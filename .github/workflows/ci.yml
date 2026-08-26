@@ -100,6 +100,21 @@ jobs:
           fi
           echo "PASS: 'unsafe-eval' absent from the console build output."
 
+      # The console must ship React's PRODUCTION build. Vite selects it from
+      # NODE_ENV, so an ambient NODE_ENV=development - which is what
+      # .env.example carries, and what sourcing .env into a shell sets - silently
+      # doubles the bundle from 193 kB to 391 kB and ships development warnings
+      # to sellers on the metered connections this product is built around.
+      # It is a check rather than a convention because nothing else would notice.
+      - name: Assert the console shipped React's production build
+        run: |
+          if grep -rq "Each child in a list" apps/console/dist/assets/; then
+            echo "FAIL: the console bundle contains React development-only warnings."
+            echo "      NODE_ENV was development during the build. It must not be."
+            exit 1
+          fi
+          echo "PASS: console bundle is a production React build."
+
       # Ruling R16 / Appendix C check 15. seller_public_stats is a plain table
       # updated in O(1) by triggers; built literally as CREATE MATERIALIZED VIEW
       # it re-aggregates every seller's entire history to update one row.
@@ -134,7 +149,8 @@ jobs:
       # --- Migration determinism --- LIVE from Tier 1 ------------------------
       # Section 16: "migrations applied twice to empty DBs, schema dumps diffed".
       # ops/scripts/db-determinism.mjs excludes pg_dump 17's per-run random
-      # estrict token, which would otherwise make this stage fail on every
+      # 
+estrict token, which would otherwise make this stage fail on every
       # schema forever — see the script's header.
       - name: Migrations are deterministic
         run: pnpm db:determinism
