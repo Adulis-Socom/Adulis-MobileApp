@@ -1,5 +1,22 @@
 # Tier status and reissue debt — back-end
 
+> **UPDATED 26 August 2026, Tier 1 session.** Four of the seven reissues in §2
+> have landed: **ADU-DB-01 v1.8**, **ADU-API-01 v1.5**, **ADU-AUTH-01 v2.1** and
+> **ADU-CON-03 v1.1** are installed in `docs/`; the superseded revisions are in
+> `_superseded/`. The `SPEC_VERSION_GAP` that blocked Tiers 1–8 in §1 is
+> therefore **closed**, and §1's table below is historical from this point.
+>
+> Tier 1 is **partially complete**: the Appendix C harness and migration 01 are
+> built, applied and tested; migrations 02–05 are blocked by defects **inside**
+> ADU-DB-01 v1.8 rather than by a missing reissue. Those are itemised, with the
+> exact question that unblocks each, in
+> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md)** — that file is now the
+> founder's writing queue, and it supersedes §2 of this document for DB-01.
+>
+> Three reissues remain outstanding and none of them blocks a migration:
+> **ADU-PRD-01 v8.6**, **ADU-PROJ-01 v9.1**, **ADU-DPIA-01 v1.1**. §2.5–2.7 below
+> still describe them accurately.
+
 **Produced:** 26 August 2026, Tier 0 session · **Author:** AI coding agent, CEO back-end session
 **Governing document:** ADU-CON-02 v3.0 §15 (the nine tiers), §23 (documents to reissue)
 **Authority rules:** `.claude/reference/DOCUMENT_AUTHORITY.md`
