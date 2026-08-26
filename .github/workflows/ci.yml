@@ -1,0 +1,181 @@
+# Adulis CI — ADU-CON-02 v3.0 section 16, "every push".
+#
+# Section 16 specifies the full pipeline. This file runs the stages that Tier 0
+# can actually run, and carries the rest as CLEARLY-LABELLED COMMENTED STAGES so
+# that the gap between what CI checks today and what section 16 demands is
+# visible in the file rather than remembered. Each commented stage names the tier
+# and the document that unblocks it.
+#
+# "Red on any; there is no skip label."
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: install → typecheck → lint → test → build → gates
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Section 3.2 / section 18: PostgreSQL 17. The pgvector image is the
+        # official pgvector build on top of postgres:17, so `vector` is present;
+        # the other three extensions ship with Postgres itself.
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: adulis_app
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: adulis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U adulis_app -d adulis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://adulis_app:ci-password@localhost:5432/adulis
+      DATABASE_URL_MIGRATE: postgres://adulis_app:ci-password@localhost:5432/adulis
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The service container does not run db/init, so create the extensions the
+      # same way docker-compose does locally. This is also section 18 step 1.
+      - name: Create the four extensions
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
+
+      - name: Typecheck (strict, no exceptions)
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # Includes the pooled-connection settings-leak test, which needs real
+      # PostgreSQL: current_setting's transaction-local behaviour cannot be
+      # mocked. Also runs the locale type-level completeness test.
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify the four extensions (Tier 0 gate)
+        run: pnpm db:verify-extensions
+
+      - name: Migrations apply cleanly
+        run: pnpm db:migrate
+
+      # ---- Static assertions on the build output ----------------------------
+
+      # Section 16: "'unsafe-eval' absent from output". The console's CSP is
+      # script-src 'self' with no nonce and no 'unsafe-inline' (section 3.9), and
+      # an eval-based build would silently require loosening it.
+      - name: Assert 'unsafe-eval' absent from the console build
+        run: |
+          if grep -rq "unsafe-eval" apps/console/dist/; then
+            echo "FAIL: 'unsafe-eval' found in the console build output."
+            grep -rn "unsafe-eval" apps/console/dist/ | head -20
+            exit 1
+          fi
+          echo "PASS: 'unsafe-eval' absent from the console build output."
+
+      # Ruling R16 / Appendix C check 15. seller_public_stats is a plain table
+      # updated in O(1) by triggers; built literally as CREATE MATERIALIZED VIEW
+      # it re-aggregates every seller's entire history to update one row.
+      # This gate exists at Tier 0 precisely so the phrase can never be
+      # introduced, including by the migrations that do not exist yet.
+      - name: Assert CREATE MATERIALIZED VIEW appears nowhere in db/
+        run: |
+          if grep -rniq "CREATE MATERIALIZED VIEW" db/; then
+            echo "FAIL: 'CREATE MATERIALIZED VIEW' found in db/ — forbidden by R16."
+            grep -rni "CREATE MATERIALIZED VIEW" db/ | head -20
+            exit 1
+          fi
+          echo "PASS: no CREATE MATERIALIZED VIEW in db/ (R16)."
+
+      # =====================================================================
+      # STAGES REQUIRED BY SECTION 16 THAT TIER 0 CANNOT RUN YET.
+      #
+      # Each is commented out with the tier and the document that unblocks it.
+      # Uncomment as the tier lands — do not delete, and do not "temporarily"
+      # skip one once it is live: section 16 is explicit that there is no skip
+      # label.
+      # =====================================================================
+
+      # --- Integration tests against a real Postgres -------------------------
+      # UNBLOCKED BY: Tier 1 (migrations 1-5 exist).
+      # Constraints, triggers, RLS and EXCLUDE cannot be mocked, which is why
+      # the service container above is provisioned from Tier 0 onward.
+      #
+      # - name: Integration tests
+      #   run: pnpm --filter @adulis/api test:integration
+
+      # --- Migration determinism --------------------------------------------
+      # UNBLOCKED BY: Tier 1.
+      # Section 16: "migrations applied twice to empty DBs, schema dumps diffed".
+      # Catches a migration that is not idempotent in its effect on the dump.
+      #
+      # - name: Migrations are deterministic
+      #   run: |
+      #     createdb -h localhost -U adulis_app det_a && createdb -h localhost -U adulis_app det_b
+      #     DATABASE_URL_MIGRATE=...det_a pnpm db:migrate && pg_dump -s ...det_a > /tmp/a.sql
+      #     DATABASE_URL_MIGRATE=...det_b pnpm db:migrate && pg_dump -s ...det_b > /tmp/b.sql
+      #     diff /tmp/a.sql /tmp/b.sql
+
+      # --- Appendix C, all 15 ------------------------------------------------
+      # UNBLOCKED BY: ADU-DB-01 v1.7  (SPEC_VERSION_GAP)
+      # v1.6 Appendix C defines 14 checks and its check 14 expects 105 tables;
+      # ADU-CON-02 v3.0 requires 15 checks and 107 tables. Check 15 (R16) exists
+      # only in v1.7. `pnpm db:check` passes trivially while db/checks is empty
+      # and prints "0 checks present (pre-v1.7)".
+      #
+      # - name: Appendix C — all 15 checks
+      #   run: pnpm db:check     # must print 15 passes
+
+      # --- Locale completeness ----------------------------------------------
+      # PARTIALLY LIVE: the type-level test in packages/locale already fails the
+      # build when an Amharic key is missing, and runs inside `pnpm test` above.
+      # The remaining half — that every user-visible string goes through the
+      # catalogue at all — needs screens, so it is Tier 4+.
+      #
+      # - name: Locale completeness (no hard-coded user-visible strings)
+      #   run: pnpm --filter @adulis/locale check:usage
+
+      # --- OpenAPI regenerate + additive diff --------------------------------
+      # UNBLOCKED BY: Tier 3 (OpenAPI publish).
+      # Section 11: "CI diffs the spec against the previous commit and fails on
+      # any removal, rename or retype inside /v1" — additive-only becomes a build
+      # failure, not a discipline. A hand-edited spec is a lie with authority.
+      #
+      # - name: Regenerate OpenAPI and fail on non-additive change
+      #   run: pnpm --filter @adulis/api openapi:generate && pnpm openapi:diff
+
+      # --- Secret scan -------------------------------------------------------
+      # UNBLOCKED BY: choosing a scanner. Section 12: "the real .env never enters
+      # git (CI secret-scan enforces)". Left commented rather than implemented
+      # with an unreviewed third-party action, since that action would run with
+      # repository credentials on every push.
+      #
+      # - name: Secret scan
+      #   run: <scanner to be selected>

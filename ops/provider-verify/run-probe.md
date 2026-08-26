@@ -123,6 +123,12 @@ reference a provider's output is compared against.
 **Read `psql:/proc/self/fd/0:NN:` as "line NN of probe.sql"** — an artifact of
 piping the file over stdin into the container, not part of the output.
 
+**Compare content, not line order.** psql writes `NOTICE` to stderr and command
+tags (`CREATE TABLE`, `DROP SCHEMA`) to stdout, so merging the two streams
+interleaves them differently from run to run. Two runs of this probe produce the
+same 126 lines in a slightly different order. Diff sorted output, or just check
+that the eight `CAPABILITY ... PASS` lines and `TEARDOWN PASS` are all present.
+
 ```text
 Timing is off.
 
