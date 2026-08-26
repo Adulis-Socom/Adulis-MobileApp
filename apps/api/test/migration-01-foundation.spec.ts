@@ -1,5 +1,16 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { Pool } from 'pg';
-import catalogue from './fixtures/enum-catalogue.json';
+
+/**
+ * ONE fixture, shared with Appendix C check 16. The transcription of Appendix A
+ * lives at db/checks/fixtures/appendix-a.json and is read by both the check
+ * harness and this suite, because two copies of the catalogue is precisely the
+ * defect D6 was reaching for and D1 actually was.
+ */
+const catalogue = JSON.parse(
+  readFileSync(path.resolve(__dirname, '../../../db/checks/fixtures/appendix-a.json'), 'utf8'),
+) as { types: Record<string, string[]> };
 
 /**
  * Migration 01 — foundation. Integration tests against REAL PostgreSQL.
@@ -163,7 +174,7 @@ describe('migration 01 — foundation', () => {
   });
 
   describe('enum catalogue (Appendix A)', () => {
-    const expected = catalogue.types as Record<string, string[]>;
+    const expected = catalogue.types;
 
     it('creates every type in Appendix A and no others', async () => {
       const rows = await q<{ name: string }>(

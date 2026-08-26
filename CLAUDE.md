@@ -25,6 +25,8 @@ Eleven absences are invariants. Never add: `original_key` on media · a generate
 ## Non-negotiable mechanics
 - Every database access runs inside a transaction whose first statement sets `adulis.account_id`, `adulis.actor_role`, `adulis.seller_id` via `set_config(..., true)` — the third argument is transaction-local and is the entire RLS control. Never `SET`, never `set_config(..., false)`.
 - `CREATE MATERIALIZED VIEW` is a forbidden phrase (R16).
-- Table count is 107 under the pending DB v1.7 manifest; a different count is wrong somewhere — stop and report it.
+- Table count is **109** under the ADU-DB-01 v1.9 manifest (Appendix B: core 84 + 25); a different count is wrong somewhere — stop and report it. Appendix C check 14 asserts it from Tier 2.
+- Enum types are **66**, and there is deliberately no asserted count in the document any more: v1.9 replaced the number with Appendix C **check 16**, which compares Appendix A against `pg_type` in both directions. `db/checks/fixtures/appendix-a.json` is the transcription both the check and the tests compare against.
+- The step-up surface restriction is a **column** (`core.permission.requires_step_up`) and a **total** CHECK, never a list of codes. v1.8's enumeration left three of the eight step-up permissions unconstrained; do not reintroduce a list.
 - No string-built SQL outside the `sql` template tag. No secrets in code. No edits to generated files (`openapi.json`, `schema.d.ts`, the generated client).
 - Stop at the boundary of the assigned slice/tier; end every session by listing what was NOT done.

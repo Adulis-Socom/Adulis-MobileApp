@@ -1,7 +1,7 @@
 /**
- * Shared helpers for the ADU-DB-01 v1.8 Appendix C check harness.
+ * Shared helpers for the ADU-DB-01 v1.9 Appendix C check harness.
  *
- * Appendix C describes fifteen checks "a reviewer can run against generated DDL
+ * Appendix C describes sixteen checks "a reviewer can run against generated DDL
  * without reading it line by line". Each guards an invariant enforced by an
  * ABSENCE — the failure mode where an agent "completes" the schema and silently
  * removes a guarantee. Nothing here raises on its own; that is the point.

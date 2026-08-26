@@ -1,5 +1,5 @@
 {
-  "_provenance": "Transcribed from ADU-DB-01 v1.8 Appendix A, in document order. 66 types, 230 values. Appendix A own header states 54 and sections 0.1/0.2 state 56; the enumeration is what is binding. See the Tier 1 report.",
+  "_provenance": "Appendix A of ADU-DB-01, transcribed in document order. 66 types, 230 values.\n\nv1.9 D6 asserts that v1.8's Appendix A was 'a core-only catalogue presented as complete' and that 'every non-core enum - six of them - is absent'. THAT IS NOT WHAT v1.8 SAID. v1.8 carried an 'Other schemas' table of ELEVEN non-core types, and v1.9 reproduces it unchanged. This fixture is that table plus the 55 core types, and it is what migration 1 creates.\n\nv1.9 then APPENDS a second, partial block of seven non-core types that contradicts the carried-forward one in six places (see _conflicts). The document marks that block 'provisional until check 16 has run green once', so the carried-forward table governs here. Check 16 is what will settle it.\n\nThe real v1.8 defect was the COUNT, not the coverage: its header said 54 and sections 0.1/0.2 said 56 where the enumeration is 66. v1.9 removes the asserted count and replaces it with this check, which is the right fix.",
   "types": {
     "core.market_phase": [
       "PHASE_1",
@@ -363,5 +363,85 @@
       "TIKTOK",
       "INSTAGRAM"
     ]
+  },
+  "_conflicts": {
+    "_note": "Six types are defined TWICE and differently inside v1.9 Appendix A. The values above are the carried-forward 'Other schemas' table; the values below are the appended block the document itself calls provisional. Reported for v1.10; not resolved here.",
+    "verification.verifier_kind": {
+      "carried_forward": [
+        "KYC_VENDOR",
+        "VIDEO_CALL"
+      ],
+      "appended": [
+        "VENDOR_KYC",
+        "FAYDA",
+        "MANUAL_REVIEW"
+      ]
+    },
+    "financial.retention_reason": {
+      "carried_forward": [
+        "AWAITING_VALIDATION",
+        "OPEN_CLAIM"
+      ],
+      "appended": [
+        "OPEN_CLAIM",
+        "LEGAL_HOLD",
+        "DISPUTE"
+      ]
+    },
+    "financial.secret_subject_kind": {
+      "carried_forward": [
+        "PAYMENT_EVIDENCE",
+        "PAYOUT_CREDENTIAL"
+      ],
+      "appended": [
+        "PAYOUT_CREDENTIAL",
+        "PAYMENT_EVIDENCE"
+      ],
+      "note": "order only; section 13.3 body matches the carried-forward order"
+    },
+    "chat.message_sender_kind": {
+      "carried_forward": [
+        "BUYER",
+        "SELLER",
+        "TEAM_MEMBER",
+        "BOT"
+      ],
+      "appended": [
+        "BUYER",
+        "SELLER",
+        "BOT"
+      ],
+      "note": "the appended block drops TEAM_MEMBER, whom section 13.2 requires be recorded as the acting confirmer"
+    },
+    "nlu.phrase_source": {
+      "carried_forward": [
+        "SEED",
+        "HARVESTED"
+      ],
+      "appended": [
+        "SEEDED",
+        "HARVESTED",
+        "OPERATOR_ADDED"
+      ]
+    },
+    "billing.subscription_state": {
+      "carried_forward": [
+        "BETA",
+        "TRIAL",
+        "ACTIVE",
+        "PAST_DUE",
+        "SUSPENDED",
+        "CANCELLED"
+      ],
+      "appended": [
+        "ACTIVE",
+        "BETA",
+        "PAST_DUE",
+        "SAFETY_SUSPENDED",
+        "CANCELLED",
+        "EXPIRED"
+      ],
+      "note": "the appended block drops TRIAL, which section 18.1's trial_started_at/trial_ends_at require, and adds SAFETY_SUSPENDED, which is a core.seller_status value rather than a subscription state"
+    }
   }
 }

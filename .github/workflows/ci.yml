@@ -106,7 +106,7 @@ jobs:
       # commented at Tier 0 is closed. Checks whose objects belong to a later
       # tier report PENDING and do not fail the build; the harness exits non-zero
       # only on FAIL. Check 15 is what now enforces R16 — see the note below.
-      - name: Appendix C — fifteen checks
+      - name: Appendix C — sixteen checks
         run: pnpm db:check
 
       # ---- Static assertions on the build output ----------------------------
