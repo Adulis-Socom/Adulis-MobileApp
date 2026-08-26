@@ -1,21 +1,29 @@
 # Tier status and reissue debt — back-end
 
-> **UPDATED 26 August 2026, Tier 1 session.** Four of the seven reissues in §2
-> have landed: **ADU-DB-01 v1.8**, **ADU-API-01 v1.5**, **ADU-AUTH-01 v2.1** and
-> **ADU-CON-03 v1.1** are installed in `docs/`; the superseded revisions are in
-> `_superseded/`. The `SPEC_VERSION_GAP` that blocked Tiers 1–8 in §1 is
-> therefore **closed**, and §1's table below is historical from this point.
+> **UPDATED 26 August 2026, second Tier 1 session.** Six of the seven reissues in
+> §2 have now landed: **ADU-DB-01 v1.9**, **ADU-AUTH-01 v2.2**, **ADU-API-01
+> v1.5** and **ADU-CON-03 v1.1**. The `SPEC_VERSION_GAP` that blocked Tiers 1-8
+> in §1 is **closed**, and §1's table is historical from this point.
 >
-> Tier 1 is **partially complete**: the Appendix C harness and migration 01 are
-> built, applied and tested; migrations 02–05 are blocked by defects **inside**
-> ADU-DB-01 v1.8 rather than by a missing reissue. Those are itemised, with the
-> exact question that unblocks each, in
-> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md)** — that file is now the
-> founder's writing queue, and it supersedes §2 of this document for DB-01.
+> **Tier 1 is built.** Migrations 01-05 are applied, tested and deterministic;
+> the Appendix C harness runs **sixteen** checks (v1.9 added check 16) at
+> **7 PASS / 9 PENDING / 0 FAIL**. `core.permission` carries all 42 codes.
 >
-> Three reissues remain outstanding and none of them blocks a migration:
-> **ADU-PRD-01 v8.6**, **ADU-PROJ-01 v9.1**, **ADU-DPIA-01 v1.1**. §2.5–2.7 below
-> still describe them accurately.
+> **One thing is outstanding and it is not a document defect:** ADU-AUTH-01
+> v2.2's §16.2 matrix arrived with its 252 cells collapsed to one indistinct
+> character, so the 139 `role_permission` grants could not be read and were not
+> guessed. Everything else in Tier 1 is complete. See
+> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md)**, which supersedes §2 of this
+> document for DB-01 and is the founder's writing queue for v1.10.
+>
+> ⚠ **The v1.9 and v2.2 files are NOT in `docs/`.** They were supplied in-session
+> and the copies available carry the encoding damage described above, so
+> installing them would enshrine it. `docs/` still holds v1.8 and v2.1. **Drop
+> the two UTF-8 originals into `docs/` and move v1.8 / v2.1 to `_superseded/`.**
+>
+> Three reissues remain outstanding and none blocks a migration: **ADU-PRD-01
+> v8.6**, **ADU-PROJ-01 v9.1**, **ADU-DPIA-01 v1.1**. §2.5-2.7 still describe
+> them accurately.
 
 **Produced:** 26 August 2026, Tier 0 session · **Author:** AI coding agent, CEO back-end session
 **Governing document:** ADU-CON-02 v3.0 §15 (the nine tiers), §23 (documents to reissue)

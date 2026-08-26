@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `pnpm db:check` — ADU-DB-01 v1.8 Appendix C, all fifteen checks.
+ * `pnpm db:check` — ADU-DB-01 v1.9 Appendix C, all sixteen checks.
  *
  * Each check guards an invariant enforced by an ABSENCE: the failure mode where
  * an agent "completes" the schema and silently removes a guarantee. Nothing here
@@ -54,8 +54,8 @@ const tier = await readCurrentTier();
 const checks = await loadChecks();
 const migrations = await loadMigrations();
 
-if (checks.length !== 15) {
-  console.error(`FAIL  expected 15 checks in db/checks, found ${checks.length}`);
+if (checks.length !== 16) {
+  console.error(`FAIL  expected 16 checks in db/checks, found ${checks.length}`);
   process.exit(2);
 }
 
@@ -97,7 +97,7 @@ for (const check of checks) {
 
 if (client) await client.end();
 
-console.log(`\nADU-DB-01 v1.8 Appendix C — fifteen checks · repository at Tier ${tier}`);
+console.log(`\nADU-DB-01 v1.9 Appendix C — sixteen checks · repository at Tier ${tier}`);
 console.log(`migrations inspected: ${migrations.length}\n`);
 const W = Math.max(...checks.map((c) => c.title.length)) + 2;
 console.log(`  ${pad('#', 3)}${pad('STATE', 9)}${pad('CHECK', W)}DETAIL`);
