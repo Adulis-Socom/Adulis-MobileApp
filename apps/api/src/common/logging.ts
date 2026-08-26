@@ -29,10 +29,21 @@ import pino, { type Logger } from 'pino';
  * ------------------------------------------------------------------------
  */
 
-/** Fields that may appear in a log line, because they are named here. */
+/**
+ * Fields that may appear in a log line, because they are named here.
+ *
+ * `level`, `time`, `pid` and `hostname` are pino's own base bindings and are
+ * emitted before `formatters.log` runs, so listing them is what keeps this array
+ * an accurate description of a log line rather than a partial one. `pid` and
+ * `hostname` are kept deliberately: ADU-CON-02 v3.0 section 17 runs the API on
+ * two instances from day one, and without them two interleaved log streams
+ * cannot be told apart.
+ */
 export const LOG_FIELD_ALLOWLIST: readonly string[] = [
   'level',
   'time',
+  'pid',
+  'hostname',
   'msg',
   'requestId',
   'method',

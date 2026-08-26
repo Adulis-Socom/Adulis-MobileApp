@@ -11,7 +11,8 @@
     "start:worker": "node dist/worker.js",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src test"
+    "lint": "eslint src test",
+    "dev:worker": "nest start --watch --entryFile worker"
   },
   "dependencies": {
     "@nestjs/common": "11.2.3",
