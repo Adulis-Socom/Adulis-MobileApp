@@ -1,10 +1,10 @@
 # Adulis CI — ADU-CON-02 v3.0 section 16, "every push".
 #
-# Section 16 specifies the full pipeline. This file runs the stages that Tier 0
-# can actually run, and carries the rest as CLEARLY-LABELLED COMMENTED STAGES so
-# that the gap between what CI checks today and what section 16 demands is
-# visible in the file rather than remembered. Each commented stage names the tier
-# and the document that unblocks it.
+# Section 16 specifies the full pipeline. This file runs the stages the
+# repository can actually run, and carries the rest as CLEARLY-LABELLED
+# COMMENTED STAGES so that the gap between what CI checks today and what section
+# 16 demands is visible in the file rather than remembered. Each commented stage
+# names the tier and the document that unblocks it.
 #
 # "Red on any; there is no skip label."
 
@@ -32,6 +32,11 @@ jobs:
         # the other three extensions ship with Postgres itself.
         image: pgvector/pgvector:pg17
         env:
+          # NOT adulis_app. POSTGRES_USER becomes a superuser, and a superuser
+          # bypasses every privilege check — so with adulis_app as the container
+          # owner, the verification and financial boundaries would be directly
+          # readable and every boundary test would pass while proving nothing.
+          # adulis_app is created NOLOGIN and non-superuser by migration 01.
           POSTGRES_USER: adulis_bootstrap
           POSTGRES_PASSWORD: ci-password
           POSTGRES_DB: adulis
@@ -71,20 +76,38 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      # Includes the pooled-connection settings-leak test, which needs real
-      # PostgreSQL: current_setting's transaction-local behaviour cannot be
-      # mocked. Also runs the locale type-level completeness test.
+      # Includes the pooled-connection settings-leak test and the migration-01
+      # integration tests, both of which need real PostgreSQL: roles, grants and
+      # current_setting's transaction-local behaviour cannot be mocked. Also runs
+      # the locale type-level completeness test.
       - name: Test
         run: pnpm test
 
       - name: Build
         run: pnpm build
 
+      # ---- Database gates ---------------------------------------------------
+
       - name: Verify the four extensions (Tier 0 gate)
         run: pnpm db:verify-extensions
 
       - name: Migrations apply
         run: pnpm db:migrate
+
+      # LIVE from Tier 1. Section 16: "migrations applied twice to empty DBs,
+      # schema dumps diffed". ops/scripts/db-determinism.mjs excludes pg_dump
+      # 17's per-run random restrict token, which would otherwise make this stage
+      # fail on every schema forever — see the script's header.
+      - name: Migrations are deterministic
+        run: pnpm db:determinism
+
+      # LIVE from Tier 1. ADU-DB-01 v1.8 supplied the fifteenth check (R16) and
+      # moved check 14 to 109 tables, so the SPEC_VERSION_GAP that kept this
+      # commented at Tier 0 is closed. Checks whose objects belong to a later
+      # tier report PENDING and do not fail the build; the harness exits non-zero
+      # only on FAIL. Check 15 is what now enforces R16 — see the note below.
+      - name: Appendix C — fifteen checks
+        run: pnpm db:check
 
       # ---- Static assertions on the build output ----------------------------
 
@@ -101,11 +124,12 @@ jobs:
           echo "PASS: 'unsafe-eval' absent from the console build output."
 
       # The console must ship React's PRODUCTION build. Vite selects it from
-      # NODE_ENV, so an ambient NODE_ENV=development - which is what
-      # .env.example carries, and what sourcing .env into a shell sets - silently
-      # doubles the bundle from 193 kB to 391 kB and ships development warnings
-      # to sellers on the metered connections this product is built around.
-      # It is a check rather than a convention because nothing else would notice.
+      # NODE_ENV, so an ambient NODE_ENV=development — which is what .env.example
+      # carries, and what sourcing .env into a shell sets — silently doubles the
+      # bundle from 193 kB to 391 kB and ships development warnings to sellers on
+      # the metered low-end connections section 23 names as the binding
+      # performance constraint. A check rather than a convention, because the
+      # build succeeds either way and nothing else would notice.
       - name: Assert the console shipped React's production build
         run: |
           if grep -rq "Each child in a list" apps/console/dist/assets/; then
@@ -115,22 +139,17 @@ jobs:
           fi
           echo "PASS: console bundle is a production React build."
 
-      # Ruling R16 / Appendix C check 15. seller_public_stats is a plain table
-      # updated in O(1) by triggers; built literally as CREATE MATERIALIZED VIEW
-      # it re-aggregates every seller's entire history to update one row.
-      # This gate exists at Tier 0 precisely so the phrase can never be
-      # introduced, including by the migrations that do not exist yet.
-      - name: Assert CREATE MATERIALIZED VIEW appears nowhere in db/
-        run: |
-          if grep -rniq "CREATE MATERIALIZED VIEW" db/; then
-            echo "FAIL: 'CREATE MATERIALIZED VIEW' found in db/ — forbidden by R16."
-            grep -rni "CREATE MATERIALIZED VIEW" db/ | head -20
-            exit 1
-          fi
-          echo "PASS: no CREATE MATERIALIZED VIEW in db/ (R16)."
+      # NOTE ON R16. Tier 0 carried a standalone recursive grep of db/ for the
+      # forbidden phrase. It is REMOVED, not kept as belt-and-braces: at Tier 1 it
+      # began failing on db/checks/check-15-no-materialized-view.mjs, whose
+      # comments necessarily contain that phrase in order to explain it. A check
+      # that fails on the file whose job is to prevent the thing teaches people to
+      # disable the check. Appendix C check 15, run above inside `pnpm db:check`,
+      # greps db/migrations/ with SQL comments stripped and is the authoritative
+      # enforcement of R16.
 
       # =====================================================================
-      # STAGES REQUIRED BY SECTION 16 THAT TIER 0 CANNOT RUN YET.
+      # STAGES REQUIRED BY SECTION 16 THAT THIS TIER CANNOT RUN YET.
       #
       # Each is commented out with the tier and the document that unblocks it.
       # Uncomment as the tier lands — do not delete, and do not "temporarily"
@@ -138,30 +157,13 @@ jobs:
       # label.
       # =====================================================================
 
-      # --- Integration tests against a real Postgres -------------------------
-      # UNBLOCKED BY: Tier 1 (migrations 1-5 exist).
-      # Constraints, triggers, RLS and EXCLUDE cannot be mocked, which is why
-      # the service container above is provisioned from Tier 0 onward.
+      # --- Integration tests against the full schema -------------------------
+      # UNBLOCKED BY: migrations 02-05, which are blocked on ADU-DB-01 v1.9 —
+      # see docs/build-status/TIER-1-SPEC-GAPS.md.
+      # Migration 01's integration tests already run inside `pnpm test` above.
       #
       # - name: Integration tests
       #   run: pnpm --filter @adulis/api test:integration
-
-      # --- Migration determinism --- LIVE from Tier 1 ------------------------
-      # Section 16: "migrations applied twice to empty DBs, schema dumps diffed".
-      # ops/scripts/db-determinism.mjs excludes pg_dump 17's per-run random
-      # 
-estrict token, which would otherwise make this stage fail on every
-      # schema forever — see the script's header.
-      - name: Migrations are deterministic
-        run: pnpm db:determinism
-
-      # --- Appendix C, all 15 --- LIVE from Tier 1 ---------------------------
-      # ADU-DB-01 v1.8 supplied the fifteenth check (R16) and moved check 14 to
-      # 109 tables, so the SPEC_VERSION_GAP that kept this commented at Tier 0 is
-      # closed. Checks whose objects belong to a later tier report PENDING and do
-      # not fail the build; the harness exits non-zero only on FAIL.
-      - name: Appendix C — fifteen checks
-        run: pnpm db:check
 
       # --- Locale completeness ----------------------------------------------
       # PARTIALLY LIVE: the type-level test in packages/locale already fails the
