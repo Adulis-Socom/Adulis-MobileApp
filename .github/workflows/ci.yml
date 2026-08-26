@@ -32,20 +32,20 @@ jobs:
         # the other three extensions ship with Postgres itself.
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: adulis_app
+          POSTGRES_USER: adulis_bootstrap
           POSTGRES_PASSWORD: ci-password
           POSTGRES_DB: adulis
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U adulis_app -d adulis"
+          --health-cmd "pg_isready -U adulis_bootstrap -d adulis"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgres://adulis_app:ci-password@localhost:5432/adulis
-      DATABASE_URL_MIGRATE: postgres://adulis_app:ci-password@localhost:5432/adulis
+      DATABASE_URL: postgres://adulis_bootstrap:ci-password@localhost:5432/adulis
+      DATABASE_URL_MIGRATE: postgres://adulis_bootstrap:ci-password@localhost:5432/adulis
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
       - name: Verify the four extensions (Tier 0 gate)
         run: pnpm db:verify-extensions
 
-      - name: Migrations apply cleanly
+      - name: Migrations apply
         run: pnpm db:migrate
 
       # ---- Static assertions on the build output ----------------------------
@@ -131,27 +131,21 @@ jobs:
       # - name: Integration tests
       #   run: pnpm --filter @adulis/api test:integration
 
-      # --- Migration determinism --------------------------------------------
-      # UNBLOCKED BY: Tier 1.
+      # --- Migration determinism --- LIVE from Tier 1 ------------------------
       # Section 16: "migrations applied twice to empty DBs, schema dumps diffed".
-      # Catches a migration that is not idempotent in its effect on the dump.
-      #
-      # - name: Migrations are deterministic
-      #   run: |
-      #     createdb -h localhost -U adulis_app det_a && createdb -h localhost -U adulis_app det_b
-      #     DATABASE_URL_MIGRATE=...det_a pnpm db:migrate && pg_dump -s ...det_a > /tmp/a.sql
-      #     DATABASE_URL_MIGRATE=...det_b pnpm db:migrate && pg_dump -s ...det_b > /tmp/b.sql
-      #     diff /tmp/a.sql /tmp/b.sql
+      # ops/scripts/db-determinism.mjs excludes pg_dump 17's per-run random
+      # estrict token, which would otherwise make this stage fail on every
+      # schema forever — see the script's header.
+      - name: Migrations are deterministic
+        run: pnpm db:determinism
 
-      # --- Appendix C, all 15 ------------------------------------------------
-      # UNBLOCKED BY: ADU-DB-01 v1.7  (SPEC_VERSION_GAP)
-      # v1.6 Appendix C defines 14 checks and its check 14 expects 105 tables;
-      # ADU-CON-02 v3.0 requires 15 checks and 107 tables. Check 15 (R16) exists
-      # only in v1.7. `pnpm db:check` passes trivially while db/checks is empty
-      # and prints "0 checks present (pre-v1.7)".
-      #
-      # - name: Appendix C — all 15 checks
-      #   run: pnpm db:check     # must print 15 passes
+      # --- Appendix C, all 15 --- LIVE from Tier 1 ---------------------------
+      # ADU-DB-01 v1.8 supplied the fifteenth check (R16) and moved check 14 to
+      # 109 tables, so the SPEC_VERSION_GAP that kept this commented at Tier 0 is
+      # closed. Checks whose objects belong to a later tier report PENDING and do
+      # not fail the build; the harness exits non-zero only on FAIL.
+      - name: Appendix C — fifteen checks
+        run: pnpm db:check
 
       # --- Locale completeness ----------------------------------------------
       # PARTIALLY LIVE: the type-level test in packages/locale already fails the

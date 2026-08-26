@@ -21,6 +21,7 @@
     "ci:local": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js -d DATABASE_URL_MIGRATE -m db/migrations -j sql up",
     "db:check": "node --env-file-if-exists=.env ops/scripts/db-check.mjs",
+    "db:determinism": "node --env-file-if-exists=.env ops/scripts/db-determinism.mjs",
     "db:verify-extensions": "node --env-file-if-exists=.env ops/scripts/verify-extensions.mjs",
     "db:seed": "node ops/scripts/seed.mjs"
   },
