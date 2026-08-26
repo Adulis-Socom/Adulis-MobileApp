@@ -1,0 +1,118 @@
+{
+  "pack": "Adulis Claude Engineering Skills Pack",
+  "version": "1.1.0",
+  "skills": [
+    {
+      "name": "adulis-accessibility",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-api-boundary",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-api-client",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-api-engineer",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-auth-authz-engineer",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-backend-security-review",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-db-invariant-engineer",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-design-system",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-financial-boundary",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-frontend-orchestrator",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-i18n-geez",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-migration-engineer",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-order-concurrency",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-seller-companion",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-spec-router",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    },
+    {
+      "name": "adulis-ui-state-mapper",
+      "files": [
+        "SKILL.md",
+        "EVALS.md"
+      ]
+    }
+  ]
+}
