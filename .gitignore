@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+coverage/
+*.local
+
+# build and tool output
+.turbo/
+*.tsbuildinfo
+apps/console/dist/
+apps/api/dist/
+
+# never commit a real environment file; .env.example is the only one tracked
+.env.*
+!.env.example

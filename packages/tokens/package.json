@@ -1,0 +1,14 @@
+{
+  "name": "@adulis/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design tokens. COO/CTO scope — placeholder at Tier 0.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "echo \"@adulis/tokens: nothing to build at Tier 0\"",
+    "test": "echo \"@adulis/tokens: no tests at Tier 0\"",
+    "typecheck": "echo \"@adulis/tokens: no sources at Tier 0\"",
+    "lint": "echo \"@adulis/tokens: no sources at Tier 0\""
+  }
+}

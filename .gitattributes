@@ -1,0 +1,4 @@
+# One line ending across two developers on different platforms.
+* text=auto eol=lf
+*.png binary
+*.zip binary

@@ -1,0 +1,39 @@
+# Local development database (ADU-CON-02 v3.0 section 13).
+#
+# PostgreSQL 17 — the version the production managed instance runs (section 18).
+# The pgvector image is the official pgvector build ON TOP OF postgres:17, so the
+# `vector` extension is available; the other three ship with Postgres itself.
+#
+# This compose file is local only. Production is managed PostgreSQL on Render
+# (Frankfurt, PITR); nothing here provisions anything.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: adulis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adulis_app
+      POSTGRES_PASSWORD: local-dev-password
+      POSTGRES_DB: adulis
+    ports:
+      # Container port is always 5432. The HOST port defaults to 5432 and is
+      # overridable, because a developer with a local PostgreSQL already bound to
+      # 5432 gets a silent shadow: both listen, the local one answers, and the
+      # error is an authentication failure that looks nothing like a port clash.
+      # Set POSTGRES_HOST_PORT=5433 (and match DATABASE_URL) when that happens.
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
+    volumes:
+      - adulis-pgdata:/var/lib/postgresql/data
+      # Runs only on first initialisation of an empty data directory.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U adulis_app -d adulis']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  adulis-pgdata:
+    name: adulis-pgdata

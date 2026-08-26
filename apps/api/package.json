@@ -1,0 +1,42 @@
+{
+  "name": "@adulis/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Adulis API and worker — one NestJS codebase started two ways.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.3",
+    "@nestjs/core": "11.2.3",
+    "@nestjs/platform-express": "11.2.3",
+    "express": "5.2.1",
+    "kysely": "0.28.17",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@adulis/config": "workspace:*",
+    "@nestjs/cli": "11.0.24",
+    "@nestjs/testing": "11.2.3",
+    "@types/express": "5.0.6",
+    "@types/jest": "30.0.0",
+    "@types/node": "22.20.1",
+    "@types/pg": "8.23.1",
+    "@types/supertest": "7.2.1",
+    "jest": "30.4.2",
+    "supertest": "7.2.2",
+    "ts-jest": "29.4.12",
+    "typescript": "5.9.3"
+  }
+}
