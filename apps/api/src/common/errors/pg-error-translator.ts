@@ -136,6 +136,18 @@ export function translatePgError(e: PgError): AdulisException | null {
     case 'U0006':
       return new AdulisException('STEP_UP_ACTION_MISMATCH');
 
+    // The payout locks (register D-28): recovery cooling and the
+    // new-device lock share the one taxonomy code; the reason is a slot.
+    case 'U0008': {
+      let slots: Record<string, unknown> | undefined;
+      try {
+        slots = e.detail ? (JSON.parse(e.detail) as Record<string, unknown>) : undefined;
+      } catch {
+        slots = undefined;
+      }
+      return new AdulisException('PAYOUT_LOCKED_RECOVERY', { slots });
+    }
+
     // The buyer-cancellation cooldown (register D-26): the until-timestamp
     // travels in DETAIL as typed slots, never prose.
     case 'U0007': {
@@ -170,6 +182,18 @@ export function translatePgError(e: PgError): AdulisException | null {
       }
       if (e.message.includes('payment already decided')) {
         return new AdulisException('PAYMENT_ALREADY_DECIDED');
+      }
+      if (e.message.includes('payout change already pending')) {
+        return new AdulisException('PAYOUT_CHANGE_PENDING');
+      }
+      if (e.message.includes('order is not payable')) {
+        return new AdulisException('ORDER_NOT_PAYABLE');
+      }
+      if (e.message.includes('no active payout details')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'NO_ACTIVE_PAYOUT' },
+        });
       }
       if (e.message.includes('not in a refundable state')) {
         return new AdulisException('VALIDATION_FAILED', {

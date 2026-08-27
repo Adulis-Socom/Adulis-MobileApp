@@ -1,11 +1,19 @@
 import { Global, Module, type OnModuleDestroy, Inject } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { Pool } from 'pg';
-import { createAppPool, createDatabase } from './database';
+import { createAppPool, createDatabase, createFinancialPool } from './database';
 import type { Database } from './database.types';
 
 /** Injection token for the application-pool Kysely instance. */
 export const APP_DATABASE = Symbol('APP_DATABASE');
+
+/**
+ * The AUDIT boundary (section 6.2): the ONLY pool permitted to call the
+ * decrypting functions. Same role, second pool — grep this token's
+ * importers and you hold the complete list of code that can reach payment
+ * evidence and payout credentials. Tier 6 made it real.
+ */
+export const FINANCIAL_DATABASE = Symbol('FINANCIAL_DATABASE');
 
 /**
  * Owns the connection pool's lifecycle.
@@ -32,14 +40,25 @@ export const APP_DATABASE = Symbol('APP_DATABASE');
         return createDatabase(createAppPool(connectionString));
       },
     },
+    {
+      provide: FINANCIAL_DATABASE,
+      useFactory: (): Kysely<Database> => {
+        const connectionString = process.env['DATABASE_URL'] ?? '';
+        return createDatabase(createFinancialPool(connectionString));
+      },
+    },
   ],
-  exports: [APP_DATABASE],
+  exports: [APP_DATABASE, FINANCIAL_DATABASE],
 })
 export class DatabaseModule implements OnModuleDestroy {
-  constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(APP_DATABASE) private readonly db: Kysely<Database>,
+    @Inject(FINANCIAL_DATABASE) private readonly financialDb: Kysely<Database>,
+  ) {}
 
   async onModuleDestroy(): Promise<void> {
     await this.db.destroy();
+    await this.financialDb.destroy();
   }
 }
 
