@@ -7,6 +7,11 @@ repository root** — from the root, none of the rules below are in context.
 ADU-API-01 **v1.6**. Read `docs/amendments/README.md` first: it says what governs and
 which amendments are live.
 
+> **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
+> Where a rule is inlined below for practicality, **the citation beside it governs, and the
+> inlined line is the first thing to check when the two disagree.** A rule kept in two
+> places grows a stale copy, and the copy an agent reads first is the one it follows.
+
 ## The doctrine, in one line
 
 **A rule the database can hold, the database holds.** Prefer a constraint to a trigger,
@@ -106,6 +111,13 @@ compare against.
 - `contracts/openapi.json` is **generated** (`pnpm generate:openapi`) and **tracked, with
   CI as its only author** — a human-authored diff to it fails the build. Regenerate
   locally to look at it; do not commit that copy.
+- **`/v1` must appear in the OpenAPI PATH KEYS** (ADU-REPO-01 v1.2 §5.1).
+  `setGlobalPrefix('v1')` **alone does not do this** — it prefixes the routes and leaves
+  the Swagger document keys unprefixed, producing a spec that serves correctly from the
+  real API and **404s against every mocked path**. That is the worst shape available: the
+  API works, the types look right, and every front-end workstream is broken at the one
+  place the seam exists to serve. `pnpm verify:contract` asserts it; the gate is inert
+  until this migration's tier produces a contract and fires the day it does.
 
 ## Gates that must be green before anything is called done
 

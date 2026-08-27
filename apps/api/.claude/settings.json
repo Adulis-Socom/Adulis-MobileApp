@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_why": "ADU-REPO-01 v1.1 S8. Read denials are the point, not a bonus: sibling CLAUDE.md files are pulled in ON DEMAND when Claude reads into that directory, so isolation is a consequence of not reaching across rather than a loader guarantee. Denying the read is what makes it one - and it enforces dependency rule 2 at the agent's READ boundary, one layer earlier than dependency-cruiser catches it at the import. Paths are CWD-relative and assume the session started in this directory, which is S8's habit.",
+  "_why": "ADU-REPO-01 v1.2 S8. Read denials are the point, not a bonus: sibling CLAUDE.md files are pulled in ON DEMAND when Claude reads into that directory, so isolation is a consequence of not reaching across rather than a loader guarantee. Denying the read is what makes it one - and it enforces dependency rule 2 at the agent's READ boundary, one layer earlier than dependency-cruiser catches it at the import. Paths are CWD-relative and assume the session started in this directory, which is S8's habit.",
   "_verify": "Run /permissions and /context after any change here.",
   "claudeMdExcludes": [
     "**/apps/console/**",

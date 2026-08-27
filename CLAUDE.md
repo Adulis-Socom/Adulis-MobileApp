@@ -32,6 +32,17 @@ code: it changes in the same PR as any decision that changes it.
 > which is the same reason rule 2 is enforced by `dependency-cruiser` and by each app's
 > `permissions.deny`, rather than by where you happened to start.
 
+> **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
+> Where a rule is inlined below for practicality, **the citation beside it governs, and
+> the inlined line is the first thing to check when the two disagree.**
+>
+> **A rule kept in two places grows a stale copy.** This document set has produced four:
+> ADU-DB-01's step-up enumeration against ADU-AUTH-01's catalogue; S6.9a's Companion
+> permission list against the same catalogue; Appendix A's withdrawn block against its own
+> change table; and S5.1's base-URL sentence, which *this file* was still carrying after
+> `packages/api-client/README.md` had already reasoned its way to the right reading. The
+> copy an agent reads first is the one it follows.
+
 ## The prime rule
 
 **The documents govern; the code discharges them.** Before implementing anything,

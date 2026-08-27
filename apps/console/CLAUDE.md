@@ -13,6 +13,11 @@ surface on which a person becomes a seller. It also carries **one screen for a d
 user entirely** — the courier (SC-C1): same deployment, same audience value, separate
 route tree, **no seller navigation**.
 
+> **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
+> Where a rule is inlined below for practicality, **the citation beside it governs, and the
+> inlined line is the first thing to check when the two disagree.** A rule kept in two
+> places grows a stale copy, and the copy an agent reads first is the one it follows.
+
 ## The boundary
 
 - **May import:** `@adulis/api-client`, `@adulis/locale`, `@adulis/tokens`, `@adulis/config`.
@@ -97,7 +102,7 @@ the shell, the states and the client first.
 | **C-7** | Reviews read-only; the empty claims list reads as good news |
 | **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
 
-> **Only C-1 is unblocked today, and v1.0 claimed C-1 to C-3.** ADU-REPO-01 v1.1 §11.1
+> **Only C-1 is unblocked today, and v1.0 claimed C-1 to C-3.** ADU-REPO-01 v1.2 §11.1
 > corrects it: `contracts/openapi.json` is generated from the API's decorators, and until
 > the API has endpoints there is nothing to generate from — **the producer arrives in
 > Tier 3.** C-1 needs no endpoint at all: the client *wrapper*, the twelve states, the

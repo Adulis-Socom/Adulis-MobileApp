@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # ADU-REPO-01 v1.1 S11.2. The default depth-1 clone has no origin/main
+          # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
           # ref, so `--filter "...[origin/main]"` below would select NOTHING and
           # the scoped steps would silently pass without running.
           fetch-depth: 0
@@ -76,7 +76,7 @@ jobs:
       - name: Create the four extensions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
-      # ADU-REPO-01 v1.1 S7 - scoped to what changed, plus its dependents.
+      # ADU-REPO-01 v1.2 S7 - scoped to what changed, plus its dependents.
       #
       # S11.2's two foot-guns, both reproduced here before this was written:
       #   - fetch-depth: 0 above, or origin/main is not a ref and NOTHING is selected
@@ -114,6 +114,13 @@ jobs:
       # violation, asserts it is caught by name, and removes it.
       - name: The dependency rules actually fire
         run: pnpm verify:deps-fires
+
+      # ADU-REPO-01 v1.2 S5.1. NestJS setGlobalPrefix('v1') prefixes the ROUTES and
+      # leaves the Swagger document keys unprefixed - a spec that serves correctly
+      # from the real API and 404s against every mocked path. Prism serves what the
+      # path keys say. INERT until Tier 3 produces a contract, and loudly so.
+      - name: The contract carries /v1 in its path keys
+        run: pnpm verify:contract
 
       - name: Test
         run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test

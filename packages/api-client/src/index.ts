@@ -47,14 +47,14 @@ export function resolveApiBaseUrl(configured: string | undefined): string {
   if (/\/v1\/?$/.test(value)) {
     throw new Error(
       `API base URL must be an origin, not a versioned path: received "${value}". ` +
-        'ADU-REPO-01 v1.1 S5.1 says "the mock base URL carries /v1", and read ' +
-        'literally that is what you just configured. It cannot be right, and the ' +
-        'same section rules it out: Prism ignores a servers[].url prefix, so /v1 ' +
-        'must live in the contract path keys — proven by /v1/bootstrap serving 200 ' +
-        'while the unprefixed path 404s. With /v1 in the path keys, a base URL ' +
-        'carrying it too produces /v1/v1/..., which is the "must not add it a ' +
-        'second time" that the very same sentence warns about. Set an origin. ' +
-        'Reported for v1.2.',
+        'ADU-REPO-01 v1.2 S5.1 RULES on this: "/v1 lives in the OpenAPI path keys. ' +
+        'The base URL is an origin and nothing more." ' +
+        'If you configured it this way you were probably reading v1.1, which said ' +
+        'the base URL carries /v1 and contradicted itself doing so — with /v1 also ' +
+        'in the path keys, every request would resolve to /v1/v1/bootstrap, the ' +
+        'doubling that same sentence warned against. Prism serves what the path ' +
+        'keys say and ignores a servers[].url prefix, which is what settled it. ' +
+        'Set an origin.',
     );
   }
   return value.replace(/\/+$/, '');

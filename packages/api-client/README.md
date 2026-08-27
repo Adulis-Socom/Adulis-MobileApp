@@ -41,7 +41,7 @@ Both `contracts/openapi.json` and `src/schema.d.ts` are **tracked**. Three reaso
 3. **A reviewer can see the wire change.** Both are marked `linguist-generated` so the
    diff collapses by default and is never mistaken for authored work.
 
-**CI is their only author** (ADU-REPO-01 v1.1 S5.1). A human-authored diff to either
+**CI is their only author** (ADU-REPO-01 v1.2 S5.1). A human-authored diff to either
 fails the build. v1.0's *"never regenerated locally and committed"* read as forbidding
 the commit itself, which would leave the mock nothing to serve; v1.1 corrects it to
 tracked-but-CI-written. A red drift check is the one signal that should send you to the

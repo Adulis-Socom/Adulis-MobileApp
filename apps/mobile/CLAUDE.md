@@ -8,6 +8,11 @@ repository root.
 **Governing documents:** ADU-ARCH-01 v2.0 S2, S3 - ADU-API-01 v1.6 S4, S12 -
 ADU-AUTH-01 v2.4 S5, S8 - ADU-REPO-01 S10.
 
+> **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
+> Where a rule is inlined below for practicality, **the citation beside it governs, and the
+> inlined line is the first thing to check when the two disagree.** A rule kept in two
+> places grows a stale copy, and the copy an agent reads first is the one it follows.
+
 ## What it is
 
 **One application with two modes, not two apps.** ADU-ARCH-01 S2: one account holds

@@ -10,7 +10,7 @@ guessed. Supply it and this runbook is a two-minute job.
 
 ## Why `apps/storefront/` does not exist yet
 
-**ADU-REPO-01 v1.1 S11 reorders the landing so that this is now the specified
+**ADU-REPO-01 v1.2 S11 reorders the landing so that this is now the specified
 behaviour rather than a workaround.** v1.0 had step 1 create a `CLAUDE.md` for every
 workstream and step 4 import the storefront by subtree - and those two steps conflict
 silently:
