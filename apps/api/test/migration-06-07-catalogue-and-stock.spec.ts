@@ -188,8 +188,12 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
     it('keeps the count equal to the sum of its events', async () => {
       await tx(async (c) => {
         await seed(c);
+        // ORDER_CREATED for the decrements: since migration 09, LINE_CANCELLED
+        // is a RELEASE reason and A3.2's release_has_a_line CHECK requires a
+        // reservation anchor on it - which is the constraint working, not a
+        // test inconvenience.
         for (const d of [10, -2, 5, -1, -4]) {
-          await addStock(c, d, d > 0 ? 'RESTOCK' : 'LINE_CANCELLED');
+          await addStock(c, d, d > 0 ? 'RESTOCK' : 'ORDER_CREATED');
         }
         const { rows } = (await c.query(
           `SELECT sum(delta)::int AS s FROM core.stock_event WHERE variant_id=$1`,
