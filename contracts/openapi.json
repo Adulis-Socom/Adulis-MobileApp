@@ -284,6 +284,20 @@
         ]
       }
     },
+    "/v1/categories": {
+      "get": {
+        "operationId": "StorefrontController_categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
     "/v1/claims": {
       "post": {
         "operationId": "ClaimsController_open",
@@ -681,6 +695,21 @@
         ]
       }
     },
+    "/v1/events": {
+      "post": {
+        "operationId": "AnalyticsController_postEvent",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "The closed allow-list of two client-observed events (S11).",
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
     "/v1/handoffs/sync": {
       "post": {
         "operationId": "HandoffController_sync",
@@ -693,6 +722,84 @@
         "summary": "Batch, per-item outcomes, never fails as a unit. 200 whenever well-formed.",
         "tags": [
           "Handoff"
+        ]
+      }
+    },
+    "/v1/notifications": {
+      "get": {
+        "operationId": "NotificationsController_list",
+        "parameters": [
+          {
+            "name": "as",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seller_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/v1/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_readAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/v1/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationsController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read state syncs across surfaces — one list, two clients.",
+        "tags": [
+          "Notifications"
         ]
       }
     },
@@ -947,6 +1054,50 @@
         ]
       }
     },
+    "/v1/post-links/resolve": {
+      "post": {
+        "operationId": "StorefrontController_resolve",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "operationId": "ReportsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Any surface, any authenticated actor; the queue trigger routes it.",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/v1/reports/mine": {
+      "get": {
+        "operationId": "ReportsController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The reporter's own reports and their outcomes.",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
@@ -959,6 +1110,36 @@
         "summary": "Create the seller. The first eligibility evaluation runs inline.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/analytics/full": {
+      "get": {
+        "operationId": "AnalyticsController_full",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Views, reservations, conversion, funnel — entitlement-gated at read time.",
+        "tags": [
+          "Analytics"
+        ]
+      }
+    },
+    "/v1/seller/analytics/overview": {
+      "get": {
+        "operationId": "AnalyticsController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Essential counts. Every tier, including Free and Beta.",
+        "tags": [
+          "Analytics"
         ]
       }
     },
@@ -1264,6 +1445,33 @@
         "summary": "KYC vendor handoff. No image ever reaches Adulis.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/notification-preferences": {
+      "get": {
+        "operationId": "NotificationsController_getPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "patch": {
+        "operationId": "NotificationsController_patchPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "suppressible=false is not togglable: 422, never a silent accept.",
+        "tags": [
+          "Notifications"
         ]
       }
     },
@@ -2225,6 +2433,174 @@
         },
         "tags": [
           "Catalogue"
+        ]
+      }
+    },
+    "/v1/sellers/lookup": {
+      "get": {
+        "operationId": "StorefrontController_lookup",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Returns sellers only, capped, never suggests (S7.6).",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}": {
+      "get": {
+        "operationId": "StorefrontController_storefront",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Header, stats, trust level, availability — one round trip (S3.1).",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}/products": {
+      "get": {
+        "operationId": "StorefrontController_products",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Seller's display order is the default (S7.5); lean by design (S14).",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}/products/{slug}": {
+      "get": {
+        "operationId": "StorefrontController_product",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Structured attributes, variants, stock with confirmed_at.",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}/reviews": {
+      "get": {
+        "operationId": "StorefrontController_reviews",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Badge per review (S12); anonymised rows carry no buyer.",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}/search": {
+      "get": {
+        "operationId": "StorefrontController_search",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Scope is one seller, always (S7.5).",
+        "tags": [
+          "Storefront"
         ]
       }
     }

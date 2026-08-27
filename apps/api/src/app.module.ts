@@ -52,6 +52,10 @@ import { INFERENCE_ADAPTER, NullInferenceAdapter } from './modules/chat/inferenc
 import { ClaimsController } from './modules/claims/claims.controller';
 import { ClaimsService } from './modules/claims/claims.service';
 import { ReviewsController } from './modules/reviews/reviews.controller';
+import { AnalyticsController } from './modules/analytics/analytics.controller';
+import { NotificationsController } from './modules/notifications/notifications.controller';
+import { ReportsController } from './modules/reports/reports.controller';
+import { StorefrontController } from './modules/storefront/storefront.controller';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -73,7 +77,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,

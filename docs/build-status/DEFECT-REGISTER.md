@@ -371,3 +371,53 @@ Effect:    A sloted template is unfillable from a bare conversation, and a reply
 Response:  WORKED AROUND
 Action:    Layers 1-2 answer only templates whose slots[] is empty; a sloted template ESCALATES (recorded as such in bot_turn). Bot messages store the template resource as body - never model output; chat.bot_turn still has no prose column. Layers 3-4 sit behind an inference adapter (Null bound until the integration lands), degrading exactly as S15.1's cap behaviour describes.
 Ruling needed: the slot-resolution model (probably a product-anchored conversation context) before the chatbot ships for real.
+
+### D-40 - Notification preferences: two endpoints, no table anywhere
+Severity:  MINOR
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.14 (GET/PATCH /v1/seller/notification-preferences, the suppressible=false 422 invariant); no document gives preferences storage; Appendix B's 109 do not include one
+Found by:  building the notifications group
+Effect:    The endpoints cannot exist without a table, and the gate's own 422 test needs the PATCH to exist.
+Response:  WORKED AROUND (the D-18 mechanism)
+Action:    Migration 0024 adds core.notification_preference keyed (seller, account, template_key) - personal to the account within the seller context - and check 14 pins it by name as a second body-over-manifest exception. The PATCH refuses to disable NEW_DEVICE_SIGNIN or any PAYOUT_CHANGE class with 422 (the classes migrations 16/22 enqueue unsuppressibly).
+Ruling needed: Appendix B to admit the row; the ruled preference-class vocabulary.
+
+### D-41 - 12.14 requires read state; ADU-DB-01 S20's notification table has no read column
+Severity:  MINOR
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.14 - "Read state syncs across surfaces - one list, two clients"; ADU-DB-01 v1.10 S20 lists no such column
+Found by:  building POST /v1/notifications/{id}/read
+Response:  FIXED (the D-27 way - the surface the later contract requires must exist)
+Action:    0024 adds core.notification.read_at with a partial unread index.
+Ruling needed: ADU-DB-01 v1.11 to print the column.
+
+### D-42 - POST /v1/seller/analytics/export is not built
+Severity:  PARKED
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.13 - "Async; returns a job handle, not a file. The job writes to R2 and the seller is notified"
+Effect:    The worker process does not exist, no job table exists to mint a handle from, and R2 is not wired.
+Action:    Parked with the section 24 worker slab. The DATA_EXPORT entitlement gate already exists in fn_effective_limit.
+
+### D-43 - The storefront product path says {slug}; no slug column exists
+Severity:  QUESTION
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.1 - GET /v1/storefronts/{handle}/products/{slug}; core.product has no slug in the 109-table schema
+Response:  WORKED AROUND
+Action:    The path parameter is served as the product id (a non-uuid is 404). A slug is a schema decision Appendix B has not made.
+Ruling needed: whether products get a slug column, and its uniqueness scope.
+
+### D-44 - 12.15's subject kinds and the frozen enum spell two values differently
+Severity:  MINOR
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.15 - subject_kind closed set PRODUCT/STORE/REVIEW/MESSAGE/ACCOUNT; core.report_target_kind - PRODUCT/REVIEW/MESSAGE/SELLER/STOREFRONT
+Response:  WORKED AROUND
+Action:    The wire accepts 12.15's five and maps STORE -> STOREFRONT, ACCOUNT -> SELLER at the edge. The enum is frozen (check 16); the wire is the contract's.
+Ruling needed: one taxonomy, in whichever document reissues first.
+
+### D-45 - The two client-observed events were missing from the seeded definitions
+Severity:  MINOR
+Phase:     C8
+Source:    ADU-API-01 v1.6 S12.16/S11 - the allow-list of two (NotificationOpened, PaymentInstructionsViewed); migration 16's seeded event_definition set carries neither snake-cased name
+Found by:  building POST /v1/events - the key-validation trigger would refuse both
+Response:  FIXED
+Action:    0024 inserts notification_opened and payment_instructions_viewed at version 1 (the definition table is append-only; growth is an INSERT).
