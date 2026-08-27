@@ -203,3 +203,42 @@ Effect:    Market selection matters the day a second market exists; the version 
 Response:  WORKED AROUND
 Action:    Phase 1 is one market, so the single live market is served (is_live DESC, created_at ASC as tiebreak) - loudly wrong the day a second market goes live, by design and by comment. min_supported_client is a value-arrives-later in the ADU-VAL-01 sense: floored at 0.0.0 so every client passes until a floor is ruled; client_status is OK unconditionally until then.
 Ruling needed: market resolution for anonymous bootstrap (geo? header? single-market assumption ratified?), and where the version floor is configured (a column on market? an ops value?).
+
+### D-21 - S9.4 says ten readiness items; the wire contract enumerates nine
+Severity:  MINOR
+Phase:     C1
+Source:    ADU-DB-01 v1.10 S9.4 - "the ten items in S4.6's table"; ADU-API-01 v1.6 S7.1a - nine items, named, in order, with R7c's removal of ACTIVE_HOURS explained (availability is informational, zero windows valid, a gate that never fails is worse than no gate)
+Found by:  building fn_publication_readiness
+Effect:    An agent following DB-01's count would reintroduce a gate that cannot fail.
+Response:  WORKED AROUND
+Action:    Nine items built, in the API document's ratified order. The later, wire-governing document wins; DB-01's count is stale against R7c.
+Ruling needed: ADU-DB-01 v1.11 to say nine.
+
+### D-22 - fn_publication_readiness's printed signature cannot emit the event its own invariant demands
+Severity:  MINOR
+Phase:     C1
+Source:    ADU-DB-01 v1.10 S9.4 prints LANGUAGE sql STABLE; the same section: "seller_publication_blocked is emitted ... by the function itself"
+Found by:  building the function
+Effect:    A STABLE sql function cannot INSERT; as printed, either the signature or the invariant must give.
+Response:  WORKED AROUND
+Action:    The invariant outranks the annotation (S4.6: the funnel data "cannot be reconstructed later"); built plpgsql VOLATILE. Related: eligibility_path is a NOT NULL cohort column on seller-scoped events, and a seller with no evaluation yet HAS no path - that event travels without seller_id, carrying the seller in payload, rather than inventing a cohort (D-21a in the migration's comments).
+Ruling needed: v1.11 to reprint the signature.
+
+### D-23 - Three reserved-band SQLSTATEs allocated for step-up failures
+Severity:  QUESTION
+Phase:     C1
+Source:    ADU-API-01 v1.6 S7.1a reserves U0003-U0999 "for future deliberate raises"; the taxonomy carries three distinct step-up codes (STEP_UP_REQUIRED / STEP_UP_EXPIRED / STEP_UP_ACTION_MISMATCH); no document assigns their SQLSTATEs
+Found by:  building fn_assert_step_up (migration 0019) - the checking function the S6.7 doctrine describes and every document elides
+Effect:    Distinct wire codes need distinct database signals, or the mapper collapses them.
+Response:  WORKED AROUND
+Action:    U0004 -> STEP_UP_REQUIRED (also covers another account's challenge - confirming a challenge exists is the same oracle a scope 404 refuses to be), U0005 -> STEP_UP_EXPIRED (stale freshness or past expiry; absent timing config fails closed here too), U0006 -> STEP_UP_ACTION_MISMATCH. Wired into the translator.
+Ruling needed: ratify the three assignments into S7.1a's table.
+
+### D-24 - POST /v1/seller/ownership-transfer is catalogued; its product rules are not written
+Severity:  MINOR (PARKED endpoint)
+Phase:     C1
+Source:    ADU-API-01 v1.6 S12.9 catalogues the endpoint and S15 (open items) says the product rules - who may receive, what notice, what the outgoing owner retains - "are not written in any document. ADU-PRD-01 v8.6 owes them"; fn_transfer_seller_ownership's body is elided everywhere
+Found by:  building C1
+Effect:    An endpoint built now would invent transfer semantics wholesale.
+Response:  PARKED - the endpoint is not built; the other thirteen C1 entries are.
+Ruling needed: ADU-PRD-01 v8.6's transfer rules; then the endpoint follows in days.

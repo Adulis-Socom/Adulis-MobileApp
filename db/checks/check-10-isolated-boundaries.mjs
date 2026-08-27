@@ -48,6 +48,12 @@ const PERMITTED_FUNCTIONS = [
   'verification.read_attestation',
   'verification.write_attestation',
   'verification.id_hash_matches',
+  // The existence probe (migration 0018): one boolean, no name, no id type,
+  // nothing logged because nothing is disclosed - same doctrine as
+  // id_hash_matches. Eligibility (S7.4) and readiness (S9.4) both need
+  // exactly this; reads that disclose still go only through
+  // read_attestation and its access log.
+  'verification.has_attestation',
   'financial.read_payment_evidence',
   'financial.render_payment_instructions',
   // Register D-16: the boundary's WRITE path. The document prints only the

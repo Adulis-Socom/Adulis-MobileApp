@@ -46,7 +46,6 @@ async function generate(): Promise<void> {
 
   const out = resolve(__dirname, '..', '..', '..', 'contracts', 'openapi.json');
   writeFileSync(out, JSON.stringify(document, null, 2) + '\n');
-  // eslint-disable-next-line no-console
   console.log(`wrote ${out} (${Object.keys(paths).length} path keys)`);
   await app.close();
   process.exit(0);

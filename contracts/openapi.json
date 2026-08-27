@@ -22,6 +22,237 @@
           "Bootstrap"
         ]
       }
+    },
+    "/v1/seller": {
+      "post": {
+        "operationId": "OnboardingController_createSeller",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create the seller. The first eligibility evaluation runs inline.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/availability": {
+      "put": {
+        "operationId": "OnboardingController_putAvailability",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The whole weekly pattern. Zero windows is valid and means closed.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/availability-overrides": {
+      "get": {
+        "operationId": "OnboardingController_getOverrides",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/availability-overrides/{date}": {
+      "put": {
+        "operationId": "OnboardingController_putOverride",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Marks the store closed on that date. Idempotent by path; no key.",
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "delete": {
+        "operationId": "OnboardingController_deleteOverride",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Removes the closure. 204 whether or not it existed.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/company-details": {
+      "patch": {
+        "operationId": "OnboardingController_patchCompanyDetails",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/fulfilment-methods": {
+      "get": {
+        "operationId": "OnboardingController_getFulfilmentMethods",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "put": {
+        "operationId": "OnboardingController_putFulfilmentMethods",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The whole set. At least one active, or 422.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/identity-verification": {
+      "post": {
+        "operationId": "OnboardingController_identityVerification",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "KYC vendor handoff. No image ever reaches Adulis.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/profile": {
+      "patch": {
+        "operationId": "OnboardingController_patchProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/readiness": {
+      "get": {
+        "operationId": "OnboardingController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The nine readiness items — a state, not a failure.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/social-accounts": {
+      "post": {
+        "operationId": "OnboardingController_createSocialAccount",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Link a social account; issues the account-control code.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/social-accounts/{id}/verify": {
+      "post": {
+        "operationId": "OnboardingController_verifySocialAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Fetch and match; captures the follower count at verification.",
+        "tags": [
+          "Onboarding"
+        ]
+      }
     }
   },
   "info": {

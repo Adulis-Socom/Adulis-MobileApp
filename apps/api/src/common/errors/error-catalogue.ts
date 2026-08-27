@@ -105,7 +105,8 @@ export const ERROR_CATALOGUE = {
   TIER_LIMIT_REACHED: { group: 'seller', status: 409, retryable: false },
   LEVEL_LIMIT_REACHED: { group: 'seller', status: 409, retryable: false },
   HANDLE_TAKEN: { group: 'seller', status: 409, retryable: false },
-  FULFILMENT_METHOD_REQUIRED: { group: 'seller', status: 409, retryable: false },
+  // 422, not 409: section 12.9 rules it ("at least one active or 422").
+  FULFILMENT_METHOD_REQUIRED: { group: 'seller', status: 422, retryable: false },
   PRODUCT_HAS_ACTIVE_ORDERS: { group: 'seller', status: 409, retryable: false },
   VARIANT_HAS_ACTIVE_ORDERS: { group: 'seller', status: 409, retryable: false },
 
