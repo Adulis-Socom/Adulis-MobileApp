@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Pool, PoolClient } from 'pg';
 
 /**
- * ADU-AUTH-01 v2.3 §16.2 — the whole role matrix, reproduced through
+ * ADU-AUTH-01 v2.4 §16.2 — the whole role matrix, reproduced through
  * core.fn_has_permission, in both directions.
  *
  * ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ const ROLES = [
 ] as const;
 type Role = (typeof ROLES)[number];
 
-/** ADU-AUTH-01 v2.3 §16.2, "Per-role totals, as a checksum against the seed". */
+/** ADU-AUTH-01 v2.4 §16.2, "Per-role totals, as a checksum against the seed". */
 const PER_ROLE_TOTAL: Record<Role, number> = {
   OWNER: 42,
   ADMIN: 40,
@@ -137,7 +137,7 @@ const ACCOUNT_FOR: Record<Role, string> = {
   CAMPAIGN_MANAGER: acct(6),
 };
 
-describe('ADU-AUTH-01 v2.3 §16.2 — the role matrix', () => {
+describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
   let pool: Pool;
   let client: PoolClient;
 

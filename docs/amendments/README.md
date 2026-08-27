@@ -1,103 +1,87 @@
-# `docs/amendments` — what governs, and where each part of it lives
+# What governs, and where each part of it lives
 
-Read this before `docs/`. Where an amendment here and a document in `docs/`
-disagree, **the amendment governs** until the next full reissue absorbs it.
+Read this before `docs/`.
 
-## ADU-AUTH-01 — governs at **v2.3**
+## Current versions
 
-| Part | Where | State |
+| Document | Governs at | In `docs/`? |
 |---|---|---|
-| §16 (the role matrix) and §0.1 | [`ADU-AUTH-01_v2_3_section_16.md`](ADU-AUTH-01_v2_3_section_16.md) | **v2.3** |
-| §16.2a, the seed as executable SQL | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) | **v2.3** |
-| §1–§14 and §17–§25 | `docs/ADU-AUTH-01_Authentication_and_Authorization_v2_1.md` | v2.1, and current |
+| **ADU-DB-01** | **v1.10** — absorbs amendments A1 and A2 | ⚠ **no** — see below |
+| **ADU-AUTH-01** | **v2.4** | ⚠ **no** — see below |
+| **ADU-API-01** | **v1.6** | ⚠ **no** — see below |
+| **ADU-VAL-01** | **v1.0** | ✅ [`docs/registers/`](../registers/) |
+| §16.2a, the permission seed | v2.4, unchanged from v2.3 | ✅ [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
-**Why v2.3 is split rather than installed whole.** v2.2 and v2.3 were supplied
-in-session, and the copies available carry the same transit damage v2.3 was
-written to defeat: in the prose, every three-byte UTF-8 glyph lost its trailing
-bytes. §16 and the `.sql` are **ASCII by construction** (that is the whole point
-of v2.3) and arrived intact, so they are installed verbatim. The rest of the
-document did not, and installing a damaged copy over the clean v2.1 already in
-`docs/` would lose text rather than gain it.
+**Amendments A1 and A2 no longer govern.** Both are absorbed into ADU-DB-01
+v1.10 §0.1 and are in `_superseded/`. So is the v2.3 §16 split file, which v2.4
+replaces.
 
-**Nothing is missing.** v2.3 §0.1: *"Everything else is carried forward from v2.2
-unaltered."* v2.2: *"Sections 1–14 and 17–25 are untouched. This is a rewrite of
-one section."* So v2.1 is the current text of every section not held here.
+## ⚠ Three documents are not installed, and this is what to do about it
 
-> **To finish the job:** drop the UTF-8 original of
-> `ADU-AUTH-01_Authentication_and_Authorization_v2_3.md` into `docs/`, move
-> `..._v2_1.md` to `_superseded/`, and delete
-> `ADU-AUTH-01_v2_3_section_16.md`. The `.sql` stays — it is what the tests
-> parse.
+**ADU-DB-01 v1.10, ADU-AUTH-01 v2.4 and ADU-API-01 v1.6 were supplied
+in-session, and the copies available carry transit damage in their prose** —
+every three-byte UTF-8 glyph lost its trailing bytes, the same corruption v2.3
+was written to defeat. Writing them out from those copies would put ~300 KB of
+damaged text into `docs/` and enshrine it.
 
-### What was verified, and how
+> **To finish: drop the UTF-8 originals of the three into `docs/`.** Nothing
+> else is needed — the superseded versions are already moved out, and no path in
+> this repository points at them.
 
-§16.2a claims the ASCII table and the generated SQL "cannot disagree" because
-both come from one source. That claim was checked rather than trusted, before
-either was used:
+**The build did not need them on disk, and here is why that is true rather than
+convenient.** The load-bearing content of both reissues is **ASCII by
+construction** and *is* installed and machine-checked:
 
-- all **252 cells** of §16.2's table agree with the SQL, in both directions;
-- the four checksums hold — **42** permissions, **139** grants, **8** step-up,
-  per-role **42 / 40 / 19 / 16 / 10 / 12**;
-- every invariant §16.4 and §16.5 state in prose is satisfied by the data —
-  Owner holds all 42, Admin lacks exactly two, Analyst holds zero writes,
-  Campaign has neither order-mutation grant, Inventory has handoff but not
-  `couriers:manage`, payout is Owner/Admin only;
-- the seven universal reads of §16.1 rule 3 reach all six roles.
+| What | Where | Checked by |
+|---|---|---|
+| The 42 permissions and 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) | `pnpm verify:permission-doc` and `permission-matrix.spec.ts`, over all 252 cells in both directions |
+| Appendix A, all 66 enum types | [`db/checks/fixtures/appendix-a.json`](../../db/checks/fixtures/appendix-a.json) | Appendix C **check 16**, against `pg_type` in both directions, every CI run |
+| Appendix B, the 109-table manifest | Appendix C **check 14** | live from Tier 2 |
+| Every column, constraint and function | the migration that transcribes it, citing its section in the header | Appendix C, and the integration suites |
 
-The one divergence found is **annotation, not data**: §16.2's *"of which write"*
-column gives Owner 27 and Admin 25, and any consistent definition of *write*
-derived from the action segment gives 28 and 26. The document never defines
-*write*, and exactly one code held by both roles is being counted as a read.
-`seller.sessions:revoke_all` is the likeliest, but it is a guess. **Reported for
-v1.10; nothing depends on it** — the binding counts all hold, and Analyst's zero
-is true under every candidate definition.
+Every migration header names the document, version and section it transcribes.
+A reader asking *"where did this column come from"* has the answer in the file.
 
-## ADU-DB-01 — governs at **v1.9 as amended by A1**
+## ADU-VAL-01 is a register. It governs nothing.
 
-| Part | Where |
+**It is never a build source**, and the distinction it exists to draw is between
+a **column** (a schema decision, which ADU-DB-01 makes) and a **value** (a
+business decision, which arrives later as a configuration row).
+
+> **Its only operational use:** a value listed there as **OPEN** or **DEFAULT**
+> is *deliberately* absent. **Do not report it as a spec gap, and do not invent
+> one.**
+>
+> **A value missing from a document that does NOT appear in ADU-VAL-01 is still
+> a gap — report it.**
+
+`core.ladder_config`'s sixteen columns are the worked example: the columns are
+named in ADU-DB-01 v1.10 §5.5 and built in migration 02; every value is
+ADU-VAL-01 Group A, B or C and is deliberately unseeded. An unnamed column
+blocks migration 8. An unseeded row blocks only the market seed, at Tier 4.
+
+## What Tier 1 found, and what came back
+
+Three sessions produced three reissues, and the pattern is worth keeping:
+
+| Reported | Became |
 |---|---|
-| Amendment A1 (four rulings) | [`ADU-DB-01_v1_9_AMENDMENT_A1.md`](ADU-DB-01_v1_9_AMENDMENT_A1.md) |
-| The document | supplied in-session; **not installed** — see below |
+| The step-up `CHECK` was an enumeration and had drifted, leaving three of eight unconstrained | **D1** — `requires_step_up` is a column and the constraint is total |
+| Appendix C check 10 forbade the `USAGE` its own design requires | **D7** — restated as a privilege query |
+| Check 15 matched the file whose job is to forbid the phrase | scoped to `db/migrations/` |
+| v2.2's matrix arrived with 252 cells collapsed to one glyph; the seed was refused rather than guessed | **v2.3** — ASCII table plus generated SQL, and **§16.6**: a two-form rule is only a check if something compares the forms |
+| The *"of which write"* column did not reproduce and *write* was never defined | **R30** — the column is withdrawn |
+| A suspended team member kept every permission for up to seven days | **R28** — suspension is an authorization gate, not only an authentication one |
+| `no_data_found` is `P0002`, and a deliberate denial shared `42501` with a misconfigured grant | **R29** — `U0001` and `U0002` |
+| Seven tables described in prose and never given columns | **v1.10 §5.5, §5.2, §7.1** and the C-series |
 
-`docs/` still holds **v1.8**. v1.9 was supplied in-session with the same prose
-damage and, unlike ADU-AUTH-01 §16, none of it is ASCII-by-construction. Its
-substance is carried in this repository three ways instead:
+**The one that did not come back is worth naming too.** A1.1 withdrew a
+correction I had reported as wrong, and confirmed the original: v1.8's Appendix
+A always held 66 types, and migration 01 had been built from it. A check that
+compares a document to a database cannot catch an error the two share — what
+caught this was that the two versions of Appendix A disagreed with *each other*,
+and the earlier one was reported rather than reconciled.
 
-- **A1** is installed here in full, and it is what changed the migrations;
-- **`db/checks/fixtures/appendix-a.json`** is Appendix A transcribed, and
-  Appendix C **check 16** asserts it against `pg_type` in both directions on
-  every CI run;
-- every migration cites the section it transcribes, in its header.
+## Where the register lives
 
-> **To finish the job:** drop the UTF-8 original of `ADU-DB-01 v1.9` into
-> `docs/` and move `..._v1_8.md` to `_superseded/`.
-
-### A1.1 required no change to migration 01
-
-A1.1 withdraws the block appended to Appendix A in v1.9 and rules that *"the
-original 66-row catalogue governs. Where the two disagree, the original is
-correct."* Migration 01 had been built from the original catalogue in the
-previous session — precisely because the appended block was labelled provisional
-— so every value it creates was already the ruled one, and nothing needed
-correcting. Verified against the applied database:
-
-```
-verification.verifier_kind     {KYC_VENDOR, VIDEO_CALL}          not the invented three
-billing.subscription_state     {BETA, TRIAL, ACTIVE, PAST_DUE, SUSPENDED, CANCELLED}
-chat.message_sender_kind       {BUYER, SELLER, TEAM_MEMBER, BOT}  TEAM_MEMBER retained
-financial.retention_reason     {AWAITING_VALIDATION, OPEN_CLAIM}
-nlu.phrase_source              {SEED, HARVESTED}
-core.team_role                 sixth value is CAMPAIGN_MANAGER    A1.4 already satisfied
-```
-
-**A1.1's note on the limit of check 16 is worth keeping in view.** Had migration
-01 been built from the appended block, Appendix A and `pg_type` would have
-*agreed* — both wrong. A check that compares a document to a database catches
-drift between them and cannot catch a shared error. What caught this was that
-the two versions of Appendix A disagreed with **each other**, and the earlier one
-was reported rather than reconciled.
-
-## Where the rest of the register lives
-
-`docs/build-status/TIER-1-SPEC-GAPS.md` — everything A1 did not settle, which is
-what ADU-DB-01 v1.10 is written against.
+`docs/build-status/TIER-1-SPEC-GAPS.md` — rewritten at the close of Tier 1.
