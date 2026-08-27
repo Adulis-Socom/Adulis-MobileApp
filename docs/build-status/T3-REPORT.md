@@ -37,7 +37,7 @@ Nothing else met the STOP bar.
 |---|---|
 | **A — finish the schema (migrations 08–15)** | **COMPLETE. Merged to main (PR #4); main CI green — first since Tier 0.** |
 | **B — request pipeline (13 components)** | **COMPLETE. Gate met.** |
-| C — 123 endpoints (C1–C8) | **C1, C2 COMPLETE** (C1: 13 of 14, ownership-transfer PARKED, D-24; C2: all 18 of §12.10). C3–C8 not started |
+| C — 123 endpoints (C1–C8) | **C1, C2, C3 COMPLETE** (C1: 13/14, transfer PARKED D-24; C2: 18/18; C3: cart + buyer orders + seller payment ops, 18 endpoints). C4–C8 not started |
 | D — security review, load tests, proofs, hygiene | not started |
 
 ## Phase B — what was built

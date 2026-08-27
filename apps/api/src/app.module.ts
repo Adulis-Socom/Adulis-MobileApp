@@ -17,6 +17,8 @@ import {
   SOCIAL_PLATFORM_ADAPTER,
 } from './modules/onboarding/social-platform.adapter';
 import { CatalogueController } from './modules/catalogue/catalogue.controller';
+import { OrdersController } from './modules/orders/orders.controller';
+import { OrdersService } from './modules/orders/orders.service';
 import { CatalogueService } from './modules/catalogue/catalogue.service';
 import {
   FakeMediaStorageAdapter,
@@ -47,7 +49,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -58,6 +60,7 @@ export const LOGGER = Symbol('LOGGER');
     // Production binds real adapters here by environment when they exist.
     { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new FakeSocialPlatformAdapter() },
     CatalogueService,
+    OrdersService,
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
     { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },
     RateLimitService,

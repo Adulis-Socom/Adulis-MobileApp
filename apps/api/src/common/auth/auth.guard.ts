@@ -84,18 +84,32 @@ export class AuthGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (isPublic) {
-      // Anonymous requests still carry a database identity: nobody.
-      req.ctx = { accountId: null, actorRole: '', sellerId: null };
-      return true;
-    }
-
     const bearer = req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.slice('Bearer '.length).trim()
       : null;
     const cookie = readCookie(req.headers.cookie, '__Host-adulis_session');
-
     const token = bearer ?? cookie;
+
+    if (isPublic) {
+      // Public means AUTH-OPTIONAL, never auth-ignored: a presented
+      // credential still authenticates (a signed-in buyer's cart must be
+      // theirs, not their device's), and a presented-but-invalid one is
+      // refused rather than silently downgraded to anonymous - a client
+      // holding a dead token must learn it now, not at checkout.
+      if (!token) {
+        req.ctx = { accountId: null, actorRole: '', sellerId: null };
+        return true;
+      }
+      const session = await this.sessions.authenticate(token);
+      const carrier = bearer !== null ? 'MOBILE' : 'CONSOLE';
+      if (session.audience !== carrier) {
+        throw new AdulisException('AUDIENCE_NOT_PERMITTED');
+      }
+      req.auth = session;
+      req.ctx = { accountId: session.accountId, actorRole: 'BUYER', sellerId: null, audience: session.audience };
+      return true;
+    }
+
     if (!token) throw new AdulisException('SESSION_EXPIRED');
 
     const session = await this.sessions.authenticate(token);
@@ -138,7 +152,7 @@ export class AuthGuard implements CanActivate {
       declaredRole ?? (requiresSellerContext(req.path, req.method) ? 'SELLER' : 'BUYER');
 
     req.auth = session;
-    req.ctx = { accountId: session.accountId, actorRole, sellerId };
+    req.ctx = { accountId: session.accountId, actorRole, sellerId, audience: session.audience };
     return true;
   }
 }
