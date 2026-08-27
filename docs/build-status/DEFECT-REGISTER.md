@@ -421,3 +421,13 @@ Source:    ADU-API-01 v1.6 S12.16/S11 - the allow-list of two (NotificationOpene
 Found by:  building POST /v1/events - the key-validation trigger would refuse both
 Response:  FIXED
 Action:    0024 inserts notification_opened and payment_instructions_viewed at version 1 (the definition table is append-only; growth is an INSERT).
+
+### D-46 - Ten callable SECURITY DEFINER functions were PUBLIC-executable, six of them boundary functions
+Severity:  MAJOR
+Phase:     D
+Source:    PostgreSQL's default EXECUTE-to-PUBLIC grant; migrations 04, 10, 12, 13 predate the REVOKE discipline 0018+ follow
+Found by:  the Phase D definer sweep "from the other side" (pg_proc x aclexplode over all 60 definer functions)
+Effect:    Any connecting role - adulis_readonly, adulis_jobs, anything future - could call financial.render_payment_instructions / read_payment_evidence / write_payment_evidence and verification.read_attestation / write_attestation / id_hash_matches, NAMING ANY ACTOR (the actor is a parameter), plus the three ladder helpers and the lapse sweep. Ciphertext, not plaintext - but the boundary exists so lesser-role compromise does not reach evidence at all, and the access log would attribute the read to whoever the caller claimed to be.
+Response:  FIXED
+Action:    Migration 0025 revokes PUBLIC on all ten and re-grants intended callers by name. Check 10 gains a third assertion: no callable function in a boundary schema may be PUBLIC-executable (trigger-returning functions are uncallable and exempt). Full suite green after the revokes, proving the named grants are complete. SECURITY-REVIEW.md SR-1.
+Ruling needed: none - but ADU-DB-01 v1.11 should state the REVOKE-on-CREATE discipline as a rule, since four migrations forgot what five later ones knew.
