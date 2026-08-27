@@ -193,3 +193,13 @@ Effect:    Every claim-driven forced demotion is impossible as printed - the CHE
 Response:  WORKED AROUND
 Action:    The upheld decision IS a moderation act, so the decision trigger records it as one: INSERT core.moderation_event (actor = decided_by, target SELLER, decision CLAIM_UPHELD, reason = outcome_reason) and passes the id to the recompute - claim -> moderation_event -> seller_level_event, one audit chain. decided_by becomes effectively required for an UPHELD outcome (the moderation event's actor is NOT NULL): an anonymous demotion fails loudly rather than proceeding.
 Ruling needed: v1.11 to print the decision path's moderation_event write, or supply the intended alternative.
+
+### D-20 - /v1/bootstrap needs two values no document rules
+Severity:  QUESTION
+Phase:     B, pipeline component 12
+Source:    ADU-API-01 v1.6 S3.1 defines the response (min_supported_client, market{...}); no document says WHICH market an anonymous bootstrap resolves, nor where the client version floor lives
+Found by:  building the endpoint
+Effect:    Market selection matters the day a second market exists; the version floor gates every store-distributed client.
+Response:  WORKED AROUND
+Action:    Phase 1 is one market, so the single live market is served (is_live DESC, created_at ASC as tiebreak) - loudly wrong the day a second market goes live, by design and by comment. min_supported_client is a value-arrives-later in the ADU-VAL-01 sense: floored at 0.0.0 so every client passes until a floor is ruled; client_status is OK unconditionally until then.
+Ruling needed: market resolution for anonymous bootstrap (geo? header? single-market assumption ratified?), and where the version floor is configured (a column on market? an ops value?).
