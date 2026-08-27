@@ -140,6 +140,11 @@ export const en = {
   'deletion.effect.reviews_anonymised_not_deleted': 'Reviews remain, attributed to no one.',
   'deletion.effect.verification_retained': 'The verification record is retained.',
   'deletion.effect.reservations_released': 'Active reservations are released.',
+
+  // Chat (C7) - the escalation is the one bot utterance with no intent
+  // behind it, so it lives here rather than in nlu.answer_template.
+  'chat.bot.escalated': 'Your question has been passed to the seller. They will reply here.',
+  'notification.chat.escalated': 'A buyer question needs your reply.',
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */

@@ -37,7 +37,7 @@ Nothing else met the STOP bar.
 |---|---|
 | **A — finish the schema (migrations 08–15)** | **COMPLETE. Merged to main (PR #4); main CI green — first since Tier 0.** |
 | **B — request pipeline (13 components)** | **COMPLETE. Gate met.** |
-| C — 123 endpoints (C1–C8) | **C1–C6 COMPLETE** (C1: 13/14 transfer PARKED D-24; C2: 18/18; C3: 18; C4: full financial boundary; C5: sync batch, QR at R20/R25, courier by RLS; C6: 28 endpoints — OTP ladder, sessions/R17 cookie pair, step-up single-use (D-32 roll-forward, migration 0023), devices, recovery, team/couriers with seat entitlements, billing behind R4, closure, BOTH deletion paths with S16.9 blockers, phone-reuse block read at seller creation; D-32..D-37 registered). C7–C8 not started |
+| C — 123 endpoints (C1–C8) | **C1–C6 COMPLETE** (C1: 13/14 transfer PARKED D-24; C2: 18/18; C3: 18; C4: full financial boundary; C5: sync batch, QR at R20/R25, courier by RLS; C6: 28 endpoints — OTP ladder, sessions/R17 cookie pair, step-up single-use (D-32 roll-forward, migration 0023), devices, recovery, team/couriers with seat entitlements, billing behind R4, closure, BOTH deletion paths with S16.9 blockers, phone-reuse block read at seller creation; D-32..D-37 registered; C7: 13 endpoints — conversations with R10's defaultless scope (creation endpoint added, D-38), the cascade's layers 1-2 with escalation-as-notification and slot-gated templates (D-39), claims with the trigger-attached bundle, the single-transaction bank record, the identity-free export, the seller's remedy, and reviews with the derived badge). C8 not started |
 | D — security review, load tests, proofs, hygiene | not started |
 
 ## Phase B — what was built

@@ -351,3 +351,23 @@ Effect:    seller_team_member.account_id is NOT NULL - there is nothing to attac
 Response:  WORKED AROUND
 Action:    Unknown phone is 404 NOT_FOUND: the invitee signs in once (creating their account with their own declaration), then the invite succeeds. No pending-invite table exists to complete into (Appendix B has none).
 Ruling needed: whether a pending-invite flow is wanted; if so it needs a table and a notification.
+
+### D-38 - 12.7's catalogue has no way to BEGIN a conversation
+Severity:  MINOR
+Phase:     C7
+Source:    ADU-API-01 v1.6 S12.7 lists list/read/send/escalate; chat.conversation is UNIQUE (seller, buyer, market); nothing creates the row a message endpoint requires
+Found by:  building the chat group
+Effect:    A buyer who has never chatted with a seller has no conversation id to post into, and the send endpoint cannot invent one.
+Response:  WORKED AROUND (additive endpoint)
+Action:    POST /v1/conversations { seller_id } creates-or-returns the pair's one row - idempotent by the UNIQUE, additive to the contract, same class of omission the v1.1 catalogue had with claims.
+Ruling needed: ADU-API-01 v1.7 to admit the endpoint (or name the intended bootstrap).
+
+### D-39 - The bot's reply carries template_key and slots, but nothing rules what fills a slot
+Severity:  QUESTION
+Phase:     C7
+Source:    ADU-API-01 v1.6 S12.7 - "template_key and slots, never assembled prose"; nlu.answer_template.slots text[]; a conversation carries NO product context to resolve a slot like {price} against
+Found by:  building the cascade's answer path
+Effect:    A sloted template is unfillable from a bare conversation, and a reply with holes is worse than none.
+Response:  WORKED AROUND
+Action:    Layers 1-2 answer only templates whose slots[] is empty; a sloted template ESCALATES (recorded as such in bot_turn). Bot messages store the template resource as body - never model output; chat.bot_turn still has no prose column. Layers 3-4 sit behind an inference adapter (Null bound until the integration lands), degrading exactly as S15.1's cap behaviour describes.
+Ruling needed: the slot-resolution model (probably a product-anchored conversation context) before the chatbot ships for real.

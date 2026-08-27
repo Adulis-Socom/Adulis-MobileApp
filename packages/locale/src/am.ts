@@ -129,4 +129,7 @@ export const am: Catalogue = {
   'deletion.effect.verification_retained': 'የማረጋገጥ መዝገብ ይቀመጣል።',
   'deletion.effect.reservations_released': 'ነቃ የሆኑ መያዟዎች ይለቀቃሉ።',
 
+  'chat.bot.escalated': 'ጥያቄዎ ለሻጭ ተላልፏል። እዚህ ይመልሱልዎታል።',
+  'notification.chat.escalated': 'የገዢ ጥያቄ ምላሽዎን ይፈልጋል።',
+
 };

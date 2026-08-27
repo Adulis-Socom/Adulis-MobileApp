@@ -284,6 +284,243 @@
         ]
       }
     },
+    "/v1/claims": {
+      "post": {
+        "operationId": "ClaimsController_open",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Buyer opens; the evidence bundle attaches by trigger at open.",
+        "tags": [
+          "Claims"
+        ]
+      },
+      "get": {
+        "operationId": "ClaimsController_listBuyer",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Claims"
+        ]
+      }
+    },
+    "/v1/claims/{id}": {
+      "get": {
+        "operationId": "ClaimsController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Claims"
+        ]
+      }
+    },
+    "/v1/claims/{id}/evidence": {
+      "post": {
+        "operationId": "ClaimsController_evidence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "The bank record: a single transaction, not a statement (X15).",
+        "tags": [
+          "Claims"
+        ]
+      }
+    },
+    "/v1/claims/{id}/evidence-export": {
+      "post": {
+        "operationId": "ClaimsController_export",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The buyer's own transaction; nothing about who the seller is (X15).",
+        "tags": [
+          "Claims"
+        ]
+      }
+    },
+    "/v1/conversations": {
+      "post": {
+        "operationId": "ChatController_open",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create-or-return the one conversation per buyer-seller pair.",
+        "tags": [
+          "Chat"
+        ]
+      },
+      "get": {
+        "operationId": "ChatController_list",
+        "parameters": [
+          {
+            "name": "as",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seller_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default.",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/v1/conversations/{id}/escalate": {
+      "post": {
+        "operationId": "ChatController_escalate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Free escalation — S15.1 layer 5 on request.",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/v1/conversations/{id}/messages": {
+      "get": {
+        "operationId": "ChatController_messages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chat"
+        ]
+      },
+      "post": {
+        "operationId": "ChatController_postMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "text or chip_id; the bot replies with template_key and slots, never prose.",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
     "/v1/courier/orders": {
       "get": {
         "operationId": "HandoffController_courierOrders",
@@ -686,6 +923,30 @@
         ]
       }
     },
+    "/v1/orders/{id}/review": {
+      "post": {
+        "operationId": "ReviewsController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "One per order, terminal orders only; the badge is derived, never sent.",
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
@@ -790,6 +1051,54 @@
         "summary": "Removes the closure. 204 whether or not it existed.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/claims": {
+      "get": {
+        "operationId": "ClaimsController_listSeller",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Seller-scoped; GET /v1/claims is buyer-shaped.",
+        "tags": [
+          "Claims"
+        ]
+      }
+    },
+    "/v1/seller/claims/{id}/remedy": {
+      "post": {
+        "operationId": "ClaimsController_remedy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "REFUND or FULFIL — the seller's choice (X15).",
+        "tags": [
+          "Claims"
         ]
       }
     },
@@ -1669,6 +1978,30 @@
         "summary": "The nine readiness items — a state, not a failure.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/reviews": {
+      "get": {
+        "operationId": "ReviewsController_sellerReviews",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read-only — there is no field a seller can write on a review.",
+        "tags": [
+          "Reviews"
         ]
       }
     },
