@@ -1,0 +1,27 @@
+# ADU-REPO-01 §3 — ownership
+#
+# GitHub applies the LAST matching pattern, so order matters: the broad workstream
+# rules come first and the shared paths that need two reviewers come last.
+#
+# An unassigned path has no owner line and gets a review from whoever is nearest
+# until it does. That is deliberate: an owner invented for an unstaffed workstream
+# is a review that nobody actually performs.
+
+/apps/api/          @naod
+/db/                @naod
+/contracts/         @naod
+/ops/               @naod
+/docs/              @naod
+
+/apps/console/      @abenezer
+
+# /apps/mobile/     — unassigned (ADU-REPO-01 §1)
+# /apps/storefront/ — unassigned (ADU-REPO-01 §1)
+
+# Both owners. A change here reaches every workstream, which is the whole reason
+# `packages/` exists — see §4 rule 2. The correct way past a dependency rule is to
+# move the shared thing here, and that move is meant to be a deliberate, reviewed
+# act rather than a convenience.
+/packages/          @naod @abenezer
+/.github/           @naod @abenezer
+/CLAUDE.md          @naod @abenezer

@@ -54,6 +54,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
+          # ref, so `--filter "...[origin/main]"` below would select NOTHING and
+          # the scoped steps would silently pass without running.
+          fetch-depth: 0
+
 
       - uses: pnpm/action-setup@v4
 
@@ -70,8 +76,20 @@ jobs:
       - name: Create the four extensions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
+      # ADU-REPO-01 v1.2 S7 - scoped to what changed, plus its dependents.
+      #
+      # S11.2's two foot-guns, both reproduced here before this was written:
+      #   - fetch-depth: 0 above, or origin/main is not a ref and NOTHING is selected
+      #   - '!adulis-platform' because THE WORKSPACE ROOT IS SELECTABLE. Any change
+      #     outside a package directory selects it, and the root's scripts are
+      #     `pnpm -r ...`, so a filtered run would re-enter unfiltered and execute
+      #     every package anyway - the scoping silently doing nothing.
+      #
+      # Verified: without the exclusion the selector returns `.` alongside the six
+      # packages; with it, only the six. Lint stays repo-wide (`eslint .`), as do
+      # every gate below - they guard invariants no single workstream owns.
       - name: Typecheck (strict, no exceptions)
-        run: pnpm typecheck
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' typecheck
 
       - name: Lint
         run: pnpm lint
@@ -80,11 +98,35 @@ jobs:
       # integration tests, both of which need real PostgreSQL: roles, grants and
       # current_setting's transaction-local behaviour cannot be mocked. Also runs
       # the locale type-level completeness test.
+      # ADU-REPO-01 S4 - the four dependency rules. Enforced here rather than in
+      # review, because a rule that depends on someone noticing is a rule that
+      # holds until the week someone is busy.
+      #
+      # Run BEFORE Build on purpose: dist/ is doNotFollow'd rather than excluded,
+      # so built output stays in the graph as a leaf and an import into it is
+      # still catchable. Running before Build simply means there is less of it.
+      - name: Dependency rules (ADU-REPO-01 S4)
+        run: pnpm verify:deps
+
+      # And prove the rules FIRE. `verify:deps` passing tells you nothing on its
+      # own: a config with a typo in a path regex, or with preserveSymlinks left
+      # true, passes exactly as loudly as a correct one. This plants each
+      # violation, asserts it is caught by name, and removes it.
+      - name: The dependency rules actually fire
+        run: pnpm verify:deps-fires
+
+      # ADU-REPO-01 v1.2 S5.1. NestJS setGlobalPrefix('v1') prefixes the ROUTES and
+      # leaves the Swagger document keys unprefixed - a spec that serves correctly
+      # from the real API and 404s against every mocked path. Prism serves what the
+      # path keys say. INERT until Tier 3 produces a contract, and loudly so.
+      - name: The contract carries /v1 in its path keys
+        run: pnpm verify:contract
+
       - name: Test
-        run: pnpm test
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
 
       - name: Build
-        run: pnpm build
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
       # ---- Database gates ---------------------------------------------------
 

@@ -2,3 +2,14 @@
 * text=auto eol=lf
 *.png binary
 *.zip binary
+
+# ADU-REPO-01 S5.1 - the seams are generated. Marking them keeps a review honest:
+# a diff on either file should only ever appear in a commit CI made, and
+# linguist-generated collapses it by default so it is not mistaken for authored work.
+contracts/openapi.json                  linguist-generated=true
+packages/api-client/src/schema.d.ts     linguist-generated=true
+
+# A hand-merged lockfile installs a set of versions nobody tested (S6). There is no
+# sensible textual merge, so git is told not to attempt one - take either side and
+# re-run `pnpm install`.
+pnpm-lock.yaml                          merge=binary linguist-generated=true

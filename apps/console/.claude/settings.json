@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_why": "ADU-REPO-01 v1.2 S8. Read denials are the point, not a bonus: sibling CLAUDE.md files are pulled in ON DEMAND when Claude reads into that directory, so isolation is a consequence of not reaching across rather than a loader guarantee. Denying the read is what makes it one - and it enforces dependency rule 2 at the agent's READ boundary, one layer earlier than dependency-cruiser catches it at the import. Paths are CWD-relative and assume the session started in this directory, which is S8's habit.",
+  "_verify": "Run /permissions and /context after any change here. If claudeMdExcludes is not honoured by your Claude Code version it is silently ignored, and the deny rules below still hold.",
+  "claudeMdExcludes": [
+    "**/apps/api/**",
+    "**/apps/mobile/**",
+    "**/apps/storefront/**"
+  ],
+  "permissions": {
+    "deny": [
+      "Read(../api/**)",
+      "Edit(../api/**)",
+      "Write(../api/**)",
+      "Read(../mobile/**)",
+      "Edit(../mobile/**)",
+      "Write(../mobile/**)",
+      "Read(../storefront/**)",
+      "Edit(../storefront/**)",
+      "Write(../storefront/**)",
+      "Edit(../../contracts/openapi.json)",
+      "Write(../../contracts/openapi.json)",
+      "Edit(../../packages/api-client/src/schema.d.ts)",
+      "Write(../../packages/api-client/src/schema.d.ts)",
+      "Edit(../../db/migrations/**)",
+      "Write(../../db/migrations/**)"
+    ]
+  }
+}
