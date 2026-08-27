@@ -1,6 +1,193 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/auth/otp/request": {
+      "post": {
+        "operationId": "AuthController_otpRequest",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Idempotency-keyed; a replay sends no SMS (X11).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/otp/resend": {
+      "post": {
+        "operationId": "AuthController_otpResend",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Not idempotency-keyed; backoff 30s-60s-120s (4.3).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/otp/verify": {
+      "post": {
+        "operationId": "AuthController_otpVerify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Creates buyer identity on first use (S6.1).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/recovery": {
+      "post": {
+        "operationId": "AuthController_recovery",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Operator review, never self-service (S6.6). 202 for any number.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/sessions": {
+      "get": {
+        "operationId": "AuthController_sessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Device, first seen, last activity, location (S8.2).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/sessions/revoke-others": {
+      "post": {
+        "operationId": "AuthController_revokeOthers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Step-up REVOKE_ALL_SESSIONS; revocation is immediate.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/sessions/{id}": {
+      "delete": {
+        "operationId": "AuthController_revokeSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/step-up/request": {
+      "post": {
+        "operationId": "AuthController_stepUpRequest",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "The SMS names the action (4.4); binds action and target (9.2).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/step-up/verify": {
+      "post": {
+        "operationId": "AuthController_stepUpVerify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/billing/mark-transferred": {
+      "post": {
+        "operationId": "BillingController_markTransferred",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The seller's own assertion; reconciliation is operator work.",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/billing/purchase-intent": {
+      "post": {
+        "operationId": "BillingController_purchaseIntent",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Step-up SUBSCRIPTION_CHANGE; opens a collection record at the scheduled price.",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/billing/subscription": {
+      "get": {
+        "operationId": "BillingController_subscription",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "CONSOLE only by permission surface — 403 to MOBILE, never a redirect (R4).",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/v1/bootstrap": {
       "get": {
         "operationId": "BootstrapController_bootstrap",
@@ -157,6 +344,103 @@
         "summary": "Event A, courier side.",
         "tags": [
           "Handoff"
+        ]
+      }
+    },
+    "/v1/deletion/confirm": {
+      "post": {
+        "operationId": "DeletionController_confirm",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Requires explicit acknowledgement; irreversible.",
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
+    "/v1/deletion/otp/request": {
+      "post": {
+        "operationId": "DeletionController_otpRequest",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "purpose ACCOUNT_DELETION; the SMS names the action (4.4).",
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
+    "/v1/deletion/otp/verify": {
+      "post": {
+        "operationId": "DeletionController_otpVerify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
+    "/v1/deletion/preview": {
+      "get": {
+        "operationId": "DeletionController_preview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Blockers as items[] and what deletion does, before confirm.",
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
+    "/v1/devices": {
+      "post": {
+        "operationId": "AuthController_registerDevice",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Anonymous, app-generated id; binds at identity creation (S11.1).",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/devices/{id}": {
+      "patch": {
+        "operationId": "AuthController_patchDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
         ]
       }
     },
@@ -509,6 +793,34 @@
         ]
       }
     },
+    "/v1/seller/closure": {
+      "post": {
+        "operationId": "DeletionController_enterClosure",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Enters CLOSING: new reservations stop, existing orders operable.",
+        "tags": [
+          "Deletion"
+        ]
+      },
+      "delete": {
+        "operationId": "DeletionController_leaveClosure",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Returns to ACTIVE. Reversible by design.",
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
     "/v1/seller/company-details": {
       "patch": {
         "operationId": "OnboardingController_patchCompanyDetails",
@@ -520,6 +832,87 @@
         },
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/couriers": {
+      "get": {
+        "operationId": "CouriersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Couriers"
+        ]
+      },
+      "post": {
+        "operationId": "CouriersController_invite",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Invite by phone; the courier signs in with their own OTP.",
+        "tags": [
+          "Couriers"
+        ]
+      }
+    },
+    "/v1/seller/couriers/{id}": {
+      "delete": {
+        "operationId": "CouriersController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Revoking ends assignment-scoped access immediately.",
+        "tags": [
+          "Couriers"
+        ]
+      }
+    },
+    "/v1/seller/deletion": {
+      "post": {
+        "operationId": "DeletionController_deleteSeller",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].",
+        "tags": [
+          "Deletion"
+        ]
+      }
+    },
+    "/v1/seller/deletion/blockers": {
+      "get": {
+        "operationId": "DeletionController_sellerBlockers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "200 with items[] — a state, not a failure (S16.9).",
+        "tags": [
+          "Deletion"
         ]
       }
     },
@@ -1315,6 +1708,58 @@
         "summary": "Fetch and match; captures the follower count at verification.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/team": {
+      "get": {
+        "operationId": "TeamController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Business tier; Owner/Admin only (seller.staff:admin).",
+        "tags": [
+          "Team"
+        ]
+      },
+      "post": {
+        "operationId": "TeamController_invite",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Invite by phone; the member signs in with their own OTP.",
+        "tags": [
+          "Team"
+        ]
+      }
+    },
+    "/v1/seller/team/{id}": {
+      "delete": {
+        "operationId": "TeamController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Revokes on the next request (R28); the account is untouched.",
+        "tags": [
+          "Team"
         ]
       }
     },

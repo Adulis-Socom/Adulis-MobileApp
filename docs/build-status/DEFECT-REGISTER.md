@@ -292,3 +292,62 @@ Effect:    A client-held signing key contradicts the trust model (nothing client
 Response:  WORKED AROUND
 Action:    The QR the seller displays carries an HMAC the SERVER minted over (order_ref, nonce, key version) with the versioned identity secret under a domain prefix; the buyer's device captures it and timestamps the blob. "Signs once, retries identical bytes" becomes literal: the signature proves the scan came from a genuinely displayed QR, and byte-identity discriminates a retry from an attack (nonce+order+account+signed_at-ms). A nonce that is not the order's displayed QR is REJECTED_SIGNATURE; an absent token or order is REJECTED_UNKNOWN_ORDER.
 Ruling needed: ratify the scheme or supply the intended one.
+
+### D-32 - fn_assert_step_up never consumed the challenge
+Severity:  MAJOR
+Phase:     C6
+Source:    ADU-AUTH-01 v2.4 S9.2 - "Uses: exactly one. Consumed by the action it authorised"; migration 0019 (merged) verified freshness and binding but wrote nothing
+Found by:  reading 0019 against S9.2 while wiring the C6 step-up endpoints
+Effect:    One satisfied challenge could authorise the SAME action repeatedly inside the five-minute freshness window - a replayed payout change, a second reissue.
+Response:  FIXED (roll-forward)
+Action:    0023 adds step_up_challenge.consumed_at and rewrites fn_assert_step_up to refuse a consumed challenge and consume on success, under FOR UPDATE so concurrent presentations serialise. Consumption is transaction-atomic: a refused action rolls its consumption back, so the honest retry after fixing the refusal still works (proven in the C6 gate suite). c4's post-consumption tests now mint per-use challenges - the behaviour the spec always described.
+
+### D-33 - AUTH 4.2 mandates OTP_SUPERSEDED; API 7.1's closed taxonomy has no such code
+Severity:  MINOR
+Phase:     C6
+Source:    ADU-AUTH-01 v2.4 S4.2 - "The error must say so specifically - OTP_SUPERSEDED"; ADU-API-01 v1.6 S7.1 Auth row omits it and the taxonomy is closed
+Found by:  building POST /v1/auth/otp/verify
+Effect:    The two documents cannot both hold on the wire.
+Response:  WORKED AROUND
+Action:    DOCUMENT_AUTHORITY gives wire behaviour to ADU-API-01, so the wire says OTP_EXPIRED - and the verify path detects a code from a recently superseded challenge specifically (burning no attempt on the live one), and the otp_expired string in BOTH locales now reads "check your messages for a newer code", which is the UX S4.2 exists to protect.
+Ruling needed: ADU-API-01 v1.7 to add OTP_SUPERSEDED to the Auth group, or ADU-AUTH-01 to withdraw the named code.
+
+### D-34 - 12.2 lists revoke-others for B S C; AUTH 9.1 says no step-up action is reachable from MOBILE
+Severity:  MINOR
+Phase:     C6
+Source:    ADU-API-01 v1.6 S12.2 row "POST /v1/auth/sessions/revoke-others S | B S C"; ADU-AUTH-01 v2.4 S9.1 INVARIANT - all step-up actions CONSOLE-only
+Found by:  building the endpoint
+Effect:    A buyer on MOBILE either can or cannot revoke all other sessions; the documents disagree.
+Response:  WORKED AROUND
+Action:    Authorization doctrine belongs to ADU-AUTH-01: the endpoint (and step-up/request itself) refuses MOBILE with 403. A mobile buyer still revokes sessions one at a time - same outcome, more taps, no invariant broken.
+Ruling needed: ADU-API-01 v1.7 to correct the audience column, or AUTH to carve the exception.
+
+### D-35 - Buyer-side account deletion: two undocumented mechanisms had to exist
+Severity:  QUESTION
+Phase:     C6
+Source:    ADU-PRD-01 v8.5 S21 ("Buyers: identity scrubbed... active reservations released") names no mechanism for either; account.phone_e164 is NOT NULL UNIQUE and IS the authentication factor
+Found by:  writing core.fn_delete_account (0023)
+Effect:    (a) "Released" cannot apply to an order whose payment was already asserted - releasing it strands money; (b) "scrubbed" cannot null the phone column.
+Response:  WORKED AROUND (both recorded in the 0023 header)
+Action:    (a) Deletion is BLOCKED while the account, as buyer, holds an order in PAYMENT_SUBMITTED or PAYMENT_CONFIRMED - S16.9's own money-blocks-deletion principle applied to the buyer side; pre-payment reservations release through the ordinary buyer-cancel path (fn_cancel_line). (b) The scrubbed account keeps a tombstone phone: '+999' + digits derived from the account id - satisfies core.e164, stays unique, frees the real number.
+Ruling needed: ADU-PRD-01 to ratify the buyer money gate (or specify the settlement path) and the tombstone convention.
+
+### D-36 - The billing purchase flow is listed in 12.12 but S16.7 says no purchase surface exists at MVP
+Severity:  QUESTION
+Phase:     C6
+Source:    ADU-API-01 v1.6 S12.12 (purchase-intent, mark-transferred); ADU-DB-01 v1.10 S18.5 - "No purchase surface exists at MVP... beta sellers pay nothing"; no document specifies the intent's lifecycle, reconciliation, or the no-subscription case
+Found by:  building the billing group
+Effect:    The endpoints exist on the wire with no ratified flow behind them.
+Response:  WORKED AROUND (minimal transcription)
+Action:    purchase-intent asserts step-up SUBSCRIPTION_CHANGE, prices from billing.price_schedule with the term discount, and opens a collection_record (provider_kind BANK_TRANSFER) against the EXISTING subscription - absent subscription or unscheduled tier is 404, fail closed. mark-transferred stamps marked_transferred_at, idempotently. Reconciliation stays operator work outside the contract, as S18.5 describes.
+Ruling needed: the purchase lifecycle (intent expiry, reconciliation-to-ACTIVE, locked-rate write) when the surface ships for real.
+
+### D-37 - Team/courier invite of a phone Adulis has never seen
+Severity:  QUESTION
+Phase:     C6
+Source:    ADU-AUTH-01 v2.4 S12 - invited by phone, "authenticates with their own OTP"; no document says what happens when no account holds the phone
+Found by:  building POST /v1/seller/team and /v1/seller/couriers
+Effect:    seller_team_member.account_id is NOT NULL - there is nothing to attach an unknown phone to, and creating an identity on someone else's behalf would bypass the age declaration and consent of sign-up.
+Response:  WORKED AROUND
+Action:    Unknown phone is 404 NOT_FOUND: the invitee signs in once (creating their account with their own declaration), then the invite succeeds. No pending-invite table exists to complete into (Appendix B has none).
+Ruling needed: whether a pending-invite flow is wanted; if so it needs a table and a notification.
