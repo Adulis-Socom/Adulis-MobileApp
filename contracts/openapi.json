@@ -97,6 +97,84 @@
         ]
       }
     },
+    "/v1/courier/orders": {
+      "get": {
+        "operationId": "HandoffController_courierOrders",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Currently assigned orders only — by row-level security.",
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
+    "/v1/courier/orders/{id}": {
+      "get": {
+        "operationId": "HandoffController_courierOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The QR is present only once custody has been accepted (R25).",
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
+    "/v1/courier/orders/{id}/custody-accept": {
+      "post": {
+        "operationId": "HandoffController_custodyAccept",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Event A, courier side.",
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
+    "/v1/handoffs/sync": {
+      "post": {
+        "operationId": "HandoffController_sync",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Batch, per-item outcomes, never fails as a unit. 200 whenever well-formed.",
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
     "/v1/orders": {
       "post": {
         "operationId": "OrdersController_createOrder",
@@ -541,6 +619,53 @@
         ]
       }
     },
+    "/v1/seller/orders/{id}/courier-assignment": {
+      "post": {
+        "operationId": "HandoffController_assignCourier",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/custody-transfer": {
+      "post": {
+        "operationId": "HandoffController_custodyTransfer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Event A, seller side. Never completes an order.",
+        "tags": [
+          "Handoff"
+        ]
+      }
+    },
     "/v1/seller/orders/{id}/payment-evidence": {
       "get": {
         "operationId": "FinancialController_sellerEvidence",
@@ -610,6 +735,30 @@
         "summary": "First rejection opens a 12-hour retry window; the second ends the order.",
         "tags": [
           "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/qr": {
+      "get": {
+        "operationId": "HandoffController_qr",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "409 ORDER_NOT_READYABLE before PAYMENT_CONFIRMED (R20).",
+        "tags": [
+          "Handoff"
         ]
       }
     },
