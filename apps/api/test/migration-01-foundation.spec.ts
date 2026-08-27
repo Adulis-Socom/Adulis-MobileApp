@@ -28,7 +28,10 @@ const catalogue = JSON.parse(
  * that a defect in the transcription would have to survive being written twice.
  */
 
-const CONNECTION_STRING = process.env['DATABASE_URL'];
+// The privileged credential, deliberately: these suites write fixtures into
+// configuration tables and assert grants from the outside, neither of which
+// adulis_app (the runtime DATABASE_URL from Tier 3) may do.
+const CONNECTION_STRING = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
 
 const ROLES = [
   'adulis_app',

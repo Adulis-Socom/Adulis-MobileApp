@@ -63,7 +63,12 @@ if (checks.length !== 16) {
 const needsDb = checks.some((c) => c.kind === 'database' && tier >= c.liveAtTier);
 let client = null;
 if (needsDb) {
-  const connectionString = process.env['DATABASE_URL'];
+  // Privileged introspection: from Tier 3, DATABASE_URL carries adulis_app
+  // (never a superuser, in any environment) and cannot see everything these
+  // sixteen checks assert about. The checks are the reviewer's eye, so they
+  // look with the migrate credential.
+  const connectionString =
+    process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
   if (!connectionString) {
     console.error('FAIL  DATABASE_URL is not set, and live database checks are due at this tier.');
     console.error('      Run:  docker compose up -d  &&  cp .env.example .env');

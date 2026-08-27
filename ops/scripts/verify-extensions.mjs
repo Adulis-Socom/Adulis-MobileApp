@@ -17,7 +17,10 @@ import pg from 'pg';
 
 const REQUIRED = ['vector', 'btree_gist', 'pg_trgm', 'pgcrypto'];
 
-const connectionString = process.env.DATABASE_URL;
+// Privileged tooling credential first: from Tier 3, DATABASE_URL carries
+// adulis_app, which is not provisioned LOGIN until after the migrations -
+// and this gate runs before them.
+const connectionString = process.env.DATABASE_URL_MIGRATE ?? process.env.DATABASE_URL;
 if (!connectionString) {
   console.error('FAIL  DATABASE_URL is not set. Copy .env.example to .env first.');
   process.exit(2);

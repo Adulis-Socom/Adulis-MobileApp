@@ -49,7 +49,13 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgres://adulis_bootstrap:ci-password@localhost:5432/adulis
+      # DATABASE_URL is the RUNTIME credential and carries adulis_app - never a
+      # superuser, in any environment, CI included: under a superuser every
+      # boundary check passes while proving nothing. The role is provisioned
+      # LOGIN by the step after "Migrations apply". Privileged tooling (the
+      # extension bootstrap, db:check, db:determinism, fixture-writing suites)
+      # uses DATABASE_URL_MIGRATE.
+      DATABASE_URL: postgres://adulis_app:ci-password@localhost:5432/adulis
       DATABASE_URL_MIGRATE: postgres://adulis_bootstrap:ci-password@localhost:5432/adulis
 
     steps:
@@ -74,7 +80,7 @@ jobs:
       # The service container does not run db/init, so create the extensions the
       # same way docker-compose does locally. This is also section 18 step 1.
       - name: Create the four extensions
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
+        run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
       # ADU-REPO-01 v1.2 S7 - scoped to what changed, plus its dependents.
       #
@@ -122,6 +128,14 @@ jobs:
       - name: The contract carries /v1 in its path keys
         run: pnpm verify:contract
 
+      # LIVE from Tier 3 - section 7.3's completeness gate. Every code in the
+      # closed taxonomy must carry its derived key in BOTH locale catalogues;
+      # a new code cannot ship without its Amharic string, which is friction
+      # and the point. Presence, not quality - the human-translation gate is
+      # separate and later.
+      - name: Every error code exists in both locale catalogues
+        run: pnpm verify:error-locale
+
       - name: Build
         run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
@@ -132,6 +146,13 @@ jobs:
 
       - name: Migrations apply
         run: pnpm db:migrate
+
+      # Migration 01 creates every role NOLOGIN (a password in a migration is a
+      # secret in git). The runtime role gets LOGIN here, per environment - the
+      # same provisioning db/init/01-local-logins.sql does for local compose.
+      - name: Provision the runtime roles
+        run: |
+          psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1             -c "ALTER ROLE adulis_app  LOGIN PASSWORD 'ci-password'"             -c "ALTER ROLE adulis_jobs LOGIN PASSWORD 'ci-password'"
 
       # AFTER the migrations, deliberately. The api test suites are integration
       # tests against the migrated schema (they query core.market in their first
@@ -251,8 +272,18 @@ jobs:
       # any removal, rename or retype inside /v1" — additive-only becomes a build
       # failure, not a discipline. A hand-edited spec is a lie with authority.
       #
-      # - name: Regenerate OpenAPI and fail on non-additive change
-      #   run: pnpm --filter @adulis/api openapi:generate && pnpm openapi:diff
+      # LIVE from Tier 3 - the seam has a producer. CI regenerates the
+      # contract and the committed copy must be byte-identical: git is how a
+      # hand-edited spec (a lie with authority) is caught, and how a code
+      # change that forgot to regenerate is caught, in the same breath. The
+      # ADDITIVE-only differ (fail on any removal/rename/retype inside /v1)
+      # is still owed - recorded in T3-REPORT.md - and this equality check
+      # is what holds the seam until it lands.
+      - name: The contract is CI-authored and current
+        run: |
+          pnpm generate:openapi
+          pnpm generate:api-client
+          git diff --exit-code contracts/ packages/api-client/src/schema.d.ts
 
       # --- Secret scan -------------------------------------------------------
       # UNBLOCKED BY: choosing a scanner. Section 12: "the real .env never enters

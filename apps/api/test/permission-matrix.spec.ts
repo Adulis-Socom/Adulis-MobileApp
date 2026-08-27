@@ -34,7 +34,10 @@ import { Pool, PoolClient } from 'pg';
  * applies the grant, applies the surface, and refuses everything else.
  */
 
-const CONNECTION_STRING = process.env['DATABASE_URL'];
+// The privileged credential, deliberately: these suites write fixtures into
+// configuration tables and assert grants from the outside, neither of which
+// adulis_app (the runtime DATABASE_URL from Tier 3) may do.
+const CONNECTION_STRING = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
 
 const SEED_SQL = path.resolve(
   __dirname,

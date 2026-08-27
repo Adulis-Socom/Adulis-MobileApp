@@ -21,16 +21,63 @@ phase's content: the same failure predates every T3 commit.** Merging this
 branch turns `main` green; a cherry-pick of the one commit is available if
 the owner wants `main` green sooner.
 
+**A second CI defect sat behind the first.** With the probe fixed, the run
+died at Test: CI ran the api suites BEFORE `Migrations apply`, so every
+integration suite failed on a bare database (`relation core.market does not
+exist`). The order dates from Tier 0, when every test was a unit test; the
+probe failure earlier in the job masked it on every run since, and a
+developer database is always already migrated so no local gate could see
+it. Fixed by moving Test after the migrations in `ci.yml`.
+
 Nothing else met the STOP bar.
 
 ## Where the run is
 
 | Phase | State |
 |---|---|
-| **A — finish the schema (migrations 08–15)** | **COMPLETE. Gate met.** |
-| B — request pipeline (13 components) | not started |
+| **A — finish the schema (migrations 08–15)** | **COMPLETE. Merged to main (PR #4); main CI green — first since Tier 0.** |
+| **B — request pipeline (13 components)** | **COMPLETE. Gate met.** |
 | C — 123 endpoints (C1–C8) | not started |
 | D — security review, load tests, proofs, hygiene | not started |
+
+## Phase B — what was built
+
+Branch `tier3/phase-b-request-pipeline` off the merged main. Thirteen
+components, in dependency order, each committed green:
+
+1. **The runtime role became real**: `DATABASE_URL` carries `adulis_app`
+   everywhere (local + CI, LOGIN provisioned per environment); privileged
+   tooling moved to `DATABASE_URL_MIGRATE`. Every boundary test after this
+   proves something.
+2. **Kysely types generated** from the live schema (108 tables, zero drift,
+   `db:codegen`).
+3. **The error contract**: closed catalogue, derived keys, RFC 9457 +
+   `items[]`, §6.3's pg translation, R29's three-SQLSTATE sharpness
+   (42501 logged fatal, served 500, never 403).
+4. **The pipeline** (§5 order, one wiring shared with every e2e test):
+   request id → 256KB limit → exact CORS + Origin CSRF (cookie-carried
+   writes only) → locale → global-guard authenticate (ONE session read
+   joining standing + R17 lifetimes; unmarked routes fail closed; the
+   carrier must match the surface) → per-request seller context →
+   fixed-window rate limit (keyed phone digests) → idempotency (record
+   inside the handler transaction; concurrent twin loses the UNIQUE race
+   and is served the winner's response) → `HandlerTransaction` (the ONE
+   place `set_config` happens) → the error mapper.
+5. **`/v1/bootstrap`** (D-20: market resolution + version floor unruled,
+   floored open loudly).
+6. **The contract producer**: `/v1` in the path keys, `verify:contract`
+   live and passing, `schema.d.ts` generated, CI equality tripwire armed.
+
+**The Tier 3 gate, item by item**: role matrix incl. every negative ✓
+(252 cells, standing suite) · 8 step-up permissions reject MOBILE ✓ ·
+scope failure = 404 **through the API** ✓ (pipeline e2e: stranger probes a
+seller route, gets the ordinary not-found envelope, no detail) ·
+pooled-connection settings-leak test ✓ (standing suite, now running as
+`adulis_app`). 188 api tests; `ci:local` exit 0.
+
+**Owed, recorded**: the additive-only contract differ (CI holds equality
+until it lands) · the Zod→OpenAPI bridge decision (C1, first request
+body) · Prism mock smoke against the generated contract.
 
 ## Phase A — what was built
 
