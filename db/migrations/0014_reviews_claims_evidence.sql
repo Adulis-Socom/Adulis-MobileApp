@@ -229,7 +229,9 @@ CREATE TRIGGER trg_claim_attach_evidence
 -- ---------------------------------------------------------------------------
 CREATE FUNCTION core.fn_claim_decision_effects() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = core AS $fn$
-DECLARE v_seller uuid;
+DECLARE
+  v_seller uuid;
+  v_mod    uuid;
 BEGIN
   IF NEW.outcome IS NOT NULL AND OLD.outcome IS NULL THEN
     SELECT o.seller_id INTO v_seller FROM core."order" o WHERE o.id = NEW.order_id;
@@ -241,7 +243,20 @@ BEGIN
 
     IF NEW.outcome = 'UPHELD' THEN
       UPDATE core.review SET badge = 'CLAIM_UPHELD' WHERE order_id = NEW.order_id;
-      PERFORM core.fn_recompute_seller_level(v_seller, true, NULL);
+      -- moderation_change_is_logged (migration 8) refuses a MODERATION-
+      -- sourced level change with no moderation_event behind it - found by
+      -- the CP-7 test, loudly. The upheld decision IS the moderation act,
+      -- so it is recorded as one, and the level event points at it:
+      -- claim -> moderation_event -> seller_level_event, one audit chain.
+      -- decided_by is NOT NULL by way of moderation_event.actor_account_id:
+      -- an upheld claim with no decider fails here rather than demoting
+      -- anonymously.
+      INSERT INTO core.moderation_event
+        (actor_account_id, target_kind, target_id, decision, reason)
+      VALUES (NEW.decided_by, 'SELLER', v_seller, 'CLAIM_UPHELD',
+              coalesce(NEW.outcome_reason, 'claim ' || NEW.id || ' upheld'))
+      RETURNING id INTO v_mod;
+      PERFORM core.fn_recompute_seller_level(v_seller, true, v_mod);
     END IF;
   END IF;
   RETURN NEW;
@@ -321,6 +336,9 @@ ALTER FUNCTION core.fn_confirmation_window_lapse(uuid)   OWNER TO adulis_migrate
 
 GRANT SELECT ON core.review, core.claim TO adulis_migrate;
 GRANT INSERT ON core.claim TO adulis_migrate;  -- the lapse function opens the SYSTEM claim
+-- the decision trigger records the moderation act it demotes under
+-- (moderation_event is migration 14's table; the grant is dormant DDL only
+-- in the sense a GRANT cannot be - so it lives there, not here)
 -- The attach trigger crosses the boundary with IDS ONLY: column-level SELECT,
 -- no object key, no byte counts, and the retention marker stays
 -- financial-owned - migrate may call it, not reimplement it.

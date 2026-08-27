@@ -781,6 +781,7 @@ GRANT SELECT ON core.session, core.seller_courier, core.account, core.market
   TO adulis_migrate;
 GRANT UPDATE (revoked_at) ON core.session TO adulis_migrate;
 GRANT SELECT, INSERT ON core.moderation_queue_item TO adulis_migrate;
+GRANT SELECT, INSERT ON core.moderation_event TO adulis_migrate;  -- the claim-decision trigger's audit row
 
 GRANT SELECT ON core.follow, core.seller_activity, core.broadcast,
                core.notification, core.content_report, core.block,

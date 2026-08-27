@@ -610,7 +610,13 @@ GRANT USAGE ON SCHEMA financial TO adulis_app;
 GRANT EXECUTE ON FUNCTION financial.read_payment_evidence(uuid, uuid, text)        TO adulis_app;
 GRANT EXECUTE ON FUNCTION financial.render_payment_instructions(uuid, uuid)        TO adulis_app;
 GRANT EXECUTE ON FUNCTION financial.write_payment_evidence(uuid, text, text, int, int) TO adulis_app;
-GRANT EXECUTE ON FUNCTION financial.fn_mark_evidence_retained(uuid)                TO adulis_app;
+-- fn_mark_evidence_retained is deliberately NOT app-callable: retention is
+-- marked by the claim-open trigger and the lapse function (both execute as
+-- adulis_migrate, migration 12), never by a request handler deciding on its
+-- own that evidence should outlive its purge date. Check 10 enforces this.
+-- (The PUBLIC revoke is what does it: PostgreSQL grants EXECUTE to PUBLIC
+-- on every new function by default.)
+REVOKE ALL ON FUNCTION financial.fn_mark_evidence_retained(uuid) FROM PUBLIC;
 
 REVOKE ALL ON financial.payment_evidence, financial.payout_credential,
               financial.access_log
