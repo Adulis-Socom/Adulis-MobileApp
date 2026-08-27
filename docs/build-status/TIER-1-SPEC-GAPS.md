@@ -1,194 +1,144 @@
-# Tier 1 — what ADU-DB-01 v1.9 and ADU-AUTH-01 v2.2 still leave open
+# Tier 1 — the register for ADU-DB-01 v1.10
 
-**Produced:** 26 August 2026, second Tier 1 session · **Supersedes** the register
-written against v1.8, which is discharged.
+**Produced:** 27 August 2026, third Tier 1 session · **Supersedes** the registers
+written against v1.8 and against v1.9-before-A1, both discharged.
 **Governing rule:** Work order T1 §3 — *"Transcribe, do not design. Where you
-believe something is missing, report it — do not fill it in."* §9 — *"the correct
-response is a document amendment, not a judgement call in SQL."*
+believe something is missing, report it — do not fill it in."*
 
-**Migrations 01–05 are built, applied, tested and deterministic.** This is the
-residue.
+**Tier 1 is complete.** Migrations 01–05 are built, applied, tested and
+deterministic; the permission catalogue and the 139-grant matrix are seeded and
+verified; Gate C is met. This is what v1.10 is written against.
 
-**v1.9 and v2.2 closed almost everything the first register raised.** All eight of
-v1.9's defects D1–D8 are real fixes; both corrections the previous session
-proposed were adopted (check 10 became a privilege query, check 15 was scoped to
-`db/migrations/`); and v2.2's rewrite of §16 from a group matrix into a code-level
-one is exactly the right answer to the objection that a group matrix cannot be
-seeded.
-
-| Migration | Status |
+| | |
 |---|---|
-| **01 foundation** | Built, applied, tested, deterministic. Unchanged under v1.9 |
-| **02 configuration** | **Built.** D8 defined the three tables that had no columns |
-| **03 accounts / sessions** | **Built.** |
-| **04 verification** | **Built.** D4 supplied the missing write path |
-| **05a sellers / availability** | **Built.** D5 fixed the timezone column |
-| **05b permission catalogue** | **42 permissions seeded.** `role_permission`'s 139 grants blocked — §A1 |
+| Appendix C | **7 PASS · 9 PENDING · 0 FAIL** across sixteen checks |
+| The matrix, through `fn_has_permission` | **139 pass · 113 raise · 0 disagreements** |
+| Step-up on `MOBILE` | **0 of 48** allowed, every role including `OWNER` |
+| Determinism | identical across two clean databases, 2895 lines |
+| Tests | **117 pass**, 6 suites |
+
+**Amendment A1 settled everything that was blocking**, and both of its
+predecessors' registers are now closed. A1.1 confirmed migration 01 needed no
+change; A1.2 added the two missing `step_up_action` values; A1.3 supplied
+`fn_has_permission` and the Owner ruling; A1.4's `CAMPAIGN_MANAGER` was already
+correct. ADU-AUTH-01 v2.3 delivered the matrix in a form that survived transit.
 
 ---
 
-## §A — The one blocker, and it is not a document defect
+## §A — The one ruling still needed, and it is a live hole
 
-### A1 · `ADU-AUTH-01 v2.2` §16.2 arrived unreadable · **BLOCKS the `role_permission` seed**
+### A1 · A **suspended** team member keeps every permission until their session expires · **v1.10, SECURITY**
 
-The matrix is 42 rows × 6 role columns = **252 cells**, and every cell arrived as
-the same character. Every three-byte UTF-8 glyph in the file lost its trailing
-bytes in transit, so ✓ and ✗ — along with the em dashes and the ⚠ marks — all
-collapsed to a bare `â`. The legend suffered the same fate, and now reads
-*"`â` is granted; `â` is not."*
+A1.3's body resolves the actor's role with:
 
-**Nothing is wrong with the document.** It needs to be re-sent as a UTF-8 file, or
-dropped into `docs/`, and the seed is then one `INSERT`.
+```sql
+SELECT tm.role INTO v_role
+  FROM core.seller_team_member tm
+ WHERE tm.seller_id = p_seller AND tm.account_id = p_account
+   AND tm.revoked_at IS NULL;          -- suspended_at is NOT tested
+```
 
-**What the prose alone fixes**, and it is not enough:
+`core.seller_team_member` carries **both** `suspended_at` and `revoked_at`, and
+§18.1 is explicit that suspension is the mechanism: *"Team logins are disabled,
+not deleted: `seller_team_member.suspended_at` rather than a row removal."*
 
-| Fixed by prose | Value |
-|---|---|
-| `OWNER` | all 42 |
-| `ADMIN` | 40 — all but `seller.account:delete` and `seller.ownership:transfer` |
-| Universal reads (§16.1 rule 3) | `orders:read`, `products:read`, `stock:read`, `store:read`, `reviews:read`, `notifications:read`, `analytics.basic:read` to all six |
-| §16.4 departures | `CAMPAIGN` loses both order-mutation grants · `INVENTORY` gains `handoff:read` + `handoff:custody_transfer` but not `couriers:manage` · `INVENTORY` gains `fulfilment:write` but not `store:write` / `availability:write` · `orders:reissue_instructions` is Owner + Admin only |
-| `ANALYST` | 10, of which **0** writes |
+**Disabling a login does not end a session.** A member suspended for cause who is
+holding a live console session keeps their full grant set until that session
+expires — **up to 12 hours, or 7 days on a remembered device under R17**. For an
+`ADMIN` that is payout access, staff administration, subscription and identity
+management, for a week, after the Owner has suspended them.
 
-**Underdetermined:** *which* ten reads `ANALYST` holds, and the remaining
-membership of `SALES_SUPPORT`'s 19, `INVENTORY`'s 16 and `CAMPAIGN`'s 12.
+**Two candidate rulings, and this is the founder's call, not a transcription:**
 
-A seeded guess would satisfy **every checksum in §6.9a** and still be wrong — the
-counts are exactly what a plausible guess gets right. A wrong grant is not a
-visible defect; it is a person who can or cannot do their job, discovered months
-later. §24 already says why: *"A matrix test that checks only positives passes on
-a seed that grants everything to everyone."*
+1. **Test it here** — add `AND tm.suspended_at IS NULL` to the predicate. One
+   line, immediate effect on every in-flight session, and it makes suspension
+   behave like the revocation §8.2 already promises takes effect *"server-side
+   immediately, not at next token refresh"*.
+2. **Revoke sessions on suspension instead** — a trigger on `suspended_at`
+   ending every session that member holds. Stronger, and consistent with
+   §8.2's mechanism, but it is a trigger writing `core.session` and belongs to
+   migration 3's neighbourhood rather than to this function.
 
-`core.role_permission` is therefore created and left **empty**, with a test
-asserting the emptiness so that a later run cannot mistake it for done.
+**Not taken here.** Adding the clause is a ruling about what suspension means,
+and A1.3's body is otherwise transcribed verbatim. Reported instead.
+
+### A2 · `no_data_found` is SQLSTATE `P0002`, not class `02` · **v1.10, API contract**
+
+A1.3 annotates the scope failure `-- API maps to 404`. `USING ERRCODE =
+'no_data_found'` yields **`P0002`**, PL/pgSQL's condition code, not `02000`.
+
+It is distinct from `42501`, which is all the design needs, and both are asserted
+by test. But **the API mapping layer must map `P0002` → 404 and `42501` → 403**,
+and a reader going by class would look in the wrong place. Worth one sentence in
+ADU-API-01 §7's error table.
 
 ---
 
-## §B — Contradictions inside ADU-DB-01 v1.9
+## §B — Documentation defects found while applying A1
 
-### B1 · Appendix A defines six enum types twice, and differently · **v1.10**
+### B1 · v2.3 §16.2a's fenced SQL still says `CAMPAIGN`, not `CAMPAIGN_MANAGER` · **v2.3 errata**
 
-v1.9 carries forward v1.8's *Other schemas* table of eleven non-core types
-**unchanged**, then appends a second block of seven marked *"provisional until
-check 16 has run green once."* Six disagree:
+A1.4 states that *"ADU-AUTH-01 v2.3 and its `.sql` are corrected"*. The attached
+`.sql` **is** corrected. The fenced SQL block inside the markdown is **not** — all
+twelve of its Campaign rows still read `('CAMPAIGN', ...)`, which is the version
+A1.4 says *"would have failed on the cast."*
 
-| Type | Carried forward — used by migration 01 | Appended |
-|---|---|---|
-| `verification.verifier_kind` | `KYC_VENDOR`, `VIDEO_CALL` | `VENDOR_KYC`, `FAYDA`, `MANUAL_REVIEW` |
-| `financial.retention_reason` | `AWAITING_VALIDATION`, `OPEN_CLAIM` | `OPEN_CLAIM`, `LEGAL_HOLD`, `DISPUTE` |
-| `financial.secret_subject_kind` | `PAYMENT_EVIDENCE`, `PAYOUT_CREDENTIAL` | same values, **reversed order** |
-| `chat.message_sender_kind` | `BUYER`, `SELLER`, `TEAM_MEMBER`, `BOT` | drops **`TEAM_MEMBER`** |
-| `nlu.phrase_source` | `SEED`, `HARVESTED` | `SEEDED`, `HARVESTED`, `OPERATOR_ADDED` |
-| `billing.subscription_state` | `BETA`, `TRIAL`, `ACTIVE`, `PAST_DUE`, `SUSPENDED`, `CANCELLED` | drops **`TRIAL`**, adds `SAFETY_SUSPENDED` and `EXPIRED` |
+The repository installed and seeded from the `.sql`, and the tests parse the
+`.sql`, so nothing here is wrong. But the markdown is the copy a reader reaches
+for first.
 
-**The carried-forward table governs here**, on the document's own instruction that
-the appended block is provisional. Check 16 has now run green once against it, so
-the appended block is what needs correcting. Three are load-bearing enough to
-name:
+### B2 · §16.2's *"of which write"* column does not reproduce, and *write* is never defined · **v1.10, minor**
 
-- **`chat.message_sender_kind` dropping `TEAM_MEMBER`** contradicts §13.2, which
-  requires that where a team member confirms a payment *"the acting member is
-  recorded, never the seller owner by default"*.
-- **`billing.subscription_state` dropping `TRIAL`** contradicts §18.1, whose
-  `trial_started_at` / `trial_ends_at` columns and 60-day rule need the state.
-  `SAFETY_SUSPENDED` in that list is a `core.seller_status` value, not a
-  subscription state — it reads as a copy from the wrong enum.
-- **`financial.secret_subject_kind`'s order** matters because the column is
-  enum-typed and `ORDER BY` follows declaration order. §13.3's body lists it in
-  the carried-forward order.
+Any consistent definition of *write* taken from the action segment gives
+**Owner 28 / Admin 26** against the stated **27 / 25**. The difference is exactly
+one code held by both roles being counted as a read. Candidates:
+`seller.sessions:revoke_all`, `seller.payment:confirm`, `seller.refunds:report`,
+`seller.claims:respond`, `seller.orders:respond`,
+`seller.orders:reissue_instructions`.
 
-### B2 · D6 misdiagnoses v1.8, and that misdiagnosis produced B1 · **v1.10**
-
-D6 states that v1.8's Appendix A was *"a `core`-only catalogue presented as
-complete"* and that *"every non-core enum — six of them — is absent."*
-
-**Neither half is true.** v1.8 carried all **eleven** non-core types in an *Other
-schemas* table, and v1.9 reproduces that table verbatim. The appended block was
-written to fill an absence that was not there, and it is the sole source of the
-six contradictions above.
-
-The **real** v1.8 defect was the count: its header said 54 and §0.1 / §0.2 said 56
-where the enumeration is **66**. v1.9 fixes that correctly and well, by deleting
-the asserted number and adding check 16. **That part should stand exactly as
-written.** Only D6's account of what was wrong needs correcting — so the appended
-block can be withdrawn outright rather than reconciled type by type.
+**Nothing depends on it.** Every binding count holds — 42 / 139 / 8, per-role
+42 · 40 · 19 · 16 · 10 · 12 — and **`ANALYST` holds zero writes under every
+candidate definition**, which is the row that matters. Either define *write* or
+drop the column.
 
 ### B3 · The closing summary contradicts §0.1 on two counts · **v1.10, editorial**
 
-The closing paragraph reads *"**109 tables**, 56 enum types, 22 append-only,
-fifteen Appendix C checks."* §0.1 says Appendix C *"gains check 16 and now runs
-**sixteen**"*, and that the asserted enum count *"is replaced by a derivation rule
-and a check"*. The summary reasserts the number the body just retired, and
-undercounts the checks.
+v1.9's closing paragraph reads *"109 tables, **56 enum types**, 22 append-only,
+**fifteen** Appendix C checks."* §0.1 says Appendix C *"gains check 16 and now
+runs **sixteen**"*, and that the asserted enum count *"is replaced by a derivation
+rule and a check"*. The count is **66** (A1.1), now **232 values**, and there are
+**sixteen** checks.
 
----
-
-## §C — Where a permission cannot be exercised because its enum value is absent
-
-### C1 · `core.step_up_action` has six values; §16.3 has eight step-up permissions · **v1.10, BLOCKING for step-up**
-
-Appendix A: `PAYOUT_CHANGE`, `REISSUE_INSTRUCTIONS`, `TEAM_CHANGE`,
-`SUBSCRIPTION_CHANGE`, `SELLER_DELETION`, `REVOKE_ALL_SESSIONS`.
-
-`seller.identity:manage` and `seller.ownership:transfer` — both step-up, both
-Owner-critical, both added precisely to close holes — **have no value here.**
-`core.step_up_challenge.action` cannot record a challenge for either, so §6.7's
-invariant (*"every mutation implementing one of those actions takes a
-`step_up_challenge_id` argument"*) is unsatisfiable for exactly the two most
-dangerous ones.
-
-This is D1's class of drift in a different place: the enum is a second copy of a
-list that lives in AUTH-01 §16.3. Two values are needed; naming them is v1.10's
-call, not a migration's.
-
-### C2 · §6.9a's Companion list names three permissions that do not exist · **v1.10, editorial**
+### B4 · §6.9a's Companion list names three permissions that do not exist · **v1.10, editorial**
 
 *"The Companion's Phase 1 grants, for reference"* lists
 `seller.reservations:read`, `seller.reservations:respond` and
 `seller.payment_receipt:confirm`. The catalogue calls them `seller.orders:read`,
 `seller.orders:respond` and `seller.payment:confirm`.
 
-Harmless **only** because the list is marked *for reference* and the seed was taken
-from AUTH-01 §15.1. Under that correspondence §6.9a's nine and §15.1's nine **M**
-codes are the same set exactly, which is what made the surface mapping safe to
-make. Worth fixing before someone seeds from the wrong list — which is how D1
-began.
+Harmless **only** because the seed came from ADU-AUTH-01 §16.2a. Worth fixing
+before someone seeds from the wrong list — which is how D1 began. Note also that
+the list is now stale in a second way: v2.3 makes **twelve** permissions
+mobile-reachable, not nine.
 
 ---
 
-## §D — The one decision this seed had to make for itself
-
-### D1 · What surfaces do the three **M²** permissions carry today? · **v1.10**
-
-`seller.reviews:read`, `seller.analytics.basic:read` and
-`seller.notifications.preferences:write` are marked **M²** — *"Companion Phase 2
-(ARCH-01 §3.1). Built on beta evidence, not before."* No document says what
-`surfaces` they hold **now**.
-
-**Seeded `{CONSOLE}`.** §6.9a enumerates exactly the nine Phase 1 codes as
-carrying `{MOBILE, CONSOLE}` and these are not among them; §15.1's legend says
-*"everything unmarked is console-only"*, and **M²** is not **M**. Widening later
-is one `UPDATE`; narrowing after a client has shipped against it is a breaking
-change. **Confirm or reverse in v1.10.**
-
----
-
-## §E — Columns described but not named
+## §C — Columns described but not named
 
 Each table is built with the columns the document names and without the ones it
-only describes. None blocks Tier 1; each blocks a later migration or an API
+only describes. **None blocks Tier 1**; each blocks a later migration or an API
 contract.
 
 | # | Table | Not named | Blocks |
 |---|---|---|---|
-| E1 | `core.ladder_config` | the **Established and Trusted thresholds**, and the **demotion rules** | migration 8's `fn_recompute_seller_level` |
-| E2 | `core.timing_config` | the **cancellation-penalty ladder** (§5.3, §12.7) | migration 9's `buyer_cancellation_counter` |
-| E3 | `core.seller_company_detail` | all five — *"registration identifier, trade licence number, TIN, representative `person_id`, representative relationship"* | built with mechanical snake_case names; **ADU-API-01 must agree** |
-| E4 | `core.account_control_challenge` | the **anchor column**; the table is described only by its payload | built as `seller_social_account_id`; confirm |
-| E5 | `core.buyer_profile` | everything — §6.3 makes every attribute a derived view | built as the account anchor only; confirm a payload-less table is intended |
-| E6 | `core.market_phase_gate` | *"each with `attested_by` and `attested_at`"* — per condition (eight more columns, none named) or per row? | built per row, which invents no name |
+| C1 | `core.ladder_config` | the **Established and Trusted thresholds**, and the **demotion rules** | migration 8's `fn_recompute_seller_level` |
+| C2 | `core.timing_config` | the **cancellation-penalty ladder** (§5.3, §12.7) | migration 9's `buyer_cancellation_counter` |
+| C3 | `core.seller_company_detail` | all five — *"registration identifier, trade licence number, TIN, representative `person_id`, representative relationship"* | built with mechanical snake_case names; **ADU-API-01 must agree** |
+| C4 | `core.account_control_challenge` | the **anchor column**; the table is described only by its payload | built as `seller_social_account_id`; confirm |
+| C5 | `core.buyer_profile` | everything — §6.3 makes every attribute a derived view | built as the account anchor only; confirm a payload-less table is intended |
+| C6 | `core.market_phase_gate` | *"each with `attested_by` and `attested_at`"* — per condition (eight more columns, none named) or per row? | built per row, which invents no name |
 
-### E7 · `timing_config` carries two names for one console lifetime · **v1.10**
+### C7 · `timing_config` carries two names for one console lifetime · **v1.10**
 
 §5.3 lists `buyer_session_lifetime` and `seller_session_lifetime`; §6.6a adds
 `console_session_lifetime` and three more. Under **R2** there is no `SELLER`
@@ -199,59 +149,61 @@ other.
 
 ---
 
-## §F — Ordering: §28's migration list against its own foreign keys
+## §D — Ordering: §28's migration list against its own foreign keys
 
 None is fatal; each was resolved by dropping a constraint or deferring an object,
 and each is recorded so the deferral is not lost.
 
 | # | Object | Wants | §28 places it in | Resolution |
 |---|---|---|---|---|
-| F1 | `*_config.created_by_account_id` | `core.account` (m3) | migration 2 | bare `uuid`, no FK |
-| F2 | `core.seller.category_id` | `core.category` (m6) | migration 5 | bare `uuid`, no FK |
-| F3 | `core.fn_enter_ladder` | `core.seller_level_state` (m8) | migration 5 | created; plpgsql resolves at runtime, so it is dormant for three migrations |
-| F4 | new-device notification trigger (§6.6) | `core.notification` (m14) + seller relationships (m5) | unassigned | **not built.** Deferred to migration 14 |
-| F5 | `core.order_courier_assignment` (§6.9) | `core."order"` (m9) | §6.9 groups it with migration 5 | deferred to migration 9, with the courier RLS policy it belongs to |
+| D1 | `*_config.created_by_account_id` | `core.account` (m3) | migration 2 | bare `uuid`, no FK |
+| D2 | `core.seller.category_id` | `core.category` (m6) | migration 5 | bare `uuid`, no FK |
+| D3 | `core.fn_enter_ladder` | `core.seller_level_state` (m8) | migration 5 | created; plpgsql resolves at runtime, so it is dormant for three migrations |
+| D4 | `core.fn_has_permission` | `core.permission`, `core.role_permission` (05b) | A1.5 says 05a | created in 05a as instructed; same runtime resolution |
+| D5 | new-device notification trigger (§6.6) | `core.notification` (m14) + seller relationships (m5) | unassigned | **not built.** Deferred to migration 14 |
+| D6 | `core.order_courier_assignment` (§6.9) | `core."order"` (m9) | §6.9 groups it with migration 5 | deferred to migration 9, with the courier RLS policy it belongs to |
 
 ---
 
-## §G — Smaller items
+## §E — Smaller items
 
-- **G1 · `verification.identity_attestation.verified` is never written.** §7.3
+- **E1 · `verification.identity_attestation.verified` is never written.** §7.3
   lists the column; `write_attestation` — its only writer — does not set it. Left
   nullable rather than defaulted, because a default decides what an unset
   attestation means.
-- **G2 · Check 10 says "the four named functions"; five exist.**
+- **E2 · Check 10 says "the four named functions"; five exist.**
   `read_attestation`, `write_attestation`, `id_hash_matches`,
-  `read_payment_evidence`, `render_payment_instructions`. `id_hash_matches` is
-  presumably the one not counted.
-- **G3 · `core.fn_has_permission` has no body in any document**, and §28 assigns
-  it to no migration — though §6.9 makes it *"the first statement of every
-  seller-scoped writing function"* and migration 9's `fn_mark_order_ready` calls
-  it. Two things are needed before it can be written: the seeded matrix (§A1), and
-  a ruling on **how the Owner is resolved** — `seller.owner_account_id`, or a
-  `seller_team_member` row with `role = 'OWNER'`? Both exist, and §6.9's one-Owner
-  invariant implies the second. **Not built.**
-- **G4 · "109 tables across nine schemas" (§0) against ten created.** Appendix A
+  `read_payment_evidence`, `render_payment_instructions`.
+- **E3 · "109 tables across nine schemas" (§0) against ten created.** Appendix A
   places an enum at `waitlist.platform` while stating all types are created in
-  migration 1, and `jobs` is a schema too. Carried from v1.8, still open. Check 14
-  counts nine; migration 01 creates ten.
-- **G5 · `core.operator_grant` is not seeded.** §6.11 says migration 5 seeds *"the
+  migration 1, and `jobs` is a schema too. Check 14 counts nine; migration 01
+  creates ten.
+- **E4 · `core.operator_grant` is not seeded.** §6.11 says migration 5 seeds *"the
   founder account holding `ADMIN`"*. No founder account id exists in any document
   and `core.account` has no seed, so the grant would have to invent the account it
-  references. One `INSERT` once the account is named.
+  references. A1.5 defers it to Tier 4.
+- **E5 · `adulis_app` retains `SELECT` on the catalogue.** A1.3 justifies
+  `SECURITY DEFINER` on the grounds that these are tables *"which the app role has
+  no need to read directly"*, but ADU-AUTH-01 §5 returns `roles[]` as a rendering
+  hint and §16.2 requires that a client not hide a control the server would
+  permit — which needs the grant set, not a yes/no per call. `SELECT` is kept and
+  the tension reported; `SECURITY DEFINER` makes the function correct either way.
+- **E6 · Ownership transfer needs `ON UPDATE CASCADE`.** A1.3 records it: the
+  transfer updates `owner_account_id`, a composite-FK anchor, so every child FK
+  referencing `(seller_id, owner_account_id)` needs the cascade or the transfer
+  raises. Tier 7, written down now.
 
 ---
 
-## §H — Recommended order for v1.10 and the v2.2 errata
+## §F — Recommended order for v1.10
 
-1. **Re-send `ADU-AUTH-01 v2.2` as UTF-8** (§A1). Unblocks the `role_permission`
-   seed, Gate C, and §24's matrix tests. **Nothing else in Tier 1 is blocked.**
-2. **Withdraw Appendix A's appended enum block** and correct D6's account of what
-   v1.8 was (§B1, §B2). Keep check 16 exactly as it is.
-3. **Add two values to `core.step_up_action`** (§C1). Without them, step-up on
-   identity management and ownership transfer cannot be recorded at all.
-4. **Name the `ladder_config` thresholds and the `timing_config` penalty ladder**
-   (§E1, §E2). Unblocks migrations 8 and 9.
-5. Confirm §D1 (the **M²** surfaces), §E3–E6 (columns named by description), and
-   §E7 (which column is the mobile lifetime).
-6. Fix §B3 and §C2 editorially.
+1. **Rule on §A1** — whether a suspended team member keeps their permissions. It
+   is the only item here with a live security consequence, and it is one line
+   either way.
+2. **Name the `ladder_config` thresholds and the `timing_config` penalty ladder**
+   (§C1, §C2). Unblocks migrations 8 and 9, which are the next two after Tier 1.
+3. Confirm §C3–C6 (columns named by description) and §C7 (which column is the
+   mobile lifetime).
+4. Fix §B1 (the `CAMPAIGN` rows in v2.3's fenced block), §B3 and §B4
+   editorially; define or drop §B2's *write* column.
+5. Record §A2 in ADU-API-01 §7's error table, and §E6 before Tier 7.

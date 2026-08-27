@@ -1,25 +1,33 @@
 # Tier status and reissue debt — back-end
 
-> **UPDATED 26 August 2026, second Tier 1 session.** Six of the seven reissues in
-> §2 have now landed: **ADU-DB-01 v1.9**, **ADU-AUTH-01 v2.2**, **ADU-API-01
-> v1.5** and **ADU-CON-03 v1.1**. The `SPEC_VERSION_GAP` that blocked Tiers 1-8
-> in §1 is **closed**, and §1's table is historical from this point.
+> **UPDATED 27 August 2026, third Tier 1 session. TIER 1 IS COMPLETE.**
 >
-> **Tier 1 is built.** Migrations 01-05 are applied, tested and deterministic;
-> the Appendix C harness runs **sixteen** checks (v1.9 added check 16) at
-> **7 PASS / 9 PENDING / 0 FAIL**. `core.permission` carries all 42 codes.
+> Migrations 01-05 are built, applied, tested and deterministic. The permission
+> catalogue and the 139-grant role matrix are seeded and verified. **Gate C is
+> met**: Appendix C runs sixteen checks at **7 PASS / 9 PENDING / 0 FAIL**, the
+> four checksums hold, and the 252-cell matrix reproduces through
+> `core.fn_has_permission` in both directions - 139 grants pass, 113 non-grants
+> raise, zero disagreements. 117 tests, 6 suites.
 >
-> **One thing is outstanding and it is not a document defect:** ADU-AUTH-01
-> v2.2's §16.2 matrix arrived with its 252 cells collapsed to one indistinct
-> character, so the 139 `role_permission` grants could not be read and were not
-> guessed. Everything else in Tier 1 is complete. See
-> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md)**, which supersedes §2 of this
-> document for DB-01 and is the founder's writing queue for v1.10.
+> **Governing versions:** ADU-DB-01 **v1.9 as amended by A1** · ADU-AUTH-01
+> **v2.3** · ADU-API-01 v1.5 · ADU-CON-03 v1.1. Amendment A1 settled all four
+> blockers the previous session reported, and ADU-AUTH-01 v2.3 delivered the
+> matrix in ASCII plus generated SQL, which survived transit where v2.2's glyphs
+> did not.
 >
-> ⚠ **The v1.9 and v2.2 files are NOT in `docs/`.** They were supplied in-session
-> and the copies available carry the encoding damage described above, so
-> installing them would enshrine it. `docs/` still holds v1.8 and v2.1. **Drop
-> the two UTF-8 originals into `docs/` and move v1.8 / v2.1 to `_superseded/`.**
+> ⚠ **Read [`docs/amendments/README.md`](../amendments/README.md) before
+> `docs/`.** ADU-AUTH-01 §16 and the seed are installed there at v2.3; §1-14 and
+> §17-25 are the v2.1 text in `docs/`, which v2.3 states is unaltered. ADU-DB-01
+> v1.9 is not installed - its substance is carried by amendment A1, by
+> `db/checks/fixtures/appendix-a.json` (which check 16 asserts against `pg_type`
+> every CI run), and by the section citations in each migration header. **Drop
+> the UTF-8 originals of ADU-DB-01 v1.9 and ADU-AUTH-01 v2.3 into `docs/` to
+> finish the job**; the README says exactly what to move.
+>
+> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md) is now the queue for ADU-DB-01
+> v1.10**, and it supersedes §2 of this document for DB-01. One item in it has a
+> live security consequence and is one line either way: whether a **suspended**
+> team member keeps their permissions until their session expires (§A1).
 >
 > Three reissues remain outstanding and none blocks a migration: **ADU-PRD-01
 > v8.6**, **ADU-PROJ-01 v9.1**, **ADU-DPIA-01 v1.1**. §2.5-2.7 still describe
