@@ -62,6 +62,11 @@ const PERMITTED_FUNCTIONS = [
   // narrow definer (insert + log, nothing else) is app-callable; the
   // retention marker is NOT (triggers and jobs reach it as adulis_migrate).
   'financial.write_payment_evidence',
+  // The payout credential's writer (migration 0022) - D-16's argument on
+  // the payout side: ciphertext in, nothing out, upsert on details id.
+  // The app supplies ciphertext it encrypted with a key Postgres never
+  // held; a read stays impossible outside render_payment_instructions.
+  'financial.write_payout_credential',
 ];
 
 export default {

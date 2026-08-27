@@ -213,6 +213,54 @@
         ]
       }
     },
+    "/v1/orders/{id}/payment-evidence": {
+      "post": {
+        "operationId": "FinancialController_evidence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Upload via signed URL, then commit — R18 frames at rest.",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/v1/orders/{id}/payment-instructions": {
+      "get": {
+        "operationId": "FinancialController_paymentInstructions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The C3 disclosure path: one function call, decrypted here, never cached.",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
     "/v1/orders/{id}/refunds/{rid}/acknowledge": {
       "post": {
         "operationId": "OrdersController_acknowledgeRefund",
@@ -493,6 +541,30 @@
         ]
       }
     },
+    "/v1/seller/orders/{id}/payment-evidence": {
+      "get": {
+        "operationId": "FinancialController_sellerEvidence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Logged access, derived role, streamed with constant memory, never cached.",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
     "/v1/seller/orders/{id}/payment/confirm": {
       "post": {
         "operationId": "OrdersController_confirmPayment",
@@ -589,6 +661,30 @@
         ]
       }
     },
+    "/v1/seller/orders/{id}/reissue-instructions": {
+      "post": {
+        "operationId": "FinancialController_reissue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Single order only. No bulk endpoint exists (S8.5).",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
     "/v1/seller/orders/{id}/reservations/{rid}/cancel": {
       "post": {
         "operationId": "OrdersController_cancelLineAsSeller",
@@ -618,6 +714,62 @@
         "summary": "\"Can't Fulfil\". There is no accept action.",
         "tags": [
           "Orders"
+        ]
+      }
+    },
+    "/v1/seller/payout": {
+      "get": {
+        "operationId": "FinancialController_getPayout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Financial"
+        ]
+      },
+      "post": {
+        "operationId": "FinancialController_requestPayoutChange",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enters PENDING; activates after the delay. Step-up in the body.",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/v1/seller/payout/history": {
+      "get": {
+        "operationId": "FinancialController_payoutHistory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/v1/seller/payout/pending": {
+      "delete": {
+        "operationId": "FinancialController_cancelPayoutChange",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "No step-up — reverting is easier than changing.",
+        "tags": [
+          "Financial"
         ]
       }
     },

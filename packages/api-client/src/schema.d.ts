@@ -139,6 +139,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/orders/{id}/payment-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload via signed URL, then commit — R18 frames at rest. */
+        post: operations["FinancialController_evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/orders/{id}/payment-instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The C3 disclosure path: one function call, decrypted here, never cached. */
+        get: operations["FinancialController_paymentInstructions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/orders/{id}/refunds/{rid}/acknowledge": {
         parameters: {
             query?: never;
@@ -322,6 +356,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/seller/orders/{id}/payment-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logged access, derived role, streamed with constant memory, never cached. */
+        get: operations["FinancialController_sellerEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller/orders/{id}/payment/confirm": {
         parameters: {
             query?: never;
@@ -390,6 +441,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/seller/orders/{id}/reissue-instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Single order only. No bulk endpoint exists (S8.5). */
+        post: operations["FinancialController_reissue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller/orders/{id}/reservations/{rid}/cancel": {
         parameters: {
             query?: never;
@@ -402,6 +470,56 @@ export interface paths {
         /** "Can't Fulfil". There is no accept action. */
         post: operations["OrdersController_cancelLineAsSeller"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/payout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FinancialController_getPayout"];
+        put?: never;
+        /** Enters PENDING; activates after the delay. Step-up in the body. */
+        post: operations["FinancialController_requestPayoutChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/payout/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FinancialController_payoutHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/payout/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** No step-up — reverting is easier than changing. */
+        delete: operations["FinancialController_cancelPayoutChange"];
         options?: never;
         head?: never;
         patch?: never;
@@ -936,6 +1054,44 @@ export interface operations {
             };
         };
     };
+    FinancialController_evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialController_paymentInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OrdersController_acknowledgeRefund: {
         parameters: {
             query?: never;
@@ -1175,6 +1331,25 @@ export interface operations {
             };
         };
     };
+    FinancialController_sellerEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OrdersController_confirmPayment: {
         parameters: {
             query?: never;
@@ -1251,6 +1426,25 @@ export interface operations {
             };
         };
     };
+    FinancialController_reissue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OrdersController_cancelLineAsSeller: {
         parameters: {
             query?: never;
@@ -1264,6 +1458,74 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialController_getPayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialController_requestPayoutChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialController_payoutHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialController_cancelPayoutChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

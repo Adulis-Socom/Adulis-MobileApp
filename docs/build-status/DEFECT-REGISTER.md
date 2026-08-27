@@ -262,3 +262,23 @@ Effect:    The gate needs a distinct database signal to reach the wire as its ow
 Response:  WORKED AROUND
 Action:    U0007 -> 409 BUYER_COOLDOWN_ACTIVE, the until-timestamp as a typed slot in DETAIL. Same device as D-23's trio.
 Ruling needed: ratify into S7.1a's table.
+
+### D-29 - The verbatim courier policy dies on an empty GUC
+Severity:  MAJOR (a 22P02 on buyer reads, plan-dependent)
+Phase:     C4
+Source:    ADU-DB-01 v1.10 S6.9's printed courier SELECT policy casts current_setting('adulis.account_id', true) straight to uuid
+Found by:  the C4 gate suite: buyer-context reads 500ed with invalid input syntax for type uuid ""
+Effect:    A custom GUC's post-transaction default is the EMPTY STRING on any pooled connection that ever set it, and PostgreSQL does not guarantee OR short-circuit inside a policy - the EXISTS arm can evaluate ''::uuid on a plain buyer read.
+Response:  WORKED AROUND
+Action:    Policy rolled forward (0022, ALTER POLICY - 0011 is merged and never edited) with nullif(...,'')::uuid. Meaning unchanged: an unset or empty account matches no assignment - fail closed.
+Ruling needed: v1.11 to reprint the policy with the total cast.
+
+### D-30 - 12.5 says a non-buyer gets 403; S19 says an unrelated actor must not learn the object exists
+Severity:  MINOR
+Phase:     C4
+Source:    ADU-API-01 v1.6 S12.5 - "403 where the caller is not the buyer"; ADU-AUTH-01 v2.4 S19/S21 - a scope failure is 404 with no detail, because 403 confirms existence
+Found by:  the stranger probe in the C4 gate suite
+Effect:    The two rulings cannot both hold for a stranger probing a random order id.
+Response:  WORKED AROUND
+Action:    S19's principle wins (it is the stronger and later security doctrine, and the render function already raises U0002): the wire says 404. A buyer-adjacent caller with a REAL relationship that is merely wrong-state still gets the ordinary conflict codes.
+Ruling needed: ADU-API-01 v1.7 to align 12.5's sentence with its own 7.1a table.

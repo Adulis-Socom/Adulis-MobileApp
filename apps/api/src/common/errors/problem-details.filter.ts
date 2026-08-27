@@ -99,14 +99,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       const translated = translatePgError(exception);
       if (translated) return translated;
 
+      // The redaction allow-list keeps unknown fields out of log lines, so
+      // the diagnostic identifiers ride in msg: SQLSTATE and constraint are
+      // codes, not data.
       this.log.error(
-        {
-          requestId,
-          sqlstate: exception.code,
-          constraint: exception.constraint,
-          message: exception.message,
-        },
-        'unmapped database refusal',
+        { requestId },
+        `unmapped database refusal [${exception.code}] ${exception.constraint ?? ''}`,
       );
       return new AdulisException('INTERNAL');
     }

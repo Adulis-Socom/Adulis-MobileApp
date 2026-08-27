@@ -18,6 +18,12 @@ import {
 } from './modules/onboarding/social-platform.adapter';
 import { CatalogueController } from './modules/catalogue/catalogue.controller';
 import { OrdersController } from './modules/orders/orders.controller';
+import { FinancialController } from './modules/financial/financial.controller';
+import { FinancialService } from './modules/financial/financial.service';
+import {
+  FakeFinancialStorageAdapter,
+  FINANCIAL_STORAGE_ADAPTER,
+} from './modules/financial/financial-storage.adapter';
 import { OrdersService } from './modules/orders/orders.service';
 import { CatalogueService } from './modules/catalogue/catalogue.service';
 import {
@@ -49,7 +55,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -61,6 +67,8 @@ export const LOGGER = Symbol('LOGGER');
     { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new FakeSocialPlatformAdapter() },
     CatalogueService,
     OrdersService,
+    FinancialService,
+    { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
     { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },
     RateLimitService,
