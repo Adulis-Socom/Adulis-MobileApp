@@ -67,6 +67,10 @@ const PERMITTED_FUNCTIONS = [
   // The app supplies ciphertext it encrypted with a key Postgres never
   // held; a read stays impossible outside render_payment_instructions.
   'financial.write_payout_credential',
+  // The purge (migration 0023, S16.9 "Payout details: Purged"): ids in,
+  // a row count out, DELETE and nothing else. Deletion's one crossing of
+  // the boundary discloses nothing - ciphertext goes away, none returns.
+  'financial.purge_payout_credential',
 ];
 
 export default {

@@ -50,6 +50,16 @@ describe('C4 — the financial boundary', () => {
 
   const cookie = (t: string) => `__Host-adulis_session=${t}`;
   const key = () => randomUUID();
+  const freshStepUp = async (action: string): Promise<string> => {
+    const id = randomUUID();
+    await admin.query(
+      `INSERT INTO core.step_up_challenge
+         (id, account_id, action, otp_challenge_id, satisfied_at, expires_at)
+       VALUES ($1, $2, $3::core.step_up_action, $4, now(), now() + interval '1 hour')`,
+      [id, OWNER, action, OTP],
+    );
+    return id;
+  };
   const sellerReq = (method: 'post' | 'get' | 'delete', path: string, token = OWNER_S) => {
     const r = request(app.getHttpServer())[method](path)
       .set('Cookie', cookie(token))
@@ -256,7 +266,7 @@ describe('C4 — the financial boundary', () => {
           bank_code: 'CBE',
           account_number: '2000999888777',
           account_name: 'Naod Solomon',
-          step_up_challenge_id: SU_PAYOUT,
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
         })
         .expect(409);
       expect(r.body.code).toBe('PAYOUT_CHANGE_PENDING');
@@ -281,7 +291,7 @@ describe('C4 — the financial boundary', () => {
           bank_code: 'CBE',
           account_number: '2000999888777',
           account_name: 'Naod Solomon',
-          step_up_challenge_id: SU_PAYOUT,
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
         })
         .expect(201);
       await sellerReq('delete', '/v1/seller/payout/pending').expect(204);
@@ -308,7 +318,7 @@ describe('C4 — the financial boundary', () => {
           bank_code: 'CBE',
           account_number: ACCOUNT_NUMBER,
           account_name: 'Naod Solomon',
-          step_up_challenge_id: SU_PAYOUT,
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
         })
         .expect(409);
       expect(r.body.slots.reason).toBe('RECOVERY_COOLING');
@@ -435,7 +445,7 @@ describe('C4 — the financial boundary', () => {
 
     it('the wrong step-up action is 403 STEP_UP_ACTION_MISMATCH', async () => {
       const r = await sellerReq('post', `/v1/seller/orders/${orderId}/reissue-instructions`)
-        .send({ step_up_challenge_id: SU_PAYOUT })
+        .send({ step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE') })
         .expect(403);
       expect(r.body.code).toBe('STEP_UP_ACTION_MISMATCH');
     });
