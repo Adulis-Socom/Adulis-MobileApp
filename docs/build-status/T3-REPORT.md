@@ -21,6 +21,14 @@ phase's content: the same failure predates every T3 commit.** Merging this
 branch turns `main` green; a cherry-pick of the one commit is available if
 the owner wants `main` green sooner.
 
+**A second CI defect sat behind the first.** With the probe fixed, the run
+died at Test: CI ran the api suites BEFORE `Migrations apply`, so every
+integration suite failed on a bare database (`relation core.market does not
+exist`). The order dates from Tier 0, when every test was a unit test; the
+probe failure earlier in the job masked it on every run since, and a
+developer database is always already migrated so no local gate could see
+it. Fixed by moving Test after the migrations in `ci.yml`.
+
 Nothing else met the STOP bar.
 
 ## Where the run is

@@ -12,7 +12,10 @@ type Tx = { query: PoolClient['query'] };
  * what the application will see.
  */
 
-const CONNECTION_STRING = process.env['DATABASE_URL'];
+// The privileged credential, deliberately: these suites write fixtures into
+// configuration tables and assert grants from the outside, neither of which
+// adulis_app (the runtime DATABASE_URL from Tier 3) may do.
+const CONNECTION_STRING = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
 
 const MARKET = '11111111-0000-4000-8000-000000000001';
 const ACCOUNT = '11111111-0000-4000-8000-000000000002';
