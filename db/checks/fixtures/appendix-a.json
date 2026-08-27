@@ -1,0 +1,449 @@
+{
+  "_provenance": "Appendix A of ADU-DB-01, transcribed in document order. 66 types, 230 values.\n\nv1.9 D6 asserts that v1.8's Appendix A was 'a core-only catalogue presented as complete' and that 'every non-core enum - six of them - is absent'. THAT IS NOT WHAT v1.8 SAID. v1.8 carried an 'Other schemas' table of ELEVEN non-core types, and v1.9 reproduces it unchanged. This fixture is that table plus the 55 core types, and it is what migration 1 creates.\n\nv1.9 then APPENDS a second, partial block of seven non-core types that contradicts the carried-forward one in six places (see _conflicts). The document marks that block 'provisional until check 16 has run green once', so the carried-forward table governs here. Check 16 is what will settle it.\n\nThe real v1.8 defect was the COUNT, not the coverage: its header said 54 and sections 0.1/0.2 said 56 where the enumeration is 66. v1.9 removes the asserted count and replaces it with this check, which is the right fix.\n\nAMENDMENT A1 (26 August 2026) settles two things this fixture records.\nA1.1 WITHDRAWS the appended block in full - \"the original 66-row catalogue governs. Where the two disagree, the original is correct\" - so the _conflicts block below is now history rather than an open question, and the values above are confirmed. The count is 66.\nA1.2 adds IDENTITY_CHANGE and OWNERSHIP_TRANSFER to core.step_up_action, which is the only change to migration 1. 66 types, 232 values.",
+  "types": {
+    "core.market_phase": [
+      "PHASE_1",
+      "PHASE_2"
+    ],
+    "core.platform": [
+      "TIKTOK",
+      "INSTAGRAM"
+    ],
+    "core.account_status": [
+      "ACTIVE",
+      "SUSPENDED",
+      "SCRUBBED"
+    ],
+    "core.device_platform": [
+      "ANDROID",
+      "IOS"
+    ],
+    "core.notification_permission": [
+      "GRANTED",
+      "DENIED",
+      "NOT_ASKED"
+    ],
+    "core.otp_purpose": [
+      "SIGN_IN",
+      "STEP_UP",
+      "ACCOUNT_DELETION",
+      "RECOVERY"
+    ],
+    "core.session_audience": [
+      "MOBILE",
+      "CONSOLE"
+    ],
+    "core.fulfilment_method": [
+      "BUYER_COLLECTION",
+      "SELLER_DELIVERY",
+      "COURIER_DELIVERY"
+    ],
+    "core.operator_role": [
+      "SUPPORT",
+      "MODERATOR",
+      "CLAIM_REVIEWER",
+      "IDENTITY_REVIEWER",
+      "ADMIN"
+    ],
+    "core.step_up_action": [
+      "PAYOUT_CHANGE",
+      "REISSUE_INSTRUCTIONS",
+      "TEAM_CHANGE",
+      "SUBSCRIPTION_CHANGE",
+      "SELLER_DELETION",
+      "REVOKE_ALL_SESSIONS",
+      "IDENTITY_CHANGE",
+      "OWNERSHIP_TRANSFER"
+    ],
+    "core.recovery_decision": [
+      "APPROVED",
+      "REJECTED"
+    ],
+    "core.team_role": [
+      "OWNER",
+      "ADMIN",
+      "SALES_SUPPORT",
+      "INVENTORY",
+      "ANALYST",
+      "CAMPAIGN_MANAGER"
+    ],
+    "core.seller_entity_type": [
+      "INDIVIDUAL",
+      "COMPANY"
+    ],
+    "core.seller_status": [
+      "DRAFT",
+      "ACTIVE",
+      "CLOSING",
+      "BILLING_SUSPENDED",
+      "SAFETY_SUSPENDED",
+      "DELETED"
+    ],
+    "core.social_verification_status": [
+      "PENDING",
+      "VERIFIED",
+      "REVOKED"
+    ],
+    "core.follower_count_source": [
+      "PLATFORM_FETCH",
+      "MANUAL_FALLBACK"
+    ],
+    "core.eligibility_path": [
+      "AUDIENCE",
+      "IDENTITY"
+    ],
+    "core.eligibility_outcome": [
+      "SATISFIED",
+      "NOT_SATISFIED"
+    ],
+    "core.id_verification_requirement": [
+      "OPTIONAL",
+      "MANDATORY_WITHOUT_AUDIENCE",
+      "MANDATORY_ALL"
+    ],
+    "core.threshold_basis": [
+      "HIGHEST_SINGLE"
+    ],
+    "core.trust_level": [
+      "NEW",
+      "ESTABLISHED",
+      "TRUSTED"
+    ],
+    "core.level_change_source": [
+      "COMPUTED",
+      "MODERATION"
+    ],
+    "core.attribute_data_type": [
+      "TEXT",
+      "NUMBER",
+      "ENUM",
+      "BOOLEAN"
+    ],
+    "core.idempotency_actor_kind": [
+      "ACCOUNT",
+      "DEVICE"
+    ],
+    "core.rate_limit_subject_kind": [
+      "ACCOUNT",
+      "DEVICE",
+      "PHONE_HASH",
+      "IP_HASH"
+    ],
+    "core.product_visibility": [
+      "DRAFT",
+      "PUBLISHED",
+      "UNPUBLISHED"
+    ],
+    "core.unpublished_reason": [
+      "SELLER",
+      "TIER_DOWNGRADE",
+      "LEVEL_DOWNGRADE",
+      "MODERATION"
+    ],
+    "core.media_class": [
+      "HOT",
+      "INFREQUENT"
+    ],
+    "core.social_post_status": [
+      "LIVE",
+      "UNAVAILABLE",
+      "UNKNOWN"
+    ],
+    "core.stock_event_reason": [
+      "SELLER_SET",
+      "ORDER_CREATED",
+      "ORDER_EXPIRED",
+      "LINE_CANCELLED",
+      "RECONCILIATION",
+      "RESTOCK"
+    ],
+    "core.cart_status": [
+      "ACTIVE",
+      "CONVERTED",
+      "ABANDONED"
+    ],
+    "core.order_state": [
+      "CREATED",
+      "NOTIFIED",
+      "PAYMENT_SUBMITTED",
+      "PAYMENT_CONFIRMED",
+      "HANDED_OFF",
+      "COMPLETED",
+      "CANCELLED_BY_BUYER",
+      "CANCELLED_BY_SELLER",
+      "EXPIRED_UNCLAIMED"
+    ],
+    "core.reservation_state": [
+      "ACTIVE",
+      "FULFILLED",
+      "CANCELLED_BY_BUYER",
+      "CANCELLED_BY_SELLER",
+      "REFUNDED",
+      "EXPIRED"
+    ],
+    "core.cancelled_by": [
+      "BUYER",
+      "SELLER",
+      "SYSTEM"
+    ],
+    "core.payment_submission_state": [
+      "SUBMITTED",
+      "CONFIRMED",
+      "REJECTED"
+    ],
+    "core.payout_state": [
+      "PENDING",
+      "ACTIVE",
+      "CANCELLED",
+      "SUPERSEDED"
+    ],
+    "core.scan_validity": [
+      "VALID",
+      "LATE",
+      "REJECTED_REPLAY",
+      "REJECTED_HORIZON"
+    ],
+    "core.confirmation_tier": [
+      "VERIFIED_HANDOFF",
+      "CONFIRMED_BY_BUYER",
+      "UNCONFIRMED"
+    ],
+    "core.review_badge": [
+      "CLAIM_UPHELD",
+      "VERIFIED_HANDOFF",
+      "CONFIRMED_BY_BUYER",
+      "UNVERIFIED"
+    ],
+    "core.claim_opener_kind": [
+      "BUYER",
+      "SYSTEM",
+      "MODERATION"
+    ],
+    "core.claim_trigger": [
+      "SLA_BREACH",
+      "STOCK_NOT_UPDATED",
+      "GOODS_NOT_RECEIVED",
+      "NOT_AS_DESCRIBED",
+      "REFUND_NOT_DELIVERED"
+    ],
+    "core.claim_outcome": [
+      "UPHELD",
+      "NOT_UPHELD"
+    ],
+    "core.claim_evidence_kind": [
+      "CHAT_HISTORY",
+      "SCAN_RECORD",
+      "PAYMENT_EVIDENCE",
+      "BANK_RECORD",
+      "STOCK_EVENTS",
+      "ORDER_TRANSITIONS",
+      "SELLER_LEVEL_AT_ORDER",
+      "ACTING_TEAM_MEMBER"
+    ],
+    "core.follow_state": [
+      "FOLLOWING",
+      "UNFOLLOWED"
+    ],
+    "core.seller_activity_kind": [
+      "NEW_PRODUCT",
+      "RESTOCK",
+      "BROADCAST",
+      "STOREFRONT_UPDATE"
+    ],
+    "core.broadcast_kind": [
+      "RESTOCK",
+      "DISCOUNT"
+    ],
+    "core.notification_channel": [
+      "PUSH",
+      "SMS",
+      "IN_APP"
+    ],
+    "core.actor_channel": [
+      "WEB",
+      "MOBILE",
+      "SYSTEM"
+    ],
+    "core.claim_state": [
+      "AWAITING_BUYER_EVIDENCE",
+      "AWAITING_SELLER_EVIDENCE",
+      "AWAITING_BANK_TRACE",
+      "UNDER_REVIEW",
+      "RESOLVED"
+    ],
+    "core.claim_severity": [
+      "ORDINARY",
+      "PAYMENT_FRAUD"
+    ],
+    "core.claim_remedy": [
+      "REFUND",
+      "FULFIL",
+      "NONE"
+    ],
+    "core.notification_state": [
+      "QUEUED",
+      "SENT",
+      "DELIVERED",
+      "FAILED",
+      "SUPPRESSED"
+    ],
+    "core.report_target_kind": [
+      "PRODUCT",
+      "REVIEW",
+      "MESSAGE",
+      "SELLER",
+      "STOREFRONT"
+    ],
+    "core.moderation_queue_kind": [
+      "PROHIBITED_KEYWORD",
+      "NEW_SELLER",
+      "NEW_LEVEL_FIRST_LISTING",
+      "SENSITIVE_CATEGORY",
+      "POST_LINK_CONFLICT",
+      "DOUBLE_ALLOCATION",
+      "REPORT",
+      "VELOCITY"
+    ],
+    "core.active_orders_decision": [
+      "CONTINUE",
+      "TERMINATE"
+    ],
+    "verification.verifier_kind": [
+      "KYC_VENDOR",
+      "VIDEO_CALL"
+    ],
+    "financial.retention_reason": [
+      "AWAITING_VALIDATION",
+      "OPEN_CLAIM"
+    ],
+    "financial.secret_subject_kind": [
+      "PAYMENT_EVIDENCE",
+      "PAYOUT_CREDENTIAL"
+    ],
+    "chat.message_sender_kind": [
+      "BUYER",
+      "SELLER",
+      "TEAM_MEMBER",
+      "BOT"
+    ],
+    "chat.resolution_path": [
+      "STRUCTURE",
+      "CHIP",
+      "KEYWORD",
+      "EMBEDDING",
+      "CLASSIFIER",
+      "ESCALATED"
+    ],
+    "nlu.phrase_source": [
+      "SEED",
+      "HARVESTED"
+    ],
+    "billing.subscription_state": [
+      "BETA",
+      "TRIAL",
+      "ACTIVE",
+      "PAST_DUE",
+      "SUSPENDED",
+      "CANCELLED"
+    ],
+    "billing.subscription_tier": [
+      "LISTED",
+      "ASSISTED",
+      "VERIFIED_PRO",
+      "BUSINESS"
+    ],
+    "billing.subscription_term": [
+      "MONTHLY",
+      "QUARTERLY",
+      "ANNUAL"
+    ],
+    "ledger.entry_direction": [
+      "DEBIT",
+      "CREDIT"
+    ],
+    "waitlist.platform": [
+      "TIKTOK",
+      "INSTAGRAM"
+    ]
+  },
+  "_conflicts": {
+    "_note": "RESOLVED by Amendment A1.1, which withdraws the appended block in full and confirms the carried-forward values above. Retained as the record of what was withdrawn and why. A1.1 also notes the limit of check 16 that this exposed: had migration 1 been built from the appended block, Appendix A and pg_type would have AGREED, both wrong. A check that compares a document to a database catches drift between them and cannot catch a shared error.",
+    "verification.verifier_kind": {
+      "carried_forward": [
+        "KYC_VENDOR",
+        "VIDEO_CALL"
+      ],
+      "appended": [
+        "VENDOR_KYC",
+        "FAYDA",
+        "MANUAL_REVIEW"
+      ]
+    },
+    "financial.retention_reason": {
+      "carried_forward": [
+        "AWAITING_VALIDATION",
+        "OPEN_CLAIM"
+      ],
+      "appended": [
+        "OPEN_CLAIM",
+        "LEGAL_HOLD",
+        "DISPUTE"
+      ]
+    },
+    "financial.secret_subject_kind": {
+      "carried_forward": [
+        "PAYMENT_EVIDENCE",
+        "PAYOUT_CREDENTIAL"
+      ],
+      "appended": [
+        "PAYOUT_CREDENTIAL",
+        "PAYMENT_EVIDENCE"
+      ],
+      "note": "order only; section 13.3 body matches the carried-forward order"
+    },
+    "chat.message_sender_kind": {
+      "carried_forward": [
+        "BUYER",
+        "SELLER",
+        "TEAM_MEMBER",
+        "BOT"
+      ],
+      "appended": [
+        "BUYER",
+        "SELLER",
+        "BOT"
+      ],
+      "note": "the appended block drops TEAM_MEMBER, whom section 13.2 requires be recorded as the acting confirmer"
+    },
+    "nlu.phrase_source": {
+      "carried_forward": [
+        "SEED",
+        "HARVESTED"
+      ],
+      "appended": [
+        "SEEDED",
+        "HARVESTED",
+        "OPERATOR_ADDED"
+      ]
+    },
+    "billing.subscription_state": {
+      "carried_forward": [
+        "BETA",
+        "TRIAL",
+        "ACTIVE",
+        "PAST_DUE",
+        "SUSPENDED",
+        "CANCELLED"
+      ],
+      "appended": [
+        "ACTIVE",
+        "BETA",
+        "PAST_DUE",
+        "SAFETY_SUSPENDED",
+        "CANCELLED",
+        "EXPIRED"
+      ],
+      "note": "the appended block drops TRIAL, which section 18.1's trial_started_at/trial_ends_at require, and adds SAFETY_SUSPENDED, which is a core.seller_status value rather than a subscription state"
+    }
+  }
+}

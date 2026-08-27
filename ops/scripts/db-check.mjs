@@ -1,54 +1,116 @@
 #!/usr/bin/env node
-// Runs every script in db/checks (ADU-DB-01 Appendix C as executable checks).
-//
-// TIER-0 STATE: db/checks is deliberately EMPTY and this passes trivially.
-//
-// The target is FIFTEEN passes (ADU-CON-02 v3.0 sections 13, 15 and 16), but the
-// binding baseline ADU-DB-01 v1.6 Appendix C defines only FOURTEEN checks, and
-// its check 14 expects 105 tables where ADU-CON-02 v3.0 requires 107. Check 15
-// (grep -c "MATERIALIZED VIEW" = 0, ruling R16) exists only in the pending
-// ADU-DB-01 v1.7. Authoring checks now would mean inventing v1.7 — forbidden by
-// .claude/reference/DOCUMENT_AUTHORITY.md. Status: SPEC_VERSION_GAP.
+/**
+ * `pnpm db:check` — ADU-DB-01 v1.9 Appendix C, all sixteen checks.
+ *
+ * Each check guards an invariant enforced by an ABSENCE: the failure mode where
+ * an agent "completes" the schema and silently removes a guarantee. Nothing here
+ * raises on its own, which is why the harness exists.
+ *
+ * THREE STATES. Most checks guard objects a later tier creates. A binary harness
+ * would print nine failures at Tier 1 and drown the two that are real.
+ *
+ *   PASS     ran, invariant holds
+ *   FAIL     ran, invariant broken   -> exit 1
+ *   PENDING  belongs to a later tier -> not run, not a failure
+ *
+ * Exits non-zero ONLY on FAIL. See db/checks/README.md.
+ */
 
-import { readdir } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import pg from 'pg';
+import { loadMigrations, PASS, FAIL, PENDING, CHECKS_DIR } from '../../db/checks/_lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const checksDir = path.resolve(here, '..', '..', 'db', 'checks');
+const repoRoot = path.resolve(here, '..', '..');
 
-let entries = [];
-try {
-  entries = (await readdir(checksDir)).filter((f) => !f.startsWith('.')).sort();
-} catch {
-  console.error(`FAIL  db/checks not found at ${checksDir}`);
+async function readCurrentTier() {
+  const raw = await readFile(path.join(repoRoot, 'db', 'checks', 'CURRENT_TIER'), 'utf8');
+  const tier = Number.parseInt(raw.trim(), 10);
+  if (!Number.isInteger(tier)) throw new Error(`db/checks/CURRENT_TIER is not an integer: ${raw}`);
+  return tier;
+}
+
+async function loadChecks() {
+  const files = (await readdir(CHECKS_DIR))
+    .filter((f) => f.startsWith('check-') && f.endsWith('.mjs'))
+    .sort();
+  const checks = [];
+  for (const f of files) {
+    // pathToFileURL: on Windows a bare absolute path is not a valid ESM specifier.
+    const mod = await import(pathToFileURL(path.join(CHECKS_DIR, f)).href);
+    checks.push({ ...mod.default, file: f });
+  }
+  return checks.sort((a, b) => a.id - b.id);
+}
+
+function pad(s, n) {
+  s = String(s);
+  return s.length >= n ? s.slice(0, n) : s + ' '.repeat(n - s.length);
+}
+
+const tier = await readCurrentTier();
+const checks = await loadChecks();
+const migrations = await loadMigrations();
+
+if (checks.length !== 16) {
+  console.error(`FAIL  expected 16 checks in db/checks, found ${checks.length}`);
   process.exit(2);
 }
 
-if (entries.length === 0) {
-  console.log('0 checks present (pre-v1.7)');
-  console.log('Target is 15 (ADU-CON-02 v3.0 section 13). ADU-DB-01 v1.6 Appendix C');
-  console.log('defines 14, and check 15 arrives with the v1.7 reissue. SPEC_VERSION_GAP.');
-  process.exit(0);
-}
-
-let failed = 0;
-for (const entry of entries) {
-  const full = path.join(checksDir, entry);
-  const isSql = entry.endsWith('.sql');
-  const result = isSql
-    ? spawnSync('psql', ['-v', 'ON_ERROR_STOP=1', '-f', full, process.env.DATABASE_URL ?? ''], {
-        stdio: 'inherit',
-      })
-    : spawnSync(process.execPath, [full], { stdio: 'inherit' });
-  if (result.status !== 0) {
-    console.error(`FAIL  ${entry}`);
-    failed += 1;
-  } else {
-    console.log(`PASS  ${entry}`);
+// One connection, opened only if a live check will actually use it.
+const needsDb = checks.some((c) => c.kind === 'database' && tier >= c.liveAtTier);
+let client = null;
+if (needsDb) {
+  const connectionString = process.env['DATABASE_URL'];
+  if (!connectionString) {
+    console.error('FAIL  DATABASE_URL is not set, and live database checks are due at this tier.');
+    console.error('      Run:  docker compose up -d  &&  cp .env.example .env');
+    process.exit(2);
+  }
+  client = new pg.Client({ connectionString });
+  try {
+    await client.connect();
+  } catch (err) {
+    console.error(`FAIL  cannot connect to the database: ${err.message}`);
+    process.exit(2);
   }
 }
 
-console.log(`\n${entries.length - failed} of ${entries.length} checks passed.`);
-process.exit(failed > 0 ? 1 : 0);
+const sql = async (text, params = []) => (await client.query(text, params)).rows;
+const ctx = { sql, migrations, tier, repoRoot };
+
+const results = [];
+for (const check of checks) {
+  if (tier < check.liveAtTier) {
+    results.push({ check, state: PENDING, detail: `live at Tier ${check.liveAtTier}` });
+    continue;
+  }
+  try {
+    const r = await check.run(ctx);
+    results.push({ check, ...r });
+  } catch (err) {
+    results.push({ check, state: FAIL, detail: `check threw: ${err.message}` });
+  }
+}
+
+if (client) await client.end();
+
+console.log(`\nADU-DB-01 v1.9 Appendix C — sixteen checks · repository at Tier ${tier}`);
+console.log(`migrations inspected: ${migrations.length}\n`);
+const W = Math.max(...checks.map((c) => c.title.length)) + 2;
+console.log(`  ${pad('#', 3)}${pad('STATE', 9)}${pad('CHECK', W)}DETAIL`);
+console.log(`  ${'-'.repeat(3 + 9 + W + 40)}`);
+for (const r of results) {
+  console.log(`  ${pad(r.check.id, 3)}${pad(r.state, 9)}${pad(r.check.title, W)}${r.detail}`);
+}
+
+const count = (s) => results.filter((r) => r.state === s).length;
+const [p, f, w] = [count(PASS), count(FAIL), count(PENDING)];
+console.log(`\n  ${p} PASS · ${w} PENDING · ${f} FAIL\n`);
+
+if (f > 0) {
+  console.error('An Appendix C invariant is broken. Stop and fix it before continuing.\n');
+  process.exit(1);
+}

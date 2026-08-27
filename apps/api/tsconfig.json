@@ -4,12 +4,13 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": "./",
     "types": ["node", "jest"],
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+    "resolveJsonModule": true,
+    "incremental": false,
+    "noEmit": true
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["dist", "node_modules"]
