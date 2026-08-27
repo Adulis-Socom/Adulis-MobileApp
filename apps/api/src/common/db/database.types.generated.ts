@@ -733,6 +733,10 @@ export interface CoreNotification {
   id: Generated<string>;
   locale: string;
   order_id: string | null;
+  /**
+   * ADU-API-01 v1.6 S12.14 - read state syncs across surfaces: one list, two clients. Absent from ADU-DB-01 v1.10 S20 (registered D-41); the wire contract requires it, so it exists.
+   */
+  read_at: Timestamp | null;
   recipient_account_id: string;
   scheduled_for: Generated<Timestamp>;
   sent_at: Timestamp | null;
@@ -740,6 +744,15 @@ export interface CoreNotification {
   state: Generated<CoreNotificationState>;
   suppressible: Generated<boolean>;
   template_key: string;
+}
+
+export interface CoreNotificationPreference {
+  account_id: string;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  seller_id: string;
+  template_key: string;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface CoreOperatorGrant {
@@ -1250,6 +1263,10 @@ export interface CoreSocialPost {
 export interface CoreStepUpChallenge {
   account_id: string;
   action: CoreStepUpAction;
+  /**
+   * Section 9.2 - "Uses: exactly one." Set by fn_assert_step_up inside the transaction of the action it authorised; a rolled-back action rolls the consumption back with it.
+   */
+  consumed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
   id: string;
@@ -1471,6 +1488,7 @@ export interface DB {
   "core.moderation_event": CoreModerationEvent;
   "core.moderation_queue_item": CoreModerationQueueItem;
   "core.notification": CoreNotification;
+  "core.notification_preference": CoreNotificationPreference;
   "core.operator_grant": CoreOperatorGrant;
   "core.order": CoreOrder;
   "core.order_confirmation": CoreOrderConfirmation;

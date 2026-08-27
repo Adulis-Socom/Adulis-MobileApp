@@ -39,7 +39,13 @@ const EXPECTED = 109;
 // Appendix B's manifest does not list it. This is the manifest's own
 // recorded failure mode (it omitted seller_availability through v1.7).
 // The exception is pinned BY NAME so any other stray table still fails.
-const BODY_OVER_MANIFEST = ['core.category_market_availability'];
+// Register D-40: ADU-API-01 v1.6 S12.14 gives notification preferences two
+// endpoints and no document gives them a table; migration 0024 adds it and
+// Appendix B owes the row. Same mechanism, pinned by name.
+const BODY_OVER_MANIFEST = [
+  'core.category_market_availability',
+  'core.notification_preference',
+];
 
 export default {
   id: 14,
