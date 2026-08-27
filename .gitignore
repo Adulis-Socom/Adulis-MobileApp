@@ -13,3 +13,7 @@ apps/api/dist/
 # never commit a real environment file; .env.example is the only one tracked
 .env.*
 !.env.example
+
+# ops/scripts/verify-deps-fires.sh plants these for a few hundred milliseconds to
+# prove the dependency rules fire. A crashed run must not leave one committable.
+**/__depcruise_probe*.ts

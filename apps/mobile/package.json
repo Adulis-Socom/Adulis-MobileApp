@@ -1,0 +1,13 @@
+{
+  "name": "@adulis/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Adulis mobile app (buyer + seller Companion) — PLACEHOLDER, unassigned workstream.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "echo \"@adulis/mobile: placeholder, no build (ADU-REPO-01 §1 — unassigned)\"",
+    "test": "echo \"@adulis/mobile: placeholder, no tests\"",
+    "typecheck": "echo \"@adulis/mobile: placeholder, no sources to typecheck\"",
+    "lint": "echo \"@adulis/mobile: placeholder, nothing to lint\""
+  }
+}
