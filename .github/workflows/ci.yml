@@ -80,6 +80,23 @@ jobs:
       # integration tests, both of which need real PostgreSQL: roles, grants and
       # current_setting's transaction-local behaviour cannot be mocked. Also runs
       # the locale type-level completeness test.
+      # ADU-REPO-01 S4 - the four dependency rules. Enforced here rather than in
+      # review, because a rule that depends on someone noticing is a rule that
+      # holds until the week someone is busy.
+      #
+      # Run BEFORE Build on purpose: dist/ is doNotFollow'd rather than excluded,
+      # so built output stays in the graph as a leaf and an import into it is
+      # still catchable. Running before Build simply means there is less of it.
+      - name: Dependency rules (ADU-REPO-01 S4)
+        run: pnpm verify:deps
+
+      # And prove the rules FIRE. `verify:deps` passing tells you nothing on its
+      # own: a config with a typo in a path regex, or with preserveSymlinks left
+      # true, passes exactly as loudly as a correct one. This plants each
+      # violation, asserts it is caught by name, and removes it.
+      - name: The dependency rules actually fire
+        run: pnpm verify:deps-fires
+
       - name: Test
         run: pnpm test
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_why": "ADU-REPO-01 §4 rules 2 and 3, plus the generated-file rule. The backend owns db/ and contracts/, but contracts/openapi.json is written by CI from decorators and is never hand-edited — a hand-edited spec is a lie with authority.",
+  "_verify": "Run /permissions and /context after any change here.",
+  "claudeMdExcludes": [
+    "**/apps/console/**",
+    "**/apps/mobile/**",
+    "**/apps/storefront/**"
+  ],
+  "permissions": {
+    "deny": [
+      "Edit(../console/**)",
+      "Edit(../mobile/**)",
+      "Edit(../storefront/**)",
+      "Write(../console/**)",
+      "Write(../mobile/**)",
+      "Write(../storefront/**)",
+      "Edit(../../contracts/openapi.json)",
+      "Write(../../contracts/openapi.json)",
+      "Edit(../../packages/api-client/src/schema.d.ts)",
+      "Write(../../packages/api-client/src/schema.d.ts)"
+    ]
+  }
+}

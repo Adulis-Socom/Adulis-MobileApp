@@ -9,8 +9,13 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
-      // Generated and never hand-edited (ADU-CON-02 v3.0 section 12).
+      // Generated and never hand-edited.
+      // ADU-REPO-01 S2 moves the generated client out of apps/console/src/api/
+      // and into packages/api-client/. The old path stays ignored so a stale
+      // branch does not start failing lint mid-restructure.
       'apps/console/src/api/**',
+      'packages/api-client/src/schema.d.ts',
+      'contracts/openapi.json',
       '**/openapi.json',
     ],
   },

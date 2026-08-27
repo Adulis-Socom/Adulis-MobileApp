@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_why": "ADU-REPO-01 §4 rule 2. Placeholder workstream; the boundary is set before anyone starts so it is inherited rather than discovered.",
+  "claudeMdExcludes": [
+    "**/apps/api/**",
+    "**/apps/console/**",
+    "**/apps/storefront/**"
+  ],
+  "permissions": {
+    "deny": [
+      "Edit(../api/**)",
+      "Edit(../console/**)",
+      "Edit(../storefront/**)",
+      "Write(../api/**)",
+      "Write(../console/**)",
+      "Write(../storefront/**)",
+      "Edit(../../contracts/openapi.json)",
+      "Write(../../contracts/openapi.json)",
+      "Edit(../../db/migrations/**)",
+      "Write(../../db/migrations/**)"
+    ]
+  }
+}
