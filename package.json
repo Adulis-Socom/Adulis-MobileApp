@@ -18,7 +18,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "ci:local": "pnpm typecheck && pnpm lint && pnpm verify:deps && pnpm verify:deps-fires && pnpm verify:contract && pnpm test && pnpm build",
+    "ci:local": "pnpm typecheck && pnpm lint && pnpm verify:deps && pnpm verify:deps-fires && pnpm verify:contract && pnpm verify:error-locale && pnpm test && pnpm build",
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js -d DATABASE_URL_MIGRATE -m db/migrations -j sql up",
     "db:check": "node --env-file-if-exists=.env ops/scripts/db-check.mjs",
     "verify:permission-doc": "node ops/scripts/verify-permission-doc.mjs",
@@ -32,7 +32,8 @@
     "mock:api": "node ops/scripts/mock-api.mjs",
     "verify:contract": "node ops/scripts/verify-contract.mjs",
     "generate:openapi": "pnpm --filter @adulis/api generate:openapi",
-    "generate:api-client": "pnpm --filter @adulis/api-client generate"
+    "generate:api-client": "pnpm --filter @adulis/api-client generate",
+    "verify:error-locale": "node ops/scripts/verify-error-locale.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

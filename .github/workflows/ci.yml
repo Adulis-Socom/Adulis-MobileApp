@@ -128,6 +128,14 @@ jobs:
       - name: The contract carries /v1 in its path keys
         run: pnpm verify:contract
 
+      # LIVE from Tier 3 - section 7.3's completeness gate. Every code in the
+      # closed taxonomy must carry its derived key in BOTH locale catalogues;
+      # a new code cannot ship without its Amharic string, which is friction
+      # and the point. Presence, not quality - the human-translation gate is
+      # separate and later.
+      - name: Every error code exists in both locale catalogues
+        run: pnpm verify:error-locale
+
       - name: Build
         run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
