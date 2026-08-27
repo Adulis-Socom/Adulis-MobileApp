@@ -2,7 +2,7 @@
   "name": "adulis-platform",
   "version": "0.0.0",
   "private": true,
-  "description": "Adulis platform monorepo \u2014 one API, four clients, two processes, one PostgreSQL.",
+  "description": "Adulis platform monorepo — one API, four clients, two processes, one PostgreSQL.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22 <23"
@@ -24,7 +24,9 @@
     "verify:permission-doc": "node ops/scripts/verify-permission-doc.mjs",
     "db:determinism": "node --env-file-if-exists=.env ops/scripts/db-determinism.mjs",
     "db:verify-extensions": "node --env-file-if-exists=.env ops/scripts/verify-extensions.mjs",
-    "db:seed": "node ops/scripts/seed.mjs"
+    "db:seed": "node ops/scripts/seed.mjs",
+    "verify:docs-ascii": "node ops/scripts/verify-docs-ascii.mjs",
+    "verify:docs": "pnpm verify:permission-doc && pnpm verify:docs-ascii"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

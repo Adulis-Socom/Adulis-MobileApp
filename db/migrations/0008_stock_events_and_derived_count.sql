@@ -16,15 +16,29 @@
 --
 -- One table (append-only), two trigger functions, one view.
 --
--- ⚠ ONE CONTRADICTION INSIDE SECTION 10.1, RESOLVED IN FAVOUR OF THE CODE.
--- The prose says stock_count "is maintained exclusively by an AFTER INSERT
--- trigger on stock_event". The function body it then gives assigns
--- NEW.resulting_count and returns NEW - which only has an effect in a BEFORE
--- trigger. As an AFTER trigger the assignment is discarded and every
--- stock_event ships with resulting_count NULL, silently.
+-- A3.1 - THE TRIGGER IS BEFORE INSERT, AND THE AMENDMENT RATIFIES IT.
 --
--- BEFORE INSERT is used, because it is the only timing under which the given
--- body does what the given body says. Reported for v1.11.
+-- Section 10.1's prose says AFTER INSERT. The function body it then gives
+-- assigns NEW.resulting_count and returns NEW, and BOTH ARE INERT IN AN AFTER
+-- TRIGGER: resulting_count would have been NULL on every stock event ever
+-- written, and NOTHING WOULD HAVE RAISED - the column is nullable and no
+-- constraint reads it. The previous revision of this migration used BEFORE and
+-- reported the contradiction; A3.1 confirms it and corrects section 10.1.
+--
+-- A3.1 ADDS AN ARGUMENT THIS MIGRATION DID NOT HAVE, and it is the better one:
+--
+--   "BEFORE is not merely what the body needs; it is what the DESIGN needs. The
+--    UPDATE on product_variant fires before the event row is written, so
+--    CHECK (stock_count >= 0) raises BEFORE a stock event exists claiming a
+--    decrement that did not happen. Under AFTER, the event row is already in
+--    flight when the constraint fires - same transaction, same rollback, but
+--    the ordering that makes the audit trail trustworthy is the BEFORE one."
+--
+-- What the defect actually was: resulting_count exists so that a stock event
+-- carries the count it produced, which is what makes the log auditable without
+-- replaying it. A silent NULL there is the same class of failure as the
+-- materialized view - it works, it is fast, and the property it was built for
+-- is absent.
 -- ===========================================================================
 
 -- Up Migration
@@ -165,24 +179,41 @@ SELECT v.id AS variant_id,
 FROM core.product_variant v;
 
 -- ---------------------------------------------------------------------------
--- 4. NOT BUILT HERE, AND DELIBERATELY
+-- 4. THE RELEASE INDEX IS DEFERRED TO MIGRATION 09 - A3.2
 --
 -- Section 12.4: "INVARIANT - stock release on expiry is idempotent. A PARTIAL
 -- UNIQUE INDEX ON (order_id, reason) for release reasons."
 --
--- It is not created, and not only because core."order" does not exist yet.
+-- The previous revision reported that scope as unworkable. A3.2 confirms it,
+-- AND FINDS IT WORSE THAN A BROKEN CONSTRAINT:
 --
--- ⚠ AS STATED IT WOULD BREAK PARTIAL FULFILMENT. Section 12.5 requires that
--- "each cancelled line writes its own stock_event", and section 12.3 that order
--- creation writes "one stock_event per line". A unique index on
--- (order_id, reason) admits ONE row per order per reason, so a two-line order
--- could not release its second line - and LINE_CANCELLED is by definition
--- per-line. The scope that makes the invariant true without breaking section
--- 12.5 is (reservation_id, reason), or (order_id, reason) restricted to
--- ORDER_EXPIRED alone if expiry is modelled as one order-level event.
+--   "Section 12.5 requires that each cancelled line writes its own stock_event
+--    and that cancelling two of three lines is two cancellations. On a
+--    three-line order the second line's release would collide - and IF THE JOB
+--    RELEASES WITH ON CONFLICT DO NOTHING, AS AN IDEMPOTENT JOB SHOULD, IT
+--    WOULD SILENTLY NOT RETURN THE STOCK. Goods cancelled, stock never
+--    released, and no error anywhere."
 --
--- Section 12.4 does not say which reasons are "release reasons" either.
--- Deferred to migration 09, where expiry is built, and reported for v1.11.
+-- RULING A3.2 - the index is (reservation_id, reason) over release reasons,
+-- AND A CHECK REQUIRES THE ANCHOR:
+--
+--   CREATE UNIQUE INDEX stock_release_once
+--     ON core.stock_event (reservation_id, reason)
+--    WHERE reason IN ( /* release reasons */ );
+--
+--   ALTER TABLE core.stock_event ADD CONSTRAINT release_has_a_line CHECK (
+--     reason NOT IN ( /* release reasons */ ) OR reservation_id IS NOT NULL
+--   );
+--
+-- THE CHECK IS THE PART THIS MIGRATION'S PROPOSED SCOPE DID NOT HAVE, and it
+-- is the half that matters: reservation_id is nullable - a seller's manual
+-- adjustment has no line - and A PARTIAL UNIQUE INDEX DOES NOT CONSTRAIN ROWS
+-- WHOSE INDEXED COLUMN IS NULL. Without the CHECK, a release reason written
+-- with a null reservation_id escapes the index entirely, and the idempotency
+-- guarantee has a hole exactly where it matters.
+--
+-- Both land in MIGRATION 09, together, because core.reservation does not exist
+-- until then. Recorded here so the deferral cannot be lost between migrations.
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------

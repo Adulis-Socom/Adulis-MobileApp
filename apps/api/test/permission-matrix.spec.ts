@@ -476,7 +476,7 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
   });
 
   // ==========================================================================
-  describe('R28 - the standing gate, and it was a live hole', () => {
+  describe('R28 and A3.3 - the standing gate', () => {
     /**
      * ADU-AUTH-01 v2.4 §14 adds Standing ahead of Role and Surface, and it was
      * "previously missing rather than merely unnamed":
@@ -519,46 +519,101 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
     });
 
     /**
-     * ⚠ THIS TEST RECORDS A CONTRADICTION BETWEEN TWO DOCUMENTS, and it asserts
-     * what the built function actually does rather than what one of them says.
+     * A3.3 - THE STANDING GATE RAISES U0001, AND THE AMENDMENT RULED THE
+     * ENFORCEMENT WRONG RATHER THAN THE PROSE.
      *
-     *   ADU-DB-01 v1.10 §6.9a — the function body, transcribed verbatim below —
-     *   folds the standing check into the ROLE LOOKUP. A suspended member
-     *   matches no row, so `v_role` stays NULL and step 3 raises **U0002**,
-     *   which ADU-API-01 v1.6 §7.1a maps to **404**.
+     * The previous revision found that ADU-DB-01 v1.10 6.9a's body and
+     * ADU-AUTH-01 v2.4 14's gate table disagreed - the body folded standing
+     * into the role lookup, so a suspended member matched no row and raised
+     * U0002 (404) where the table said U0001 (403). It shipped the enforcement,
+     * because v1.10 governs enforcement, and reported the contradiction.
      *
-     *   ADU-AUTH-01 v2.4 §14's gate table says the Standing gate fails with
-     *   **`PERMISSION_DENIED (U0001)`** — a **403**.
+     * A3.3 confirms the contradiction and rules the OTHER way:
      *
-     * The observable difference is real: a suspended Admin is told the seller
-     * does not exist, rather than that they may not act on it.
+     *   "The principle the 404 rests on is DO NOT CONFIRM EXISTENCE TO SOMEONE
+     *    WITH NO BUSINESS KNOWING. It exists to defeat enumeration by
+     *    strangers. A SUSPENDED ADMIN IS NOT A STRANGER - they worked there,
+     *    they know the store exists, and telling them it does not is not
+     *    protecting a secret. It is a lie that produces a support ticket and
+     *    looks like a bug."
      *
-     * v1.10's own preamble is the tie-break and is why the body is transcribed
-     * unchanged: "Where they disagree on HOW A BEHAVIOUR IS ENFORCED, this
-     * document governs." ADU-API-01 v1.6 says the same of itself. So U0002 is
-     * what ships, and the discrepancy is REPORTED rather than resolved in SQL.
-     *
-     * There is a case for each. U0002 discloses less — a suspended member sees
-     * exactly what a stranger sees. U0001 is what v2.4's own table promises, and
-     * a member who still holds a live session already knows the seller exists,
-     * so 404 tells them nothing they could not infer. It is a ruling either way.
+     * So the boundary is "did you EVER have standing", not "do you have it
+     * now". Three cases, not two, and these are the three.
      */
-    it('reports a suspended member as U0002 - see the note, the documents disagree', async () => {
-      await client.query('SAVEPOINT r28b');
+    it('raises U0001 for a suspended member - they are not a stranger', async () => {
+      await client.query('SAVEPOINT a33a');
       await client.query(
         'UPDATE core.seller_team_member SET suspended_at = now()' +
           ' WHERE seller_id = $1 AND account_id = $2',
         [SELLER, ACCOUNT_FOR.SALES_SUPPORT],
       );
       const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.orders:read', 'CONSOLE');
-      await client.query('ROLLBACK TO SAVEPOINT r28b');
+      await client.query('ROLLBACK TO SAVEPOINT a33a');
 
-      // ADU-DB-01 v1.10 §6.9a, which governs enforcement.
-      expect(r).toEqual({ allowed: false, sqlstate: 'U0002' });
+      expect(r).toEqual({ allowed: false, sqlstate: 'U0001' });
+    });
 
-      // Whatever the code, the permission is gone. THAT is what R28 bought, and
-      // it holds under either reading.
-      expect(r.allowed).toBe(false);
+    it('raises U0001 for a revoked member too - standing, not membership', async () => {
+      await client.query('SAVEPOINT a33b');
+      await client.query(
+        'UPDATE core.seller_team_member SET revoked_at = now()' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, ACCOUNT_FOR.INVENTORY],
+      );
+      const r = await probe(ACCOUNT_FOR.INVENTORY, 'seller.products:read', 'CONSOLE');
+      await client.query('ROLLBACK TO SAVEPOINT a33b');
+
+      expect(r).toEqual({ allowed: false, sqlstate: 'U0001' });
+    });
+
+    /**
+     * The pair that carries the whole ruling: the two failures must be
+     * DISTINCT, and they must be distinct in this direction. A stranger gets
+     * 404 because confirming the seller exists would make any endpoint taking
+     * an identifier an enumeration oracle; a suspended member gets 403 because
+     * they already know it exists.
+     */
+    it('holds the two apart: stranger U0002, suspended U0001', async () => {
+      await client.query('SAVEPOINT a33c');
+      await client.query(
+        'UPDATE core.seller_team_member SET suspended_at = now()' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, ACCOUNT_FOR.ADMIN],
+      );
+      const suspended = await probe(ACCOUNT_FOR.ADMIN, 'seller.payout:update', 'CONSOLE');
+      await client.query('ROLLBACK TO SAVEPOINT a33c');
+
+      const stranger = await probe(STRANGER, 'seller.payout:update', 'CONSOLE');
+
+      expect(suspended).toEqual({ allowed: false, sqlstate: 'U0001' });
+      expect(stranger).toEqual({ allowed: false, sqlstate: 'U0002' });
+      expect(suspended.sqlstate).not.toBe(stranger.sqlstate);
+    });
+
+    /**
+     * THE NON-DETERMINISM A3.3'S BODY WOULD HAVE HAD, and the reason migration
+     * 09's ORDER BY is this repository's addition rather than the amendment's.
+     *
+     * seller_team_member_live is UNIQUE on (seller_id, account_id) only WHERE
+     * revoked_at IS NULL, so a member revoked and later re-invited holds
+     * SEVERAL rows. A bare SELECT ... INTO over an unfiltered lookup takes an
+     * arbitrary one, and picking the stale revoked row denies a member who is
+     * currently in good standing. The live row wins.
+     */
+    it('prefers the live membership when a revoked one also exists', async () => {
+      await client.query('SAVEPOINT a33d');
+      // An older, revoked membership for an account that also holds a live one.
+      await client.query(
+        'INSERT INTO core.seller_team_member' +
+          ' (id, seller_id, account_id, role, revoked_at, created_at)' +
+          ' VALUES (gen_random_uuid(), $1, $2, $3, now(), now() - $4::interval)',
+        [SELLER, ACCOUNT_FOR.SALES_SUPPORT, 'ANALYST', '400 days'],
+      );
+      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.orders:respond', 'CONSOLE');
+      await client.query('ROLLBACK TO SAVEPOINT a33d');
+
+      // SALES_SUPPORT holds orders:respond; the revoked ANALYST row does not.
+      expect(r.allowed).toBe(true);
     });
 
     it('takes away EVERY permission, not merely the dangerous ones', async () => {
@@ -569,12 +624,17 @@ describe('ADU-AUTH-01 v2.4 §16.2 — the role matrix', () => {
         [SELLER, ACCOUNT_FOR.ADMIN],
       );
       const stillAllowed: string[] = [];
+      const codes: string[] = [];
       for (const { code } of SEED.permissions) {
-        const { allowed } = await probe(ACCOUNT_FOR.ADMIN, code, 'CONSOLE');
+        const { allowed, sqlstate } = await probe(ACCOUNT_FOR.ADMIN, code, 'CONSOLE');
         if (allowed) stillAllowed.push(code);
+        else if (sqlstate !== undefined) codes.push(sqlstate);
       }
       await client.query('ROLLBACK TO SAVEPOINT r28c');
       expect(stillAllowed).toEqual([]);
+      // A3.3: every one of the 42 denials is U0001, never U0002. A suspended
+      // Admin must not be told the seller does not exist.
+      expect([...new Set(codes)]).toEqual(['U0001']);
     }, 60_000);
 
     /**

@@ -117,6 +117,8 @@ jobs:
       # that would have caught it, and it runs before anything is seeded.
       - name: The permission matrix agrees with its own generated SQL
         run: pnpm verify:permission-doc
+      - name: A3.5 - governed specifications are ASCII
+        run: pnpm verify:docs-ascii
 
       - name: Appendix C — sixteen checks
         run: pnpm db:check
