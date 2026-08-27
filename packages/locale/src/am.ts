@@ -34,7 +34,7 @@ export const am: Catalogue = {
   // the error catalogue - machine-translation placeholders (presence gate only)
   // auth
   'error.auth.otp_invalid': 'ያስገቡት ኮድ ትክክል አይደለም።',
-  'error.auth.otp_expired': 'ይህ ኮድ ጊዜው አልፎበታል። አዲስ ይጠይቁ።',
+  'error.auth.otp_expired': 'ይህ ኮድ አሁን አይሠራም። ለአዲስ ኮድ መልዕክቶችዎን ይመልከቱ፣ ወይም አዲስ ይጠይቁ።',
   'error.auth.otp_attempts_exceeded': 'በጣም ብዙ ሙከራዎች። አዲስ ኮድ ይጠይቁ።',
   'error.auth.otp_purpose_not_permitted': 'ይህ ኮድ ለዚያ ተግባር መጠቀም አይቻልም።',
   'error.auth.session_expired': 'ክፍለ ጊዜዎ አብቅቷል። እንደገና ይግቡ።',
@@ -105,4 +105,28 @@ export const am: Catalogue = {
   'error.request.not_found': 'አልተገኘም።',
   'error.request.gone': 'ይህ ገጽ ከእንግዲህ የለም።',
   'error.request.internal': 'በእኛ በኩል የሆነ ችግር ተፈጥሯል። እንደገና ይሞክሩ።',
+
+  'sms.otp.sign_in': '{code} የአዱሊስ ኮድዎ ነው።',
+  'sms.otp.account_deletion': '{code} - የአዱሊስ መለያዎን መሰረዝ ያረጋግጡ።',
+  'sms.otp.step_up.payout_change': '{code} - የክፍያ ሁሴታዎን መቀየር ያረጋግጡ።',
+  'sms.otp.step_up.reissue_instructions': '{code} - የክፍያ መመሪያዎን እንደገና መስጠት ያረጋግጡ።',
+  'sms.otp.step_up.team_change': '{code} - የቡድን ለውጥ ያረጋግጡ።',
+  'sms.otp.step_up.subscription_change': '{code} - የደንበኝነት ለውጥ ያረጋግጡ።',
+  'sms.otp.step_up.seller_deletion': '{code} - ሁቅዎን መሰረዝ ያረጋግጡ።',
+  'sms.otp.step_up.revoke_all_sessions': '{code} - ሌሎች ክፍለ-ጊዜያት መዝጋት ያረጋግጡ።',
+  'sms.otp.step_up.identity_change': '{code} - የማንነት ዝርዝሮች ለውጥ ያረጋግጡ።',
+  'sms.otp.step_up.ownership_transfer': '{code} - የሁቅ ባለቤትነት ማስተላለፍ ያረጋግጡ።',
+  'deletion.blocker.non_terminal_reservations': 'ክፍት የሆኑ መያዝ መትቶች መጀመሪያ መጨነቅ አለባቸው።',
+  'deletion.blocker.evidence_awaiting_confirmation': 'የቀረቡ ክፍያዎች መጀመሪያ መረጋገጥ አለባቸው።',
+  'deletion.blocker.orders_awaiting_handoff': 'የተረጋገጡ ትእዛዞች መጀመሪያ መጠናቀቅ አለባቸው።',
+  'deletion.blocker.refunds_unresolved': 'ተመላቶች መጀመሪያ መጨነቅ አለባቸው።',
+  'deletion.blocker.open_claims': 'ክፍት የሆኑ ቅሬቶች መጀመሪያ መፈታት አለባቸው።',
+  'deletion.blocker.subscription_past_due': 'ያልተከፈለ የደንበኝነት ሂሳብ መጀመሪያ መከፈል አለበት።',
+  'deletion.blocker.buyer_orders_in_payment': 'ክፍያ በሂደት ላይ ያሉ ትእዛዞች መጀመሪያ መጠናቀቅ አለባቸው።',
+  'deletion.effect.identity_scrubbed': 'የማንነት ዝርዝሮችዎ ይሰረዛሉ።',
+  'deletion.effect.records_anonymised': 'የግብይት መዝገቦች ያለ ስምዎ ይቀመጣሉ።',
+  'deletion.effect.reviews_anonymised_not_deleted': 'ግምገማዎች ያለ ስም ይቀስሉ።',
+  'deletion.effect.verification_retained': 'የማረጋገጥ መዝገብ ይቀመጣል።',
+  'deletion.effect.reservations_released': 'ነቃ የሆኑ መያዟዎች ይለቀቃሉ።',
+
 };

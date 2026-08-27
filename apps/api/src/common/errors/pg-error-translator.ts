@@ -119,6 +119,12 @@ const ILLEGAL_TRANSITION_RE = /Illegal (?:order|reservation) transition (\S+) ->
 export function translatePgError(e: PgError): AdulisException | null {
   switch (e.code) {
     case 'U0001':
+      // One message earns a more specific 403: the S16.9 owner rule. The
+      // matrix already restricts seller.account:delete to the Owner, so
+      // this fires only if the matrix is ever widened - which is the point.
+      if (e.message.includes('deletion owner only')) {
+        return new AdulisException('DELETION_OWNER_ONLY');
+      }
       return new AdulisException('PERMISSION_DENIED');
 
     case 'U0002':
@@ -200,6 +206,11 @@ export function translatePgError(e: PgError): AdulisException | null {
           status: 409,
           slots: { reason: 'LINE_NOT_REFUNDABLE' },
         });
+      }
+      if (e.message.includes('deletion blocked')) {
+        // The endpoint surfaces blockers with items[] before calling; this
+        // branch is the in-function re-check winning a race.
+        return new AdulisException('DELETION_BLOCKED');
       }
       if (e.message.includes('publication blocked') || e.message.includes('publication limit')) {
         // handled endpoint-side with items[]; reaching here means a caller

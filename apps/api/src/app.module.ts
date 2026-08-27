@@ -36,6 +36,16 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from './modules/catalogue/post-link.adapter';
+import { AuthController } from './modules/auth/auth.controller';
+import { AuthService } from './modules/auth/auth.service';
+import { OtpService } from './modules/auth/otp.service';
+import { FakeSmsAdapter, SMS_ADAPTER } from './modules/auth/sms.adapter';
+import { DeletionController } from './modules/deletion/deletion.controller';
+import { DeletionService } from './modules/deletion/deletion.service';
+import { TeamController } from './modules/team/team.controller';
+import { TeamService } from './modules/team/team.service';
+import { CouriersController } from './modules/couriers/couriers.controller';
+import { BillingController } from './modules/billing/billing.controller';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -57,7 +67,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -71,6 +81,11 @@ export const LOGGER = Symbol('LOGGER');
     OrdersService,
     FinancialService,
     HandoffService,
+    OtpService,
+    AuthService,
+    DeletionService,
+    TeamService,
+    { provide: SMS_ADAPTER, useValue: new FakeSmsAdapter() },
     { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
     { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },

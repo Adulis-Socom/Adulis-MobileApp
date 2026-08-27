@@ -37,7 +37,7 @@ export const en = {
   // ---------------------------------------------------------------------
   // auth
   'error.auth.otp_invalid': 'The code you entered is not correct.',
-  'error.auth.otp_expired': 'This code has expired. Request a new one.',
+  'error.auth.otp_expired': 'This code is no longer valid. Check your messages for a newer code, or request a new one.',
   'error.auth.otp_attempts_exceeded': 'Too many attempts. Request a new code.',
   'error.auth.otp_purpose_not_permitted': 'This code cannot be used for that action.',
   'error.auth.session_expired': 'Your session has ended. Sign in again.',
@@ -108,6 +108,38 @@ export const en = {
   'error.request.not_found': 'Not found.',
   'error.request.gone': 'This page is gone.',
   'error.request.internal': 'Something went wrong on our side. Try again.',
+
+  // ---------------------------------------------------------------------
+  // SMS templates (ADU-AUTH-01 section 4.4). A sign-in code names no
+  // action; a step-up code names the action - the second half is the
+  // security control: a seller who receives a payout-change code they did
+  // not request has been told someone is inside their account.
+  // ---------------------------------------------------------------------
+  'sms.otp.sign_in': '{code} is your Adulis code.',
+  'sms.otp.account_deletion': '{code} - confirm deleting your Adulis account.',
+  'sms.otp.step_up.payout_change': '{code} - confirm changing your Adulis payout account.',
+  'sms.otp.step_up.reissue_instructions': '{code} - confirm reissuing payment instructions.',
+  'sms.otp.step_up.team_change': '{code} - confirm changing your Adulis team.',
+  'sms.otp.step_up.subscription_change': '{code} - confirm changing your Adulis subscription.',
+  'sms.otp.step_up.seller_deletion': '{code} - confirm deleting your Adulis store.',
+  'sms.otp.step_up.revoke_all_sessions': '{code} - confirm signing out your other Adulis sessions.',
+  'sms.otp.step_up.identity_change': '{code} - confirm changing your Adulis identity details.',
+  'sms.otp.step_up.ownership_transfer': '{code} - confirm transferring your Adulis store.',
+
+  // Deletion blockers and effects (S16.9; ADU-WEB-01 S6.2) - the server
+  // sends keys, the client renders sentences.
+  'deletion.blocker.non_terminal_reservations': 'Open reservations must be fulfilled or cancelled first.',
+  'deletion.blocker.evidence_awaiting_confirmation': 'Submitted payments must be confirmed or rejected first.',
+  'deletion.blocker.orders_awaiting_handoff': 'Confirmed orders must be handed off or refunded first.',
+  'deletion.blocker.refunds_unresolved': 'Refunds must be reported and acknowledged first.',
+  'deletion.blocker.open_claims': 'Open claims must be resolved first.',
+  'deletion.blocker.subscription_past_due': 'The outstanding subscription balance must be settled first.',
+  'deletion.blocker.buyer_orders_in_payment': 'Orders with payment in progress must settle first.',
+  'deletion.effect.identity_scrubbed': 'Your identity details are removed.',
+  'deletion.effect.records_anonymised': 'Transaction records are kept without your name.',
+  'deletion.effect.reviews_anonymised_not_deleted': 'Reviews remain, attributed to no one.',
+  'deletion.effect.verification_retained': 'The verification record is retained.',
+  'deletion.effect.reservations_released': 'Active reservations are released.',
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */

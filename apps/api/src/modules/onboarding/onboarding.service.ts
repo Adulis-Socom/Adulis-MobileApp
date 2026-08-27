@@ -4,6 +4,7 @@ import { sql, type Transaction } from 'kysely';
 import type { Database } from '../../common/db/database.types';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import { assertPermission } from '../../common/auth/permission';
+import { phoneHash } from '../deletion/deletion.service';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import {
   SOCIAL_PLATFORM_ADAPTER,
@@ -45,6 +46,27 @@ export class OnboardingService {
     body: CreateSellerBody,
   ): Promise<unknown> {
     const accountId = req.ctx?.accountId as string;
+
+    // S16.9 — a deleted seller's phone does not become immediately
+    // reusable for a NEW seller account. The block outlives the scrubbed
+    // account, so it is keyed by phone hash, and this is the read that
+    // makes the write mean something (migration 0023 writes it).
+    const caller = await sql<{ phone_e164: string; market_id: string }>`
+      SELECT phone_e164, market_id FROM core.account
+       WHERE id = ${accountId}`.execute(trx);
+    const phone = caller.rows[0];
+    if (!phone) throw new AdulisException('INTERNAL');
+    const blocked = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM core.phone_reuse_block b
+       WHERE b.phone_hash = ${phoneHash(phone.phone_e164)}
+         AND b.market_id = ${phone.market_id}
+         AND b.blocked_until > now()`.execute(trx);
+    if ((blocked.rows[0]?.n ?? 0) > 0) {
+      throw new AdulisException('ELIGIBILITY_NOT_SATISFIED', {
+        slots: { reason: 'PHONE_REUSE_BLOCKED' },
+      });
+    }
+
     try {
       const seller = await sql<{ id: string }>`
         INSERT INTO core.seller
