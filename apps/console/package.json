@@ -1,0 +1,29 @@
+{
+  "name": "@adulis/console",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Adulis Seller Console — Vite React SPA on Cloudflare Pages.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "echo \"@adulis/console: no tests at Tier 0 (front-end is COO/CTO scope)\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@adulis/locale": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@adulis/config": "workspace:*",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "5.2.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  }
+}

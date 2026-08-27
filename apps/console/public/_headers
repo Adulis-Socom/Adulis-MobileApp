@@ -1,0 +1,68 @@
+# Adulis Seller Console — response headers (Cloudflare Pages `_headers` format).
+#
+# ADU-CON-02 v3.0 section 3.9 makes this file load-bearing: the entire policy
+# protecting the payout surface lives here, statically, so that it is
+# REVIEWABLE IN A DIFF rather than assembled at runtime by middleware.
+#
+# ---------------------------------------------------------------------------
+# WHY THERE IS NO NONCE, AND THE ONE DIVERGENCE TO KNOW ABOUT
+#
+# ADU-SEC-01 v1.0 section 5.2 specifies:
+#     script-src 'self' 'nonce-{NONCE}' 'strict-dynamic'
+# ADU-CON-02 v3.0 section 3.9 supersedes that for this origin:
+#     script-src 'self'
+#
+# The reason is the Vite-over-Next.js ruling. Next.js injects inline bootstrap
+# scripts, which forces the nonce machinery of ADU-SEC-01 section 8. A Vite SPA
+# emits ZERO inline scripts, so 'self' alone is sufficient — and 'self' has no
+# bypass on an origin that serves only CI-built assets, because there is no
+# upload path and no dynamic route on which an attacker-controlled file could
+# ever be served.
+#
+# STATUS: SPEC_VERSION_GAP. ADU-SEC-01 -> v1.1 is pending (ADU-CON-02 section 23)
+# and must absorb this nonce-free console policy along with the second
+# __Host-adulis_device cookie from R17. Until that reissue lands, this file
+# follows ADU-CON-02 v3.0 section 3.9 because section 9 of
+# .claude/reference/DOCUMENT_AUTHORITY.md makes v3.0 govern build sequencing —
+# and the Tier 0 work order directs this form explicitly.
+#
+# DOCUMENTED REOPEN TRIGGER (ADU-CON-02 section 3.9), and it is the whole
+# argument: the moment the console origin ever serves user-influenced content,
+# 'self' stops being safe and the nonce policy of ADU-SEC-01 section 5.2 must be
+# restored. Serving one user-supplied file from this origin reopens this ruling.
+# ---------------------------------------------------------------------------
+#
+# Every other directive is ADU-SEC-01 v1.0 section 5.2 unchanged:
+#   default-src 'none'               deny by default; every allowance is named
+#   style-src   'unsafe-inline'      the section 9 concession, scoped to styles only
+#   img-src     blob:                required by the payment evidence viewer
+#                                    (section 7 / R18). Evidence is never at a
+#                                    predictable URL, so blob: appears here and
+#                                    NOWHERE else.
+#   connect-src the API origin       the console holds no credential; it learns
+#                                    everything by calling the API
+#   worker-src  'self'               a poisoned service worker is persistent XSS
+#                                    that survives reload, so its source is pinned
+#   frame-src / frame-ancestors      the console frames nothing and is framed by
+#               'none'               nothing. Social embeds belong on storefronts.
+#   require-trusted-types-for        kills DOM XSS sinks (innerHTML, eval) in
+#               'script'             supporting engines
+#
+# OMITTED AT TIER 0, deliberately: `report-to csp`. ADU-SEC-01 section 5.2 lists
+# it, but it only works alongside a `Reporting-Endpoints` header naming a real
+# collector, and section 13.1's reporting endpoint is not provisioned yet. A
+# `report-to` pointing at a group that does not exist is silently dead. It is
+# added in the same change that stands the collector up (section 13.2 rollout).
+#
+# The hosts below are the specification's example origins. They are replaced with
+# the real ones when DNS is provisioned; that change is a diff on this file.
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://media.adulis.example blob:; font-src 'self'; connect-src 'self' https://api.adulis.example; frame-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; worker-src 'self'; manifest-src 'self'; require-trusted-types-for 'script'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-site
+  X-Frame-Options: DENY
