@@ -148,8 +148,15 @@ jobs:
       # schema dumps diffed". ops/scripts/db-determinism.mjs excludes pg_dump
       # 17's per-run random restrict token, which would otherwise make this stage
       # fail on every schema forever — see the script's header.
+      # The harness shells psql and pg_dump through `docker exec` into the
+      # Postgres container, because the runner's own client tools are a major
+      # behind the server (pg_dump 16 refuses a PG17 server outright). Locally
+      # that container is compose's adulis-postgres; here it is the service
+      # container, whose generated name GitHub exposes as job.services.<id>.id.
       - name: Migrations are deterministic
         run: pnpm db:determinism
+        env:
+          ADULIS_PG_CONTAINER: ${{ job.services.postgres.id }}
 
       # LIVE from Tier 1. ADU-DB-01 v1.8 supplied the fifteenth check (R16) and
       # moved check 14 to 109 tables, so the SPEC_VERSION_GAP that kept this
