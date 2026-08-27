@@ -1,9 +1,11 @@
 import { Controller, Get, Inject } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation } from '@nestjs/swagger';
 import { sql, type Kysely } from 'kysely';
 import { APP_DATABASE } from '../../common/db/database.module';
 import type { Database } from '../../common/db/database.types';
 import { Public } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { BootstrapResponseDto } from './bootstrap.dto';
 
 /**
  * GET /v1/bootstrap (ADU-API-01 v1.6 section 3.1). Client version is
@@ -40,6 +42,8 @@ export class BootstrapController {
 
   @Public()
   @Get()
+  @ApiOperation({ summary: 'Client floor, market configuration and the clock reference.' })
+  @ApiOkResponse({ type: BootstrapResponseDto })
   async bootstrap(): Promise<BootstrapResponse> {
     const r = await sql<{
       code: string;

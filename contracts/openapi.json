@@ -1,0 +1,117 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/v1/bootstrap": {
+      "get": {
+        "operationId": "BootstrapController_bootstrap",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Client floor, market configuration and the clock reference.",
+        "tags": [
+          "Bootstrap"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Adulis API",
+    "description": "",
+    "version": "1",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "BootstrapMarketDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "ET"
+          },
+          "display_currency": {
+            "type": "string",
+            "example": "ETB"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Africa/Addis_Ababa"
+          }
+        },
+        "required": [
+          "code",
+          "display_currency",
+          "timezone"
+        ]
+      },
+      "BootstrapResponseDto": {
+        "type": "object",
+        "properties": {
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The A5 clock-offset reference."
+          },
+          "min_supported_client": {
+            "type": "string",
+            "example": "1.4.0"
+          },
+          "client_status": {
+            "type": "string",
+            "enum": [
+              "OK",
+              "UPGRADE_RECOMMENDED",
+              "UPGRADE_REQUIRED"
+            ]
+          },
+          "market": {
+            "$ref": "#/components/schemas/BootstrapMarketDto"
+          },
+          "locales": {
+            "example": [
+              "en",
+              "am"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "feature_flags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          }
+        },
+        "required": [
+          "server_time",
+          "min_supported_client",
+          "client_status",
+          "market",
+          "locales",
+          "feature_flags"
+        ]
+      }
+    }
+  }
+}

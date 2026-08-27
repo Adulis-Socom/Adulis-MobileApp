@@ -264,8 +264,18 @@ jobs:
       # any removal, rename or retype inside /v1" — additive-only becomes a build
       # failure, not a discipline. A hand-edited spec is a lie with authority.
       #
-      # - name: Regenerate OpenAPI and fail on non-additive change
-      #   run: pnpm --filter @adulis/api openapi:generate && pnpm openapi:diff
+      # LIVE from Tier 3 - the seam has a producer. CI regenerates the
+      # contract and the committed copy must be byte-identical: git is how a
+      # hand-edited spec (a lie with authority) is caught, and how a code
+      # change that forgot to regenerate is caught, in the same breath. The
+      # ADDITIVE-only differ (fail on any removal/rename/retype inside /v1)
+      # is still owed - recorded in T3-REPORT.md - and this equality check
+      # is what holds the seam until it lands.
+      - name: The contract is CI-authored and current
+        run: |
+          pnpm generate:openapi
+          pnpm generate:api-client
+          git diff --exit-code contracts/ packages/api-client/src/schema.d.ts
 
       # --- Secret scan -------------------------------------------------------
       # UNBLOCKED BY: choosing a scanner. Section 12: "the real .env never enters

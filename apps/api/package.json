@@ -2,7 +2,7 @@
   "name": "@adulis/api",
   "version": "0.0.0",
   "private": true,
-  "description": "Adulis API and worker \u2014 one NestJS codebase started two ways.",
+  "description": "Adulis API and worker — one NestJS codebase started two ways.",
   "license": "UNLICENSED",
   "scripts": {
     "dev": "nest start --watch",
@@ -13,12 +13,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src test",
     "dev:worker": "nest start --watch --entryFile worker",
-    "db:codegen": "kysely-codegen --dialect postgres --url \"$DATABASE_URL_MIGRATE\" --include-pattern \"(core|chat|nlu|billing|ledger|analytics|waitlist).*\" --out-file src/common/db/database.types.generated.ts"
+    "db:codegen": "kysely-codegen --dialect postgres --url \"$DATABASE_URL_MIGRATE\" --include-pattern \"(core|chat|nlu|billing|ledger|analytics|waitlist).*\" --out-file src/common/db/database.types.generated.ts",
+    "generate:openapi": "nest build && node dist/generate-openapi.js"
   },
   "dependencies": {
     "@nestjs/common": "11.2.3",
     "@nestjs/core": "11.2.3",
     "@nestjs/platform-express": "11.2.3",
+    "@nestjs/swagger": "^11.4.7",
     "express": "5.2.1",
     "kysely": "0.28.17",
     "pg": "8.23.0",
