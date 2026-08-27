@@ -16,6 +16,16 @@ import {
   FakeSocialPlatformAdapter,
   SOCIAL_PLATFORM_ADAPTER,
 } from './modules/onboarding/social-platform.adapter';
+import { CatalogueController } from './modules/catalogue/catalogue.controller';
+import { CatalogueService } from './modules/catalogue/catalogue.service';
+import {
+  FakeMediaStorageAdapter,
+  MEDIA_STORAGE_ADAPTER,
+} from './modules/catalogue/media-storage.adapter';
+import {
+  FakePostLinkAdapter,
+  POST_LINK_ADAPTER,
+} from './modules/catalogue/post-link.adapter';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -37,7 +47,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -47,6 +57,9 @@ export const LOGGER = Symbol('LOGGER');
     // and under test the fake binds, and the specs configure it per case.
     // Production binds real adapters here by environment when they exist.
     { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new FakeSocialPlatformAdapter() },
+    CatalogueService,
+    { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
+    { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },
     RateLimitService,
     HandlerTransaction,
     { provide: APP_GUARD, useClass: AuthGuard },

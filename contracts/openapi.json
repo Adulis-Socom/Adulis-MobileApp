@@ -186,6 +186,334 @@
         ]
       }
     },
+    "/v1/seller/products": {
+      "post": {
+        "operationId": "CatalogueController_createProduct",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      },
+      "get": {
+        "operationId": "CatalogueController_listProducts",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}": {
+      "get": {
+        "operationId": "CatalogueController_getProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The editor's read: variants, attributes, media, posts, state.",
+        "tags": [
+          "Catalogue"
+        ]
+      },
+      "patch": {
+        "operationId": "CatalogueController_patchProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      },
+      "delete": {
+        "operationId": "CatalogueController_deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/images": {
+      "post": {
+        "operationId": "CatalogueController_images",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Signed upload then commit — one catalogued path, two actions.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/images/order": {
+      "put": {
+        "operationId": "CatalogueController_reorderImages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The WHOLE ordering in one request — one transaction or a defect.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/images/{position}": {
+      "delete": {
+        "operationId": "CatalogueController_deleteImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "position",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/publish": {
+      "post": {
+        "operationId": "CatalogueController_publishProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "409 with readiness items[] where blocked.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/social-posts": {
+      "post": {
+        "operationId": "CatalogueController_attachSocialPost",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Canonical id resolved server-side; never the URL string.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/unpublish": {
+      "post": {
+        "operationId": "CatalogueController_unpublishProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Removes from the storefront; keeps the row.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/variants": {
+      "post": {
+        "operationId": "CatalogueController_createVariant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/products/{id}/video": {
+      "post": {
+        "operationId": "CatalogueController_video",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      },
+      "delete": {
+        "operationId": "CatalogueController_deleteVideo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
     "/v1/seller/profile": {
       "patch": {
         "operationId": "OnboardingController_patchProfile",
@@ -251,6 +579,138 @@
         "summary": "Fetch and match; captures the follower count at verification.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/variants/{id}": {
+      "patch": {
+        "operationId": "CatalogueController_patchVariant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
+        ]
+      },
+      "delete": {
+        "operationId": "CatalogueController_deleteVariant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/variants/{id}/confirm-stock": {
+      "post": {
+        "operationId": "CatalogueController_confirmStock",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Resets stock_confirmed_at (S13.3).",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/variants/{id}/stock": {
+      "post": {
+        "operationId": "CatalogueController_writeStock",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Writes a StockEvent. Never a direct count set.",
+        "tags": [
+          "Catalogue"
+        ]
+      }
+    },
+    "/v1/seller/variants/{id}/stock-events": {
+      "get": {
+        "operationId": "CatalogueController_listStockEvents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Catalogue"
         ]
       }
     }
