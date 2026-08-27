@@ -122,9 +122,6 @@ jobs:
       - name: The contract carries /v1 in its path keys
         run: pnpm verify:contract
 
-      - name: Test
-        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
-
       - name: Build
         run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
@@ -135,6 +132,17 @@ jobs:
 
       - name: Migrations apply
         run: pnpm db:migrate
+
+      # AFTER the migrations, deliberately. The api test suites are integration
+      # tests against the migrated schema (they query core.market in their first
+      # fixture line); a Test step that precedes "Migrations apply" fails on a
+      # bare database with 'relation does not exist'. It sat before the
+      # migrations from Tier 0 - when every test WAS a unit test - and nobody
+      # saw it break, because the deps-fires failure earlier in this job masked
+      # it on every run since the migration tests arrived. Locally the order is
+      # invisible: a developer database is always already migrated.
+      - name: Test
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
 
       # LIVE from Tier 1. Section 16: "migrations applied twice to empty DBs,
       # schema dumps diffed". ops/scripts/db-determinism.mjs excludes pg_dump
