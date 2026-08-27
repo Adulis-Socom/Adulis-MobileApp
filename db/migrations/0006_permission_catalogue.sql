@@ -1,9 +1,9 @@
 -- ===========================================================================
 -- MIGRATION 05b - THE PERMISSION CATALOGUE AND THE ROLE MATRIX
 --
--- Source: ADU-DB-01 v1.9 section 6.9a and section 28 item 5, second half -
+-- Source: ADU-DB-01 v1.10 section 6.9a and section 28 item 5, second half -
 -- "permission and role_permission seeded from ADU-AUTH-01 section 15/16".
--- The seed itself is ADU-AUTH-01 **v2.3 section 16.2a**, and it is EXECUTED
+-- The seed itself is ADU-AUTH-01 **v2.4 section 16.2a** (unchanged from v2.3), and it is EXECUTED
 -- RATHER THAN TRANSCRIBED, per amendment A1.5 step 4: "Prefer executing
 -- section 16.2a's SQL over transcribing section 16.2's table."
 --
@@ -12,7 +12,7 @@
 -- there is a surface restriction that silently does not exist."
 --
 -- ---------------------------------------------------------------------------
--- WHY v2.3 EXISTS, AND WHY THIS FILE IS A COPY RATHER THAN A TRANSCRIPTION
+-- WHY THE SEED IS A COPY RATHER THAN A TRANSCRIPTION
 --
 -- v2.2 rendered the matrix with two three-byte glyphs that differ only in their
 -- second and third bytes. In transit those bytes were lost and the two
@@ -21,10 +21,10 @@
 -- does not fail loudly, and a reader who had not seen the original would have
 -- seeded 252 grants with confidence.
 --
--- v2.3 answers it twice: section 16.2 is ASCII (`Y` and `.`), and section 16.2a
+-- v2.3 answered it twice, and v2.4 carries both unchanged: section 16.2 is ASCII (`Y` and `.`), and section 16.2a
 -- is the seed as executable SQL, both generated from one source. The block
 -- below is that SQL, byte for byte. The authority copy is kept at
--- docs/amendments/ADU-AUTH-01_v2_3_permission_seed.sql, and a test parses THAT
+-- docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql, and a test parses THAT
 -- file and compares it against the live database - so a bad copy-paste into
 -- this migration fails the build rather than the audit.
 --
@@ -83,7 +83,7 @@ COMMENT ON COLUMN core.permission.requires_step_up IS
   'outside.';
 
 COMMENT ON TABLE core.role_permission IS
-  'ADU-AUTH-01 v2.3 section 16.2 - 42 codes, 6 roles, 139 grants. The Owner is '
+  'ADU-AUTH-01 v2.4 section 16.2 - 42 codes, 6 roles, 139 grants. The Owner is '
   'core.seller.owner_account_id and never a row in seller_team_member '
   '(amendment A1.3), so the OWNER rows here describe the store owner rather '
   'than a team membership. At MVP only OWNER is reachable: Business tier is '
@@ -92,12 +92,12 @@ COMMENT ON TABLE core.role_permission IS
   'five unused".';
 
 -- ---------------------------------------------------------------------------
--- 2. THE SEED - ADU-AUTH-01 v2.3 section 16.2a, byte for byte.
+-- 2. THE SEED - ADU-AUTH-01 v2.4 section 16.2a, byte for byte.
 --
 -- SURFACES ARE THE DOCUMENT'S, NOT THIS MIGRATION'S. The previous revision of
 -- this file had to decide for itself what the three **M-squared** permissions
 -- carried, because no document said; it chose {CONSOLE} and reported the
--- question. v2.3 answers it: seller.reviews:read,
+-- question. v2.3 answered it, and v2.4 carries it: seller.reviews:read,
 -- seller.analytics.basic:read and seller.notifications.preferences:write are
 -- MOBILE-reachable, so TWELVE permissions carry {MOBILE, CONSOLE} and thirty
 -- carry {CONSOLE}. The seed below is the ruling, and the earlier reading is
@@ -309,7 +309,7 @@ BEGIN
   SELECT count(*) INTO n_mobile FROM core.permission WHERE 'MOBILE' = ANY(surfaces);
 
   IF n_perm <> 42 THEN
-    RAISE EXCEPTION 'core.permission holds % rows; ADU-AUTH-01 v2.3 section 15.1 has 42', n_perm
+    RAISE EXCEPTION 'core.permission holds % rows; ADU-AUTH-01 v2.4 section 15.1 has 42', n_perm
       USING ERRCODE = 'restrict_violation';
   END IF;
   IF n_grant <> 139 THEN

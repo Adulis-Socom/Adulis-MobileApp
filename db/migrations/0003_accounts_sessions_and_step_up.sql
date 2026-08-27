@@ -1,10 +1,10 @@
 -- ===========================================================================
 -- MIGRATION 03 - ACCOUNTS, PERSONS, DEVICES, SESSIONS, STEP-UP, RECOVERY
 --
--- Source: ADU-DB-01 v1.9 section 28 item 3 - "Accounts, persons, devices,
+-- Source: ADU-DB-01 v1.10 section 28 item 3 - "Accounts, persons, devices,
 -- account_device (R17), OTP, sessions, step-up, recovery".
 --
--- Transcribed from sections 6.1 through 6.8, plus ADU-AUTH-01 v2.2 section 13
+-- Transcribed from sections 6.1 through 6.8, plus ADU-AUTH-01 v2.4 section 13
 -- for the age declaration.
 --
 -- Nine tables. One append-only (account_recovery_case, Appendix B).
@@ -51,7 +51,7 @@ CREATE TABLE core.account (
   market_id             uuid NOT NULL REFERENCES core.market(id),
   person_id             uuid NULL REFERENCES core.person(id),
   status                core.account_status NOT NULL DEFAULT 'ACTIVE',
-  -- ADU-AUTH-01 v2.2 section 13. "Store the confirmation, not the date."
+  -- ADU-AUTH-01 v2.4 section 13. "Store the confirmation, not the date."
   -- Adulis sells no age-graded product, so a date of birth would be data
   -- collected for no purpose, and data minimisation is a live obligation
   -- rather than a preference.
@@ -131,10 +131,13 @@ COMMENT ON COLUMN core.otp_challenge.code_hash IS
   'time. A timing oracle on a 6-digit code is a real one.';
 
 COMMENT ON COLUMN core.otp_challenge.step_up_action IS
-  'NULL, or which section 6.5 action this authorises. NOTE: core.step_up_action '
-  'carries SIX values while ADU-AUTH-01 v2.2 section 16.3 makes EIGHT '
-  'permissions require step-up - seller.identity:manage and '
-  'seller.ownership:transfer have no value here. Reported, not invented.';
+  'NULL, or which section 6.5 action this authorises. core.step_up_action '
+  'carries EIGHT values, one per step-up permission of ADU-AUTH-01 v2.4 '
+  'section 16.3. It carried six through v1.9, so seller.identity:manage and '
+  'seller.ownership:transfer - the two most dangerous actions in the system - '
+  'were the two whose challenge could not be recorded. Closed by A1.2, '
+  'absorbed into v1.10; the one-to-one correspondence is asserted in migration '
+  '05b and again by test.';
 
 -- ---------------------------------------------------------------------------
 -- 6. core.account_device (section 6.6a) - remembered console devices, R17

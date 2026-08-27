@@ -8,7 +8,7 @@ disagree, **the amendment governs** until the next full reissue absorbs it.
 | Part | Where | State |
 |---|---|---|
 | §16 (the role matrix) and §0.1 | [`ADU-AUTH-01_v2_3_section_16.md`](ADU-AUTH-01_v2_3_section_16.md) | **v2.3** |
-| §16.2a, the seed as executable SQL | [`ADU-AUTH-01_v2_3_permission_seed.sql`](ADU-AUTH-01_v2_3_permission_seed.sql) | **v2.3** |
+| §16.2a, the seed as executable SQL | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) | **v2.3** |
 | §1–§14 and §17–§25 | `docs/ADU-AUTH-01_Authentication_and_Authorization_v2_1.md` | v2.1, and current |
 
 **Why v2.3 is split rather than installed whole.** v2.2 and v2.3 were supplied

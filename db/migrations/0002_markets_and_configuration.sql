@@ -1,20 +1,22 @@
 -- ===========================================================================
 -- MIGRATION 02 - MARKETS AND ALL CONFIGURATION TABLES
 --
--- Source: ADU-DB-01 v1.9 section 28 item 2 - "Markets and all configuration
--- tables". Transcribed from sections 5.1, 5.2, 5.3 and 5.4.
+-- Source: ADU-DB-01 v1.10 section 28 item 2 - "Markets and all configuration
+-- tables". Transcribed from sections 5.1, 5.2, 5.3, 5.4 and 5.5.
 --
--- Section 5.4 is new in v1.9 and is defect D8: locale_pack, identity_config
--- and legal_config were named in the manifest through v1.8 with not one column
--- defined anywhere. They are defined now, and this migration is the first that
--- could be written.
+-- v1.10 closes register items C1, C2, C6 and C7, all of which land here:
+--   C6  market_phase_gate is THIRTEEN columns, not six - attestation is per
+--       CONDITION, because section 5.2 said "each with" and meant it.
+--   C1  ladder_config gains its sixteen columns. The COLUMNS are named here;
+--       the VALUES are deferred to ADU-VAL-01 Groups A, B and C.
+--   C2  timing_config gains the cancellation-penalty ladder, which was never
+--       open - ADU-PRD-01 section 9.5 had it all along and nobody transcribed it.
+--   C7  buyer_session_lifetime becomes mobile_session_lifetime, and
+--       seller_session_lifetime is DROPPED. R2 collapsed the audiences, so the
+--       column described an audience that no longer exists.
 --
 -- Eight tables. Six carry the section 4 effective-range pattern, which is what
 -- Appendix C check 7 counts.
---
--- THREE PLACES WHERE THE DOCUMENT DESCRIBES A COLUMN WITHOUT NAMING IT are
--- marked "NOT NAMED" below and are omitted rather than invented. Work order T1
--- section 3: transcribe, do not design. They are itemised in the Tier 1 report.
 -- ===========================================================================
 
 -- Up Migration
@@ -41,40 +43,84 @@ COMMENT ON COLUMN core.market.phase IS
 
 COMMENT ON COLUMN core.market.display_timezone IS
   'IANA name. Read by core.fn_seller_availability_state (section 13.1b) to '
-  'resolve an override date in the market timezone rather than in UTC. v1.8 '
-  'read m.timezone here and did not compile; D5 in v1.9.';
+  'resolve an override date in the market timezone rather than in UTC.';
 
 -- ---------------------------------------------------------------------------
--- 2. core.market_phase_gate (section 5.2)
+-- 2. core.market_phase_gate (section 5.2) - C6, THIRTEEN COLUMNS
 --
--- "One row per market. v3_discovery_live boolean, kyc_vendor_integrated
--- boolean, ladder_operating boolean, dpia_revisited_at timestamptz, each with
--- attested_by and attested_at. Set by admin action, logged."
+-- "Per condition, not per row, and the difference is the whole point. One
+--  attestation pair for the row records that SOMEBODY SIGNED OFF ON SOMETHING.
+--  Four pairs record WHO ATTESTED WHICH GATE AND WHEN - which is the question
+--  asked when a market went live and one of the four turns out not to have
+--  been true."
 --
--- READING TAKEN, AND IT IS A READING. "each with attested_by and attested_at"
--- admits two constructions: one attestation pair per condition (eight further
--- columns, none of them named), or one pair on the row. The row-level reading
--- is taken because it invents no column name; the per-condition reading cannot
--- be built without inventing eight. Recorded in the Tier 1 report.
+-- The previous revision of this migration read "each with" the other way and
+-- built one pair on the row, because that invented no column name. v1.10 names
+-- all twelve, so the reading is settled and the row-level version is discarded.
+--
+-- attested_by is a BARE uuid with no foreign key: core.account is migration 3
+-- and this is migration 2. Register deferral D1, same as created_by_account_id.
 -- ---------------------------------------------------------------------------
 CREATE TABLE core.market_phase_gate (
-  market_id             uuid PRIMARY KEY REFERENCES core.market(id),
-  v3_discovery_live     boolean NOT NULL DEFAULT false,
-  kyc_vendor_integrated boolean NOT NULL DEFAULT false,
-  ladder_operating      boolean NOT NULL DEFAULT false,
-  dpia_revisited_at     timestamptz NULL,
-  attested_by           uuid NULL,      -- account; FK deferred, see the note below
-  attested_at           timestamptz NULL,
-  created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now()
+  market_id                          uuid PRIMARY KEY REFERENCES core.market(id),
+
+  v3_discovery_live                  boolean NOT NULL DEFAULT false,
+  v3_discovery_live_attested_by      uuid NULL,
+  v3_discovery_live_attested_at      timestamptz NULL,
+
+  kyc_vendor_integrated              boolean NOT NULL DEFAULT false,
+  kyc_vendor_integrated_attested_by  uuid NULL,
+  kyc_vendor_integrated_attested_at  timestamptz NULL,
+
+  ladder_operating                   boolean NOT NULL DEFAULT false,
+  ladder_operating_attested_by       uuid NULL,
+  ladder_operating_attested_at       timestamptz NULL,
+
+  dpia_revisited_at                  timestamptz NULL,
+  dpia_revisited_attested_by         uuid NULL,
+  dpia_revisited_attested_at         timestamptz NULL,
+
+  created_at                         timestamptz NOT NULL DEFAULT now(),
+  updated_at                         timestamptz NOT NULL DEFAULT now(),
+
+  -- "A CHECK requires the attestation pair to be non-null whenever its
+  -- condition is set." An unattested gate condition is an assertion with
+  -- nobody's name on it, which is the thing section 5.2 exists to prevent.
+  CONSTRAINT v3_discovery_live_attested CHECK (
+    NOT v3_discovery_live
+    OR (v3_discovery_live_attested_by IS NOT NULL AND v3_discovery_live_attested_at IS NOT NULL)
+  ),
+  CONSTRAINT kyc_vendor_integrated_attested CHECK (
+    NOT kyc_vendor_integrated
+    OR (kyc_vendor_integrated_attested_by IS NOT NULL AND kyc_vendor_integrated_attested_at IS NOT NULL)
+  ),
+  CONSTRAINT ladder_operating_attested CHECK (
+    NOT ladder_operating
+    OR (ladder_operating_attested_by IS NOT NULL AND ladder_operating_attested_at IS NOT NULL)
+  ),
+  CONSTRAINT dpia_revisited_attested CHECK (
+    dpia_revisited_at IS NULL
+    OR (dpia_revisited_attested_by IS NOT NULL AND dpia_revisited_attested_at IS NOT NULL)
+  )
 );
+
+COMMENT ON TABLE core.market_phase_gate IS
+  'Section 5.2 - one row per market, four conditions, each with its own '
+  'attestation pair. Set by operator action under core.operator_grant, logged. '
+  'The three boolean conditions gate PHASE_2; dpia_revisited_at is a date '
+  'rather than a flag because the DPIA is revisited rather than completed.';
 
 -- INVARIANT (section 5.1) - market.phase cannot be set to PHASE_2 unless the
 -- three gate conditions are all satisfied. "ADU-PROJ-01 section 11 phase 5
 -- makes those conditions build dependencies, not policy preferences; a trigger
 -- is the difference between a dependency and a hope."
+--
+-- Note that dpia_revisited_at is NOT one of the three. Section 5.1 says "the
+-- three gate conditions", and section 5.2 lists four columns of which one is a
+-- timestamp rather than a condition. The DPIA revisit is recorded here and
+-- gates nothing automatically.
 CREATE FUNCTION core.fn_guard_market_phase() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql AS $fn$
 DECLARE g core.market_phase_gate;
 BEGIN
   IF NEW.phase = 'PHASE_2' AND OLD.phase IS DISTINCT FROM 'PHASE_2' THEN
@@ -88,14 +134,14 @@ BEGIN
     END IF;
   END IF;
   RETURN NEW;
-END $$;
+END $fn$;
 
 CREATE TRIGGER trg_guard_market_phase
   BEFORE UPDATE ON core.market
   FOR EACH ROW EXECUTE FUNCTION core.fn_guard_market_phase();
 
 -- ---------------------------------------------------------------------------
--- 3. The six versioned configuration tables (sections 5.3, 5.4)
+-- 3. The six versioned configuration tables (sections 5.3, 5.4, 5.5)
 --
 -- Section 4's effective-range mechanism, reproduced on each with its own scope
 -- columns:
@@ -103,18 +149,12 @@ CREATE TRIGGER trg_guard_market_phase
 --   effective tstzrange NOT NULL DEFAULT tstzrange(now(), NULL, '[)'),
 --   EXCLUDE USING gist (market_id WITH =, effective WITH &&)
 --
--- "Two versions of the same configuration can never be in force at the same
--- moment, and history is retained rather than overwritten."
+-- Doctrine 6: configuration is versioned rows with effective ranges, never
+-- constants and never a settings singleton.
 --
--- Doctrine 6 (section 2): configuration is versioned rows with effective
--- ranges, never constants and never a settings singleton.
---
--- created_by_account_id IS A BARE uuid WITH NO FOREIGN KEY. core.account is
--- created by migration 3 (section 28 item 3) and these tables by migration 2,
--- so the reference the document describes cannot be expressed here. Adding the
--- constraint later is one ALTER; reordering the migrations is not, because
--- section 5.3's config rows are what migration 3's session lifetimes read.
--- Recorded in the Tier 1 report.
+-- created_by_account_id IS A BARE uuid WITH NO FOREIGN KEY - register deferral
+-- D1, now recorded in v1.10 section 28.1: "Configuration precedes accounts, and
+-- the alternative is moving every config table after identity."
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE core.eligibility_config (
@@ -134,104 +174,181 @@ CREATE TABLE core.eligibility_config (
 
 COMMENT ON COLUMN core.eligibility_config.follower_threshold IS
   'INVARIANT (section 5.3, PRD section 4.1) - nullable, and null means NO '
-  'threshold. Not zero, which would read as "a threshold of zero exists". Not '
-  'a magic sentinel. Setting a number later is an INSERT of a new effective '
-  'row and touches no code.';
+  'threshold. Not zero, which would read as "a threshold of zero exists". The '
+  'VALUE is ADU-VAL-01 item 3.1 - "the number the beta exists to discover; do '
+  'not guess it". Setting one later is an INSERT of a new effective row.';
 
--- PARTIAL. Section 5.3 says ladder_config carries "Established/Trusted
--- thresholds, new_level_product_cap, new_level_transaction_cap_minor,
--- demotion rules, distinct-buyer window and count".
+-- ---------------------------------------------------------------------------
+-- core.ladder_config - C1. Sixteen columns, from v1.10 section 5.5.
 --
---   NAMED and built:     new_level_product_cap, new_level_transaction_cap_minor,
---                        distinct_buyer_window, max_handoffs_per_buyer
---                        (the last two from section 8.2, which names them)
---   NOT NAMED, omitted:  the Established and Trusted thresholds, and the
---                        demotion rules.
+-- THE COLUMNS ARE NAMED HERE AND THE VALUES ARE NOT, AND THAT IS THE POINT.
+-- v1.10: "an unnamed column blocks migration 8; an unseeded row blocks only
+-- the market seed - so naming them now and deferring the values costs nothing
+-- and unblocks the next two migrations."
 --
--- Section 8.1's fn_recompute_seller_level (migration 8) reads the thresholds,
--- so migration 8 cannot be written until v1.10 names them. Omitted rather than
--- guessed: a threshold column with an invented name is one the recompute
--- function will not find, and the failure surfaces as a seller who never
--- advances rather than as an error.
+-- Every value below is ADU-VAL-01 Group A (thresholds and demotion), Group B
+-- (new-level caps) or Group C (anti-gaming). Per work order T2 section 1.1
+-- those are DELIBERATE deferrals and are not reported as spec gaps.
+--
+-- RATES ARE numeric, NEVER float. "A claim rate compared against a threshold
+-- decides whether a livelihood is restricted; binary floating point is the
+-- wrong type for a comparison whose result someone will contest."
+--
+-- demotion_* is a SEPARATE set from established_*, deliberately: "a seller
+-- demoted the instant they fall below the bar they climbed would oscillate on
+-- a single bad week. The gap between the two sets is hysteresis."
+-- ---------------------------------------------------------------------------
 CREATE TABLE core.ladder_config (
-  id                               uuid PRIMARY KEY,
-  market_id                        uuid NOT NULL REFERENCES core.market(id),
-  new_level_product_cap            int NOT NULL,
-  new_level_transaction_cap_minor  bigint NOT NULL CHECK (new_level_transaction_cap_minor >= 0),
-  distinct_buyer_window            interval NOT NULL,
-  max_handoffs_per_buyer           int NOT NULL,
-  effective                        tstzrange NOT NULL DEFAULT tstzrange(now(), NULL, '[)'),
-  created_by_account_id            uuid NULL,
-  created_at                       timestamptz NOT NULL DEFAULT now(),
+  id                                uuid PRIMARY KEY,
+  market_id                         uuid NOT NULL REFERENCES core.market(id),
+
+  -- Group A - promotion to ESTABLISHED
+  established_min_handoffs          int NOT NULL,
+  established_window                interval NOT NULL,
+  established_min_avg_rating        numeric(3,2) NOT NULL,
+  established_max_claim_rate        numeric(5,4) NOT NULL,
+
+  -- Group A - promotion to TRUSTED
+  trusted_min_handoffs              int NOT NULL,
+  trusted_window                    interval NOT NULL,
+  trusted_min_scan_completion_rate  numeric(5,4) NOT NULL,
+  trusted_max_claim_rate            numeric(5,4) NOT NULL,
+
+  -- Group A - demotion. Hysteresis, not the promotion bar read backwards.
+  demotion_max_claim_rate           numeric(5,4) NOT NULL,
+  demotion_max_cancellation_rate    numeric(5,4) NOT NULL,
+  demotion_min_scan_completion_rate numeric(5,4) NOT NULL,
+  demotion_window                   interval NOT NULL,
+
+  -- Group B - the two numbers a beta seller feels first
+  new_level_product_cap             int NOT NULL,
+  new_level_transaction_cap_minor   bigint NOT NULL,
+
+  -- Group C - anti-gaming
+  distinct_buyer_window             interval NOT NULL,
+  distinct_buyer_max_count          int NOT NULL,
+
+  effective                         tstzrange NOT NULL DEFAULT tstzrange(now(), NULL, '[)'),
+  created_by_account_id             uuid NULL,
+  created_at                        timestamptz NOT NULL DEFAULT now(),
+
+  -- Rates are proportions. A "maximum claim rate" of 3 is a typo, not a policy.
+  CONSTRAINT ladder_rates_are_proportions CHECK (
+    established_min_avg_rating        BETWEEN 1 AND 5
+    AND established_max_claim_rate        BETWEEN 0 AND 1
+    AND trusted_min_scan_completion_rate  BETWEEN 0 AND 1
+    AND trusted_max_claim_rate            BETWEEN 0 AND 1
+    AND demotion_max_claim_rate           BETWEEN 0 AND 1
+    AND demotion_max_cancellation_rate    BETWEEN 0 AND 1
+    AND demotion_min_scan_completion_rate BETWEEN 0 AND 1
+  ),
+  CONSTRAINT ladder_caps_non_negative CHECK (
+    new_level_product_cap           >= 0
+    AND new_level_transaction_cap_minor >= 0
+    AND distinct_buyer_max_count        >= 1
+  ),
+  -- ADU-VAL-01 Group C: "Set the count above one. At one, you punish the
+  -- loyal-customer pattern that a good small retailer actually has, and the
+  -- false-positive lands on your best sellers." The constraint holds the floor
+  -- the register argues for; the value itself is still Group C's to choose.
   EXCLUDE USING gist (market_id WITH =, effective WITH &&)
 );
 
--- Section 5.3, plus section 6.6a's four console columns (R17), section 12.4a's
--- payment_confirmation_window, and ADU-AUTH-01 v2.2 section 25's four OTP and
--- step-up columns.
+COMMENT ON TABLE core.ladder_config IS
+  'INVARIANT (PRD section 5.1) - all thresholds are per-market configuration '
+  'records, PUBLISHED TO SELLERS AND NEVER SECRET. A ladder whose rungs are '
+  'hidden is indistinguishable from favouritism, and the product claim is that '
+  'trust is earned by evidence rather than granted. Values: ADU-VAL-01 A, B, C.';
+
+COMMENT ON COLUMN core.ladder_config.distinct_buyer_max_count IS
+  'How many times one buyer''s handoffs may count toward one seller''s level '
+  'inside distinct_buyer_window. NOTE: section 8.2 calls this column '
+  'max_handoffs_per_buyer while section 5.5 names it distinct_buyer_max_count. '
+  'Section 5.5 is the column definition and governs; reported for v1.11.';
+
+-- ---------------------------------------------------------------------------
+-- core.timing_config - C2 and C7.
 --
--- NOT NAMED, omitted: the cancellation-penalty ladder. Section 5.3 lists it and
--- section 12.7 says "the escalation ladder is timing_config, not literals in a
--- service" - neither names a column. PRD section 9.5 describes the behaviour
--- (three consecutive cancellations with one seller, 1 hour; a pattern across
--- sellers, 1 day then 2 days escalating; decay after 30 days) but a ladder is
--- not obviously one column, and choosing between an interval[] and a set of
--- scalars is a design decision. Migration 9's buyer_cancellation_counter needs
--- it; migration 2 does not.
+-- C2 WAS NEVER OPEN. ADU-PRD-01 section 9.5 states the cancellation ladder in
+-- full; section 5.3 described it and nobody transcribed it. These are SET,
+-- not deferred - ADU-VAL-01 marks the row "SET, transcribe don't decide".
+--
+-- C7 - there is no seller_session_lifetime and there cannot be. R2 collapsed
+-- the audiences to MOBILE and CONSOLE, so the lifetime columns are
+-- mobile_session_lifetime plus section 6.6a's four console columns. The CHECK
+-- now NAMES mobile_session_lifetime rather than inferring which column is the
+-- mobile one, which is what the previous revision had to do.
+-- ---------------------------------------------------------------------------
 CREATE TABLE core.timing_config (
   id                          uuid PRIMARY KEY,
   market_id                   uuid NOT NULL REFERENCES core.market(id),
 
-  -- PRD section 25 items, shipping at the PRD's stated defaults
+  -- PRD section 25 items, shipping at the PRD's stated defaults (ADU-VAL-01 s2)
   reservation_window          interval NOT NULL,   -- 48h
-  fulfilment_window           interval NOT NULL,
+  payment_confirmation_window interval NOT NULL,   -- 24h, section 12.4a
+  fulfilment_window           interval NOT NULL,   -- ADU-VAL-01 3.2, OPEN
   offline_sync_horizon        interval NOT NULL,   -- 7d
   payout_activation_delay     interval NOT NULL,   -- 24h
   recovery_cooling_period     interval NOT NULL,   -- 7d
-  deleted_number_cooling_period interval NOT NULL,
-  refund_ack_window           interval NOT NULL,
-  media_retention             interval NOT NULL,
+  deleted_number_cooling_period interval NOT NULL, -- ADU-VAL-01 3.4, OPEN
+  refund_ack_window           interval NOT NULL,   -- ADU-VAL-01 3.3, OPEN
+  media_retention             interval NOT NULL,   -- ADU-VAL-01 3.5, OPEN
   level_credit_grace          interval NOT NULL,   -- 24h
-  payment_confirmation_window interval NOT NULL,   -- 24h, section 12.4a
 
-  -- Session lifetimes. buyer_session_lifetime and seller_session_lifetime are
-  -- section 5.3's names and predate R2; console_* are R17's (section 6.6a).
-  -- Both sets are carried because both are named in the document. The overlap
-  -- between seller_session_lifetime and console_session_lifetime is recorded
-  -- in the Tier 1 report - under R2 there is no SELLER audience for the first
-  -- to describe.
-  buyer_session_lifetime      interval NOT NULL,   -- MOBILE, 30 days
-  seller_session_lifetime     interval NOT NULL,
+  -- Session lifetimes. C7: mobile plus the four console columns, and nothing
+  -- describing an audience that no longer exists.
+  mobile_session_lifetime     interval NOT NULL,   -- 30 days
   console_session_lifetime    interval NOT NULL,   -- 12h
   console_idle_timeout        interval NOT NULL,   -- 30 min
-  console_remembered_lifetime interval NOT NULL,   -- 7 days
-  console_remembered_idle     interval NOT NULL,   -- 8 hours
+  console_remembered_lifetime interval NOT NULL,   -- 7 days, R17
+  console_remembered_idle     interval NOT NULL,   -- 8 hours, R17
 
-  -- ADU-AUTH-01 v2.2 sections 4.1, 7.2, 9.2 and 25
+  -- ADU-AUTH-01 sections 4.1, 7.2, 9.2, 25
   otp_ttl                     interval NOT NULL,   -- 5 min
   otp_max_attempts            int NOT NULL,        -- 5
   step_up_freshness           interval NOT NULL,   -- 5 min
   new_device_payout_lock      interval NOT NULL,   -- 24h
+
+  -- C2 - the cancellation-penalty ladder, ADU-PRD-01 section 9.5
+  same_seller_cancellation_threshold int NOT NULL,        -- 3
+  same_seller_cooldown               interval NOT NULL,   -- 1 hour
+  cross_seller_cooldown_ladder       interval[] NOT NULL, -- {1 day, 2 days, 4 days}
+  cancellation_counter_decay         interval NOT NULL,   -- 30 days clean
 
   effective                   tstzrange NOT NULL DEFAULT tstzrange(now(), NULL, '[)'),
   created_by_account_id       uuid NULL,
   created_at                  timestamptz NOT NULL DEFAULT now(),
 
   -- INVARIANT (sections 6.6, 6.6a) - the CHECK orders BOTH console pairs
-  -- against the mobile lifetime, "so a configuration edit cannot make a console
-  -- session outlive a mobile one in either mode". Stated in section 6.6 as
-  -- "a CONSOLE session is shorter than a MOBILE one".
+  -- against the MOBILE lifetime, "so a configuration edit cannot make a
+  -- console session outlive a mobile one in either mode". C7 is why the column
+  -- is named rather than inferred.
   CONSTRAINT console_shorter_than_mobile CHECK (
-    console_session_lifetime    < buyer_session_lifetime
-    AND console_remembered_lifetime < buyer_session_lifetime
+    console_session_lifetime        < mobile_session_lifetime
+    AND console_remembered_lifetime < mobile_session_lifetime
   ),
-  -- Idle must not exceed its own absolute lifetime, or the idle bound is dead.
+  -- An idle bound above its own absolute lifetime is a bound that never fires.
   CONSTRAINT console_idle_within_absolute CHECK (
-    console_idle_timeout    <= console_session_lifetime
-    AND console_remembered_idle <= console_remembered_lifetime
+    console_idle_timeout            <= console_session_lifetime
+    AND console_remembered_idle     <= console_remembered_lifetime
   ),
+  -- "The ladder is an interval[], indexed by offence count, and the final
+  -- element repeats. An escalating penalty with no ceiling eventually bans a
+  -- buyer permanently for cancelling, which is not what section 9.5 describes."
+  CONSTRAINT cross_seller_ladder_not_empty CHECK (
+    cardinality(cross_seller_cooldown_ladder) > 0
+  ),
+  CONSTRAINT same_seller_threshold_positive CHECK (same_seller_cancellation_threshold > 0),
+  CONSTRAINT otp_max_attempts_positive CHECK (otp_max_attempts > 0),
   EXCLUDE USING gist (market_id WITH =, effective WITH &&)
 );
+
+COMMENT ON COLUMN core.timing_config.cross_seller_cooldown_ladder IS
+  'PRD section 9.5 - a pattern across sellers costs 1 day, then 2 days, '
+  'escalating. Indexed by offence count; THE FINAL ELEMENT REPEATS rather than '
+  'the ladder growing without bound, because a terminal penalty inverts the '
+  'doctrine that "cancelling actively is penalised less than letting an order '
+  'expire silently".';
 
 -- D8, section 5.4.
 CREATE TABLE core.locale_pack (
@@ -255,10 +372,7 @@ COMMENT ON TABLE core.locale_pack IS
   'legitimately available here and hidden in the client, which is exactly the '
   'state while Amharic is machine-translated and awaiting human review.';
 
--- D8, section 5.4. verifier_kind is verification.verifier_kind, whose values
--- are one of the six types v1.9's Appendix A defines twice and inconsistently.
--- The carried-forward "Other schemas" table governs here - see migration 1 and
--- the Tier 1 report.
+-- D8, section 5.4.
 CREATE TABLE core.identity_config (
   id                       uuid PRIMARY KEY,
   market_id                uuid NOT NULL REFERENCES core.market(id),
@@ -339,13 +453,13 @@ TO adulis_readonly;
 
 -- Down Migration
 
--- ADU-DB-01 section 19 / ADU-CON-02 section 19 doctrine is roll forward. A
--- down migration that drops configuration tables would drop every market's
--- versioned history with them, and the effective-range pattern exists so that
--- history is retained rather than overwritten. Recovery is a new migration.
-DO $$
+-- ADU-CON-02 section 19 doctrine is roll forward. A down migration that drops
+-- configuration tables would drop every market's versioned history with them,
+-- and the effective-range pattern exists so that history is retained rather
+-- than overwritten. Recovery is a new migration.
+DO $down$
 BEGIN
   RAISE EXCEPTION
     'Migration 02 is not reversible. Roll forward with a new migration.'
     USING ERRCODE = 'restrict_violation';
-END $$;
+END $down$;

@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- MIGRATION 05a - SELLERS, ELIGIBILITY, AVAILABILITY, FULFILMENT, OPERATORS
 --
--- Source: ADU-DB-01 v1.9 section 28 item 5, first half - "Sellers, social
+-- Source: ADU-DB-01 v1.10 section 28 item 5, first half - "Sellers, social
 -- accounts, team, courier, eligibility, ladder-entry trigger,
 -- seller_availability, seller_availability_override and
 -- fn_seller_availability_state (R27), seller_fulfilment_method (R13),
@@ -75,12 +75,16 @@ CREATE INDEX idx_seller_handle_trgm     ON core.seller USING gin (handle gin_trg
 -- ---------------------------------------------------------------------------
 -- 2. core.seller_company_detail (section 7.1)
 --
--- COLUMN NAMES ARE THIS MIGRATION'S, NOT THE DOCUMENT'S. Section 7.1 gives a
--- prose list - "registration identifier, trade licence number, TIN,
--- representative person_id, representative relationship" - and names no
--- columns. The snake_case renderings below are mechanical, but they are still
--- this migration's choice and ADU-API-01 will have to agree with them.
--- Reported for confirmation in v1.10.
+-- C3 - CONFIRMED IN v1.10. The previous revision had to render section 7.1's
+-- prose list into snake_case itself and reported the guess; v1.10 section 7.1
+-- now names all seven columns, and they are the ones below. ADU-API-01 v1.6
+-- section 12.9 names the same five payload fields on
+-- PATCH /v1/seller/company-details, so the contract agrees.
+--
+-- INVARIANT (section 7.1) - the representative is a person_id, and the identity
+-- attestation attaches to THAT PERSON, not to the company. "Declaring company
+-- does not add a second verification, it CHANGES WHOM THE EXISTING ONE IS
+-- ABOUT, and a seller who discovers that mid-flow abandons it." 
 -- ---------------------------------------------------------------------------
 CREATE TABLE core.seller_company_detail (
   seller_id                   uuid PRIMARY KEY REFERENCES core.seller(id),
@@ -533,89 +537,103 @@ GRANT SELECT ON
 TO adulis_readonly;
 
 -- ---------------------------------------------------------------------------
--- 14. core.fn_has_permission (AMENDMENT A1.3)
+-- 14. core.fn_has_permission (ADU-DB-01 v1.10 section 6.9a)
 --
--- ADU-DB-01 cites this function in five places as "the first statement of every
--- seller-scoped writing function" and never wrote its body. A1.3 supplies it.
+-- v1.9 cited this function in five places and never gave its body. Amendment
+-- A1.3 supplied it; v1.10 absorbs A1.3 with A2's two rulings applied and prints
+-- the whole thing in section 6.9a. This is that listing.
 --
 -- IT READS core.permission AND core.role_permission, WHICH MIGRATION 05b
 -- CREATES. plpgsql resolves table names at execution rather than at CREATE
--- FUNCTION, so this compiles here and is exercised from 05b onward. A1.5 places
--- it in migration 5a and that is followed.
+-- FUNCTION, so this compiles here and is exercised from 05b onward. Recorded as
+-- deferral D4 in v1.10 section 28.1.
 --
--- ONE DEPARTURE FROM THE BODY AS WRITTEN, AND IT IS FORCED. A1.3's listing
--- reads `tm.removed_at IS NULL`. There is no removed_at column: section 6.9
--- gives core.seller_team_member `suspended_at` and `revoked_at`, and this
--- migration built it from that list. `revoked_at` is used, being the column
--- that carries the meaning A1.3's predicate wants. Transcribed verbatim, the
--- function would not compile - the same class of defect as D5. Reported.
---
--- AND ONE THING DELIBERATELY NOT ADDED. The body tests revoked_at and NOT
--- suspended_at, so a SUSPENDED team member still resolves to their role and
--- still passes every permission check. Section 18.1 says "Team logins are
--- disabled, not deleted", which locates suspension at authentication rather
--- than here - but a member suspended while holding a live session keeps full
--- authority until that session expires, which is up to 12 hours, or 7 days on a
--- remembered device. Adding the clause is a one-line change and it is a ruling,
--- not a transcription. Reported to the founder rather than taken here.
+-- FIVE GATES, AND THIS FUNCTION IS TWO OF THEM (ADU-AUTH-01 v2.4 section 14).
+-- v2.4 adds the STANDING gate ahead of Role and Surface, and it was previously
+-- missing rather than merely unnamed.
 -- ---------------------------------------------------------------------------
 CREATE FUNCTION core.fn_has_permission(
-  p_account    uuid,
-  p_seller     uuid,
-  p_permission text,
-  p_audience   core.session_audience
+  p_account uuid, p_seller uuid, p_permission text, p_audience core.session_audience
 ) RETURNS void
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = core AS $fn$
 DECLARE v_role core.team_role;
 BEGIN
-  -- 1. Resolve the actor's role for this seller. Owner first, then team.
+  -- 1. Owner first. The Owner is core.seller.owner_account_id and nothing else.
   SELECT 'OWNER'::core.team_role INTO v_role
     FROM core.seller s
    WHERE s.id = p_seller AND s.owner_account_id = p_account;
 
+  -- 2. Otherwise a team member who is neither suspended nor revoked. R28.
   IF v_role IS NULL THEN
     SELECT tm.role INTO v_role
       FROM core.seller_team_member tm
-     WHERE tm.seller_id  = p_seller
-       AND tm.account_id = p_account
-       AND tm.revoked_at IS NULL;
+     WHERE tm.seller_id    = p_seller
+       AND tm.account_id   = p_account
+       AND tm.suspended_at IS NULL
+       AND tm.revoked_at   IS NULL;
   END IF;
 
-  -- 2. No relationship is a SCOPE failure. It must not be reported as a
-  --    permission failure, because 403 confirms the object exists.
+  -- 3. No relationship is a SCOPE failure, and must not be reported as a
+  --    permission failure: 403 confirms the object exists.
   IF v_role IS NULL THEN
-    RAISE EXCEPTION 'no relationship between actor and seller'
-      USING ERRCODE = 'no_data_found';          -- API maps to 404
+    RAISE EXCEPTION 'out of scope' USING ERRCODE = 'U0002';   -- API maps to 404
   END IF;
 
-  -- 3. Role grant AND surface, in ONE query, so the two cannot be told apart.
+  -- 4. Role grant AND surface, in ONE query, so the two cannot be told apart.
   IF NOT EXISTS (
-    SELECT 1
-      FROM core.role_permission rp
+    SELECT 1 FROM core.role_permission rp
       JOIN core.permission p ON p.code = rp.permission_code
-     WHERE rp.role            = v_role
-       AND rp.permission_code = p_permission
+     WHERE rp.role = v_role AND rp.permission_code = p_permission
        AND p_audience = ANY(p.surfaces)
   ) THEN
-    RAISE EXCEPTION 'permission denied'
-      USING ERRCODE = 'insufficient_privilege';  -- API maps to 403
+    RAISE EXCEPTION 'permission denied' USING ERRCODE = 'U0001';  -- 403
   END IF;
 END $fn$;
 
 COMMENT ON FUNCTION core.fn_has_permission IS
-  'A1.3. Gates 1 and 2 of ADU-AUTH-01 section 14, and only those. '
+  'Gates 1 and 2 of ADU-AUTH-01 v2.4 section 14, plus the STANDING gate (R28). '
   'RETURNS void AND RAISES: every call site uses PERFORM, because a boolean '
   'return invites "IF NOT fn_has_permission(...) THEN" and the failure mode of '
   'that shape is a caller who forgets the IF, which reads as authorised. '
-  'TWO ERROR CLASSES: a missing relationship raises no_data_found (404), a role '
-  'or surface failure raises insufficient_privilege (403) - because reporting '
-  '"no relationship" as 403 confirms that a seller with that id exists. '
-  'ROLE AND SURFACE ARE ONE EXISTS: section 14 requires that a 403 never says '
-  'which gate stopped you, and one query covering both makes the function '
-  'STRUCTURALLY unable to distinguish them - a shape, not a discipline. '
   'It checks NEITHER seller.status (gate 0, 409) NOR object ownership '
   '(gate 4, 404 via composite FK); both belong to the calling function and to '
   'the schema respectively.';
+
+-- R28 - THE STANDING GATE, and it was a live hole the previous revision found
+-- and reported rather than closed.
+--
+-- Section 18.1 disables a suspended team member's LOGIN. Disabling a login does
+-- not end a live session, so a member suspended for cause kept every permission
+-- until their session expired - up to twelve hours, or SEVEN DAYS on a
+-- remembered device under R17. For an ADMIN that is payout access, staff
+-- administration and identity management for a week after the Owner suspended
+-- them.
+--
+--   "The predicate is the control because it is on the row every authorization
+--    check already reads: immediate, free, and impossible for a service path to
+--    skip. A trigger also revokes that member's sessions, as hygiene - if it
+--    fails, the boundary still holds."
+--
+-- The session-revocation trigger belongs to migration 14's neighbourhood, since
+-- it writes core.session and fires on a table this migration creates; the
+-- predicate above is what makes the boundary hold without it.
+
+-- R29 - APPLICATION SQLSTATEs. 42501 is left to PostgreSQL.
+--
+-- ADU-CON-02 section 6.3 maps insufficient_privilege to 500 on the reasoning
+-- "a grant is wrong" - correct for Postgres raising it, and wrong for a
+-- deliberate denial, which is a 403. One code meaning both "you may not" and
+-- "our grants are misconfigured" means a real privilege bug reaches a seller as
+-- a clean 403 and is never investigated.
+--
+--   U0001  fn_has_permission        -> 403 PERMISSION_DENIED
+--   U0002  fn_has_permission        -> 404, and never 403: an actor with no
+--                                      relationship must not learn the seller exists
+--   42501  PostgreSQL only          -> 500, a defect
+--
+-- NOT "ADU01": the SQL standard reserves SQLSTATE classes beginning 0-4 and
+-- A-H, so implementation-defined codes must begin 5-9 or I-Z. U0003-U0999 are
+-- reserved for future deliberate raises.
 
 -- SECURITY DEFINER RUNS AS THE FUNCTION OWNER. These migrations are applied by
 -- a bootstrap superuser, so without the line below this authorization function

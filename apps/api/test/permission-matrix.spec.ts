@@ -13,7 +13,7 @@ import { Pool, PoolClient } from 'pg';
  * table. A test that reads the same table a human transcribed proves only that
  * both made the same mistake."
  *
- * So this suite parses `docs/amendments/ADU-AUTH-01_v2_3_permission_seed.sql` —
+ * So this suite parses `docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql` —
  * the authority copy of the generated seed — and compares the LIVE DATABASE
  * against it. The migration carries its own copy of the same SQL, so what this
  * actually catches is a bad copy-paste into the migration: a defect that would
@@ -38,7 +38,7 @@ const CONNECTION_STRING = process.env['DATABASE_URL'];
 
 const SEED_SQL = path.resolve(
   __dirname,
-  '../../../docs/amendments/ADU-AUTH-01_v2_3_permission_seed.sql',
+  '../../../docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql',
 );
 
 const ROLES = [
@@ -301,7 +301,7 @@ describe('ADU-AUTH-01 v2.3 §16.2 — the role matrix', () => {
 
       expect(roleFailure.allowed).toBe(false);
       expect(surfaceFailure.allowed).toBe(false);
-      expect(roleFailure.sqlstate).toBe('42501'); // insufficient_privilege
+      expect(roleFailure.sqlstate).toBe('U0001'); // R29 - a deliberate denial
       expect(surfaceFailure.sqlstate).toBe(roleFailure.sqlstate);
     });
 
@@ -310,25 +310,32 @@ describe('ADU-AUTH-01 v2.3 §16.2 — the role matrix', () => {
      * relationship' as 403 confirms that a seller with that id exists", which
      * turns any endpoint taking an identifier into an enumeration oracle.
      *
-     * NOTE ON THE CODE. `USING ERRCODE = 'no_data_found'` yields SQLSTATE
-     * **P0002**, PL/pgSQL's condition, not class 02. It is distinct from 42501,
-     * which is all the design needs — but the API mapping layer must map P0002
-     * to 404, and a reader of A1.3's "-- API maps to 404" comment could
-     * reasonably go looking for 02000. Reported.
+     * R29 CLOSES THE CODE QUESTION THE PREVIOUS REVISION RAISED. A1.3 used
+     * `no_data_found`, which yields PL/pgSQL's P0002 rather than class 02 —
+     * distinct from 42501, but a code PostgreSQL also raises for its own
+     * reasons. v1.10 §6.9b gives the deliberate raises their own class:
+     *
+     *   U0001  fn_has_permission   -> 403
+     *   U0002  fn_has_permission   -> 404
+     *   42501  PostgreSQL ONLY     -> 500, a defect
+     *
+     * "One code meaning both 'you may not' and 'our grants are misconfigured'
+     *  means a real privilege bug reaches a seller as a clean 403 and is never
+     *  investigated."
      */
     it('raises a DIFFERENT code for a stranger than for a denied permission', async () => {
       const stranger = await probe(STRANGER, 'seller.orders:read', 'CONSOLE');
       const denied = await probe(ACCOUNT_FOR.ANALYST, 'seller.products:write', 'CONSOLE');
 
       expect(stranger.allowed).toBe(false);
-      expect(stranger.sqlstate).toBe('P0002'); // no_data_found -> 404
-      expect(denied.sqlstate).toBe('42501'); // insufficient_privilege -> 403
+      expect(stranger.sqlstate).toBe('U0002'); // -> 404
+      expect(denied.sqlstate).toBe('U0001'); // -> 403
       expect(stranger.sqlstate).not.toBe(denied.sqlstate);
     });
 
     it('refuses a stranger even for a permission every role holds', async () => {
       const { allowed, sqlstate } = await probe(STRANGER, 'seller.orders:read', 'CONSOLE');
-      expect({ allowed, sqlstate }).toEqual({ allowed: false, sqlstate: 'P0002' });
+      expect({ allowed, sqlstate }).toEqual({ allowed: false, sqlstate: 'U0002' });
     });
   });
 
@@ -465,6 +472,126 @@ describe('ADU-AUTH-01 v2.3 §16.2 — the role matrix', () => {
         ).resolves.toBeDefined();
       }
       await client.query('ROLLBACK TO SAVEPOINT sa');
+    });
+  });
+
+  // ==========================================================================
+  describe('R28 - the standing gate, and it was a live hole', () => {
+    /**
+     * ADU-AUTH-01 v2.4 §14 adds Standing ahead of Role and Surface, and it was
+     * "previously missing rather than merely unnamed":
+     *
+     *   "§18.1 places suspension at authentication - 'team logins are disabled,
+     *    not deleted.' DISABLING A LOGIN DOES NOT END A LIVE SESSION. A member
+     *    suspended for cause who holds a console session kept every permission
+     *    until it expired: up to twelve hours, or SEVEN DAYS on a remembered
+     *    device under R17. For an ADMIN that is payout access, staff
+     *    administration and identity management for a week after the Owner
+     *    suspended them."
+     *
+     * The previous revision of this repository found and reported this rather
+     * than closing it, because what suspension MEANS is a ruling. R28 is that
+     * ruling, and these are the tests it asked for.
+     */
+    it('takes a permission away the moment the member is suspended', async () => {
+      const code = 'seller.payout:update'; // an ADMIN power that moves money
+      const account = ACCOUNT_FOR.ADMIN;
+
+      const before = await probe(account, code, 'CONSOLE');
+      expect(before.allowed).toBe(true);
+
+      await client.query('SAVEPOINT r28');
+      await client.query(
+        'UPDATE core.seller_team_member SET suspended_at = now()' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, account],
+      );
+
+      // Immediate, and on the very next call: the predicate is on the row every
+      // authorization check already reads, so there is nothing to invalidate.
+      const during = await probe(account, code, 'CONSOLE');
+      expect(during.allowed).toBe(false);
+
+      await client.query('ROLLBACK TO SAVEPOINT r28');
+
+      const after = await probe(account, code, 'CONSOLE');
+      expect(after.allowed).toBe(true);
+    });
+
+    /**
+     * ⚠ THIS TEST RECORDS A CONTRADICTION BETWEEN TWO DOCUMENTS, and it asserts
+     * what the built function actually does rather than what one of them says.
+     *
+     *   ADU-DB-01 v1.10 §6.9a — the function body, transcribed verbatim below —
+     *   folds the standing check into the ROLE LOOKUP. A suspended member
+     *   matches no row, so `v_role` stays NULL and step 3 raises **U0002**,
+     *   which ADU-API-01 v1.6 §7.1a maps to **404**.
+     *
+     *   ADU-AUTH-01 v2.4 §14's gate table says the Standing gate fails with
+     *   **`PERMISSION_DENIED (U0001)`** — a **403**.
+     *
+     * The observable difference is real: a suspended Admin is told the seller
+     * does not exist, rather than that they may not act on it.
+     *
+     * v1.10's own preamble is the tie-break and is why the body is transcribed
+     * unchanged: "Where they disagree on HOW A BEHAVIOUR IS ENFORCED, this
+     * document governs." ADU-API-01 v1.6 says the same of itself. So U0002 is
+     * what ships, and the discrepancy is REPORTED rather than resolved in SQL.
+     *
+     * There is a case for each. U0002 discloses less — a suspended member sees
+     * exactly what a stranger sees. U0001 is what v2.4's own table promises, and
+     * a member who still holds a live session already knows the seller exists,
+     * so 404 tells them nothing they could not infer. It is a ruling either way.
+     */
+    it('reports a suspended member as U0002 - see the note, the documents disagree', async () => {
+      await client.query('SAVEPOINT r28b');
+      await client.query(
+        'UPDATE core.seller_team_member SET suspended_at = now()' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, ACCOUNT_FOR.SALES_SUPPORT],
+      );
+      const r = await probe(ACCOUNT_FOR.SALES_SUPPORT, 'seller.orders:read', 'CONSOLE');
+      await client.query('ROLLBACK TO SAVEPOINT r28b');
+
+      // ADU-DB-01 v1.10 §6.9a, which governs enforcement.
+      expect(r).toEqual({ allowed: false, sqlstate: 'U0002' });
+
+      // Whatever the code, the permission is gone. THAT is what R28 bought, and
+      // it holds under either reading.
+      expect(r.allowed).toBe(false);
+    });
+
+    it('takes away EVERY permission, not merely the dangerous ones', async () => {
+      await client.query('SAVEPOINT r28c');
+      await client.query(
+        'UPDATE core.seller_team_member SET suspended_at = now()' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, ACCOUNT_FOR.ADMIN],
+      );
+      const stillAllowed: string[] = [];
+      for (const { code } of SEED.permissions) {
+        const { allowed } = await probe(ACCOUNT_FOR.ADMIN, code, 'CONSOLE');
+        if (allowed) stillAllowed.push(code);
+      }
+      await client.query('ROLLBACK TO SAVEPOINT r28c');
+      expect(stillAllowed).toEqual([]);
+    }, 60_000);
+
+    /**
+     * The Owner is core.seller.owner_account_id (A1.3) and holds no
+     * seller_team_member row, so there is nothing to suspend. Recorded because
+     * a reader could expect suspension to reach them, and §16.5's answer is
+     * that removing an Owner is ownership transfer, not suspension.
+     */
+    it('cannot suspend the Owner, because the Owner is not a team member', async () => {
+      const { rows } = await client.query(
+        'SELECT count(*)::int AS n FROM core.seller_team_member' +
+          ' WHERE seller_id = $1 AND account_id = $2',
+        [SELLER, ACCOUNT_FOR.OWNER],
+      );
+      expect(rows[0].n).toBe(0);
+      const owner = await probe(ACCOUNT_FOR.OWNER, 'seller.payout:update', 'CONSOLE');
+      expect(owner.allowed).toBe(true);
     });
   });
 

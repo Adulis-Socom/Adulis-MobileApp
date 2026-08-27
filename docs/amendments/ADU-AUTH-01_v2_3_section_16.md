@@ -139,7 +139,7 @@ Generated from the same source as §16.2, so the two cannot disagree. **ASCII
 only, and no transcription step.** It is held in this repository as a file rather
 than a fenced block, so that the tests can parse the authority copy directly:
 
-**→ [`ADU-AUTH-01_v2_3_permission_seed.sql`](ADU-AUTH-01_v2_3_permission_seed.sql)**
+**→ [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql)**
 
 `db/migrations/0006_permission_catalogue.sql` carries the same statements, and
 `apps/api/test/permission-matrix.spec.ts` parses the file above and compares it

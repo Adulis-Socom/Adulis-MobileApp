@@ -1,14 +1,14 @@
 -- ===========================================================================
 -- MIGRATION 01 - FOUNDATION
 --
--- Source: ADU-DB-01 v1.8 section 28 item 1 -
+-- Source: ADU-DB-01 v1.10 section 28 item 1 -
 --   "Extensions, roles, schemas, domains, all enum types (Appendix A),
 --    shared trigger functions"
 --
 -- Transcribed from sections 3 (schemas, roles), 3.1 (extensions), 4 (domains
 -- and the append-only mechanism) and Appendix A (the enum catalogue).
 --
--- Nothing here is designed. Every object below is named in ADU-DB-01 v1.8.
+-- Nothing here is designed. Every object below is named in ADU-DB-01 v1.10.
 -- Two counting defects found in that document while transcribing it are noted
 -- inline and recorded in the Tier 1 report.
 -- ===========================================================================

@@ -231,8 +231,7 @@ describe('migrations 02-03 — configuration, accounts, sessions', () => {
       media_retention: '90 days',
       level_credit_grace: '24 hours',
       payment_confirmation_window: '24 hours',
-      buyer_session_lifetime: '30 days',
-      seller_session_lifetime: '12 hours',
+      mobile_session_lifetime: '30 days',
       console_session_lifetime: '12 hours',
       console_idle_timeout: '30 minutes',
       console_remembered_lifetime: '7 days',
@@ -240,14 +239,20 @@ describe('migrations 02-03 — configuration, accounts, sessions', () => {
       otp_ttl: '5 minutes',
       step_up_freshness: '5 minutes',
       new_device_payout_lock: '24 hours',
+      same_seller_cooldown: '1 hour',
+      cancellation_counter_decay: '30 days',
     };
 
     const insertTiming = (c: Tx, over: Partial<typeof base> = {}) => {
       const v = { ...base, ...over };
       const cols = Object.keys(v);
       return c.query(
-        `INSERT INTO core.timing_config (id, market_id, otp_max_attempts, ${cols.join(', ')})
-         VALUES (gen_random_uuid(), $1, 5, ${cols.map((_, i) => `$${i + 2}::interval`).join(', ')})`,
+        `INSERT INTO core.timing_config
+           (id, market_id, otp_max_attempts, same_seller_cancellation_threshold,
+            cross_seller_cooldown_ladder, ${cols.join(', ')})
+         VALUES (gen_random_uuid(), $1, 5, 3,
+                 ARRAY['1 day','2 days','4 days']::interval[],
+                 ${cols.map((_, i) => `$${i + 2}::interval`).join(', ')})`,
         [MARKET, ...cols.map((k) => (v as Record<string, string>)[k])],
       );
     };
@@ -308,8 +313,11 @@ describe('migrations 02-03 — configuration, accounts, sessions', () => {
         await seedMarket(c);
         await c.query(
           `INSERT INTO core.market_phase_gate
-             (market_id, v3_discovery_live, kyc_vendor_integrated, ladder_operating)
-           VALUES ($1, true, true, false)`,
+             (market_id,
+              v3_discovery_live, v3_discovery_live_attested_by, v3_discovery_live_attested_at,
+              kyc_vendor_integrated, kyc_vendor_integrated_attested_by, kyc_vendor_integrated_attested_at,
+              ladder_operating)
+           VALUES ($1, true, gen_random_uuid(), now(), true, gen_random_uuid(), now(), false)`,
           [MARKET],
         );
         await expect(
@@ -332,8 +340,12 @@ describe('migrations 02-03 — configuration, accounts, sessions', () => {
         await seedMarket(c);
         await c.query(
           `INSERT INTO core.market_phase_gate
-             (market_id, v3_discovery_live, kyc_vendor_integrated, ladder_operating)
-           VALUES ($1, true, true, true)`,
+             (market_id,
+              v3_discovery_live, v3_discovery_live_attested_by, v3_discovery_live_attested_at,
+              kyc_vendor_integrated, kyc_vendor_integrated_attested_by, kyc_vendor_integrated_attested_at,
+              ladder_operating, ladder_operating_attested_by, ladder_operating_attested_at)
+           VALUES ($1, true, gen_random_uuid(), now(), true, gen_random_uuid(), now(),
+                   true, gen_random_uuid(), now())`,
           [MARKET],
         );
         await expect(

@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- MIGRATION 04 - THE VERIFICATION BOUNDARY
 --
--- Source: ADU-DB-01 v1.9 section 28 item 4 - "verification schema and its
+-- Source: ADU-DB-01 v1.10 section 28 item 4 - "verification schema and its
 -- functions". Transcribed from section 7.3.
 --
 -- Two tables, three functions. This is one of the two isolated boundaries of
@@ -35,7 +35,6 @@ CREATE TABLE verification.identity_attestation (
   legal_name          text NULL,
   id_hash             bytea NULL,
   id_hash_key_version int NULL,
-  verified            boolean NULL,
   company_relationship text NULL,
   created_at          timestamptz NOT NULL DEFAULT now()
 );
@@ -55,10 +54,17 @@ CREATE TABLE verification.identity_attestation (
 -- 13.6 takes the same decision for financial.payout_credential's
 -- payout_details_id, and says so in as many words.
 --
--- NOTE ON `verified`: section 7.3 lists the column and
--- verification.write_attestation - the only writer - never sets it. It is
--- therefore nullable rather than defaulted, because a default would be this
--- migration deciding what an unset attestation means. Reported.
+-- E1 - `verified boolean` IS DROPPED IN v1.10, and the previous revision of
+-- this migration is what found it. The column was listed in section 7.3 and no
+-- writer ever set it: write_attestation, its only writer, does not mention it.
+--
+--   "THE ROW'S EXISTENCE IS THE ATTESTATION - one is written when and only when
+--    a vendor verified - so a boolean is redundant and a row reading false
+--    means nothing."
+--
+-- Same argument as seller_availability_override having no is_closed
+-- (section 13.1a): a column whose false value is meaningless is a second state
+-- to reason about on every read, bought for nothing.
 COMMENT ON TABLE verification.identity_attestation IS
   'Isolated boundary. Readable only through verification.read_attestation, '
   'which logs. No image column exists and none may be added.';
