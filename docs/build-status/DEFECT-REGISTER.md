@@ -153,3 +153,23 @@ Effect:    Every full-refund path on a paid order is impossible as printed. The 
 Response:  WORKED AROUND
 Action:    CHECK weakened to a CASE: paid-family states require a stopped clock; CREATED/NOTIFIED/PAYMENT_SUBMITTED/EXPIRED_UNCLAIMED require a running one; the two CANCELLED terminals admit either, because both entry paths (pre-payment, post-refund) are ratified. The sweep's predicate (clock_stopped_at IS NULL) still excludes every paid order.
 Ruling needed: v1.11 to reprint the CHECK; the two real invariants are unchanged.
+
+### D-16 - The financial boundary has read paths but no ratified write path
+Severity:  MINOR
+Phase:     A, migration 10
+Source:    ADU-DB-01 v1.10 S13 defines financial.payment_evidence, its access log, and read_payment_evidence / render_payment_instructions; no document prints the function that WRITES evidence, names the operator roles the derived-role read admits, or says what a cross-currency snapshot does with no fx source
+Found by:  building migration 10 - a read-only boundary with no write path is D4's write_attestation gap over again
+Effect:    Without a boundary-owned writer, the upload path would need app table grants in financial - the exact hole S13 exists to close.
+Response:  WORKED AROUND
+Action:    financial.write_payment_evidence built as the narrow definer commit path (insert + log, nothing else), owned by adulis_financial like its read twins; the derived-role read admits CLAIM_REVIEWER / SUPPORT / ADMIN operator grants (IDENTITY_REVIEWER and MODERATOR deliberately absent - identity review and content moderation have no business reading payment evidence); U0003 carries the revalidation items[] in DETAIL per ADU-API-01 S5.1; a cross-currency order with no fx source REFUSES rather than inventing a rate.
+Ruling needed: v1.11 to print the writer, the role set, and the fx rule.
+
+### D-17 - Claim evidence kinds have no kind-per-trigger mapping
+Severity:  QUESTION
+Phase:     A, migration 12
+Source:    ADU-DB-01 v1.10 S16 - "a trigger on claim insert populates the set" and the claim_evidence_kind catalogue; no document maps which kinds attach for which claim trigger
+Found by:  building the attach trigger
+Effect:    The bundle's composition is unspecified; a wrong subset under-evidences a dispute.
+Response:  WORKED AROUND
+Action:    Attach every kind whose referent EXISTS at open (transitions, stock events, level-at-order always; payment evidence, scan records, acting team members when present) - over-inclusion is reviewable, omission is not. Payment evidence is marked retained in the same transaction. CHAT_HISTORY and BANK_RECORD attach later by their own flows (chat is migration 13; a bank record only exists after a trace).
+Ruling needed: v1.11 to print the mapping, or bless attach-what-exists.
