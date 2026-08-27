@@ -13,7 +13,12 @@ services:
     container_name: adulis-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: adulis_app
+      # NOT adulis_app. POSTGRES_USER becomes a SUPERUSER, and a superuser
+      # bypasses every privilege check in PostgreSQL — so if adulis_app were this
+      # role, `verification` and `financial` would be directly readable and every
+      # boundary test in this repository would pass while proving nothing.
+      # adulis_app is created as an ordinary NOLOGIN role by migration 01.
+      POSTGRES_USER: adulis_bootstrap
       POSTGRES_PASSWORD: local-dev-password
       POSTGRES_DB: adulis
     ports:
@@ -28,7 +33,7 @@ services:
       # Runs only on first initialisation of an empty data directory.
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U adulis_app -d adulis']
+      test: ['CMD-SHELL', 'pg_isready -U adulis_bootstrap -d adulis']
       interval: 5s
       timeout: 5s
       retries: 10

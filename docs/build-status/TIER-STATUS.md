@@ -1,5 +1,38 @@
 # Tier status and reissue debt — back-end
 
+> **UPDATED 27 August 2026, third Tier 1 session. TIER 1 IS COMPLETE.**
+>
+> Migrations 01-05 are built, applied, tested and deterministic. The permission
+> catalogue and the 139-grant role matrix are seeded and verified. **Gate C is
+> met**: Appendix C runs sixteen checks at **7 PASS / 9 PENDING / 0 FAIL**, the
+> four checksums hold, and the 252-cell matrix reproduces through
+> `core.fn_has_permission` in both directions - 139 grants pass, 113 non-grants
+> raise, zero disagreements. 117 tests, 6 suites.
+>
+> **Governing versions:** ADU-DB-01 **v1.9 as amended by A1** · ADU-AUTH-01
+> **v2.3** · ADU-API-01 v1.5 · ADU-CON-03 v1.1. Amendment A1 settled all four
+> blockers the previous session reported, and ADU-AUTH-01 v2.3 delivered the
+> matrix in ASCII plus generated SQL, which survived transit where v2.2's glyphs
+> did not.
+>
+> ⚠ **Read [`docs/amendments/README.md`](../amendments/README.md) before
+> `docs/`.** ADU-AUTH-01 §16 and the seed are installed there at v2.3; §1-14 and
+> §17-25 are the v2.1 text in `docs/`, which v2.3 states is unaltered. ADU-DB-01
+> v1.9 is not installed - its substance is carried by amendment A1, by
+> `db/checks/fixtures/appendix-a.json` (which check 16 asserts against `pg_type`
+> every CI run), and by the section citations in each migration header. **Drop
+> the UTF-8 originals of ADU-DB-01 v1.9 and ADU-AUTH-01 v2.3 into `docs/` to
+> finish the job**; the README says exactly what to move.
+>
+> **[`TIER-1-SPEC-GAPS.md`](TIER-1-SPEC-GAPS.md) is now the queue for ADU-DB-01
+> v1.10**, and it supersedes §2 of this document for DB-01. One item in it has a
+> live security consequence and is one line either way: whether a **suspended**
+> team member keeps their permissions until their session expires (§A1).
+>
+> Three reissues remain outstanding and none blocks a migration: **ADU-PRD-01
+> v8.6**, **ADU-PROJ-01 v9.1**, **ADU-DPIA-01 v1.1**. §2.5-2.7 still describe
+> them accurately.
+
 **Produced:** 26 August 2026, Tier 0 session · **Author:** AI coding agent, CEO back-end session
 **Governing document:** ADU-CON-02 v3.0 §15 (the nine tiers), §23 (documents to reissue)
 **Authority rules:** `.claude/reference/DOCUMENT_AUTHORITY.md`
