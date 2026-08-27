@@ -242,3 +242,23 @@ Found by:  building C1
 Effect:    An endpoint built now would invent transfer semantics wholesale.
 Response:  PARKED - the endpoint is not built; the other thirteen C1 entries are.
 Ruling needed: ADU-PRD-01 v8.6's transfer rules; then the endpoint follows in days.
+
+### D-27 - The ruled context wrapper sets three settings; a ratified function body reads a fourth
+Severity:  MINOR
+Phase:     C3
+Source:    ADU-CON-02 v3.0 S6.1 prints set_config for exactly adulis.account_id / actor_role / seller_id; ADU-DB-01 v1.7 S12.6a's printed fn_mark_order_ready body reads current_setting('adulis.audience')
+Found by:  the C3 gate suite - every mark-ready call was a 500 (unrecognised configuration parameter)
+Effect:    The surface check the function performs below the endpoint cannot run.
+Response:  WORKED AROUND
+Action:    The wrapper sets a FOURTH transaction-local setting, adulis.audience, from the authenticated session's audience - additive, same third-argument-true discipline, the original three untouched.
+Ruling needed: ADU-CON-02's next reissue to print four.
+
+### D-26 - U0007 allocated for the buyer-cancellation cooldown
+Severity:  QUESTION
+Phase:     C3
+Source:    ADU-API-01 v1.6 S7.1a's reserved band; BUYER_COOLDOWN_ACTIVE exists in the closed taxonomy; ADU-PRD-01 S9.5 rules the penalty ladder; no document assigns the SQLSTATE
+Found by:  building the cooldown gate into order creation (migration 0021)
+Effect:    The gate needs a distinct database signal to reach the wire as its own 409.
+Response:  WORKED AROUND
+Action:    U0007 -> 409 BUYER_COOLDOWN_ACTIVE, the until-timestamp as a typed slot in DETAIL. Same device as D-23's trio.
+Ruling needed: ratify into S7.1a's table.

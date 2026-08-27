@@ -12,6 +12,14 @@ export interface RequestContext {
   readonly accountId: string | null;
   readonly actorRole: string;
   readonly sellerId: string | null;
+  /**
+   * Register D-27: ADU-CON-02 section 6.1 prints THREE settings; ADU-DB-01
+   * v1.7 S12.6a's ratified fn_mark_order_ready body reads a fourth,
+   * adulis.audience (the surface check belongs below the endpoint). The
+   * function wins - a setting it needs must exist - so the wrapper sets
+   * four, additively; recorded for CON-02's next reissue.
+   */
+  readonly audience?: 'MOBILE' | 'CONSOLE' | '' | undefined;
 }
 
 /**
@@ -48,7 +56,8 @@ export async function withRequestContext<T>(
   return db.transaction().execute(async (trx) => {
     await sql`SELECT set_config('adulis.account_id', ${ctx.accountId}, true),
                      set_config('adulis.actor_role',  ${ctx.actorRole}, true),
-                     set_config('adulis.seller_id',   ${ctx.sellerId},  true)`.execute(trx);
+                     set_config('adulis.seller_id',   ${ctx.sellerId},  true),
+                     set_config('adulis.audience',    ${ctx.audience ?? ''}, true)`.execute(trx);
     return fn(trx);
   });
 }

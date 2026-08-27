@@ -136,6 +136,18 @@ export function translatePgError(e: PgError): AdulisException | null {
     case 'U0006':
       return new AdulisException('STEP_UP_ACTION_MISMATCH');
 
+    // The buyer-cancellation cooldown (register D-26): the until-timestamp
+    // travels in DETAIL as typed slots, never prose.
+    case 'U0007': {
+      let slots: Record<string, unknown> | undefined;
+      try {
+        slots = e.detail ? (JSON.parse(e.detail) as Record<string, unknown>) : undefined;
+      } catch {
+        slots = undefined;
+      }
+      return new AdulisException('BUYER_COOLDOWN_ACTIVE', { slots });
+    }
+
     case 'U0003':
       return new AdulisException('CART_REVALIDATION_FAILED', {
         items: itemsFromDetail(e.detail),
@@ -155,6 +167,20 @@ export function translatePgError(e: PgError): AdulisException | null {
       }
       if (e.message.includes('scan predates its token')) {
         return new AdulisException('SCAN_PREDATES_TOKEN');
+      }
+      if (e.message.includes('payment already decided')) {
+        return new AdulisException('PAYMENT_ALREADY_DECIDED');
+      }
+      if (e.message.includes('not in a refundable state')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'LINE_NOT_REFUNDABLE' },
+        });
+      }
+      if (e.message.includes('publication blocked') || e.message.includes('publication limit')) {
+        // handled endpoint-side with items[]; reaching here means a caller
+        // outside the publish handler tripped it - still a 409.
+        return new AdulisException('PUBLICATION_BLOCKED');
       }
       return null;
     }

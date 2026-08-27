@@ -23,6 +23,259 @@
         ]
       }
     },
+    "/v1/cart": {
+      "get": {
+        "operationId": "OrdersController_getCart",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Re-checks availability per line on every view.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/cart/lines": {
+      "post": {
+        "operationId": "OrdersController_addLine",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "409 CART_SELLER_CONFLICT on a second seller.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/cart/lines/{id}": {
+      "patch": {
+        "operationId": "OrdersController_patchLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      },
+      "delete": {
+        "operationId": "OrdersController_deleteLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders": {
+      "post": {
+        "operationId": "OrdersController_createOrder",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Whole-cart revalidation in one transaction; 409 with complete items[].",
+        "tags": [
+          "Orders"
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_listOrders",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The authoritative order card; expires_at is a time, never a duration.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancelOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Convenience: cancels every remaining line.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders/{id}/confirm-receipt": {
+      "post": {
+        "operationId": "OrdersController_confirmReceipt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "The tapped tier — medium weight, no level.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders/{id}/refunds/{rid}/acknowledge": {
+      "post": {
+        "operationId": "OrdersController_acknowledgeRefund",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Explicit buyer action, never inferred.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/orders/{id}/reservations/{rid}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancelLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
@@ -183,6 +436,188 @@
         "summary": "KYC vendor handoff. No image ever reaches Adulis.",
         "tags": [
           "Onboarding"
+        ]
+      }
+    },
+    "/v1/seller/orders": {
+      "get": {
+        "operationId": "OrdersController_listSellerOrders",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getSellerOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/payment/confirm": {
+      "post": {
+        "operationId": "OrdersController_confirmPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "\"Confirm Payment Received\", never \"Accept Payment\".",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/payment/reject": {
+      "post": {
+        "operationId": "OrdersController_rejectPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "First rejection opens a 12-hour retry window; the second ends the order.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/ready": {
+      "post": {
+        "operationId": "OrdersController_markReady",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Idempotent by state, not only by key. 409 before PAYMENT_CONFIRMED.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/refunds": {
+      "post": {
+        "operationId": "OrdersController_reportRefund",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Seller reports; buyer acknowledges separately.",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/v1/seller/orders/{id}/reservations/{rid}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancelLineAsSeller",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "\"Can't Fulfil\". There is no accept action.",
+        "tags": [
+          "Orders"
         ]
       }
     },
