@@ -131,10 +131,8 @@ is how that gets caught.
 - **ADU specification documents are ASCII** (A3.5). No byte above U+007F, in prose or in
   data — three sessions in a row lost documents to transit damage, and a document that
   will not install governs nothing.
-  ⚠ **Review-only on this branch.** `pnpm verify:docs-ascii` — which enforces it and
-  also fails on a control byte anywhere in source — arrives with the Tier 2 branch. Until
-  that merges the rule holds by reading, which is the weaker half of every rule in this
-  file and is named rather than assumed.
+  `pnpm verify:docs-ascii` enforces it on the governed set, reports the pre-A3.5
+  documents as visible debt, and also fails on a control byte anywhere in source.
 - **`docs/registers/ADU-VAL-01` is a register, not a specification. It governs nothing
   and is never a build source.** A value listed there as OPEN or DEFAULT is *deliberately*
   absent: do not report it as a spec gap and do not invent one. A value missing from a

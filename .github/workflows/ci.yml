@@ -122,9 +122,6 @@ jobs:
       - name: The contract carries /v1 in its path keys
         run: pnpm verify:contract
 
-      - name: Test
-        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
-
       - name: Build
         run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
@@ -136,12 +133,30 @@ jobs:
       - name: Migrations apply
         run: pnpm db:migrate
 
+      # AFTER the migrations, deliberately. The api test suites are integration
+      # tests against the migrated schema (they query core.market in their first
+      # fixture line); a Test step that precedes "Migrations apply" fails on a
+      # bare database with 'relation does not exist'. It sat before the
+      # migrations from Tier 0 - when every test WAS a unit test - and nobody
+      # saw it break, because the deps-fires failure earlier in this job masked
+      # it on every run since the migration tests arrived. Locally the order is
+      # invisible: a developer database is always already migrated.
+      - name: Test
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
+
       # LIVE from Tier 1. Section 16: "migrations applied twice to empty DBs,
       # schema dumps diffed". ops/scripts/db-determinism.mjs excludes pg_dump
       # 17's per-run random restrict token, which would otherwise make this stage
       # fail on every schema forever — see the script's header.
+      # The harness shells psql and pg_dump through `docker exec` into the
+      # Postgres container, because the runner's own client tools are a major
+      # behind the server (pg_dump 16 refuses a PG17 server outright). Locally
+      # that container is compose's adulis-postgres; here it is the service
+      # container, whose generated name GitHub exposes as job.services.<id>.id.
       - name: Migrations are deterministic
         run: pnpm db:determinism
+        env:
+          ADULIS_PG_CONTAINER: ${{ job.services.postgres.id }}
 
       # LIVE from Tier 1. ADU-DB-01 v1.8 supplied the fifteenth check (R16) and
       # moved check 14 to 109 tables, so the SPEC_VERSION_GAP that kept this
@@ -159,6 +174,8 @@ jobs:
       # that would have caught it, and it runs before anything is seeded.
       - name: The permission matrix agrees with its own generated SQL
         run: pnpm verify:permission-doc
+      - name: A3.5 - governed specifications are ASCII
+        run: pnpm verify:docs-ascii
 
       - name: Appendix C — sixteen checks
         run: pnpm db:check

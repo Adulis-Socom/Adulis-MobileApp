@@ -50,6 +50,12 @@ const PERMITTED_FUNCTIONS = [
   'verification.id_hash_matches',
   'financial.read_payment_evidence',
   'financial.render_payment_instructions',
+  // Register D-16: the boundary's WRITE path. The document prints only the
+  // readers; a read-only boundary with no commit path would force app table
+  // grants in financial - the exact hole section 13 exists to close. The
+  // narrow definer (insert + log, nothing else) is app-callable; the
+  // retention marker is NOT (triggers and jobs reach it as adulis_migrate).
+  'financial.write_payment_evidence',
 ];
 
 export default {

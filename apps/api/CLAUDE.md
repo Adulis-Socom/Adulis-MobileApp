@@ -125,14 +125,11 @@ compare against.
 pnpm db:migrate && pnpm db:check        # Appendix C, sixteen checks
 pnpm db:determinism                     # two clean databases converge
 pnpm verify:permission-doc              # 252 cells, both directions
+pnpm verify:docs-ascii                  # A3.5, plus the NUL-byte guard
 pnpm --filter @adulis/api test
 pnpm verify:deps && pnpm verify:deps-fires   # ADU-REPO-01 §4, and that they fire
+pnpm verify:contract                    # /v1 in the path keys — inert until Tier 3
 ```
-
-⚠ `pnpm verify:docs-ascii` (A3.5, plus the NUL-byte guard) belongs in that list and
-**does not exist on this branch** — it arrives with the Tier 2 branch. Add it here the
-moment that merges; a gate block naming a script that is not there teaches a reader to
-skip the block.
 
 **`adulis_app` is never a superuser, in any environment, including local.** Under
 superuser every boundary check passes while proving nothing — check 10 returns zero rows

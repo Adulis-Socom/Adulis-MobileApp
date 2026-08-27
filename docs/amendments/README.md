@@ -1,46 +1,55 @@
 # What governs, and where each part of it lives
 
-Read this before `docs/`.
+## Current versions — all installed
 
-## Current versions
-
-| Document | Governs at | In `docs/`? |
+| Document | Governs at | Where |
 |---|---|---|
-| **ADU-DB-01** | **v1.10** — absorbs amendments A1 and A2 | ⚠ **no** — see below |
-| **ADU-AUTH-01** | **v2.4** | ⚠ **no** — see below |
-| **ADU-API-01** | **v1.6** | ⚠ **no** — see below |
-| **ADU-VAL-01** | **v1.0** | ✅ [`docs/registers/`](../registers/) |
-| §16.2a, the permission seed | v2.4, unchanged from v2.3 | ✅ [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
+| **ADU-DB-01** | **v1.10**, as amended by **A3** | [`docs/ADU-DB-01_..._v1_10.md`](../ADU-DB-01_Database_and_Data_Model_v1_10.md) |
+| **ADU-AUTH-01** | **v2.4** | [`docs/ADU-AUTH-01_..._v2_4.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_4.md) |
+| **ADU-API-01** | **v1.6** | [`docs/ADU-API-01_API_Contract_v1_6.md`](../ADU-API-01_API_Contract_v1_6.md) |
+| **ADU-VAL-01** | **v1.0** — a register, not a specification | [`docs/registers/`](../registers/) |
+| The permission seed, §16.2a | v2.4, unchanged from v2.3 | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
-**Amendments A1 and A2 no longer govern.** Both are absorbed into ADU-DB-01
-v1.10 §0.1 and are in `_superseded/`. So is the v2.3 §16 split file, which v2.4
-replaces.
+**Amendments A1 and A2 are absorbed into v1.10** and cease to apply separately.
+**Amendment A3 is live and governs where it and v1.10 disagree** — see below.
 
-## ⚠ Three documents are not installed, and this is what to do about it
+> **The three large documents were not installable until A3.5.** Every copy
+> supplied in-session carried the same transit damage: three-byte UTF-8 glyphs
+> losing their trailing bytes. A3.5 makes ADU specifications ASCII, ASCII copies
+> were supplied, and they are now in `docs/`. `pnpm verify:docs-ascii` is the
+> comparator that keeps them that way.
 
-**ADU-DB-01 v1.10, ADU-AUTH-01 v2.4 and ADU-API-01 v1.6 were supplied
-in-session, and the copies available carry transit damage in their prose** —
-every three-byte UTF-8 glyph lost its trailing bytes, the same corruption v2.3
-was written to defeat. Writing them out from those copies would put ~300 KB of
-damaged text into `docs/` and enshrine it.
+## AMENDMENT A3 — what it changed, and where it landed
 
-> **To finish: drop the UTF-8 originals of the three into `docs/`.** Nothing
-> else is needed — the superseded versions are already moved out, and no path in
-> this repository points at them.
+A3 confirmed all three contradictions the CP-4 report raised. **All three were the
+document's, and two of them ratified what the migrations already did.**
 
-**The build did not need them on disk, and here is why that is true rather than
-convenient.** The load-bearing content of both reissues is **ASCII by
-construction** and *is* installed and machine-checked:
-
-| What | Where | Checked by |
+| | Ruling | Where it landed |
 |---|---|---|
-| The 42 permissions and 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) | `pnpm verify:permission-doc` and `permission-matrix.spec.ts`, over all 252 cells in both directions |
-| Appendix A, all 66 enum types | [`db/checks/fixtures/appendix-a.json`](../../db/checks/fixtures/appendix-a.json) | Appendix C **check 16**, against `pg_type` in both directions, every CI run |
-| Appendix B, the 109-table manifest | Appendix C **check 14** | live from Tier 2 |
-| Every column, constraint and function | the migration that transcribes it, citing its section in the header | Appendix C, and the integration suites |
+| **A3.1** | `fn_apply_stock_event` fires **`BEFORE INSERT`**, correcting §10.1's prose. Under `AFTER`, `RETURNING ... INTO NEW.resulting_count` is inert and **every stock event ships with NULL and nothing raises** | Already built that way — [`0008_stock_events...`](../../db/migrations/0008_stock_events_and_derived_count.sql) records the ruling |
+| **A3.2** | The release index is **`UNIQUE (reservation_id, reason)`**, plus a **`CHECK` requiring the anchor** — a partial unique index does not constrain rows whose indexed column is NULL, so a release with a null `reservation_id` escapes it entirely | **Migration 09.** Recorded in 0008's §4 so the deferral cannot be lost |
+| **A3.3** | **The standing gate raises `U0001`, not `U0002`.** Three cases, not two: never a member → 404; ever a member, not in good standing → 403 | [`0009_amendment_a3_standing_gate.sql`](../../db/migrations/0009_amendment_a3_standing_gate.sql) |
+| **A3.4** | The four elided function bodies are **owed by v1.11** — correct not to build them | Logged, not lost |
+| **A3.5** | **ADU specifications are ASCII.** §16.6's prose exemption is withdrawn | `pnpm verify:docs-ascii` |
 
-Every migration header names the document, version and section it transcribes.
-A reader asking *"where did this column come from"* has the answer in the file.
+**A3.3 landed as a new migration rather than an edit, and that is a departure
+from what A3.6 asked for.** A3.6 says *"apply A3.3 in migration 05a, before
+merge"* — but **05a had already merged**: work order T2 Task B directed it, and
+PRs #1, #2 and #3 put migrations 01–06 on `main` in the previous session. A
+migration is never edited after it merges, and editing 0005 in place would also
+mean any database already carrying it never receives the fix, because
+node-pg-migrate would not re-run a migration it has recorded. `CREATE OR REPLACE
+FUNCTION` on an identical signature leaves every call site, grant and dependency
+untouched.
+
+**One addition to A3.3's body is this repository's, and it is flagged in the
+migration.** `seller_team_member_live` is UNIQUE on `(seller_id, account_id)`
+only `WHERE revoked_at IS NULL`, so a member revoked and later re-invited holds
+**several rows** — and A3.3's lookup, which deliberately reads membership
+*regardless of standing*, has no `revoked_at` filter to make it unique. A bare
+`SELECT ... INTO` takes an arbitrary one, so a member in good standing could be
+denied because the planner returned their old revoked row. An `ORDER BY` prefers
+the live membership. **Reported for v1.11.**
 
 ## ADU-VAL-01 is a register. It governs nothing.
 
@@ -60,20 +69,37 @@ named in ADU-DB-01 v1.10 §5.5 and built in migration 02; every value is
 ADU-VAL-01 Group A, B or C and is deliberately unseeded. An unnamed column
 blocks migration 8. An unseeded row blocks only the market seed, at Tier 4.
 
-## What Tier 1 found, and what came back
+## What is checked mechanically, and by what
 
-Three sessions produced three reissues, and the pattern is worth keeping:
+A rule nothing executes will drift. Each of these is a standing CI gate.
+
+| Rule | Check |
+|---|---|
+| §16.2's matrix agrees with §16.2a's SQL, all 252 cells, both directions | `pnpm verify:permission-doc` |
+| Governed specifications are ASCII (A3.5) | `pnpm verify:docs-ascii` |
+| Appendix A agrees with `pg_type`, both directions | Appendix C **check 16** |
+| Appendix B's 109-table manifest | Appendix C **check 14** (live from Tier 2) |
+| Eleven load-bearing absences | Appendix C checks 1–4, 6, 11, 15 |
+| Every column, constraint and function | the migration that transcribes it, citing its section in its header |
+
+## What Tier 1 and CP-4 found, and what came back
+
+Four reissues and three amendments, and the pattern is worth keeping:
 
 | Reported | Became |
 |---|---|
 | The step-up `CHECK` was an enumeration and had drifted, leaving three of eight unconstrained | **D1** — `requires_step_up` is a column and the constraint is total |
 | Appendix C check 10 forbade the `USAGE` its own design requires | **D7** — restated as a privilege query |
 | Check 15 matched the file whose job is to forbid the phrase | scoped to `db/migrations/` |
-| v2.2's matrix arrived with 252 cells collapsed to one glyph; the seed was refused rather than guessed | **v2.3** — ASCII table plus generated SQL, and **§16.6**: a two-form rule is only a check if something compares the forms |
-| The *"of which write"* column did not reproduce and *write* was never defined | **R30** — the column is withdrawn |
-| A suspended team member kept every permission for up to seven days | **R28** — suspension is an authorization gate, not only an authentication one |
+| v2.2's matrix arrived with 252 cells collapsed to one glyph; the seed was refused rather than guessed | **v2.3** — ASCII table plus generated SQL, and **§16.6** |
+| Two forms with nothing comparing them | **v2.4 §16.6, second clause** — a comparator, as a CI gate |
+| The *"of which write"* column did not reproduce and *write* was never defined | **R30** — withdrawn |
+| A suspended team member kept every permission for up to seven days | **R28** — suspension is an authorization gate |
 | `no_data_found` is `P0002`, and a deliberate denial shared `42501` with a misconfigured grant | **R29** — `U0001` and `U0002` |
-| Seven tables described in prose and never given columns | **v1.10 §5.5, §5.2, §7.1** and the C-series |
+| §10.1's prose said `AFTER`; its own body needed `BEFORE` | **A3.1** — prose corrected |
+| §12.4's release index would silently not return stock on a multi-line order | **A3.2** — `(reservation_id, reason)` plus the `CHECK` |
+| A suspended member was told the seller did not exist | **A3.3** — a suspended Admin is not a stranger |
+| Three sessions of documents that could not be installed | **A3.5** — specifications are ASCII |
 
 **The one that did not come back is worth naming too.** A1.1 withdrew a
 correction I had reported as wrong, and confirmed the original: v1.8's Appendix
@@ -82,6 +108,12 @@ compares a document to a database cannot catch an error the two share — what
 caught this was that the two versions of Appendix A disagreed with *each other*,
 and the earlier one was reported rather than reconciled.
 
+[!] **v1.10's Appendix A still carries the seven-type block A1.1 withdrew**, under
+a note saying to treat it as provisional until check 16 runs green. Check 16 has
+run green, against the 66-type catalogue, since Tier 1.
+`db/checks/fixtures/appendix-a.json` is the governing transcription and records
+the withdrawal. **Reported for v1.11.**
+
 ## Where the register lives
 
-`docs/build-status/TIER-1-SPEC-GAPS.md` — rewritten at the close of Tier 1.
+`docs/build-status/TIER-1-SPEC-GAPS.md`.

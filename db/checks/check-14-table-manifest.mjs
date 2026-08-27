@@ -34,6 +34,12 @@ const SCHEMAS = [
   'waitlist',
 ];
 const EXPECTED = 109;
+// Register D-18: the section 9 body gives core.category a "per-market
+// availability", which only spells relationally as a join table - and
+// Appendix B's manifest does not list it. This is the manifest's own
+// recorded failure mode (it omitted seller_availability through v1.7).
+// The exception is pinned BY NAME so any other stray table still fails.
+const BODY_OVER_MANIFEST = ['core.category_market_availability'];
 
 export default {
   id: 14,
@@ -54,8 +60,29 @@ export default {
     );
     const total = rows.reduce((a, r) => a + r.n, 0);
     const breakdown = rows.map((r) => `${r.schema}=${r.n}`).join(' ');
-    return total === EXPECTED
-      ? ok(`${total} tables (${breakdown})`)
-      : bad(`${total} tables, expected ${EXPECTED} — ${breakdown}`);
+
+    // Every pinned body-over-manifest table must actually exist; a table
+    // that vanished should fail loudly, not silently absorb a stray.
+    const pinned = await sql(
+      `SELECT n.nspname || '.' || c.relname AS t
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname || '.' || c.relname = ANY($1::text[])
+          AND c.relkind IN ('r','p')`,
+      [BODY_OVER_MANIFEST],
+    );
+    const missingPinned = BODY_OVER_MANIFEST.filter(
+      (t) => !pinned.some((r) => r.t === t),
+    );
+
+    const want = EXPECTED + BODY_OVER_MANIFEST.length;
+    return total === want && missingPinned.length === 0
+      ? ok(
+          `${total} tables: manifest ${EXPECTED} + ${BODY_OVER_MANIFEST.length} body-over-manifest (D-18) (${breakdown})`,
+        )
+      : bad(
+          `${total} tables, expected ${want} (manifest ${EXPECTED} + D-18 exception)` +
+            (missingPinned.length ? `; pinned table missing: ${missingPinned.join(', ')}` : '') +
+            ` — ${breakdown}`,
+        );
   },
 };
