@@ -1,5 +1,16 @@
 # Tier status and reissue debt — back-end
 
+> **UPDATED 27 August 2026 (later), T3 autonomous run CLOSE-OUT. WORK ORDER
+> T3 IS COMPLETE: Phases A-D.** Migrations 0001-0025 applied and
+> deterministic (10,115 lines converge); 109 endpoints across C1-C8 merged
+> (PRs #4-#14) with the contract at 109 path keys, every group's diff
+> additive; Phase D merged the security review (SR-1 MAJOR found and fixed:
+> PUBLIC-executable boundary definers, migration 0025), all six A1 s6 load
+> measurements, and clean hygiene. 307 tests green; db:check 16/0/0;
+> permission-doc 252 cells; register at D-46. What remains is the worker
+> (s24), the operator model, real adapters, and the open rulings - each
+> named in T3-REPORT's NOT-done list.
+
 > **UPDATED 27 August 2026, T3 autonomous run. TIER 2 SCHEMA IS COMPLETE
 > (Phase A of WORK ORDER T3).**
 >

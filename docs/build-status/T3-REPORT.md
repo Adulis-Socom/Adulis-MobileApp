@@ -157,12 +157,34 @@ post-link resolution, `fn_effective_limit` (level-unlock inputs unruled),
 payout change/transfer functions, `fn_send_broadcast`. The tables they need
 all exist.
 
-## NOT done (scope honesty)
+## NOT done (scope honesty — final, at T3 close)
 
-- Phases B, C, D in their entirety.
-- No HNSW index (D-05 — dimension unruled). Layer 3 is seq-scan until then.
-- `nlu.harvest_unmatched` ETL body, all §24 job bodies: Phase B/C work.
-- Review-removal mechanics for moderation (no printed column or path;
-  will be needed at C6 and may become a D-entry there).
+Phases A-D are COMPLETE. What T3 deliberately did not build, and where
+each is held:
+
+- **The worker process and every §24 job body** (expiry sweep, dispatch,
+  purges, lapse, analytics partition/retirement, `nlu.harvest_unmatched`)
+  — the invariants they enforce are dormant until a worker exists; the
+  query paths are load-proven (SECURITY-REVIEW SR-11, D-42).
+- **Real deployment adapters**: SMS provider, KYC vendor, R2 storage,
+  social platforms, post-link resolution, inference (cascade layers 3-4),
+  push delivery — every fake sits behind the interface the real one
+  implements.
+- **PARKED endpoints**: ownership transfer (D-24, product rules unwritten),
+  analytics export (D-42, needs the worker).
+- **The operator model in its entirety** (AUTH §20's own recorded gap):
+  recovery review, claim decisions, moderation queue drain, report
+  resolution — the queues fill; nothing in-product drains them.
+- No HNSW index (D-05 — embedding dimension unruled); layer 3 is
+  seq-scan-by-adapter until then.
+- Review-removal mechanics for moderation (no printed column or path).
 - The website's 8 event names are not seeded (they write to the waitlist
-  store per C7 and import later; the 70 seeded are PRD §20 + AUTH §23).
+  store and import later; the 72 seeded are PRD §20 + AUTH §23 + 12.16's
+  two client events).
+- The additive-only contract differ as a CI step (each group's diff was
+  verified additive by hand against the prior main; CI holds equality).
+- The Zod-to-OpenAPI bridge decision and a Prism mock smoke against the
+  generated contract.
+- Amharic translation QUALITY (machine placeholders; presence gated).
+- 26 open rulings in the defect register (D-01..D-46, the "Ruling needed"
+  lines) — each names the document that owes the answer.
