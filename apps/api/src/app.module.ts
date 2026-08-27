@@ -46,6 +46,12 @@ import { TeamController } from './modules/team/team.controller';
 import { TeamService } from './modules/team/team.service';
 import { CouriersController } from './modules/couriers/couriers.controller';
 import { BillingController } from './modules/billing/billing.controller';
+import { ChatController } from './modules/chat/chat.controller';
+import { ChatService } from './modules/chat/chat.service';
+import { INFERENCE_ADAPTER, NullInferenceAdapter } from './modules/chat/inference.adapter';
+import { ClaimsController } from './modules/claims/claims.controller';
+import { ClaimsService } from './modules/claims/claims.service';
+import { ReviewsController } from './modules/reviews/reviews.controller';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -67,7 +73,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -86,6 +92,11 @@ export const LOGGER = Symbol('LOGGER');
     DeletionService,
     TeamService,
     { provide: SMS_ADAPTER, useValue: new FakeSmsAdapter() },
+    ChatService,
+    ClaimsService,
+    // Layers 3-4 of the cascade are a deployment integration; Null answers
+    // nothing and everything above layer 2 escalates (S15.1's degradation).
+    { provide: INFERENCE_ADAPTER, useValue: new NullInferenceAdapter() },
     { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
     { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },
