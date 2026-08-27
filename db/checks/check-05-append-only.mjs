@@ -43,6 +43,10 @@ export default {
         JOIN pg_class     c ON c.oid = g.tgrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE g.tgname = 'trg_append_only' AND NOT g.tgisinternal
+         AND g.tgparentid = 0 -- a partitioned parent's trigger is CLONED onto
+                              -- every partition; counting the clones would make
+                              -- analytics.event's DEFAULT partition a 23rd
+                              -- "table" the manifest never declared
        ORDER BY 1`);
 
     const writable = trig.filter((r) => r.can_update || r.can_delete).map((r) => r.t);
