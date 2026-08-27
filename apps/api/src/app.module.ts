@@ -19,6 +19,8 @@ import {
 import { CatalogueController } from './modules/catalogue/catalogue.controller';
 import { OrdersController } from './modules/orders/orders.controller';
 import { FinancialController } from './modules/financial/financial.controller';
+import { HandoffController } from './modules/handoff/handoff.controller';
+import { HandoffService } from './modules/handoff/handoff.service';
 import { FinancialService } from './modules/financial/financial.service';
 import {
   FakeFinancialStorageAdapter,
@@ -55,7 +57,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -68,6 +70,7 @@ export const LOGGER = Symbol('LOGGER');
     CatalogueService,
     OrdersService,
     FinancialService,
+    HandoffService,
     { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
     { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },

@@ -282,3 +282,13 @@ Effect:    The two rulings cannot both hold for a stranger probing a random orde
 Response:  WORKED AROUND
 Action:    S19's principle wins (it is the stronger and later security doctrine, and the render function already raises U0002): the wire says 404. A buyer-adjacent caller with a REAL relationship that is merely wrong-state still gets the ordinary conflict codes.
 Ruling needed: ADU-API-01 v1.7 to align 12.5's sentence with its own 7.1a table.
+
+### D-31 - The scan signature scheme is described by behaviour, not by construction
+Severity:  QUESTION
+Phase:     C5
+Source:    ADU-API-01 v1.6 S12.6.1 - "the client signs once, at the moment of scanning, and stores the signed blob"; REJECTED_SIGNATURE = "signature does not verify"; no document says what key signs a scan or how the client would hold one
+Found by:  building POST /v1/handoffs/sync
+Effect:    A client-held signing key contradicts the trust model (nothing client-held is trusted for authorization); with none, "signs" is unimplementable as written.
+Response:  WORKED AROUND
+Action:    The QR the seller displays carries an HMAC the SERVER minted over (order_ref, nonce, key version) with the versioned identity secret under a domain prefix; the buyer's device captures it and timestamps the blob. "Signs once, retries identical bytes" becomes literal: the signature proves the scan came from a genuinely displayed QR, and byte-identity discriminates a retry from an attack (nonce+order+account+signed_at-ms). A nonce that is not the order's displayed QR is REJECTED_SIGNATURE; an absent token or order is REJECTED_UNKNOWN_ORDER.
+Ruling needed: ratify the scheme or supply the intended one.
