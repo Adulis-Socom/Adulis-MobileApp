@@ -101,10 +101,69 @@ if (debt.length) {
   console.log('  teach everyone to skip this check.');
 }
 
+// ---------------------------------------------------------------------------
+// A NUL-byte guard over source. Not A3.5, but the same class of fault.
+//
+// TWICE NOW a template literal in this repository has been written through a
+// shell heredoc and had the space inside an interpolation replaced by byte 0.
+// IT DOES NOT FAIL LOUDLY: verify-permission-doc kept passing for a whole
+// session because BOTH sides of the comparison used the same corrupt
+// separator, so the keys matched each other while matching nothing a human
+// would ever write. The only outward sign was git reporting the file binary.
+//
+// A control byte in source is never intentional and scanning for one costs
+// nothing. Same argument as check 15 and as the comparator above: the
+// corruption that leaves the structure intact is the one nothing else catches.
+// ---------------------------------------------------------------------------
+const SOURCE_DIRS = ['db', 'ops', 'apps', 'packages', '.github'];
+const SOURCE_EXT = /\.(m?[jt]sx?|sql|json|ya?ml|md)$/;
+const SKIP = new Set(['node_modules', 'dist', 'build', 'coverage', '.next', '.turbo']);
+
+const walkSrc = async (dir) => {
+  const out = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (SKIP.has(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...(await walkSrc(p)));
+    else if (SOURCE_EXT.test(e.name)) out.push(p);
+  }
+  return out;
+};
+
+const nulOffenders = [];
+let scanned = 0;
+for (const d of SOURCE_DIRS) {
+  for (const p of await walkSrc(path.join(root, d))) {
+    scanned += 1;
+    const buf = await readFile(p);
+    let n = 0;
+    for (const b of buf) if (b === 0) n += 1;
+    if (n > 0) nulOffenders.push([path.relative(root, p).replace(/\\/g, '/'), n]);
+  }
+}
+
+console.log(`\n  NUL-byte guard over ${scanned} source files: ${nulOffenders.length === 0 ? 'clean' : 'FAILED'}`);
+for (const [p, n] of nulOffenders) {
+  console.log(`    FAIL  ${p} carries ${n} NUL byte(s)`);
+  failures += 1;
+}
+if (nulOffenders.length > 0) {
+  console.log('\n  A control byte in source is never intentional. It is almost always a');
+  console.log('  template literal written through a shell heredoc, where the space inside');
+  console.log('  an interpolation became byte 0. It does not fail loudly: both sides of a');
+  console.log('  comparison can share the corrupt separator and agree with each other.');
+}
+
 console.log();
 if (failures) {
-  console.error(`FAIL  ${failures} governed document(s) carry non-ASCII bytes.`);
+  console.error(`FAIL  ${failures} problem(s): non-ASCII in a governed document, or a NUL byte in source.`);
   console.error('      A3.5: a document that will not survive transit governs nothing.\n');
   process.exit(1);
 }
-console.log('PASS  every governed specification is ASCII.\n');
+console.log('PASS  governed specifications are ASCII; no source file carries a NUL byte.\n');
