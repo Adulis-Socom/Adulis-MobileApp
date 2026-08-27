@@ -1,5 +1,5 @@
 /**
- * ADU-REPO-01 v1.0 §4 — the four dependency rules, enforced in CI rather than in
+ * ADU-REPO-01 v1.1 §4 — the four dependency rules, enforced in CI rather than in
  * review. A rule that depends on someone noticing is a rule that holds until the
  * week someone is busy.
  *

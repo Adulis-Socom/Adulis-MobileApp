@@ -89,7 +89,7 @@ There is no fourth.
 
 | Seam | Carries | Rule |
 |---|---|---|
-| `contracts/openapi.json` | backend → every client | **Generated in CI. Never hand-edited, never regenerated locally and committed.** A hand-edited spec is a lie with authority |
+| `contracts/openapi.json` | backend → every client | **Tracked in git, and CI is its only author.** A human-authored diff to it fails the build. Tracked so every client has it offline; CI-written so nobody edits it. A hand-edited spec is a lie with authority |
 | `packages/tokens` | design → three clients | Values only. **No component** — a web button and a React Native button share values, not code |
 | `packages/locale` | content → everyone | `en.ts` defines the key union; a missing Amharic string is a **compile error**, not a fallback |
 

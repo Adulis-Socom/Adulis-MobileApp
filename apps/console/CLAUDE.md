@@ -97,7 +97,16 @@ the shell, the states and the client first.
 | **C-7** | Reviews read-only; the empty claims list reads as good news |
 | **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
 
-**C-1 to C-3 can start today against the mock.** They do not wait for Tier 3.
+> **Only C-1 is unblocked today, and v1.0 claimed C-1 to C-3.** ADU-REPO-01 v1.1 §11.1
+> corrects it: `contracts/openapi.json` is generated from the API's decorators, and until
+> the API has endpoints there is nothing to generate from — **the producer arrives in
+> Tier 3.** C-1 needs no endpoint at all: the client *wrapper*, the twelve states, the
+> shell, nav, router and `intl.ts` are all endpoint-free. **C-2 onward waits on the auth
+> endpoints**, which are the first thing Tier 3 builds.
+>
+> **Do not hand-write a placeholder `contracts/openapi.json` to close the gap.** A
+> hand-authored contract is exactly the lie with authority §5.1 forbids, and it would
+> diverge from the generated one silently the day the producer lands.
 
 ## CSP
 

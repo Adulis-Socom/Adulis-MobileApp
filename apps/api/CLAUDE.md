@@ -103,8 +103,9 @@ compare against.
   endpoint.
 - The active seller is a **request parameter** (`X-Adulis-Seller`), never session state.
 - **No string-built SQL outside the `sql` template tag.**
-- `contracts/openapi.json` is **generated** (`pnpm generate:openapi`). Never hand-edit it,
-  and never commit a locally regenerated copy — CI writes it.
+- `contracts/openapi.json` is **generated** (`pnpm generate:openapi`) and **tracked, with
+  CI as its only author** — a human-authored diff to it fails the build. Regenerate
+  locally to look at it; do not commit that copy.
 
 ## Gates that must be green before anything is called done
 

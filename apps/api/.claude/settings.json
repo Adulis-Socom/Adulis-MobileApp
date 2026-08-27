@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_why": "ADU-REPO-01 §4 rules 2 and 3, plus the generated-file rule. The backend owns db/ and contracts/, but contracts/openapi.json is written by CI from decorators and is never hand-edited — a hand-edited spec is a lie with authority.",
+  "_why": "ADU-REPO-01 v1.1 S8. Read denials are the point, not a bonus: sibling CLAUDE.md files are pulled in ON DEMAND when Claude reads into that directory, so isolation is a consequence of not reaching across rather than a loader guarantee. Denying the read is what makes it one - and it enforces dependency rule 2 at the agent's READ boundary, one layer earlier than dependency-cruiser catches it at the import. Paths are CWD-relative and assume the session started in this directory, which is S8's habit.",
   "_verify": "Run /permissions and /context after any change here.",
   "claudeMdExcludes": [
     "**/apps/console/**",
@@ -9,11 +9,14 @@
   ],
   "permissions": {
     "deny": [
+      "Read(../console/**)",
       "Edit(../console/**)",
-      "Edit(../mobile/**)",
-      "Edit(../storefront/**)",
       "Write(../console/**)",
+      "Read(../mobile/**)",
+      "Edit(../mobile/**)",
       "Write(../mobile/**)",
+      "Read(../storefront/**)",
+      "Edit(../storefront/**)",
       "Write(../storefront/**)",
       "Edit(../../contracts/openapi.json)",
       "Write(../../contracts/openapi.json)",

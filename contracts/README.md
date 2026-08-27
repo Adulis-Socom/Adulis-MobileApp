@@ -14,9 +14,14 @@ the rule that gets broken helpfully.
 
 ## The rules
 
-> **Generated in CI. Never hand-edited, and never regenerated locally and committed.**
-> A hand-edited spec is a lie with authority: every client would then be typed against
-> a contract the server does not implement, and nothing would fail until runtime.
+> **Tracked in git, and CI is its only author.** A human-authored diff to it fails the
+> build. A hand-edited spec is a lie with authority: every client would then be typed
+> against a contract the server does not implement, and nothing would fail until runtime.
+
+**Tracked, so every client has it offline; CI-written, so nobody edits it.** ADU-REPO-01
+v1.0 said *"never regenerated locally and committed"*, which read as forbidding the
+commit - and an untracked contract leaves the Prism mock nothing to serve, which breaks
+S5.1's own guarantee. v1.1 corrects it.
 
 - Regenerate locally to *look* at it: `pnpm generate:openapi`. Do not commit the result.
 - CI regenerates it on merge to `main` and commits it from there.

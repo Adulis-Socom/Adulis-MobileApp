@@ -5,7 +5,7 @@ repository - so they cannot be a script and must not be lost in a pull request b
 
 | Runbook | Status |
 |---|---|
-| [`storefront-import.md`](storefront-import.md) | **Blocked** - needs the storefront repository URL (ADU-REPO-01 S11 step 4) |
+| [`storefront-import.md`](storefront-import.md) | **Blocked** - needs the storefront repository URL (ADU-REPO-01 v1.1 S11 step 2) |
 
 **Not yet written, and owed:**
 

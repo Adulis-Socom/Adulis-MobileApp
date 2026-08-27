@@ -10,9 +10,10 @@ guessed. Supply it and this runbook is a two-minute job.
 
 ## Why `apps/storefront/` does not exist yet
 
-ADU-REPO-01 S11 orders the landing as: **step 1** governance, including a per-app
-`CLAUDE.md` for every workstream; **step 4** the storefront by subtree import. **Those
-two steps conflict**, and the conflict is silent until you hit it:
+**ADU-REPO-01 v1.1 S11 reorders the landing so that this is now the specified
+behaviour rather than a workaround.** v1.0 had step 1 create a `CLAUDE.md` for every
+workstream and step 4 import the storefront by subtree - and those two steps conflict
+silently:
 
 ```
 $ mkdir -p apps/storefront && echo x > apps/storefront/CLAUDE.md && git add -A && git commit
@@ -20,12 +21,14 @@ $ git subtree add --prefix apps/storefront <url> main
 fatal: prefix 'apps/storefront' already exists.
 ```
 
-`git subtree add` refuses a prefix that exists. Verified empirically, not assumed.
-Creating the placeholder first would therefore have broken step 4 - so the directory is
-deliberately absent and its `CLAUDE.md` is staged here instead.
+Reproduced in a scratch repository, not assumed. v1.1 S11 now reads: **step 2 is the
+import, step 3 is the instruction file applied afterwards**, with the reason stated -
 
-**Reported for ADU-REPO-01 v1.1:** step 1 should exclude the storefront, or step 4
-should read *"import first, then add its `CLAUDE.md`."*
+> *"The instruction file is not the cost. ANYTHING written at that path before the
+> import blocks it - a `.gitkeep`, a README, an empty directory that git happens to
+> track. `apps/storefront/` stays absent until its history arrives."*
+
+So the directory is deliberately absent and its `CLAUDE.md` is staged here.
 
 ---
 

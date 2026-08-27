@@ -54,6 +54,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ADU-REPO-01 v1.1 S11.2. The default depth-1 clone has no origin/main
+          # ref, so `--filter "...[origin/main]"` below would select NOTHING and
+          # the scoped steps would silently pass without running.
+          fetch-depth: 0
+
 
       - uses: pnpm/action-setup@v4
 
@@ -70,8 +76,20 @@ jobs:
       - name: Create the four extensions
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
+      # ADU-REPO-01 v1.1 S7 - scoped to what changed, plus its dependents.
+      #
+      # S11.2's two foot-guns, both reproduced here before this was written:
+      #   - fetch-depth: 0 above, or origin/main is not a ref and NOTHING is selected
+      #   - '!adulis-platform' because THE WORKSPACE ROOT IS SELECTABLE. Any change
+      #     outside a package directory selects it, and the root's scripts are
+      #     `pnpm -r ...`, so a filtered run would re-enter unfiltered and execute
+      #     every package anyway - the scoping silently doing nothing.
+      #
+      # Verified: without the exclusion the selector returns `.` alongside the six
+      # packages; with it, only the six. Lint stays repo-wide (`eslint .`), as do
+      # every gate below - they guard invariants no single workstream owns.
       - name: Typecheck (strict, no exceptions)
-        run: pnpm typecheck
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' typecheck
 
       - name: Lint
         run: pnpm lint
@@ -98,10 +116,10 @@ jobs:
         run: pnpm verify:deps-fires
 
       - name: Test
-        run: pnpm test
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
 
       - name: Build
-        run: pnpm build
+        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
 
       # ---- Database gates ---------------------------------------------------
 
