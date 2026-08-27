@@ -46,8 +46,16 @@ export interface AuthedRequest extends Request {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The seller-context prefixes of ADU-API-01 section 4.2. */
-function requiresSellerContext(path: string): boolean {
+/**
+ * The seller-context prefixes of ADU-API-01 section 4.2. The one exemption
+ * is seller CREATION: POST /v1/seller is the act that brings the seller
+ * into existence, so no header can name it yet - and no permission gate
+ * runs, because a relationship cannot be checked before it exists.
+ */
+function requiresSellerContext(path: string, method: string): boolean {
+  if (method === 'POST' && (path === '/v1/seller' || path === '/v1/seller/')) {
+    return false;
+  }
   return path.startsWith('/v1/seller') || path.startsWith('/v1/billing');
 }
 
@@ -107,7 +115,7 @@ export class AuthGuard implements CanActivate {
     // header's presence check can never become a relationship oracle.
     let sellerId: string | null = null;
     const sellerHeader = req.headers['x-adulis-seller'];
-    if (requiresSellerContext(req.path)) {
+    if (requiresSellerContext(req.path, req.method)) {
       if (typeof sellerHeader !== 'string' || sellerHeader === '') {
         throw new AdulisException('SELLER_CONTEXT_REQUIRED');
       }
@@ -127,7 +135,7 @@ export class AuthGuard implements CanActivate {
       'BUYER' | 'SELLER' | 'COURIER' | undefined
     >(ACTOR_ROLE_KEY, [context.getHandler(), context.getClass()]);
     const actorRole =
-      declaredRole ?? (requiresSellerContext(req.path) ? 'SELLER' : 'BUYER');
+      declaredRole ?? (requiresSellerContext(req.path, req.method) ? 'SELLER' : 'BUYER');
 
     req.auth = session;
     req.ctx = { accountId: session.accountId, actorRole, sellerId };

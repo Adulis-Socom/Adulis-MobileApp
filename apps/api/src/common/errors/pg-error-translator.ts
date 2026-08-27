@@ -127,6 +127,15 @@ export function translatePgError(e: PgError): AdulisException | null {
       // attacker which one to work on.
       return notFound();
 
+    // The step-up band (register D-23): distinct failure modes reach the
+    // wire as the distinct codes section 7.1 already rules.
+    case 'U0004':
+      return new AdulisException('STEP_UP_REQUIRED');
+    case 'U0005':
+      return new AdulisException('STEP_UP_EXPIRED');
+    case 'U0006':
+      return new AdulisException('STEP_UP_ACTION_MISMATCH');
+
     case 'U0003':
       return new AdulisException('CART_REVALIDATION_FAILED', {
         items: itemsFromDetail(e.detail),

@@ -10,6 +10,12 @@ import { ProblemDetailsFilter } from './common/errors/problem-details.filter';
 import { IdempotencyService } from './common/idempotency/idempotency';
 import { RateLimitService } from './common/rate-limit/rate-limit.service';
 import { BootstrapController } from './modules/bootstrap/bootstrap.controller';
+import { OnboardingController } from './modules/onboarding/onboarding.controller';
+import { OnboardingService } from './modules/onboarding/onboarding.service';
+import {
+  FakeSocialPlatformAdapter,
+  SOCIAL_PLATFORM_ADAPTER,
+} from './modules/onboarding/social-platform.adapter';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -31,11 +37,16 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController],
+  controllers: [HealthController, BootstrapController, OnboardingController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
     IdempotencyService,
+    OnboardingService,
+    // The platform adapters are deployment integrations (like SMS); locally
+    // and under test the fake binds, and the specs configure it per case.
+    // Production binds real adapters here by environment when they exist.
+    { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new FakeSocialPlatformAdapter() },
     RateLimitService,
     HandlerTransaction,
     { provide: APP_GUARD, useClass: AuthGuard },
