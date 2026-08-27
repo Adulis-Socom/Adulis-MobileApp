@@ -155,9 +155,23 @@ CREATE TYPE core.fulfilment_method AS ENUM (
 CREATE TYPE core.operator_role AS ENUM (
   'SUPPORT', 'MODERATOR', 'CLAIM_REVIEWER', 'IDENTITY_REVIEWER', 'ADMIN'
 );
+-- AMENDMENT A1.2 to ADU-DB-01 v1.9. Appendix A carried SIX values against the
+-- EIGHT step-up permissions of ADU-AUTH-01 section 16.3, so
+-- core.step_up_challenge.action could not record a challenge for
+-- seller.identity:manage or seller.ownership:transfer - "the two most dangerous
+-- actions in the system are the two that cannot be audited".
+--
+-- Added HERE, in migration 1 where enums are created, rather than by a later
+-- ALTER TYPE: nothing is merged, so the type is rewritten rather than patched.
+--
+-- INVARIANT (A1.2) - core.step_up_action has exactly one value per permission
+-- whose requires_step_up is true, and the two sets correspond ONE-TO-ONE. The
+-- correspondence is asserted by test; A1.2 records it as a v1.10 candidate for
+-- Appendix C, so a ninth step-up permission cannot be added without a value to
+-- record its challenge.
 CREATE TYPE core.step_up_action AS ENUM (
   'PAYOUT_CHANGE', 'REISSUE_INSTRUCTIONS', 'TEAM_CHANGE', 'SUBSCRIPTION_CHANGE',
-  'SELLER_DELETION', 'REVOKE_ALL_SESSIONS'
+  'SELLER_DELETION', 'REVOKE_ALL_SESSIONS', 'IDENTITY_CHANGE', 'OWNERSHIP_TRANSFER'
 );
 CREATE TYPE core.recovery_decision AS ENUM ('APPROVED', 'REJECTED');
 CREATE TYPE core.team_role AS ENUM (

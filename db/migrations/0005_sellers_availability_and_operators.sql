@@ -119,11 +119,30 @@ CREATE TABLE core.seller_team_member (
 CREATE UNIQUE INDEX seller_team_member_live
   ON core.seller_team_member (seller_id, account_id) WHERE revoked_at IS NULL;
 
--- INVARIANT (section 6.9) - EXACTLY ONE OWNER per seller. "Section 16.9 gives
--- the Owner a power no Admin has; a seller with two Owners or none makes that
--- rule unresolvable." Partial unique index.
-CREATE UNIQUE INDEX seller_team_member_one_owner
-  ON core.seller_team_member (seller_id) WHERE role = 'OWNER' AND revoked_at IS NULL;
+-- AMENDMENT A1.3 - THE OWNER RULING, and it removes an index rather than adding one.
+--
+-- Through v1.9 the Owner could be read from two places: core.seller's
+-- owner_account_id, and a core.seller_team_member row with role = 'OWNER'.
+-- Nothing said which governed, and fn_has_permission could not be written until
+-- something did.
+--
+--   "RULING - the Owner is core.seller.owner_account_id, and only that.
+--    core.seller_team_member NEVER holds a row with role = 'OWNER'."
+--
+-- The seller row wins because it already had to: UNIQUE (id, owner_account_id)
+-- is a composite-foreign-key anchor used throughout sections 9-12, so the Owner
+-- cannot move to seller_team_member without breaking those anchors.
+--
+-- Two consequences, both good:
+--   * Section 16's "exactly one Owner" becomes FREE - it is a single NOT NULL
+--     column, not an index over a set. The partial unique index this constraint
+--     replaces could only ever have detected a second Owner AFTER one was
+--     written; the CHECK makes the first one impossible.
+--   * "seller.staff:admin never permits changing the Owner" becomes
+--     ENFORCEABLE, because staff administration writes seller_team_member and
+--     ownership lives in a table it does not touch.
+ALTER TABLE core.seller_team_member
+  ADD CONSTRAINT team_member_is_never_owner CHECK (role <> 'OWNER');
 
 COMMENT ON TABLE core.seller_team_member IS
   'INVARIANT (ADU-AUTH-01 section 16.5) - seller.staff:admin NEVER permits '
@@ -512,6 +531,105 @@ GRANT SELECT ON
   core.seller_fulfilment_method,
   core.operator_grant
 TO adulis_readonly;
+
+-- ---------------------------------------------------------------------------
+-- 14. core.fn_has_permission (AMENDMENT A1.3)
+--
+-- ADU-DB-01 cites this function in five places as "the first statement of every
+-- seller-scoped writing function" and never wrote its body. A1.3 supplies it.
+--
+-- IT READS core.permission AND core.role_permission, WHICH MIGRATION 05b
+-- CREATES. plpgsql resolves table names at execution rather than at CREATE
+-- FUNCTION, so this compiles here and is exercised from 05b onward. A1.5 places
+-- it in migration 5a and that is followed.
+--
+-- ONE DEPARTURE FROM THE BODY AS WRITTEN, AND IT IS FORCED. A1.3's listing
+-- reads `tm.removed_at IS NULL`. There is no removed_at column: section 6.9
+-- gives core.seller_team_member `suspended_at` and `revoked_at`, and this
+-- migration built it from that list. `revoked_at` is used, being the column
+-- that carries the meaning A1.3's predicate wants. Transcribed verbatim, the
+-- function would not compile - the same class of defect as D5. Reported.
+--
+-- AND ONE THING DELIBERATELY NOT ADDED. The body tests revoked_at and NOT
+-- suspended_at, so a SUSPENDED team member still resolves to their role and
+-- still passes every permission check. Section 18.1 says "Team logins are
+-- disabled, not deleted", which locates suspension at authentication rather
+-- than here - but a member suspended while holding a live session keeps full
+-- authority until that session expires, which is up to 12 hours, or 7 days on a
+-- remembered device. Adding the clause is a one-line change and it is a ruling,
+-- not a transcription. Reported to the founder rather than taken here.
+-- ---------------------------------------------------------------------------
+CREATE FUNCTION core.fn_has_permission(
+  p_account    uuid,
+  p_seller     uuid,
+  p_permission text,
+  p_audience   core.session_audience
+) RETURNS void
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = core AS $fn$
+DECLARE v_role core.team_role;
+BEGIN
+  -- 1. Resolve the actor's role for this seller. Owner first, then team.
+  SELECT 'OWNER'::core.team_role INTO v_role
+    FROM core.seller s
+   WHERE s.id = p_seller AND s.owner_account_id = p_account;
+
+  IF v_role IS NULL THEN
+    SELECT tm.role INTO v_role
+      FROM core.seller_team_member tm
+     WHERE tm.seller_id  = p_seller
+       AND tm.account_id = p_account
+       AND tm.revoked_at IS NULL;
+  END IF;
+
+  -- 2. No relationship is a SCOPE failure. It must not be reported as a
+  --    permission failure, because 403 confirms the object exists.
+  IF v_role IS NULL THEN
+    RAISE EXCEPTION 'no relationship between actor and seller'
+      USING ERRCODE = 'no_data_found';          -- API maps to 404
+  END IF;
+
+  -- 3. Role grant AND surface, in ONE query, so the two cannot be told apart.
+  IF NOT EXISTS (
+    SELECT 1
+      FROM core.role_permission rp
+      JOIN core.permission p ON p.code = rp.permission_code
+     WHERE rp.role            = v_role
+       AND rp.permission_code = p_permission
+       AND p_audience = ANY(p.surfaces)
+  ) THEN
+    RAISE EXCEPTION 'permission denied'
+      USING ERRCODE = 'insufficient_privilege';  -- API maps to 403
+  END IF;
+END $fn$;
+
+COMMENT ON FUNCTION core.fn_has_permission IS
+  'A1.3. Gates 1 and 2 of ADU-AUTH-01 section 14, and only those. '
+  'RETURNS void AND RAISES: every call site uses PERFORM, because a boolean '
+  'return invites "IF NOT fn_has_permission(...) THEN" and the failure mode of '
+  'that shape is a caller who forgets the IF, which reads as authorised. '
+  'TWO ERROR CLASSES: a missing relationship raises no_data_found (404), a role '
+  'or surface failure raises insufficient_privilege (403) - because reporting '
+  '"no relationship" as 403 confirms that a seller with that id exists. '
+  'ROLE AND SURFACE ARE ONE EXISTS: section 14 requires that a 403 never says '
+  'which gate stopped you, and one query covering both makes the function '
+  'STRUCTURALLY unable to distinguish them - a shape, not a discipline. '
+  'It checks NEITHER seller.status (gate 0, 409) NOR object ownership '
+  '(gate 4, 404 via composite FK); both belong to the calling function and to '
+  'the schema respectively.';
+
+-- SECURITY DEFINER RUNS AS THE FUNCTION OWNER. These migrations are applied by
+-- a bootstrap superuser, so without the line below this authorization function
+-- would run as a superuser - which is not a privilege escalation here, because
+-- it only reads, but it is exactly the habit that made the verification
+-- boundary decorative in migration 04 until it was fixed. adulis_migrate owns
+-- the core schema and is not a login role.
+ALTER FUNCTION core.fn_has_permission(uuid, uuid, text, core.session_audience)
+  OWNER TO adulis_migrate;
+
+GRANT SELECT ON core.seller, core.seller_team_member TO adulis_migrate;
+
+REVOKE ALL     ON FUNCTION core.fn_has_permission(uuid, uuid, text, core.session_audience) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION core.fn_has_permission(uuid, uuid, text, core.session_audience) TO adulis_app;
 
 -- Down Migration
 

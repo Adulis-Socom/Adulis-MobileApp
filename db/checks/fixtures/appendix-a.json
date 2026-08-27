@@ -1,5 +1,5 @@
 {
-  "_provenance": "Appendix A of ADU-DB-01, transcribed in document order. 66 types, 230 values.\n\nv1.9 D6 asserts that v1.8's Appendix A was 'a core-only catalogue presented as complete' and that 'every non-core enum - six of them - is absent'. THAT IS NOT WHAT v1.8 SAID. v1.8 carried an 'Other schemas' table of ELEVEN non-core types, and v1.9 reproduces it unchanged. This fixture is that table plus the 55 core types, and it is what migration 1 creates.\n\nv1.9 then APPENDS a second, partial block of seven non-core types that contradicts the carried-forward one in six places (see _conflicts). The document marks that block 'provisional until check 16 has run green once', so the carried-forward table governs here. Check 16 is what will settle it.\n\nThe real v1.8 defect was the COUNT, not the coverage: its header said 54 and sections 0.1/0.2 said 56 where the enumeration is 66. v1.9 removes the asserted count and replaces it with this check, which is the right fix.",
+  "_provenance": "Appendix A of ADU-DB-01, transcribed in document order. 66 types, 230 values.\n\nv1.9 D6 asserts that v1.8's Appendix A was 'a core-only catalogue presented as complete' and that 'every non-core enum - six of them - is absent'. THAT IS NOT WHAT v1.8 SAID. v1.8 carried an 'Other schemas' table of ELEVEN non-core types, and v1.9 reproduces it unchanged. This fixture is that table plus the 55 core types, and it is what migration 1 creates.\n\nv1.9 then APPENDS a second, partial block of seven non-core types that contradicts the carried-forward one in six places (see _conflicts). The document marks that block 'provisional until check 16 has run green once', so the carried-forward table governs here. Check 16 is what will settle it.\n\nThe real v1.8 defect was the COUNT, not the coverage: its header said 54 and sections 0.1/0.2 said 56 where the enumeration is 66. v1.9 removes the asserted count and replaces it with this check, which is the right fix.\n\nAMENDMENT A1 (26 August 2026) settles two things this fixture records.\nA1.1 WITHDRAWS the appended block in full - \"the original 66-row catalogue governs. Where the two disagree, the original is correct\" - so the _conflicts block below is now history rather than an open question, and the values above are confirmed. The count is 66.\nA1.2 adds IDENTITY_CHANGE and OWNERSHIP_TRANSFER to core.step_up_action, which is the only change to migration 1. 66 types, 232 values.",
   "types": {
     "core.market_phase": [
       "PHASE_1",
@@ -51,7 +51,9 @@
       "TEAM_CHANGE",
       "SUBSCRIPTION_CHANGE",
       "SELLER_DELETION",
-      "REVOKE_ALL_SESSIONS"
+      "REVOKE_ALL_SESSIONS",
+      "IDENTITY_CHANGE",
+      "OWNERSHIP_TRANSFER"
     ],
     "core.recovery_decision": [
       "APPROVED",
@@ -365,7 +367,7 @@
     ]
   },
   "_conflicts": {
-    "_note": "Six types are defined TWICE and differently inside v1.9 Appendix A. The values above are the carried-forward 'Other schemas' table; the values below are the appended block the document itself calls provisional. Reported for v1.10; not resolved here.",
+    "_note": "RESOLVED by Amendment A1.1, which withdraws the appended block in full and confirms the carried-forward values above. Retained as the record of what was withdrawn and why. A1.1 also notes the limit of check 16 that this exposed: had migration 1 been built from the appended block, Appendix A and pg_type would have AGREED, both wrong. A check that compares a document to a database catches drift between them and cannot catch a shared error.",
     "verification.verifier_kind": {
       "carried_forward": [
         "KYC_VENDOR",

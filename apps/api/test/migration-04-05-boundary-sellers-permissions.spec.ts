@@ -31,17 +31,29 @@ const STEP_UP_CODES = [
   'seller.subscription:update',
 ];
 
-/** ADU-AUTH-01 v2.2 section 15.1, the codes marked **M**; section 6.9a's nine. */
+/**
+ * ADU-AUTH-01 v2.3 section 16.2a - TWELVE, not the nine of section 6.9a's
+ * "Companion Phase 1 grants".
+ *
+ * The previous revision of this suite had to decide for itself what the three
+ * **M-squared** permissions carried, because no document said, and it chose
+ * {CONSOLE}. v2.3 answers the question the other way: seller.reviews:read,
+ * seller.analytics.basic:read and seller.notifications.preferences:write are
+ * mobile-reachable. The earlier reading is discarded.
+ */
 const MOBILE_CODES = [
+  'seller.analytics.basic:read',
   'seller.handoff:read',
   'seller.messages:read',
   'seller.messages:send',
+  'seller.notifications.preferences:write',
   'seller.notifications:read',
   'seller.order_ready:update',
   'seller.orders:read',
   'seller.orders:respond',
   'seller.payment:confirm',
   'seller.payment_evidence:read',
+  'seller.reviews:read',
 ];
 
 describe('migrations 04-05 — boundary, sellers, permissions', () => {
@@ -318,25 +330,41 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
 
   // =========================================================================
   describe('sellers and the team (sections 7.1, 6.9)', () => {
-    /** "a seller with two Owners or none makes that rule unresolvable" */
-    it('permits exactly one live OWNER per seller', async () => {
+    /**
+     * AMENDMENT A1.3 - THE OWNER RULING. Through v1.9 the Owner could be read
+     * from core.seller.owner_account_id OR from a seller_team_member row with
+     * role = 'OWNER', and nothing said which governed. A1.3: "the Owner is
+     * core.seller.owner_account_id, and only that."
+     *
+     * This is why "exactly one Owner" is now free rather than enforced by a
+     * partial unique index: it is a single NOT NULL column. The index this
+     * replaced could only detect a second Owner AFTER one was written.
+     */
+    it('refuses an OWNER row in seller_team_member outright', async () => {
       await tx(async (c) => {
         await seedSeller(c);
-        const addOwner = async (phone: string) => {
-          const { rows } = await c.query(
-            `INSERT INTO core.account (id, phone_e164, market_id, status)
-             VALUES (gen_random_uuid(), $1, $2, 'ACTIVE') RETURNING id`,
-            [phone, MARKET],
-          );
-          return c.query(
+        const { rows } = await c.query(
+          `INSERT INTO core.account (id, phone_e164, market_id, status)
+           VALUES (gen_random_uuid(), '+251911000901', $1, 'ACTIVE') RETURNING id`,
+          [MARKET],
+        );
+        await expect(
+          c.query(
             `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
              VALUES (gen_random_uuid(), $1, $2, 'OWNER')`,
             [SELLER, rows[0].id],
-          );
-        };
-        await expect(addOwner('+251911000901')).resolves.toBeDefined();
-        await expect(addOwner('+251911000902')).rejects.toThrow(/seller_team_member_one_owner/);
+          ),
+        ).rejects.toThrow(/team_member_is_never_owner/);
       });
+    });
+
+    it('keeps the Owner where the composite-FK anchors already needed it', async () => {
+      const { rows } = await pool.query(
+        `SELECT a.attnotnull AS not_null
+           FROM pg_attribute a
+          WHERE a.attrelid = 'core.seller'::regclass AND a.attname = 'owner_account_id'`,
+      );
+      expect(rows[0]?.not_null).toBe(true);
     });
 
     it('permits several ADMINs, which is the point of the partial index', async () => {
@@ -574,7 +602,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       expect(rows).toEqual([]);
     });
 
-    it('gives mobile reach to exactly the nine Companion Phase 1 codes', async () => {
+    it('gives mobile reach to exactly the twelve codes of section 16.2a', async () => {
       const { rows } = await pool.query(
         `SELECT code FROM core.permission WHERE 'MOBILE' = ANY(surfaces) ORDER BY code`,
       );
@@ -664,22 +692,21 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
     });
 
     /**
-     * core.role_permission IS DELIBERATELY EMPTY and this test is the record of
-     * why. ADU-AUTH-01 v2.2 section 16.2 requires 139 grants; its matrix cells
-     * did not survive delivery, every glyph in the six role columns arriving as
-     * one identical character. The prose fixes OWNER's 42, ADMIN's 40, the
-     * seven universal reads and the section 16.4 departures, and leaves the
-     * membership of ANALYST's 10, SALES_SUPPORT's 19, INVENTORY's 16 and
-     * CAMPAIGN's 12 underdetermined.
+     * SEEDED IN FULL from ADU-AUTH-01 v2.3 section 16.2a. The previous revision
+     * of this suite asserted this table was EMPTY, because v2.2's matrix
+     * arrived with all 252 cells collapsed to one character and a guess would
+     * have satisfied every checksum in section 6.9a while still being wrong.
      *
-     * A seeded guess would satisfy every checksum in section 6.9a and still be
-     * wrong, and a wrong grant is not a visible defect — it is a person who can
-     * or cannot do their job, found months later. This asserts the absence so
-     * that a future run cannot mistake "empty" for "done".
+     * The 252 cells themselves are reproduced through fn_has_permission in
+     * permission-matrix.spec.ts, against the authority .sql file rather than
+     * against this database.
      */
-    it('leaves role_permission empty until section 16.2 is readable', async () => {
-      const { rows } = await pool.query(`SELECT count(*)::int AS n FROM core.role_permission`);
-      expect(rows[0].n).toBe(0);
+    it('holds the 139 grants of section 16.2, across all six roles', async () => {
+      const { rows } = await pool.query(
+        `SELECT count(*)::int AS n, count(DISTINCT role)::int AS roles
+           FROM core.role_permission`,
+      );
+      expect(rows[0]).toEqual({ n: 139, roles: 6 });
     });
   });
 });
