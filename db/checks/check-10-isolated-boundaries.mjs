@@ -111,14 +111,34 @@ export default {
       (f) => !PERMITTED_FUNCTIONS.includes(f),
     );
 
-    if (tables.length === 0 && stray.length === 0) {
+    // 3. No CALLABLE boundary function is PUBLIC-executable (Phase D
+    // SR-1/D-46: PostgreSQL's default grant hands EXECUTE to PUBLIC, and a
+    // boundary function taking its actor as a PARAMETER must never be
+    // reachable from a role the boundary was built to exclude). Functions
+    // returning trigger are uncallable directly and exempt.
+    const publicExec = await sql(
+      `SELECT n.nspname || '.' || p.proname AS f
+         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = ANY($1::text[])
+          AND p.prorettype <> 'trigger'::regtype
+          AND coalesce((SELECT bool_or(a.grantee = 0)
+                          FROM aclexplode(p.proacl) a
+                         WHERE a.privilege_type = 'EXECUTE'), p.proacl IS NULL)`,
+      [BOUNDARY_SCHEMAS],
+    );
+
+    if (tables.length === 0 && stray.length === 0 && publicExec.length === 0) {
       const n = new Set(routines.map((r) => r.f)).size;
       return ok(`0 table privileges; EXECUTE on ${n} named boundary function(s)`);
     }
     return bad(
       (tables.length
         ? `TABLE PRIVILEGE LEAK: ${tables.map((r) => `${r.t}:${r.priv}`).slice(0, 5).join(', ')}`
-        : '') + (stray.length ? ` | unnamed executable routine(s): ${stray.join(', ')}` : ''),
+        : '') +
+        (stray.length ? ` | unnamed executable routine(s): ${stray.join(', ')}` : '') +
+        (publicExec.length
+          ? ` | PUBLIC-executable boundary function(s): ${publicExec.map((r) => r.f).join(', ')}`
+          : ''),
     );
   },
 };

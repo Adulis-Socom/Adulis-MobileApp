@@ -35,6 +35,7 @@ Nothing else met the STOP bar.
 
 | Phase | State |
 |---|---|
+| **D — security review, loads, hygiene** | **COMPLETE.** SECURITY-REVIEW.md (SR-1..SR-11): one MAJOR found and fixed - ten PUBLIC-executable definer functions incl. all six boundary fns (D-46, migration 0025, check 10 hardened). All six A1 s6 loads measured: exact-stock at 350-vs-300 concurrent, sweep 2.8ms via partial index at 1M rows, trigger path flat ~0.35ms/scan, 10k dispatch drained 99ms, 100x2MB streams at +24.8MB RSS, zero identity crossings under load. Hygiene: prod audit clean, dev audit 4 findings all in the Prism mock (excepted SR-10), history secret-scan clean over 75 commits, zero log leaks across the full suite. |
 | **A — finish the schema (migrations 08–15)** | **COMPLETE. Merged to main (PR #4); main CI green — first since Tier 0.** |
 | **B — request pipeline (13 components)** | **COMPLETE. Gate met.** |
 | C — 123 endpoints (C1–C8) | **C1–C6 COMPLETE** (C1: 13/14 transfer PARKED D-24; C2: 18/18; C3: 18; C4: full financial boundary; C5: sync batch, QR at R20/R25, courier by RLS; C6: 28 endpoints — OTP ladder, sessions/R17 cookie pair, step-up single-use (D-32 roll-forward, migration 0023), devices, recovery, team/couriers with seat entitlements, billing behind R4, closure, BOTH deletion paths with S16.9 blockers, phone-reuse block read at seller creation; D-32..D-37 registered; C7: 13 endpoints — conversations with R10's defaultless scope (creation endpoint added, D-38), the cascade's layers 1-2 with escalation-as-notification and slot-gated templates (D-39), claims with the trigger-attached bundle, the single-transaction bank record, the identity-free export, the seller's remedy, and reviews with the derived badge; C8: 18 endpoints — analytics overview/full with entitlement resolved at read time (export PARKED D-42), notifications with read state (0024, D-41) and preferences behind the 422 (D-40), reports routed to moderation (D-44), the allow-list of two (D-45), and the 12.1 public group with server-emitted view events (slug by id, D-43)). Phase C COMPLETE at the endpoint level |
@@ -156,12 +157,34 @@ post-link resolution, `fn_effective_limit` (level-unlock inputs unruled),
 payout change/transfer functions, `fn_send_broadcast`. The tables they need
 all exist.
 
-## NOT done (scope honesty)
+## NOT done (scope honesty — final, at T3 close)
 
-- Phases B, C, D in their entirety.
-- No HNSW index (D-05 — dimension unruled). Layer 3 is seq-scan until then.
-- `nlu.harvest_unmatched` ETL body, all §24 job bodies: Phase B/C work.
-- Review-removal mechanics for moderation (no printed column or path;
-  will be needed at C6 and may become a D-entry there).
+Phases A-D are COMPLETE. What T3 deliberately did not build, and where
+each is held:
+
+- **The worker process and every §24 job body** (expiry sweep, dispatch,
+  purges, lapse, analytics partition/retirement, `nlu.harvest_unmatched`)
+  — the invariants they enforce are dormant until a worker exists; the
+  query paths are load-proven (SECURITY-REVIEW SR-11, D-42).
+- **Real deployment adapters**: SMS provider, KYC vendor, R2 storage,
+  social platforms, post-link resolution, inference (cascade layers 3-4),
+  push delivery — every fake sits behind the interface the real one
+  implements.
+- **PARKED endpoints**: ownership transfer (D-24, product rules unwritten),
+  analytics export (D-42, needs the worker).
+- **The operator model in its entirety** (AUTH §20's own recorded gap):
+  recovery review, claim decisions, moderation queue drain, report
+  resolution — the queues fill; nothing in-product drains them.
+- No HNSW index (D-05 — embedding dimension unruled); layer 3 is
+  seq-scan-by-adapter until then.
+- Review-removal mechanics for moderation (no printed column or path).
 - The website's 8 event names are not seeded (they write to the waitlist
-  store per C7 and import later; the 70 seeded are PRD §20 + AUTH §23).
+  store and import later; the 72 seeded are PRD §20 + AUTH §23 + 12.16's
+  two client events).
+- The additive-only contract differ as a CI step (each group's diff was
+  verified additive by hand against the prior main; CI holds equality).
+- The Zod-to-OpenAPI bridge decision and a Prism mock smoke against the
+  generated contract.
+- Amharic translation QUALITY (machine placeholders; presence gated).
+- 26 open rulings in the defect register (D-01..D-46, the "Ruling needed"
+  lines) — each names the document that owes the answer.
