@@ -1,5 +1,31 @@
 # Tier status and reissue debt — back-end
 
+> **UPDATED 27 August 2026, T3 autonomous run. TIER 2 SCHEMA IS COMPLETE
+> (Phase A of WORK ORDER T3).**
+>
+> Document migrations 06-15 (files 0006-0017) are built, applied, smoke-tested
+> and deterministic. **The Phase A gate is met**: Appendix C runs sixteen
+> checks at **16 PASS / 0 PENDING / 0 FAIL** with `CURRENT_TIER = 2`; check 14
+> counts the manifest's 109 tables plus one pinned body-over-manifest
+> exception (register D-18); the two legal tables carry 17 + 6 ratified rows
+> and zero unratified; `db:determinism` converges two clean databases on an
+> identical schema (8,633 lines); the 252-cell permission matrix still
+> reproduces both directions; and the CP-7 ladder test proves the trust
+> ladder FAILS CLOSED - with no thresholds in force no seller is ever
+> promoted, level credit cannot even accrue, and forced demotion works
+> without configuration through the full claim -> moderation_event ->
+> seller_level_event audit chain. 153 tests, 8 suites.
+>
+> **Governing versions:** ADU-DB-01 **v1.10 as amended by A3** · ADU-AUTH-01
+> **v2.4** · ADU-API-01 **v1.6**. The defect register
+> ([`DEFECT-REGISTER.md`](DEFECT-REGISTER.md)) carries D-01..D-19; none is a
+> BLOCKER. Parked function bodies (register D-07: eligibility, publication,
+> deletion, effective-limit and friends) are Phase C work and block nothing
+> in the schema.
+>
+> The T3 run's own report is [`T3-REPORT.md`](T3-REPORT.md). The Tier 1
+> record below stands as history.
+
 > **UPDATED 27 August 2026, third Tier 1 session. TIER 1 IS COMPLETE.**
 >
 > Migrations 01-05 are built, applied, tested and deterministic. The permission

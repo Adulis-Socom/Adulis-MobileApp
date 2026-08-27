@@ -173,3 +173,23 @@ Effect:    The bundle's composition is unspecified; a wrong subset under-evidenc
 Response:  WORKED AROUND
 Action:    Attach every kind whose referent EXISTS at open (transitions, stock events, level-at-order always; payment evidence, scan records, acting team members when present) - over-inclusion is reviewable, omission is not. Payment evidence is marked retained in the same transaction. CHAT_HISTORY and BANK_RECORD attach later by their own flows (chat is migration 13; a bank record only exists after a trace).
 Ruling needed: v1.11 to print the mapping, or bless attach-what-exists.
+
+### D-18 - Appendix B omits a table the section 9 body requires
+Severity:  MINOR
+Phase:     A, gate (check 14's first live run)
+Source:    ADU-DB-01 v1.10 section 9 - "core.category -- id, parent, code, per-market availability"; Appendix B - core = 84 tables, category_market_availability not among them
+Found by:  check 14 going live at Tier 2: 110 tables against the manifest's 109
+Effect:    The only relational spelling of per-market availability is a join table; a migration set matching the manifest exactly cannot satisfy the body.
+Response:  WORKED AROUND
+Action:    This is the manifest's own recorded failure mode - it omitted seller_availability through v1.7 and says "recount whenever the manifest changes". Check 14 now expects manifest 109 plus a BODY_OVER_MANIFEST list pinned BY NAME (currently the one table), and verifies the pinned table exists - so any other stray table still fails the check.
+Ruling needed: v1.11 to add core.category_market_availability to Appendix B (core = 85, total 110).
+
+### D-19 - An upheld claim demotes under MODERATION source, but no printed path supplies the moderation_event the CHECK demands
+Severity:  MINOR
+Phase:     A, gate (CP-7 ladder test)
+Source:    ADU-DB-01 v1.10 S8.1 - seller_level_event CHECK: a MODERATION-sourced change requires moderation_event_id; S8.3/S5.2 - an upheld claim ALWAYS forces demotion; section 16 prints no moderation_event write on the claim decision path
+Found by:  the CP-7 forced-demotion test: the decision trigger's recompute call violated moderation_change_is_logged on the first real demotion
+Effect:    Every claim-driven forced demotion is impossible as printed - the CHECK demands an audit row no path creates.
+Response:  WORKED AROUND
+Action:    The upheld decision IS a moderation act, so the decision trigger records it as one: INSERT core.moderation_event (actor = decided_by, target SELLER, decision CLAIM_UPHELD, reason = outcome_reason) and passes the id to the recompute - claim -> moderation_event -> seller_level_event, one audit chain. decided_by becomes effectively required for an UPHELD outcome (the moderation event's actor is NOT NULL): an anonymous demotion fails loudly rather than proceeding.
+Ruling needed: v1.11 to print the decision path's moderation_event write, or supply the intended alternative.
