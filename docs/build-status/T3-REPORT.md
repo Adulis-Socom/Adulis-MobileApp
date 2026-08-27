@@ -5,7 +5,23 @@
 
 ## BLOCKERs
 
-**None.** Nothing met the STOP bar. `main` is not broken.
+**`main`'s CI is red — diagnosed, fix rides this branch.** Every run since
+the Tier-0 bootstrap commit fails, on `main` and on this branch alike, at
+`verify:deps-fires` probe 2: the probe imports `../../api/dist/main.js` to
+prove the `no-import-into-dist` rule fires, but in CI that step runs before
+any build, `apps/api/dist` does not exist, the import cannot RESOLVE, and
+`not-to-unresolvable` catches it instead — the probe fails asserting the
+rule NAME while the boundary itself holds. It passed locally only where a
+stale `dist/` happened to exist, which is why nobody saw it before CI did.
+Fix (`ops/scripts/verify-deps-fires.sh`): the probe now plants a one-line
+target inside `apps/api/dist` alongside the probe import, making it
+independent of build order; verified locally in both environments (dist
+absent — the CI shape — and dist present). **Not the schema, not this
+phase's content: the same failure predates every T3 commit.** Merging this
+branch turns `main` green; a cherry-pick of the one commit is available if
+the owner wants `main` green sooner.
+
+Nothing else met the STOP bar.
 
 ## Where the run is
 

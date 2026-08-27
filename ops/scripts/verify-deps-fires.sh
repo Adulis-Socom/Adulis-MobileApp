@@ -85,9 +85,19 @@ export const x = boot;" \
   "rule 2: undeclared '@adulis/api' import"
 
 # Reaching into another app's built output, which the dist/ exclusion would
-# otherwise hide completely.
+# otherwise hide completely. THE TARGET IS PLANTED TOO: on a fresh clone - and
+# in CI, where this step runs before any build - apps/api/dist does not exist,
+# the import cannot RESOLVE, and not-to-unresolvable catches it instead of
+# no-import-into-dist. The probe then fails asserting the rule NAME while the
+# boundary itself holds: a green rule proven by the wrong mechanism. Planting
+# a one-line target makes the probe independent of build order everywhere.
+# (This is why main went red on 27 Aug 2026: same probe, same missing dist.)
+mkdir -p apps/api/dist
+printf 'export const boot = 1;
+' > "apps/api/dist/__depcruise_probe_target_$$.js"
+PLANTED+=("apps/api/dist/__depcruise_probe_target_$$.js")
 plant "apps/console/src/__depcruise_probe_$$.ts" \
-"import { boot } from '../../api/dist/main.js';
+"import { boot } from '../../api/dist/__depcruise_probe_target_$$.js';
 export const x = boot;" \
   "no-import-into-dist" \
   "rule 2: console -> api/dist (the exclusion blind spot)"
