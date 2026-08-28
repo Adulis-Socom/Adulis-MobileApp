@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * The signed-upload storage adapter (ADU-CON-02 section 8.1): media never
  * transits the API. The client resizes to the three derivatives, PUTs them
@@ -37,6 +38,10 @@ export const MEDIA_STORAGE_ADAPTER = Symbol('MEDIA_STORAGE_ADAPTER');
 
 /** Local/test adapter: tests register objects; signing is deterministic. */
 export class FakeMediaStorageAdapter implements MediaStorageAdapter {
+  constructor() {
+    assertFakeIsPermitted('FakeMediaStorageAdapter');
+  }
+
   private readonly objects = new Map<string, StoredObject>();
 
   put(key: string, obj: StoredObject): void {

@@ -34,10 +34,16 @@ describe('GET /healthz', () => {
     await app.close();
   });
 
-  it('returns 200 with status ok and db up when the database is reachable', async () => {
+  it('returns 200 and db up when the database is reachable, and reports the worker', async () => {
     const res = await request(app.getHttpServer()).get('/healthz');
+    // 200 regardless of the WORKER's state: section 18 makes a 503 here the
+    // signal that removes an instance from traffic, and a dead worker must
+    // not take the API down with it (T4 register D-51). The worker's health
+    // is reported in the body, which is what the uptime check reads.
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok', db: 'up' });
+    expect(res.body.db).toBe('up');
+    expect(['up', 'stale', 'never_started']).toContain(res.body.worker);
+    expect(res.body.status).toBe(res.body.worker === 'up' ? 'ok' : 'degraded');
   });
 
   it('reports db state as a literal up/down value, never a free-text message', async () => {

@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * SMS delivery adapter (ADU-AUTH-01 sections 4.4, 6).
  *
@@ -30,6 +31,10 @@ export const SMS_ADAPTER = Symbol('SMS_ADAPTER');
  * message's slots; local development reads it from the API log.
  */
 export class FakeSmsAdapter implements SmsAdapter {
+  constructor() {
+    assertFakeIsPermitted('FakeSmsAdapter');
+  }
+
   readonly sent: SmsMessage[] = [];
 
   send(message: SmsMessage): Promise<void> {

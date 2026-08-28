@@ -1,33 +1,52 @@
 import { createLogger } from './common/logging';
+import { startWorker, type WorkerHandle } from './jobs/runtime';
 
 /**
  * Process 2 of 2 — the job runner (ADU-CON-02 v3.0 section 1).
  *
  * "The worker is the same codebase started differently." Two processes so a
- * heavy job can never make a seller's click slow.
+ * heavy job can never make a seller's click slow, and — since T4 — two
+ * ROLES: the worker connects as `adulis_jobs`, which holds a different and
+ * narrower set of privileges than the API's `adulis_app`.
  *
- * TIER 0 — no jobs are registered, and graphile-worker is not started. The 21
- * jobs of ADU-DB-01 section 24 plus v3.0's two additions
- * (`analytics.retire_partitions`, R19; the worker heartbeat, section 20.1) all
- * need the `jobs` schema from migration 14 — Tier 2 at the earliest. Starting a
- * worker against a database with no `graphile_worker` schema would fail loudly
- * and mean nothing, so it idles instead.
+ * Twenty jobs (ADU-DB-01 S24) plus the heartbeat (ADU-CON-02 S20.2).
+ *
+ * Shutdown is explicit and ordered: stop accepting work, let in-flight jobs
+ * finish, then close the pool. A worker killed mid-job is safe by design —
+ * every job is idempotent (S24) — but a clean stop means the next start has
+ * nothing to redo.
  */
-function main(): void {
+async function main(): Promise<void> {
   const log = createLogger();
-  console.log('worker: no jobs registered pre-Tier-1');
-  log.info({ msg: 'worker: no jobs registered pre-Tier-1' });
+  let handle: WorkerHandle | null = null;
 
-  // Idle cleanly: hold the process open so a container running this does not
-  // restart-loop, and exit on the signals an orchestrator actually sends.
-  const keepAlive = setInterval(() => {}, 60_000);
-  const shutdown = (signal: string) => () => {
-    clearInterval(keepAlive);
-    log.info({ msg: `worker: ${signal} received, exiting` });
-    process.exit(0);
+  const shutdown = (signal: string) => (): void => {
+    log.info({ msg: `worker: ${signal} received, draining` });
+    void (async () => {
+      try {
+        await handle?.stop();
+        log.info({ msg: 'worker: drained, exiting' });
+        process.exit(0);
+      } catch (e) {
+        log.error({ msg: 'worker: unclean shutdown', err: String(e) });
+        process.exit(1);
+      }
+    })();
   };
   process.on('SIGTERM', shutdown('SIGTERM'));
   process.on('SIGINT', shutdown('SIGINT'));
+
+  try {
+    handle = await startWorker(log);
+    log.info({ msg: 'worker: registered', jobs: handle.jobNames.join(',') });
+  } catch (e) {
+    // A worker that cannot start must EXIT, loudly. Idling would be the
+    // worst outcome available: the process looks alive to an orchestrator,
+    // the heartbeat never beats, and the only symptom is that nothing ever
+    // expires.
+    log.error({ msg: 'worker: failed to start', err: String(e) });
+    process.exit(1);
+  }
 }
 
-main();
+void main();

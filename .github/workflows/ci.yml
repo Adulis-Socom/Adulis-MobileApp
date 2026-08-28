@@ -57,6 +57,10 @@ jobs:
       # uses DATABASE_URL_MIGRATE.
       DATABASE_URL: postgres://adulis_app:ci-password@localhost:5432/adulis
       DATABASE_URL_MIGRATE: postgres://adulis_bootstrap:ci-password@localhost:5432/adulis
+      # The WORKER's credential. A different role from adulis_app on purpose
+      # (ADU-CON-02 S1, T4 S1.2): the job tests run as adulis_jobs so that a
+      # missing grant fails the build rather than surfacing in production.
+      DATABASE_URL_JOBS: postgres://adulis_jobs:ci-password@localhost:5432/adulis
       # The three key secrets, FAKE - the suites exercise real AEAD through
       # resolveKey's digest path exactly as local dev does (.env.example's
       # doctrine: fake values only, never a real one).
@@ -159,6 +163,17 @@ jobs:
       - name: Provision the runtime roles
         run: |
           psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1             -c "ALTER ROLE adulis_app  LOGIN PASSWORD 'ci-password'"             -c "ALTER ROLE adulis_jobs LOGIN PASSWORD 'ci-password'"
+
+      # graphile-worker's own tables, installed by the DDL role. The worker's
+      # first statement would otherwise be `create schema if not exists jobs`,
+      # which needs CREATE on the DATABASE - a standing privilege the runtime
+      # role must not hold (T4 register E-6). Also moves ownership of those
+      # tables to adulis_jobs: graphile puts RLS on them, and a non-owner with
+      # full DML boots fine and then fails on its first task.
+      - name: Install the worker queue schema
+        run: pnpm worker:install
+        env:
+          DATABASE_URL_JOBS: postgres://adulis_jobs:ci-password@localhost:5432/adulis
 
       # AFTER the migrations, deliberately. The api test suites are integration
       # tests against the migrated schema (they query core.market in their first

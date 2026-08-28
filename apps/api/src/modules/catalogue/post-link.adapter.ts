@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * Post-link resolution (ADU-DB-01 S9.6): matching is on canonical_post_id,
  * NEVER the URL string — TikTok share links are usually shortened, and
@@ -22,6 +23,10 @@ export interface PostLinkAdapter {
 export const POST_LINK_ADAPTER = Symbol('POST_LINK_ADAPTER');
 
 export class FakePostLinkAdapter implements PostLinkAdapter {
+  constructor() {
+    assertFakeIsPermitted('FakePostLinkAdapter');
+  }
+
   private readonly map = new Map<string, CanonicalPost>();
 
   register(url: string, post: CanonicalPost): void {
