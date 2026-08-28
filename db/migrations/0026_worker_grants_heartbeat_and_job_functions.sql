@@ -287,13 +287,16 @@ GRANT EXECUTE ON FUNCTION analytics.create_partition(date) TO adulis_jobs;
 GRANT EXECUTE ON FUNCTION core.fn_recompute_seller_level(uuid, boolean, uuid) TO adulis_jobs;
 -- The nightly sweep also re-evaluates eligibility where a window moved.
 GRANT EXECUTE ON FUNCTION core.fn_evaluate_eligibility(uuid, timestamptz) TO adulis_jobs;
--- NOT GRANTED, deliberately: fn_unpublish_product. S13.3's graduated
--- consequences at stock-confidence levels 2-5 are all READ-TIME (a staleness
--- notice, a hedging chatbot, a degraded badge, blocked broadcasts) and level
--- 5 is "broadcasts blocked", not unpublished. The nudge job's only action is
--- the level-1 nudge, so the job never needs to unpublish anything - and a
--- grant issued "in case" is how a job acquires a power nobody asked it to
--- have.
+-- NOT RE-GRANTED HERE: fn_unpublish_product. Migration 0020 already grants
+-- it to adulis_jobs, and 0020 has merged, so it stays - S9.2's downgrade
+-- sweep ("products above the limit are UNPUBLISHED, never deleted") is the
+-- job that will use it.
+--
+-- What matters for THIS phase is that stock.confidence_nudge does not.
+-- S13.3's graduated consequences at levels 2-5 are all READ-TIME - a
+-- staleness notice, a hedging chatbot, a degraded badge, blocked broadcasts
+-- - and level 5 is "broadcasts blocked", not unpublished. The nudge job's
+-- only action is the level-1 nudge.
 
 -- ---------------------------------------------------------------------------
 -- 7. core.fn_stats_on_reservation was owned by the SUPERUSER (register D-50)

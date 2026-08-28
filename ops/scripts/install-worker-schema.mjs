@@ -55,7 +55,19 @@ try {
   // per-object rather than a blanket ALTER DEFAULT PRIVILEGES so that a
   // future graphile table arrives visibly rather than silently.
   await c.query(`GRANT USAGE ON SCHEMA jobs TO adulis_jobs`);
-  await c.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA jobs TO adulis_jobs`);
+  // graphile's OWN tables only. `ON ALL TABLES IN SCHEMA jobs` would sweep
+  // in jobs.worker_heartbeat and hand the worker a DELETE on its own
+  // heartbeat - a privilege nothing needs and a grant that then exists in
+  // the running database and in no migration.
+  const graphile = await c.query(
+    `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'jobs' AND c.relkind IN ('r','p') AND c.relname <> 'worker_heartbeat'`,
+  );
+  for (const row of graphile.rows) {
+    await c.query(
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON jobs.${'"' + row.relname + '"'} TO adulis_jobs`,
+    );
+  }
   await c.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA jobs TO adulis_jobs`);
   await c.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA jobs TO adulis_jobs`);
 

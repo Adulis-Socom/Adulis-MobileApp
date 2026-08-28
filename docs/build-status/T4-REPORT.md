@@ -112,6 +112,17 @@ migration 16's comment names the function; the partitioned parent is owned by th
 bootstrap role, so no definer could attach to it. Every analytics event since Tier 2 has
 landed in the DEFAULT partition.
 
+**Grant drift, caught by asking the question directly.** `db:determinism` compares two
+fresh builds to *each other*; it cannot see a grant applied by hand to the working
+database and never written into a migration. A one-off check built a database from
+`db/migrations` alone and diffed `adulis_jobs`' privileges against the live one. It found
+two: a hand-`REVOKE` of `fn_unpublish_product` that a **merged** migration (0020) grants
+and that any rebuild would have restored — so the revoke was a local fiction, and the
+comment claiming it was "not granted, deliberately" was false — and a `DELETE` on the
+worker's own heartbeat swept in by a blanket `ON ALL TABLES`. Both corrected; the
+migration file now reproduces the live grants exactly (86 table grants, 7 column grants,
+395 functions, identical).
+
 **The recurring class, third and fourth instances.** `fn_derive_order_state` and
 `fn_cart_last_line` are **invoker** triggers that write tables the job's own statement
 never mentions. A column-scoped grant passes every statement test and fails the first time
