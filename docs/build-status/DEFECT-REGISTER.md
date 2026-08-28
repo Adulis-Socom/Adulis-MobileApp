@@ -431,3 +431,98 @@ Effect:    Any connecting role - adulis_readonly, adulis_jobs, anything future -
 Response:  FIXED
 Action:    Migration 0025 revokes PUBLIC on all ten and re-grants intended callers by name. Check 10 gains a third assertion: no callable function in a boundary schema may be PUBLIC-executable (trigger-returning functions are uncallable and exempt). Full suite green after the revokes, proving the named grants are complete. SECURITY-REVIEW.md SR-1.
 Ruling needed: none - but ADU-DB-01 v1.11 should state the REVOKE-on-CREATE discipline as a rule, since four migrations forgot what five later ones knew.
+
+### D-47 - adulis_jobs had no USAGE on schema core, so every one of the twenty jobs was dead on arrival
+Severity:  BLOCKER (for the worker; nothing in production depended on it because nothing ran)
+Phase:     T4 E
+Source:    Migration 01 grants USAGE on core to adulis_app and adulis_migrate and not to adulis_jobs; migration 0025 then granted EXECUTE on fn_confirmation_window_lapse to adulis_jobs, which cannot be called without it
+Found by:  probing every grant AS the role, before writing a line of the worker
+Effect:    Every job in ADU-DB-01 S24 would have failed on its first statement with 42501 "permission denied for schema core" - the expiry sweep, the confirmation window, the notification sender, all of them. The 48-hour reservation window would have stayed a promise nothing keeps, and the first symptom would have been a seller noticing.
+Response:  FIXED
+Action:    Migration 0026 grants USAGE, then every table privilege explicitly and narrowly, each line naming the job that fails without it. Proven as the role, not inferred.
+Ruling needed: none. But ADU-DB-01 S3's grant table should name adulis_jobs' schema access explicitly, since S24 gives it twenty jobs and S3 never gives it a way to reach them.
+
+### D-48 - The evidence purge needed a boundary function rather than a table grant
+Severity:  MINOR (a design finding, recorded before it became a grant)
+Phase:     T4 E
+Source:    ADU-DB-01 S24 - "Scoped to financial.payment_evidence BY NAME, never to the schema - payout credentials share it and must not be purged"; WORK ORDER T4 S1.2 - "If a job needs a boundary function, that is a finding worth a register entry before it is a grant"
+Effect:    The obvious implementation is GRANT DELETE ON financial.payment_evidence TO adulis_jobs, which puts a table privilege in the financial schema and leaves "by name" as a convention inside a WHERE clause - one edit away from purging payout credentials.
+Response:  FIXED (by design)
+Action:    Two SECURITY DEFINER functions owned by adulis_financial - list_purgeable_evidence and purge_payment_evidence - each naming the table literally. adulis_jobs holds NO table privilege in financial at all, so it cannot name payout_credential even by accident. The purge RE-EVALUATES the predicate rather than trusting the ids handed to it, so a claim opened between the list and the purge saves its evidence. A test asserts a payout credential survives a purge run.
+
+### D-49 - analytics.event is owned by the bootstrap role, not by its schema's owner, so no definer can attach a partition
+Severity:  MINOR
+Phase:     T4 E
+Source:    Migration 01 creates schema analytics AUTHORIZATION adulis_migrate, but migrations RUN as the bootstrap role, so every table in it is bootstrap-owned
+Found by:  writing analytics.create_partition, which S24 names and migration 16's comment names and nothing had ever written
+Effect:    A SECURITY DEFINER owned by adulis_migrate cannot attach a partition to a table it does not own ("must be owner of table event"), so S24's monthly job was unimplementable. Every event has landed in the DEFAULT partition since Tier 2.
+Response:  FIXED
+Action:    0026 re-owns the partitioned parent to adulis_migrate, aligning it with its own schema. Grants live in the ACL and survive; routed INSERTs are checked on the parent, so nothing the API does changes.
+Ruling needed: none, but it is worth asking whether every table should be owned by its schema's owner rather than by whoever ran the migration. R19's future detach-and-export needs the same privilege.
+
+### D-50 - core.fn_stats_on_reservation was a SECURITY DEFINER owned by the SUPERUSER
+Severity:  MAJOR
+Phase:     T4 E
+Source:    Migration 0011 creates it SECURITY DEFINER and never issues the ALTER FUNCTION ... OWNER TO adulis_migrate that every one of its siblings got, so it defaulted to adulis_bootstrap - which is rolsuper and rolbypassrls
+Found by:  a definer-ownership sweep while diagnosing an unrelated trigger privilege
+Effect:    The function executed with SUPERUSER rights: it bypassed RLS and every privilege check in the database. Nothing exploits it today - it returns trigger, so it cannot be called directly, and its body touches one table - which is exactly why it survived four work orders unnoticed. It worked perfectly, forever.
+Response:  FIXED
+Action:    0026 re-owns it to adulis_migrate, matching fn_stats_on_order_completed beside it. adulis_migrate already held SELECT/INSERT/UPDATE on core.seller_public_stats, which is all the body needs. Verified afterwards: zero SECURITY DEFINER functions in the database are owned by a superuser.
+Ruling needed: none - but SR-1's lesson repeats. ADU-DB-01 v1.11 should state the definer discipline as a rule (own it, revoke PUBLIC, grant by name), because migrations keep forgetting individually what the set knows collectively.
+
+### D-51 - /healthz has two jobs that conflict exactly at a dead worker
+Severity:  MINOR (decided; the decision is load-bearing)
+Phase:     T4 E
+Source:    ADU-CON-02 v3.0 S20.2 - "A worker heartbeat row every 5 minutes; /healthz reddens when stale"; S18 - the Render topology names /healthz as the API health check, so "a 503 here is what stops a bad instance taking traffic"
+Effect:    Reddening a stale worker with a 503 would pull every HEALTHY API instance out of rotation, turning "orders stop expiring" into "the storefront is down" - a strictly worse outcome, caused by the monitoring rather than by the fault.
+Response:  DECIDED
+Action:    The status code answers only "can this instance serve?" and stays 200; the BODY carries status degraded and worker stale or never_started, which is what the uptime check alarms on. Tested both ways.
+Ruling needed: ADU-CON-02's next reissue to say which signal "reddens" means, or to give the worker its own endpoint.
+
+### D-52 - graphile-worker needs CREATE on the DATABASE to boot, and owns its tables under RLS
+Severity:  MINOR (two findings, one cause: the queue library assumes it is privileged)
+Phase:     T4 E
+Source:    graphile-worker 0.17's installSchema issues a create-schema-if-not-exists, which requires CREATE on the database even when the schema exists; and it enables ROW-LEVEL SECURITY on its own tables with policies written for their owner
+Found by:  booting the worker as adulis_jobs
+Effect:    (a) The runtime role would need standing CREATE on the database - the kind of privilege T3/T4 spent two migrations removing. (b) With the tables owned by the DDL role, the worker BOOTS, logs healthy, and then fails on its first task with "new row violates row-level security policy" - a process that looks alive and does nothing.
+Response:  WORKED AROUND
+Action:    pnpm worker:install performs the DDL as the migrate role and then moves ownership of graphile's tables to adulis_jobs, which already owns the schema. The worker boots, finds jobs.migrations present, and skips its installer. The runtime test now enqueues a real job and waits for its EFFECT - registration alone had passed while nothing could run.
+Ruling needed: none - but the deploy runbook must run this step, and it belongs in ADU-CON-02 S20.6's deploy runbook when that is written.
+
+### D-53 - There is no KYC adapter, and identity attestation is written from client-supplied data
+Severity:  MAJOR (trust; currently a load-bearing workaround)
+Phase:     T4 F
+Source:    ADU-PRD-01 S13.1 - "the KYC provider sits behind a vendor-agnostic interface", and a vendor must be integrated and load-tested before the gate drops; WORK ORDER T4 S3.2 - KYC is one of the five interfaces and has no vendor selected
+Found by:  confirming the five adapter interfaces in Phase F
+Effect:    POST /v1/seller/identity-verification takes verifier_kind, vendor_reference, legal_name, id_hash and verified_on FROM THE REQUEST BODY and calls verification.write_attestation with them. There is no callback to any vendor, because no vendor exists to call. A seller holding seller.identity:manage plus a step-up challenge can therefore assert their own ID verification - which is the IDENTITY eligibility path and, at Pro, the verified badge. "Payment never buys a badge" is enforced; self-assertion currently is not.
+Response:  RECORDED, not worked around - building a vendor is out of scope (T4 S5), and inventing a verification protocol would be worse than naming the gap.
+Action:    None in code. The interface is absent by consequence rather than by design, and the absence is now written where the next person will find it.
+Ruling needed: BLOCKING BEFORE ANY REAL SELLER IS VERIFIED. Either select the KYC vendor and build the interface, or restrict identity-verification writes to an operator path until one exists.
+
+### D-54 - device.purge_unbound has no market to take its retention period from
+Severity:  MINOR
+Phase:     T4 E
+Source:    ADU-DB-01 S11.5 - "A device with no account_id and no activity beyond timing_config.media_retention is deleted"; core.device carries NO market_id, deliberately (S6.4: a device row holds no personal data and is registered before any identity exists)
+Effect:    media_retention is per-market configuration and a device belongs to no market, so "the retention period" is undefined for the only job that needs it.
+Response:  WORKED AROUND
+Action:    The job uses the LONGEST media_retention in force across all markets - the only choice that cannot delete a device some market still considers live. Documented in the job body.
+Ruling needed: confirm the longest-wins reading, or give devices a market - which would mean giving them something that says where a person is, and S6.4 exists to avoid exactly that.
+
+### D-55 - S24's close_confirmation_window row conflates two windows and contradicts S12.4a
+Severity:  MINOR (ruled by the founder at WORK ORDER T4 S1.1 before implementation)
+Phase:     T4 E
+Source:    ADU-DB-01 S24 - the job "cancels, releases stock and opens a claim when the 24h or 12h window ends (S12.4)"; S12.4a, written later - the order does NOT expire, stock STAYS HELD, and a SYSTEM claim opens
+Effect:    Read literally, S24 would release stock a buyer had already paid for.
+Response:  RULED (T4 S1.1), and built both ways
+Action:    The 24h SELLER silence is S12.4a exactly - no cancellation, stock held, SYSTEM claim, missed window counted. The 12h BUYER silence after a first rejection is ordinary expiry - cancel, release, no claim - because nobody performed and nobody lost anything. Both branches live in one job, and the 12h branch shares the expiry routine with order.expire_sweep, which is a compare-and-set, so the two jobs seeing the same row is safe by construction.
+Ruling needed: ADU-DB-01 v1.12 to correct S24's row, as the founder has already undertaken to do.
+
+### D-56 - The register is cited at D-25 and D-28 from code, and neither entry exists
+Severity:  MINOR (a hole in the audit trail, not in the schema)
+Phase:     T4 G
+Source:    apps/api/src/modules/catalogue/catalogue.schemas.ts cites register D-25; db/migrations/0022 and pg-error-translator.ts cite register D-28; DEFECT-REGISTER.md runs D-01 to D-24, then D-26, D-27, D-29 onward
+Found by:  the Phase G triage, reading every entry
+Effect:    Three citations point at nothing. Someone following D-28 to understand the payout-lock SQLSTATEs finds no entry, and cannot tell whether the reasoning was lost or never written.
+Response:  RECORDED
+Action:    None yet - the reasoning behind both is present in the code comments that cite them, so nothing is lost, but the numbers should either be back-filled or the citations corrected.
+Ruling needed: none. Back-fill at the next register pass.

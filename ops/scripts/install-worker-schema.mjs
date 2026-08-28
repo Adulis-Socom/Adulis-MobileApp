@@ -2,7 +2,7 @@
  * Install graphile-worker's own tables into the `jobs` schema, as the DDL
  * role, and grant the runtime role what it needs to use them.
  *
- * WHY THIS EXISTS AS A STEP (register E-6). graphile-worker installs its
+ * WHY THIS EXISTS AS A STEP (register D-52). graphile-worker installs its
  * schema on first boot, and its very first statement is
  * `create schema if not exists jobs` — which requires CREATE **on the
  * database**, even when the schema already exists. Letting the worker hold
@@ -52,7 +52,7 @@ try {
   await c.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA jobs TO adulis_jobs`);
   await c.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA jobs TO adulis_jobs`);
 
-  // OWNERSHIP, and it is not a formality (register E-6). graphile-worker
+  // OWNERSHIP, and it is not a formality (register D-52). graphile-worker
   // enables ROW-LEVEL SECURITY on its own tables with policies written for
   // their owner, so a non-owning role with full DML still cannot insert:
   //

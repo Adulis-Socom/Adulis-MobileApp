@@ -94,7 +94,7 @@ describe('the worker runtime', () => {
       const stale = await request(app.getHttpServer()).get('/healthz').expect(200);
       expect(stale.body).toMatchObject({ status: 'degraded', worker: 'stale' });
       // Still 200: a dead WORKER must not pull healthy API instances out of
-      // traffic (register E-5). The body is what the uptime check reads.
+      // traffic (register D-51). The body is what the uptime check reads.
       expect(stale.body.db).toBe('up');
     });
 

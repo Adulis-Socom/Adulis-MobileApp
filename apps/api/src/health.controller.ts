@@ -27,7 +27,7 @@ export interface HealthResponse {
  * the whole reason this check exists: the worker holds the reservation
  * clock, and its silence has no other symptom until a seller notices.
  *
- * DECIDED (T4, register E-5) — A STALE WORKER REDDENS THE BODY, NOT THE
+ * DECIDED (T4, register D-51) — A STALE WORKER REDDENS THE BODY, NOT THE
  * STATUS CODE. Sections 20.2 and 18 give this one endpoint two jobs that
  * conflict exactly here: 20.2 wants it to go red when the worker dies, and
  * 18 makes a 503 the signal that "stops a bad instance taking traffic". A

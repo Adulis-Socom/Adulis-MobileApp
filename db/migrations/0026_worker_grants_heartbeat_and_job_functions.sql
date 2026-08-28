@@ -12,7 +12,7 @@
 --                              grant to adulis_jobs, justified in one line
 --
 -- ---------------------------------------------------------------------------
--- THE FINDING THIS MIGRATION EXISTS FOR (register E-1)
+-- THE FINDING THIS MIGRATION EXISTS FOR (register D-47)
 --
 -- adulis_jobs had NO USAGE ON SCHEMA core. Not "the wrong table grants" -
 -- no access to the schema at all, so every one of the twenty jobs would
@@ -156,7 +156,7 @@ GRANT SELECT, INSERT, UPDATE ON jobs.worker_heartbeat TO adulis_jobs;
 -- worker:install), and the `jobs` schema is owned by adulis_jobs, so the DDL
 -- role needs CREATE inside it. The alternative - letting the worker install
 -- its own schema - requires CREATE on the DATABASE at runtime, which is a
--- standing privilege the runtime role must not hold (register E-6).
+-- standing privilege the runtime role must not hold (register D-52).
 GRANT CREATE, USAGE ON SCHEMA jobs TO adulis_migrate;
 -- The API reads it to answer /healthz; it never writes it.
 GRANT USAGE  ON SCHEMA jobs        TO adulis_app;
@@ -164,7 +164,7 @@ GRANT SELECT ON jobs.worker_heartbeat TO adulis_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. financial.purge_payment_evidence - the boundary crossing, and why it is
---    a function rather than a grant (register E-2)
+--    a function rather than a grant (register D-48)
 --
 -- S24: "Scoped to financial.payment_evidence BY NAME, never to the schema -
 -- payout credentials share it and must not be purged." The safest way to
@@ -241,7 +241,7 @@ GRANT USAGE ON SCHEMA financial TO adulis_jobs;
 -- by the schema's owner - the job holds no CREATE anywhere.
 -- ---------------------------------------------------------------------------
 -- The parent must be owned by the definer's owner or PostgreSQL refuses the
--- ATTACH with "must be owner of table event" (register E-3): migrations run
+-- ATTACH with "must be owner of table event" (register D-49): migrations run
 -- as the bootstrap role, so every table is bootstrap-owned while the SCHEMA
 -- is adulis_migrate's. Aligning the partitioned parent with its own schema's
 -- owner is what makes S24's monthly job possible at all; grants live in the
@@ -296,7 +296,7 @@ GRANT EXECUTE ON FUNCTION core.fn_evaluate_eligibility(uuid, timestamptz) TO adu
 -- have.
 
 -- ---------------------------------------------------------------------------
--- 7. core.fn_stats_on_reservation was owned by the SUPERUSER (register E-4)
+-- 7. core.fn_stats_on_reservation was owned by the SUPERUSER (register D-50)
 --
 -- Migration 0011 created it SECURITY DEFINER and never issued the
 -- `ALTER FUNCTION ... OWNER TO adulis_migrate` that every one of its siblings

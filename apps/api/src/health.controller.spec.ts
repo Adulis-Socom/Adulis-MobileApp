@@ -38,7 +38,7 @@ describe('GET /healthz', () => {
     const res = await request(app.getHttpServer()).get('/healthz');
     // 200 regardless of the WORKER's state: section 18 makes a 503 here the
     // signal that removes an instance from traffic, and a dead worker must
-    // not take the API down with it (T4 register E-5). The worker's health
+    // not take the API down with it (T4 register D-51). The worker's health
     // is reported in the body, which is what the uptime check reads.
     expect(res.status).toBe(200);
     expect(res.body.db).toBe('up');
