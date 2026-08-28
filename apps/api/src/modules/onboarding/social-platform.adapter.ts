@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * The platform adapter (ADU-DB-01 S13.1 by way of S7.2): each social
  * platform sits behind this interface, and a platform failure degrades to
@@ -22,6 +23,13 @@ export interface SocialProfile {
 
 export interface SocialPlatformAdapter {
   fetchProfile(platform: 'TIKTOK' | 'INSTAGRAM', handle: string): Promise<SocialProfile>;
+  /**
+   * S9.6 / S24's `social_post.availability_check`: is this post still served
+   * by the platform? THROWS on an outage rather than returning false — the
+   * caller must be able to tell "deleted" from "cannot reach TikTok", or an
+   * incident silently unlinks every seller's catalogue.
+   */
+  postExists(platform: string, canonicalPostId: string): Promise<boolean>;
 }
 
 /** Injection token; AppModule binds by environment. */
@@ -33,6 +41,27 @@ export const SOCIAL_PLATFORM_ADAPTER = Symbol('SOCIAL_PLATFORM_ADAPTER');
  * path exactly as a platform outage would.
  */
 export class FakeSocialPlatformAdapter implements SocialPlatformAdapter {
+  /** Tests register post ids; `true` = live, `false` = deleted, absent = outage. */
+  private readonly posts = new Map<string, boolean>();
+
+  constructor() {
+    assertFakeIsPermitted('FakeSocialPlatformAdapter');
+  }
+
+  registerPost(platform: string, canonicalPostId: string, live: boolean): void {
+    this.posts.set(`${platform}:${canonicalPostId}`, live);
+  }
+
+  postExists(platform: string, canonicalPostId: string): Promise<boolean> {
+    const known = this.posts.get(`${platform}:${canonicalPostId}`);
+    if (known === undefined) {
+      // Unregistered = the platform could not be reached, which is the
+      // degradation the UNKNOWN status exists for.
+      return Promise.reject(new Error(`platform unreachable for ${platform}:${canonicalPostId}`));
+    }
+    return Promise.resolve(known);
+  }
+
   private readonly profiles = new Map<
     string,
     { platformAccountId: string; followerCount: number; bio: string }

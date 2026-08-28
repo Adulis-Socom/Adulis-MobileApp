@@ -2,7 +2,7 @@
   "name": "@adulis/api",
   "version": "0.0.0",
   "private": true,
-  "description": "Adulis API and worker \u2014 one NestJS codebase started two ways.",
+  "description": "Adulis API and worker — one NestJS codebase started two ways.",
   "license": "UNLICENSED",
   "scripts": {
     "dev": "nest start --watch",
@@ -23,6 +23,7 @@
     "@nestjs/platform-express": "11.2.3",
     "@nestjs/swagger": "^11.4.7",
     "express": "5.2.1",
+    "graphile-worker": "^0.17.3",
     "kysely": "0.28.17",
     "pg": "8.23.0",
     "pino": "10.3.1",

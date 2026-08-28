@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * Evidence object storage. A SEPARATE adapter token from the media one on
  * purpose: grep its importers and you hold the complete list of code that
@@ -27,6 +28,10 @@ export interface FinancialStorageAdapter {
 export const FINANCIAL_STORAGE_ADAPTER = Symbol('FINANCIAL_STORAGE_ADAPTER');
 
 export class FakeFinancialStorageAdapter implements FinancialStorageAdapter {
+  constructor() {
+    assertFakeIsPermitted('FakeFinancialStorageAdapter');
+  }
+
   private readonly objects = new Map<string, Buffer>();
 
   seed(key: string, bytes: Buffer): void {

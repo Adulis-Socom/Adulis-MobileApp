@@ -1,3 +1,4 @@
+import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 /**
  * The metered layers of the S15.1 cascade (3: embedding similarity, 4:
  * model-as-classifier), behind an adapter like every deployment
@@ -29,7 +30,24 @@ export interface InferenceAdapter {
 
 export const INFERENCE_ADAPTER = Symbol('INFERENCE_ADAPTER');
 
+/**
+ * NOT a fake, and so NOT guarded against production.
+ *
+ * "The bot never goes dark" (S15.1): with no layer-4 classifier bound,
+ * layers 0-2 keep answering and everything above escalates — which is the
+ * SPECIFIED degradation, identical to the behaviour at the inference cap. A
+ * fake pretends to be a vendor and must refuse to run in production; this
+ * one truthfully answers "I matched nothing", and refusing to start over it
+ * would take the whole API down to disable one cascade layer.
+ */
 export class NullInferenceAdapter implements InferenceAdapter {
+  constructor() {
+    console.warn(
+      '[NO CLASSIFIER] layer 4 of the S15.1 cascade is unbound; ' +
+        'unmatched questions escalate to the seller, as specified.',
+    );
+  }
+
   classify(): Promise<InferenceResult | null> {
     return Promise.resolve(null);
   }
@@ -37,6 +55,10 @@ export class NullInferenceAdapter implements InferenceAdapter {
 
 /** Tests script it per case. */
 export class FakeInferenceAdapter implements InferenceAdapter {
+  constructor() {
+    assertFakeIsPermitted('FakeInferenceAdapter');
+  }
+
   next: InferenceResult | null = null;
 
   classify(): Promise<InferenceResult | null> {
