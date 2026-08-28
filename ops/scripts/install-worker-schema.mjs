@@ -28,9 +28,16 @@ const require = createRequire(new URL('../../apps/api/package.json', import.meta
 const { Client } = require('pg');
 const { runMigrations } = require('graphile-worker');
 
-for (const line of readFileSync(new URL('../../.env', import.meta.url), 'utf8').split(/\r?\n/)) {
-  const m = line.match(/^([A-Z_]+)=(.*)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+// Local convenience only. CI supplies the environment directly and has no
+// .env, so its absence is not an error — and must not be, or the deploy step
+// this script becomes fails on every machine that does it properly.
+try {
+  for (const line of readFileSync(new URL('../../.env', import.meta.url), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  }
+} catch {
+  /* no .env: CI, or a real deployment */
 }
 
 const connectionString = process.env.DATABASE_URL_MIGRATE;
