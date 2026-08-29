@@ -42,9 +42,14 @@ const EXPECTED = 109;
 // Register D-40: ADU-API-01 v1.6 S12.14 gives notification preferences two
 // endpoints and no document gives them a table; migration 0024 adds it and
 // Appendix B owes the row. Same mechanism, pinned by name.
+// Register D-59: v1.12 S6.3a DEFINES core.seller_courier_invite and S0.1's
+// arithmetic COUNTS it ("111 ... plus seller_courier_invite"), and Appendix B
+// never lists it - the same omission, in the same appendix, in the revision
+// that claims the appendix was reconciled. Pinned by name like the other two.
 const BODY_OVER_MANIFEST = [
   'core.category_market_availability',
   'core.notification_preference',
+  'core.seller_courier_invite',
 ];
 
 export default {
