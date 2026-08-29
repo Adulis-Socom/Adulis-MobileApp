@@ -20,6 +20,13 @@ surface for it, so G1.7 built the enforcement - `billing.fn_reconcile_purchase`,
 derives its authority from `core.operator_grant` - and granted `EXECUTE` to no runtime
 role at all. A runbook is what "outside this contract" looks like once it is literal.
 
-**Still owed:** the ADU-CON-02 S20.6 set - `deploy`, `rollback`, `restore-drill`,
+**Added at T6 Phase D.** [`deploy.md`](deploy.md), written for the two steps nothing in
+the repository can do for you: `pnpm worker:install`, which is not part of
+`pnpm db:migrate` and cannot be, and giving the runtime roles a LOGIN password that
+migration 01 deliberately withholds. Neither leaves a trace when skipped until something
+is already wrong.
+
+**Still owed:** the rest of the ADU-CON-02 S20.6 set - `rollback`, `restore-drill`,
 `incident`, `sms-failover`, `key-rotation`, `db-upgrade`. Each needs a deployment that
-exists.
+exists. And `ops/render.yaml`, which S18 says "keeps infrastructure in the repo" and
+which has never been written - deploy.md step 0.
