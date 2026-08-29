@@ -3,9 +3,10 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.10 as amended by A3** · ADU-AUTH-01 **v2.4** ·
-ADU-API-01 **v1.6**. Read `docs/amendments/README.md` first: it says what governs and
-which amendments are live.
+**Governing documents:** ADU-DB-01 **v1.12** · ADU-AUTH-01 **v2.5** · ADU-API-01 **v1.7** ·
+ADU-CON-02 **v3.1**, installed at T5. Read `docs/amendments/README.md` first: it says what
+governs and which amendments are live. A1, A2 and A3 are all absorbed into the installed
+text and no longer apply separately.
 
 > **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
 > Where a rule is inlined below for practicality, **the citation beside it governs, and the
@@ -40,12 +41,19 @@ a NestJS service is an invariant a second endpoint can bypass.
 
 | | | Asserted by |
 |---|---|---|
-| Tables | **109** (Appendix B: core 84 + 25) | Appendix C **check 14**, live from Tier 2 |
-| Enum types | **66**, 232 values | Appendix C **check 16**, against `pg_type` both directions |
+| Tables | **112** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
+| Enum types | **66** types | Appendix C **check 16**, against `pg_type` both directions |
 | Append-only tables | **22**, each with both the trigger and the `REVOKE` | Appendix C **check 5** |
 | Permissions / grants | **42 / 139**, 8 step-up, 12 mobile-reachable | `pnpm verify:permission-doc`, 252 cells both directions |
 
 A different count is wrong somewhere — **stop and report it** rather than reconciling.
+
+> **[!] The counts above are the BUILD's, asserted by the fixtures, and v1.12's printed
+> ones do not match them.** Appendix B heads its core list "84" and lists 85; its stated
+> 112 counts `seller_courier_invite`, which G1.8 has not built here, while omitting
+> `category_market_availability` and `notification_preference`, which exist — the two
+> tables §30 says Appendix B was *reconciled* for (D-58, D-59 in the register). **The
+> fixtures govern, because something executes them.**
 There is deliberately no asserted enum count in the document any more: v1.9 replaced the
 number with a check, because a number in prose drifts and a number from a query cannot.
 `db/checks/fixtures/appendix-a.json` is the transcription both the check and the tests

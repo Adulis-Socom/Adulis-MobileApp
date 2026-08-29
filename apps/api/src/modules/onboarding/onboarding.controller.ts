@@ -98,8 +98,22 @@ export class OnboardingController {
     );
   }
 
+  /**
+   * G1.1 -- OPERATOR-ONLY. A seller session receives 403.
+   *
+   * It keeps its /v1/seller path because ADU-API-01 v1.7 keeps it: the
+   * capability did not disappear, it moved to whoever holds the grant, and
+   * removing the path would be the shape change doctrine 6 forbids. What
+   * changed is who may call it, which doctrine 6 never protected.
+   *
+   * No @ActorRole, no seller header, no fn_has_permission: the gate is
+   * write_attestation's derivation from core.operator_grant.
+   */
   @Post('seller/identity-verification')
-  @ApiOperation({ summary: 'KYC vendor handoff. No image ever reaches Adulis.' })
+  @ApiOperation({
+    summary:
+      'Operator-only (G1.1). An operator attests about a named person. No image ever reaches Adulis.',
+  })
   async identityVerification(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,

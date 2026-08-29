@@ -343,9 +343,12 @@ describe('C1 — onboarding and verification', () => {
     });
   });
 
-  describe('identity verification — step-up as a body parameter', () => {
+  describe('identity verification — OPERATOR-ONLY since G1.1', () => {
     const body = {
-      verifier_kind: 'KYC_VENDOR',
+      // The subject is named explicitly now: an operator attests about
+      // someone else and cannot derive them from their own session.
+      person_id: '66666666-5555-4000-8000-0000000000f0',
+      verifier_kind: 'OPERATOR_ATTESTED',
       vendor_reference: 'vnd-123',
       id_type: 'NATIONAL_ID',
       legal_name: 'Naod Solomon',
@@ -355,7 +358,6 @@ describe('C1 — onboarding and verification', () => {
 
     it('403 STEP_UP_EXPIRED on a stale challenge (freshness is 5 minutes)', async () => {
       const r = await post('/v1/seller/identity-verification', OWNER_S)
-        .set('X-Adulis-Seller', sellerId)
         .send({ ...body, step_up_challenge_id: STEP_UP_STALE })
         .expect(403);
       expect(r.body.code).toBe('STEP_UP_EXPIRED');
@@ -363,24 +365,39 @@ describe('C1 — onboarding and verification', () => {
 
     it('403 STEP_UP_ACTION_MISMATCH on a challenge minted for another action', async () => {
       const r = await post('/v1/seller/identity-verification', OWNER_S)
-        .set('X-Adulis-Seller', sellerId)
         .send({ ...body, step_up_challenge_id: STEP_UP_WRONG })
         .expect(403);
       expect(r.body.code).toBe('STEP_UP_ACTION_MISMATCH');
     });
 
-    it('writes the attestation with a fresh challenge (201); readiness item flips', async () => {
-      await post('/v1/seller/identity-verification', OWNER_S)
-        .set('X-Adulis-Seller', sellerId)
+    it('403 PERMISSION_DENIED for the Owner even with a fresh challenge, and no row is written', async () => {
+      // This test asserted 201 until T5. The step-up was working perfectly
+      // then and is working perfectly now: it proves the person holding
+      // the phone is the account holder, which was never the question.
+      // The question was whether anyone had checked the document.
+      const r = await post('/v1/seller/identity-verification', OWNER_S)
         .send({ ...body, step_up_challenge_id: STEP_UP_OK })
-        .expect(201);
-      const r = await request(app.getHttpServer())
-        .get('/v1/seller/readiness')
-        .set('Cookie', cookie(OWNER_S))
-        .set('X-Adulis-Seller', sellerId)
-        .expect(200);
-      const identity = r.body.items.find((i: { code: string }) => i.code === 'IDENTITY_VERIFIED');
-      expect(identity.satisfied).toBe(true);
+        .expect(403);
+      expect(r.body.code).toBe('PERMISSION_DENIED');
+
+      // The attestation is the claim worth asserting, not the readiness
+      // item: this market carries identity_required = false, so
+      // IDENTITY_VERIFIED is satisfied by S4.2's second arm regardless of
+      // whether anyone attested anything.
+      const rows = await admin.query(
+        `SELECT 1 FROM verification.identity_attestation WHERE person_id = $1`,
+        [body.person_id],
+      );
+      expect(rows.rowCount).toBe(0);
+    });
+
+    it('carries no seller context, and does not need it', async () => {
+      // The path is exempt from X-Adulis-Seller (guard, S4.2's second
+      // exemption). Absent, it is NOT a 400: an operator holds no seller.
+      const r = await post('/v1/seller/identity-verification', OWNER_S)
+        .send({ ...body, step_up_challenge_id: STEP_UP_STALE })
+        .expect(403);
+      expect(r.body.code).not.toBe('SELLER_CONTEXT_REQUIRED');
     });
   });
 

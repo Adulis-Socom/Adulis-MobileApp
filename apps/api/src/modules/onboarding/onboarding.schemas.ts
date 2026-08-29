@@ -37,10 +37,18 @@ export const socialAccountBody = z.object({
 });
 
 export const identityVerificationBody = z.object({
+  // OPERATOR-ONLY since G1.1. The subject is named explicitly because an
+  // operator attests ABOUT SOMEONE ELSE and cannot derive them from their
+  // own session — they hold no seller relationship at all.
+  person_id: z.uuid(),
   // The vendor session outcome, relayed by the client. NO image, NO
   // document, NO upload URL — there is no field for one, deliberately
   // (S13.1), and adding one is the load-bearing absence in CLAUDE.md.
-  verifier_kind: z.enum(['KYC_VENDOR', 'VIDEO_CALL']),
+  // OPERATOR_ATTESTED is new in ADU-DB-01 v1.12, and exists because neither
+  // other value would be true: there is no KYC vendor and there is no video
+  // call. An audit row that says something other than what occurred is
+  // worse than one that says less.
+  verifier_kind: z.enum(['KYC_VENDOR', 'VIDEO_CALL', 'OPERATOR_ATTESTED']),
   vendor_reference: z.string().trim().min(1).max(200),
   id_type: z.string().trim().min(1).max(60),
   legal_name: z.string().trim().min(1).max(200),

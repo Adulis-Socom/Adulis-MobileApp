@@ -47,13 +47,35 @@ export interface AuthedRequest extends Request {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The seller-context prefixes of ADU-API-01 section 4.2. The one exemption
- * is seller CREATION: POST /v1/seller is the act that brings the seller
- * into existence, so no header can name it yet - and no permission gate
- * runs, because a relationship cannot be checked before it exists.
+ * The seller-context prefixes of ADU-API-01 section 4.2, and its two
+ * exemptions. Both are paths under /v1/seller that no seller header can
+ * describe, for opposite reasons.
+ *
+ *  - POST /v1/seller is seller CREATION: the act that brings the seller
+ *    into existence, so no header can name it yet, and no permission gate
+ *    runs because a relationship cannot be checked before it exists.
+ *
+ *  - POST /v1/seller/identity-verification is OPERATOR-only since G1.1.
+ *    An operator holds no seller relationship, so a seller-scoped
+ *    permission check would raise U0002 -- a 404 -- before the boundary
+ *    function was ever reached, and the caller would be told the seller
+ *    does not exist rather than that they may not do this. Its gate is
+ *    verification.write_attestation's own derivation from
+ *    core.operator_grant, which is the only place that can decide it.
+ *
+ * The path keeps its /v1/seller prefix because ADU-API-01 v1.7 keeps it:
+ * removing the path would be the shape change doctrine 6 forbids, and the
+ * capability did not disappear -- it moved to whoever holds the grant.
  */
 function requiresSellerContext(path: string, method: string): boolean {
-  if (method === 'POST' && (path === '/v1/seller' || path === '/v1/seller/')) {
+  if (method !== 'POST') {
+    return path.startsWith('/v1/seller') || path.startsWith('/v1/billing');
+  }
+  if (path === '/v1/seller' || path === '/v1/seller/') return false;
+  if (
+    path === '/v1/seller/identity-verification' ||
+    path === '/v1/seller/identity-verification/'
+  ) {
     return false;
   }
   return path.startsWith('/v1/seller') || path.startsWith('/v1/billing');
