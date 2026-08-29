@@ -39,6 +39,14 @@ export class FakeSmsAdapter implements SmsAdapter {
 
   send(message: SmsMessage): Promise<void> {
     this.sent.push(message);
+    // ADU-CON-02 S13 promises "the local SMS adapter prints OTPs to the
+    // terminal" -- until T7 it did not, and a developer signing the seeded
+    // seller into the console had no way to read the code. Silent under
+    // jest (NODE_ENV=test); unreachable in production (the construction
+    // guard refuses to start).
+    if (process.env['NODE_ENV'] !== 'test') {
+      console.warn(`[FAKE SMS] to ${message.phone}: ${message.templateKey}`, message.slots);
+    }
     return Promise.resolve();
   }
 

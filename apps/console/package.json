@@ -2,7 +2,7 @@
   "name": "@adulis/console",
   "version": "0.0.0",
   "private": true,
-  "description": "Adulis Seller Console — Vite React SPA on Cloudflare Pages.",
+  "description": "Adulis Seller Console \u2014 Vite React SPA on Cloudflare Pages.",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -17,7 +17,9 @@
     "@adulis/api-client": "workspace:*",
     "@adulis/locale": "workspace:*",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "@adulis/tokens": "workspace:*",
+    "react-router": "7.18.3"
   },
   "devDependencies": {
     "@adulis/config": "workspace:*",

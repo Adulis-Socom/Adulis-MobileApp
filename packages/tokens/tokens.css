@@ -1,0 +1,34 @@
+/*
+ * @adulis/tokens -- tokens.css. PLACEHOLDER AWAITING DESIGN (see index.ts).
+ * The same values as index.ts, as custom properties, for the web surfaces.
+ * One source would be better than two; until a build step derives one from
+ * the other, a drift between these files is a defect to fix in BOTH.
+ */
+:root {
+  --adu-color-bg: #ffffff;
+  --adu-color-surface: #f6f6f6;
+  --adu-color-border: #d9d9d9;
+  --adu-color-text-muted: #5c5c5c;
+  --adu-color-text: #1a1a1a;
+  --adu-color-accent: #1d4ed8;
+  --adu-color-accent-text: #ffffff;
+  --adu-color-danger: #b91c1c;
+  --adu-color-success: #15803d;
+  --adu-color-warn: #a16207;
+
+  --adu-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans',
+    'Noto Sans Ethiopic', sans-serif;
+
+  --adu-space-xs: 0.25rem;
+  --adu-space-sm: 0.5rem;
+  --adu-space-md: 1rem;
+  --adu-space-lg: 1.5rem;
+  --adu-space-xl: 2rem;
+  --adu-space-xxl: 3rem;
+
+  --adu-radius-sm: 0.25rem;
+  --adu-radius-md: 0.5rem;
+  --adu-radius-lg: 0.75rem;
+
+  --adu-touch-min: 44px;
+}

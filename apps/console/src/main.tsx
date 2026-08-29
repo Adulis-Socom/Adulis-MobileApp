@@ -1,14 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './App';
+import { RouterProvider } from 'react-router/dom';
+import '@adulis/tokens/tokens.css';
+import './console.css';
+import { SessionProvider } from './auth/session';
+import { router } from './router';
 
-const container = document.getElementById('root');
-if (!container) {
-  throw new Error('#root not found');
-}
+const el = document.getElementById('root');
+if (!el) throw new Error('#root missing from index.html');
 
-createRoot(container).render(
+createRoot(el).render(
   <StrictMode>
-    <App />
+    <SessionProvider>
+      <RouterProvider router={router} />
+    </SessionProvider>
   </StrictMode>,
 );

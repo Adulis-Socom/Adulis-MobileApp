@@ -941,6 +941,49 @@ Action:    CODEOWNERS now assigns every path to @NaodSolomon (one owner; the uns
 What the adversarial pass found this entry had missed, all fixed in the same PR: the ROOT CLAUDE.md -- the file every session loads -- still carried the two-owner model (apps/console owned by COO/CTO, two rules requiring "both owners"), so the one record most likely to be read was the one record not corrected; the CODEOWNERS rewrite silently falsified ops/runbooks/storefront-import.md step 3 ("until then it has no CODEOWNERS line, which is deliberate") and apps/mobile/CLAUDE.md's start-up checklist ("it needs an owner in .github/CODEOWNERS"); and .claude/reference/DOCUMENT_AUTHORITY.md still routed build/operations sequencing to ADU-CON-02 v3.0 while v3.1 is the installed baseline and v3.0 sits in docs/superseded/. Also corrected here: the T7 S7.1 flip from the mock to the real API had been made in the console's file only, leaving the root CLAUDE.md, .env.example and packages/api-client's own error message still instructing the mock.
 Ruling needed: reissue ADU-REPO-01 (S3, S9, and the file's own installation) and ADU-CON-02 (S14.1 review model; S21's branch-protection note gains "required approvals must be 0, not 1 -- nobody can approve their own PR, and 1 would deadlock every merge the day protection becomes enforceable").
 
+### D-95 - core.device_platform has no value a web console can honestly register
+
+Severity:  MAJOR (parked with a dev workaround; production console sign-in cannot register a device truthfully)
+Phase:     T7 - 5
+Source:    0003 -- core.device_platform is ANDROID | IOS, nothing else; POST /v1/auth/devices takes { id, platform } (auth.service.ts:328-332) and every core.device row must carry one of the two; ADU-CON-02 v3.1 S4.3 requires remember-device on the console; T7 S7.3 rule 6 bans localStorage, sessionStorage, and tokens in JavaScript wholesale
+Found by:  Phase 5 C-2, wiring the sign-in flow to the real API
+Effect:    Three constraints meet and no honest path exists between them: the console needs a device row to remember, the enum has no value that is true of a browser, and the storage ban leaves nowhere permitted to persist a minted device id across loads. What is built: the console mints a device id per app load (crypto.randomUUID()), VITE_DEVICE_ID carries the seeded device in development, and ops/scripts/seed.mjs provisions that device row labeled 'ANDROID' -- a value the seed's own header names as false and known. Durable remember-device still works END TO END because the credential that persists is the httpOnly __Host-adulis_device cookie (permitted -- it is not JS-readable storage), not the JS-side id; but a fresh production browser has no registered device row and cannot honestly create one.
+Response:  PARKED; dev loop seeded, the lie confined to the seed and named there
+Action:    None in console code -- inventing a platform value in the product path is exactly the invention rule 6's neighbours forbid. The seeded row keeps C-2 demonstrable.
+Ruling needed: add WEB to core.device_platform (one enum migration) and rule whether CONSOLE-audience verify may auto-register an unseen device id, OR rule that console sessions never mint device rows and remember-device rides the device cookie alone.
+
+### D-96 - No endpoint transmits the idle-session values the console must warn about
+
+Severity:  MINOR (cosmetic mistiming only; the server stays authoritative)
+Phase:     T7 - 5
+Source:    ADU-CON-02 v3.1 S4.3 -- "the client shows the idle warning 5 minutes before either idle limit"; the limits are per-market configuration in core.timing_config; neither the otp/verify response nor GET /v1/auth/sessions nor /v1/bootstrap carries them (verified against the generated contract at T7)
+Found by:  Phase 5 C-2, building IdleWarning against the real responses
+Effect:    The console cannot warn at "5 minutes before the limit" without knowing the limit. Built: the timer uses the ADU-VAL-01 S3 shipped defaults (30 minutes unremembered, 8 hours remembered), named in session.tsx as exactly that. A market that retunes timing_config gets a warning at the wrong time until this lands; the session itself is never wrong -- an expired session 401s whatever the timer believed, and the 401 is handled (signed-out state, sign-in screen).
+Response:  BUILT with named defaults; constants marked for deletion
+Action:    session.tsx carries the two constants and this entry's number; no invented endpoint, no probing heuristic.
+Ruling needed: which surface carries the values -- the natural seam is GET /v1/auth/sessions gaining idle_timeout_seconds on the current row (it already returns expires_at and remembered). One field, then the constants are deleted.
+
+### D-97 - The contract has no endpoint listing the caller's own sellers
+
+Severity:  MINOR (C-1 scope: the store chooser cannot render a list)
+Phase:     T7 - 5
+Source:    the generated contract at T7 -- every /v1/seller/* operation is scoped to one store via X-Adulis-Seller; GET /v1/auth/sessions returns sessions, not stores; no operation returns "the stores this account owns or belongs to", though core.seller.owner_account_id and core.seller_team_member hold the answer
+Found by:  Phase 5 C-1, building the shell's store context per T7 S7.3 rule 2 (seller id in the URL)
+Effect:    The console's entry screen cannot enumerate stores to choose from. Built: a chooser that takes a pasted store id, with the gap named ON SCREEN (locale key console.chooser.gap cites this entry) rather than hidden -- a wireframe with a hole labeled as a hole. Deep links (/s/:sellerId/...) work fully; discovery does not.
+Response:  BUILT AROUND, gap visible in the product surface itself
+Action:    None in console code -- the endpoint's shape (owner stores only? team memberships? role per store?) is contract design, not console transcription.
+Ruling needed: the listing endpoint. Natural shape: GET /v1/accounts/me/sellers returning { id, handle, display_name, role } per store, both owned and team-membered; needs an ADU-API-01 reissue or amendment.
+
+### D-98 - The auth operations are schema-less in the generated contract
+
+Severity:  MINOR (drift risk, typed locally and marked)
+Phase:     T7 - 5
+Source:    apps/api auth controller -- the Swagger decorators on otp/request, otp/verify, sessions, and sign-out carry no request/response body schemas, so openapi.json (generated only -- the unbending rule) and schema.d.ts give the console no types for the sign-in flow it must drive
+Found by:  Phase 5 C-2, importing the contract types and finding none for auth
+Effect:    apps/console/src/api/client.ts types the auth shapes LOCALLY, with a header stating they are to be DELETED in favour of the generated ones when the decorators land -- never reconciled. Until then, a wire-shape change on the API side compiles clean in the console and fails at runtime; the twelve-state screen contract turns that into a visible ERROR state rather than a blank page, which is containment, not immunity.
+Response:  TYPED LOCALLY, marked for deletion
+Action:    Owed on the API, not the console: ApiBody/ApiResponse decorators transcribing the existing zod schemas -- mechanical, no ruling required, any future phase may carry it.
+Ruling needed: none.
 ### D-99 - The API process loads no .env, so the documented dev recipe cannot work from a clean shell
 
 Severity:  MAJOR (a dev-loop defect with a security-shaped failure mode; nothing validates required configuration)
