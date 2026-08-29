@@ -152,19 +152,39 @@ export class CouriersController {
         max: 10,
       });
 
-      // 1. The invite, always. ON CONFLICT also revives a revoked invite,
-      //    which is the only way to re-invite a phone at all: S6.3a's
-      //    UNIQUE is TOTAL where the neighbouring seller_courier's is
-      //    partial on revoked_at, so the row never leaves (register D-67).
+      // 1. The invite, always -- ONE statement, whatever the phone's
+      //    history, because the branches must stay indistinguishable
+      //    (G1.8). D-67's ruling (T7 S3.3) made the UNIQUE partial --
+      //    seller_courier_invite_live, on live PENDING rows only -- so:
+      //      * live pending invite  -> the ON CONFLICT arm refreshes it
+      //        (the conflict target must name the predicate: a partial
+      //        unique is matched by inference, never by name);
+      //      * live CLAIMED invite  -> the `existing` CTE returns it and
+      //        the INSERT is skipped: an active courier's invite stays the
+      //        one invite, same id, which is what "idempotent by the
+      //        relationship" means -- not a duplicate list row per re-tap;
+      //      * revoked (or none)    -> a fresh row. THIS is what D-67
+      //        fixes: a revoked invite is history and blocks nothing.
       const invite = await sql<{ id: string }>`
-        INSERT INTO core.seller_courier_invite
-          (id, seller_id, phone, invited_by_account_id)
-        VALUES (${randomUUID()}, ${sellerId}, ${body.phone}, ${accountId})
-        ON CONFLICT (seller_id, phone) DO UPDATE
-          SET invited_at = now(),
-              invited_by_account_id = EXCLUDED.invited_by_account_id,
-              revoked_at = NULL
-        RETURNING id`.execute(trx);
+        WITH existing AS (
+          SELECT id FROM core.seller_courier_invite
+           WHERE seller_id = ${sellerId} AND phone = ${body.phone}
+             AND revoked_at IS NULL AND claimed_at IS NOT NULL
+           ORDER BY invited_at DESC LIMIT 1
+        ), upsert AS (
+          INSERT INTO core.seller_courier_invite
+            (id, seller_id, phone, invited_by_account_id)
+          SELECT ${randomUUID()}, ${sellerId}, ${body.phone}, ${accountId}
+           WHERE NOT EXISTS (SELECT 1 FROM existing)
+          ON CONFLICT (seller_id, phone)
+            WHERE revoked_at IS NULL AND claimed_at IS NULL
+          DO UPDATE
+            SET invited_at = now(),
+                invited_by_account_id = EXCLUDED.invited_by_account_id
+          RETURNING id
+        )
+        SELECT coalesce((SELECT id FROM upsert),
+                        (SELECT id FROM existing)) AS id`.execute(trx);
       const id = (first(invite.rows) as { id: string }).id;
 
       // 2. Claim it now if that phone is already someone. INSERT ... SELECT

@@ -199,11 +199,18 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     const againUnknown = await invite(P_UNKNOWN, randomUUID());
     expect(again.status).toBe(201);
     expect(againUnknown.status).toBe(201);
-    expect(again.body.id).toBe(againUnknown.body.id === again.body.id ? again.body.id : again.body.id);
-    // Idempotent by (seller, phone): the same phone keeps the same invite.
+    // The two ids must differ from each other (different phones) -- the
+    // old line here compared a value to itself and asserted nothing.
+    expect(again.body.id).not.toBe(againUnknown.body.id);
+    // Idempotent by the RELATIONSHIP: a live invite -- claimed (P_KNOWN is
+    // an active courier by now) or pending (P_UNKNOWN) -- keeps its id
+    // across re-taps. D-67's partial unique made this a code path rather
+    // than a constraint side effect, and this is the assertion that keeps
+    // the list free of duplicate rows per re-tap.
     const third = await invite(P_KNOWN, randomUUID());
     expect(third.body.id).toBe(again.body.id);
   });
+
 
   it('4 - an unknown number leaves a PENDING invite and no courier relationship', async () => {
     await invite(P_ALSO_UNKNOWN, randomUUID());
@@ -313,6 +320,62 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
       [OWNER],
     );
     expect(Number(byAccount.rows[0]?.n)).toBe(0);
+    await purgeBucket();
+  });
+
+  it("9 - D-67's two arms: a revoked phone can be re-invited, claimed or not", async () => {
+    await purgeBucket();
+    // ---- arm 1: invite -> revoke -> invite again succeeds -------------
+    const p1 = '+251919990201';
+    const first = await invite(p1, randomUUID());
+    expect(first.status).toBe(201);
+    await request(app.getHttpServer())
+      .delete(`/v1/seller/couriers/${first.body.id}`)
+      .set('Cookie', cookie(OWNER_S))
+      .set('X-Adulis-Seller', SELLER)
+      .set('Origin', CONSOLE_ORIGIN)
+      .expect(204);
+    const second = await invite(p1, randomUUID());
+    // Before D-67's ruling this was impossible: the TOTAL unique meant the
+    // revoked row blocked the phone forever unless the endpoint revived it
+    // -- and revival resurrected stale claim stamps. Now the revoked row is
+    // history and this is a FRESH invite.
+    expect(second.status).toBe(201);
+    expect(second.body.id).not.toBe(first.body.id);
+    const rows = await admin.query(
+      `SELECT revoked_at IS NULL AS live FROM core.seller_courier_invite
+        WHERE seller_id = $1 AND phone = $2 ORDER BY invited_at`,
+      [SELLER, p1],
+    );
+    expect(rows.rows.map((r: { live: boolean }) => r.live)).toEqual([false, true]);
+
+    // ---- arm 2: invite -> claim -> revoke -> invite again succeeds ----
+    // P_KNOWN was claimed immediately (it has an account) and is a live
+    // courier from the earlier tests; revoke it, then re-invite.
+    const live = await admin.query(
+      `SELECT id FROM core.seller_courier_invite
+        WHERE seller_id = $1 AND phone = $2 AND revoked_at IS NULL`,
+      [SELLER, P_KNOWN],
+    );
+    expect(live.rows).toHaveLength(1);
+    await request(app.getHttpServer())
+      .delete(`/v1/seller/couriers/${live.rows[0].id}`)
+      .set('Cookie', cookie(OWNER_S))
+      .set('X-Adulis-Seller', SELLER)
+      .set('Origin', CONSOLE_ORIGIN)
+      .expect(204);
+    const reinvited = await invite(P_KNOWN, randomUUID());
+    expect(reinvited.status).toBe(201);
+    expect(reinvited.body.id).not.toBe(live.rows[0].id);
+    // The known phone claims immediately again: the fresh invite is a fresh
+    // relationship, stamped by the same transaction that created it.
+    const stamped = await admin.query(
+      `SELECT claimed_at, claimed_by_account_id FROM core.seller_courier_invite
+        WHERE id = $1`,
+      [reinvited.body.id],
+    );
+    expect(stamped.rows[0].claimed_at).not.toBeNull();
+    expect(stamped.rows[0].claimed_by_account_id).toBe(KNOWN);
     await purgeBucket();
   });
 });
