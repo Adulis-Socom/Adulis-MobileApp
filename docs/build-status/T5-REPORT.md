@@ -166,6 +166,21 @@ S0.2 and S30, so nothing is lost -- but the jump is two revisions, and
 | `pnpm verify:permission-doc` | PASS -- 252 cells both directions, **unchanged**, which v2.5 S0.1 says is the outcome worth checking rather than assuming |
 | `pnpm verify:docs-ascii` | PASS on all four installed documents |
 | `pnpm ci:local` | exit 0 |
+| CI | **green only on the second run** -- see below |
+
+> **[!] A green `ci:local` is not a green CI, and this PR is the evidence.** The first CI
+> run failed on the step `ci:local` does not have: *"The contract is CI-authored and
+> current"* regenerates `contracts/openapi.json` and `packages/api-client/src/schema.d.ts`
+> and diffs them. My change to the endpoint's `@ApiOperation` summary made both stale, and
+> nothing local said so -- `ci:local` runs `verify:contract`, which asserts `/v1` is in the
+> path keys, and never regenerates.
+>
+> **Fixed the intended way** -- `pnpm generate:openapi && pnpm generate:api-client`,
+> committed, two lines. **Not fixed here:** `ci:local` still cannot catch this class, so
+> the next person who changes an API surface will find out from CI rather than from their
+> laptop. Adding the regenerate-and-diff to `ci:local` is one line and is **deliberately
+> left out of this PR** -- it is not G1.1, and a human reading this diff for one security
+> change should not have to read a build-tooling change beside it.
 
 **Four tests elsewhere changed, and each is the same fact restated.** C1's
 `identity verification` block asserted **201** for the Owner and now asserts **403** with

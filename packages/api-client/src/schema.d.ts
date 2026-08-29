@@ -1109,7 +1109,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** KYC vendor handoff. No image ever reaches Adulis. */
+        /** Operator-only (G1.1). An operator attests about a named person. No image ever reaches Adulis. */
         post: operations["OnboardingController_identityVerification"];
         delete?: never;
         options?: never;
