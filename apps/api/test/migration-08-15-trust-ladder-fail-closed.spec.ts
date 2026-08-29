@@ -104,10 +104,14 @@ describe('migrations 08-15 — the trust ladder fails closed', () => {
       [market],
     );
     if (withConfig) {
-      // Trivially-low thresholds: one counting handoff and one five-star
-      // review clear every ESTABLISHED gate.
+      // Trivially-low thresholds, so that the one completed order clears the
+      // ESTABLISHED gate. Since G1.2/A1.3 that gate is TENURE and COMPLETED
+      // ORDERS and nothing else -- the established_* columns are retained
+      // and read by nothing, so they are seeded here only to satisfy their
+      // NOT NULLs, and changing them would change no outcome.
       await c.query(
         `INSERT INTO core.ladder_config (id, market_id,
+           new_to_established_min_tenure, new_to_established_min_orders,
            established_min_handoffs, established_window,
            established_min_avg_rating, established_max_claim_rate,
            trusted_min_handoffs, trusted_window,
@@ -116,7 +120,8 @@ describe('migrations 08-15 — the trust ladder fails closed', () => {
            demotion_min_scan_completion_rate, demotion_window,
            new_level_product_cap, new_level_transaction_cap_minor,
            distinct_buyer_window, distinct_buyer_max_count)
-         VALUES (gen_random_uuid(), $1, 1, '90 days', 1.0, 0.99,
+         VALUES (gen_random_uuid(), $1, interval '0 seconds', 1,
+                 1, '90 days', 1.0, 0.99,
                  100, '180 days', 0.9, 0.5,
                  0.99, 0.99, 0.0, '60 days',
                  10, 500000, '30 days', 3)`,
