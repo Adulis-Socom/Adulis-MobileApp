@@ -121,19 +121,40 @@ export const devicePurgeUnbound: Job = {
     // The cart goes first — it references the device. A cart that ever
     // converted is anchored by an order, so only ACTIVE/ABANDONED carts of
     // unbound devices are reachable here at all.
-    // A DEVICE IS NOT MARKET-SCOPED — core.device carries no market_id, by
-    // design (it holds no personal data and is registered before any
-    // identity exists). So "the retention period" is genuinely ambiguous
-    // across markets, and the resolution is the LONGEST media_retention in
-    // force anywhere: the only choice that cannot delete a device some
-    // market still considers live. Registered for a ruling.
+    // G1.11 RULED THIS, AND REVERSED IT. A device now carries a market,
+    // assigned at its first /v1/bootstrap, so the ordinary case reads that
+    // market's own media_retention. Where a device genuinely has none, the
+    // fallback is the SHORTEST interval in force, never the longest:
+    // "a retention default must fail toward deletion. Falling back to the
+    // longest keeps anonymous data longest exactly where the system knows
+    // least about whose it is" (S6.4). T4's longest-wins reading (D-54)
+    // optimised for not losing a cart; this optimises for not holding a
+    // stranger's data, which is the question a DPIA actually asks.
+    //
+    // With NO timing_config in force anywhere the subquery is NULL, the
+    // comparison is NULL, and nothing is selected -- fail closed, which for
+    // a delete means deleting nothing.
+    //
+    // THE TWO NOT EXISTS ARE A BUG FIX, NOT PART OF THE RULING, and they are
+    // in this query because the ruling rewrote it. core.session.device_id
+    // and core.account_device.device_id both REFERENCE core.device(id) with
+    // no ON DELETE, and fn_delete_account un-binds a device
+    // (account_id := NULL) while leaving its session rows. Such a device was
+    // selected here and the DELETE raised 23503 -- and because the batch is
+    // taken in the same order every night, the job would have failed on the
+    // same rows forever. Registered.
     const stale = await sql<{ id: string }>`
       SELECT d.id
         FROM core.device d
        WHERE d.account_id IS NULL
-         AND d.last_seen_at < ${at}::timestamptz - (
-           SELECT max(tc.media_retention) FROM core.timing_config tc
-            WHERE tc.effective @> ${at}::timestamptz)
+         AND d.last_seen_at < ${at}::timestamptz - coalesce(
+           (SELECT tc.media_retention FROM core.timing_config tc
+             WHERE tc.market_id = d.market_id
+               AND tc.effective @> ${at}::timestamptz),
+           (SELECT min(tc.media_retention) FROM core.timing_config tc
+             WHERE tc.effective @> ${at}::timestamptz))
+         AND NOT EXISTS (SELECT 1 FROM core.session s WHERE s.device_id = d.id)
+         AND NOT EXISTS (SELECT 1 FROM core.account_device ad WHERE ad.device_id = d.id)
        LIMIT ${BATCH}`.execute(ctx.db);
     if (stale.rows.length === 0) return { stale: 0, devices_purged: 0, carts_purged: 0 };
 
@@ -152,7 +173,11 @@ export const devicePurgeUnbound: Job = {
         DELETE FROM core.device d
          WHERE d.id = ANY(${sql.val(ids)}::uuid[])
            AND d.account_id IS NULL
-           AND NOT EXISTS (SELECT 1 FROM core.cart c WHERE c.device_id = d.id)`.execute(trx);
+           AND NOT EXISTS (SELECT 1 FROM core.cart c WHERE c.device_id = d.id)
+           AND NOT EXISTS (SELECT 1 FROM core.session s WHERE s.device_id = d.id)
+           AND NOT EXISTS (SELECT 1 FROM core.account_device ad WHERE ad.device_id = d.id)`.execute(
+        trx,
+      );
       return {
         stale: ids.length,
         devices_purged: Number(devices.numAffectedRows ?? 0),
