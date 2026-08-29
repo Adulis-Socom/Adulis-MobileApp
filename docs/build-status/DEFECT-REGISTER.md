@@ -820,3 +820,46 @@ Action:    **Exactly one suite may own a global sweep, and no test asserts a glo
   - `t6-parked-decisions` builds its two OTP challenges directly with `codeHash`, so it needs no budget and purges nothing; the courier-invite budget is purged **scoped to the seller** in both suites that hold one.
   Verified by twelve consecutive full-suite runs, 413/413 each, with every run's output kept.
 Ruling needed: none. The rule is worth carrying: **a test that asserts a number the whole database contributes to is a test about other people's rows.** Assert your own row is gone; assert theirs is not.
+### D-84 - ADU-RUL-02 is named as an installable document and its text was never supplied
+
+Severity:  MINOR (documentation debt; the rulings themselves arrived in full)
+Phase:     T7 - 1
+Source:    WORK ORDER T7 S3 -- "Install first: `ADU-RUL-02...` to `docs/`"; ADU-VAL-01 v1.1 S0.2 quotes the ruling by name
+Found by:  attempting the install
+Effect:    The four Phase 1 rulings (D-66 message anchor, D-57 person row, D-67 partial unique, D-64 residual) and the nullability rule are specified in binding detail in the work order's own text and in ADU-VAL-01 v1.1 -- but the DOCUMENT those rulings live in was not attached, so `docs/` cannot receive it and a future reader who greps for ADU-RUL-02 finds citations with no file, exactly the shape ADU-RUL-01 had before T6 installed the amendment trail.
+Response:  BUILT FROM THE WORK ORDER'S TEXT, install PARKED
+Action:    Every implementation cites "T7 S3.x" beside "ADU-RUL-02" so the authority chain survives the missing file. ADU-VAL-01 v1.1 is installed at docs/registers/ and is GOVERNED by the ASCII gate.
+Ruling needed: supply ADU-RUL-02's text for installation to docs/ -- or rule that T7's S3 text IS the document of record, in which case the citation form "ADU-RUL-02 via T7 S3" becomes permanent.
+
+### D-85 - The slot vocabulary is ruled by nothing, so the anchor's READER is a seam and not a filler
+
+Severity:  MINOR (deliberate under-build; the alternative was invention)
+Phase:     T7 - 1
+Source:    T7 S3.1 -- "slot resolution reads the anchor of the message being answered, not the thread's"; nlu.answer_template.slots text[] (0015:199); ADU-DB-01 v1.12 S17.2 prints the column and no vocabulary
+Found by:  building D-66 and looking for what a slot NAME maps to
+Effect:    No document defines which slot names exist or which product/order fields they draw from -- there is not one seeded template in any migration, and the assistant has always escalated on any template whose slots[] is non-empty. "Reads the anchor of the message" is therefore implemented as the SEAM: the cascade and answerWith now receive the answered message's own anchor (never the thread's -- the thread no longer has one), and the escalate-on-slots branch holds it at the exact point a filler would plug in.
+Response:  SEAM BUILT, FILLER PARKED
+Action:    chat.service.ts threads MessageAnchor from postMessage through cascade into answerWith; the branch comment names this entry. Filling a slot without a ruled vocabulary would answer confidently from an invented mapping -- the precise failure D-66 exists to prevent, one layer down.
+Ruling needed: the slot vocabulary -- names, and the field each draws from the anchored product or order. RULINGS-NEEDED already carries the question as D-39's "what fills a template's slots"; D-66's landing narrows the answer to "the message's anchor" and leaves the vocabulary open.
+
+### D-86 - Nothing forbids rewriting a message's anchor, and the ruling is silent
+
+Severity:  QUESTION
+Phase:     T7 - 1
+Source:    chat.message carries table-level UPDATE for adulis_app (0015:270); T7 S3.1 rules storage, validation and reading, and says nothing about mutability; 0031's conversation-era write-once trigger died with the columns it guarded
+Found by:  porting 0031's inventory and asking what replaces the write-once trigger
+Effect:    No code path UPDATEs chat.message anywhere (verified: the only read_at writers are core.notification's), so the exposure is theoretical today -- but the grant permits it, and the conversation-era anchor earned an explicit immutability trigger for the same shape of risk. An anchor rewritten after the bot answered would falsify the containment record retroactively.
+Response:  NOT BUILT, recorded
+Action:    Building an unasked-for trigger is the "completing the schema" failure mode; the ruling's author decides whether message anchors are set-at-send. The translator's 23001 ladder is substring-keyed, so a future trigger's RAISE text must be unique across it (its ANCHOR_IMMUTABLE predecessor was removed with 0035).
+Ruling needed: is a message's anchor immutable after send? If yes, a BEFORE UPDATE trigger mirroring 0031's, with a fresh message text and a translator branch in the same change.
+
+### D-87 - Three governing-document passages now print the pre-T7 anchor and invite shapes
+
+Severity:  MINOR (documentation debt, deliberately incurred; documents are never edited here)
+Phase:     T7 - 1
+Source:    ADU-API-01 v1.7:43 (change table: POST /v1/conversations "anchored on a product or an order"), :852 (the route row, "anchored on exactly one"), :862 (the G1.10 note); ADU-DB-01 v1.12 S17.1:2210-2214 (the anchor printed on chat.conversation), S6.3a:757 (the total UNIQUE (seller_id, phone))
+Found by:  the T7 survey's adversarial pass, enumerated line by line
+Effect:    A reader implementing from the printed documents rebuilds the conversation anchor and the total invite UNIQUE -- both now wrong. The rulings that supersede them (D-66, D-67 via T7 S3) live in this register and in migrations 0035/0037's headers until v1.13 and an ADU-API-01 reissue land.
+Response:  RECORDED for the reissues
+Action:    v1.13 owes: S17.1 anchor moved to chat.message; S6.3a partial UNIQUE plus the two account FKs; Appendix B rows unchanged (no table count change). ADU-API-01 owes: lines 43/852/862 re-anchored to the messages route.
+Ruling needed: none -- reissue work, listed for the document owner.

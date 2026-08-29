@@ -39,7 +39,10 @@ const GOVERNED = [
   // T5: ADU-CON-02 becomes GOVERNED at v3.1 -- it was supplied ASCII, so it
   // is enforced rather than merely reported as debt.
   'docs/ADU-CON-02_Seller_Console_System_Design_v3_1.md',
-  'docs/registers/ADU-VAL-01_Deferred_Value_Decisions_Register_v1_0.md',
+  // T7: v1.1 supersedes v1.0 and is GOVERNED with real teeth now -- S1.1 is
+  // machine-read into db/checks/fixtures/deferred-values.json, so a corrupted
+  // byte here corrupts a gate's source of truth, not just prose.
+  'docs/registers/ADU-VAL-01_Deferred_Value_Decisions_Register_v1_1.md',
 ];
 
 const scan = (buf) => {

@@ -116,11 +116,15 @@ first team invite fails confusingly.
 uniqueness scope, or no and the contract says {id}.* **If wrong:** every product URL
 changes shape later, and links shared into TikTok break.
 
-**G1.10 — What fills a chatbot template's slots?** — `D-39`. A conversation carries no
-product context, so a slotted template cannot be filled and currently escalates. *Answer
-with: the resolution model (probably a product-anchored conversation).* **If wrong:** the
-chatbot answers a smaller set of questions than it could, silently — containment looks
-worse than it is and the S15.3 improvement loop optimises against the wrong signal.
+**G1.10 -- What fills a chatbot template's slots?** -- `D-39`. NARROWED BY T7 (D-66 via
+ADU-RUL-02): the anchor now rides the MESSAGE, and the cascade already hands the answered
+message's own anchor to the answering branch -- the "product-anchored conversation" half
+of the old answer landed, one noun lower (register D-73's reasoning: a thread is a
+relationship; a question is about a thing). WHAT REMAINS OPEN is the slot VOCABULARY:
+which slot names exist and which product/order field each draws from (register D-85).
+Until that is ruled, a slotted template still escalates -- honestly, holding the right
+anchor at the exact point a filler would plug in. **If wrong:** the chatbot answers a
+smaller set of questions than it could, silently.
 
 **G1.11 — The device retention period, when a device belongs to no market.** — `D-54`.
 Today: the longest `media_retention` in force anywhere. *Answer with: confirm, or give
@@ -148,7 +152,7 @@ reads the document and "fixes" the code.
 | `D-33` | AUTH 4.2 mandates `OTP_SUPERSEDED` | `OTP_EXPIRED`, whose string says "check for a newer code" | ADU-API-01 v1.7 or AUTH withdraws the code |
 | `D-34` | 12.2 lists revoke-others for B S C | CONSOLE only — AUTH 9.1 governs step-up | ADU-API-01 v1.7 |
 | `D-30` | 12.5 says a non-buyer gets 403 | 404 — S19 forbids confirming existence | ADU-API-01 v1.7 |
-| `D-38` | 12.7 has no way to begin a conversation | An additive `POST /v1/conversations` | ADU-API-01 v1.7 |
+| `D-38` | 12.7 has no way to begin a conversation | An additive `POST /v1/conversations` -- anchorless again since T7/D-66 (v1.7:43/852/862 now print the withdrawn anchored shape; register D-87) | ADU-API-01 v1.8 |
 | `D-44` | 12.15's subject kinds vs the frozen enum spell two values differently | Mapped at the edge | Either document, whichever reissues first |
 | `D-51` | S20.2 "reddens /healthz"; S18 makes a 503 there remove the instance | 200 + `status: degraded` | ADU-CON-02 next reissue |
 | `D-27` | The context wrapper sets three settings | Four — a ratified function body reads `adulis.audience` | ADU-CON-02 next reissue |
