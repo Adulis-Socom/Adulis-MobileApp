@@ -1,7 +1,6 @@
 import { Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { randomUUID } from 'node:crypto';
 import { sql, type Transaction } from 'kysely';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -11,7 +10,7 @@ import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 
 /**
- * C6 — billing (ADU-API-01 v1.6 section 12.12, R4).
+ * C6 — billing (ADU-API-01 v1.7 section 12.12, R4).
  *
  * The whole group is CONSOLE-only, and that is enforced BELOW the
  * endpoint: seller.subscription:update carries surfaces = {CONSOLE} in
@@ -20,11 +19,22 @@ import { AdulisException } from '../../common/errors/adulis-exception';
  * external purchase mechanism and the exact thing an App Store reviewer
  * is looking for.
  *
- * Collection is a manual bank transfer behind the provider-agnostic
- * billing.collection_record (S16.7): purchase-intent computes the price
- * from the market's schedule and opens a record; mark-transferred stamps
- * the seller's own assertion; reconciliation is operator work outside
- * this contract.
+ * G1.7 — THE INTENT IS A ROW NOW, AND THIS FILE STOPPED DECIDING THINGS.
+ *
+ * v1.6's version computed the price in JavaScript, inserted a
+ * billing.collection_record directly, and returned. Three consequences,
+ * all of which the ruling names:
+ *
+ *   - every call with a fresh Idempotency-Key opened ANOTHER record, all
+ *     indistinguishable, all owed money against;
+ *   - no path ever wrote reconciled_at, so subscription.collect_reminder
+ *     matched forever and SMSed every seven days in perpetuity;
+ *   - the "intent" existed only in the URL, so nothing carried the tier,
+ *     the term, the quoted rate or a clock.
+ *
+ * All of that now lives in billing.fn_open_purchase_intent and
+ * billing.fn_reconcile_purchase. This controller parses, calls one named
+ * function, and shapes the envelope.
  */
 
 const purchaseIntentBody = z.object({
@@ -65,74 +75,67 @@ export class BillingController {
                s.locked_rate_minor, s.locked_rate_currency
           FROM billing.subscription s
          WHERE s.seller_id = ${sellerId}`.execute(trx);
-      return { subscription: first(r.rows) ?? null };
+
+      // The LIVE intent, if there is one. A seller who opened a quote and
+      // closed the tab has no other way to find out what they were asked to
+      // transfer, and inventing a second intent to find out is exactly the
+      // duplicate the one-open index now forbids. Expiry is read here, not
+      // swept: a row past its 24 hours is simply not live.
+      const i = await sql<Record<string, unknown>>`
+        SELECT pi.id AS intent_id, pi.collection_record_id, pi.tier, pi.term,
+               pi.amount_minor, pi.currency, pi.expires_at,
+               cr.marked_transferred_at
+          FROM billing.purchase_intent pi
+          JOIN billing.subscription s ON s.id = pi.subscription_id
+          JOIN billing.collection_record cr ON cr.id = pi.collection_record_id
+         WHERE s.seller_id = ${sellerId}
+           AND pi.reconciled_at IS NULL AND pi.cancelled_at IS NULL
+           AND pi.expires_at > now()`.execute(trx);
+
+      return { subscription: first(r.rows) ?? null, intent: first(i.rows) ?? null };
     });
   }
 
   @Post('billing/purchase-intent')
-  @ApiOperation({ summary: 'Step-up SUBSCRIPTION_CHANGE; opens a collection record at the scheduled price.' })
+  @ApiOperation({ summary: 'Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE.' })
   async purchaseIntent(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = purchaseIntentBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, async (trx) => {
-      const { accountId, sellerId } = await this.assertPermission(trx, req);
-      await sql`
-        SELECT core.fn_assert_step_up(${body.step_up_challenge_id},
-          ${accountId}, 'SUBSCRIPTION_CHANGE')`.execute(trx);
-
-      const sub = await sql<{ id: string }>`
-        SELECT id FROM billing.subscription
-         WHERE seller_id = ${sellerId}`.execute(trx);
-      const subscription = first(sub.rows);
-      // No subscription row is no purchase anchor: the beta cohort is
-      // provisioned with one, and the self-serve path from nothing is not
-      // written in any document (recorded).
-      if (!subscription) throw new AdulisException('NOT_FOUND');
-
-      const price = await sql<{
-        price_minor: string;
+      // NO assertPermission HERE, and that is not an omission. The named
+      // function's first statement is fn_has_permission and its second is
+      // fn_assert_step_up; calling them twice would make the endpoint the
+      // place the rules live again, and a second call site is a second
+      // place to forget one.
+      const r = await sql<{
+        intent_id: string;
+        collection_record_id: string;
+        amount_minor: string;
         currency: string;
-        prepay_quarterly_discount: string;
-        prepay_annual_discount: string;
+        expires_at: Date;
+        tier: string;
+        term: string;
       }>`
-        SELECT ps.price_minor::text AS price_minor, ps.currency,
-               ps.prepay_quarterly_discount::text AS prepay_quarterly_discount,
-               ps.prepay_annual_discount::text AS prepay_annual_discount
-          FROM billing.price_schedule ps
-          JOIN core.seller s ON s.market_id = ps.market_id
-         WHERE s.id = ${sellerId} AND ps.tier = ${body.tier}::billing.subscription_tier
-           AND ps.effective @> now()`.execute(trx);
-      const schedule = first(price.rows);
-      // A tier with no scheduled price in this market cannot be bought —
-      // fail closed, the ladder precedent.
-      if (!schedule) throw new AdulisException('NOT_FOUND');
+        SELECT * FROM billing.fn_open_purchase_intent(
+          ${req.ctx?.sellerId}, ${req.ctx?.accountId},
+          ${(req.ctx?.audience as string) ?? ''}::core.session_audience,
+          ${body.tier}::billing.subscription_tier,
+          ${body.term}::billing.subscription_term,
+          ${body.step_up_challenge_id})`.execute(trx);
+      const row = first(r.rows);
+      if (!row) throw new AdulisException('INTERNAL');
 
-      const months = body.term === 'ANNUAL' ? 12 : body.term === 'QUARTERLY' ? 3 : 1;
-      const discount =
-        body.term === 'ANNUAL'
-          ? Number(schedule.prepay_annual_discount)
-          : body.term === 'QUARTERLY'
-            ? Number(schedule.prepay_quarterly_discount)
-            : 0;
-      const amountMinor = Math.round(
-        Number(schedule.price_minor) * months * (1 - discount),
-      );
-
-      const id = randomUUID();
-      await sql`
-        INSERT INTO billing.collection_record
-          (id, subscription_id, amount_minor, currency, provider_kind)
-        VALUES (${id}, ${subscription.id}, ${amountMinor}, ${schedule.currency},
-                'BANK_TRANSFER')`.execute(trx);
       return {
-        collection_record_id: id,
-        amount_minor: amountMinor,
-        currency: schedule.currency,
-        reference: `ADU-SUB-${id.slice(0, 8).toUpperCase()}`,
-        tier: body.tier,
-        term: body.term,
+        intent_id: row.intent_id,
+        collection_record_id: row.collection_record_id,
+        amount_minor: Number(row.amount_minor),
+        currency: row.currency,
+        reference: `ADU-SUB-${row.collection_record_id.slice(0, 8).toUpperCase()}`,
+        tier: row.tier,
+        term: row.term,
+        expires_at: row.expires_at,
       };
     });
   }
@@ -147,16 +150,35 @@ export class BillingController {
     const body = markTransferredBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 200, async (trx) => {
       const { sellerId } = await this.assertPermission(trx, req);
+      // THE STATE GUARD v1.6 DID NOT HAVE. The old UPDATE stamped any row
+      // the seller owned, reconciled or not, and coalesce() returned 200 as
+      // if nothing were odd — so a seller could assert a transfer against a
+      // record an operator had already closed, and no surface said so.
       const r = await sql<{ marked_transferred_at: Date }>`
         UPDATE billing.collection_record cr
            SET marked_transferred_at = coalesce(cr.marked_transferred_at, now())
           FROM billing.subscription s
          WHERE cr.id = ${body.collection_record_id}
            AND s.id = cr.subscription_id AND s.seller_id = ${sellerId}
+           AND cr.reconciled_at IS NULL AND cr.voided_at IS NULL
          RETURNING cr.marked_transferred_at`.execute(trx);
       const row = first(r.rows);
-      if (!row) throw new AdulisException('NOT_FOUND');
-      return { marked_transferred_at: row.marked_transferred_at };
+      if (row) return { marked_transferred_at: row.marked_transferred_at };
+
+      // Zero rows is two different facts, and they earn different answers:
+      // a record that is not this seller's must not be confirmed to exist
+      // (404, S19); one that is theirs and closed is a conflict they can
+      // act on.
+      const own = await sql<{ id: string }>`
+        SELECT cr.id FROM billing.collection_record cr
+          JOIN billing.subscription s ON s.id = cr.subscription_id
+         WHERE cr.id = ${body.collection_record_id}
+           AND s.seller_id = ${sellerId}`.execute(trx);
+      if (!first(own.rows)) throw new AdulisException('NOT_FOUND');
+      throw new AdulisException('VALIDATION_FAILED', {
+        status: 409,
+        slots: { reason: 'COLLECTION_RECORD_CLOSED' },
+      });
     });
   }
 }

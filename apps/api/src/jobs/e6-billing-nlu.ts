@@ -55,6 +55,23 @@ export const subscriptionCollectReminder: Job = {
   cadenceNote: 'S24: per schedule. SMS (S16.7)',
   async run(ctx: JobContext): Promise<JobResult> {
     const at = ctx.clock.now();
+
+    // G1.7 -- THE EXIT CONDITION, FIRST. Before this call the loop below
+    // had none: reconciled_at was the only way out and no code wrote it, so
+    // every open record SMSed its seller every seven days forever. Worse,
+    // core.fn_delete_seller_effects cancels a deleted seller's subscription
+    // but holds no grant on collection_record, and core.fn_delete_account
+    // has by then rewritten that account's phone to a synthetic '+999...'
+    // number -- so the terminal state was an SMS provider called every
+    // seven days, in perpetuity, with a fabricated number, for an account
+    // that no longer exists.
+    //
+    // NOT A TWENTY-FIRST JOB. ADU-DB-01 S24's table IS the job set and the
+    // registry asserts exactly its twenty names. The job whose termination
+    // condition was missing is the right owner of it anyway.
+    const closed = await sql<{ n: number }>`
+      SELECT billing.fn_close_stale_collections() AS n`.execute(ctx.db);
+
     // An outstanding collection the seller has not yet said they paid.
     // reminder_sent_at is BOTH the idempotency guard and the record: the
     // compare-and-set on it means a crash after the SMS at worst skips a
@@ -69,6 +86,7 @@ export const subscriptionCollectReminder: Job = {
          AND a.id = s.owner_account_id
          AND cr.marked_transferred_at IS NULL
          AND cr.reconciled_at IS NULL
+         AND cr.voided_at IS NULL
          AND (cr.reminder_sent_at IS NULL
               OR cr.reminder_sent_at < ${at}::timestamptz - interval '7 days')
        RETURNING cr.id, s.owner_account_id, m.default_locale AS locale, a.phone_e164 AS phone`.execute(
@@ -89,7 +107,7 @@ export const subscriptionCollectReminder: Job = {
         ctx.log.error({ msg: 'collection reminder failed', id: row.id, err: String(e) });
       }
     }
-    return { due: due.rows.length, sent };
+    return { closed: Number(closed.rows[0]?.n ?? 0), due: due.rows.length, sent };
   },
 };
 
