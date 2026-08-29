@@ -188,8 +188,10 @@ describe('T6 / G1.2 -- NEW leaves only on tenure AND orders', () => {
     tx(async (c) => {
       // A1.3: "Test that the deferral is real, not just believed." The
       // seller below satisfies every NEW->ESTABLISHED arm many times over
-      // and has counting handoffs; TRUSTED still cannot be reached, because
-      // its own four thresholds are ADU-VAL-01 Group A and NULL.
+      // (completed orders; no counting handoff exists, and none can be
+      // staged while distinct_buyer_* are NULL -- 0013:159); TRUSTED still
+      // cannot be reached, because its own four thresholds are ADU-VAL-01
+      // Group A and NULL.
       const { market, seller, buyer } = await seedMarket(c, '5');
       await enterLadder(c, seller, 4000);
       await completedOrders(c, market, seller, buyer, 500);

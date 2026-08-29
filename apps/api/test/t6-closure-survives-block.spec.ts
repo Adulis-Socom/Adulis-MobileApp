@@ -190,6 +190,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
     await admin.query(`DELETE FROM core."order" WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = $1`, [OWNER]);
     await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 = '+251919960001'`);
+    await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.session WHERE id = $1`, [OWNER_S]);
     await admin.query(`DELETE FROM core.device WHERE id = $1`, [DEVICE]);

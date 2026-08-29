@@ -235,6 +235,8 @@ describe('T5 / G1.1 -- identity verification is operator-only', () => {
         WHERE seller_id IN ('${SELLER_ID}','${AUDIENCE_SELLER}')`,
       `DELETE FROM core.seller_level_state
         WHERE seller_id IN ('${SELLER_ID}','${AUDIENCE_SELLER}')`,
+      `DELETE FROM core.seller_public_stats
+        WHERE seller_id IN ('${SELLER_ID}','${AUDIENCE_SELLER}')`,
       `DELETE FROM core.seller WHERE id IN ('${SELLER_ID}','${AUDIENCE_SELLER}')`,
       `DELETE FROM core.person WHERE id IN ('${SUBJECT_A}','${SUBJECT_B}','${SUBJECT_C}')`,
       `DELETE FROM core.session WHERE account_id = ANY($1::uuid[])`,

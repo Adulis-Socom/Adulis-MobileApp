@@ -307,6 +307,7 @@ describe('C6 — accounts, team, billing, deletion', () => {
       `DELETE FROM core.seller_level_state WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.review WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.media_lifecycle WHERE reason='SELLER_DELETED'`,
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
       `DELETE FROM core.account_recovery_case WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.step_up_challenge WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,

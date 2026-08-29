@@ -97,6 +97,7 @@ describe('T7 Phase 3 -- deferral is a state the schema holds, and every consumer
     await admin.query(`DELETE FROM core.claim WHERE id = $1`, [CLAIM]);
     await admin.query(`DELETE FROM core."order" WHERE id = $1`, [ORDER]);
     await admin.query(`DELETE FROM core.ladder_config WHERE market_id = $1`, [M]);
+    await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.account WHERE market_id = $1`, [M]);
     await admin.query(`DELETE FROM core.market WHERE id = $1`, [M]);
@@ -115,13 +116,16 @@ describe('T7 Phase 3 -- deferral is a state the schema holds, and every consumer
     expect(await level()).toBe('ESTABLISHED');
   });
 
-  it('no evidence, however good, promotes past ESTABLISHED while trusted_* are NULL', async () => {
-    // A counting scanned handoff would need distinct_buyer_* to be set --
-    // themselves NULL, so counts_toward_level stays false at INSERT time
-    // (0013:159) and the TRUSTED evidence count is zero twice over. The
-    // gate itself is a coalesce(AND-chain, false): one NULL threshold
-    // poisons the conjunction. Both mechanisms fail closed; recompute and
-    // look.
+  it('ESTABLISHED holds on recompute while trusted_* are NULL, and no TRUSTED event exists', async () => {
+    // What is ASSERTED here is the closed gate on zero counting evidence:
+    // a recompute with no scans stays ESTABLISHED and mints no TRUSTED
+    // event. A run WITH counting evidence cannot be staged -- while
+    // distinct_buyer_* are NULL, 0013:159 stamps counts_toward_level
+    // false at INSERT -- which is the deferral itself working; note that
+    // this leaves fn_recompute's counting-scan arm (0028:388-392)
+    // exercised nowhere in the tree until those values are ruled. The
+    // gate is a coalesce(AND-chain, false): one NULL threshold poisons
+    // the conjunction.
     await recompute();
     expect(await level()).toBe('ESTABLISHED');
     const events = await admin.query(
@@ -133,10 +137,11 @@ describe('T7 Phase 3 -- deferral is a state the schema holds, and every consumer
   });
 
   it('adverse evidence does not demote while demotion_* are NULL', async () => {
-    // The strongest adverse signal the demotion gate reads is the claim
-    // rate -- give the seller a claim VOLUME without an upheld outcome, and
-    // cancellations. With demotion_window NULL the helpers return NULL and
-    // the OR-gate collapses inside coalesce(..., false).
+    // The adverse signal actually staged is claim VOLUME without an
+    // upheld outcome (one UNDER_REVIEW claim). No cancellation is
+    // inserted: the cancellation-rate leg is exercised only through its
+    // NULL-window collapse -- with demotion_window NULL the helpers
+    // return NULL and the OR-gate collapses inside coalesce(..., false).
     await admin.query(
       `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id,
          trigger, state)

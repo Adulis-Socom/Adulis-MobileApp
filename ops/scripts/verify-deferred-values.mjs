@@ -89,6 +89,16 @@ for (const r of docRows) {
 }
 for (const f of fx) {
   if (!docByKey.has(key(f))) fail(`fixture row ${f.n} (${key(f)}) is absent from S1.1`);
+  // The enforcement bit itself is register-determined, never fixture-determined:
+  // S1.1's note rules rows 1-15 nullable ("Rows 1-14 must all be nullable";
+  // row 15 already is) and row 16 "not a nullability question" (S1.4 -- the
+  // deferral is the vector DIMENSION). A silent flip of nullable_required in
+  // the fixture must be a red gate, not a silently skipped assertion.
+  const expected = f.n !== 16;
+  if (f.nullable_required !== expected) {
+    fail(`fixture row ${f.n} (${key(f)}): nullable_required=${f.nullable_required}, ` +
+      `but S1.1's note rules ${expected} -- the register wins`);
+  }
 }
 if (failures === 0) pass(`fixture and S1.1 agree on all ${fx.length} rows, both directions`);
 

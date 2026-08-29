@@ -184,6 +184,10 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
                         WHERE subscription_id = ANY($1::uuid[])`, [[SUB, SUB2]]);
     await admin.query(`DELETE FROM billing.subscription WHERE id = ANY($1::uuid[])`, [[SUB, SUB2]]);
     await admin.query(`DELETE FROM billing.price_schedule WHERE market_id = $1`, [M]);
+    await admin.query(
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id = $1)`,
+      [M],
+    );
     await admin.query(`DELETE FROM core.seller WHERE market_id = $1`, [M]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = ANY($1::uuid[])`, [
       [OWNER, OWNER2],

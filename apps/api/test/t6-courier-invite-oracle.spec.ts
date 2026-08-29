@@ -136,6 +136,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     await admin.query(`DELETE FROM core.idempotency_record WHERE actor_id = $1`, [OWNER]);
     await admin.query(`DELETE FROM core.seller_courier_invite WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller_courier WHERE seller_id = $1`, [SELLER]);
+    await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.session WHERE id = $1`, [OWNER_S]);
     await admin.query(`DELETE FROM core.device WHERE id = $1`, [DEVICE]);
