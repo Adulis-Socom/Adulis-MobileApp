@@ -17,7 +17,7 @@
  * Retry-After slot), TRANSPORT_ERROR (request id shown, selectable).
  */
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError, deviceId } from '../api/client';
 import { useIdempotencyKey } from '../lib/idempotency';
@@ -31,7 +31,8 @@ const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 
 export function SignIn() {
   const nav = useNavigate();
-  const { signedIn } = useSession();
+  const location = useLocation();
+  const { refresh } = useSession();
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('+251');
   const [remember, setRemember] = useState(false);
@@ -65,11 +66,30 @@ export function SignIn() {
       });
       setStep('code');
       setResendAt(Date.now() + 30_000);
+      // The intent is COMPLETE. Holding the key past it made the next
+      // request a replay: the server returned the stored 202 and dispatched
+      // no SMS, while this screen advanced to the code step and started a
+      // countdown for a code nobody sent.
+      requestKey.remint();
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        setProblem(e);
+        armResend(e);
+      }
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * The server's resend ladder is 30s, then 60s, then a 900s block
+   * (otp.service.ts). A flat client-side 30s re-enables the button while the
+   * server still refuses, so the seller's next tap is a guaranteed 429. When
+   * the server tells us how long it wants, that is the number we honour.
+   */
+  const armResend = (e: ApiError) => {
+    const secs = Number(e.problem.slots?.['retry_after_seconds']);
+    if (Number.isFinite(secs) && secs > 0) setResendAt(Date.now() + secs * 1000);
   };
 
   const resend = async () => {
@@ -79,7 +99,10 @@ export function SignIn() {
       await api('/auth/otp/resend', { method: 'POST', body: { phone, purpose: 'SIGN_IN' } });
       setResendAt(Date.now() + 30_000);
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        setProblem(e);
+        armResend(e);
+      }
     } finally {
       setBusy(false);
     }
@@ -105,8 +128,14 @@ export function SignIn() {
           remember_device: remember,
         },
       });
-      signedIn({ accountId: r.account_id, expiresAt: r.expires_at, remembered: remember });
-      nav('/', { replace: true });
+      void r;
+      // Read the session back from the server rather than believing the
+      // checkbox: remembered-ness is decided by the device cookie the server
+      // received, and the verify response carries neither that nor the
+      // session id that signing out needs.
+      await refresh();
+      const from = (location.state as { from?: string } | null)?.from;
+      nav(from && from !== '/sign-in' ? from : '/', { replace: true });
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -121,7 +150,7 @@ export function SignIn() {
     <main className="signin">
       <h1>{en['app.title']}</h1>
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
-      {summary.length > 0 ? <ValidationSummary errors={summary} /> : null}
+      {summary.length > 0 ? <ValidationSummary errors={summary} idPrefix="signin" /> : null}
 
       {step === 'phone' ? (
         <form
@@ -210,6 +239,12 @@ export function SignIn() {
               setStep('phone');
               setCode('');
               setProblem(null);
+              // A different number is a DIFFERENT request. Reusing the key
+              // made the server compare body hashes and answer 409
+              // IDEMPOTENCY_KEY_REUSED -- "This retry key was already used
+              // for a different request" -- on a control the seller was
+              // invited to press.
+              requestKey.remint();
             }}
           >
             {en['console.signin.change_number']}

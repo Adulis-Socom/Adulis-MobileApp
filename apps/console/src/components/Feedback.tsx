@@ -41,10 +41,18 @@ export function ProblemBanner({ problem }: { problem: AdulisProblem }) {
   );
 }
 
+/**
+ * S15 wants "a summary of links that focus each invalid field". The link
+ * target therefore belongs to the SCREEN, not to this component: it was
+ * hard-coded to `#signin-*`, so every screen after the first got a list of
+ * dead anchors.
+ */
 export function ValidationSummary({
   errors,
+  idPrefix,
 }: {
   errors: ReadonlyArray<{ field: string; message: string }>;
+  idPrefix: string;
 }) {
   return (
     <div role="alert" className="validation-summary">
@@ -52,7 +60,7 @@ export function ValidationSummary({
       <ul>
         {errors.map((e) => (
           <li key={e.field}>
-            <a href={`#signin-${e.field}`}>{e.message}</a>
+            <a href={`#${idPrefix}-${e.field}`}>{e.message}</a>
           </li>
         ))}
       </ul>

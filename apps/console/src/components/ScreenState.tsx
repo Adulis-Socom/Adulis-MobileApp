@@ -18,6 +18,8 @@ interface Props {
   readonly problem?: AdulisProblem;
   readonly emptyText?: string;
   readonly validationErrors?: ReadonlyArray<{ field: string; message: string }>;
+  /** Id prefix the screen gives its fields, so the summary can link to them. */
+  readonly fieldIdPrefix?: string;
   readonly blockedItem?: { text: string; action: ReactNode };
   readonly entitlementUnlock?: string;
   readonly onRetry?: () => void;
@@ -27,13 +29,18 @@ export function ScreenState(p: Props) {
   switch (p.state) {
     case 'LOADING':
       // A skeleton matching the final layout's shape -- never a spinner on
-      // a blank page (S3). aria-hidden: the loading state is announced by
-      // the busy region, not read line by line.
+      // a blank page (S3). The bars themselves are decorative; the busy
+      // region around them is what an assistive technology announces, and
+      // it has to actually exist -- this comment used to cite a region no
+      // file in the console defined.
       return (
-        <div className="skeleton" aria-hidden="true" data-state="LOADING">
-          <div className="skeleton-row" />
-          <div className="skeleton-row" />
-          <div className="skeleton-row short" />
+        <div aria-busy="true" aria-live="polite" data-state="LOADING">
+          <span className="visually-hidden">{en['console.a11y.loading']}</span>
+          <div className="skeleton" aria-hidden="true">
+            <div className="skeleton-row" />
+            <div className="skeleton-row" />
+            <div className="skeleton-row short" />
+          </div>
         </div>
       );
     case 'EMPTY':
@@ -74,7 +81,9 @@ export function ScreenState(p: Props) {
     case 'CONFLICT':
       return p.problem ? <ProblemBanner problem={p.problem} /> : null;
     case 'VALIDATION':
-      return p.validationErrors ? <ValidationSummary errors={p.validationErrors} /> : null;
+      return p.validationErrors ? (
+        <ValidationSummary errors={p.validationErrors} idPrefix={p.fieldIdPrefix ?? 'field'} />
+      ) : null;
     case 'TERMINAL':
       return (
         <div data-state="TERMINAL">
@@ -86,9 +95,13 @@ export function ScreenState(p: Props) {
       return (
         <div data-state="TRANSPORT_ERROR">
           {p.problem ? <ProblemBanner problem={p.problem} /> : null}
-          <button type="button" onClick={p.onRetry}>
-            {en['common.retry']}
-          </button>
+          {/* The envelope says whether a retry can help; offering the button
+              regardless teaches the seller that it does not work. */}
+          {p.onRetry && (p.problem?.retryable ?? true) ? (
+            <button type="button" onClick={p.onRetry}>
+              {en['common.retry']}
+            </button>
+          ) : null}
         </div>
       );
     case 'UPGRADE_REQUIRED':

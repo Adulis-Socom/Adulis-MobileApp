@@ -22,6 +22,13 @@ if (!CONNECTION) {
   console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: docker compose up -d && cp .env.example .env');
   process.exit(2);
 }
+// This script writes a market and an account that can receive a code. The
+// fake adapters refuse to construct in production; this had no equivalent
+// refusal, so it inherits the same one.
+if (process.env.NODE_ENV === 'production') {
+  console.error('FAIL  refusing to seed with NODE_ENV=production. This script writes a live market and a test account.');
+  process.exit(2);
+}
 
 const M = '5eed0000-0000-4000-8000-000000000001';
 const ACCOUNT = '5eed0000-0000-4000-8000-000000000002';
@@ -37,10 +44,22 @@ try {
   await client.query(
     `INSERT INTO core.market (id, code, display_name, phase, display_currency,
                               display_timezone, default_locale, is_live)
-     VALUES ($1,'SEED','Ethiopia (seed)','PHASE_1','ETB','Africa/Addis_Ababa','en',true)
+     VALUES ($1,'SEED','Ethiopia (seed)','PHASE_1','ETB','Africa/Addis_Ababa','en',false)
      ON CONFLICT (id) DO NOTHING`,
     [M],
   );
+  // is_live = FALSE, deliberately, and re-asserted here so a database seeded
+  // by an earlier version of this script is corrected by re-running it.
+  //
+  // Identity creation resolves "the market" with `SELECT id FROM core.market
+  // WHERE is_live LIMIT 1` -- no ORDER BY, and no uniqueness behind it
+  // (register D-104). A second live market makes that lookup arbitrary, and
+  // the c6 suite's new-account tests then land their accounts in THIS market,
+  // where c6's market-scoped teardown cannot see them -- so the next run of
+  // c6 gets a 200 where a 400 belongs. The seeded account already exists, and
+  // both live-market lookups are fallbacks used only when a phone has no
+  // account, so the console dev loop never needed this market to be live.
+  await client.query(`UPDATE core.market SET is_live = false WHERE id = $1`, [M]);
   await client.query(
     `INSERT INTO core.timing_config (id, market_id, reservation_window,
        payment_confirmation_window, fulfilment_window, offline_sync_horizon,
@@ -67,7 +86,8 @@ try {
   // ADU-VAL-01 S2's SET values only; every OPEN column stays NULL -- which
   // is the whole point of ADU-RUL-02, and this seed is the first real
   // consumer of it: before 0039 this INSERT was impossible to write
-  // without inventing eight numbers (D-61).
+  // without inventing the ten deferred numbers (D-90 corrects D-61's count of
+// eight; 0039 drops NOT NULL on exactly ten).
   await client.query(
     `INSERT INTO core.ladder_config (id, market_id,
        new_to_established_min_tenure, new_to_established_min_orders,

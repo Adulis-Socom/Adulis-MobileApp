@@ -12,7 +12,7 @@
  * carries it as a body parameter on the protected call. This modal never
  * performs the protected action itself.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { en, type MessageKey } from '@adulis/locale';
 import { api, ApiError } from '../api/client';
 import { mintKey } from '../lib/idempotency';
@@ -41,6 +41,16 @@ interface Props {
 export function StepUpModal({ action, targetRef, onSatisfied, onCancel }: Props) {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const codeRef = useRef<HTMLInputElement | null>(null);
+
+  // Focus moves INTO the dialog when it opens, and back to whatever opened it
+  // when it closes -- otherwise the keyboard is left behind the modal.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    codeRef.current?.focus();
+    return () => opener?.focus();
+  }, []);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   // Minted once per modal mount (S7) -- retrying the request re-uses it,
@@ -86,8 +96,41 @@ export function StepUpModal({ action, targetRef, onSatisfied, onCancel }: Props)
   };
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <div role="dialog" aria-modal="true" aria-labelledby="stepup-title" className="modal">
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onKeyDown={(e) => {
+        // aria-modal is an announcement, not a behaviour. Without these the
+        // dialog guarding a payout change could be tabbed straight out of,
+        // and Escape did nothing.
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onCancel();
+          return;
+        }
+        if (e.key !== 'Tab' || !dialogRef.current) return;
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stepup-title"
+        className="modal"
+      >
         <h2 id="stepup-title">{en[promptKey]}</h2>
         {problem ? <ProblemBanner problem={problem.problem} /> : null}
         <form
@@ -98,6 +141,7 @@ export function StepUpModal({ action, targetRef, onSatisfied, onCancel }: Props)
         >
           <label htmlFor="stepup-code">{en['console.stepup.code_label']}</label>
           <input
+            ref={codeRef}
             id="stepup-code"
             inputMode="numeric"
             autoComplete="one-time-code"

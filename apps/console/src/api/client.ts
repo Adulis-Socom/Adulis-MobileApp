@@ -17,7 +17,35 @@
 import { resolveApiBaseUrl } from '@adulis/api-client';
 import type { AdulisProblem } from '../lib/states';
 
-const base = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+/**
+ * The base URL is resolved on FIRST REQUEST, never at module scope. It used
+ * to be a module-level const, and a build without VITE_API_BASE_URL therefore
+ * threw during import -- before createRoot, so the page was blank and no
+ * error boundary could exist yet. A misconfigured deployment must fail as a
+ * screen the twelve-state vocabulary can render, not as a white page.
+ */
+let baseMemo: string | null = null;
+function apiBase(): string {
+  if (baseMemo === null) baseMemo = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+  return baseMemo;
+}
+
+/**
+ * The server's idle clock runs from the last REQUEST (session.service.ts
+ * touches last_activity_at only inside authenticate()). The client therefore
+ * measures the same thing the server does; stamping this on pointer or key
+ * activity would let the warning drift hours past the real expiry.
+ */
+export const requestClock = { last: Date.now() };
+
+/**
+ * A 401 means the session is gone whatever any local timer believed. The
+ * provider registers itself here so one handler covers every call site.
+ */
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
+}
 
 /**
  * The device identity, minted per app load. A web console has nowhere
@@ -55,9 +83,25 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   if (opts.sellerId) headers['X-Adulis-Seller'] = opts.sellerId;
   if (opts.locale) headers['Accept-Language'] = opts.locale;
 
+  let root: string;
+  try {
+    root = apiBase();
+  } catch (e) {
+    // Misconfiguration, not a network fault -- but it must still arrive as
+    // the one error shape every screen knows how to render.
+    throw new ApiError({
+      type: 'about:blank',
+      title_key: 'error.request.internal',
+      status: 0,
+      code: 'CONFIG',
+      request_id: '',
+      retryable: false,
+    });
+  }
+
   let res: Response;
   try {
-    res = await fetch(`${base}/v1${path}`, {
+    res = await fetch(`${root}/v1${path}`, {
       method: opts.method ?? 'GET',
       credentials: 'include',
       headers,
@@ -76,9 +120,30 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
       retryable: true,
     });
   }
+  // The request reached the server and came back: that is what the server's
+  // idle clock counts, whatever the status.
+  requestClock.last = Date.now();
+  if (res.status === 401 && onUnauthorized) onUnauthorized();
   if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  const parsed: unknown = text ? JSON.parse(text) : {};
+
+  let text: string;
+  let parsed: unknown;
+  try {
+    text = await res.text();
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    // A proxy's HTML error page, a truncated body: previously a SyntaxError
+    // that no `instanceof ApiError` catch site handled, so the button just
+    // stopped spinning and nothing rendered.
+    throw new ApiError({
+      type: 'about:blank',
+      title_key: 'error.request.internal',
+      status: res.status,
+      code: 'MALFORMED_RESPONSE',
+      request_id: res.headers.get('X-Request-Id') ?? '',
+      retryable: res.status >= 500,
+    });
+  }
   if (!res.ok) throw new ApiError(parsed as AdulisProblem);
   return parsed as T;
 }

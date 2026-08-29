@@ -32,7 +32,10 @@ export const router = createBrowserRouter([
           { path: 'products', element: <Placeholder screen="SC-07" /> },
           { path: 'inbox', element: <Placeholder screen="SC-20" /> },
           { path: 'more', element: <Placeholder screen="More" /> },
-          { path: '*', element: <Navigate to="." replace /> },
+          // `to="."` resolves to the CURRENT path inside a splat, so this
+          // rendered nothing into the shell's main. The seller home is the
+          // honest destination for an unknown child route.
+          { path: '*', element: <Navigate to=".." relative="path" replace /> },
         ],
       },
       { path: '/courier', element: <Placeholder screen="SC-C1" /> },

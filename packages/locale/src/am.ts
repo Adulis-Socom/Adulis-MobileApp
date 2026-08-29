@@ -143,6 +143,7 @@ export const am: Catalogue = {
   // ---- Seller console (T7 Phase 5) -- MACHINE-TRANSLATION PLACEHOLDERS.
   // Every key here is listed in packages/locale/MT-KEYS.md; AM_ENABLED
   // stays off until the human pass replaces them (T7 S7.4).
+  'console.a11y.loading': '\u12a5\u12eb\u1320\u1290 \u1290\u12cd', // MT
   'console.a11y.skip_to_content': 'ወደ ይዘቱ ዝለል',
   'console.a11y.primary_nav': 'ዋና ማውጫ',
   'console.nav.home': 'መነሻ',
@@ -192,7 +193,7 @@ export const am: Catalogue = {
   'console.states.upgrade': 'አዲስ የመተግበሪያ ስሪት ያስፈልጋል።',
   'console.states.upgrade_reload': 'እንደገና ጫን',
   'console.chooser.title': 'መደብር ይምረጡ',
-  'console.chooser.gap': 'መደብሮችዎን የሚዘረዝር የውል ነጥብ ገና የለም (መዝገብ D-96)፤ የተሰጠዎትን የመደብር መለያ ይለጥፉ።',
+  'console.chooser.gap': 'መደብሮችዎን የሚዘረዝር የውል ነጥብ ገና የለም (መዝገብ D-97)፤ የተሰጠዎትን የመደብር መለያ ይለጥፉ።',
   'console.chooser.id_label': 'የመደብር መለያ',
   'console.chooser.open_button': 'መደብር ክፈት',
   'console.demo.title': 'አሥራ ሁለቱ የማያ ገጽ ሁኔታዎች',

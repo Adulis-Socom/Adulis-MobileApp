@@ -50,16 +50,33 @@ export interface AdulisProblem {
  * NO_PERMISSION is usually the ABSENCE of a control, decided from
  * allowed_actions, not from an error).
  *
- * NOTE on 429: the state vocabulary defines CONFLICT as "409 from the API",
- * and SC-00 maps rate limiting to CONFLICT ("shows when they may retry",
- * S6). A 429 is therefore rendered through CONFLICT deliberately -- the
- * closed set has no RATE_LIMITED state, and inventing one is exactly what
- * S3 forbids. Recorded in the T7 report as a vocabulary tension.
+ * THREE STATUSES HAVE NO STATE OF THEIR OWN, and each is a real tension
+ * with the closed set rather than a gap in this function (all three are
+ * recorded in the T7 report):
+ *   429 -> CONFLICT. S3 defines CONFLICT as "409 from the API", but SC-00
+ *          maps rate limiting to CONFLICT ("shows when they may retry", S6),
+ *          and inventing RATE_LIMITED is what S3 forbids.
+ *   404 -> EMPTY. "Requested and there is nothing there" is what EMPTY says
+ *          to a person. Routing it to TRANSPORT_ERROR (as this function once
+ *          did) offered a Retry button for a thing that will never appear.
+ *   403 STEP_UP_REQUIRED is NOT a screen state at all -- it is a modal over
+ *          the screen that asked. Callers must intercept it with
+ *          isStepUpRequired() BEFORE consulting this mapper; if it reaches
+ *          here it degrades to NO_PERMISSION, which renders nothing, which
+ *          is wrong but safe.
+ *
+ * 401 keeps TRANSPORT_ERROR because the screen is about to be replaced: the
+ * api client signs the session out globally on any 401.
  */
+export function isStepUpRequired(p: AdulisProblem): boolean {
+  return p.status === 403 && p.code === 'STEP_UP_REQUIRED';
+}
+
 export function stateFromProblem(p: AdulisProblem): UiState {
   if (p.code === 'CLIENT_UPGRADE_REQUIRED') return 'UPGRADE_REQUIRED';
   if (p.status === 400 || p.status === 422) return 'VALIDATION';
   if (p.status === 409 || p.status === 429) return 'CONFLICT';
-  if (p.status >= 500) return 'TRANSPORT_ERROR';
+  if (p.status === 403) return 'NO_PERMISSION';
+  if (p.status === 404) return 'EMPTY';
   return 'TRANSPORT_ERROR';
 }

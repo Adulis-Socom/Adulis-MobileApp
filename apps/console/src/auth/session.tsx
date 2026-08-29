@@ -19,7 +19,8 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api, ApiError } from '../api/client';
+import type { AdulisProblem } from '../lib/states';
+import { api, ApiError, requestClock, setUnauthorizedHandler } from '../api/client';
 
 /** ADU-VAL-01 S3 defaults; D-96 owes the real per-market values a field. */
 const IDLE_MS_UNREMEMBERED = 30 * 60 * 1000;
@@ -27,8 +28,15 @@ const IDLE_MS_REMEMBERED = 8 * 60 * 60 * 1000;
 const WARN_BEFORE_MS = 5 * 60 * 1000;
 
 export interface SessionInfo {
-  readonly accountId: string;
+  /** The current session's id -- the only thing that can sign it out. */
+  readonly id: string;
   readonly expiresAt: string;
+  /**
+   * SERVER TRUTH, never the sign-in checkbox. The server decides
+   * remembered-ness from the __Host-adulis_device cookie it received, not
+   * from the remember_device field it was sent, and the two disagree
+   * whenever a device cookie is already present.
+   */
   readonly remembered: boolean;
 }
 
@@ -44,8 +52,13 @@ interface SessionContextValue {
   readonly session: SessionInfo | null;
   readonly booting: boolean;
   readonly idleWarningAt: number | null;
+  /** Set when the boot probe failed for a reason that is NOT "signed out". */
+  readonly bootProblem: AdulisProblem | null;
+  /** Re-run the boot probe; true if the server reports a current session. */
+  refresh(): Promise<boolean>;
   signedIn(s: SessionInfo): void;
   signedOut(): void;
+  signOut(): Promise<void>;
   touch(): void;
 }
 
@@ -55,7 +68,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [booting, setBooting] = useState(true);
   const [idleWarningAt, setIdleWarningAt] = useState<number | null>(null);
+  const [bootProblem, setBootProblem] = useState<AdulisProblem | null>(null);
   const lastActivity = useRef<number>(Date.now());
+
+  // One 401 handler for every call site: the session is gone, and no local
+  // timer's opinion outranks the server saying so.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setSession(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,15 +86,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const current = r.data.find((s) => s.current);
         if (!cancelled && current) {
           setSession({
-            accountId: '',
+            id: current.id,
             expiresAt: current.expires_at,
             remembered: current.remembered,
           });
         }
       } catch (e) {
-        // 401 = signed out; anything else also lands on the sign-in screen,
-        // which owns the error presentation.
-        void e;
+        // A 401 IS the answer: signed out, no problem to report. Anything
+        // else -- 500, a dropped connection -- must not masquerade as one,
+        // so it is kept and the sign-in screen renders it. Discarding it
+        // made a Wi-Fi blip indistinguishable from an expired session.
+        if (!cancelled && e instanceof ApiError && e.problem.status !== 401) {
+          setBootProblem(e.problem);
+        }
       } finally {
         if (!cancelled) setBooting(false);
       }
@@ -83,33 +108,45 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const refresh = useCallback(async (): Promise<boolean> => {
+    const r = await api<{ data: SessionRow[] }>('/auth/sessions');
+    const current = r.data.find((s) => s.current);
+    if (!current) return false;
+    setSession({
+      id: current.id,
+      expiresAt: current.expires_at,
+      remembered: current.remembered,
+    });
+    setIdleWarningAt(null);
+    return true;
+  }, []);
+
   const touch = useCallback(() => {
     lastActivity.current = Date.now();
     setIdleWarningAt(null);
   }, []);
 
-  // The warning clock. Driven from USER ACTIVITY (the server's idle clock
-  // runs from the last REQUEST; a fully quiet client makes none, so local
-  // activity is the honest proxy for "about to go idle").
+  // The warning clock, measured against the SAME event the server measures:
+  // the last request. It used to reset on pointerdown/keydown, which meant a
+  // seller who typed for an hour without triggering a request pushed the
+  // warning far past the moment the server actually expired the session --
+  // an interactive shell over a session that was already dead.
   useEffect(() => {
     if (!session) return undefined;
     const idleMs = session.remembered ? IDLE_MS_REMEMBERED : IDLE_MS_UNREMEMBERED;
-    const t = window.setInterval(() => {
-      const idleFor = Date.now() - lastActivity.current;
-      if (idleFor >= idleMs - WARN_BEFORE_MS) {
-        setIdleWarningAt(lastActivity.current + idleMs);
-      }
-    }, 15_000);
-    const onActivity = () => {
-      lastActivity.current = Date.now();
+    const evaluate = () => {
+      const idleFor = Date.now() - Math.max(lastActivity.current, requestClock.last);
+      // Both directions: it must also CLEAR when a request has restarted the
+      // clock, or the banner sticks forever naming a time long past.
+      setIdleWarningAt(
+        idleFor >= idleMs - WARN_BEFORE_MS
+          ? Math.max(lastActivity.current, requestClock.last) + idleMs
+          : null,
+      );
     };
-    window.addEventListener('pointerdown', onActivity);
-    window.addEventListener('keydown', onActivity);
-    return () => {
-      window.clearInterval(t);
-      window.removeEventListener('pointerdown', onActivity);
-      window.removeEventListener('keydown', onActivity);
-    };
+    evaluate();
+    const t = window.setInterval(evaluate, 15_000);
+    return () => window.clearInterval(t);
   }, [session]);
 
   const value = useMemo<SessionContextValue>(
@@ -123,9 +160,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setSession(s);
       },
       signedOut: () => setSession(null),
+      signOut: async () => {
+        // Revoke server-side, then drop local state whatever happened: a
+        // failed revoke must not leave the seller looking signed in.
+        try {
+          if (session) await api<void>(`/auth/sessions/${session.id}`, { method: 'DELETE' });
+        } finally {
+          setSession(null);
+          setIdleWarningAt(null);
+        }
+      },
       touch,
+      bootProblem,
+      refresh,
     }),
-    [session, booting, idleWarningAt, touch],
+    [session, booting, idleWarningAt, bootProblem, touch, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -136,11 +185,12 @@ export function useSession(): SessionContextValue {
   return v;
 }
 
-/** Keep the session warm: any successful API call counts as activity server-side. */
+/**
+ * Keep the session warm: any successful API call counts as activity
+ * server-side. EVERY failure rethrows. Swallowing non-401 errors here made
+ * "Stay signed in" report success on a request the server never saw -- the
+ * seller was told they were safe while the session idled out underneath.
+ */
 export async function keepAlive(): Promise<void> {
-  try {
-    await api<{ data: SessionRow[] }>('/auth/sessions');
-  } catch (e) {
-    if (e instanceof ApiError && e.problem.status === 401) throw e;
-  }
+  await api<{ data: SessionRow[] }>('/auth/sessions');
 }

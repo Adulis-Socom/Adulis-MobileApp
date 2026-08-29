@@ -16,6 +16,16 @@ import react from '@vitejs/plugin-react';
  * than silently reloading under a seller mid-payout-change (section 3.11).
  */
 export default defineConfig({
+  /**
+   * envDir is deliberately NOT pointed at the workspace root. Doing so makes
+   * the console's build read the root `.env`, which carries
+   * NODE_ENV=development -- and Vite then selects React's DEVELOPMENT build,
+   * doubling the bundle and shipping development warnings to sellers. That
+   * is the hazard `.env.example` warns about in as many words, and gate 18
+   * exists to catch it. VITE_API_BASE_URL reaches Vite from the SHELL
+   * instead (Vite reads VITE_-prefixed vars out of process.env), which is
+   * what `apps/console/CLAUDE.md`'s recipe loads.
+   */
   plugins: [react()],
   build: {
     outDir: 'dist',

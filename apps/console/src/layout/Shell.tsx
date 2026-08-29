@@ -16,6 +16,7 @@
 import { NavLink, Outlet, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { IdleWarning } from '../auth/IdleWarning';
+import { useSession } from '../auth/session';
 
 const NAV = [
   { key: 'home', to: '', label: en['console.nav.home'], end: true },
@@ -27,6 +28,7 @@ const NAV = [
 
 export function Shell() {
   const { sellerId } = useParams();
+  const { signOut } = useSession();
   return (
     <div className="shell">
       <a className="skip-link" href="#main">
@@ -35,14 +37,17 @@ export function Shell() {
       <header className="topbar">
         <span className="store-name">{en['console.shell.store']}</span>
         {/* SellerSwitcher: only with >1 seller; the sellers-list contract
-            gap (D-95) means it cannot render yet. */}
+            gap (D-97) means it cannot render yet. */}
         {/* SC-26's unread count arrives with its stage; the control exists
             so the top bar's three regions are real from C-1. */}
         <button type="button" className="bell" aria-label={en['console.shell.notifications']}>
           {'\u2022'}
         </button>
-        <button type="button" aria-label={en['console.shell.account']}>
-          {en['console.shell.account']}
+        {/* Sign-out was reachable from nowhere: this control had no handler,
+            `common.signOut` had no render site, and a 401 left the shell up.
+            A console holding a seller's money cannot lack an exit. */}
+        <button type="button" onClick={() => void signOut()}>
+          {en['common.signOut']}
         </button>
       </header>
       <nav className="sidenav" aria-label={en['console.a11y.primary_nav']}>

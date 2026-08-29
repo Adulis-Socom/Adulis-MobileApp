@@ -160,6 +160,7 @@ export const en = {
   // lands in am.ts in the same change or the build fails -- which is the
   // design (root CLAUDE.md, the three seams).
   'console.a11y.skip_to_content': 'Skip to content',
+  'console.a11y.loading': 'Loading',
   'console.a11y.primary_nav': 'Primary',
   'console.nav.home': 'Home',
   'console.nav.orders': 'Orders',
