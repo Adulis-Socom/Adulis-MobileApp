@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Kysely, Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import type { Response } from 'express';
 import { APP_DATABASE } from './database.module';
 import type { Database } from './database.types';
-import { withRequestContext } from './request-context';
+import { withRequestContext, type RequestContext } from './request-context';
 import type { LocalizedRequest } from '../http/locale.middleware';
 import { AdulisException } from '../errors/adulis-exception';
 import {
@@ -27,6 +27,9 @@ import {
  *    the codebase touches set_config;
  *  - a state-changing POST cannot forget its idempotency record, because
  *    the method that gives it a transaction is the method that writes one.
+ *
+ * G1.6 adds a third: a DUE OWNERSHIP TRANSFER ACTIVATES ON THE NEXT REQUEST
+ * TO THAT STORE, whoever makes it. See `activateDueOwnership` below.
  */
 
 @Injectable()
@@ -36,13 +39,81 @@ export class HandlerTransaction {
     private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * G1.6 / AMENDMENT A1.1 — a due ownership transfer activates HERE, at the
+   * top of every seller-scoped transaction, before the handler runs.
+   *
+   * A1.1 requires that "a live session held by the outgoing owner across the
+   * activation boundary must lose those capabilities on its next request,
+   * with no re-authentication." That is only true if something activates on
+   * that request. The payout precedent (`core.fn_activate_due_payout`, 0022)
+   * is lazy on GET /v1/seller/payout, which would leave the outgoing owner
+   * as Owner indefinitely if nobody happened to read the transfer — and the
+   * S24 job set is closed at twenty names, so a sweeper is not available
+   * either.
+   *
+   * This is the one place every seller-scoped handler passes through, and it
+   * is already inside the transaction, so the cost is one statement rather
+   * than a round trip. In the common case it is a single lookup on a partial
+   * index over an almost-always-empty table.
+   *
+   * `fn_activate_due_ownership_transfer` NEVER RAISES for an ordinary
+   * outcome — a blocked transfer cancels itself and returns false — because
+   * a raise here would 500 every request to that store.
+   */
+  private async activateDueOwnership(
+    trx: Transaction<Database>,
+    sellerId: string | null,
+  ): Promise<void> {
+    if (!sellerId) return;
+    await sql`SELECT core.fn_activate_due_ownership_transfer(${sellerId})`.execute(trx);
+  }
+
+  /**
+   * ...AND AGAIN, ON ITS OWN, WHEN THE HANDLER FAILED.
+   *
+   * Found by A1.1's own test, which is why A1.1 asks for it. The outgoing
+   * owner's next request activates the transfer and is THEN judged by what
+   * the activation did — so it raises U0002 and 404s, correctly — and the
+   * raise rolls the transaction back, taking the activation with it. The
+   * store would never move: every one of that owner's requests would 404
+   * while `owner_account_id` stayed exactly where it was, and the
+   * notifications would never send.
+   *
+   * A rollback-safe activation cannot live in the handler's transaction, and
+   * a second transaction on every request is a cost paid for a case that
+   * almost never happens. So: in the transaction while it succeeds — free —
+   * and once more on its own when it did not.
+   */
+  private async activateDueOwnershipAfterFailure(ctx: RequestContext): Promise<void> {
+    if (!ctx.sellerId) return;
+    const sellerId = ctx.sellerId;
+    try {
+      await withRequestContext(this.db, ctx, async (trx) => {
+        await sql`SELECT core.fn_activate_due_ownership_transfer(${sellerId})`.execute(trx);
+      });
+    } catch {
+      // Never mask the handler's own error with this one. The function does
+      // not raise for an ordinary outcome; if it raised here, the next
+      // request tries again.
+    }
+  }
+
   /** A read, or a naturally idempotent PATCH/DELETE (section 8). */
   async run<T>(
     req: LocalizedRequest,
     fn: (trx: Transaction<Database>) => Promise<T>,
   ): Promise<T> {
     const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
-    return withRequestContext(this.db, ctx, fn);
+    try {
+      return await withRequestContext(this.db, ctx, async (trx) => {
+        await this.activateDueOwnership(trx, ctx.sellerId);
+        return fn(trx);
+      });
+    } catch (e) {
+      await this.activateDueOwnershipAfterFailure(ctx);
+      throw e;
+    }
   }
 
   /**
@@ -78,6 +149,7 @@ export class HandlerTransaction {
     const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
     try {
       const result = await withRequestContext(this.db, ctx, async (trx) => {
+        await this.activateDueOwnership(trx, ctx.sellerId);
         const body = await fn(trx);
         await this.idempotency.record(trx, key, actor, endpoint, requestHash, {
           status,
@@ -105,6 +177,7 @@ export class HandlerTransaction {
           return winner.body as T;
         }
       }
+      await this.activateDueOwnershipAfterFailure(ctx);
       throw e;
     }
   }
