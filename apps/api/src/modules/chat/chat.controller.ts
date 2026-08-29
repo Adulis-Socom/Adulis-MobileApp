@@ -11,39 +11,28 @@ import { ChatService } from './chat.service';
 /** C7 — chat (ADU-API-01 v1.7 section 12.7). */
 
 /**
- * G1.10 — a conversation is ANCHORED, on exactly one of a product or an
- * order.
- *
- * "Without an anchor a slotted answer template cannot be filled, so the
- * assistant escalates instead of answering. That is worse than a missed
- * answer: containment then measures the missing anchor rather than the
- * assistant, and S15.3's improvement loop optimises against a signal that
- * is wrong about which intents are failing" (S12.7).
- *
- * EXACTLY ONE here, at most one in the database. That is not a
- * disagreement: DOCUMENT_AUTHORITY assigns ADU-API-01 the wire and
- * ADU-DB-01 enforcement, and ADU-DB-01 S17.1 prints
- * num_nonnulls(...) <= 1. The database has to keep permitting zero because
- * unanchored rows predate the ruling; the wire does not have to accept new
- * ones.
+ * D-66 via T7 S3.1 -- THE ANCHOR MOVED TO THE MESSAGE. Opening a
+ * conversation is back to the pre-G1.10 shape: a thread is a relationship,
+ * and what a QUESTION is about rides the send path, per message. The wire
+ * cardinality there is AT MOST ONE (never both), matching the database's
+ * message_one_anchor CHECK; an anchorless message stays legal because a
+ * follow-up ("thanks!") is about nothing, and the assistant honestly
+ * escalates where it cannot resolve.
  */
-const openBody = z
-  .object({
-    seller_id: z.uuid(),
-    product_id: z.uuid().optional(),
-    order_id: z.uuid().optional(),
-  })
-  .refine((b) => (b.product_id === undefined) !== (b.order_id === undefined), {
-    message: 'exactly one of product_id or order_id',
-  });
+const openBody = z.object({ seller_id: z.uuid() });
 
 const messageBody = z
   .object({
     text: z.string().min(1).max(4000).optional(),
     chip_id: z.uuid().optional(),
+    product_id: z.uuid().optional(),
+    order_id: z.uuid().optional(),
   })
   .refine((b) => (b.text === undefined) !== (b.chip_id === undefined), {
     message: 'exactly one of text or chip_id',
+  })
+  .refine((b) => b.product_id === undefined || b.order_id === undefined, {
+    message: 'at most one of product_id or order_id',
   });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,10 +49,10 @@ export class ChatController {
     private readonly svc: ChatService,
   ) {}
 
-  /** 12.7, and anchored since G1.10. Idempotent by the pair's UNIQUE. */
+  /** 12.7; anchorless again since D-66 (T7). Idempotent by the pair's UNIQUE. */
   @Post('conversations')
   @ApiOperation({
-    summary: 'Begin a conversation, anchored on exactly one of product_id or order_id.',
+    summary: 'Create-or-return the one conversation per buyer-seller pair.',
   })
   async open(
     @Req() req: AuthedRequest,
@@ -71,7 +60,7 @@ export class ChatController {
   ): Promise<unknown> {
     const body = openBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, (trx) =>
-      this.svc.openConversation(trx, req, body.seller_id, body.product_id, body.order_id),
+      this.svc.openConversation(trx, req, body.seller_id),
     );
   }
 
@@ -101,7 +90,7 @@ export class ChatController {
   }
 
   @Post('conversations/:id/messages')
-  @ApiOperation({ summary: 'text or chip_id; the bot replies with template_key and slots, never prose.' })
+  @ApiOperation({ summary: 'text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.' })
   async postMessage(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,

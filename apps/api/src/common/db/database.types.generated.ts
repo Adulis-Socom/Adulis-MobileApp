@@ -311,14 +311,6 @@ export interface ChatConversation {
   id: Generated<string>;
   last_message_at: Generated<Timestamp>;
   market_id: string;
-  /**
-   * G1.10. See product_id. At most one of the two is set, by conversation_one_anchor.
-   */
-  order_id: string | null;
-  /**
-   * G1.10. Bare uuid, no FK, exactly as S17.1 prints it -- and an FK would make deleting a product a 23503 that catalogue.service.ts reports as PRODUCT_HAS_ACTIVE_ORDERS, which would be a lie.
-   */
-  product_id: string | null;
   seller_id: string;
   started_at: Generated<Timestamp>;
 }
@@ -328,6 +320,14 @@ export interface ChatMessage {
   conversation_id: string;
   id: Generated<string>;
   locale: string;
+  /**
+   * D-66 via T7 S3.1. See product_id. Slot resolution reads the anchor of the message being answered, never the thread's.
+   */
+  order_id: string | null;
+  /**
+   * D-66 via T7 S3.1. What this MESSAGE is about. Bare uuid, no FK (0031's reason). At most one of product_id/order_id (message_one_anchor); the send path requires the anchor to belong to the conversation's seller and, for orders, its buyer -- 404 on mismatch, per message.
+   */
+  product_id: string | null;
   read_at: Timestamp | null;
   sender_account_id: string | null;
   sender_kind: ChatMessageSenderKind;
@@ -1257,6 +1257,21 @@ export interface CoreSellerLevelState {
   since: Generated<Timestamp>;
 }
 
+export interface CoreSellerOwnershipTransfer {
+  activated_at: Timestamp | null;
+  activates_at: Timestamp;
+  cancel_reason: string | null;
+  cancelled_at: Timestamp | null;
+  cancelled_by_account_id: string | null;
+  from_account_id: string;
+  id: Generated<string>;
+  requested_at: Generated<Timestamp>;
+  residual_role: CoreTeamRole | null;
+  seller_id: string;
+  step_up_challenge_id: string;
+  to_account_id: string;
+}
+
 export interface CoreSellerPublicStats {
   cancellation_rate: Numeric | null;
   completed_handoff_count: Generated<number>;
@@ -1596,6 +1611,7 @@ export interface DB {
   "core.seller_fulfilment_method": CoreSellerFulfilmentMethod;
   "core.seller_level_event": CoreSellerLevelEvent;
   "core.seller_level_state": CoreSellerLevelState;
+  "core.seller_ownership_transfer": CoreSellerOwnershipTransfer;
   "core.seller_public_stats": CoreSellerPublicStats;
   "core.seller_social_account": CoreSellerSocialAccount;
   "core.seller_team_member": CoreSellerTeamMember;

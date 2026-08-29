@@ -311,14 +311,6 @@ export function translatePgError(e: PgError): AdulisException | null {
         // branch is the in-function re-check winning a race.
         return new AdulisException('DELETION_BLOCKED');
       }
-      if (e.message.includes('conversation anchor is set at creation')) {
-        // G1.10. The anchor is what a slotted template fills from, so
-        // moving it would refill old answers from a new product.
-        return new AdulisException('VALIDATION_FAILED', {
-          status: 409,
-          slots: { reason: 'ANCHOR_IMMUTABLE' },
-        });
-      }
       if (e.message.includes('product slug is immutable')) {
         // G1.9. The slug is generated once and never moves, because the
         // distribution channel is a shared link -- a renamed product must
@@ -357,7 +349,7 @@ export function translatePgError(e: PgError): AdulisException | null {
       if (e.constraint === 'product_variant_stock_count_check') {
         return new AdulisException('INSUFFICIENT_STOCK');
       }
-      if (e.constraint === 'conversation_one_anchor') {
+      if (e.constraint === 'message_one_anchor') {
         // G1.10. Two anchors on one conversation. Without this branch the
         // database enforcing the rule correctly reaches the caller as a
         // 500, because 23514 otherwise falls through to `return null` and

@@ -366,7 +366,7 @@ export interface paths {
         /** ?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default. */
         get: operations["ChatController_list"];
         put?: never;
-        /** Begin a conversation, anchored on exactly one of product_id or order_id. */
+        /** Create-or-return the one conversation per buyer-seller pair. */
         post: operations["ChatController_open"];
         delete?: never;
         options?: never;
@@ -400,7 +400,7 @@ export interface paths {
         };
         get: operations["ChatController_messages"];
         put?: never;
-        /** text or chip_id; the bot replies with template_key and slots, never prose. */
+        /** text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose. */
         post: operations["ChatController_postMessage"];
         delete?: never;
         options?: never;
