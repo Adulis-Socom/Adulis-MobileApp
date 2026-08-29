@@ -181,7 +181,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Step-up SUBSCRIPTION_CHANGE; opens a collection record at the scheduled price. */
+        /** Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE. */
         post: operations["BillingController_purchaseIntent"];
         delete?: never;
         options?: never;
@@ -366,7 +366,7 @@ export interface paths {
         /** ?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default. */
         get: operations["ChatController_list"];
         put?: never;
-        /** Create-or-return the one conversation per buyer-seller pair. */
+        /** Begin a conversation, anchored on exactly one of product_id or order_id. */
         post: operations["ChatController_open"];
         delete?: never;
         options?: never;
@@ -1330,6 +1330,25 @@ export interface paths {
         /** "Can't Fulfil". There is no accept action. */
         post: operations["OrdersController_cancelLineAsSeller"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/ownership-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pending transfer, visible to its two parties only. */
+        get: operations["OwnershipController_pending"];
+        put?: never;
+        /** Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours. */
+        post: operations["OwnershipController_request"];
+        /** Either party ends it: the owner cancels, the recipient declines. */
+        delete: operations["OwnershipController_cancel"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3489,6 +3508,57 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OwnershipController_pending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OwnershipController_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OwnershipController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

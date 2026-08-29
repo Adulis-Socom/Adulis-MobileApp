@@ -160,7 +160,7 @@ export type Numeric = ColumnType<string, number | string, number | string>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
-export type VerificationVerifierKind = "KYC_VENDOR" | "VIDEO_CALL";
+export type VerificationVerifierKind = "KYC_VENDOR" | "OPERATOR_ATTESTED" | "VIDEO_CALL";
 
 export type WaitlistPlatform = "INSTAGRAM" | "TIKTOK";
 
@@ -201,6 +201,11 @@ export interface BillingCollectionRecord {
   reconciled_by: string | null;
   reminder_sent_at: Timestamp | null;
   subscription_id: string;
+  void_reason: string | null;
+  /**
+   * G1.7. The record is closed and no money is owed against it. Distinct from reconciled_at, which asserts money ARRIVED - a closed-unpaid record written as reconciled is a false financial statement, and a record left open forever is an SMS every seven days forever.
+   */
+  voided_at: Timestamp | null;
 }
 
 export interface BillingInferenceUsageMonth {
@@ -224,6 +229,22 @@ export interface BillingPriceSchedule {
   price_minor: Int8;
   tier: BillingSubscriptionTier;
   usd_reference_minor: Int8;
+}
+
+export interface BillingPurchaseIntent {
+  amount_minor: Int8;
+  cancel_reason: string | null;
+  cancelled_at: Timestamp | null;
+  collection_record_id: string;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  price_schedule_version_id: string;
+  reconciled_at: Timestamp | null;
+  subscription_id: string;
+  term: BillingSubscriptionTerm;
+  tier: BillingSubscriptionTier;
 }
 
 export interface BillingSubscription {
@@ -290,6 +311,14 @@ export interface ChatConversation {
   id: Generated<string>;
   last_message_at: Generated<Timestamp>;
   market_id: string;
+  /**
+   * G1.10. See product_id. At most one of the two is set, by conversation_one_anchor.
+   */
+  order_id: string | null;
+  /**
+   * G1.10. Bare uuid, no FK, exactly as S17.1 prints it -- and an FK would make deleting a product a 23503 that catalogue.service.ts reports as PRODUCT_HAS_ACTIVE_ORDERS, which would be a lie.
+   */
+  product_id: string | null;
   seller_id: string;
   started_at: Generated<Timestamp>;
 }
@@ -514,6 +543,10 @@ export interface CoreDevice {
   first_seen_at: Generated<Timestamp>;
   id: string;
   last_seen_at: Generated<Timestamp>;
+  /**
+   * G1.11. Assigned at the first /v1/bootstrap, which already resolves a market. NULL means "not yet seen at bootstrap", and retention then falls back to the SHORTEST media_retention in force -- a retention default must fail toward deletion (S6.4). Existing rows stay NULL: nothing records which market they came from, and a backfill would assign a person's device to a country.
+   */
+  market_id: string | null;
   notification_permission: Generated<CoreNotificationPermission>;
   platform: CoreDevicePlatform;
   push_token: string | null;
@@ -614,12 +647,26 @@ export interface CoreLadderConfig {
   established_window: Interval;
   id: string;
   market_id: string;
-  new_level_product_cap: number;
-  new_level_transaction_cap_minor: Int8;
-  trusted_max_claim_rate: Numeric;
-  trusted_min_handoffs: number;
-  trusted_min_scan_completion_rate: Numeric;
-  trusted_window: Interval;
+  new_level_product_cap: Generated<number>;
+  /**
+   * G1.2: NULL, and NULL means NO CAP. Not zero, which would read as a cap of nothing. fn_create_order tests IS NOT NULL explicitly (S12.3).
+   */
+  new_level_transaction_cap_minor: Int8 | null;
+  /**
+   * G1.2. Lifetime count of core."order" rows in state COMPLETED for this seller. The ruling gives no window, so none is applied.
+   */
+  new_to_established_min_orders: Generated<number>;
+  /**
+   * G1.2. Measured from seller_level_state.since -- the moment the seller entered the ladder at NEW. No document defines tenure's origin; registered as an open question. A demotion resets it, which is hysteresis.
+   */
+  new_to_established_min_tenure: Generated<Interval>;
+  trusted_max_claim_rate: Numeric | null;
+  /**
+   * ADU-VAL-01 Group A, deferred. NULL means the TRUSTED gate cannot be evaluated and nobody is promoted (A1.3). NOT NULL until T6, which made the deferral inexpressible.
+   */
+  trusted_min_handoffs: number | null;
+  trusted_min_scan_completion_rate: Numeric | null;
+  trusted_window: Interval | null;
 }
 
 export interface CoreLegalConfig {
@@ -944,6 +991,10 @@ export interface CoreProduct {
   name: string;
   published_at: Timestamp | null;
   seller_id: string;
+  /**
+   * G1.9. Generated once at creation, immutable thereafter, unique per seller. The public path is /{handle}/{slug}; doctrine 5 forbids the UUID that used to be there.
+   */
+  slug: string;
   unpublished_reason: CoreUnpublishedReason | null;
   visibility: Generated<CoreProductVisibility>;
 }
@@ -1147,6 +1198,20 @@ export interface CoreSellerCourier {
   created_at: Generated<Timestamp>;
   id: string;
   invited_at: Generated<Timestamp>;
+  revoked_at: Timestamp | null;
+  seller_id: string;
+}
+
+export interface CoreSellerCourierInvite {
+  claimed_at: Timestamp | null;
+  claimed_by_account_id: string | null;
+  id: Generated<string>;
+  invited_at: Generated<Timestamp>;
+  invited_by_account_id: string;
+  /**
+   * The invited number, in the clear. Unlike core.phone_reuse_block and the rate-limit buckets -- which hash BECAUSE they must work before an account exists -- this row is scoped to one seller who typed the number themselves, and it has to be matched against core.account.phone_e164 at that person's next sign-in.
+   */
+  phone: string;
   revoked_at: Timestamp | null;
   seller_id: string;
 }
@@ -1445,6 +1510,7 @@ export interface DB {
   "billing.collection_record": BillingCollectionRecord;
   "billing.inference_usage_month": BillingInferenceUsageMonth;
   "billing.price_schedule": BillingPriceSchedule;
+  "billing.purchase_intent": BillingPurchaseIntent;
   "billing.subscription": BillingSubscription;
   "billing.subscription_state_transition": BillingSubscriptionStateTransition;
   "billing.tier_definition": BillingTierDefinition;
@@ -1525,6 +1591,7 @@ export interface DB {
   "core.seller_availability_override": CoreSellerAvailabilityOverride;
   "core.seller_company_detail": CoreSellerCompanyDetail;
   "core.seller_courier": CoreSellerCourier;
+  "core.seller_courier_invite": CoreSellerCourierInvite;
   "core.seller_eligibility_evaluation": CoreSellerEligibilityEvaluation;
   "core.seller_fulfilment_method": CoreSellerFulfilmentMethod;
   "core.seller_level_event": CoreSellerLevelEvent;

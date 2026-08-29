@@ -8,9 +8,34 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ChatService } from './chat.service';
 
-/** C7 — chat (ADU-API-01 v1.6 section 12.7). */
+/** C7 — chat (ADU-API-01 v1.7 section 12.7). */
 
-const openBody = z.object({ seller_id: z.uuid() });
+/**
+ * G1.10 — a conversation is ANCHORED, on exactly one of a product or an
+ * order.
+ *
+ * "Without an anchor a slotted answer template cannot be filled, so the
+ * assistant escalates instead of answering. That is worse than a missed
+ * answer: containment then measures the missing anchor rather than the
+ * assistant, and S15.3's improvement loop optimises against a signal that
+ * is wrong about which intents are failing" (S12.7).
+ *
+ * EXACTLY ONE here, at most one in the database. That is not a
+ * disagreement: DOCUMENT_AUTHORITY assigns ADU-API-01 the wire and
+ * ADU-DB-01 enforcement, and ADU-DB-01 S17.1 prints
+ * num_nonnulls(...) <= 1. The database has to keep permitting zero because
+ * unanchored rows predate the ruling; the wire does not have to accept new
+ * ones.
+ */
+const openBody = z
+  .object({
+    seller_id: z.uuid(),
+    product_id: z.uuid().optional(),
+    order_id: z.uuid().optional(),
+  })
+  .refine((b) => (b.product_id === undefined) !== (b.order_id === undefined), {
+    message: 'exactly one of product_id or order_id',
+  });
 
 const messageBody = z
   .object({
@@ -35,17 +60,18 @@ export class ChatController {
     private readonly svc: ChatService,
   ) {}
 
-  /** Not in 12.7's table — the catalogue omits how a conversation begins
-   *  (registered). Additive, idempotent by the pair's UNIQUE. */
+  /** 12.7, and anchored since G1.10. Idempotent by the pair's UNIQUE. */
   @Post('conversations')
-  @ApiOperation({ summary: 'Create-or-return the one conversation per buyer-seller pair.' })
+  @ApiOperation({
+    summary: 'Begin a conversation, anchored on exactly one of product_id or order_id.',
+  })
   async open(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = openBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, (trx) =>
-      this.svc.openConversation(trx, req, body.seller_id),
+      this.svc.openConversation(trx, req, body.seller_id, body.product_id, body.order_id),
     );
   }
 

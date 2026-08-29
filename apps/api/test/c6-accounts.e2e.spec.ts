@@ -268,6 +268,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
       `DELETE FROM financial.payout_credential WHERE payout_details_id IN (SELECT id FROM core.payout_details WHERE seller_id IN ('${SELLER}','${DELSELLER}'))`,
       `DELETE FROM core.payout_change_log WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.payout_details WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
+      // BEFORE the record: the intent references it, and this teardown runs
+      // with session_replication_role = replica, so deleting the record
+      // first does not raise -- it leaves an ORPHANED intent that the next
+      // run finds open, returns as the standing quote, and points at a
+      // collection_record id that no longer exists. Disabled FKs do not
+      // remove the ordering, they remove the complaint about it.
+      `DELETE FROM billing.purchase_intent WHERE subscription_id='${SUB}'`,
       `DELETE FROM billing.collection_record WHERE subscription_id='${SUB}'`,
       `DELETE FROM billing.subscription_state_transition WHERE subscription_id IN (SELECT id FROM billing.subscription WHERE seller_id IN ('${SELLER}','${DELSELLER}'))`,
       `DELETE FROM billing.subscription WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,

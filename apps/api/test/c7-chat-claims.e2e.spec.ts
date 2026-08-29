@@ -26,6 +26,10 @@ const DEVICE = 'dddd7777-3333-4000-8000-000000000006';
 const SELLER = 'dddd7777-3333-4000-8000-000000000007';
 const SELLER2 = 'dddd7777-3333-4000-8000-000000000008';
 const PRODUCT = 'dddd7777-3333-4000-8000-000000000009';
+// G1.10: a conversation is anchored on a product or an order, and the
+// anchor must belong to the seller being talked to -- so the second
+// seller needs one of its own.
+const PRODUCT2 = 'dddd7777-3333-4000-8000-00000000000f';
 const VARIANT = 'dddd7777-3333-4000-8000-00000000000a';
 const OWNER_S = 'dddd7777-3333-4000-8000-00000000000b';
 const OWNER_MOB_S = 'dddd7777-3333-4000-8000-00000000000c';
@@ -129,6 +133,12 @@ describe('C7 — chat, claims, reviews', () => {
          base_price_currency, visibility)
        VALUES ($1,$2,$3,'Lamp',30000,'ETB','PUBLISHED')`,
       [PRODUCT, SELLER, M],
+    );
+    await admin.query(
+      `INSERT INTO core.product (id, seller_id, market_id, name, base_price_minor,
+         base_price_currency, visibility)
+       VALUES ($1,$2,$3,'Lamp',30000,'ETB','PUBLISHED')`,
+      [PRODUCT2, SELLER2, M],
     );
     await admin.query(
       `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor,
@@ -275,9 +285,13 @@ describe('C7 — chat, claims, reviews', () => {
     });
 
     it('one conversation per pair: open twice, same id both times', async () => {
-      const a = await buyerReq('post', '/v1/conversations').send({ seller_id: SELLER }).expect(201);
+      const a = await buyerReq('post', '/v1/conversations')
+        .send({ seller_id: SELLER, product_id: PRODUCT })
+        .expect(201);
       conversationId = a.body.conversation_id;
-      const b = await buyerReq('post', '/v1/conversations').send({ seller_id: SELLER }).expect(201);
+      const b = await buyerReq('post', '/v1/conversations')
+        .send({ seller_id: SELLER, product_id: PRODUCT })
+        .expect(201);
       expect(b.body.conversation_id).toBe(conversationId);
     });
 
@@ -324,7 +338,9 @@ describe('C7 — chat, claims, reviews', () => {
     });
 
     it('no chatbot entitlement: the message lands, the bot stays silent, humans are free', async () => {
-      const open = await buyerReq('post', '/v1/conversations').send({ seller_id: SELLER2 }).expect(201);
+      const open = await buyerReq('post', '/v1/conversations')
+        .send({ seller_id: SELLER2, product_id: PRODUCT2 })
+        .expect(201);
       const r = await buyerReq('post', `/v1/conversations/${open.body.conversation_id}/messages`)
         .send({ text: 'do you deliver' })
         .expect(201);

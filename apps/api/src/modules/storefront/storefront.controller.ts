@@ -21,9 +21,16 @@ import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.
  * INVARIANT — no reserve endpoint is reachable without a session, so the
  * web client cannot offer the action even by mistake.
  *
- * The product path parameter is the product id: no slug column exists in
- * the 109-table schema (registered) — {slug} in the contract is served by
- * id until Appendix B grows one.
+ * The product path parameter is the SLUG, since G1.9 gave core.product the
+ * column doctrine 5 always required: "no internal UUID appears in any public
+ * URL ... a UUIDv7 is time-ordered, so a UUID in a public URL leaks signup
+ * order and admits walking the space." It was served by id from C2 until
+ * T6 (register D-43), because the contract named {slug} and the column did
+ * not exist.
+ *
+ * The list and search routes still RETURN p.id alongside the slug. That is
+ * deliberate and additive: the id is what an authenticated client uses to
+ * add a line to a cart, and doctrine 5 governs URLs rather than payloads.
  *
  * Storefront and product views are SERVER-emitted analytics events
  * (storefront_viewed, product_viewed) — a crashed client loses nothing,
@@ -31,8 +38,6 @@ import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.
  */
 
 const resolveBody = z.object({ url: z.string().max(2048) });
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A storefront exists while its seller is publicly live. */
 const VISIBLE_STATES = ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'];
@@ -128,7 +133,7 @@ export class StorefrontController {
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
       const r = await sql<Record<string, unknown>>`
-        SELECT p.id, p.name, p.base_price_minor, p.base_price_currency,
+        SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                p.display_order,
                (SELECT i.card_key FROM core.product_image i
                  WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key
@@ -148,22 +153,30 @@ export class StorefrontController {
     @Param('handle') handle: string,
     @Param('slug') slug: string,
   ): Promise<unknown> {
-    if (!UUID_RE.test(slug)) throw new AdulisException('NOT_FOUND');
+    // No UUID guard any more: a slug is free text within a seller, and the
+    // scope check is the (seller_id, slug) lookup itself. An unknown slug
+    // is the ordinary 404 below, which is also what a wrong-seller slug
+    // gets -- a storefront must not confirm that a product exists
+    // elsewhere.
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
-      const p = await sql<Record<string, unknown>>`
-        SELECT p.id, p.name, p.description, p.base_price_minor,
+      const p = await sql<{ id: string } & Record<string, unknown>>`
+        SELECT p.id, p.slug, p.name, p.description, p.base_price_minor,
                p.base_price_currency, p.category_id
           FROM core.product p
-         WHERE p.id = ${slug} AND p.seller_id = ${seller.id}
+         WHERE p.slug = ${slug} AND p.seller_id = ${seller.id}
            AND p.published_at IS NOT NULL`.execute(trx);
       const product = first(p.rows);
       if (!product) throw new AdulisException('NOT_FOUND');
+      // Everything below keys on the resolved ID, not on the slug: the
+      // slug addresses the product on the wire and the uuid joins it in
+      // the database, which is exactly the split doctrine 5 asks for.
+      const productId = product.id;
       const variants = await sql<Record<string, unknown>>`
         SELECT v.id, v.variant_key, v.price_minor, v.price_currency,
                v.stock_count, v.stock_confirmed_at, v.status
           FROM core.product_variant v
-         WHERE v.product_id = ${slug} AND v.status = 'ACTIVE'
+         WHERE v.product_id = ${productId} AND v.status = 'ACTIVE'
          ORDER BY v.variant_key`.execute(trx);
       const attributes = await sql<Record<string, unknown>>`
         SELECT ad.code AS attribute,
@@ -172,13 +185,13 @@ export class StorefrontController {
           FROM core.product_attribute_value pav
           JOIN core.attribute_definition ad ON ad.id = pav.attribute_definition_id
           LEFT JOIN core.attribute_option ao ON ao.id = pav.value_option_id
-         WHERE pav.product_id = ${slug}`.execute(trx);
+         WHERE pav.product_id = ${productId}`.execute(trx);
       const images = await sql<Record<string, unknown>>`
         SELECT position, thumb_key, card_key, full_key
-          FROM core.product_image WHERE product_id = ${slug}
+          FROM core.product_image WHERE product_id = ${productId}
          ORDER BY position`.execute(trx);
       await this.emit(trx, 'product_viewed', seller.market_id, seller.id, {
-        product_id: slug,
+        product_id: productId,
       });
       return { ...product, variants: variants.rows, attributes: attributes.rows, images: images.rows };
     });
@@ -273,7 +286,7 @@ export class StorefrontController {
       const canonical = await this.postLinks.resolve(body.url);
       if (!canonical) return { data: [] };
       const r = await sql<Record<string, unknown>>`
-        SELECT p.id, p.name, p.base_price_minor, p.base_price_currency,
+        SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                s.handle AS seller_handle
           FROM core.social_post sp
           JOIN core.product_social_post psp ON psp.social_post_id = sp.id

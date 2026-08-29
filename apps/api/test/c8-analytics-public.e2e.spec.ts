@@ -223,6 +223,10 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         [SELLER],
       );
       expect(ev.rows[0].n).toBeGreaterThan(0);
+
+      // And the id no longer addresses it. If this ever 200s again, a UUID
+      // is back on an anonymous URL.
+      await http().get(`/v1/storefronts/c8-store/products/${PRODUCT}`).expect(404);
     });
 
     it('an unknown or unpublished storefront does not exist', async () => {
@@ -233,7 +237,12 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('the product read carries variants, stock with confirmed_at, and emits its view', async () => {
       const list = await http().get('/v1/storefronts/c8-store/products').expect(200);
       expect(list.body.data).toHaveLength(1);
-      const r = await http().get(`/v1/storefronts/c8-store/products/${PRODUCT}`).expect(200);
+      // G1.9: the product page is addressed by SLUG. The list carries it,
+      // which is how a client builds the link -- and the uuid that used to
+      // be in this URL is exactly what doctrine 5 forbids there.
+      const slug = list.body.data[0].slug as string;
+      expect(slug).toBeTruthy();
+      const r = await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(200);
       expect(r.body.variants[0]).toMatchObject({ stock_count: 4 });
       expect(r.body.variants[0].stock_confirmed_at).toBeTruthy();
       const ev = await admin.query(
@@ -418,7 +427,11 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Authorization', `Bearer ${BUYER_S}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
-        .send({ subject_kind: 'STORE', subject_id: SELLER, reason: 'COUNTERFEIT' })
+        // D-44: the wire spells it the way the frozen enum does. 'STORE'
+        // was a document's word for STOREFRONT and the edge translated it;
+        // a translation layer between a document and a shipped type is
+        // where a third spelling appears.
+        .send({ subject_kind: 'STOREFRONT', subject_id: SELLER, reason: 'COUNTERFEIT' })
         .expect(201);
       expect(r.body.report_id).toBeTruthy();
       const queued = await admin.query(

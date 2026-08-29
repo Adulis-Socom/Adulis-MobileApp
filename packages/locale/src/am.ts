@@ -123,6 +123,13 @@ export const am: Catalogue = {
   'deletion.blocker.open_claims': 'ክፍት የሆኑ ቅሬቶች መጀመሪያ መፈታት አለባቸው።',
   'deletion.blocker.subscription_past_due': 'ያልተከፈለ የደንበኝነት ሂሳብ መጀመሪያ መከፈል አለበት።',
   'deletion.blocker.buyer_orders_in_payment': 'ክፍያ በሂደት ላይ ያሉ ትእዛዞች መጀመሪያ መጠናቀቅ አለባቸው።',
+
+  'ownership_transfer.no_eligible_admin':
+    'አዲሱ ባለቤት አስቀድሞ የዚህ መደብር አድሚን መሆን አለበት። መጀመሪያ ይጋብዙት እና አድሚን ያድርጉት።',
+  'ownership_transfer.blocker.payout_change_pending':
+    'የክፍያ መቀበያ ለውጥ በመጠባበቅ ላይ ነው። እስኪጸና ይጠብቁ ወይም መጀመሪያ ይሰርዙት።',
+  'ownership_transfer.blocker.open_claims': 'ክፍት የሆኑ ቅሬታዎች መጀመሪያ መፈታት አለባቸው።',
+
   'deletion.effect.identity_scrubbed': 'የማንነት ዝርዝሮችዎ ይሰረዛሉ።',
   'deletion.effect.records_anonymised': 'የግብይት መዝገቦች ያለ ስምዎ ይቀመጣሉ።',
   'deletion.effect.reviews_anonymised_not_deleted': 'ግምገማዎች ያለ ስም ይቀስሉ።',

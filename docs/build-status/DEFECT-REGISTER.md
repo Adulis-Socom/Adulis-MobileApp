@@ -633,3 +633,124 @@ Effect:    Once an invite is revoked or claimed its row remains, and that seller
 Response:  TRANSCRIBED VERBATIM, not corrected
 Action:    Migration 0029 builds exactly what S6.3a prints, including this and the two columns that carry no REFERENCES where every comparable column in core does. **A judgement call in SQL is the failure this project has paid for most**, and the correct response to a document that looks wrong is an amendment, not a deviation.
 Ruling needed: should the invite UNIQUE be partial on `revoked_at IS NULL`, matching seller_courier? And should invited_by_account_id / claimed_by_account_id reference core.account(id)?
+
+### D-68 - The intent G1.7 requires has no table in any document, so Appendix B owes a row
+
+Severity:  MINOR (documentation debt, deliberately incurred)
+Phase:     T6 B
+Source:    ADU-API-01 v1.7 S12.12 (G1.7) rules "an intent expires after 24 hours" and "the rate is locked at intent creation"; ADU-DB-01 v1.12 S18.5 stops at `billing.collection_record` and prints no intent
+Found by:  building G1.7 and finding nothing to build it in
+Effect:    The collection record is the RECONCILIATION artifact -- the row an operator matches a bank line against -- and it has the opposite lifetime to a quote. Expiring it would void, under an operator's hands, the record they were matching. So the intent needs its own table, and `pnpm db:check` check 14 compares the live table set against Appendix B, which does not list one.
+Response:  BUILT, and pinned by name
+Action:    Migration 0033 creates `billing.purchase_intent`; `check-14-table-manifest.mjs` carries it in `BODY_OVER_MANIFEST` beside `core.category_market_availability` (D-18), `core.notification_preference` (D-40) and `core.seller_courier_invite` (D-59). Exactly D-40's mechanism: ADU-API-01 gave a capability endpoints and no document gave it a table.
+Ruling needed: add `billing.purchase_intent` to ADU-DB-01 Appendix B, with its columns. The shipped shape is one row per open purchase, `collection_record_id UNIQUE`, tier/term/`price_schedule_version_id`/`amount_minor`/`currency` carrying the locked quote, and `created_at`/`expires_at`/`reconciled_at`/`cancelled_at` carrying its state as timestamps rather than as an enum (check 16 freezes the enum catalogue).
+
+### D-69 - RULE: an endpoint whose failure must be indistinguishable from its success cannot fail inside the transaction holding its idempotency claim
+
+Severity:  RULE (recorded here because this is where the build's hard-won invariants live)
+Phase:     T6 B, from Work Order T6-B S3
+Source:    G1.8's own second oracle -- `apps/api/test/t6-courier-invite-oracle.spec.ts` test 2
+Found by:  closing the courier-invite oracle and discovering that the response body was only one of three channels
+Effect:    **The idempotency record is a state channel.** `HandlerTransaction.runIdempotent` writes the record INSIDE the handler's transaction, deliberately, so a state-changing POST cannot forget one. The consequence is that a handler which throws writes NO record -- and a caller who replays the same Idempotency-Key then re-executes instead of replaying, with no `X-Adulis-Idempotent-Replay` header. Two requests distinguish the two branches whatever the first body said. G1.8's old 404-on-unknown-phone leaked exactly this way, and a body-shape fix alone would have left it open.
+Response:  RECORDED AS A STANDING RULE, and added to `apps/api/CLAUDE.md` so it is in context for every backend session
+Action:    Any endpoint that must not distinguish two inputs has to reach a COMMIT on both paths. Where a genuine refusal is required (a rate limit, a validation error) it must be one that is independent of the discriminating input -- which is why G1.8's rate limit is keyed on the SELLER and never on the phone. Where a side effect must be counted even though the transaction rolls back, it goes on its own connection: `RateLimitService.consume` already does.
+Ruling needed: none. This is a build rule, not a specification question.
+
+### D-70 - Ownership transfer is named in three documents and has no table, no signature and no shape
+
+Severity:  MINOR (documentation debt, deliberately incurred)
+Phase:     T6 B
+Source:    ADU-DB-01 v1.12 names `core.fn_transfer_seller_ownership` at :195, :990 and :1022 and prints no arguments, no return type and no body anywhere; ADU-API-01 v1.7 S12.12 (G1.6) supplies the POLICY and no schema
+Found by:  building G1.6
+Effect:    A 24-hour delay needs a pending record, and no document gives it one. `pnpm db:check` check 14 compares the live table set against Appendix B.
+Response:  BUILT, and pinned by name
+Action:    Migration 0034 creates `core.seller_ownership_transfer` and five functions; check 14 carries the table in `BODY_OVER_MANIFEST`. State is three timestamps rather than an enum, because check 16 compares the enum catalogue against Appendix A in both directions.
+Ruling needed: add `core.seller_ownership_transfer` to Appendix B, and print a signature for whatever ADU-DB-01 means by `fn_transfer_seller_ownership` -- the shipped set is `fn_request_ownership_transfer`, `fn_cancel_ownership_transfer`, `fn_activate_due_ownership_transfer`, `fn_ownership_transfer_blockers` and `fn_notify_ownership_transfer`, because the act has four moments and one function cannot hold them.
+
+### D-71 - The ownership-transfer delay is a literal 24 hours; the payout delay it is modelled on is per-market configuration
+
+Severity:  QUESTION
+Phase:     T6 B
+Source:    ADU-API-01 v1.7 S12.12 -- "Activation after **24 hours**" and "It is the same control as a payout change and for the same reason"; `core.timing_config.payout_activation_delay` is a per-market `interval`, seeded at 24 hours
+Found by:  choosing between the two while writing `fn_request_ownership_transfer`
+Effect:    The two values are equal today and are not the same decision. Reading `payout_activation_delay` would couple a flat ADU-API-01 rule to a per-market configurable, so a market that shortened its payout delay would silently shorten the window in which a compromised Owner session can be caught handing the store away. Writing the literal means a market that ever wants its own has no column to put it in.
+Response:  LITERAL, and registered rather than assumed
+Action:    Migration 0034 uses `now() + interval '24 hours'` with the reasoning in the function's comment, so the coupling is not discovered later by a reader who assumed it.
+Ruling needed: is the ownership-transfer delay per-market? If yes, `core.timing_config` owes an `ownership_transfer_delay` column and Appendix B owes the change; if no, the literal is correct and ADU-DB-01 should say so beside the payout one.
+
+### D-72 - core.rate_limit_subject_kind has no SELLER value, and T6-B S2's limit is per seller
+
+Severity:  MINOR
+Phase:     T6 B
+Source:    `core.rate_limit_subject_kind AS ENUM ('ACCOUNT', 'DEVICE', 'PHONE_HASH', 'IP_HASH')` (0001:196); Work Order T6-B S2 -- "10 invites per hour per seller"
+Found by:  applying the limit
+Effect:    The subject of this limit is the STORE, not the person: an oracle walked from three Admin sessions on one store is one oracle, and a per-account limit would give it three budgets. There is no enum value for that subject, and Appendix C check 16 compares enum names and values against `db/checks/fixtures/appendix-a.json` in both directions -- so adding one is a document amendment, not a migration.
+Response:  WORKED AROUND, and named
+Action:    The bucket is written as `subject_kind = 'ACCOUNT'` carrying the SELLER id, under `bucket_key = 'seller-courier-invite'`. The primary key is `(subject_kind, subject_id, bucket_key, window_start)`, so a distinct bucket key makes collision with a genuine account bucket impossible; the only wrongness is the label. The reasoning is in `couriers.controller.ts` at the call site.
+Ruling needed: add `SELLER` to `core.rate_limit_subject_kind` in Appendix A, or rule that seller-scoped limits are recorded as `ACCOUNT` with a namespacing bucket key.
+
+### D-73 - D-66's real answer is that the anchor belongs to the MESSAGE, not to the conversation
+
+Severity:  MAJOR (it is the shape of the fix, not a new defect)
+Phase:     T6 B, from Work Order T6-B S4
+Source:    D-66 above; `one_conversation_per_pair UNIQUE (seller_id, buyer_account_id, market_id)` (0015:40); ADU-DB-01 v1.12 S17.1's `chat.conversation.product_id` / `order_id`
+Found by:  T6-B S4, which asked for the reasoning to be recorded and nothing to be built
+Effect:    G1.10 puts the anchor on the CONVERSATION, and a conversation is per buyer-seller pair. A buyer asks about one product, then another, in the same thread -- which is what a thread IS. Under a per-conversation anchor the second question is answered against the FIRST product's slots. **That produces a wrong answer with BETTER containment metrics than the missing-anchor case it replaces: a regression that measures as an improvement**, and S15.3's improvement loop then optimises toward it. The missing anchor at least escalated, which is honest.
+Response:  REGISTERED WITH THE REASONING. NOTHING BUILT.
+Action:    `openConversation` does NOT re-anchor an existing conversation (`ON CONFLICT ... DO UPDATE SET last_message_at = chat.conversation.last_message_at`), so today's behaviour is the honest one: a second product's question runs against a stale anchor whose slots will not fill, and escalates. Moving the anchor to `chat.message` is a schema and a product decision that no ruling makes, and inventing it here would be the judgement call in SQL this project has paid for most.
+Ruling needed: **does the anchor belong to the message?** The likely answer is yes -- an anchor is a property of what was asked, not of who is talking to whom -- in which case `chat.message` gains `product_id`/`order_id` with the same `num_nonnulls(...) <= 1` CHECK, `chat.conversation` keeps its pair uniqueness, and the assistant resolves slots from the anchor of the message it is answering. `chat.conversation`'s two columns then become the thread's most recent anchor, or are dropped.
+
+### D-74 - A lazy activation inside the handler's transaction is undone by the request it activates on
+
+Severity:  MAJOR (found and fixed in this phase; it would have shipped silently)
+Phase:     T6 B
+Source:    AMENDMENT A1.1 -- "a live session held by the outgoing owner across the activation boundary must lose those capabilities on its next request, with no re-authentication"; `HandlerTransaction`
+Found by:  the test A1.1 asks for, on its first run
+Effect:    G1.6's activation runs at the top of every seller-scoped transaction, so the OUTGOING OWNER'S own next request activates the transfer and is then judged by what the activation did -- `fn_has_permission` finds no relationship, raises `U0002`, and the endpoint 404s, correctly. **And the raise rolls the transaction back, taking the activation with it.** The observable behaviour is exactly right (404) and the store never moves: `owner_account_id` stays where it was, the memberships never change, both notifications are never queued, and every subsequent request by that owner repeats the cycle. The one case A1.1 names is precisely the case that cannot commit.
+Response:  FIXED
+Action:    `HandlerTransaction.run` and `.runIdempotent` attempt the activation inside the handler's transaction -- free, and correct whenever the handler succeeds -- and once more in a transaction of its own when the handler threw, before rethrowing. That second attempt swallows its own errors so it can never mask the handler's. A second transaction on every request would have been the simpler shape and is a real cost paid for a case that almost never happens.
+Ruling needed: none. Worth reading beside `core.fn_activate_due_payout` (0022), which is lazy on `GET /v1/seller/payout` and has the same rollback exposure on any request that fails after it -- and, separately, activates only when somebody reads.
+
+### D-75 - Closure requires ACTIVE, so the one blocker that leads to suspension locks the seller out of G1.3's escape hatch
+
+Severity:  QUESTION (latent: nothing writes BILLING_SUSPENDED today)
+Phase:     T6 B
+Source:    `enterClosure` (`deletion.service.ts:226-229`) -- `UPDATE core.seller SET status='CLOSING' WHERE id = $1 AND status = 'ACTIVE'`; `fn_deletion_blockers`' sixth check is `SUBSCRIPTION_PAST_DUE`
+Found by:  writing the G1.3 test and asking which blocker bites hardest
+Effect:    G1.3 says "`POST /v1/seller/closure` remains available when `POST /v1/seller/deletion` is blocked ... closes now and deletes when the money settles". The blocker most obviously about money settling is `SUBSCRIPTION_PAST_DUE`, and a `PAST_DUE` subscription is what drives a seller to `BILLING_SUSPENDED` -- a status from which `enterClosure` returns `ILLEGAL_TRANSITION`. The escape hatch is closed in the one case the ruling describes.
+Response:  REGISTERED, NOT FIXED
+Action:    Nothing writes `BILLING_SUSPENDED` in this build, so the case is unreachable today. Fixing it is not one change but two, and the second is unruled: permitting `BILLING_SUSPENDED -> CLOSING` also requires deciding where `DELETE /v1/seller/closure` returns that seller to. Returning them to `ACTIVE` would launder a suspension -- close, reopen, suspended no more -- and recording the status they came from is a column no document gives. `apps/api/test/t6-closure-survives-block.spec.ts` proves the reachable case.
+Ruling needed: may a `BILLING_SUSPENDED` seller close? May a `DRAFT` one? And when a suspended seller re-opens, what status do they re-open into?
+
+### D-76 - Gate 0 -- "a CLOSING seller is blocked from forward-looking actions" -- is implemented in two functions out of an unenumerated set
+
+Severity:  MAJOR
+Phase:     T6 B
+Source:    ADU-AUTH-01 v2.5 S14 -- "A fifth check sits above all four and is not authorization: the seller's own status. A `SAFETY_SUSPENDED` or **`CLOSING` seller is blocked from forward-looking actions regardless of who is asking**. That is a state gate, evaluated first." ADU-DB-01 v1.12:2303 restates it for order functions only
+Found by:  the survey's adversarial pass, and confirmed while building G1.7's gate
+Effect:    Before this phase exactly ONE function implemented it: `core.fn_create_order`. So "closure stops new obligations" was true of order creation and of nothing else. `core.fn_publish_product` (0020:57-124) checks readiness and the tier limit and never reads `core.seller.status`, so **a CLOSING store can still publish products**; the storefront lists `CLOSING` in `VISIBLE_STATES`, so those products are publicly browsable. The billing group read status nowhere at all, so a closing -- or draft, or billing-suspended -- store could open a collection record and start the seven-day SMS clock.
+Response:  PARTLY FIXED, and the rest registered
+Action:    `billing.fn_open_purchase_intent` now refuses `CLOSING`, `SAFETY_SUSPENDED` and `DELETED`, deliberately NOT `BILLING_SUSPENDED` (paying is how a seller leaves that state, so blocking the payment would be a trap with no exit). Product publication is untouched: it belongs to the catalogue's own ruling and adding a status gate there changes what a closing seller may do to their own shelf, which is a product decision.
+Ruling needed: **enumerate the forward-looking actions.** Neither document lists them. Publication, broadcasts, courier invites, team invites and subscription purchase are all candidates and none is named.
+
+### D-77 - Reconciliation has enforcement, no surface, and no role that could call it
+
+Severity:  QUESTION
+Phase:     T6 B
+Source:    ADU-DB-01 S18.5 and D-36 -- reconciliation is "operator work outside this contract"; `adulis_app` holds DML on `billing.collection_record` and there is no endpoint; `adulis_jobs` holds `UPDATE (reminder_sent_at)` alone
+Found by:  building G1.7's second rule and asking who performs it
+Effect:    A subscription can only become `ACTIVE` through `billing.fn_reconcile_purchase`, and no runtime role holds `EXECUTE` on it. That is correct -- granting it to `adulis_app` would create the operator endpoint by accident -- but it means the act is performed by a human at a psql prompt, and the only thing standing between "can open a session" and "can activate a paid subscription" is the function's own `core.operator_grant` derivation.
+Response:  BUILT AS ENFORCEMENT ONLY, with a runbook
+Action:    `ops/runbooks/billing-reconciliation.md`, following the `grant-founder-operator.md` precedent. The function derives authority from a live `ADMIN` operator grant exactly as T5's `verification.write_attestation` does, so the psql session is not the authority.
+Ruling needed: what is the operator surface, and which role serves it? This is the same question D-36 asks about the purchase surface, now with a function on the other side of it.
+
+### D-78 - mark-transferred had no state guard, and coalesce() made the absence invisible
+
+Severity:  MAJOR (fixed in this phase)
+Phase:     T6 B
+Source:    `billing.controller.ts` before this change -- `SET marked_transferred_at = coalesce(cr.marked_transferred_at, now())` with no predicate on `reconciled_at`
+Found by:  the survey's adversarial pass
+Effect:    A seller could assert a transfer against a record an operator had already reconciled, and the `coalesce` returned 200 as if nothing were odd. Once G1.7 gave records a closed state the same statement would have silently stamped a VOIDED record too.
+Response:  FIXED
+Action:    The UPDATE now carries `AND cr.reconciled_at IS NULL AND cr.voided_at IS NULL`. Zero rows is then two different facts and they earn different answers: a record that is not this seller's is 404 (S19 -- it must not be confirmed to exist), and one that is theirs and closed is 409 with `reason: COLLECTION_RECORD_CLOSED`.
+Ruling needed: none.

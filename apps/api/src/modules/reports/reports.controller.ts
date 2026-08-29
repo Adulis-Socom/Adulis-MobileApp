@@ -19,21 +19,23 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
  * pending. A seller can never prevent a review from publishing, and this
  * path must not become the mechanism by which they do.
  *
- * The wire's subject kinds are 12.15's closed five; the frozen enum spells
- * two of them differently (STORE -> STOREFRONT, ACCOUNT -> SELLER) —
- * mapped here, registered as a taxonomy mismatch.
+ * D-44 — THE EDGE MAPPING IS GONE, and the wire adopts the enum's spelling.
+ *
+ * v1.6 spelled two of the five differently from the shipped type (STORE for
+ * STOREFRONT, ACCOUNT for SELLER) and this controller translated between
+ * them. ADU-API-01 v1.7 S12.15 withdraws that: "the enum is frozen and
+ * shipped; this document is not the authority on its spelling ... a
+ * translation layer between a document and a shipped type is a place for a
+ * THIRD spelling to appear."
+ *
+ * So `subject_kind` is now exactly core.report_target_kind's five values.
+ * That is a wire change rather than an additive one, and it is the change
+ * the contract asks for: the mapping existed only to paper over a document
+ * that has since corrected itself.
  */
 
-const WIRE_TO_ENUM: Record<string, string> = {
-  PRODUCT: 'PRODUCT',
-  STORE: 'STOREFRONT',
-  REVIEW: 'REVIEW',
-  MESSAGE: 'MESSAGE',
-  ACCOUNT: 'SELLER',
-};
-
 const reportBody = z.object({
-  subject_kind: z.enum(['PRODUCT', 'STORE', 'REVIEW', 'MESSAGE', 'ACCOUNT']),
+  subject_kind: z.enum(['PRODUCT', 'REVIEW', 'MESSAGE', 'SELLER', 'STOREFRONT']),
   subject_id: z.uuid(),
   reason: z.string().min(1).max(80),
   detail: z.string().max(2000).optional(),
@@ -56,7 +58,7 @@ export class ReportsController {
         INSERT INTO core.content_report
           (id, reporter_account_id, target_kind, target_id, reason_code, body)
         VALUES (${id}, ${req.ctx?.accountId ?? null},
-                ${WIRE_TO_ENUM[body.subject_kind]}::core.report_target_kind,
+                ${body.subject_kind}::core.report_target_kind,
                 ${body.subject_id}, ${body.reason}, ${body.detail ?? null})`.execute(trx);
       return { report_id: id };
     });

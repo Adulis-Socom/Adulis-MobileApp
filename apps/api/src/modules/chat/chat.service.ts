@@ -48,6 +48,8 @@ export class ChatService {
     trx: Transaction<Database>,
     req: AuthedRequest,
     sellerId: string,
+    productId?: string,
+    orderId?: string,
   ): Promise<unknown> {
     const buyer = req.ctx?.accountId as string;
     const seller = await sql<{ id: string; market_id: string; status: string }>`
@@ -59,9 +61,38 @@ export class ChatService {
     if (!s || (s.status !== 'ACTIVE' && s.status !== 'CLOSING')) {
       throw new AdulisException('NOT_FOUND');
     }
+
+    // THE ANCHOR MUST BELONG TO THIS SELLER, and to this buyer where it is
+    // an order. Otherwise a buyer could anchor a conversation with seller A
+    // to seller B's product, and the slots would fill from a catalogue the
+    // seller cannot see. A mismatch is 404, never a 403: an anchor that is
+    // not yours must not be confirmed to exist (S19).
+    if (productId !== undefined) {
+      const owned = await sql<{ id: string }>`
+        SELECT id FROM core.product
+         WHERE id = ${productId} AND seller_id = ${sellerId}`.execute(trx);
+      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
+    } else if (orderId !== undefined) {
+      const owned = await sql<{ id: string }>`
+        SELECT id FROM core."order"
+         WHERE id = ${orderId} AND seller_id = ${sellerId}
+           AND buyer_account_id = ${buyer}`.execute(trx);
+      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
+    }
+
+    // ON CONFLICT DOES NOT RE-ANCHOR, and that is register D-66 handled
+    // rather than hidden. one_conversation_per_pair means a buyer and a
+    // seller have ONE conversation, so a second product would otherwise
+    // overwrite the first product's anchor -- and a slotted template would
+    // then fill CONFIDENTLY WITH THE WRONG PRODUCT rather than escalate,
+    // which is worse than the missing anchor G1.10 exists to fix. Keeping
+    // the original anchor keeps the containment signal honest until a
+    // ruling says whether a conversation is per pair or per anchor.
     const r = await sql<{ id: string }>`
-      INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id)
-      VALUES (${randomUUID()}, ${sellerId}, ${buyer}, ${s.market_id})
+      INSERT INTO chat.conversation
+        (id, seller_id, buyer_account_id, market_id, product_id, order_id)
+      VALUES (${randomUUID()}, ${sellerId}, ${buyer}, ${s.market_id},
+              ${productId ?? null}, ${orderId ?? null})
       ON CONFLICT (seller_id, buyer_account_id, market_id)
       DO UPDATE SET last_message_at = chat.conversation.last_message_at
       RETURNING id`.execute(trx);

@@ -109,6 +109,37 @@ function itemsFromDetail(detail: string | undefined): ErrorItem[] {
   });
 }
 
+/**
+ * G1.6 — the blocking conditions, as items[]. `fn_request_ownership_transfer`
+ * raises ONCE with all of them in DETAIL, for the same reason
+ * fn_deletion_blockers returns all six: a refusal naming one obligation sends
+ * the caller round the loop again for the next one.
+ */
+function ownershipBlockerItems(detail: string | undefined): ErrorItem[] {
+  if (!detail) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(detail);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((raw): ErrorItem[] => {
+    if (typeof raw !== 'object' || raw === null) return [];
+    const r = raw as { code?: unknown; count?: unknown; resolving_action?: unknown };
+    if (typeof r.code !== 'string') return [];
+    return [
+      {
+        code: r.code,
+        message_key: `ownership_transfer.blocker.${r.code.toLowerCase()}`,
+        slots: { count: r.count },
+        resolving_action:
+          typeof r.resolving_action === 'string' ? { kind: r.resolving_action } : undefined,
+      },
+    ];
+  });
+}
+
 const ILLEGAL_TRANSITION_RE = /Illegal (?:order|reservation) transition (\S+) -> (\S+)/;
 
 /**
@@ -205,6 +236,74 @@ export function translatePgError(e: PgError): AdulisException | null {
         return new AdulisException('VALIDATION_FAILED', {
           status: 409,
           slots: { reason: 'LINE_NOT_REFUNDABLE' },
+        });
+      }
+      // G1.6's refusals. The 422 is the one the ruling names: "the no-Admin
+      // case is a 422 naming the reason AND the remedy" -- so it carries an
+      // items[] entry, because the envelope's resolving_action lives on the
+      // item, not on the problem (S7.2).
+      if (e.message.includes('ownership transfer needs an active admin')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 422,
+          items: [
+            {
+              code: 'NO_ELIGIBLE_ADMIN',
+              // NOT an `error.<group>.<code>` key: that namespace is
+              // DERIVED from the closed catalogue (S7.2), and this is an
+              // item code, not a catalogue code.
+              message_key: 'ownership_transfer.no_eligible_admin',
+              resolving_action: { kind: 'INVITE_AND_PROMOTE_ADMIN' },
+            },
+          ],
+        });
+      }
+      if (e.message.includes('residual role may not be admin')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 422,
+          slots: { reason: 'RESIDUAL_ROLE_MAY_NOT_BE_ADMIN' },
+        });
+      }
+      if (e.message.includes('ownership transfer already pending')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'OWNERSHIP_TRANSFER_PENDING' },
+        });
+      }
+      if (e.message.includes('ownership transfer blocked')) {
+        // DETAIL carries every blocker, never the first: the same
+        // completeness rule as DELETION_BLOCKED, and each names its
+        // clearing action.
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          items: ownershipBlockerItems(e.detail),
+        });
+      }
+
+      // G1.7's three billing refusals. All 409: each is a conflict the
+      // caller can act on, and each names WHICH in a slot rather than
+      // spending three codes from a closed taxonomy (S7.1: adding a code is
+      // a change to ADU-API-01, not a decision taken in a pull request).
+      if (e.message.includes('seller is not purchasable')) {
+        return new AdulisException('SELLER_UNAVAILABLE', {
+          slots: { reason: 'SELLER_STATE' },
+        });
+      }
+      if (e.message.includes('purchase intent pending reconciliation')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'PURCHASE_INTENT_PENDING' },
+        });
+      }
+      if (e.message.includes('purchase intent is not live')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'PURCHASE_INTENT_NOT_LIVE' },
+        });
+      }
+      if (e.message.includes('collection record already closed')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'COLLECTION_RECORD_CLOSED' },
         });
       }
       if (e.message.includes('deletion blocked')) {

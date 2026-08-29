@@ -46,10 +46,23 @@ const EXPECTED = 109;
 // arithmetic COUNTS it ("111 ... plus seller_courier_invite"), and Appendix B
 // never lists it - the same omission, in the same appendix, in the revision
 // that claims the appendix was reconciled. Pinned by name like the other two.
+// Register D-68: ADU-API-01 v1.7 S12.12 (G1.7) rules that "an intent expires
+// after 24 hours" and that "the rate is locked at intent creation", and NO
+// document gives the intent a table - ADU-DB-01 v1.12 S18.5 stops at
+// billing.collection_record, which is the reconciliation artifact and has
+// the opposite lifetime. Migration 0033 adds billing.purchase_intent and
+// Appendix B owes the row. Same mechanism as D-40, pinned by name like it.
 const BODY_OVER_MANIFEST = [
   'core.category_market_availability',
   'core.notification_preference',
   'core.seller_courier_invite',
+  'billing.purchase_intent',
+  // Register D-70: ADU-API-01 v1.7 S12.12 (G1.6) gives ownership transfer a
+  // policy with a 24-hour delay, which needs a pending record, and ADU-DB-01
+  // v1.12 names core.fn_transfer_seller_ownership three times without ever
+  // printing a signature or a table. Migration 0034 adds
+  // core.seller_ownership_transfer; Appendix B owes the row.
+  'core.seller_ownership_transfer',
 ];
 
 export default {
