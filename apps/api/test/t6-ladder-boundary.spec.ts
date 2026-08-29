@@ -15,7 +15,6 @@ import { Pool, type PoolClient } from 'pg';
  */
 
 const ADMIN = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
-const M = '88888888-2222-4000-8000-000000000001';
 
 type Tx = PoolClient;
 
