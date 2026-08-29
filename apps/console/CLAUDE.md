@@ -4,8 +4,18 @@ Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root.**
 
 **Governing documents:** ADU-CON-03 v1.1 (thirty screens, five destinations, twelve
-states) · ADU-CON-02 v3.0 (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01 v2.4 ·
-ADU-API-01 v1.6 · **ADU-REPO-01 §9**.
+states) · ADU-CON-02 **v3.1** (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01
+**v2.5** · ADU-API-01 **v1.7** · **ADU-REPO-01 §9** (cited from 30 files and installed
+nowhere -- the missing-source fact is on record; this file's §9.2/§9.5 transcriptions
+are the working copy). Versions corrected at T7 Phase 4; `docs/amendments/README.md`
+is always the authority on what governs.
+
+> **Ownership (T7 §0/§6):** the console is no longer a separate workstream's -- the
+> COO/CTO has left, and this workstream is worked by the agent under the one remaining
+> owner. **ADU-REPO-01 §4's dependency rules hold in full.** One owner is not a reason
+> for `apps/console` to import from `apps/api`: the rules exist so the workstreams stay
+> separable, and that matters MORE with one person, not less -- separability is now the
+> only thing keeping a console defect from becoming a backend session's problem.
 
 **What this is:** the *full* seller management system. **Nine of the ten
 publication-readiness items are reachable from nowhere else**, so this is the only
@@ -27,8 +37,10 @@ route tree, **no seller navigation**.
 - **The types you need are generated** into `packages/api-client` from
   `contracts/openapi.json`. If a type is missing there, **the endpoint does not exist
   yet** — and the answer is the Prism mock, not a reach across.
-- **Build against the mock:** `pnpm mock:api`, then `VITE_API_BASE_URL=http://127.0.0.1:4010`.
-  Flipping to the real API is one variable.
+- **Build against the real API on docker compose** (T7 §7): `pnpm dev:api`, then
+  `VITE_API_BASE_URL=http://localhost:3000`. The mock (`pnpm mock:api`,
+  `VITE_API_BASE_URL=http://127.0.0.1:4010`) remains for contract-only work; its
+  purpose was to unblock a workstream that no longer needs unblocking.
 
 ## The rules an agent working here needs
 
@@ -94,7 +106,7 @@ the shell, the states and the client first.
 | Stage | Done when |
 |---|---|
 | **C-1** | A placeholder route renders inside the shell at both breakpoints, with the twelve states demonstrable |
-| **C-2** | A seeded seller signs in against the mock and is warned before idle expiry |
+| **C-2** | A seeded seller signs in against the real API and is warned before idle expiry (T7 §7.1; was "the mock" before Tier 3 existed) |
 | **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable |
 | **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted |
 | **C-5** | Set-count and confirm-stock are visibly **two** actions |
@@ -102,16 +114,15 @@ the shell, the states and the client first.
 | **C-7** | Reviews read-only; the empty claims list reads as good news |
 | **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
 
-> **Only C-1 is unblocked today, and v1.0 claimed C-1 to C-3.** ADU-REPO-01 v1.2 §11.1
-> corrects it: `contracts/openapi.json` is generated from the API's decorators, and until
-> the API has endpoints there is nothing to generate from — **the producer arrives in
-> Tier 3.** C-1 needs no endpoint at all: the client *wrapper*, the twelve states, the
-> shell, nav, router and `intl.ts` are all endpoint-free. **C-2 onward waits on the auth
-> endpoints**, which are the first thing Tier 3 builds.
+> **The unblock note that used to sit here is history** (T7 Phase 4): Tier 3 landed,
+> the contract is committed with its 110 `/v1` path keys, and the auth endpoints exist
+> -- C-2 and everything after it are gated by build order alone. Two of its rules are
+> permanent and stay: **do not hand-write `contracts/openapi.json`** (a hand-authored
+> contract is the lie with authority §5.1 forbids), and a screen whose endpoint does
+> not exist is not built.
 >
-> **Do not hand-write a placeholder `contracts/openapi.json` to close the gap.** A
-> hand-authored contract is exactly the lie with authority §5.1 forbids, and it would
-> diverge from the generated one silently the day the producer lands.
+> C-2's done-clause reads "against the real API" since T7 §7.1 -- the seeded seller
+> comes from `pnpm db:seed`, which prints the sign-in loop.
 
 ## CSP
 

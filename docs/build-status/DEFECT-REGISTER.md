@@ -928,3 +928,14 @@ Effect:    Any backend-only PR failed gate 17 with "dist is absent - build first
 Response:  FIXED
 Action:    Under a scope filter, an absent dist now passes with a note naming why (the console was not selected; the assertion runs on every build that produces one). Unscoped -- every local run -- an absent dist stays a hard fail, because an unscoped build always produces one.
 Ruling needed: none.
+
+### D-94 - The ownership records named three people who could review and zero who can: both CODEOWNERS handles were never collaborators
+
+Severity:  MAJOR (the outermost review layer was decorative since the day it was written)
+Phase:     T7 - 4
+Source:    WORK ORDER T7 S0 (the COO/CTO has left; ADU-REPO-01 S3 and ADU-CON-02 v3.1 S14.1 are now false); .github/CODEOWNERS (@naod, @abenezer); the GitHub API at T7
+Found by:  Phase 4's verification pass -- T7 S6 warns "a file naming someone who has left requests review from nobody," and the API check showed it was ALREADY true for both names
+Effect:    `@naod` and `@abenezer` both exist on GitHub -- as accounts (ids 5516146, 6717001) that are evidently not this project's people and were NEVER collaborators on this repository. The only collaborator is `NaodSolomon`, the handle every commit in history carries. GitHub silently ignores CODEOWNERS entries for users without access, so the file has requested review from nobody since T-something -- through every work order that assumed it was the outermost layer. Combined with ADU-CON-02 S21's standing fact (branch protection does not APPLY on the current plan), the review model was CI plus nothing, which is what T7 S0 now makes official with the adversarial pass added.
+Response:  FIXED forward, and the stale documents recorded
+Action:    CODEOWNERS now assigns every path to @NaodSolomon (one owner; the unstaffed-workstream doctrine is superseded while there is one human). apps/console/CLAUDE.md carries the ownership note and its stale citations are corrected (v3.1/v2.5/v1.7); the C-2 "against the mock" clause updated per T7 S7.1. Stale and owed to the CEO's reissues: ADU-REPO-01 S3 (CODEOWNERS split), ADU-CON-02 v3.1 S14.1 ("the other founder approves"), plus the ADU-REPO-01 file itself, which is cited from 30 files and installed nowhere (MISSING_SOURCE on record since T6).
+Ruling needed: reissue ADU-REPO-01 (S3, S9, and the file's own installation) and ADU-CON-02 (S14.1 review model; S21's branch-protection note gains "required approvals must be 0, not 1 -- nobody can approve their own PR, and 1 would deadlock every merge the day protection becomes enforceable").
