@@ -92,3 +92,11 @@ END $assert$;
 
 -- No grant work: adulis_app already holds INSERT on core.person (0003, for
 -- the endpoint), and this backfill runs as the migration role.
+--
+-- THE DEPLOY WINDOW (adversarial pass): in a rolling deploy, a declaration
+-- served by a still-running pre-T7 pod AFTER this migration commits writes
+-- an INDIVIDUAL seller with NULL person_id -- past the one-time assert,
+-- invisible forever. The two UPDATE statements above are deliberately
+-- RE-RUNNABLE VERBATIM (idempotent by their IS NULL predicates); the deploy
+-- runbook's post-deploy check is where a re-run belongs if the window is
+-- ever real. Recorded in the T7 report.

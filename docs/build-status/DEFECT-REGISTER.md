@@ -863,3 +863,25 @@ Effect:    A reader implementing from the printed documents rebuilds the convers
 Response:  RECORDED for the reissues
 Action:    v1.13 owes: S17.1 anchor moved to chat.message; S6.3a partial UNIQUE plus the two account FKs; Appendix B rows unchanged (no table count change). ADU-API-01 owes: lines 43/852/862 re-anchored to the messages route.
 Ruling needed: none -- reissue work, listed for the document owner.
+
+### D-88 - Ownership transfer moves the store and leaves the person, and D-57's owner-reuse key must not follow it
+
+Severity:  MAJOR (found by the adversarial pass on this phase; the narrow arm is fixed, the wide question is parked)
+Phase:     T7 - 1 (adversarial pass)
+Source:    0034 flips core.seller.owner_account_id and never touches person_id (no entity_type restriction -- INDIVIDUAL stores transfer); 0036/onboarding resolve "the owner's person" through the owner's current INDIVIDUAL sellers
+Found by:  the Phase 1 conformance reviewer, reading D-57's reuse key against G1.6's transfer
+Effect:    A transferred-in INDIVIDUAL store carries the PREVIOUS owner's person. Unfixed, the recipient's next declaration would have REUSED that person -- anchoring one human's stores to another human's person row, the merge-direction form of the split S4.4 forbids, and their attestations would have blended.
+Response:  THE NARROW ARM FIXED, the wide interaction PARKED
+Action:    The reuse lookup now excludes stores with an activated inbound transfer (onboarding.service.ts), and the same-account race is closed with FOR UPDATE on the account row. What remains unruled: what a transferred INDIVIDUAL store's person_id MEANS after transfer -- it still names the previous owner, fn_seller_attestation_person still reads it, so the store's IDENTITY_VERIFIED readiness rides the OLD owner's attestation. T6's survey flagged the same edge (do not assume person_id == current owner's person); nothing yet re-points or clears it.
+Ruling needed: on activation of an INDIVIDUAL store's transfer, is person_id cleared (new owner re-anchors by their own declaration mechanism -- but no such act exists post-creation), re-pointed (to what? the recipient may have no person), or retained-with-meaning ("the store was verified by its founder")? Each answer changes what the eligibility badge asserts to buyers.
+
+### D-89 - A pending courier invite has no claim path: the sign-in leg 0029 and 0037 describe is built nowhere
+
+Severity:  MAJOR (a feature's second half is missing and two migration headers describe it as existing)
+Phase:     T7 - 1 (adversarial pass)
+Source:    0029:53-54 and couriers.controller.ts describe the claim "at next sign-in"; core.seller_courier_invite is read by exactly one file (the controller); no auth path touches it
+Found by:  the Phase 1 conformance reviewer, tracing the pending row's consumers
+Effect:    An invite to a phone with NO account creates a PENDING row that nothing can ever claim: when that person later signs up, no code matches their phone against pending invites, so the courier relationship never forms and the seller waits forever. The G1.8 oracle work made the pending row indistinguishable from the claimed path on purpose -- which also made its dead-endedness invisible. D-67's arm-1 test blesses "fresh pending row" as the happy outcome of a path with no consumer.
+Response:  RECORDED, not built
+Action:    Building the claim-at-sign-in leg touches the auth path (otp/verify) for a courier feature no ruling has specified end-to-end -- the exact "helpful completion" failure mode. The invite surface remains correct for phones that already hold accounts (immediate claim, in the invite transaction).
+Ruling needed: the claim mechanism -- at sign-in (which purposes? MOBILE only?), with what notification to the seller, and what expiry a pending invite carries (today: none -- a typo'd number is pending forever and shows in the list).

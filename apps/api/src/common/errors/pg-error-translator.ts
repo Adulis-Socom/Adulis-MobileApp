@@ -350,7 +350,7 @@ export function translatePgError(e: PgError): AdulisException | null {
         return new AdulisException('INSUFFICIENT_STOCK');
       }
       if (e.constraint === 'message_one_anchor') {
-        // G1.10. Two anchors on one conversation. Without this branch the
+        // G1.10. Two anchors on one message. Without this branch the
         // database enforcing the rule correctly reaches the caller as a
         // 500, because 23514 otherwise falls through to `return null` and
         // the filter turns that into INTERNAL -- doctrine-correct

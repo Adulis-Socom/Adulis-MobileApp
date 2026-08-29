@@ -51,9 +51,14 @@ export class OnboardingService {
     // reusable for a NEW seller account. The block outlives the scrubbed
     // account, so it is keyed by phone hash, and this is the read that
     // makes the write mean something (migration 0023 writes it).
+    // FOR UPDATE serializes concurrent declarations by the same account:
+    // without it, two simultaneous INDIVIDUAL creations both find no
+    // personed sibling below and mint two persons for one human -- the
+    // split S4.4 forbids, unraisable by any constraint afterwards
+    // (adversarial pass on T7 Phase 1).
     const caller = await sql<{ phone_e164: string; market_id: string }>`
       SELECT phone_e164, market_id FROM core.account
-       WHERE id = ${accountId}`.execute(trx);
+       WHERE id = ${accountId} FOR UPDATE`.execute(trx);
     const phone = caller.rows[0];
     if (!phone) throw new AdulisException('INTERNAL');
     const blocked = await sql<{ n: number }>`
@@ -85,11 +90,21 @@ export class OnboardingService {
     // for a store that was never created rolls back with it.
     let personId: string | null = null;
     if (body.entity_type === 'INDIVIDUAL') {
+      // The reuse source EXCLUDES stores that arrived by ownership
+      // transfer: their person_id was anchored by the PREVIOUS owner's
+      // declaration (0034 flips owner_account_id and never touches
+      // person_id), and reusing it would attach this human's stores to
+      // someone else's person row -- the merge-direction form of the split
+      // S4.4 forbids. Register D-88 records the wider interaction.
       const existing = await sql<{ person_id: string }>`
-        SELECT person_id FROM core.seller
-         WHERE owner_account_id = ${accountId}
-           AND entity_type = 'INDIVIDUAL' AND person_id IS NOT NULL
-         ORDER BY created_at LIMIT 1`.execute(trx);
+        SELECT s.person_id FROM core.seller s
+         WHERE s.owner_account_id = ${accountId}
+           AND s.entity_type = 'INDIVIDUAL' AND s.person_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM core.seller_ownership_transfer t
+                            WHERE t.seller_id = s.id
+                              AND t.to_account_id = ${accountId}
+                              AND t.activated_at IS NOT NULL)
+         ORDER BY s.created_at LIMIT 1`.execute(trx);
       personId = existing.rows[0]?.person_id ?? null;
       if (!personId) {
         personId = randomUUID();

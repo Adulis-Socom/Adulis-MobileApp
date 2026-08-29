@@ -219,6 +219,18 @@ export class ChatService {
     const accountId = req.ctx?.accountId as string;
     const { conv, side } = await this.membership(trx, req, conversationId);
 
+    // AUTHORIZATION BEFORE RESOURCE VALIDATION (adversarial pass): the
+    // send-permission gate runs before any anchor probe, so a member who
+    // may read but not send learns nothing from anchor 404s. Today every
+    // role with messages:read also holds messages:send -- the ordering is
+    // for the day the matrix splits them.
+    if (side === 'SELLER') {
+      await sql`
+        SELECT core.fn_has_permission(${accountId}, ${conv.seller_id},
+          'seller.messages:send',
+          ${(req.ctx?.audience as string) ?? ''}::core.session_audience)`.execute(trx);
+    }
+
     // THE ANCHOR MUST BELONG TO THE SELLER BEING TALKED TO -- 404 on
     // mismatch, PER MESSAGE (D-66 via T7 S3.1). Otherwise a message in a
     // thread with seller A could be "about" seller B's product, and slot
@@ -229,10 +241,17 @@ export class ChatService {
     // send path is reachable from both sides, and a seller anchoring their
     // reply on the buyer's own order is legitimate -- the invariant is that
     // the order belongs to THIS pair, not to whoever is typing.
+    //
+    // SIDE-AWARE VISIBILITY on the product arm: a buyer's anchor must be a
+    // product the public catalogue would show them (PUBLISHED) -- anything
+    // else turns the anchor probe into an oracle over the seller's drafts
+    // and moderation-unpublished rows. The seller side may anchor its own
+    // catalogue whatever the visibility.
     if (body.product_id !== undefined) {
       const owned = await sql<{ id: string }>`
         SELECT id FROM core.product
-         WHERE id = ${body.product_id} AND seller_id = ${conv.seller_id}`.execute(trx);
+         WHERE id = ${body.product_id} AND seller_id = ${conv.seller_id}
+           AND (${side === 'BUYER'} = false OR visibility = 'PUBLISHED')`.execute(trx);
       if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
     } else if (body.order_id !== undefined) {
       const owned = await sql<{ id: string }>`
@@ -240,13 +259,6 @@ export class ChatService {
          WHERE id = ${body.order_id} AND seller_id = ${conv.seller_id}
            AND buyer_account_id = ${conv.buyer_account_id}`.execute(trx);
       if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
-    }
-
-    if (side === 'SELLER') {
-      await sql`
-        SELECT core.fn_has_permission(${accountId}, ${conv.seller_id},
-          'seller.messages:send',
-          ${(req.ctx?.audience as string) ?? ''}::core.session_audience)`.execute(trx);
     }
 
     // A chip IS its intent: the tap carries the intent id, no

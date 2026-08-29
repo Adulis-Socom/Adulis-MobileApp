@@ -152,6 +152,17 @@ export class CouriersController {
         max: 10,
       });
 
+      // 0. SERIALIZE PER (seller, phone) -- adversarial pass on this
+      //    phase. The arbiter index alone cannot hold the invariant: the
+      //    winner's SAME transaction stamps its row claimed, which removes
+      //    it from the partial index, and a concurrent insert's ON CONFLICT
+      //    recheck then finds nothing to conflict with -- two live CLAIMED
+      //    invites for one phone, a phantom courier in the list forever.
+      //    The lock is taken identically on EVERY invite, so the G1.8
+      //    oracle's statement shape does not vary with the phone's history.
+      await sql`SELECT pg_advisory_xact_lock(
+        hashtextextended(${sellerId}::text || ':' || ${body.phone}, 7))`.execute(trx);
+
       // 1. The invite, always -- ONE statement, whatever the phone's
       //    history, because the branches must stay indistinguishable
       //    (G1.8). D-67's ruling (T7 S3.3) made the UNIQUE partial --

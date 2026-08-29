@@ -153,6 +153,22 @@ END $function$;
 -- at runtime. The exact failure class 0023's header names.
 GRANT DELETE ON core.account_device TO adulis_migrate;
 
+-- THE EXISTING POPULATION (adversarial pass on this phase): every account
+-- deleted between 0023 and here is SCRUBBED with its account_device rows
+-- merely STAMPED -- token_hash intact, session FK still hooked -- which is
+-- precisely the state this migration's header calls a standing credential.
+-- 0035 and 0036 both remediate history; this one must too. The sign-in
+-- reader does gate on revoked_at, so no session could be minted today --
+-- the backfill closes the invariant, not an live exploit.
+UPDATE core.session s SET account_device_id = NULL
+ WHERE s.account_device_id IN (
+   SELECT ad.id FROM core.account_device ad
+     JOIN core.account a ON a.id = ad.account_id
+    WHERE a.status = 'SCRUBBED');
+DELETE FROM core.account_device ad
+ USING core.account a
+ WHERE ad.account_id = a.id AND a.status = 'SCRUBBED';
+
 -- Definer discipline, re-asserted (S4.4a; no-ops where already true):
 ALTER FUNCTION core.fn_delete_account(uuid, uuid, bytea) OWNER TO adulis_migrate;
 REVOKE ALL ON FUNCTION core.fn_delete_account(uuid, uuid, bytea) FROM PUBLIC;

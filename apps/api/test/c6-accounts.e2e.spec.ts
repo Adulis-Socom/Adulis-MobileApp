@@ -294,6 +294,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
       `DELETE FROM billing.tier_definition WHERE id='${TD_BUSINESS}'`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.seller_courier WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
+      // T7/D-67: this teardown runs under replica mode, which disables the
+      // invite table's seller CASCADE and its two account FKs alike -- so
+      // without this line every c6 run leaves an orphaned invite row
+      // carrying a real phone number, which is exactly what migration
+      // 0037's one-time cleanup deleted. The FKs cannot prevent the
+      // recurrence; only this line does.
+      `DELETE FROM core.seller_courier_invite WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.product_variant WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.product WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.seller_eligibility_evaluation WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
