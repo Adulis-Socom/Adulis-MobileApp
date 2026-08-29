@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { FakeSmsAdapter, SMS_ADAPTER } from '../src/modules/auth/sms.adapter';
 
 /**
  * T6 / G1.8 -- inviting a courier tells you nothing about the number.
@@ -24,7 +25,15 @@ import { configureApp } from '../src/configure-app';
  *   3. the DUPLICATE 409  -- re-inviting a live courier hit
  *      seller_courier_live and returned the constraint NAME in slots.
  *
- * All three are asserted below.
+ * All three are asserted below, and T6-B S2 adds the two that close the
+ * remaining volume channel:
+ *
+ *   7. NOTHING IS SENT to a number with no account. An invitation SMS would
+ *      hand the oracle straight back -- the sender learns nothing from the
+ *      response, and the OWNER of the number learns somebody typed it into
+ *      Adulis -- and would make the endpoint a free SMS cannon.
+ *   8. TEN INVITES PER HOUR PER SELLER. A response that reveals nothing is
+ *      still walkable at ten thousand numbers a night if the walk is free.
  */
 
 const CONSOLE_ORIGIN = 'http://localhost:5173';
@@ -40,6 +49,8 @@ const SELLER = randomUUID();
 const P_KNOWN = '+251919990001';
 const P_UNKNOWN = '+251919990002';
 const P_ALSO_UNKNOWN = '+251919990003';
+
+const sms = new FakeSmsAdapter();
 
 @Module({ imports: [AppModule] })
 class T6AppModule {}
@@ -58,8 +69,12 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
       .set('Idempotency-Key', key)
       .send({ phone });
 
+  const purgeBucket = () =>
+    admin.query(`DELETE FROM core.rate_limit_bucket WHERE bucket_key = 'seller-courier-invite'`);
+
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });
+    await admin.query(`DELETE FROM core.rate_limit_bucket WHERE bucket_key = 'seller-courier-invite'`);
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
                                 display_timezone, default_locale, is_live)
@@ -102,7 +117,10 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
       [SELLER, M, OWNER],
     );
 
-    const moduleRef = await Test.createTestingModule({ imports: [T6AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [T6AppModule] })
+      .overrideProvider(SMS_ADAPTER)
+      .useValue(sms)
+      .compile();
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
@@ -121,6 +139,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     await admin.query(`DELETE FROM core.timing_config WHERE market_id = $1`, [M]);
     await admin.query(`DELETE FROM core.market WHERE id = $1`, [M]);
     await admin.query(`SET session_replication_role = DEFAULT`);
+    await purgeBucket();
     await admin.end();
   });
 
@@ -225,5 +244,59 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     // A pending invite must be visible or the seller cannot tell an
     // invitation that is waiting from a number they mistyped.
     expect(phones).toEqual(expect.arrayContaining([P_KNOWN, P_UNKNOWN, P_ALSO_UNKNOWN]));
+  });
+
+  it('7 - an invite to a number with NO ACCOUNT sends nothing at all', async () => {
+    await purgeBucket();
+    const before = sms.sent.length;
+    await invite('+251919990077', randomUUID());
+    // T6-B S2's INVARIANT. Not "no invitation SMS" -- NO MESSAGE OF ANY
+    // KIND, to anybody. An SMS to the invited number tells its owner that
+    // somebody typed it into Adulis, which is the oracle handed back from
+    // the other end; and an endpoint that texts arbitrary numbers on demand
+    // is an SMS cannon with a seller session for a trigger.
+    expect(sms.sent.length).toBe(before);
+
+    // The known number too: the branch that DOES create a relationship must
+    // not send either, or the two are distinguishable by the phone bill.
+    await invite(P_KNOWN, randomUUID());
+    expect(sms.sent.length).toBe(before);
+  });
+
+  it('8 - the eleventh invite in an hour is refused, and the refusal says nothing about the numbers', async () => {
+    await purgeBucket();
+    // Ten distinct numbers, MIXED: five that exist here and five that do
+    // not. Whatever the eleventh response is, it must be the same response
+    // it would have been for any other ten.
+    for (let i = 0; i < 10; i += 1) {
+      const r = await invite(`+2519199901${String(i).padStart(2, '0')}`, randomUUID());
+      expect(r.status).toBe(201);
+    }
+    const eleventhUnknown = await invite('+251919990188', randomUUID());
+    expect(eleventhUnknown.status).toBe(429);
+    expect(eleventhUnknown.body.code).toBe('RATE_LIMITED');
+    // Retry-After is a duration, not a hint about the subject.
+    expect(eleventhUnknown.body.slots.retry_after_seconds).toBeGreaterThan(0);
+
+    // The SAME refusal for a number that IS registered -- so a caller who
+    // has burned their budget cannot spend the last request learning
+    // anything. Same code, same status, same key set.
+    const eleventhKnown = await invite(P_KNOWN, randomUUID());
+    expect(eleventhKnown.status).toBe(429);
+    expect(eleventhKnown.body.code).toBe(eleventhUnknown.body.code);
+    expect(Object.keys(eleventhKnown.body).sort()).toEqual(
+      Object.keys(eleventhUnknown.body).sort(),
+    );
+
+    // And the limit is per SELLER: it is recorded against the store, not
+    // against the Admin who typed, so three sessions on one store are one
+    // budget.
+    const bucket = await admin.query<{ subject_id: string; count: number }>(
+      `SELECT subject_id, count FROM core.rate_limit_bucket
+        WHERE bucket_key = 'seller-courier-invite'`,
+    );
+    expect(bucket.rows).toHaveLength(1);
+    expect(bucket.rows[0]?.subject_id).toBe(SELLER);
+    await purgeBucket();
   });
 });

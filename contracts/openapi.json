@@ -167,7 +167,7 @@
             "description": ""
           }
         },
-        "summary": "Step-up SUBSCRIPTION_CHANGE; opens a collection record at the scheduled price.",
+        "summary": "Opens a 24-hour intent at the locked rate; step-up SUBSCRIPTION_CHANGE.",
         "tags": [
           "Billing"
         ]
@@ -414,7 +414,7 @@
             "description": ""
           }
         },
-        "summary": "Create-or-return the one conversation per buyer-seller pair.",
+        "summary": "Begin a conversation, anchored on exactly one of product_id or order_id.",
         "tags": [
           "Chat"
         ]
@@ -1773,6 +1773,47 @@
         "summary": "\"Can't Fulfil\". There is no accept action.",
         "tags": [
           "Orders"
+        ]
+      }
+    },
+    "/v1/seller/ownership-transfer": {
+      "get": {
+        "operationId": "OwnershipController_pending",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The pending transfer, visible to its two parties only.",
+        "tags": [
+          "Ownership"
+        ]
+      },
+      "post": {
+        "operationId": "OwnershipController_request",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.",
+        "tags": [
+          "Ownership"
+        ]
+      },
+      "delete": {
+        "operationId": "OwnershipController_cancel",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Either party ends it: the owner cancels, the recipient declines.",
+        "tags": [
+          "Ownership"
         ]
       }
     },

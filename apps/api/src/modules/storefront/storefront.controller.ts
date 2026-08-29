@@ -39,8 +39,6 @@ import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.
 
 const resolveBody = z.object({ url: z.string().max(2048) });
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** A storefront exists while its seller is publicly live. */
 const VISIBLE_STATES = ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'];
 

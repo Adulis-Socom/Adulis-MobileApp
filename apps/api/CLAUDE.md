@@ -41,7 +41,7 @@ a NestJS service is an invariant a second endpoint can bypass.
 
 | | | Asserted by |
 |---|---|---|
-| Tables | **112** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
+| Tables | **114** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
 | Enum types | **66** types | Appendix C **check 16**, against `pg_type` both directions |
 | Append-only tables | **22**, each with both the trigger and the `REVOKE` | Appendix C **check 5** |
 | Permissions / grants | **42 / 139**, 8 step-up, 12 mobile-reachable | `pnpm verify:permission-doc`, 252 cells both directions |
@@ -49,11 +49,15 @@ a NestJS service is an invariant a second endpoint can bypass.
 A different count is wrong somewhere — **stop and report it** rather than reconciling.
 
 > **[!] The counts above are the BUILD's, asserted by the fixtures, and v1.12's printed
-> ones do not match them.** Appendix B heads its core list "84" and lists 85; its stated
-> 112 counts `seller_courier_invite`, which G1.8 has not built here, while omitting
-> `category_market_availability` and `notification_preference`, which exist — the two
-> tables §30 says Appendix B was *reconciled* for (D-58, D-59 in the register). **The
-> fixtures govern, because something executes them.**
+> ones do not match them.** T6 Phase B adds two more the appendix does not list --
+> `billing.purchase_intent` (D-68) and `core.seller_ownership_transfer` (D-70) -- both
+> pinned by name in check 14's `BODY_OVER_MANIFEST`, both for D-40's reason: ADU-API-01
+> gave a capability a ruling and no document gave it a table.
+>
+> The older gap stands too: Appendix B heads its core list "84" and lists 85, and omits
+> `category_market_availability`, `notification_preference` and `seller_courier_invite`
+> — all three of which exist, and the last two are the tables §30 says the appendix was
+> *reconciled* for (D-58, D-59). **The fixtures govern, because something executes them.**
 There is deliberately no asserted enum count in the document any more: v1.9 replaced the
 number with a check, because a number in prose drifts and a number from a query cannot.
 `db/checks/fixtures/appendix-a.json` is the transcription both the check and the tests
@@ -116,6 +120,32 @@ compare against.
   endpoint.
 - The active seller is a **request parameter** (`X-Adulis-Seller`), never session state.
 - **No string-built SQL outside the `sql` template tag.**
+
+> ### INVARIANT — the idempotency record is a state channel (register D-69)
+>
+> **An endpoint whose failure must be indistinguishable from its success cannot fail
+> inside the transaction holding its idempotency claim.**
+>
+> `HandlerTransaction.runIdempotent` writes the record **inside** the handler's
+> transaction, deliberately, so a state-changing POST cannot forget one. The
+> consequence is that a handler which throws writes **no** record — and a caller who
+> replays the same `Idempotency-Key` then re-executes instead of replaying, with no
+> `X-Adulis-Idempotent-Replay` header. **Two requests distinguish the two branches
+> whatever the first body said.**
+>
+> This is how G1.8's courier invite leaked after its body was fixed: the 404-on-unknown
+> -phone path rolled back, and a body-shape fix alone left the oracle wide open. So:
+>
+> - an endpoint that must not distinguish two inputs has to reach a **COMMIT on both
+>   paths** — the same statements, both committing;
+> - where a genuine refusal is still required, it must be **independent of the
+>   discriminating input** (G1.8's rate limit is keyed on the seller, never on the phone);
+> - where a side effect must be counted even though the transaction rolls back, it goes
+>   **on its own connection** — `RateLimitService.consume` already does.
+>
+> The same rollback trap bites lazy activation: anything written at the top of a handler
+> transaction is undone when the handler raises. See register D-74, which is that trap
+> found in G1.6's own test.
 - `contracts/openapi.json` is **generated** (`pnpm generate:openapi`) and **tracked, with
   CI as its only author** — a human-authored diff to it fails the build. Regenerate
   locally to look at it; do not commit that copy.

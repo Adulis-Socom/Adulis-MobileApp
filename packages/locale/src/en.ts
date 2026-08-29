@@ -135,6 +135,15 @@ export const en = {
   'deletion.blocker.open_claims': 'Open claims must be resolved first.',
   'deletion.blocker.subscription_past_due': 'The outstanding subscription balance must be settled first.',
   'deletion.blocker.buyer_orders_in_payment': 'Orders with payment in progress must settle first.',
+
+  // G1.6 — ownership transfer. Item keys, not catalogue keys: the
+  // `error.<group>.<code>` namespace is derived from the closed taxonomy.
+  'ownership_transfer.no_eligible_admin':
+    'The new owner must already be an Admin on this store. Invite them and make them an Admin first.',
+  'ownership_transfer.blocker.payout_change_pending':
+    'A payout change is pending. Wait for it to activate, or cancel it first.',
+  'ownership_transfer.blocker.open_claims': 'Open claims must be resolved first.',
+
   'deletion.effect.identity_scrubbed': 'Your identity details are removed.',
   'deletion.effect.records_anonymised': 'Transaction records are kept without your name.',
   'deletion.effect.reviews_anonymised_not_deleted': 'Reviews remain, attributed to no one.',

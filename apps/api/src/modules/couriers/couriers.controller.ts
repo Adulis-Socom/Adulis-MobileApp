@@ -18,6 +18,7 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { RateLimitService } from '../../common/rate-limit/rate-limit.service';
 import { phone } from '../auth/auth.schemas';
 
 /**
@@ -58,6 +59,23 @@ import { phone } from '../auth/auth.schemas';
  * mental model is "I invited this phone, and I revoke that invite", and
  * whether the invite has been claimed is not something the caller should
  * infer from the shape of an identifier.
+ *
+ * T6-B S2 -- AND THE ORACLE IS RATE-LIMITED, because closing it on shape
+ * alone still leaves it open on volume. A seller who cannot tell one number
+ * from another in a single response can still walk a range and read the
+ * answer off `claimed_at` in the list, ten thousand numbers a night. Ten
+ * invites per hour per seller makes that cost real without touching a
+ * legitimate seller, who invites a courier now and then.
+ *
+ * INVARIANT -- AN INVITE TO A NUMBER WITH NO ACCOUNT SENDS NOTHING. No SMS,
+ * no message of any kind. An invitation SMS would hand the oracle back
+ * immediately: the sender learns nothing from the response, and the OWNER OF
+ * THE NUMBER learns that somebody typed it into Adulis. It would also make
+ * the endpoint a free SMS cannon aimed at any number in the country. The
+ * courier learns they were invited when they next open the app, because the
+ * claim happens at their own sign-in. Asserted in
+ * apps/api/test/t6-courier-invite-oracle.spec.ts -- exactly the thing a
+ * later well-meaning change breaks.
  */
 
 const inviteBody = z.object({ phone });
@@ -68,7 +86,10 @@ const first = <T>(rows: readonly T[]): T | undefined => rows[0];
 
 @Controller()
 export class CouriersController {
-  constructor(private readonly tx: HandlerTransaction) {}
+  constructor(
+    private readonly tx: HandlerTransaction,
+    private readonly rateLimit: RateLimitService,
+  ) {}
 
   private async assertPermission(
     trx: Transaction<Database>,
@@ -109,6 +130,27 @@ export class CouriersController {
     const body = inviteBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, async (trx) => {
       const { accountId, sellerId } = await this.assertPermission(trx, req);
+
+      // T6-B S2 -- ten per hour, per SELLER, not per account: an oracle run
+      // from three Admin sessions on one store is one oracle. Inside the
+      // closure so an idempotent replay burns no budget (the otp-request
+      // precedent), and RateLimitService writes on its own connection, so
+      // the count survives a rolled-back handler and cannot be reset by
+      // failing on purpose.
+      //
+      // subject_kind = 'ACCOUNT' CARRYING A SELLER ID, and that is a seam
+      // rather than a mistake: core.rate_limit_subject_kind has no SELLER
+      // value, and Appendix C check 16 compares the enum against ADU-DB-01
+      // Appendix A in both directions, so adding one is a document
+      // amendment, not a migration. The primary key is
+      // (subject_kind, subject_id, bucket_key, window_start), so a distinct
+      // bucket_key makes a collision with a real account bucket impossible.
+      // Registered (D-72): Appendix A owes a SELLER value.
+      await this.rateLimit.consume('ACCOUNT', sellerId, {
+        bucketKey: 'seller-courier-invite',
+        windowSeconds: 3600,
+        max: 10,
+      });
 
       // 1. The invite, always. ON CONFLICT also revives a revoked invite,
       //    which is the only way to re-invite a phone at all: S6.3a's

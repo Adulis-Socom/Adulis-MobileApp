@@ -46,6 +46,7 @@ import { TeamController } from './modules/team/team.controller';
 import { TeamService } from './modules/team/team.service';
 import { CouriersController } from './modules/couriers/couriers.controller';
 import { BillingController } from './modules/billing/billing.controller';
+import { OwnershipController } from './modules/ownership/ownership.controller';
 import { ChatController } from './modules/chat/chat.controller';
 import { ChatService } from './modules/chat/chat.service';
 import { INFERENCE_ADAPTER, NullInferenceAdapter } from './modules/chat/inference.adapter';
@@ -77,7 +78,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
