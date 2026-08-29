@@ -1,0 +1,237 @@
+#!/usr/bin/env node
+/**
+ * THE GATE LIST. One list, run by two callers.
+ *
+ * Work Order T6 S5.1: "The fix is not to add the missing step to
+ * `ci:local`. It is to stop maintaining two lists."
+ *
+ * Before this file there were two. Root `package.json`'s `ci:local` ran
+ * eight things; `.github/workflows/ci.yml` ran eighteen. Nothing compared
+ * them, so the difference was invisible until a push failed on a gate no
+ * local run had -- which is exactly how T5 shipped a stale
+ * `contracts/openapi.json`: an `@ApiOperation` summary changed, `ci:local`
+ * went green, and CI failed on a step `ci:local` did not have.
+ *
+ * A green local run that means less than a green CI run is worse than no
+ * local run at all, because it is trusted.
+ *
+ * ------------------------------------------------------------------------
+ * WHAT IS HERE AND WHAT IS NOT.
+ *
+ * This file holds the GATES -- the things that can fail because the code is
+ * wrong. It does not hold SETUP: checking out, installing node and pnpm,
+ * creating the four extensions, giving the runtime roles a LOGIN password.
+ * Those differ legitimately between a GitHub service container and a
+ * developer's docker-compose, they are environment rather than judgement,
+ * and CI still owns them.
+ *
+ * The boundary test is: if it can fail because a person wrote something
+ * wrong, it belongs in this list.
+ *
+ * ------------------------------------------------------------------------
+ * THE ONE PARAMETER.
+ *
+ * CI scopes typecheck, build and test to the packages that changed plus
+ * their dependents (ADU-REPO-01 S7). A developer wants the whole thing.
+ * That is a real difference and it is expressed ONCE, as
+ * ADULIS_SCOPE_FILTER, rather than as two lists that happen to differ in
+ * three rows. Unset -- the local default -- means no scoping.
+ *
+ * ADU-REPO-01 S11.2's two foot-guns travel with it, in CI's own comments:
+ * fetch-depth 0, or `origin/main` is not a ref and NOTHING is selected; and
+ * `!adulis-platform`, because the workspace root is selectable and its
+ * scripts are `pnpm -r`, so a filtered run re-enters unfiltered.
+ *
+ * ------------------------------------------------------------------------
+ * REQUIRES A DATABASE. Always did: `pnpm test` runs twenty integration
+ * suites that open a real pg.Pool and THROW rather than skip when
+ * DATABASE_URL is unset. The belief that `ci:local` was database-free was
+ * how the database gates stayed out of it.
+ */
+
+import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const scope = process.env['ADULIS_SCOPE_FILTER'] ?? '';
+
+/**
+ * NODE_ENV=development IS DROPPED, and this is the first thing this file
+ * had to decide.
+ *
+ * `.env` carries NODE_ENV=development because that is what `pnpm dev`
+ * wants, and this script loads `.env` for DATABASE_URL. Vite selects
+ * React's build from NODE_ENV, so a gate run that inherited it produced a
+ * DEVELOPMENT console bundle and failed the very gate that exists to catch
+ * a development console bundle -- every time, for every developer, on a
+ * machine where nothing was wrong.
+ *
+ * CI never sets NODE_ENV, so the gate passes there. A gate that fails
+ * locally and passes in CI, for reasons that are not the code, is a gate
+ * people learn to skip -- and the whole point of this file is that a local
+ * run means what a CI run means.
+ *
+ * So: a build must be EXPLICIT about its environment, not inherit a dev
+ * server's. Unset is what CI has, unset is what the gates get. Jest sets
+ * its own NODE_ENV=test, and assertFakeIsPermitted only refuses
+ * 'production', so nothing else notices.
+ *
+ * NODE_ENV=production is NOT dropped: if someone sets that deliberately,
+ * they mean it, and the fake-adapter guard should refuse to start.
+ */
+if (process.env['NODE_ENV'] === 'development') {
+  delete process.env['NODE_ENV'];
+  console.log(
+    'note: NODE_ENV=development came from .env and was dropped for this run.\n' +
+      '      A build must not inherit a dev server environment; CI has it unset.',
+  );
+}
+
+/** `pnpm <script>`, scoped where CI would scope it. */
+const pnpm = (script, { scoped = false } = {}) =>
+  scoped && scope
+    ? ['pnpm', '--filter', scope, '--filter', '!adulis-platform', script]
+    : ['pnpm', script];
+
+/**
+ * Section 16: "'unsafe-eval' absent from output." The console's CSP is
+ * script-src 'self' with no nonce and no 'unsafe-inline' (S3.9), and an
+ * eval-based build would silently require loosening it.
+ */
+function assertNoUnsafeEval() {
+  const dist = path.join(root, 'apps', 'console', 'dist');
+  if (!existsSync(dist)) return { ok: false, detail: 'apps/console/dist is absent - build first' };
+  const hits = grepDir(dist, 'unsafe-eval');
+  return hits.length === 0
+    ? { ok: true, detail: 'absent from the console build output' }
+    : { ok: false, detail: `found in ${hits.length} file(s): ${hits.slice(0, 3).join(', ')}` };
+}
+
+/**
+ * The console must ship React's PRODUCTION build. Vite selects it from
+ * NODE_ENV, so an ambient NODE_ENV=development -- which is what .env.example
+ * carries, and what sourcing .env into a shell sets -- silently doubles the
+ * bundle and ships development warnings to sellers on the metered low-end
+ * connections S23 names as the binding performance constraint. A check
+ * rather than a convention, because the build succeeds either way.
+ */
+function assertProductionReact() {
+  const assets = path.join(root, 'apps', 'console', 'dist', 'assets');
+  if (!existsSync(assets)) return { ok: false, detail: 'apps/console/dist/assets is absent' };
+  const hits = grepDir(assets, 'Each child in a list');
+  return hits.length === 0
+    ? { ok: true, detail: 'production React build' }
+    : { ok: false, detail: 'development-only React warnings present - NODE_ENV was development' };
+}
+
+function grepDir(dir, needle) {
+  const hits = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (!entry.isFile()) continue;
+    const full = path.join(entry.parentPath ?? entry.path ?? dir, entry.name);
+    try {
+      if (readFileSync(full, 'utf8').includes(needle)) hits.push(path.relative(root, full));
+    } catch {
+      // binary or unreadable: not a text match
+    }
+  }
+  return hits;
+}
+
+/**
+ * The seam's equality check. CI regenerates the contract and demands the
+ * committed copy be byte-identical: a hand-edited spec (a lie with
+ * authority) and a code change that forgot to regenerate are the same
+ * failure, caught in the same breath.
+ *
+ * `git diff HEAD` rather than `git diff`, deliberately: CI works from a
+ * fresh checkout where staged and unstaged do not differ, and comparing
+ * against the COMMIT is what makes a local run mean the same thing. A
+ * regenerated-but-only-staged contract is still uncommitted, and CI would
+ * still fail on it.
+ */
+const CONTRACT_PATHS = ['contracts/', 'packages/api-client/src/schema.d.ts'];
+
+const GATES = [
+  { id: 'typecheck', title: 'Typecheck (strict, no exceptions)', cmd: pnpm('typecheck', { scoped: true }) },
+  { id: 'lint', title: 'Lint', cmd: ['pnpm', 'lint'] },
+  { id: 'deps', title: 'Dependency rules (ADU-REPO-01 S4)', cmd: ['pnpm', 'verify:deps'] },
+  { id: 'deps-fires', title: 'The dependency rules actually fire', cmd: ['pnpm', 'verify:deps-fires'] },
+  { id: 'contract-prefix', title: 'The contract carries /v1 in its path keys', cmd: ['pnpm', 'verify:contract'] },
+  { id: 'error-locale', title: 'Every error code exists in both locale catalogues', cmd: ['pnpm', 'verify:error-locale'] },
+  { id: 'build', title: 'Build', cmd: pnpm('build', { scoped: true }) },
+  { id: 'extensions', title: 'The four extensions (Tier 0 gate)', cmd: ['pnpm', 'db:verify-extensions'] },
+  { id: 'migrate', title: 'Migrations apply', cmd: ['pnpm', 'db:migrate'] },
+  { id: 'worker-schema', title: 'The worker queue schema is installed', cmd: ['pnpm', 'worker:install'] },
+  { id: 'test', title: 'Test', cmd: pnpm('test', { scoped: true }) },
+  { id: 'determinism', title: 'Migrations are deterministic', cmd: ['pnpm', 'db:determinism'] },
+  { id: 'permission-doc', title: 'The permission matrix agrees with its own generated SQL', cmd: ['pnpm', 'verify:permission-doc'] },
+  { id: 'docs-ascii', title: 'A3.5 - governed specifications are ASCII', cmd: ['pnpm', 'verify:docs-ascii'] },
+  { id: 'appendix-c', title: 'Appendix C - sixteen checks', cmd: ['pnpm', 'db:check'] },
+  { id: 'no-unsafe-eval', title: "'unsafe-eval' absent from the console build", fn: assertNoUnsafeEval },
+  { id: 'production-react', title: 'The console shipped React production', fn: assertProductionReact },
+  {
+    id: 'contract-current',
+    title: 'The contract is CI-authored and current',
+    steps: [
+      ['pnpm', 'generate:openapi'],
+      ['pnpm', 'generate:api-client'],
+      ['git', 'diff', '--exit-code', 'HEAD', '--', ...CONTRACT_PATHS],
+    ],
+  },
+];
+
+if (process.argv.includes('--list')) {
+  for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
+  process.exit(0);
+}
+
+const only = process.argv.indexOf('--only');
+const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+
+function run(cmd) {
+  const r = spawnSync(cmd[0], cmd.slice(1), {
+    cwd: root,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+  return r.status === 0;
+}
+
+console.log(
+  `\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)` +
+    (scope ? `\nscope: ${scope}` : '\nscope: none (full run)') +
+    '\n',
+);
+
+let n = 0;
+for (const gate of GATES) {
+  if (wanted && !wanted.has(gate.id)) continue;
+  n += 1;
+  console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
+  let ok;
+  if (gate.fn) {
+    const r = gate.fn();
+    ok = r.ok;
+    console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.detail}`);
+  } else if (gate.steps) {
+    ok = gate.steps.every((s) => run(s));
+  } else {
+    ok = run(gate.cmd);
+  }
+  if (!ok) {
+    console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);
+    console.error(
+      gate.id === 'contract-current'
+        ? '      The committed contract does not match what the code generates.\n' +
+            '      Run: pnpm generate:openapi && pnpm generate:api-client, then COMMIT the result.\n' +
+            '      contracts/openapi.json is tracked and CI-authored: a hand-edited spec is a lie with authority.'
+        : '      Red on any; there is no skip label (ADU-CON-02 S16).',
+    );
+    process.exit(1);
+  }
+}
+
+console.log(`\nPASS  all ${n} gates.\n`);

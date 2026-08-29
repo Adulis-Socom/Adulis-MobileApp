@@ -1,6 +1,7 @@
 import { Controller, Get, Res, HttpStatus, Inject } from '@nestjs/common';
 import type { Response } from 'express';
 import { Kysely, sql } from 'kysely';
+import { Public } from './common/auth/auth.guard';
 import { pingDatabase } from './common/db/database';
 import { APP_DATABASE } from './common/db/database.module';
 import type { Database } from './common/db/database.types';
@@ -42,6 +43,24 @@ export interface HealthResponse {
 export class HealthController {
   constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
 
+  /**
+   * @Public IS LOAD-BEARING, and its absence was a live defect (register
+   * D-79). The AuthGuard is APP_GUARD-global, so without this decorator
+   * /healthz answers 401 SESSION_EXPIRED in the assembled application --
+   * and section 18 makes this the route Render polls, with no Authorization
+   * header, to decide whether an instance may take traffic. Every instance
+   * would have been marked unhealthy and no deploy would ever have gone
+   * live.
+   *
+   * It went unseen because BOTH tests built a standalone module
+   * (DatabaseModule + this controller) where no global guard exists. The
+   * assertion that defends it now is in
+   * apps/api/test/t6-parked-decisions.spec.ts, against the real AppModule.
+   *
+   * Public means AUTH-OPTIONAL, never auth-ignored: a caller who presents a
+   * dead token is still refused. Render presents none.
+   */
+  @Public()
   @Get('/healthz')
   async healthz(@Res() res: Response): Promise<void> {
     const up = await pingDatabase(this.db);

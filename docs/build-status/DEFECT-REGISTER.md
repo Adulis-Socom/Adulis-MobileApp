@@ -754,3 +754,69 @@ Effect:    A seller could assert a transfer against a record an operator had alr
 Response:  FIXED
 Action:    The UPDATE now carries `AND cr.reconciled_at IS NULL AND cr.voided_at IS NULL`. Zero rows is then two different facts and they earn different answers: a record that is not this seller's is 404 (S19 -- it must not be confirmed to exist), and one that is theirs and closed is 409 with `reason: COLLECTION_RECORD_CLOSED`.
 Ruling needed: none.
+
+### D-79 - GET /healthz answered 401 in the assembled application, and both its tests bypassed the guard
+
+Severity:  BLOCKER (in deployment; it does not raise, it 401s, and nothing would have gone live)
+Phase:     T6 C
+Source:    `AuthGuard` is registered as `APP_GUARD` (`app.module.ts:110`); `HealthController.healthz` carried no `@Public()`; ADU-CON-02 v3.1 S18 names `/healthz` as the Render health check
+Found by:  Work Order T6 S4 -- "write a test for each, even where no code changes." D-51's test, written against the REAL AppModule for the first time.
+Effect:    `GET /healthz` returned **401 SESSION_EXPIRED**. Render polls it with no `Authorization` header to decide whether an instance may take traffic, so every instance would have been marked unhealthy and no deploy would ever have gone live. The whole T4 heartbeat feature and D-51's 200-versus-503 decision were being tested against a route that could not be reached.
+Response:  FIXED
+Action:    `@Public()` on the route, with the reasoning at the decorator. Public means AUTH-OPTIONAL, never auth-ignored -- a caller presenting a dead token is still refused; Render presents none. **The reason it went unseen is the finding**: `health.controller.spec.ts` and `worker-runtime.spec.ts` both build a standalone module (`DatabaseModule` + the controller), where no global guard exists. `t6-parked-decisions.spec.ts` builds the real `AppModule` and asserts the route answers at all before asserting anything about its body.
+Ruling needed: none. Worth generalising in review: **a controller tested only in a standalone module is a controller whose global guards, filters and interceptors are untested.** `/healthz` is the only route in the repository with no e2e coverage through `AppModule`, and it was the only one that was wrong.
+
+### D-80 - ops/render.yaml is named by the document, referenced by the topology, and has never existed
+
+Severity:  MINOR
+Phase:     T6 D
+Source:    ADU-CON-02 v3.1 S18 -- "`render.yaml` keeps infrastructure in the repo" (:446) and "**Topology (`ops/render.yaml`)**" (:450)
+Found by:  writing the deploy runbook and looking for the file it should point at
+Effect:    The hosting topology -- `adulis-db` with PITR, `adulis-api` x2 on `/healthz`, `adulis-worker`, a pre-deploy `pnpm db:migrate` -- exists only as one sentence in a document. Infrastructure created by hand in a dashboard is infrastructure nobody can review, diff or restore.
+Response:  REGISTERED, and the shape written down where it can be followed
+Action:    `ops/runbooks/deploy.md` step 0 carries the topology verbatim and says the services are created by hand until the file exists. Writing it needs a Render account to verify against; inventing a `render.yaml` that has never been applied would be a file that looks authoritative and has never been true.
+Ruling needed: none -- it is work, not a question. It is the first thing to do once an account exists.
+
+### D-81 - ci:local and CI were two lists, and the difference was invisible until a push failed
+
+Severity:  MAJOR (process; it has already cost one broken build)
+Phase:     T6 D
+Source:    root `package.json`'s `ci:local` ran eight gates; `.github/workflows/ci.yml` ran eighteen
+Found by:  Work Order T6 S5.1 -- "The fix is not to add the missing step to `ci:local`. It is to stop maintaining two lists."
+Effect:    T5 changed one `@ApiOperation` summary. `ci:local` went green; CI failed on `generate:openapi` + `git diff --exit-code`, a step `ci:local` did not have. **A green local run that means less than a green CI run is worse than no local run at all, because it is trusted.** Ten gates were CI-only: the extensions, migrate, worker:install, determinism, the permission matrix, the ASCII gate, Appendix C, both console build assertions, and the contract equality check.
+Response:  CONVERGED ON ONE LIST
+Action:    `ops/scripts/gates.mjs` holds the eighteen gates. `pnpm ci:local` runs it; the CI job runs the same script and keeps only SETUP -- checkout, node, pnpm, the four extensions, the LOGIN passwords -- which differs legitimately between a service container and docker-compose and cannot fail because someone wrote something wrong. The single real difference, CI's scoping of typecheck/build/test to changed packages (ADU-REPO-01 S7), is expressed once as `ADULIS_SCOPE_FILTER`. **Proved the way the dependency rules were proved**: an `@ApiOperation` summary was changed, `ci:local` was run, and it failed on `contract-current` with the instruction to regenerate and commit. The old `ci:local` was green on the same change.
+Ruling needed: none. Note for ADU-CON-02's next reissue: S14.2 says `db:check` prints **fifteen** passes and S18 says **15** with check 14 = **107**; the code is at **sixteen** checks and check 14 at **109** manifest tables. The document is stale on all three numbers, and S18.2 is the gate a deploy depends on.
+
+### D-82 - The premise that `ci:local` touches no database was false, and it is why the database gates stayed out
+
+Severity:  MINOR (a belief, not a defect; it produced one)
+Phase:     T6 D
+Source:    `pnpm ci:local` -> `pnpm test` -> `apps/api` jest, whose twenty integration suites open a real `pg.Pool` from `DATABASE_URL_MIGRATE ?? DATABASE_URL` and **throw** rather than skip when it is unset (`migration-01-foundation.spec.ts:34`, `:63-70`, and four more)
+Found by:  the survey's adversarial pass, and load-bearing for Phase D
+Effect:    The argument for keeping `db:check`, `db:determinism` and the rest out of `ci:local` was that it should stay infrastructure-free. It never was. The real question was not whether `ci:local` may require Docker -- it already did -- but which gates it should therefore stop excluding.
+Response:  RECORDED, and acted on
+Action:    All ten database and build-output gates are in the shared list. `ops/scripts/gates.mjs` says so in its header, so the next person to reason about "keeping ci:local light" starts from what is true.
+Ruling needed: none.
+
+### D-83 - Two suites running one global sweep is a flake, and the suite carried four of them
+
+Severity:  MAJOR (in the harness; it makes every gate re-runnable-until-green, which is the same failure as a gate people skip)
+Phase:     T6 D
+Source:    twelve instrumented full-suite runs while converging `ci:local` and CI
+Found by:  Phase D. A converged gate list is worth nothing if it goes red at random, so the suite was run twelve times with the output saved rather than once.
+Effect:    Five distinct intermittent failures, none of them about the behaviour under test. All the same shape: **a test asserting a global count, or driving a fleet-wide sweep, against a database shared with every other suite in the run.**
+  1. `device.purge_unbound` was exercised by BOTH `e2-e6.jobs.spec.ts` and `t6-device-retention.spec.ts`. Run from two jest workers at once, one suite's `cart_line` INSERT lands between the other's `cart_line` DELETE and its `cart` DELETE, and the sweep dies on `cart_line_single_seller` -- in whichever suite happened to lose. `e2-e6` also asserted `devices_purged === 1`, a global count, and saw 3.
+  2. `subscription.collect_reminder` was driven by both `e2-e6` and `t6-purchase-intent`.
+  3. `analytics.create_partition` ran at a FIXED clock (T0 = 2026-06-01) whose "next two months" had drifted into the REAL current month. Any `analytics.event` another suite wrote for now sat in `event_default` and the CREATE failed with *"updated partition constraint for default partition would be violated by some row"*. Its `DROP TABLE` cleanup would then have taken that suite's rows with it.
+  4. `stock_event` was read `ORDER BY occurred_at` where both rows share a statement-time -- not a total order, stable until the day it is not.
+  5. `t6-parked-decisions` purged `core.rate_limit_bucket` by `bucket_key` alone to make room for two OTP requests, wiping every other suite's OTP budget mid-run.
+Response:  FIXED, by one rule
+Action:    **Exactly one suite may own a global sweep, and no test asserts a global count.**
+  - `device.purge_unbound` belongs to `t6-device-retention.spec.ts` alone -- the file written at Phase A precisely because `e2-e6`'s version could not detect what G1.11 changed (D-65). `e2-e6`'s copy is removed, with the reasoning in its place.
+  - `t6-purchase-intent` calls `billing.fn_close_stale_collections()` directly; `e2-e6` keeps the job.
+  - The partition test drives a clock far enough ahead (2027-06) that nothing writes into its months.
+  - The stock read tiebreaks on `resulting_count`.
+  - `t6-parked-decisions` builds its two OTP challenges directly with `codeHash`, so it needs no budget and purges nothing; the courier-invite budget is purged **scoped to the seller** in both suites that hold one.
+  Verified by twelve consecutive full-suite runs, 413/413 each, with every run's output kept.
+Ruling needed: none. The rule is worth carrying: **a test that asserts a number the whole database contributes to is a test about other people's rows.** Assert your own row is gone; assert theirs is not.

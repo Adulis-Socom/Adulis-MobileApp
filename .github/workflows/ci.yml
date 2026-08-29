@@ -92,174 +92,65 @@ jobs:
       - name: Create the four extensions
         run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
-      # ADU-REPO-01 v1.2 S7 - scoped to what changed, plus its dependents.
+      # graphile-worker's own tables are installed by the DDL role INSIDE the
+      # gate run below (`worker:install`), not here: the worker's first
+      # statement would otherwise be `create schema if not exists jobs`, which
+      # needs CREATE on the DATABASE - a standing privilege the runtime role
+      # must not hold (register D-52).
       #
-      # S11.2's two foot-guns, both reproduced here before this was written:
-      #   - fetch-depth: 0 above, or origin/main is not a ref and NOTHING is selected
-      #   - '!adulis-platform' because THE WORKSPACE ROOT IS SELECTABLE. Any change
-      #     outside a package directory selects it, and the root's scripts are
-      #     `pnpm -r ...`, so a filtered run would re-enter unfiltered and execute
-      #     every package anyway - the scoping silently doing nothing.
+      # ==================================================================
+      # THE GATES ARE ONE LIST, AND IT IS NOT IN THIS FILE.
       #
-      # Verified: without the exclusion the selector returns `.` alongside the six
-      # packages; with it, only the six. Lint stays repo-wide (`eslint .`), as do
-      # every gate below - they guard invariants no single workstream owns.
-      - name: Typecheck (strict, no exceptions)
-        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      # Includes the pooled-connection settings-leak test and the migration-01
-      # integration tests, both of which need real PostgreSQL: roles, grants and
-      # current_setting's transaction-local behaviour cannot be mocked. Also runs
-      # the locale type-level completeness test.
-      # ADU-REPO-01 S4 - the four dependency rules. Enforced here rather than in
-      # review, because a rule that depends on someone noticing is a rule that
-      # holds until the week someone is busy.
+      # Work Order T6 S5.1: "The fix is not to add the missing step to
+      # `ci:local`. It is to stop maintaining two lists."
       #
-      # Run BEFORE Build on purpose: dist/ is doNotFollow'd rather than excluded,
-      # so built output stays in the graph as a leaf and an import into it is
-      # still catchable. Running before Build simply means there is less of it.
-      - name: Dependency rules (ADU-REPO-01 S4)
-        run: pnpm verify:deps
-
-      # And prove the rules FIRE. `verify:deps` passing tells you nothing on its
-      # own: a config with a typo in a path regex, or with preserveSymlinks left
-      # true, passes exactly as loudly as a correct one. This plants each
-      # violation, asserts it is caught by name, and removes it.
-      - name: The dependency rules actually fire
-        run: pnpm verify:deps-fires
-
-      # ADU-REPO-01 v1.2 S5.1. NestJS setGlobalPrefix('v1') prefixes the ROUTES and
-      # leaves the Swagger document keys unprefixed - a spec that serves correctly
-      # from the real API and 404s against every mocked path. Prism serves what the
-      # path keys say. INERT until Tier 3 produces a contract, and loudly so.
-      - name: The contract carries /v1 in its path keys
-        run: pnpm verify:contract
-
-      # LIVE from Tier 3 - section 7.3's completeness gate. Every code in the
-      # closed taxonomy must carry its derived key in BOTH locale catalogues;
-      # a new code cannot ship without its Amharic string, which is friction
-      # and the point. Presence, not quality - the human-translation gate is
-      # separate and later.
-      - name: Every error code exists in both locale catalogues
-        run: pnpm verify:error-locale
-
-      - name: Build
-        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' build
-
-      # ---- Database gates ---------------------------------------------------
-
-      - name: Verify the four extensions (Tier 0 gate)
-        run: pnpm db:verify-extensions
-
-      - name: Migrations apply
+      # There were two. This file ran eighteen gates; root package.json's
+      # `ci:local` ran eight. Nothing compared them, so the difference was
+      # invisible until a push failed on a gate no local run had - which is
+      # how T5 shipped a stale contracts/openapi.json: a summary changed,
+      # `ci:local` went green, CI failed on a step `ci:local` did not have.
+      #
+      # ops/scripts/gates.mjs is now the list, `pnpm ci:local` runs it, and
+      # this job runs the SAME script. What stays here is SETUP - checking
+      # out, node, pnpm, the extensions, the LOGIN passwords - which differs
+      # legitimately between a service container and docker-compose and
+      # cannot fail because someone wrote something wrong.
+      #
+      # ADULIS_SCOPE_FILTER is the one difference, expressed once: CI scopes
+      # typecheck/build/test to changed packages plus dependents
+      # (ADU-REPO-01 S7); a developer runs everything. S11.2's two foot-guns
+      # travel with it - fetch-depth 0 above, or `origin/main` is not a ref
+      # and NOTHING is selected; and the script's own `!adulis-platform`,
+      # because the workspace root is selectable and its scripts are
+      # `pnpm -r`, so a filtered run re-enters unfiltered.
+      # ==================================================================
+      # Migration 01 creates every role NOLOGIN, because a password in a
+      # migration is a secret in git. So the runtime roles cannot be given a
+      # LOGIN password until the migrations have run, and `pnpm test` inside
+      # the gates cannot connect until they have. Hence this order, and hence
+      # `migrate` appearing twice: once here as SETUP, so the roles exist to
+      # be provisioned, and once inside the gate list where it belongs as a
+      # gate. The second run is a no-op that still asserts node-pg-migrate's
+      # record agrees with the files.
+      - name: Migrations apply (setup - migration 01 creates the roles)
         run: pnpm db:migrate
 
-      # Migration 01 creates every role NOLOGIN (a password in a migration is a
-      # secret in git). The runtime role gets LOGIN here, per environment - the
-      # same provisioning db/init/01-local-logins.sql does for local compose.
       - name: Provision the runtime roles
         run: |
-          psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1             -c "ALTER ROLE adulis_app  LOGIN PASSWORD 'ci-password'"             -c "ALTER ROLE adulis_jobs LOGIN PASSWORD 'ci-password'"
+          psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "ALTER ROLE adulis_app LOGIN PASSWORD 'ci-password'"
+          psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "ALTER ROLE adulis_jobs LOGIN PASSWORD 'ci-password'"
 
-      # graphile-worker's own tables, installed by the DDL role. The worker's
-      # first statement would otherwise be `create schema if not exists jobs`,
-      # which needs CREATE on the DATABASE - a standing privilege the runtime
-      # role must not hold (T4 register E-6). Also moves ownership of those
-      # tables to adulis_jobs: graphile puts RLS on them, and a non-owner with
-      # full DML boots fine and then fails on its first task.
-      - name: Install the worker queue schema
-        run: pnpm worker:install
+      - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
+        run: pnpm ci:local
         env:
-          DATABASE_URL_JOBS: postgres://adulis_jobs:ci-password@localhost:5432/adulis
-
-      # AFTER the migrations, deliberately. The api test suites are integration
-      # tests against the migrated schema (they query core.market in their first
-      # fixture line); a Test step that precedes "Migrations apply" fails on a
-      # bare database with 'relation does not exist'. It sat before the
-      # migrations from Tier 0 - when every test WAS a unit test - and nobody
-      # saw it break, because the deps-fires failure earlier in this job masked
-      # it on every run since the migration tests arrived. Locally the order is
-      # invisible: a developer database is always already migrated.
-      - name: Test
-        run: pnpm --filter "...[origin/main]" --filter '!adulis-platform' test
-
-      # LIVE from Tier 1. Section 16: "migrations applied twice to empty DBs,
-      # schema dumps diffed". ops/scripts/db-determinism.mjs excludes pg_dump
-      # 17's per-run random restrict token, which would otherwise make this stage
-      # fail on every schema forever — see the script's header.
-      # The harness shells psql and pg_dump through `docker exec` into the
-      # Postgres container, because the runner's own client tools are a major
-      # behind the server (pg_dump 16 refuses a PG17 server outright). Locally
-      # that container is compose's adulis-postgres; here it is the service
-      # container, whose generated name GitHub exposes as job.services.<id>.id.
-      - name: Migrations are deterministic
-        run: pnpm db:determinism
-        env:
+          ADULIS_SCOPE_FILTER: '...[origin/main]'
+          # db-determinism shells psql and pg_dump through `docker exec`,
+          # because the runner's own client tools are a major behind the
+          # server (pg_dump 16 refuses a PG17 server outright). Locally that
+          # container is compose's adulis-postgres; here it is the service
+          # container, whose generated name GitHub exposes as
+          # job.services.<id>.id.
           ADULIS_PG_CONTAINER: ${{ job.services.postgres.id }}
-
-      # LIVE from Tier 1. ADU-DB-01 v1.8 supplied the fifteenth check (R16) and
-      # moved check 14 to 109 tables, so the SPEC_VERSION_GAP that kept this
-      # commented at Tier 0 is closed. Checks whose objects belong to a later
-      # tier report PENDING and do not fail the build; the harness exits non-zero
-      # only on FAIL. Check 15 is what now enforces R16 — see the note below.
-      # LIVE from Tier 1. ADU-AUTH-01 v2.3 section 16.6, made executable:
-      # "Where a value must survive transit, give it twice in different forms.
-      #  Section 16.2 is a table for a human; section 16.2a is SQL for a machine;
-      #  both come from one generator. Corruption that damages one is visible
-      #  against the other." That is only true if something compares them.
-      #
-      # v2.2 shipped a matrix whose 252 cells all collapsed to one character in
-      # transit and STILL PARSED as a well-formed table. This is the comparison
-      # that would have caught it, and it runs before anything is seeded.
-      - name: The permission matrix agrees with its own generated SQL
-        run: pnpm verify:permission-doc
-      - name: A3.5 - governed specifications are ASCII
-        run: pnpm verify:docs-ascii
-
-      - name: Appendix C — sixteen checks
-        run: pnpm db:check
-
-      # ---- Static assertions on the build output ----------------------------
-
-      # Section 16: "'unsafe-eval' absent from output". The console's CSP is
-      # script-src 'self' with no nonce and no 'unsafe-inline' (section 3.9), and
-      # an eval-based build would silently require loosening it.
-      - name: Assert 'unsafe-eval' absent from the console build
-        run: |
-          if grep -rq "unsafe-eval" apps/console/dist/; then
-            echo "FAIL: 'unsafe-eval' found in the console build output."
-            grep -rn "unsafe-eval" apps/console/dist/ | head -20
-            exit 1
-          fi
-          echo "PASS: 'unsafe-eval' absent from the console build output."
-
-      # The console must ship React's PRODUCTION build. Vite selects it from
-      # NODE_ENV, so an ambient NODE_ENV=development — which is what .env.example
-      # carries, and what sourcing .env into a shell sets — silently doubles the
-      # bundle from 193 kB to 391 kB and ships development warnings to sellers on
-      # the metered low-end connections section 23 names as the binding
-      # performance constraint. A check rather than a convention, because the
-      # build succeeds either way and nothing else would notice.
-      - name: Assert the console shipped React's production build
-        run: |
-          if grep -rq "Each child in a list" apps/console/dist/assets/; then
-            echo "FAIL: the console bundle contains React development-only warnings."
-            echo "      NODE_ENV was development during the build. It must not be."
-            exit 1
-          fi
-          echo "PASS: console bundle is a production React build."
-
-      # NOTE ON R16. Tier 0 carried a standalone recursive grep of db/ for the
-      # forbidden phrase. It is REMOVED, not kept as belt-and-braces: at Tier 1 it
-      # began failing on db/checks/check-15-no-materialized-view.mjs, whose
-      # comments necessarily contain that phrase in order to explain it. A check
-      # that fails on the file whose job is to prevent the thing teaches people to
-      # disable the check. Appendix C check 15, run above inside `pnpm db:check`,
-      # greps db/migrations/ with SQL comments stripped and is the authoritative
-      # enforcement of R16.
 
       # =====================================================================
       # STAGES REQUIRED BY SECTION 16 THAT THIS TIER CANNOT RUN YET.
@@ -293,18 +184,14 @@ jobs:
       # any removal, rename or retype inside /v1" — additive-only becomes a build
       # failure, not a discipline. A hand-edited spec is a lie with authority.
       #
-      # LIVE from Tier 3 - the seam has a producer. CI regenerates the
-      # contract and the committed copy must be byte-identical: git is how a
-      # hand-edited spec (a lie with authority) is caught, and how a code
-      # change that forgot to regenerate is caught, in the same breath. The
-      # ADDITIVE-only differ (fail on any removal/rename/retype inside /v1)
-      # is still owed - recorded in T3-REPORT.md - and this equality check
-      # is what holds the seam until it lands.
-      - name: The contract is CI-authored and current
-        run: |
-          pnpm generate:openapi
-          pnpm generate:api-client
-          git diff --exit-code contracts/ packages/api-client/src/schema.d.ts
+      # LIVE from Tier 3, and it now runs INSIDE the gate list as
+      # `contract-current` - CI regenerates the contract and the committed
+      # copy must be byte-identical. It moved there rather than staying here
+      # because it is precisely the gate that used to exist only in this file:
+      # T5 changed one @ApiOperation summary, `ci:local` went green, and CI
+      # failed on a step no local run had. The ADDITIVE-only differ (fail on
+      # any removal/rename/retype inside /v1) is still owed - recorded in
+      # T3-REPORT.md - and the equality check holds the seam until it lands.
 
       # --- Secret scan -------------------------------------------------------
       # UNBLOCKED BY: choosing a scanner. Section 12: "the real .env never enters

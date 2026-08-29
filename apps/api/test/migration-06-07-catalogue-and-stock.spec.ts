@@ -157,8 +157,13 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
         expect(await countOf(c)).toBe(7);
 
         const { rows } = (await c.query(
+          // ORDER BY occurred_at ALONE IS NOT A TOTAL ORDER. Both events are
+          // inserted in the same statement-time, so occurred_at ties and
+          // PostgreSQL returns them in whatever order it pleases -- which is
+          // stable until the day it is not, and then reads as a real
+          // failure. resulting_count is the sequence, so it is the tiebreak.
           `SELECT delta, resulting_count FROM core.stock_event
-            WHERE variant_id=$1 ORDER BY occurred_at`,
+            WHERE variant_id=$1 ORDER BY occurred_at, resulting_count DESC`,
           [V],
         )) as { rows: { delta: number; resulting_count: number }[] };
         expect(rows).toEqual([

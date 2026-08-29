@@ -97,12 +97,24 @@ describe('C6 — accounts, team, billing, deletion', () => {
     return id;
   };
 
-  const purgeRateBuckets = () =>
-    admin.query(
+  const purgeRateBuckets = async () => {
+    await admin.query(
       `DELETE FROM core.rate_limit_bucket
         WHERE bucket_key IN ('otp-request','otp-request-ip','step-up-request',
                              'auth-recovery','deletion-otp-request')`,
     );
+    // T6-B S2 gave the courier invite a budget of ten per hour per SELLER,
+    // and a bucket row outlives the run that made it -- so without this the
+    // suite starts 429ing on its eleventh cumulative invite, days later,
+    // for no reason a reader could see. Scoped to THIS seller: the table is
+    // shared, and purging by bucket_key alone wipes another suite's budget
+    // mid-run, in a parallel worker.
+    await admin.query(
+      `DELETE FROM core.rate_limit_bucket
+        WHERE bucket_key = 'seller-courier-invite' AND subject_id = $1`,
+      [SELLER],
+    );
+  };
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });

@@ -1,10 +1,10 @@
 import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
+import { Module, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import pino from 'pino';
 import { Pool } from 'pg';
-import { HealthController } from '../src/health.controller';
-import { DatabaseModule } from '../src/common/db/database.module';
+import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/configure-app';
 import { startWorker, WORKER_CONCURRENCY, cronItemsForTest } from '../src/jobs/runtime';
 import { S24_JOBS } from '../src/jobs/registry';
 import { makeHeartbeatJob, HEARTBEAT_STALE_AFTER_SECONDS } from '../src/jobs/heartbeat';
@@ -17,7 +17,29 @@ import { createJobHarness, type Harness } from './jobs-harness';
  * not by 48-hour-old unexpired orders." So the test that matters here is
  * not that the worker starts — it is that /healthz says something different
  * when it stops.
+ *
+ * T6 PHASE C — THE APP IS BUILT FROM THE REAL AppModule NOW, and that is the
+ * whole of register D-79. This block used to compile a standalone module
+ * (DatabaseModule plus HealthController), where the APP_GUARD-global
+ * AuthGuard does not exist. In the assembled application it does, and
+ * /healthz answered 401 SESSION_EXPIRED — Render polls it with no
+ * Authorization header to decide whether an instance may take traffic, so
+ * every instance would have been marked unhealthy and no deploy would ever
+ * have gone live. D-51's careful 200-versus-503 decision was being tested
+ * against a route that could not be reached.
+ *
+ * A controller tested only in a standalone module is a controller whose
+ * global guards, filters and interceptors are untested.
+ *
+ * The heartbeat table is a SINGLETON — one row by construction (id boolean
+ * PK with a CHECK) — so exactly one suite may own it. This one does. Phase
+ * C's other four decisions live in t6-parked-decisions.spec.ts; D-51's live
+ * here, beside the heartbeat, because two suites racing on one row is a
+ * flake that reads as a real failure.
  */
+
+@Module({ imports: [AppModule] })
+class WorkerRuntimeAppModule {}
 
 const ADMIN = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
 
@@ -65,15 +87,25 @@ describe('the worker runtime', () => {
 
     beforeAll(async () => {
       const moduleRef = await Test.createTestingModule({
-        imports: [DatabaseModule],
-        controllers: [HealthController],
+        imports: [WorkerRuntimeAppModule],
       }).compile();
       app = moduleRef.createNestApplication();
+      await configureApp(app, 'http://localhost:5173');
       await app.init();
     });
 
     afterAll(async () => {
       await app.close();
+    });
+
+    it('answers AT ALL without a credential (D-79)', async () => {
+      // The assertion that was missing. Public means AUTH-OPTIONAL, never
+      // auth-ignored: a caller presenting a dead token is still refused.
+      // Render presents none, which is exactly the case that was broken.
+      const res = await request(app.getHttpServer()).get('/healthz');
+      expect(res.status).not.toBe(401);
+      expect(res.body.code).toBeUndefined();
+      expect(res.body.db).toBe('up');
     });
 
     it('is ok while the heartbeat is fresh and degraded once it goes stale', async () => {
