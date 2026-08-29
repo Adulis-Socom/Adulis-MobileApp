@@ -17,3 +17,9 @@ apps/api/dist/
 # ops/scripts/verify-deps-fires.sh plants these for a few hundred milliseconds to
 # prove the dependency rules fire. A crashed run must not leave one committable.
 **/__depcruise_probe*.ts
+
+# Development OTP codes (ADU-RUL-03 S1.1). The fake SMS adapter appends here
+# instead of stdout, because the redaction allow-list cannot carry an OTP and
+# console.* is banned in apps/api. Never commit it; it holds live codes and
+# phone numbers for whoever ran the dev loop.
+.dev-sms.log

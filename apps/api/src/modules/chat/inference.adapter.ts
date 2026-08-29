@@ -1,4 +1,7 @@
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
+import { createLogger } from '../../common/logging';
+
+const log = createLogger();
 /**
  * The metered layers of the S15.1 cascade (3: embedding similarity, 4:
  * model-as-classifier), behind an adapter like every deployment
@@ -42,10 +45,11 @@ export const INFERENCE_ADAPTER = Symbol('INFERENCE_ADAPTER');
  */
 export class NullInferenceAdapter implements InferenceAdapter {
   constructor() {
-    console.warn(
-      '[NO CLASSIFIER] layer 4 of the S15.1 cascade is unbound; ' +
+    log.warn({
+      msg:
+        '[NO CLASSIFIER] layer 4 of the S15.1 cascade is unbound; ' +
         'unmatched questions escalate to the seller, as specified.',
-    );
+    });
   }
 
   classify(): Promise<InferenceResult | null> {

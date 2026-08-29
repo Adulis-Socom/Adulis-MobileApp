@@ -156,6 +156,7 @@ Console dev loop (three terminals):
   2. pnpm dev:console        # with VITE_API_BASE_URL=http://localhost:3000
                              # and  VITE_DEVICE_ID=${DEVICE}
   3. sign in at http://localhost:5173/sign-in with ${PHONE},
-     read the 6-digit code off the API terminal, and open
+     read the 6-digit code from apps/api/.dev-sms.log (T8: it is no
+     longer printed to the terminal -- see D-106), and open
      /s/${SELLER}
 `);

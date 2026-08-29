@@ -20,8 +20,13 @@
  *   Classifier  — no provider; layer 4 of the S15.1 cascade
  */
 
+import { createLogger } from '../logging';
+import { nodeEnv } from '../env';
+
+const log = createLogger();
+
 export function assertFakeIsPermitted(adapterName: string): void {
-  if (process.env['NODE_ENV'] === 'production') {
+  if (nodeEnv() === 'production') {
     throw new Error(
       `${adapterName}: a FAKE adapter cannot run in production. ` +
         'Bind the real integration or do not start this process. ' +
@@ -29,7 +34,9 @@ export function assertFakeIsPermitted(adapterName: string): void {
         'than not starting.)',
     );
   }
-  // Deliberately console, not the pino logger: this must be visible in a
-  // container's first ten lines whether or not logging is configured yet.
-  console.warn(`[FAKE ADAPTER] ${adapterName} is bound. Nothing leaves this process.`);
+  // Through the logger, not console: ADU-RUL-03 S1.1 makes the logger the
+  // only egress, and pino needs no configuration to emit this. The message
+  // carries an adapter NAME and no user data, so the allow-list's `msg` is
+  // the whole line.
+  log.warn({ msg: `[FAKE ADAPTER] ${adapterName} is bound. Nothing leaves this process.` });
 }

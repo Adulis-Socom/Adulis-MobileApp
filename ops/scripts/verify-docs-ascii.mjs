@@ -44,6 +44,12 @@ const GOVERNED = [
   // db/checks/fixtures/deferred-values.json and the live schema, so a
   // corrupted byte here corrupts a gate's source of truth, not just prose.
   'docs/registers/ADU-VAL-01_Deferred_Value_Decisions_Register_v1_1.md',
+  // T8: ADU-RUL-03 is GOVERNED from installation, and for a reason the other
+  // entries do not have: its S4 carries the age declaration's wording
+  // VERBATIM -- the sentence a person is legally bound by, which the console
+  // transcribes character for character. A mangled byte in a legal
+  // attestation is not a typo, it is an attestation to something else.
+  'docs/ADU-RUL-03_Console_Blockers_and_the_NODE_ENV_Class.md',
 ];
 
 const scan = (buf) => {

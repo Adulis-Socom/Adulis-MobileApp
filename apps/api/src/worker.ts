@@ -1,4 +1,5 @@
 import { createLogger } from './common/logging';
+import { assertNodeEnv } from './common/env';
 import { startWorker, type WorkerHandle } from './jobs/runtime';
 
 /**
@@ -17,7 +18,12 @@ import { startWorker, type WorkerHandle } from './jobs/runtime';
  * nothing to redo.
  */
 async function main(): Promise<void> {
+  // Process 2 of 2 gets the same boundary as process 1: it constructs the
+  // same adapters, so an unset NODE_ENV would take the same permissive
+  // branches here (ADU-RUL-03 S1.2).
+  const env = assertNodeEnv();
   const log = createLogger();
+  log.info({ msg: `worker: starting in ${env}` });
   let handle: WorkerHandle | null = null;
 
   const shutdown = (signal: string) => (): void => {
