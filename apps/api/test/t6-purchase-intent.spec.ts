@@ -6,7 +6,6 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { createJobHarness, type Harness } from './jobs-harness';
-import { subscriptionCollectReminder } from '../src/jobs/e6-billing-nlu';
 
 /**
  * T6 / G1.7 -- the subscription lifecycle.
@@ -409,10 +408,17 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
       [a.body.intent_id],
     );
 
-    // The job whose termination condition was missing now enforces it.
+    // THE SWEEP DIRECTLY, NOT THE JOB. `subscription.collect_reminder` calls
+    // billing.fn_close_stale_collections() on every tick and e2-e6 owns that
+    // job's test; running one global sweep from two suites in parallel
+    // workers is a flake, not a redundancy (D-83). What THIS file is about
+    // is that the record closes and stops being remindable, and the sweep is
+    // where that happens.
     const before = jobs.sms.sent.length;
-    const r = await subscriptionCollectReminder.run(jobs.ctx);
-    expect(Number(r['closed'])).toBeGreaterThan(0);
+    const closed = await admin.query<{ n: number }>(
+      `SELECT billing.fn_close_stale_collections() AS n`,
+    );
+    expect(Number(closed.rows[0]?.n)).toBeGreaterThan(0);
 
     const cr = await admin.query<{ voided_at: Date; void_reason: string; reminder: Date }>(
       `SELECT voided_at, void_reason, reminder_sent_at AS reminder
@@ -451,7 +457,7 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
         WHERE id = $1`,
       [a.body.intent_id],
     );
-    await subscriptionCollectReminder.run(jobs.ctx);
+    await admin.query(`SELECT billing.fn_close_stale_collections()`);
 
     const cr = await admin.query<{ voided_at: Date | null }>(
       `SELECT voided_at FROM billing.collection_record WHERE id = $1`,

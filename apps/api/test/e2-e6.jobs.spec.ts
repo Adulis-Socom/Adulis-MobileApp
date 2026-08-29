@@ -15,7 +15,6 @@ import {
   financialPurgePaymentEvidence,
   mediaLifecycle,
   waitlistRetentionPurge,
-  devicePurgeUnbound,
 } from '../src/jobs/e4-retention';
 import {
   idempotencyPurgeExpired,
@@ -510,33 +509,20 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       expect(left.rows.map((x) => x.reference_code)).toEqual(['E2T-NEW']);
     });
 
-    it('device.purge_unbound takes the cart with the device, and never a bound one', async () => {
-      const unbound = randomUUID();
-      const cart = randomUUID();
-      await admin.query(`INSERT INTO core.device (id, platform, last_seen_at) VALUES ($1,'ANDROID',$2)`, [
-        unbound,
-        new Date(T0.getTime() - 200 * 86_400_000),
-      ]);
-      await admin.query(
-        `INSERT INTO core.cart (id, device_id, seller_id, market_id) VALUES ($1,$2,$3,$4)`,
-        [cart, unbound, SELLER, M],
-      );
-      await admin.query(
-        `INSERT INTO core.cart_line (id, cart_id, seller_id, variant_id, quantity)
-         VALUES (gen_random_uuid(),$1,$2,$3,1)`,
-        [cart, SELLER, VARIANT],
-      );
-      h.clock.set(T0);
-      const r = await devicePurgeUnbound.run(h.ctx);
-      expect(r['devices_purged']).toBe(1);
-      expect(r['carts_purged']).toBe(1);
-      // The BOUND device (it has an account) is untouched, however old.
-      const bound = await admin.query(`SELECT count(*)::int AS n FROM core.device WHERE id=$1`, [
-        DEVICE,
-      ]);
-      expect(bound.rows[0].n).toBe(1);
-      expect((await devicePurgeUnbound.run(h.ctx))['devices_purged']).toBe(0);
-    });
+    // device.purge_unbound IS NOT TESTED HERE ANY MORE, and that is a fix
+    // rather than a loss. apps/api/test/t6-device-retention.spec.ts owns it
+    // since T6 Phase A -- written because this test could not detect the
+    // change G1.11 is about (register D-65), and it covers the market
+    // lookup, the shortest-interval fallback and both wedge guards, none of
+    // which this one did.
+    //
+    // TWO SUITES RUNNING ONE GLOBAL SWEEP IS A FLAKE, not a redundancy. The
+    // job deletes carts fleet-wide; run from two jest workers at once, one
+    // suite's cart_line INSERT lands between the other's cart_line DELETE
+    // and its cart DELETE, and the sweep dies on
+    // cart_line_single_seller -- which reads as a real failure in whichever
+    // suite happened to lose. Exactly one suite may own a global sweep.
+    // Registered as D-83.
   });
 
   describe('E5 — transport and ledger', () => {
@@ -592,14 +578,28 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
     });
 
     it('analytics.create_partition creates ahead and is idempotent', async () => {
-      h.clock.set(T0);
+      // NOT T0, and that is the whole of this comment. The job creates the
+      // NEXT two months from its clock, and T0 (2026-06-01) makes those July
+      // and August 2026 -- which drift into the REAL current month as time
+      // passes. Any analytics.event another suite writes for "now" then sits
+      // in event_default, and CREATE of that month's partition fails with
+      // "updated partition constraint for default partition would be
+      // violated by some row". The DROP below made it worse: it would take
+      // another suite's rows with it.
+      //
+      // A clock far enough ahead that nothing writes into its months, and
+      // the assertion is unchanged: two created, ahead, idempotently.
+      const FAR = new Date('2027-06-01T00:00:00.000Z');
+      h.clock.set(FAR);
       const first = await analyticsCreatePartition.run(h.ctx);
       expect(first['ensured']).toBe(2);
-      expect(String(first['partitions'])).toContain('event_2026_07');
+      expect(String(first['partitions'])).toContain('event_2027_07');
+      expect(String(first['partitions'])).toContain('event_2027_08');
       const second = await analyticsCreatePartition.run(h.ctx);
       expect(second['partitions']).toBe(first['partitions']);
-      await admin.query(`DROP TABLE IF EXISTS analytics.event_2026_07`);
-      await admin.query(`DROP TABLE IF EXISTS analytics.event_2026_08`);
+      await admin.query(`DROP TABLE IF EXISTS analytics.event_2027_07`);
+      await admin.query(`DROP TABLE IF EXISTS analytics.event_2027_08`);
+      h.clock.set(T0);
     });
   });
 

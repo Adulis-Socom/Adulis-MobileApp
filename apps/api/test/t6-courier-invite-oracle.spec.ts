@@ -70,11 +70,15 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
       .send({ phone });
 
   const purgeBucket = () =>
-    admin.query(`DELETE FROM core.rate_limit_bucket WHERE bucket_key = 'seller-courier-invite'`);
+    admin.query(
+      `DELETE FROM core.rate_limit_bucket
+        WHERE bucket_key = 'seller-courier-invite' AND subject_id = $1`,
+      [SELLER],
+    );
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });
-    await admin.query(`DELETE FROM core.rate_limit_bucket WHERE bucket_key = 'seller-courier-invite'`);
+    await purgeBucket();
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
                                 display_timezone, default_locale, is_live)
@@ -291,12 +295,24 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     // And the limit is per SELLER: it is recorded against the store, not
     // against the Admin who typed, so three sessions on one store are one
     // budget.
-    const bucket = await admin.query<{ subject_id: string; count: number }>(
-      `SELECT subject_id, count FROM core.rate_limit_bucket
-        WHERE bucket_key = 'seller-courier-invite'`,
+    // Scoped to THIS seller: the bucket table is shared, and c6 invites
+    // couriers too. What matters is that the budget is recorded against the
+    // STORE and not against the Admin who typed -- so the seller's row
+    // exists and carries all eleven, and the owner's account has no row at
+    // all.
+    const mine = await admin.query<{ count: number }>(
+      `SELECT count FROM core.rate_limit_bucket
+        WHERE bucket_key = 'seller-courier-invite' AND subject_id = $1`,
+      [SELLER],
     );
-    expect(bucket.rows).toHaveLength(1);
-    expect(bucket.rows[0]?.subject_id).toBe(SELLER);
+    expect(mine.rows).toHaveLength(1);
+    expect(Number(mine.rows[0]?.count)).toBeGreaterThan(10);
+    const byAccount = await admin.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM core.rate_limit_bucket
+        WHERE bucket_key = 'seller-courier-invite' AND subject_id = $1`,
+      [OWNER],
+    );
+    expect(Number(byAccount.rows[0]?.n)).toBe(0);
     await purgeBucket();
   });
 });
