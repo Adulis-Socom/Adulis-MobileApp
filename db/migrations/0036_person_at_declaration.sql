@@ -40,12 +40,20 @@
 --    lazy-creation flow made some), the personless siblings REUSE it --
 --    creating a second person for the same human is the exact split S4.4
 --    forbids.
+--    The source EXCLUDES stores that arrived by ownership transfer (their
+--    person was anchored by the PREVIOUS owner's declaration -- 0034 flips
+--    owner_account_id and never touches person_id; register D-88), so a
+--    transferred-in person never seeds the recipient's other stores.
 UPDATE core.seller s
    SET person_id = src.person_id
-  FROM (SELECT DISTINCT ON (owner_account_id) owner_account_id, person_id
-          FROM core.seller
-         WHERE entity_type = 'INDIVIDUAL' AND person_id IS NOT NULL
-         ORDER BY owner_account_id, created_at) src
+  FROM (SELECT DISTINCT ON (s2.owner_account_id) s2.owner_account_id, s2.person_id
+          FROM core.seller s2
+         WHERE s2.entity_type = 'INDIVIDUAL' AND s2.person_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM core.seller_ownership_transfer t
+                            WHERE t.seller_id = s2.id
+                              AND t.to_account_id = s2.owner_account_id
+                              AND t.activated_at IS NOT NULL)
+         ORDER BY s2.owner_account_id, s2.created_at) src
  WHERE s.owner_account_id = src.owner_account_id
    AND s.entity_type = 'INDIVIDUAL'
    AND s.person_id IS NULL;
