@@ -67,14 +67,47 @@ export class OnboardingService {
       });
     }
 
+    // D-57 via T7 S3.2 -- THE PERSON ROW IS CREATED HERE, at the
+    // declaration, in the same transaction. Declaring yourself an
+    // individual seller already asserts you are a natural person; an
+    // operator attests ABOUT a person and cannot bring one into being, so
+    // the person must exist before anyone can attest
+    // (fn_seller_attestation_person reads seller.person_id).
+    //
+    // ONE PERSON PER OWNER, not per store: S4.4 stores the ID hash "once
+    // per person and referenced by each seller account", and S6.1's
+    // one-phone-one-account means this account's INDIVIDUAL declarations
+    // are all the same natural person -- a second store REUSES the person
+    // its sibling anchored. COMPANY sellers are untouched; their person is
+    // the representative, arriving via company-details.
+    //
+    // Inside this trx deliberately: on HANDLE_TAKEN below, a person minted
+    // for a store that was never created rolls back with it.
+    let personId: string | null = null;
+    if (body.entity_type === 'INDIVIDUAL') {
+      const existing = await sql<{ person_id: string }>`
+        SELECT person_id FROM core.seller
+         WHERE owner_account_id = ${accountId}
+           AND entity_type = 'INDIVIDUAL' AND person_id IS NOT NULL
+         ORDER BY created_at LIMIT 1`.execute(trx);
+      personId = existing.rows[0]?.person_id ?? null;
+      if (!personId) {
+        personId = randomUUID();
+        // core.person.id has NO default -- minted explicitly. adulis_app
+        // holds INSERT on core.person (0003); DELETE exists for nobody.
+        await sql`INSERT INTO core.person (id) VALUES (${personId})`.execute(trx);
+      }
+    }
+
     try {
       const seller = await sql<{ id: string }>`
         INSERT INTO core.seller
           (id, market_id, owner_account_id, entity_type, store_name, handle,
-           description, category_id, status)
+           description, category_id, status, person_id)
         SELECT ${randomUUID()}, a.market_id, a.id, ${body.entity_type},
                ${body.store_name}, ${body.handle},
-               ${body.description ?? null}, ${body.category_id ?? null}, 'DRAFT'
+               ${body.description ?? null}, ${body.category_id ?? null}, 'DRAFT',
+               ${personId}
           FROM core.account a WHERE a.id = ${accountId}
         RETURNING id`.execute(trx);
       const sellerId = seller.rows[0]?.id;
