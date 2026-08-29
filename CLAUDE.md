@@ -73,9 +73,16 @@ in `core.session_audience`, never a deployment and never a directory.
 | Path | Workstream | Owner |
 |---|---|---|
 | `apps/api/` · `db/` | Backend and database | CEO |
-| `apps/console/` | Seller console PWA | COO/CTO |
-| `apps/mobile/` | Mobile app — buyer plus seller lite, **one app, two modes** | unassigned |
-| `apps/storefront/` | Storefront website | unassigned |
+| `apps/console/` | Seller console PWA | CEO |
+| `apps/mobile/` | Mobile app — buyer plus seller lite, **one app, two modes** | unstaffed |
+| `apps/storefront/` | Storefront website | unstaffed |
+
+> **One owner, since T7 S0 (register D-94).** The COO/CTO has left; `.github/CODEOWNERS`
+> routes every path to the one remaining owner, and the unstaffed-workstream doctrine
+> (no owner line at all) is superseded -- review-by-nobody and review-by-the-only-
+> engineer are the same thing, and the records say so rather than implying a second
+> reviewer who does not exist. **The four boundary rules below do not relax.** They
+> exist so the workstreams stay separable, and that matters MORE with one person.
 
 1. `apps/*` **may** import from `packages/*`
 2. `apps/*` **may never** import from another `apps/*`
@@ -89,7 +96,7 @@ in `core.session_audience`, never a deployment and never a directory.
 > two workstreams that were supposed to proceed independently are one.
 >
 > **When rule 2 is in your way, move the shared thing into `packages/`** — a deliberate
-> act reviewed by both owners. Never reach across.
+> act, made in its own PR and recorded there. Never reach across.
 >
 > Enforced by `dependency-cruiser` in CI (`pnpm verify:deps`), not by review. A rule
 > that depends on someone noticing is a rule that holds until the week someone is busy.
@@ -104,8 +111,10 @@ There is no fourth.
 | `packages/tokens` | design → three clients | Values only. **No component** — a web button and a React Native button share values, not code |
 | `packages/locale` | content → everyone | `en.ts` defines the key union; a missing Amharic string is a **compile error**, not a fallback |
 
-**Every client develops against the Prism mock** (`pnpm mock:api`) and flips a base URL
-when the endpoint lands. **No front-end workstream is ever blocked on the backend.**
+**Clients build against the real API since T7 S7.1** -- the endpoints exist, and a
+done-clause verified against a mock is not verified. The Prism mock (`pnpm mock:api`)
+remains for contract-only work and for a client whose endpoint genuinely has not
+landed; the base URL is one variable either way.
 Front-end types are generated into `packages/api-client`; never hand-author a duplicate DTO.
 
 ## Load-bearing absences — completing the schema is the defined failure
@@ -155,6 +164,6 @@ the default outcome of a merge conflict in these files is a **silent** wrong ans
 | `pnpm-lock.yaml` | **Never hand-merge.** Take either side, run `pnpm install`, commit the result. A hand-merged lockfile installs a set of versions nobody tested |
 | `db/migrations/NNNN_*.sql` | **Single writer — the backend owner.** Two people adding `0016` collides *cleanly* and yields two migrations with one number |
 | `contracts/openapi.json` | **Written by CI only.** Front-end workstreams read it and never touch it |
-| `packages/*` | **Its own PR, both owners.** Never bundled into an app change |
+| `packages/*` | **Its own PR.** Never bundled into an app change |
 | Root `package.json`, `tsconfig.base.json` | Thin and rarely touched. The root exists to delegate |
 | This file | Shared rules only. Anything true of one workstream belongs in that workstream's file |

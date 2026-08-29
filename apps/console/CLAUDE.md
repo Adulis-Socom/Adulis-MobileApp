@@ -5,8 +5,9 @@ repository root.**
 
 **Governing documents:** ADU-CON-03 v1.1 (thirty screens, five destinations, twelve
 states) · ADU-CON-02 **v3.1** (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01
-**v2.5** · ADU-API-01 **v1.7** · **ADU-REPO-01 §9** (cited from 30 files and installed
-nowhere -- the missing-source fact is on record; this file's §9.2/§9.5 transcriptions
+**v2.5** · ADU-API-01 **v1.7** · **ADU-REPO-01 §9** (cited across this repository and installed
+nowhere: it is absent from `docs/` and from DOCUMENT_AUTHORITY's supplied baseline,
+and no register entry recorded that until D-94; this file's §9.2/§9.5 transcriptions
 are the working copy). Versions corrected at T7 Phase 4; `docs/amendments/README.md`
 is always the authority on what governs.
 
@@ -36,11 +37,17 @@ route tree, **no seller navigation**.
   tempting**, because the backend defines every shape the console renders.
 - **The types you need are generated** into `packages/api-client` from
   `contracts/openapi.json`. If a type is missing there, **the endpoint does not exist
-  yet** — and the answer is the Prism mock, not a reach across.
-- **Build against the real API on docker compose** (T7 §7): `pnpm dev:api`, then
-  `VITE_API_BASE_URL=http://localhost:3000`. The mock (`pnpm mock:api`,
-  `VITE_API_BASE_URL=http://127.0.0.1:4010`) remains for contract-only work; its
-  purpose was to unblock a workstream that no longer needs unblocking.
+  yet** — and the answer is the contract -- the mock, for contract-only work -- never a reach across.
+- **Build against the real API** (T7 §7): the full recipe, because two
+  commands are not enough. `docker compose up -d` (Postgres ONLY -- the API is not a
+  compose service), `cp .env.example .env`, `pnpm db:migrate`, `pnpm db:seed`, then
+  start the API **with that environment loaded into the shell**: `apps/api` reads no
+  `.env` of its own (register D-99), so `pnpm dev:api` from a clean shell gets an
+  empty `DATABASE_URL` and an empty `CONSOLE_ORIGIN` -- which makes CORS a wildcard
+  the browser refuses on a credentialed request, and 403s every cookie-carried write.
+  Then `VITE_API_BASE_URL=http://localhost:3000`. The mock (`pnpm mock:api`,
+  `http://127.0.0.1:4010`) remains for contract-only work; its purpose was to unblock
+  a workstream that no longer needs unblocking.
 
 ## The rules an agent working here needs
 
@@ -115,14 +122,16 @@ the shell, the states and the client first.
 | **C-8** | SC-C1 courier: mobile only, no seller nav, QR only after custody |
 
 > **The unblock note that used to sit here is history** (T7 Phase 4): Tier 3 landed,
-> the contract is committed with its 110 `/v1` path keys, and the auth endpoints exist
+> the contract is committed with its 110 `/v1` path keys (four governing-document
+> sites still print 124 -- register D-100; the contract in the tree is the authority), and the auth endpoints exist
 > -- C-2 and everything after it are gated by build order alone. Two of its rules are
 > permanent and stay: **do not hand-write `contracts/openapi.json`** (a hand-authored
 > contract is the lie with authority §5.1 forbids), and a screen whose endpoint does
 > not exist is not built.
 >
-> C-2's done-clause reads "against the real API" since T7 §7.1 -- the seeded seller
-> comes from `pnpm db:seed`, which prints the sign-in loop.
+> C-2's done-clause reads "against the real API" since T7 §7.1 . The seeded seller it needs comes
+> from `pnpm db:seed`, which is still the Tier-0 stub at THIS commit -- the real seed
+> lands with C-2 in Phase 5, and this line becomes present tense there.
 
 ## CSP
 
