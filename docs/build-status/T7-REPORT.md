@@ -17,11 +17,12 @@ Phase 5  reached: C-2
          C-1 at 1280 and 360: CSS reviewed, NOT observed (no browser in this run)
          twelve states demonstrable: y (StateDemo, behind a session)
          console automated tests: NONE -- see the Phase 5 note
-         MT-KEYS.md: 149 keys
+         MT-KEYS.md: 150 keys
 Gates    db:check 16/0/0   tests 430/430   determinism y   ci:local PASS (19 gates)
-Register 21 new (D-84..D-104) -- BLOCKERs first, by id and title (S-Register below)
+Register 21 new (D-84..D-104) -- no BLOCKERs; MAJORs first (S-Register below)
 Parked   (S-Parked below, each with the ruling it needs)
-State of main: clean
+State of main: clean -- phases 1, 3, 4, 5 merged as #21, #22, #23, #24
+         (this report lands in #24; nothing sits unmerged behind it)
 ```
 
 **The review model, as exercised.** Per T7 S0, every phase PR ran CI's gates plus an
@@ -32,8 +33,14 @@ itself) and seven more -- eight findings survived refutation (7b7d73b); CI caugh
 Phase 3's pass found a teardown-residue class across ten suites and a hole in the new
 gate's own enforcement bit (both applied pre-merge, commit dbc004a); Phases 4 and 5
 record their passes in their sections.
-Merges: PR #21 (Phase 1), #22 (Phase 3), #23 (Phase 4), #24 (Phase 5), each after its
-own green CI.
+Merges: PR #21 (Phase 1), #22 (Phase 3), #23 (Phase 4), #24 (Phase 5), each after
+its own green CI. One caveat about this report's own evidence: the adversarial
+passes ran as agents, and their transcripts are NOT committed to the repository.
+What is committed is what they changed -- each phase's findings applied in a named
+commit whose message states them -- so every claim below about what a pass found can
+be checked against a diff, and the counts of what it found cannot. Where I say a
+finding was refuted rather than applied, that is the one class of statement here you
+cannot verify from the tree.
 
 ---
 
@@ -186,16 +193,19 @@ in session and a pasted store id. There is no /dev route. Shell/nav/router: the 
 stores (D-97 -- the hole is labeled ON the screen, not hidden). intl.ts holds the
 formatting seam: absolute market time, currency from minor units, and whole-sentence
 templates with named slots (never concatenated fragments).
-Locale: en.ts authored; am.ts machine-translated placeholders with MT-KEYS.md naming
-all 149 keys owed to a translator; a missing Amharic key is a compile error, and the parity is real (149 keys in each
-catalogue, symmetric difference empty). One correction the review earned:
+Locale: en.ts authored; am.ts machine-translated placeholders with MT-KEYS.md naming all 150 keys owed to a
+translator; a missing Amharic key is a compile error, and the parity is real (150 keys in each catalogue, symmetric difference empty). One correction the review earned:
 **AM_ENABLED does not exist.** It appears in specs, comments and MT-KEYS.md, but
 there is no flag, no language switcher, and no console module imports `am` -- every
 screen imports `en` directly. "Amharic stays off" is therefore true only because the
 mechanism was never built, which is a different sentence from the one the order's
-checklist invites, and worth saying plainly. A second caveat on the same seam:
-nothing in CI regenerates or verifies MT-KEYS.md, so it can drift from en.ts
-silently; it simply has not yet. Layout is fluid -- no fixed heights on translated text, one
+checklist invites, and worth saying plainly. A second caveat on the same seam, and it is not hypothetical: nothing in CI
+regenerates or verifies MT-KEYS.md, so it can drift from en.ts silently -- and
+within this order it DID. The adversarial-pass repairs added `console.a11y.loading`
+to en.ts and am.ts and left the manifest at 149, which a fact-check caught and a
+regeneration fixed. A translator handed the stale file would have returned 149 of
+150 strings and nobody would have known which one was missing. That is the gate this
+seam wants and does not have. Layout is fluid -- no fixed heights on translated text, one
 grid that widens at 1024px; verified by build and CSS review at 1280/360. No browser
 automation was in this run's loop, so nothing ever rendered the page: the breakpoint
 and the absence of fixed heights were read in the CSS, not observed. StateDemo is
@@ -247,12 +257,20 @@ only in the token file.
 lands now (7.18.3, pinned); TanStack Query, Tailwind 4, RHF+Zod remain the
 destination (C-3+); hand CSS on the tokens' custom properties until design exists.
 Contract gaps hit and registered rather than papered over: D-95, D-96, D-97, D-98.
-**Two tensions the console code says are recorded here, so here they are.** (1)
-**429 has no state.** The twelve-state vocabulary is closed and holds no
+**Three tensions the console code says are recorded here, so here they are** --
+`lib/states.ts` names all three and this report owes an answer to each. (1) **429
+has no state.** The twelve-state vocabulary is closed and holds no
 RATE_LIMITED, so a 429 renders through CONFLICT with the retry seconds in the
 message. That is a real seam: the closed set is a virtue (no screen invents a
-thirteenth state) and this is the first place it pinches. Widening it is ADU-CON-03
-territory, not mine. (2) **The market timezone is a literal.** Shell renders the
+thirteenth state) and this is the first place it pinches. Widening it is ADU-CON-03 territory, not mine. (2) **404 has no state either.** A
+request that succeeded and found nothing is EMPTY, and that is what a 404 now
+renders as -- closer to the truth for a person than the TRANSPORT_ERROR-with-a-
+Retry-button it used to get, but still a status being read through a word that was
+defined for something else. (3) **403 STEP_UP_REQUIRED is not a screen state at
+all** -- it is a modal over the screen that asked, so callers must intercept it
+before consulting the mapper; if it reaches the mapper it degrades to NO_PERMISSION,
+which renders nothing, which is wrong but safe. A fourth thing, not a vocabulary
+tension but recorded alongside them: **the market timezone is a literal.** Shell renders the
 idle warning with timezone="Africa/Addis_Ababa" while intl.ts states that formatting
 runs against the market timezone from /v1/bootstrap. Correct for the only market
 that exists and wrong the day a second one does; it is a hardcode, not a resolution,
@@ -288,10 +306,12 @@ a 401 left a fully rendered shell in place. The idle clock ran from pointer and 
 events while the server's runs from the last REQUEST, so an active seller was never
 warned and the session expired silently underneath an interactive console; "Stay
 signed in" then reported success on requests the server never saw, because keepAlive
-swallowed everything but a 401. And the state mapper had two identical arms, sending
-401, 403 and 404 alike to TRANSPORT_ERROR with a Retry button for things retrying
-cannot fix. All repaired, and the sign-out and 401 paths verified against the
-running API. **The security finding I take most seriously is mine.** The [FAKE SMS]
+swallowed everything but a 401. And the state mapper had two identical arms, sending 401, 403 and 404 alike to
+TRANSPORT_ERROR with a Retry button for things retrying cannot fix; 403 and 404 have
+their own arms now, and the Retry button honours the envelope's own `retryable`. 401
+deliberately KEEPS TRANSPORT_ERROR, because the client signs out globally on any 401
+and the screen is about to be replaced. All repaired, and the sign-out and 401 paths
+verified against the running API. **The security finding I take most seriously is mine.** The [FAKE SMS]
 print I added to make S13's promise true wrote a phone number and a live OTP through
 console.warn, which bypasses the logger's NEVER_LOG redaction entirely -- and its
 guard was `!== 'test'`, i.e. print everywhere except jest. Nothing in this
@@ -309,9 +329,12 @@ not fix, on purpose.** A person with no account still cannot sign in: verify dem
 `age_declared_over_18` and no control collects it (**D-101**). The control is three
 lines; its LABEL is a legal attestation whose English and Amharic wording is not
 mine to invent, and the console fails closed rather than silently creating an
-account. The console's device identity is a build-time constant shared by every
-browser loading the bundle, which makes the new-device payout lock inert (**D-102**)
--- and every available fix invents an authorization rule. The console never calls
+account. The console's device identity has no configuration that works (**D-102**): with
+VITE_DEVICE_ID set it is a build-time constant shared by every browser loading the
+bundle, so the new-device payout lock reads "known device" for a machine it has
+never seen; without it, each load mints a uuid that has no core.device row and
+verify 400s before sign-in can happen at all. Every available fix invents an
+authorization rule. The console never calls
 /v1/bootstrap, so the market timezone and currency are literals and UPGRADE_REQUIRED
 is unreachable (**D-103**) -- owed build, not a decision.
 
@@ -456,8 +479,9 @@ MAJOR    D-99  the API process loads no .env, so the documented dev recipe canno
 MAJOR    D-101 a person with no account cannot sign in: verify demands an age
                declaration the console has no control for, and whose wording is
                a legal attestation, not a string to invent
-MAJOR    D-102 the console's device identity is a build-time constant shared by
-               every browser, so the new-device payout lock never fires
+MAJOR    D-102 the console's device identity has no working configuration: shared
+               build constant (payout lock never fires) or an unregistered
+               per-load uuid that cannot sign in at all
 MAJOR    D-104 identity creation picks "the live market" with an unordered
                LIMIT 1 and nothing keeps there being only one -- found because
                it broke a green suite on a seeded database
@@ -491,10 +515,15 @@ MINOR    D-103 the console never calls /v1/bootstrap: the market timezone and
 
 ## Errata -- register numbers cited wrongly in code
 
+(Method, since the count below is a claim: the four review lenses and the report
+fact-check each swept the diff for `D-\\d+` citations and checked them against the
+register's own headings. That is a sweep of the T7 diffs, not of the whole repository,
+so it is complete for what this order touched and says nothing about older files.)
+
 Four were found, three fixed in Phase 5's branch: `IdleWarning.tsx` cited D-93 (the
 scoped-gate defect) where it means D-96 (the idle values); `Shell.tsx` cited D-95 (the
 device platform) where it means D-97 (the sellers list); and `am.ts` -- a USER-FACING
-Amharic string -- cited D-96 where its English twin correctly cites D-97. The third is NOT fixed and will not be: `0039_deferred_values_nullable.sql`'s
+Amharic string -- cited D-96 where its English twin correctly cites D-97. The FOURTH is NOT fixed and will not be: `0039_deferred_values_nullable.sql`'s
 header cites D-88 where it means D-90, and that migration is merged. **Merged
 migrations are never edited** (T7 S2), and a comment is not worth the one exception
 that teaches the rule is negotiable. It is recorded here instead, which is where a

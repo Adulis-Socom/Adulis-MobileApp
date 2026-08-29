@@ -26,7 +26,7 @@ if (!CONNECTION) {
 // fake adapters refuse to construct in production; this had no equivalent
 // refusal, so it inherits the same one.
 if (process.env.NODE_ENV === 'production') {
-  console.error('FAIL  refusing to seed with NODE_ENV=production. This script writes a live market and a test account.');
+  console.error('FAIL  refusing to seed with NODE_ENV=production. This script writes a market, a seller and an account that can receive a code.');
   process.exit(2);
 }
 

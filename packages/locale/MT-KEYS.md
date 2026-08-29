@@ -8,7 +8,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-149 keys:
+150 keys:
 
 - `app.title`
 - `health.ok`
@@ -104,6 +104,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `chat.bot.escalated`
 - `notification.chat.escalated`
 - `console.a11y.skip_to_content`
+- `console.a11y.loading`
 - `console.a11y.primary_nav`
 - `console.nav.home`
 - `console.nav.orders`
