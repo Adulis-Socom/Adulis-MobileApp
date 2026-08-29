@@ -212,6 +212,18 @@ export function translatePgError(e: PgError): AdulisException | null {
         // branch is the in-function re-check winning a race.
         return new AdulisException('DELETION_BLOCKED');
       }
+      if (e.message.includes('product slug is immutable')) {
+        // G1.9. The slug is generated once and never moves, because the
+        // distribution channel is a shared link -- a renamed product must
+        // not break every post pointing at it. Nothing in the API writes
+        // the column, so reaching here means a caller tried; without this
+        // branch the ladder falls through to `return null` and the write
+        // that the database CORRECTLY refused surfaces as a 500.
+        return new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'SLUG_IMMUTABLE' },
+        });
+      }
       if (e.message.includes('publication blocked') || e.message.includes('publication limit')) {
         // handled endpoint-side with items[]; reaching here means a caller
         // outside the publish handler tripped it - still a 409.
