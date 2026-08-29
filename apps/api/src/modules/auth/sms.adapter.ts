@@ -1,4 +1,8 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
+import { createLogger } from '../../common/logging';
+import { nodeEnv } from '../../common/env';
 /**
  * SMS delivery adapter (ADU-AUTH-01 sections 4.4, 6).
  *
@@ -27,12 +31,26 @@ export interface SmsAdapter {
 export const SMS_ADAPTER = Symbol('SMS_ADAPTER');
 
 /**
+ * Where development OTPs are written. Overridable so a developer can point it
+ * somewhere else; gitignored where it lands by default.
+ */
+export function devSmsLogPath(): string {
+  return process.env['DEV_SMS_LOG'] ?? join(process.cwd(), '.dev-sms.log');
+}
+
+const log = createLogger();
+
+/**
  * Records what would have been sent. Tests read the code out of the last
- * message's slots; local development reads it from the API log.
+ * message's slots; local development reads it from the file named above.
  */
 export class FakeSmsAdapter implements SmsAdapter {
   constructor() {
     assertFakeIsPermitted('FakeSmsAdapter');
+    if (nodeEnv() === 'development') {
+      // The PATH is safe to log; what the file contains is not.
+      log.warn({ msg: `[FAKE SMS] development codes are appended to ${devSmsLogPath()}` });
+    }
   }
 
   readonly sent: SmsMessage[] = [];
@@ -40,20 +58,24 @@ export class FakeSmsAdapter implements SmsAdapter {
   send(message: SmsMessage): Promise<void> {
     this.sent.push(message);
     // ADU-CON-02 S13 promises "the local SMS adapter prints OTPs to the
-    // terminal" -- until T7 it did not, and a developer signing the seeded
-    // seller into the console had no way to read the code.
+    // TERMINAL". It cannot, and this is the deviation, recorded rather than
+    // quietly kept: ADU-RUL-03 S1.1 makes the logger the only egress in
+    // apps/api, and the logger CANNOT carry an OTP -- the code and the phone
+    // are on NEVER_LOG precisely so they never reach a log line. Printing
+    // them to stdout under any name is the defect that ruling closes.
     //
-    // THE GATE IS AN ALLOW-LIST, and deliberately so. This line prints a
-    // phone number and a live OTP through console.warn, which bypasses the
-    // logger's NEVER_LOG redaction entirely (otpCode, phone, phoneNumber are
-    // all on that list). It was written as `!== 'test'`, i.e. printing
-    // everywhere except jest -- and NOTHING in this repository sets
-    // NODE_ENV=production (no render.yaml, and the deploy runbook never
-    // mentions it, per D-80), so the one deployment that must never see this
-    // was the one it printed in. Only an explicit development environment
-    // qualifies now.
-    if (process.env['NODE_ENV'] === 'development') {
-      console.warn(`[FAKE SMS] to ${message.phone}: ${message.templateKey}`, message.slots);
+    // So the code goes to a FILE that only a development machine has:
+    // gitignored, off stdout, and therefore outside every container log
+    // aggregator. Production cannot reach it because production cannot
+    // construct this adapter at all (assertFakeIsPermitted, above), and that
+    // refusal is now provable because NODE_ENV is asserted at boot.
+    if (nodeEnv() === 'development') {
+      appendFileSync(
+        devSmsLogPath(),
+        `${new Date().toISOString()} to ${message.phone}: ${message.templateKey} ` +
+          `${JSON.stringify(message.slots)}\n`,
+        'utf8',
+      );
     }
     return Promise.resolve();
   }

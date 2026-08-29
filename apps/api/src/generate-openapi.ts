@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+// MUST precede the app.module import: it declares this build's NODE_ENV
+// before app.module.ts constructs its adapters at module load. See the file.
+import './build-tool-env';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';

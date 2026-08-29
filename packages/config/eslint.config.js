@@ -37,6 +37,36 @@ export default tseslint.config(
     // API and worker run on Node.
     files: ['apps/api/**/*.ts'],
     languageOptions: { globals: { ...globals.node, ...globals.jest } },
+    rules: {
+      /**
+       * ADU-RUL-03 S1.1 -- the logger is the only egress from apps/api.
+       *
+       * Pino's redaction allow-list (logging.ts) governs what reaches a log
+       * line: a field appears BECAUSE it is named. `console.*` writes
+       * straight to stdout and is governed by nothing, so the guarantee
+       * "fields are logged because they were named" held only for code that
+       * used the logger -- and the [FAKE SMS] print walked around it with a
+       * phone number and a live OTP. An allow-list any module can bypass is
+       * a convention with a config file.
+       *
+       * apps/console is deliberately NOT covered: a browser console is not
+       * stdout and holds no server credentials.
+       */
+      'no-console': 'error',
+    },
+  },
+  {
+    /**
+     * ONE exemption, in the rule rather than in the code, so that it is
+     * visible here instead of as a disable comment someone can copy.
+     * Two CLIs, neither of which serves a request or handles a credential:
+     * generate-openapi.ts writes one line naming the file it just wrote, and
+     * the load-test harness prints the measurements that are its entire
+     * output (wave timings, RSS growth). Both belong on a terminal rather
+     * than in a JSON log stream.
+     */
+    files: ['apps/api/src/generate-openapi.ts', 'apps/api/test-load/**/*.ts'],
+    rules: { 'no-console': 'off' },
   },
   {
     // The console runs in a browser.

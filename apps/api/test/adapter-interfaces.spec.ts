@@ -5,6 +5,7 @@ import { FakeFinancialStorageAdapter } from '../src/modules/financial/financial-
 import { FakeSocialPlatformAdapter } from '../src/modules/onboarding/social-platform.adapter';
 import { FakePostLinkAdapter } from '../src/modules/catalogue/post-link.adapter';
 import { NullInferenceAdapter } from '../src/modules/chat/inference.adapter';
+import { resetNodeEnvForTests } from '../src/common/env';
 
 /**
  * Phase F.2 — "A fake that could be mistaken for an implementation is worse
@@ -25,6 +26,15 @@ const FAKES: ReadonlyArray<[string, () => unknown]> = [
 
 describe('deployment adapters', () => {
   const realNodeEnv = process.env['NODE_ENV'];
+
+  // NODE_ENV is read once and memoised (ADU-RUL-03 S1.2 -- asserted at a
+  // boundary, not consulted at a call site), so a spec that changes it must
+  // forget the memo first. That the seam is needed here is the design
+  // working: nothing in the running processes can change environment
+  // mid-flight either.
+  beforeEach(() => {
+    resetNodeEnvForTests();
+  });
 
   afterEach(() => {
     if (realNodeEnv === undefined) delete process.env['NODE_ENV'];

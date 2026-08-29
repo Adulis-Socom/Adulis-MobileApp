@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { configureApp } from './configure-app';
 import { createLogger } from './common/logging';
+import { assertNodeEnv } from './common/env';
 
 /**
  * Process 1 of 2 — the HTTP API (ADU-CON-02 v3.0 section 1).
@@ -14,6 +15,9 @@ import { createLogger } from './common/logging';
  * mapper) are app.module.ts's.
  */
 async function bootstrap(): Promise<void> {
+  // FIRST, before the logger, the container and every adapter: a process that
+  // cannot say which environment it is in must not start (ADU-RUL-03 S1.2).
+  const env = assertNodeEnv();
   const log = createLogger();
   const app = await NestFactory.create(AppModule, { logger: false });
 
@@ -21,7 +25,7 @@ async function bootstrap(): Promise<void> {
 
   const port = Number(process.env['PORT'] ?? 3000);
   await app.listen(port);
-  log.info({ msg: 'api listening', route: '/healthz', statusCode: 200 });
+  log.info({ msg: `api listening in ${env}`, route: '/healthz', statusCode: 200 });
 }
 
 void bootstrap();

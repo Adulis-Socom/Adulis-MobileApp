@@ -1049,3 +1049,25 @@ Effect:    A new account is assigned to whichever live market the planner return
 Response:  the reachable trigger is REMOVED; the underlying lookup is NOT changed
 Action:    ops/scripts/seed.mjs now writes its market with is_live = false and re-asserts that on every run, so a database seeded by the earlier version corrects itself. That is sound because both live-market lookups are fallbacks used only when a phone has NO account, and the seed creates its account outright. The unordered SELECT itself is untouched: making it deterministic is a change to how every future account is assigned, which is a ruling, not a cleanup.
 Ruling needed: whether more than one live market is legal. If NO, a partial unique index (`CREATE UNIQUE INDEX ... ON core.market ((true)) WHERE is_live`) makes the LIMIT 1 honest and turns a silent misassignment into a constraint violation. If YES, both lookups need a deterministic ORDER BY and a documented rule for which live market a new account joins -- and "the first one the planner returns" cannot be it.
+
+### D-106 - ADU-CON-02 S13's promise that the local SMS adapter prints OTPs to the terminal is no longer implementable
+
+Severity:  MINOR (a deviation from an installed document, taken deliberately and recorded here rather than kept quietly)
+Phase:     T8 - 1
+Source:    ADU-CON-02 v3.1 S13 -- "the local SMS adapter prints OTPs to the terminal"; ADU-RUL-03 S1.1 -- console.* is banned in apps/api and the logger is the only egress; apps/api/src/common/logging.ts -- the allow-list emits a field BECAUSE it is named, and otpCode/phone/phoneNumber are on NEVER_LOG precisely so they are never named
+Found by:  implementing ADU-RUL-03 S1.1: the two instructions cannot both be honoured
+Effect:    S13 asks for an OTP on the terminal. The ruling forbids the only mechanism that put it there, and the sanctioned mechanism cannot carry it -- routing the code through pino's `msg` would satisfy the letter of "use the logger" while laundering exactly the value the allow-list exists to exclude, which is worse than the original defect because it would look compliant. There is no way to satisfy both sentences.
+Response:  DEVIATED, deliberately, and the deviation is this entry
+Action:    The fake SMS adapter appends to a file instead: `apps/api/.dev-sms.log` by default (overridable with DEV_SMS_LOG), gitignored, written only when NODE_ENV is exactly 'development'. The reasoning is that the risk in the original was not "a developer can read the code" but "the code reaches stdout", where every container log aggregator collects it. A file on a development machine is outside that path, and production cannot reach the code at all because production cannot construct the adapter -- a refusal that is now provable rather than merely written (see D-105's boundary). The logger still announces the PATH at construction, which is safe to log and tells a developer where to look. ops/scripts/seed.mjs's printed instructions point at the file.
+Ruling needed: whether ADU-CON-02 v3.2 restates S13 as "writes OTPs to a development file" or specifies a different developer channel. Nothing is blocked either way; the dev loop works.
+
+### D-107 - Every NODE_ENV guard in the tree was re-read, and one more was inverted the same way
+
+Severity:  MINOR (all guards now sit behind the asserted boundary; recorded because ADU-RUL-03 S1 asks for the sweep's result)
+Phase:     T8 - 1
+Source:    ADU-RUL-03 S1 -- "Every existing NODE_ENV guard is now suspect and should be re-read... none has ever been exercised in the branch it guards"
+Found by:  the Phase 1 sweep
+Effect:    Five runtime guards existed. (1) fake-guard.ts's production refusal -- the T7 S3.2 rule; never exercised, now provable, and it additionally refuses when NODE_ENV is unset instead of silently permitting a fake. (2) sms.adapter.ts's development-only print -- rewritten (D-106). (3) ops/scripts/seed.mjs's production refusal -- an .mjs script outside the API process, so it reads process.env directly and stays that way; the boundary module is TypeScript and importing it into an ops script would couple the two builds. (4) and (5) ops/scripts/gates.mjs drops an inherited NODE_ENV=development and keeps production -- correct as written, and deliberately outside the boundary for the same reason as (3). The API's two ENTRYPOINTS both assert now: main.ts and worker.ts, because "the worker is the same codebase started differently" and it constructs the same adapters.
+Response:  FIXED where the guard was in the API process; recorded where it is not
+Action:    apps/api consults common/env.ts's memoised value, never process.env['NODE_ENV']. The ops scripts (.mjs) still read process.env because they are separate processes with their own lifecycle and no build step; that is a deliberate boundary, not an oversight.
+Ruling needed: none.
