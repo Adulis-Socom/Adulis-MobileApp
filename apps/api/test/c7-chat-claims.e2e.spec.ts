@@ -26,9 +26,11 @@ const DEVICE = 'dddd7777-3333-4000-8000-000000000006';
 const SELLER = 'dddd7777-3333-4000-8000-000000000007';
 const SELLER2 = 'dddd7777-3333-4000-8000-000000000008';
 const PRODUCT = 'dddd7777-3333-4000-8000-000000000009';
-// G1.10: a conversation is anchored on a product or an order, and the
-// anchor must belong to the seller being talked to -- so the second
-// seller needs one of its own.
+// D-66 (T7): anchors moved to the MESSAGE and opens are anchorless again,
+// so this second seller's product is no longer anchored anywhere in this
+// file. It stays as SELLER2's one catalogue row (the entitlement tests talk
+// to a store that plausibly sells something); the per-message anchor and
+// mismatch probes live in t7-rulings.spec.ts.
 const PRODUCT2 = 'dddd7777-3333-4000-8000-00000000000f';
 const VARIANT = 'dddd7777-3333-4000-8000-00000000000a';
 const OWNER_S = 'dddd7777-3333-4000-8000-00000000000b';
@@ -286,11 +288,11 @@ describe('C7 — chat, claims, reviews', () => {
 
     it('one conversation per pair: open twice, same id both times', async () => {
       const a = await buyerReq('post', '/v1/conversations')
-        .send({ seller_id: SELLER, product_id: PRODUCT })
+        .send({ seller_id: SELLER })
         .expect(201);
       conversationId = a.body.conversation_id;
       const b = await buyerReq('post', '/v1/conversations')
-        .send({ seller_id: SELLER, product_id: PRODUCT })
+        .send({ seller_id: SELLER })
         .expect(201);
       expect(b.body.conversation_id).toBe(conversationId);
     });
@@ -339,7 +341,7 @@ describe('C7 — chat, claims, reviews', () => {
 
     it('no chatbot entitlement: the message lands, the bot stays silent, humans are free', async () => {
       const open = await buyerReq('post', '/v1/conversations')
-        .send({ seller_id: SELLER2, product_id: PRODUCT2 })
+        .send({ seller_id: SELLER2 })
         .expect(201);
       const r = await buyerReq('post', `/v1/conversations/${open.body.conversation_id}/messages`)
         .send({ text: 'do you deliver' })

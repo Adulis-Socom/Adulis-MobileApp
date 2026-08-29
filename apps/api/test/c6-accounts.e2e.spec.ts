@@ -294,6 +294,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
       `DELETE FROM billing.tier_definition WHERE id='${TD_BUSINESS}'`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.seller_courier WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
+      // T7/D-67: this teardown runs under replica mode, which disables the
+      // invite table's seller CASCADE and its two account FKs alike -- so
+      // without this line every c6 run leaves an orphaned invite row
+      // carrying a real phone number, which is exactly what migration
+      // 0037's one-time cleanup deleted. The FKs cannot prevent the
+      // recurrence; only this line does.
+      `DELETE FROM core.seller_courier_invite WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.product_variant WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.product WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.seller_eligibility_evaluation WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
@@ -1011,6 +1018,38 @@ describe('C6 — accounts, team, billing, deletion', () => {
       const bearer = signin.body.token as string;
       const accountId = signin.body.account_id as string;
 
+      // T7 S3.4 (D-64 residual) -- a CONSOLE sign-in WITH remember_device,
+      // so the deletion below has a real core.account_device row and a
+      // session referencing it. Without this the account_device assertion
+      // is vacuous: MOBILE sessions cannot carry one (CHECK
+      // remembered_device_is_console), and the FK-unhook path in
+      // fn_delete_account would go untested.
+      await http()
+        .post('/v1/auth/otp/request')
+        .set('Idempotency-Key', key())
+        .set('X-Adulis-Device', d)
+        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN' })
+        .expect(202);
+      const consoleSignin = await http()
+        .post('/v1/auth/otp/verify')
+        .set('Idempotency-Key', key())
+        .set('X-Adulis-Device', d)
+        .set('Origin', CONSOLE_ORIGIN)
+        .send({
+          phone: P_WEBDEL,
+          code: codeFor(P_WEBDEL),
+          audience: 'CONSOLE',
+          device_id: d,
+          remember_device: true,
+        })
+        .expect(200);
+      expect(String(consoleSignin.headers['set-cookie'])).toContain('__Host-adulis_device');
+      const remembered = await admin.query(
+        `SELECT count(*)::int AS n FROM core.account_device WHERE account_id=$1`,
+        [accountId],
+      );
+      expect(remembered.rows[0].n).toBe(1);
+
       // An order that will be RELEASED by deletion (still pre-payment).
       await http()
         .post('/v1/cart/lines')
@@ -1108,6 +1147,25 @@ describe('C6 — accounts, team, billing, deletion', () => {
       expect(scrubbed.rows[0].status).toBe('SCRUBBED');
       expect(scrubbed.rows[0].phone_e164).toMatch(/^\+999/);
       expect(scrubbed.rows[0].scrubbed_at).toBeTruthy();
+
+      // T7 S3.4 -- DIRECT SQL, not a 401: authenticate refuses a scrubbed
+      // account's session by account status alone, so the HTTP assertion
+      // above passes whether or not the rows were actually revoked. A
+      // session belonging to a deleted account is a live credential for an
+      // identity that no longer exists; a remembered-device row is worse --
+      // it would outlive its account silently.
+      const liveSessions = await admin.query(
+        `SELECT count(*)::int AS n FROM core.session
+          WHERE account_id=$1 AND revoked_at IS NULL`,
+        [accountId],
+      );
+      expect(liveSessions.rows[0].n).toBe(0);
+      const deviceRows = await admin.query(
+        `SELECT count(*)::int AS n FROM core.account_device WHERE account_id=$1`,
+        [accountId],
+      );
+      // REMOVED, not revoked (D-64 residual): zero rows, not stamped rows.
+      expect(deviceRows.rows[0].n).toBe(0);
 
       await http()
         .post('/v1/auth/otp/request')

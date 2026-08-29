@@ -28,6 +28,12 @@ import { INFERENCE_ADAPTER, type InferenceAdapter } from './inference.adapter';
 
 const first = <T>(rows: readonly T[]): T | undefined => rows[0];
 
+/** D-66: the anchor of the message being answered, threaded to the seam. */
+interface MessageAnchor {
+  readonly productId: string | null;
+  readonly orderId: string | null;
+}
+
 interface ConversationRow {
   id: string;
   seller_id: string;
@@ -48,8 +54,6 @@ export class ChatService {
     trx: Transaction<Database>,
     req: AuthedRequest,
     sellerId: string,
-    productId?: string,
-    orderId?: string,
   ): Promise<unknown> {
     const buyer = req.ctx?.accountId as string;
     const seller = await sql<{ id: string; market_id: string; status: string }>`
@@ -62,37 +66,15 @@ export class ChatService {
       throw new AdulisException('NOT_FOUND');
     }
 
-    // THE ANCHOR MUST BELONG TO THIS SELLER, and to this buyer where it is
-    // an order. Otherwise a buyer could anchor a conversation with seller A
-    // to seller B's product, and the slots would fill from a catalogue the
-    // seller cannot see. A mismatch is 404, never a 403: an anchor that is
-    // not yours must not be confirmed to exist (S19).
-    if (productId !== undefined) {
-      const owned = await sql<{ id: string }>`
-        SELECT id FROM core.product
-         WHERE id = ${productId} AND seller_id = ${sellerId}`.execute(trx);
-      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
-    } else if (orderId !== undefined) {
-      const owned = await sql<{ id: string }>`
-        SELECT id FROM core."order"
-         WHERE id = ${orderId} AND seller_id = ${sellerId}
-           AND buyer_account_id = ${buyer}`.execute(trx);
-      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
-    }
-
-    // ON CONFLICT DOES NOT RE-ANCHOR, and that is register D-66 handled
-    // rather than hidden. one_conversation_per_pair means a buyer and a
-    // seller have ONE conversation, so a second product would otherwise
-    // overwrite the first product's anchor -- and a slotted template would
-    // then fill CONFIDENTLY WITH THE WRONG PRODUCT rather than escalate,
-    // which is worse than the missing anchor G1.10 exists to fix. Keeping
-    // the original anchor keeps the containment signal honest until a
-    // ruling says whether a conversation is per pair or per anchor.
+    // NO ANCHOR HERE ANY MORE (D-66 via T7 S3.1). A thread is a
+    // relationship; a question is about a thing -- so the anchor rides the
+    // MESSAGE, on the send path, and this endpoint went back to the shape
+    // it had before G1.10. one_conversation_per_pair is untouched: the
+    // create-or-return upsert is still what makes opening idempotent.
     const r = await sql<{ id: string }>`
       INSERT INTO chat.conversation
-        (id, seller_id, buyer_account_id, market_id, product_id, order_id)
-      VALUES (${randomUUID()}, ${sellerId}, ${buyer}, ${s.market_id},
-              ${productId ?? null}, ${orderId ?? null})
+        (id, seller_id, buyer_account_id, market_id)
+      VALUES (${randomUUID()}, ${sellerId}, ${buyer}, ${s.market_id})
       ON CONFLICT (seller_id, buyer_account_id, market_id)
       DO UPDATE SET last_message_at = chat.conversation.last_message_at
       RETURNING id`.execute(trx);
@@ -185,6 +167,7 @@ export class ChatService {
     const limit = 50;
     const r = await sql<Record<string, unknown>>`
       SELECT m.id, m.sender_kind, m.body, m.locale, m.sent_at, m.read_at,
+             m.product_id, m.order_id,
              bt.resolution_path, bt.intent_id, bt.escalated
         FROM chat.message m
         LEFT JOIN chat.bot_turn bt ON bt.message_id = m.id
@@ -211,6 +194,10 @@ export class ChatService {
             locale: m['locale'],
             sent_at: m['sent_at'],
             read_at: m['read_at'],
+            // D-66: what this message is about, per message. BOT rows are
+            // anchorless by design (the bot answers; it does not ask).
+            product_id: m['product_id'],
+            order_id: m['order_id'],
           },
     );
     return page(rows, limit, (x) => String((x as { sent_at: Date }).sent_at?.toISOString?.() ?? ''));
@@ -221,17 +208,57 @@ export class ChatService {
     trx: Transaction<Database>,
     req: AuthedRequest,
     conversationId: string,
-    body: { text?: string | undefined; chip_id?: string | undefined },
+    body: {
+      text?: string | undefined;
+      chip_id?: string | undefined;
+      product_id?: string | undefined;
+      order_id?: string | undefined;
+    },
     locale: string,
   ): Promise<unknown> {
     const accountId = req.ctx?.accountId as string;
     const { conv, side } = await this.membership(trx, req, conversationId);
 
+    // AUTHORIZATION BEFORE RESOURCE VALIDATION (adversarial pass): the
+    // send-permission gate runs before any anchor probe, so a member who
+    // may read but not send learns nothing from anchor 404s. Today every
+    // role with messages:read also holds messages:send -- the ordering is
+    // for the day the matrix splits them.
     if (side === 'SELLER') {
       await sql`
         SELECT core.fn_has_permission(${accountId}, ${conv.seller_id},
           'seller.messages:send',
           ${(req.ctx?.audience as string) ?? ''}::core.session_audience)`.execute(trx);
+    }
+
+    // THE ANCHOR MUST BELONG TO THE SELLER BEING TALKED TO -- 404 on
+    // mismatch, PER MESSAGE (D-66 via T7 S3.1). Otherwise a message in a
+    // thread with seller A could be "about" seller B's product, and slot
+    // resolution would read a catalogue the seller cannot see. 404, never
+    // 403: an anchor that is not yours must not be confirmed to exist (S19).
+    //
+    // The order arm checks the CONVERSATION's buyer, not the caller: the
+    // send path is reachable from both sides, and a seller anchoring their
+    // reply on the buyer's own order is legitimate -- the invariant is that
+    // the order belongs to THIS pair, not to whoever is typing.
+    //
+    // SIDE-AWARE VISIBILITY on the product arm: a buyer's anchor must be a
+    // product the public catalogue would show them (PUBLISHED) -- anything
+    // else turns the anchor probe into an oracle over the seller's drafts
+    // and moderation-unpublished rows. The seller side may anchor its own
+    // catalogue whatever the visibility.
+    if (body.product_id !== undefined) {
+      const owned = await sql<{ id: string }>`
+        SELECT id FROM core.product
+         WHERE id = ${body.product_id} AND seller_id = ${conv.seller_id}
+           AND (${side === 'BUYER'} = false OR visibility = 'PUBLISHED')`.execute(trx);
+      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
+    } else if (body.order_id !== undefined) {
+      const owned = await sql<{ id: string }>`
+        SELECT id FROM core."order"
+         WHERE id = ${body.order_id} AND seller_id = ${conv.seller_id}
+           AND buyer_account_id = ${conv.buyer_account_id}`.execute(trx);
+      if (!first(owned.rows)) throw new AdulisException('NOT_FOUND');
     }
 
     // A chip IS its intent: the tap carries the intent id, no
@@ -265,15 +292,23 @@ export class ChatService {
 
     const messageId = randomUUID();
     await sql`
-      INSERT INTO chat.message (id, conversation_id, sender_kind, sender_account_id, body, locale)
+      INSERT INTO chat.message
+        (id, conversation_id, sender_kind, sender_account_id, body, locale,
+         product_id, order_id)
       VALUES (${messageId}, ${conversationId}, ${senderKind}::chat.message_sender_kind,
-              ${accountId}, ${text}, ${locale})`.execute(trx);
+              ${accountId}, ${text}, ${locale},
+              ${body.product_id ?? null}, ${body.order_id ?? null})`.execute(trx);
 
     // The cascade runs for BUYER messages on a seller whose tier includes
-    // the chatbot. Human messaging stays free either way (S15).
+    // the chatbot. Human messaging stays free either way (S15). It receives
+    // THE ANCHOR OF THE MESSAGE BEING ANSWERED -- never the thread's,
+    // because the thread no longer has one (D-66).
     let bot: unknown = null;
     if (side === 'BUYER') {
-      bot = await this.cascade(trx, conv, messageId, chipIntent, body.text ?? null, locale);
+      bot = await this.cascade(trx, conv, messageId, chipIntent, body.text ?? null, locale, {
+        productId: body.product_id ?? null,
+        orderId: body.order_id ?? null,
+      });
     }
     return { message_id: messageId, bot };
   }
@@ -297,6 +332,7 @@ export class ChatService {
     chipIntent: string | null,
     freeText: string | null,
     locale: string,
+    anchor: MessageAnchor,
   ): Promise<unknown> {
     const entitled = await sql<{ limit: { allowed: boolean } }>`
       SELECT billing.fn_effective_limit(${conv.seller_id}, 'CHATBOT_SCOPE') AS "limit"`.execute(trx);
@@ -304,7 +340,7 @@ export class ChatService {
 
     // Layer 1 — the chip carries its intent.
     if (chipIntent) {
-      return this.answerWith(trx, conv, chipIntent, 'CHIP', locale);
+      return this.answerWith(trx, conv, chipIntent, 'CHIP', locale, anchor);
     }
     if (!freeText) return null;
 
@@ -316,13 +352,13 @@ export class ChatService {
        LIMIT 1`.execute(trx);
     const hit = first(match.rows);
     if (hit) {
-      return this.answerWith(trx, conv, hit.intent_id, 'KEYWORD', locale);
+      return this.answerWith(trx, conv, hit.intent_id, 'KEYWORD', locale, anchor);
     }
 
     // Layers 3-4 — the adapter. Null until the integration lands.
     const inferred = await this.inference.classify(freeText, locale);
     if (inferred) {
-      return this.answerWith(trx, conv, inferred.intentId, inferred.path, locale, inferred);
+      return this.answerWith(trx, conv, inferred.intentId, inferred.path, locale, anchor, inferred);
     }
 
     // Layer 5 — escalate with full context; delivered as a notification
@@ -337,6 +373,7 @@ export class ChatService {
     intentId: string,
     path: 'CHIP' | 'KEYWORD' | 'EMBEDDING' | 'CLASSIFIER',
     locale: string,
+    _anchor: MessageAnchor,
     inferred?: { confidence: number; modelId: string; tokensIn: number; tokensOut: number },
   ): Promise<unknown> {
     // Seller-specific answer first, the global default second (S15.1 —
@@ -348,8 +385,13 @@ export class ChatService {
        ORDER BY seller_id NULLS LAST
        LIMIT 1`.execute(trx);
     const t = first(template.rows);
-    // No template, or a template whose slots this surface cannot fill:
-    // unanswerable — escalate rather than reply with holes (registered).
+    // A template with slots is still unanswerable and escalates. THE SEAM
+    // IS NOW HONEST, though: `_anchor` is the anchor of the message being
+    // answered (D-66 via T7 S3.1), which is where those slots would fill
+    // from -- and the slot VOCABULARY (which slot names map to which
+    // product/order fields) is ruled by no document, so filling them here
+    // would be invention (register D-85). When that ruling lands, this
+    // branch is where it plugs in, and it already holds the right anchor.
     if (!t || (t.slots?.length ?? 0) > 0) {
       const botMessageId = await this.escalateTurn(trx, conv, 0);
       return { resolution_path: 'ESCALATED', bot_message_id: botMessageId };

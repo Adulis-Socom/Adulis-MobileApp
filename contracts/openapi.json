@@ -414,7 +414,7 @@
             "description": ""
           }
         },
-        "summary": "Begin a conversation, anchored on exactly one of product_id or order_id.",
+        "summary": "Create-or-return the one conversation per buyer-seller pair.",
         "tags": [
           "Chat"
         ]
@@ -529,7 +529,7 @@
             "description": ""
           }
         },
-        "summary": "text or chip_id; the bot replies with template_key and slots, never prose.",
+        "summary": "text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.",
         "tags": [
           "Chat"
         ]

@@ -820,3 +820,68 @@ Action:    **Exactly one suite may own a global sweep, and no test asserts a glo
   - `t6-parked-decisions` builds its two OTP challenges directly with `codeHash`, so it needs no budget and purges nothing; the courier-invite budget is purged **scoped to the seller** in both suites that hold one.
   Verified by twelve consecutive full-suite runs, 413/413 each, with every run's output kept.
 Ruling needed: none. The rule is worth carrying: **a test that asserts a number the whole database contributes to is a test about other people's rows.** Assert your own row is gone; assert theirs is not.
+### D-84 - ADU-RUL-02 is named as an installable document and its text was never supplied
+
+Severity:  MINOR (documentation debt; the rulings themselves arrived in full)
+Phase:     T7 - 1
+Source:    WORK ORDER T7 S3 -- "Install first: `ADU-RUL-02...` to `docs/`"; ADU-VAL-01 v1.1 S0.2 quotes the ruling by name
+Found by:  attempting the install
+Effect:    The four Phase 1 rulings (D-66 message anchor, D-57 person row, D-67 partial unique, D-64 residual) and the nullability rule are specified in binding detail in the work order's own text and in ADU-VAL-01 v1.1 -- but the DOCUMENT those rulings live in was not attached, so `docs/` cannot receive it and a future reader who greps for ADU-RUL-02 finds citations with no file, exactly the shape ADU-RUL-01 had before T6 installed the amendment trail.
+Response:  BUILT FROM THE WORK ORDER'S TEXT, install PARKED
+Action:    Every implementation cites "T7 S3.x" beside "ADU-RUL-02" so the authority chain survives the missing file. ADU-VAL-01 v1.1 is installed at docs/registers/ and is GOVERNED by the ASCII gate.
+Ruling needed: supply ADU-RUL-02's text for installation to docs/ -- or rule that T7's S3 text IS the document of record, in which case the citation form "ADU-RUL-02 via T7 S3" becomes permanent.
+
+### D-85 - The slot vocabulary is ruled by nothing, so the anchor's READER is a seam and not a filler
+
+Severity:  MINOR (deliberate under-build; the alternative was invention)
+Phase:     T7 - 1
+Source:    T7 S3.1 -- "slot resolution reads the anchor of the message being answered, not the thread's"; nlu.answer_template.slots text[] (0015:199); ADU-DB-01 v1.12 S17.2 prints the column and no vocabulary
+Found by:  building D-66 and looking for what a slot NAME maps to
+Effect:    No document defines which slot names exist or which product/order fields they draw from -- there is not one seeded template in any migration, and the assistant has always escalated on any template whose slots[] is non-empty. "Reads the anchor of the message" is therefore implemented as the SEAM: the cascade and answerWith now receive the answered message's own anchor (never the thread's -- the thread no longer has one), and the escalate-on-slots branch holds it at the exact point a filler would plug in.
+Response:  SEAM BUILT, FILLER PARKED
+Action:    chat.service.ts threads MessageAnchor from postMessage through cascade into answerWith; the branch comment names this entry. Filling a slot without a ruled vocabulary would answer confidently from an invented mapping -- the precise failure D-66 exists to prevent, one layer down.
+Ruling needed: the slot vocabulary -- names, and the field each draws from the anchored product or order. RULINGS-NEEDED already carries the question as D-39's "what fills a template's slots"; D-66's landing narrows the answer to "the message's anchor" and leaves the vocabulary open.
+
+### D-86 - Nothing forbids rewriting a message's anchor, and the ruling is silent
+
+Severity:  QUESTION
+Phase:     T7 - 1
+Source:    chat.message carries table-level UPDATE for adulis_app (0015:270); T7 S3.1 rules storage, validation and reading, and says nothing about mutability; 0031's conversation-era write-once trigger died with the columns it guarded
+Found by:  porting 0031's inventory and asking what replaces the write-once trigger
+Effect:    No code path UPDATEs chat.message anywhere (verified: the only read_at writers are core.notification's), so the exposure is theoretical today -- but the grant permits it, and the conversation-era anchor earned an explicit immutability trigger for the same shape of risk. An anchor rewritten after the bot answered would falsify the containment record retroactively.
+Response:  NOT BUILT, recorded
+Action:    Building an unasked-for trigger is the "completing the schema" failure mode; the ruling's author decides whether message anchors are set-at-send. The translator's 23001 ladder is substring-keyed, so a future trigger's RAISE text must be unique across it (its ANCHOR_IMMUTABLE predecessor was removed with 0035).
+Ruling needed: is a message's anchor immutable after send? If yes, a BEFORE UPDATE trigger mirroring 0031's, with a fresh message text and a translator branch in the same change.
+
+### D-87 - Three governing-document passages now print the pre-T7 anchor and invite shapes
+
+Severity:  MINOR (documentation debt, deliberately incurred; documents are never edited here)
+Phase:     T7 - 1
+Source:    ADU-API-01 v1.7:43 (change table: POST /v1/conversations "anchored on a product or an order"), :852 (the route row, "anchored on exactly one"), :862 (the G1.10 note); ADU-DB-01 v1.12 S17.1:2210-2214 (the anchor printed on chat.conversation), S6.3a:757 (the total UNIQUE (seller_id, phone))
+Found by:  the T7 survey's adversarial pass, enumerated line by line
+Effect:    A reader implementing from the printed documents rebuilds the conversation anchor and the total invite UNIQUE -- both now wrong. The rulings that supersede them (D-66, D-67 via T7 S3) live in this register and in migrations 0035/0037's headers until v1.13 and an ADU-API-01 reissue land.
+Response:  RECORDED for the reissues
+Action:    v1.13 owes: S17.1 anchor moved to chat.message; S6.3a partial UNIQUE plus the two account FKs; Appendix B rows unchanged (no table count change). ADU-API-01 owes: lines 43/852/862 re-anchored to the messages route.
+Ruling needed: none -- reissue work, listed for the document owner.
+
+### D-88 - Ownership transfer moves the store and leaves the person, and D-57's owner-reuse key must not follow it
+
+Severity:  MAJOR (found by the adversarial pass on this phase; the narrow arm is fixed, the wide question is parked)
+Phase:     T7 - 1 (adversarial pass)
+Source:    0034 flips core.seller.owner_account_id and never touches person_id (no entity_type restriction -- INDIVIDUAL stores transfer); 0036/onboarding resolve "the owner's person" through the owner's current INDIVIDUAL sellers
+Found by:  the Phase 1 conformance reviewer, reading D-57's reuse key against G1.6's transfer
+Effect:    A transferred-in INDIVIDUAL store carries the PREVIOUS owner's person. Unfixed, the recipient's next declaration would have REUSED that person -- anchoring one human's stores to another human's person row, the merge-direction form of the split S4.4 forbids, and their attestations would have blended.
+Response:  THE NARROW ARM FIXED, the wide interaction PARKED
+Action:    The reuse lookup now excludes stores with an activated inbound transfer (onboarding.service.ts), and the same-account race is closed with FOR UPDATE on the account row. What remains unruled: what a transferred INDIVIDUAL store's person_id MEANS after transfer -- it still names the previous owner, fn_seller_attestation_person still reads it, so the store's IDENTITY_VERIFIED readiness rides the OLD owner's attestation. T6's survey flagged the same edge (do not assume person_id == current owner's person); nothing yet re-points or clears it.
+Ruling needed: on activation of an INDIVIDUAL store's transfer, is person_id cleared (new owner re-anchors by their own declaration mechanism -- but no such act exists post-creation), re-pointed (to what? the recipient may have no person), or retained-with-meaning ("the store was verified by its founder")? Each answer changes what the eligibility badge asserts to buyers. AND the answer unlocks the database-side enforcement the adversarial pass sketched: btree_gist is among the four ruled extensions, so `EXCLUDE USING gist (owner_account_id WITH =, person_id WITH <>) WHERE (entity_type = 'INDIVIDUAL' AND person_id IS NOT NULL)` would hold one-person-per-owner structurally without touching NULL-person fixtures -- but TODAY it would make fn_activate_due_ownership_transfer RAISE on any transferred store whose founder verified, inside the one function that must never raise for an ordinary outcome (D-74). The constraint waits on the ruling; the service-level FOR UPDATE serialization holds the line until then.
+
+### D-89 - A pending courier invite has no claim path: the sign-in leg 0029 and 0037 describe is built nowhere
+
+Severity:  MAJOR (a feature's second half is missing and two migration headers describe it as existing)
+Phase:     T7 - 1 (adversarial pass)
+Source:    0029:53-54 and couriers.controller.ts describe the claim "at next sign-in"; core.seller_courier_invite is read by exactly one file (the controller); no auth path touches it
+Found by:  the Phase 1 conformance reviewer, tracing the pending row's consumers
+Effect:    An invite to a phone with NO account creates a PENDING row with no AUTOMATIC claim: when that person later signs up, no code matches their phone against pending invites. The one escape is manual -- the seller re-taps invite after the courier registers, and the pending row converts in that transaction -- but nothing tells the seller to do that, so in practice the relationship never forms and the seller waits forever. The G1.8 oracle work made the pending row indistinguishable from the claimed path on purpose -- which also made its dead-endedness invisible. D-67's arm-1 test blesses "fresh pending row" as the happy outcome of a path with no consumer.
+Response:  RECORDED, not built
+Action:    Building the claim-at-sign-in leg touches the auth path (otp/verify) for a courier feature no ruling has specified end-to-end -- the exact "helpful completion" failure mode. The invite surface remains correct for phones that already hold accounts (immediate claim, in the invite transaction).
+Ruling needed: the claim mechanism -- at sign-in (which purposes? MOBILE only?), with what notification to the seller, and what expiry a pending invite carries (today: none -- a typo'd number is pending forever and shows in the list).
