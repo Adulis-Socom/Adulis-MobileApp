@@ -556,3 +556,80 @@ Effect:    Appendix B names **neither** `core.category_market_availability` (D-1
 Response:  RECORDED. Check 14 reads the repository fixture, not the document, so the build is unaffected and green.
 Action:    None in code. `apps/api/CLAUDE.md` now states that the build's counts are the fixtures' and that v1.12's printed ones differ, so the next reader does not "correct" a green check against a stale appendix.
 Ruling needed: ADU-DB-01 v1.13 to reconcile Appendix B **from the database**, as its own preamble says it is. **The lesson is the one v1.11 already drew about itself:** a correction announced in a change table and not performed in the body is indistinguishable, to the next reader, from one that was.
+
+### D-60 - The FK trap ADU-DB-01 E6 warned about has ZERO instances, and the warning had drifted from the schema
+Severity:  MINOR (the warning was wrong; the underlying risk is real and smaller)
+Phase:     T6 A
+Source:    ADU-DB-01 v1.10/v1.12 S6.9a E6 -- "ownership transfer needs ON UPDATE CASCADE ... every child FK referencing (seller_id, owner_account_id) needs the cascade or the transfer raises"; WORK ORDER T6 S1.1, which repeated it
+Found by:  enumerating from pg_constraint before writing anything, exactly as S1.1 instructed
+Effect:    There are 29 foreign keys into core.seller. **28 reference seller(id) alone and one references (id, entity_type).** NONE references (id, owner_account_id). The anchor `seller_id_owner UNIQUE (id, owner_account_id)` exists and nothing uses it. Independently confirmed by a second agent, which also established that confupdtype is 'a' for all 29 and that **no ON UPDATE action of any kind exists anywhere in this database.** So there is no cascade to add and the migration the warning called for would have been empty.
+Response:  RESOLVED by AMENDMENT A1.1, which withdraws the warning
+Action:    None in schema. The real surface is eight FUNCTIONS that resolve authority from owner_account_id -- fn_has_permission, fn_delete_seller, fn_delete_account, fn_cancel_line, fn_handoff_scan_validity, fn_notify_new_device, fn_notify_payout_change, financial.read_payment_evidence -- and no RLS policy. An ownership transfer changes eight authorization outcomes at the instant the column flips, which is the ruling working. Phase B asserts it with a live session crossing the activation boundary.
+Ruling needed: none. A1.1 records the withdrawal. **The lesson is the founder's own:** a work order warning that documents drift from schemas contained a warning that had drifted from the schema, and the instruction to enumerate from the catalogue is what caught it.
+
+### D-61 - Every deferred threshold on ladder_config is NOT NULL, so "deferred" was inexpressible
+Severity:  MAJOR (it made a ruling unbuildable and a fail-closed guard decorative)
+Phase:     T6 A
+Source:    ADU-DB-01 v1.12 S5.5 prints new_level_transaction_cap_minor as "bigint NULL -- NULL = no cap" and the Group A thresholds as deferred; S12.3 says "the column is NULL and the check does not fire"; A1.3 says "all four trusted_* stay NULL, so TRUSTED remains unreachable"
+Found by:  writing the test A1.3 asks for and watching the INSERT refuse
+Effect:    Every threshold column on core.ladder_config was NOT NULL. Three consequences, none of which raises anything: (a) S12.3's transaction-cap ruling could not be expressed at all; (b) A1.3's stated mechanism for TRUSTED being unreachable was FALSE -- a configured market must supply all four trusted_* values, so TRUSTED became reachable at the market seed, the opposite of the ruling; (c) the `coalesce(..., false)` guards in fn_recompute_seller_level, which exist to make NULL never promote, were guarding against a value the schema forbade. The inertness that actually protected the ladder came from there being NO ladder_config row at all, and that protection ends at the market seed.
+Response:  FIXED for the columns two rulings depend on
+Action:    Migration 0028 drops NOT NULL on new_level_transaction_cap_minor (S12.3) and on the four trusted_* (A1.3), and the fail-closed guards become live. **The other deferred thresholds -- established_* (4), demotion_* (3), distinct_buyer_max_count -- are still NOT NULL**, so a market seed must still invent values ADU-VAL-01 marks OPEN.
+Ruling needed: whether every ADU-VAL-01 OPEN threshold should be nullable, so that "not yet decided" is a state the schema can hold. **Today the Ethiopian market seed cannot be written without inventing eight numbers**, which is the thing rule 6 forbids.
+
+### D-62 - fn_create_order takes four arguments, and a hand-written replacement would have re-run T5's trap
+Severity:  MINOR (caught before it left my working tree; recorded because the method is the finding)
+Phase:     T6 A
+Source:    Migration 0028 had to change one line in core.fn_create_order
+Found by:  extracting the function with pg_get_functiondef instead of trusting a reading of it
+Effect:    My first draft reconstructed the function by hand from fragments and gave it THREE parameters; the real signature is `(p_cart_id uuid, p_buyer uuid, p_order_id uuid, p_expected jsonb)` -- four. Shipping that would have created a **NEW function object** with PostgreSQL's defaults (owner = whoever ran the migration, EXECUTE to PUBLIC) and left the four-argument original callable behind it. That is exactly the trap T5's S2.2 was written about, committed in the work order after the one that warned about it.
+Response:  AVOIDED
+Action:    0028 reproduces the function from pg_get_functiondef with a single line replaced by a scripted substitution asserting exactly one match. **The rule worth keeping: a plpgsql body that must change is EXTRACTED and patched, never retyped.** A 174-line function rewritten from memory is a silent behaviour change wearing a bug fix.
+
+### D-63 - Three PostgreSQL defaults would each have made a correct database refusal read as a server error
+Severity:  MINOR (three instances of one class, all closed)
+Phase:     T6 A
+Source:    Building G1.9's immutability trigger and G1.10's anchor CHECK
+Found by:  the survey's adversarial pass, which read pg-error-translator.ts rather than assuming it
+Effect:    (a) `REVOKE UPDATE (slug) ON core.product FROM adulis_app` is a SILENT NO-OP -- adulis_app holds TABLE-level UPDATE and a column-level REVOKE does not subtract from it, so the obvious immutability mechanism would have appeared to work and enforced nothing. (b) A restrict_violation from a write-once trigger falls through the 23001 branch's message-match ladder to `return null`, which the filter turns into INTERNAL: the database refusing correctly, reported as a 500. (c) 23514 is translated only for product_variant_stock_count_check, so the anchor CHECK would have done the same.
+Response:  FIXED
+Action:    Immutability is a write-once TRIGGER copying core.fn_reservation_price_write_once, and both new messages plus the new constraint name have branches in the translator. **The general shape: a new database-enforced refusal needs a translator entry in the same change, or enforcement that works reads as enforcement that is broken.**
+
+### D-64 - device.purge_unbound could wedge permanently on a device a deleted account left behind
+Severity:  MAJOR (a nightly job failing forever on the same rows, silently)
+Phase:     T6 A
+Source:    core.session.device_id and core.account_device.device_id both REFERENCE core.device(id) with NO ON DELETE; core.fn_delete_account (0023:439) un-binds a device by setting account_id = NULL and leaves its session rows
+Found by:  the survey's adversarial pass on G1.11, while checking the query the ruling rewrites
+Effect:    After any account deletion the device is `account_id IS NULL` with live session rows still pointing at it. devicePurgeUnbound selected it as stale and the DELETE raised 23503. **The batch is taken in the same order every night, so the job would have failed on the same rows forever** -- and a failing job is only visible through the heartbeat, which stays green because the worker is alive.
+Response:  FIXED, and the fix rides with G1.11 because the ruling rewrote that exact query
+Action:    Two `NOT EXISTS` guards on core.session and core.account_device, in both the selection and the re-asserted delete predicate, plus a test that plants the wedge and proves the job completes. The guards needed SELECT on both tables for adulis_jobs, which it did not hold -- the same class as D-47, found the same way.
+Ruling needed: none for the guard. But **nothing purges an orphaned session row**, so a device whose account was deleted is now retained indefinitely rather than wedging. That is better and it is not what S11.5 describes.
+
+### D-65 - The purge test could not detect the change G1.11 is about
+Severity:  MINOR (a test that passes either way)
+Phase:     T6 A
+Source:    apps/api/test/e2-e6.jobs.spec.ts seeds two markets through one shared literal
+Found by:  the survey's adversarial pass
+Effect:    Both markets carried `media_retention = '90 days'`, so `max()` and `min()` over {90, 90} are the same number and the seeded device was stale under either. **An implementation that changed nothing, or that swapped max for min and got the per-device join backwards, would have shipped green.**
+Response:  FIXED
+Action:    A new suite gives every market a DIFFERENT retention -- 10 days and 400 days -- and asserts a marketless device is purged under the SHORT one. **That single assertion is the whole ruling**, and it is the one the old fixture was structurally unable to make.
+
+### D-66 - G1.10's anchor is per buyer-seller PAIR, so the second product inherits the first product's anchor
+Severity:  MAJOR (it defeats the purpose of the ruling, in the direction the ruling exists to prevent)
+Phase:     T6 A
+Source:    `one_conversation_per_pair UNIQUE (seller_id, buyer_account_id, market_id)` (0015:40), unchanged by G1.10; ADU-DB-01 S17.1 still says "Unique together"
+Found by:  reading the constraint beside the column the ruling adds
+Effect:    A buyer and a seller have exactly ONE conversation. Its anchor is set at creation and is immutable. **The second product that buyer asks about therefore reuses the first product's anchor** -- so a slotted answer template would fill confidently with the WRONG product rather than escalate. G1.10 exists because "containment then measures the missing anchor rather than the assistant"; a wrong anchor measures the assistant answering correctly about the wrong thing, which is worse than the problem it replaces.
+Response:  RECORDED, not designed around. Widening the UNIQUE to include the anchor is a product decision no ruling makes.
+Action:    The endpoint does NOT re-anchor an existing conversation, so the containment signal keeps its honest shape: an unanchored or wrongly-anchored conversation escalates rather than answering wrongly.
+Ruling needed: **is a conversation per buyer-seller pair, or per anchor?** If per pair, G1.10 helps only the first product a buyer ever asks about. If per anchor, `one_conversation_per_pair` must widen and the chat list becomes a list rather than a row.
+
+### D-67 - S6.3a's UNIQUE is total where its neighbour's is partial, so a revoked invite blocks that phone forever
+Severity:  MINOR
+Phase:     T6 A
+Source:    ADU-DB-01 v1.12 S6.3a prints `UNIQUE (seller_id, phone)`; core.seller_courier beside it uses `seller_courier_live UNIQUE (seller_id, account_id) WHERE revoked_at IS NULL` (0005:178-179)
+Found by:  the survey's adversarial pass, comparing the new table to the one it sits beside
+Effect:    Once an invite is revoked or claimed its row remains, and that seller can **never invite that phone again**. The neighbouring table deliberately frees the pair on revocation. Two tables about the same relationship, with opposite rules, and the document does not acknowledge the difference.
+Response:  TRANSCRIBED VERBATIM, not corrected
+Action:    Migration 0029 builds exactly what S6.3a prints, including this and the two columns that carry no REFERENCES where every comparable column in core does. **A judgement call in SQL is the failure this project has paid for most**, and the correct response to a document that looks wrong is an amendment, not a deviation.
+Ruling needed: should the invite UNIQUE be partial on `revoked_at IS NULL`, matching seller_courier? And should invited_by_account_id / claimed_by_account_id reference core.account(id)?
