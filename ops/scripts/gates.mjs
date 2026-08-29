@@ -170,6 +170,10 @@ const GATES = [
   { id: 'permission-doc', title: 'The permission matrix agrees with its own generated SQL', cmd: ['pnpm', 'verify:permission-doc'] },
   { id: 'docs-ascii', title: 'A3.5 - governed specifications are ASCII', cmd: ['pnpm', 'verify:docs-ascii'] },
   { id: 'appendix-c', title: 'Appendix C - sixteen checks', cmd: ['pnpm', 'db:check'] },
+  // NOT a seventeenth db/checks file: db-check.mjs exits 2 on any count but
+  // sixteen (a governed set), and its loader would count a check-*.mjs
+  // dropped there whether or not anything referenced it.
+  { id: 'deferred-values', title: 'ADU-VAL-01 S1.1 - three forms agree, deferred values are nullable', cmd: ['pnpm', 'verify:deferred-values'] },
   { id: 'no-unsafe-eval', title: "'unsafe-eval' absent from the console build", fn: assertNoUnsafeEval },
   { id: 'production-react', title: 'The console shipped React production', fn: assertProductionReact },
   {
