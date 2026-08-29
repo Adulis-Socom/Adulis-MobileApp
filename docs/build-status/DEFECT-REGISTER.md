@@ -941,6 +941,49 @@ Action:    CODEOWNERS now assigns every path to @NaodSolomon (one owner; the uns
 What the adversarial pass found this entry had missed, all fixed in the same PR: the ROOT CLAUDE.md -- the file every session loads -- still carried the two-owner model (apps/console owned by COO/CTO, two rules requiring "both owners"), so the one record most likely to be read was the one record not corrected; the CODEOWNERS rewrite silently falsified ops/runbooks/storefront-import.md step 3 ("until then it has no CODEOWNERS line, which is deliberate") and apps/mobile/CLAUDE.md's start-up checklist ("it needs an owner in .github/CODEOWNERS"); and .claude/reference/DOCUMENT_AUTHORITY.md still routed build/operations sequencing to ADU-CON-02 v3.0 while v3.1 is the installed baseline and v3.0 sits in docs/superseded/. Also corrected here: the T7 S7.1 flip from the mock to the real API had been made in the console's file only, leaving the root CLAUDE.md, .env.example and packages/api-client's own error message still instructing the mock.
 Ruling needed: reissue ADU-REPO-01 (S3, S9, and the file's own installation) and ADU-CON-02 (S14.1 review model; S21's branch-protection note gains "required approvals must be 0, not 1 -- nobody can approve their own PR, and 1 would deadlock every merge the day protection becomes enforceable").
 
+### D-95 - core.device_platform has no value a web console can honestly register
+
+Severity:  MAJOR (parked with a dev workaround; production console sign-in cannot register a device truthfully)
+Phase:     T7 - 5
+Source:    0003 -- core.device_platform is ANDROID | IOS, nothing else; POST /v1/devices takes { id, platform } (auth.controller.ts:273 under the global v1 prefix; auth.service.ts:328-332 -- an earlier draft of this entry wrote /v1/auth/devices, which is not a path key in the contract) and every core.device row must carry one of the two; ADU-CON-02 v3.1 S4.3 requires remember-device on the console; T7 S7.3 rule 6 bans localStorage, sessionStorage, and tokens in JavaScript wholesale
+Found by:  Phase 5 C-2, wiring the sign-in flow to the real API
+Effect:    Three constraints meet and no honest path exists between them: the console needs a device row to remember, the enum has no value that is true of a browser, and the storage ban leaves nowhere permitted to persist a minted device id across loads. What is built: the console mints a device id per app load (crypto.randomUUID()), VITE_DEVICE_ID carries the seeded device in development, and ops/scripts/seed.mjs provisions that device row labeled 'ANDROID' -- a value the seed's own header names as false and known. Durable remember-device still works END TO END because the credential that persists is the httpOnly __Host-adulis_device cookie (permitted -- it is not JS-readable storage), not the JS-side id; but a fresh production browser has no registered device row and cannot honestly create one.
+Response:  PARKED; dev loop seeded, the lie confined to the seed and named there
+Action:    None in console code -- inventing a platform value in the product path is exactly the invention rule 6's neighbours forbid. The seeded row keeps C-2 demonstrable.
+Ruling needed: add WEB to core.device_platform (one enum migration) and rule whether CONSOLE-audience verify may auto-register an unseen device id, OR rule that console sessions never mint device rows and remember-device rides the device cookie alone.
+
+### D-96 - No endpoint transmits the idle-session values the console must warn about
+
+Severity:  MINOR (cosmetic mistiming only; the server stays authoritative)
+Phase:     T7 - 5
+Source:    ADU-CON-02 v3.1 S4.3 -- "the client shows the idle warning 5 minutes before either idle limit"; the limits are per-market configuration in core.timing_config; neither the otp/verify response nor GET /v1/auth/sessions nor /v1/bootstrap carries them (verified against the generated contract at T7)
+Found by:  Phase 5 C-2, building IdleWarning against the real responses
+Effect:    The console cannot warn at "5 minutes before the limit" without knowing the limit. Built: the timer uses the ADU-VAL-01 S3 shipped defaults (30 minutes unremembered, 8 hours remembered), named in session.tsx as exactly that. A market that retunes timing_config gets a warning at the wrong time until this lands; the session itself is never wrong -- an expired session 401s whatever the timer believed. NOTE: when this entry was written that last clause was ASPIRATIONAL -- the Phase 5 adversarial pass found the console had no 401 handling at all, so an expired session left a fully rendered shell in place. The api client now signs the session out on any 401, which is what makes this entry true.
+Response:  BUILT with named defaults; constants marked for deletion
+Action:    session.tsx carries the two constants and this entry's number; no invented endpoint, no probing heuristic.
+Ruling needed: which surface carries the values -- the natural seam is GET /v1/auth/sessions gaining idle_timeout_seconds on the current row (it already returns expires_at and remembered). One field, then the constants are deleted.
+
+### D-97 - The contract has no endpoint listing the caller's own sellers
+
+Severity:  MINOR (C-1 scope: the store chooser cannot render a list)
+Phase:     T7 - 5
+Source:    the generated contract at T7 -- every /v1/seller/* operation is scoped to one store via X-Adulis-Seller; GET /v1/auth/sessions returns sessions, not stores; no operation returns "the stores this account owns or belongs to", though core.seller.owner_account_id and core.seller_team_member hold the answer
+Found by:  Phase 5 C-1, building the shell's store context per T7 S7.3 rule 2 (seller id in the URL)
+Effect:    The console's entry screen cannot enumerate stores to choose from. Built: a chooser that takes a pasted store id, with the gap named ON SCREEN (locale key console.chooser.gap cites this entry) rather than hidden -- a wireframe with a hole labeled as a hole. Deep links (/s/:sellerId/...) work fully; discovery does not.
+Response:  BUILT AROUND, gap visible in the product surface itself
+Action:    None in console code -- the endpoint's shape (owner stores only? team memberships? role per store?) is contract design, not console transcription.
+Ruling needed: the listing endpoint. Natural shape: GET /v1/accounts/me/sellers returning { id, handle, display_name, role } per store, both owned and team-membered; needs an ADU-API-01 reissue or amendment.
+
+### D-98 - The auth operations are schema-less in the generated contract
+
+Severity:  MINOR (drift risk, typed locally and marked)
+Phase:     T7 - 5
+Source:    apps/api auth controller -- the Swagger decorators on otp/request, otp/verify, sessions, and sign-out carry no request/response body schemas, so openapi.json (generated only -- the unbending rule) and schema.d.ts give the console no types for the sign-in flow it must drive
+Found by:  Phase 5 C-2, importing the contract types and finding none for auth
+Effect:    apps/console/src/api/client.ts types the auth shapes LOCALLY, with a header stating they are to be DELETED in favour of the generated ones when the decorators land -- never reconciled. Until then, a wire-shape change on the API side compiles clean in the console and fails at runtime; the twelve-state screen contract turns that into a visible ERROR state rather than a blank page, which is containment, not immunity.
+Response:  TYPED LOCALLY, marked for deletion
+Action:    Owed on the API, not the console: ApiBody/ApiResponse decorators transcribing the existing zod schemas -- mechanical, no ruling required, any future phase may carry it.
+Ruling needed: none.
 ### D-99 - The API process loads no .env, so the documented dev recipe cannot work from a clean shell
 
 Severity:  MAJOR (a dev-loop defect with a security-shaped failure mode; nothing validates required configuration)
@@ -962,3 +1005,47 @@ Effect:    ADU-API-01's 124 is a count of its own CATALOGUE -- the endpoints it 
 Response:  RECORDED, not resolved -- resolving it means auditing ADU-API-01's catalogue against the contract endpoint by endpoint, which is a work order, not a drive-by
 Action:    apps/console/CLAUDE.md's 110 now carries a pointer here. The contract in the tree remains the authority (it is CI-authored and gate-checked); no document was edited.
 Ruling needed: an audit of ADU-API-01 v1.7's catalogue against contracts/openapi.json -- which entries have no path key, and whether the residue is unbuilt scope or a counting artifact -- then one corrected sentence in each of the three documents, stating WHICH quantity it counts.
+
+### D-101 - A person without an account cannot sign in to the console: the age declaration has no control and no ruled copy
+
+Severity:  MAJOR (SC-00's second half is unreachable; the seeded path hides it)
+Phase:     T7 - 5
+Source:    apps/api/src/modules/auth/auth.service.ts:78-82 -- when no core.account row exists for the phone, verify requires age_declared_over_18 === true or throws VALIDATION_FAILED; auth.schemas.ts:26 makes the field OPTIONAL, so zod does not catch its absence; ADU-AUTH-01 S13 (identity creation at first sign-in)
+Found by:  the Phase 5 adversarial pass (three of four lenses independently)
+Effect:    The console sends phone, code, audience, device_id, remember_device and nothing else. A NEW seller therefore receives a real SMS, types a correct code, and is told "The request is not valid." -- with no field to correct, because the slots.path naming age_declared_over_18 is never rendered and no such control exists on the screen. Every C-2 verification passed because ops/scripts/seed.mjs inserts core.account, so the demo path never touches the branch. This is the first-run experience of the product's only seller surface.
+Response:  RECORDED, not built -- deliberately
+Action:    The control is three lines; its LABEL is not. An age declaration is a legal attestation whose wording (and whose Amharic wording) is a decision with consequences outside this repository, and T7 S7.4 has machine-translated placeholders standing in for a translator who has not seen this file. Inventing the sentence a person legally affirms, and then machine-translating it, is exactly the invention the order forbids. The console fails closed instead: the seller sees a validation error rather than a silently-created account.
+Ruling needed: the exact English and Amharic text of the age declaration, and whether it is a checkbox on SC-00's phone step or a separate screen before verify. One ruled sentence unblocks the build.
+
+### D-102 - The console's device identity is shared by every browser that loads the bundle, which makes the new-device payout lock inert
+
+Severity:  MAJOR (a security control silently does nothing; D-95 named the dishonesty, not this consequence)
+Phase:     T7 - 5
+Source:    apps/console/src/api/client.ts -- deviceId is VITE_DEVICE_ID ?? crypto.randomUUID(); a Vite env var is a BUILD-TIME constant, so every browser loading a given bundle sends the same X-Adulis-Device. db/migrations/0022_payout_and_reissue_functions.sql:95-102 locks payout changes while min(core.session.created_at) for (account_id, device_id) is inside new_device_payout_lock
+Found by:  the Phase 5 adversarial pass, following D-95 into its consequences
+Effect:    Two halves, both bad. WITH VITE_DEVICE_ID set (the dev loop, and any build that sets it), every console user shares one device id, so an attacker who obtains a victim's OTP and signs in from another machine inherits the victim's OLDEST session timestamp for that id and the 24-hour new-device payout lock never fires -- the control reads "known device" for a device it has never seen. WITHOUT it, each load mints a uuid that has no core.device row, and verify returns 400 before sign-in can happen at all (POST /v1/devices accepts only ANDROID | IOS). There is no configuration of the current design in which the console both signs in and preserves the lock.
+Response:  RECORDED; no code change, because every available fix invents a rule
+Action:    D-95 parks the enum question (no WEB value). This entry parks the SECURITY question underneath it, which is separate: what identifies a browser for the purposes of a payout lock, given that ADU-SEC-01 forbids the console persisting anything. The honest answers all live server-side (a device cookie already exists and is httpOnly), and choosing one is an ADU-AUTH-01 decision.
+Ruling needed: whether the new-device payout lock keys on the __Host-adulis_device cookie rather than a client-supplied device id for CONSOLE sessions -- and if so, whether X-Adulis-Device is required at all on that surface. Until then the lock must be assumed non-functional for the console.
+
+### D-103 - The console never calls /v1/bootstrap, so the market context it formats against is hardcoded
+
+Severity:  MINOR (correct for the only market that exists; wrong the day a second one does)
+Phase:     T7 - 5
+Source:    apps/console/src/lib/intl.ts's own header cites "the market timezone from /v1/bootstrap (ADU-CON-03 S4.4)"; Shell.tsx passes timezone="Africa/Addis_Ababa" as a literal and IdleWarning hardcodes { currency: 'ETB', locale: 'en' }; no console module fetches /v1/bootstrap, though BootstrapResponseDto is in the generated contract and carries market.timezone, market.display_currency, locales and client_status
+Found by:  the Phase 5 adversarial pass (two lenses)
+Effect:    The console derives client-side a fact the server owns -- the rule S7.3 exists to prevent -- with no contract gap to excuse it, since the endpoint and its types are both built. A second market formats every time and every amount in the first market's timezone and currency. There is a second consequence: UPGRADE_REQUIRED, one of the twelve states, is triggered by client_status, which nothing reads, so that state is unreachable outside the demo screen.
+Response:  RECORDED, not built -- C-1's scope is the shell, and a bootstrap fetch belongs with the provider that consumes it
+Action:    None yet. The fix is a market-context provider fetching /v1/bootstrap at boot beside the session probe, feeding intl.ts and the UPGRADE_REQUIRED path; that is C-3 work and would be invented scope here.
+Ruling needed: none -- this is owed build, not a decision. Listed so the next console phase starts from it rather than rediscovering it.
+
+### D-104 - Identity creation picks "the live market" with an unordered LIMIT 1, and nothing keeps there being only one
+
+Severity:  MAJOR (silent misassignment; found because it broke the test suite, not because anything raised)
+Phase:     T7 - 5
+Source:    apps/api/src/modules/auth/auth.service.ts:83-84 -- `SELECT id FROM core.market WHERE is_live LIMIT 1`, no ORDER BY; otp.service.ts:90 repeats the same fallback; db/migrations/0002_markets_and_configuration.sql:35 makes is_live a plain boolean with no unique or partial index. Contrast bootstrap.controller.ts:59 and orders.service.ts:71, which both use `ORDER BY is_live DESC, created_at ASC`
+Found by:  the Phase 5 adversarial pass predicted it; the Phase 5 dev loop then reproduced it
+Effect:    A new account is assigned to whichever live market the planner returns first. With one live market this is invisible. ops/scripts/seed.mjs created a SECOND one, and the consequence was immediate and confusing: the c6 suite's identity-creation tests began writing their accounts into the seed's market, where c6's own market-scoped teardown could not see them, so the NEXT run of c6 got 200 where 400 belongs ("identity creation without the age declaration is refused") and OTP_INVALID where OTP_EXPIRED belongs. Nothing raised; a green suite simply started failing on a database that had been seeded. In production the same lookup decides which market a real seller's account belongs to -- its currency, its timezone, its ladder configuration.
+Response:  the reachable trigger is REMOVED; the underlying lookup is NOT changed
+Action:    ops/scripts/seed.mjs now writes its market with is_live = false and re-asserts that on every run, so a database seeded by the earlier version corrects itself. That is sound because both live-market lookups are fallbacks used only when a phone has NO account, and the seed creates its account outright. The unordered SELECT itself is untouched: making it deterministic is a change to how every future account is assigned, which is a ruling, not a cleanup.
+Ruling needed: whether more than one live market is legal. If NO, a partial unique index (`CREATE UNIQUE INDEX ... ON core.market ((true)) WHERE is_live`) makes the LIMIT 1 honest and turns a silent misassignment into a constraint violation. If YES, both lookups need a deterministic ORDER BY and a documented rule for which live market a new account joins -- and "the first one the planner returns" cannot be it.

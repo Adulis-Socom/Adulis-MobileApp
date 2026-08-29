@@ -25,7 +25,7 @@
     "verify:permission-doc": "node ops/scripts/verify-permission-doc.mjs",
     "db:determinism": "node --env-file-if-exists=.env ops/scripts/db-determinism.mjs",
     "db:verify-extensions": "node --env-file-if-exists=.env ops/scripts/verify-extensions.mjs",
-    "db:seed": "node ops/scripts/seed.mjs",
+    "db:seed": "node --env-file-if-exists=.env ops/scripts/seed.mjs",
     "verify:docs-ascii": "node ops/scripts/verify-docs-ascii.mjs",
     "verify:docs": "pnpm verify:permission-doc && pnpm verify:docs-ascii",
     "verify:deps": "depcruise apps packages --config .dependency-cruiser.cjs",

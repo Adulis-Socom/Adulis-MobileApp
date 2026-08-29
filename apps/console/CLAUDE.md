@@ -45,9 +45,30 @@ route tree, **no seller navigation**.
   `.env` of its own (register D-99), so `pnpm dev:api` from a clean shell gets an
   empty `DATABASE_URL` and an empty `CONSOLE_ORIGIN` -- which makes CORS a wildcard
   the browser refuses on a credentialed request, and 403s every cookie-carried write.
-  Then `VITE_API_BASE_URL=http://localhost:3000`. The mock (`pnpm mock:api`,
+  Then `VITE_API_BASE_URL=http://localhost:3000` **in the shell** -- Vite reads
+  `VITE_`-prefixed variables from `process.env`, and this app's `envDir` is
+  deliberately its own directory, never the workspace root: pointing it at the
+  root would pull in `NODE_ENV=development` and ship React's development build
+  (gate 18 fails on exactly that). The mock (`pnpm mock:api`,
   `http://127.0.0.1:4010`) remains for contract-only work; its purpose was to unblock
   a workstream that no longer needs unblocking.
+
+## The stack, and what of it has actually landed
+
+**Landed at C-1/C-2 (T7 Phase 5):** React 19 + Vite, `react-router` 7.18.3
+(pinned), and hand-written CSS over `@adulis/tokens`' custom properties.
+**Still the destination, deliberately deferred to C-3+:** TanStack Query (it
+earns its keep at catalogue scale, not on two screens), Tailwind 4 (it arrives
+with the first catalogue-scale screens), and React Hook Form + Zod. This is a
+STAGING decision, not a deviation from the ruled stack -- recorded here, in
+`src/console.css`'s header and in the T7 report, so the next agent adds the
+library when its screen arrives instead of re-deciding the stack.
+
+**There is no test harness here yet.** `pnpm --filter @adulis/console test` is
+an echo. C-1/C-2 are held up by typecheck, lint, gates 17 and 18 (which
+inspect the production build) and a live sign-in against the real API --
+verification, but not coverage. A harness is owed at C-3, and until it exists
+a regression here is caught by a person, not by CI.
 
 ## The rules an agent working here needs
 

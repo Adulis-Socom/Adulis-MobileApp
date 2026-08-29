@@ -1,0 +1,212 @@
+/*
+ * console.css -- the whole visual layer for stages C-1/C-2, on
+ * @adulis/tokens custom properties (tokens.css). Hand-rolled and small on
+ * purpose: the ruled stack's Tailwind 4 arrives with the first
+ * catalogue-scale screens (C-3+), where utility classes earn their build
+ * step; adopting it for a shell and two auth screens would be surface
+ * without payoff. Recorded as a staging decision in the T7 report.
+ *
+ * Layout rules encoded here, from the documents:
+ *  - >=1024px: persistent left sidebar; <1024px: bottom bar (S2.1)
+ *  - NO FIXED HEIGHTS on anything holding translated text (S13: Amharic
+ *    runs 30-50% longer) -- min-height only, and only for touch targets
+ *  - every interactive target >= 44x44px (S15)
+ *  - :focus-visible is always visible (S15)
+ */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--adu-font-family);
+  color: var(--adu-color-text);
+  background: var(--adu-color-bg);
+  line-height: 1.5;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--adu-color-accent);
+  color: var(--adu-color-accent-text);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+}
+.skip-link:focus { left: 0; z-index: 10; }
+
+:focus-visible {
+  outline: 3px solid var(--adu-color-accent);
+  outline-offset: 2px;
+}
+
+button, input {
+  font: inherit;
+  min-height: var(--adu-touch-min);
+}
+button {
+  min-width: var(--adu-touch-min);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  cursor: pointer;
+}
+button[type='submit'] {
+  background: var(--adu-color-accent);
+  color: var(--adu-color-accent-text);
+  border-color: var(--adu-color-accent);
+}
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+input {
+  width: 100%;
+  padding: var(--adu-space-sm);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-sm);
+}
+input[aria-invalid='true'] { border-color: var(--adu-color-danger); }
+label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
+.hint { color: var(--adu-color-text-muted); font-size: 0.875rem; }
+.field-error { color: var(--adu-color-danger); font-size: 0.875rem; }
+
+/* ---- shell: mobile-first bottom bar, sidebar from 1024px ---- */
+.shell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: 'top' 'main' 'bottom';
+}
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-md);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border-bottom: 1px solid var(--adu-color-border);
+}
+.topbar .store-name { font-weight: 700; margin-right: auto; }
+.shell > main { grid-area: main; padding: var(--adu-space-md); max-width: 64rem; width: 100%; margin: 0 auto; }
+.sidenav { display: none; }
+.bottombar {
+  grid-area: bottom;
+  border-top: 1px solid var(--adu-color-border);
+  position: sticky;
+  bottom: 0;
+  background: var(--adu-color-bg);
+}
+.bottombar ul, .sidenav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+.bottombar li { flex: 1; }
+.bottombar a, .sidenav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-sm);
+  text-decoration: none;
+  color: var(--adu-color-text-muted);
+}
+.bottombar a[aria-current='page'], .sidenav a[aria-current='page'] {
+  color: var(--adu-color-accent);
+  font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    grid-template-columns: 14rem 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 'top top' 'side main';
+  }
+  .sidenav { display: block; grid-area: side; border-right: 1px solid var(--adu-color-border); }
+  .sidenav ul { flex-direction: column; }
+  .sidenav a { justify-content: flex-start; }
+  .bottombar { display: none; }
+}
+
+/* ---- state primitives ---- */
+.skeleton-row {
+  height: 1.25rem;
+  margin: var(--adu-space-sm) 0;
+  border-radius: var(--adu-radius-sm);
+  background: linear-gradient(90deg, var(--adu-color-surface), var(--adu-color-border), var(--adu-color-surface));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.skeleton-row.short { width: 60%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+/* S15: "reduced-motion respected". An infinite shimmer is exactly the kind
+   of thing the setting exists to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-row { animation: none; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+/* Announced to assistive technology, invisible on screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.problem, .validation-summary {
+  border: 1px solid var(--adu-color-danger);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-md);
+  margin: var(--adu-space-md) 0;
+}
+.request-id code { user-select: all; }
+.stale-indicator { color: var(--adu-color-text-muted); font-size: 0.875rem; }
+.empty { color: var(--adu-color-text-muted); padding: var(--adu-space-xl) 0; text-align: center; }
+.idle-warning {
+  position: fixed;
+  inset-inline: var(--adu-space-md);
+  bottom: calc(var(--adu-touch-min) + var(--adu-space-md));
+  border: 1px solid var(--adu-color-warn);
+  background: var(--adu-color-bg);
+  border-radius: var(--adu-radius-lg);
+  padding: var(--adu-space-md);
+  display: flex;
+  gap: var(--adu-space-md);
+  align-items: center;
+  z-index: 20;
+}
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: grid; place-items: center; z-index: 30;
+}
+.modal {
+  background: var(--adu-color-bg);
+  border-radius: var(--adu-radius-lg);
+  padding: var(--adu-space-lg);
+  width: min(28rem, calc(100vw - 2 * var(--adu-space-md)));
+}
+.signin, .chooser { max-width: 26rem; margin: 0 auto; padding: var(--adu-space-lg); }
+.demo-picker { display: flex; flex-wrap: wrap; gap: var(--adu-space-xs); }
+.demo-picker [aria-selected='true'] { background: var(--adu-color-accent); color: var(--adu-color-accent-text); }
+.demo-stage { border: 1px dashed var(--adu-color-border); border-radius: var(--adu-radius-md); padding: var(--adu-space-md); margin-top: var(--adu-space-md); }
+/* The box stays 20px because a 44px checkbox looks broken -- so the LABEL
+   carries the target instead. Clicking a label toggles its control, so the
+   whole row is the 44px hit area S15 asks for. Before this, the checkbox's
+   `min-height: auto` simply cancelled the global rule and left a 20px
+   target with nothing making up the difference. */
+.remember {
+  margin-top: var(--adu-space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-sm);
+  min-height: var(--adu-touch-min);
+}
+.remember input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 0;
+  flex: none;
+}

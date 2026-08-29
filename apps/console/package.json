@@ -2,14 +2,14 @@
   "name": "@adulis/console",
   "version": "0.0.0",
   "private": true,
-  "description": "Adulis Seller Console — Vite React SPA on Cloudflare Pages.",
+  "description": "Adulis Seller Console \u2014 Vite React SPA on Cloudflare Pages.",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "echo \"@adulis/console: no tests at Tier 0 (front-end is COO/CTO scope)\"",
+    "test": "echo \"@adulis/console: no automated tests yet -- C-1/C-2 are verified by typecheck, build, the repo gates and a live sign-in against the real API; a harness is owed at C-3 (T7 S0: the front-end is no longer a separate owner's scope)\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
@@ -17,7 +17,9 @@
     "@adulis/api-client": "workspace:*",
     "@adulis/locale": "workspace:*",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "@adulis/tokens": "workspace:*",
+    "react-router": "7.18.3"
   },
   "devDependencies": {
     "@adulis/config": "workspace:*",
