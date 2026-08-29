@@ -187,8 +187,15 @@ stores (D-97 -- the hole is labeled ON the screen, not hidden). intl.ts holds th
 formatting seam: absolute market time, currency from minor units, and whole-sentence
 templates with named slots (never concatenated fragments).
 Locale: en.ts authored; am.ts machine-translated placeholders with MT-KEYS.md naming
-all 149 keys owed to a translator; a missing Amharic key is a compile error;
-AM_ENABLED stays off. Layout is fluid -- no fixed heights on translated text, one
+all 149 keys owed to a translator; a missing Amharic key is a compile error, and the parity is real (149 keys in each
+catalogue, symmetric difference empty). One correction the review earned:
+**AM_ENABLED does not exist.** It appears in specs, comments and MT-KEYS.md, but
+there is no flag, no language switcher, and no console module imports `am` -- every
+screen imports `en` directly. "Amharic stays off" is therefore true only because the
+mechanism was never built, which is a different sentence from the one the order's
+checklist invites, and worth saying plainly. A second caveat on the same seam:
+nothing in CI regenerates or verifies MT-KEYS.md, so it can drift from en.ts
+silently; it simply has not yet. Layout is fluid -- no fixed heights on translated text, one
 grid that widens at 1024px; verified by build and CSS review at 1280/360. No browser
 automation was in this run's loop, so nothing ever rendered the page: the breakpoint
 and the absence of fixed heights were read in the CSS, not observed. StateDemo is
