@@ -96,13 +96,31 @@ const pnpm = (script, { scoped = false } = {}) =>
     : ['pnpm', script];
 
 /**
+ * The two console build-output gates inspect apps/console/dist -- which a
+ * SCOPED run legitimately never produces when the diff selects nothing the
+ * console depends on (found by PR #22, the first PR since the T6
+ * convergence to touch only db/ops/api: the Build gate correctly skipped
+ * @adulis/console and gate 17 then failed on the missing dist -- register
+ * D-93). Under a scope filter, an absent dist means "not selected" and the
+ * gate passes WITH A NOTE; unscoped (every local run), an absent dist is
+ * still a hard fail, because an unscoped build always produces one.
+ */
+function consoleDistAbsent(p) {
+  if (existsSync(p)) return null;
+  return scope
+    ? { ok: true, detail: `console not selected by the scope filter (${p} absent); asserted on every run that builds it` }
+    : { ok: false, detail: `${p} is absent - build first` };
+}
+
+/**
  * Section 16: "'unsafe-eval' absent from output." The console's CSP is
  * script-src 'self' with no nonce and no 'unsafe-inline' (S3.9), and an
  * eval-based build would silently require loosening it.
  */
 function assertNoUnsafeEval() {
   const dist = path.join(root, 'apps', 'console', 'dist');
-  if (!existsSync(dist)) return { ok: false, detail: 'apps/console/dist is absent - build first' };
+  const absent = consoleDistAbsent(dist);
+  if (absent) return absent;
   const hits = grepDir(dist, 'unsafe-eval');
   return hits.length === 0
     ? { ok: true, detail: 'absent from the console build output' }
@@ -119,7 +137,8 @@ function assertNoUnsafeEval() {
  */
 function assertProductionReact() {
   const assets = path.join(root, 'apps', 'console', 'dist', 'assets');
-  if (!existsSync(assets)) return { ok: false, detail: 'apps/console/dist/assets is absent' };
+  const absent = consoleDistAbsent(assets);
+  if (absent) return absent;
   const hits = grepDir(assets, 'Each child in a list');
   return hits.length === 0
     ? { ok: true, detail: 'production React build' }

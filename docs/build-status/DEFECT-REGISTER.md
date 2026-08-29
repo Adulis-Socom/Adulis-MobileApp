@@ -917,3 +917,14 @@ Found by:  the Phase 3 survey, reading the two sentences against the one consume
 Effect:    Under fail-closed, a market with audience_required = true and follower_threshold NULL refuses every seller with FOLLOWER_THRESHOLD_NOT_MET -- the beta posture ("no threshold is enforced", ADU-CON-01:82) is only achievable by audience_required = false, never by a NULL threshold. Under PRD S4.1's reading, NULL should satisfy the gate. Both sentences are in force; they cannot both hold.
 Response:  PARKED. The code stands as built (fail closed), the seed ships audience_required = false, and the deferred-values gate asserts nullability only -- never NULL semantics.
 Ruling needed: which reading governs row 15. If PRD S4.1 (NULL = no threshold), fn_evaluate_eligibility's audience arm becomes coalesce(v_best >= threshold, TRUE) when the threshold is NULL -- one line, plus a test that a NULL-threshold market admits an audience-less seller.
+
+### D-93 - The console build-output gates failed every scoped CI run that did not select the console
+
+Severity:  MINOR (loud, not silent -- CI went red on the first qualifying PR)
+Phase:     T7 - 3 (defect introduced at T6 Phase D)
+Source:    ops/scripts/gates.mjs -- gates 'no-unsafe-eval' and 'production-react' hard-failed when apps/console/dist was absent; in CI the Build gate is scoped to `...[origin/main]`, so a diff selecting nothing the console depends on (PR #22: db, ops, apps/api, docs only) correctly skips the console build and produces no dist
+Found by:  CI on PR #22 -- the first PR since the T6 convergence whose diff pulled in no console dependency (every earlier PR touched packages/locale or the console itself)
+Effect:    Any backend-only PR failed gate 17 with "dist is absent - build first" -- a red that teaches people the gate lies, which is the exact failure class the one-list convergence exists to prevent.
+Response:  FIXED
+Action:    Under a scope filter, an absent dist now passes with a note naming why (the console was not selected; the assertion runs on every build that produces one). Unscoped -- every local run -- an absent dist stays a hard fail, because an unscoped build always produces one.
+Ruling needed: none.
