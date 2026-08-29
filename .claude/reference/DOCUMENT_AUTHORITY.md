@@ -8,12 +8,12 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PROJ-01_Project_Documentation_v9_0.md` — current supplied project baseline.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — binding product behaviour.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — binding seller-surface architecture.
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md` — binding database enforcement baseline.
-- `ADU-API-01_API_Contract_v1_3.md` — binding wire contract baseline.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — binding identity/access baseline.
+- `ADU-DB-01_Database_and_Data_Model_v1_12.md` — binding database enforcement baseline. Installed at T5; carries ADU-RUL-01's rulings and the fifteen T4 documentation corrections.
+- `ADU-API-01_API_Contract_v1_7.md` — binding wire contract baseline. Installed at T5.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_5.md` — binding identity/access baseline. Installed at T5.
 - `ADU-SEC-01_Content_Security_Policy_v1_0.md` — binding browser-security baseline.
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — binding public-website baseline.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — binding architecture/operations record and standing developer manual.
+- `ADU-CON-02_Seller_Console_System_Design_v3_1.md` — binding architecture/operations record and standing developer manual. Installed at T5.
 - `ADU-CON-01_Seller_Console_Source_Analysis_v1_0.md` — analysis and build basis; its §6 endpoint gap register is the build register for missing endpoints; informative, not binding.
 - `ADU-CON-02-A1_Capacity_Model_and_Failure_Analysis_v1_0.md` — **binding annex** to ADU-CON-02 v3.0; source of rulings R16–R19 and of the six ADU-CON-05 load tests.
 - `ADU-LEG-01_Startup_Designation_and_IP_v1_0.md` — legal/IP baseline; founder working document, not legal advice.
@@ -23,9 +23,9 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 ## Authority by question
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
-2. **Database enforcement:** `ADU-DB-01 v1.6` governs the supplied baseline.
-3. **API/wire behaviour:** `ADU-API-01 v1.3` governs.
-4. **Authentication/authorization:** `ADU-AUTH-01 v2.0` governs.
+2. **Database enforcement:** `ADU-DB-01 v1.12` governs.
+3. **API/wire behaviour:** `ADU-API-01 v1.7` governs.
+4. **Authentication/authorization:** `ADU-AUTH-01 v2.5` governs.
 5. **Seller surface placement:** `ADU-ARCH-01 v2.0` governs.
 6. **Browser security:** `ADU-SEC-01 v1.0` governs.
 7. **Public website:** `ADU-WEB-01 v1.0` governs, subject to PRD on product facts.

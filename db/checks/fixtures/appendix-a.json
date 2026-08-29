@@ -310,7 +310,8 @@
     ],
     "verification.verifier_kind": [
       "KYC_VENDOR",
-      "VIDEO_CALL"
+      "VIDEO_CALL",
+      "OPERATOR_ATTESTED"
     ],
     "financial.retention_reason": [
       "AWAITING_VALIDATION",
@@ -377,7 +378,8 @@
         "VENDOR_KYC",
         "FAYDA",
         "MANUAL_REVIEW"
-      ]
+      ],
+      "added": []
     },
     "financial.retention_reason": {
       "carried_forward": [

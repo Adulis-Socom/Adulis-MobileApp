@@ -187,7 +187,7 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       });
     });
 
-    it('takes no role parameter — the audit identity cannot be supplied', async () => {
+    it('neither function takes a role parameter — the audit identity cannot be supplied', async () => {
       const { rows } = await pool.query(
         `SELECT p.proname, pg_get_function_arguments(p.oid) AS args
            FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -210,9 +210,9 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
 
         await c.query(`SET LOCAL ROLE adulis_app`);
         await c.query(
-          `SELECT verification.write_attestation($1,'KYC_VENDOR','VND-1','NATIONAL_ID',
+          `SELECT verification.write_attestation($2,$1,'KYC_VENDOR','VND-1','NATIONAL_ID',
                                                  'Alemu Bekele', decode('c0ffee','hex'), 1, DATE '2026-08-01')`,
-          [PERSON],
+          [PERSON, ACCOUNT],
         );
         const read = await c.query(
           `SELECT (verification.read_attestation($1,$2,'recovery review')).legal_name AS n`,
@@ -234,12 +234,20 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       await tx(async (c) => {
         await seedSeller(c);
         await c.query(`INSERT INTO core.person (id) VALUES ($1)`, [PERSON]);
+        // G1.1 -- the write derives its authority from an operator grant,
+        // so the fixture needs one. Before T5 this test passed with none,
+        // which is the hole restated as a test that did not notice.
+        await c.query(
+          `INSERT INTO core.operator_grant (id, account_id, role, reason)
+           VALUES (gen_random_uuid(), $1, 'IDENTITY_REVIEWER', 'founder')`,
+          [ACCOUNT],
+        );
         await c.query(`SET LOCAL ROLE adulis_app`);
         const write = (name: string) =>
           c.query(
-            `SELECT verification.write_attestation($1,'KYC_VENDOR','VND','NATIONAL_ID',$2,
+            `SELECT verification.write_attestation($3,$1,'KYC_VENDOR','VND','NATIONAL_ID',$2,
                                                    decode('01','hex'),1,DATE '2026-08-01') AS id`,
-            [PERSON, name],
+            [PERSON, name, ACCOUNT],
           );
         const first = await write('Alemu Bekele');
         const second = await write('Alemu Bekele Tesfaye');
@@ -260,11 +268,16 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
       await tx(async (c) => {
         await seedSeller(c);
         await c.query(`INSERT INTO core.person (id) VALUES ($1)`, [PERSON]);
+        await c.query(
+          `INSERT INTO core.operator_grant (id, account_id, role, reason)
+           VALUES (gen_random_uuid(), $1, 'IDENTITY_REVIEWER', 'founder')`,
+          [ACCOUNT],
+        );
         await c.query(`SET LOCAL ROLE adulis_app`);
         await c.query(
-          `SELECT verification.write_attestation($1,'KYC_VENDOR','V','ID','N',
+          `SELECT verification.write_attestation($2,$1,'KYC_VENDOR','V','ID','N',
                                                  decode('02','hex'),1,DATE '2026-08-01')`,
-          [PERSON],
+          [PERSON, ACCOUNT],
         );
         await c.query(`RESET ROLE`);
         const { rows } = await c.query(`SELECT count(*)::int AS n FROM verification.access_log`);

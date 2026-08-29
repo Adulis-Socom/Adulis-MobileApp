@@ -268,59 +268,56 @@ export class OnboardingService {
    * PARAMETER, action IDENTITY_CHANGE). No image ever reaches Adulis —
    * there is no field for one.
    */
+  /**
+   * G1.1 -- OPERATOR-ONLY. `seller.identity:manage` no longer authorises
+   * writing an attestation; an operator grant does.
+   *
+   * Three things this method deliberately does NOT do, and each is the
+   * reason the endpoint is shaped the way it is:
+   *
+   *  - **It does not call `fn_has_permission`.** An operator holds no
+   *    seller relationship, so a seller-scoped check raises U0002 -- a
+   *    404 -- before the boundary function is reached, and the caller is
+   *    told the seller does not exist rather than that they may not act.
+   *  - **It does not read `req.ctx.sellerId`.** The path is exempt from
+   *    seller context in the guard; the subject arrives as `person_id`,
+   *    because an operator attests about someone else.
+   *  - **It does not create a `core.person` row.** The old body did, for
+   *    an individual seller verifying themselves. An operator attesting
+   *    about a person who does not exist is a mistake, not a signup.
+   *
+   * The gate is `write_attestation`'s own derivation from
+   * `core.operator_grant`, which raises U0001 -> 403 where there is none.
+   * We call it and let it raise: duplicating the check here would create a
+   * second place to get it wrong and a first place to skip the log.
+   */
   async identityVerification(
     trx: Transaction<Database>,
     req: AuthedRequest,
     body: IdentityVerificationBody,
   ): Promise<unknown> {
-    await assertPermission(trx, req, 'seller.identity:manage');
+    // Step-up is RETAINED, and it is not what closes the hole. It proves
+    // the person holding the phone is the account holder -- which was
+    // never the question here, and is still worth having on an operator
+    // session that can write identity evidence. Removing a working control
+    // while closing a different one is the wrong direction.
     await sql`SELECT core.fn_assert_step_up(
       ${body.step_up_challenge_id}, ${req.ctx?.accountId},
       'IDENTITY_CHANGE')`.execute(trx);
 
-    // The attested person: the individual seller's own person row (created
-    // here on first verification), or the company's REPRESENTATIVE, who
-    // must already be named in company details (S7.1 - the attestation is
-    // about the person, and declaring "company" changes whom it is about).
-    let person = (
-      await sql<{ id: string | null }>`
-        SELECT core.fn_seller_attestation_person(${req.ctx?.sellerId}) AS id`.execute(trx)
-    ).rows[0]?.id;
-
-    if (!person) {
-      const entity = (
-        await sql<{ entity_type: string }>`
-          SELECT entity_type FROM core.seller WHERE id = ${req.ctx?.sellerId}`.execute(trx)
-      ).rows[0]?.entity_type;
-      if (entity === 'COMPANY') {
-        throw new AdulisException('VALIDATION_FAILED', {
-          status: 409,
-          slots: { reason: 'COMPANY_DETAILS_FIRST' },
-        });
-      }
-      person = (
-        await sql<{ id: string }>`
-          INSERT INTO core.person (id) VALUES (${randomUUID()}) RETURNING id`.execute(trx)
-      ).rows[0]?.id as string;
-      await sql`
-        UPDATE core.seller SET person_id = ${person}
-         WHERE id = ${req.ctx?.sellerId}`.execute(trx);
-    }
-
     const attestation = await sql<{ id: string }>`
       SELECT verification.write_attestation(
-        ${person}, ${body.verifier_kind}, ${body.vendor_reference},
-        ${body.id_type}, ${body.legal_name},
+        ${req.ctx?.accountId}, ${body.person_id}, ${body.verifier_kind},
+        ${body.vendor_reference}, ${body.id_type}, ${body.legal_name},
         decode(${body.id_hash}, 'hex'), 1, ${body.verified_on}::date) AS id`.execute(trx);
 
-    const ev = await sql<{ outcome: string; reasons: string[] }>`
-      SELECT (e).outcome::text AS outcome, (e).reasons AS reasons
-        FROM core.fn_evaluate_eligibility(${req.ctx?.sellerId}) e`.execute(trx);
-
-    return {
-      attestation_id: attestation.rows[0]?.id,
-      eligibility: { outcome: ev.rows[0]?.outcome, reasons: ev.rows[0]?.reasons ?? [] },
-    };
+    // No eligibility block. It named the CALLER's seller, and the caller
+    // is no longer a seller -- ADU-DB-01 v1.12 S7.3 is explicit that
+    // whether a new attestation re-opens eligibility "is S7.4's business,
+    // evaluated by fn_evaluate_eligibility at the moment it is asked."
+    // Returning a resolved eligibility here would mean finding a seller
+    // from a person, which is a lookup nothing rules.
+    return { attestation_id: attestation.rows[0]?.id };
   }
 
   /**

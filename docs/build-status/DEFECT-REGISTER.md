@@ -526,3 +526,33 @@ Effect:    Three citations point at nothing. Someone following D-28 to understan
 Response:  RECORDED
 Action:    None yet - the reasoning behind both is present in the code comments that cite them, so nothing is lost, but the numbers should either be back-filled or the citations corrected.
 Ruling needed: none. Back-fill at the next register pass.
+
+### D-57 - After G1.1, nothing creates the `core.person` row an INDIVIDUAL seller's attestation needs
+Severity:  MAJOR (a consequence of the fix, not of the hole; the IDENTITY path is unreachable for individual sellers)
+Phase:     T5
+Source:    ADU-DB-01 v1.12 S7.3 (write_attestation takes `p_person_id` and creates nothing); S18's `core.fn_seller_attestation_person`, which resolves a COMPANY seller to `seller_company_detail.representative_person_id` and an INDIVIDUAL seller to `core.seller.person_id`
+Found by:  removing the seller path and asking who supplies the subject the operator attests about
+Effect:    The old endpoint body created a `core.person` row and set `core.seller.person_id` on it, for an individual seller verifying themselves. Operator-only removes that -- correctly, because an operator attesting about a person who does not exist is a mistake and not a signup -- and **nothing else in the codebase writes `core.person`.** A grep confirms it: the only other reference is the company path, which takes `representative_person_id` from the client. So for an INDIVIDUAL seller, `fn_seller_attestation_person` returns NULL forever, `IDENTITY_VERIFIED` can never be satisfied by an attestation, and `fn_evaluate_eligibility`'s IDENTITY arm can never be satisfied. **COMPANY sellers are unaffected** -- their representative person is named through company details, and an operator can attest about that person end to end.
+Response:  RECORDED, not worked around
+Action:    None. The fix requires ruling WHO links a person to an individual seller and by what act -- an operator step, a person-creation endpoint, or a column on the seller written elsewhere. Inventing one would be inventing an authorization path, which T5 S2.3 forbids in as many words.
+Ruling needed: how an individual seller acquires a `core.person` row now that self-attestation is closed. **Not urgent:** ADU-PRD-01 S4.1 admits a seller on EITHER path, `id_verification_requirement` is `OPTIONAL` in the Ethiopian configuration, and AUDIENCE carries the beta (test 7 asserts exactly that). It becomes blocking the day a market sets `MANDATORY_ALL`, or the day an individual seller needs the Pro badge.
+
+### D-58 - ADU-DB-01 v1.12's Appendix A omits the enum value v1.12 itself introduces
+Severity:  MINOR (a documentation defect in the reissue, caught by building it)
+Phase:     T5
+Source:    v1.12 S0.1 ruling table, S7.3's ruling box and S7.3's prose all introduce `OPERATOR_ATTESTED` -- four mentions. Appendix A's catalogue row still reads `verification.verifier_kind | KYC_VENDOR, VIDEO_CALL`
+Found by:  applying migration 0027 and running Appendix C check 16
+Effect:    **Check 16 compares Appendix A against `pg_type` in BOTH directions**, so a database that carries the ruling disagrees with the appendix of the document that ruled it. The repository transcription `db/checks/fixtures/appendix-a.json` is what check 16 actually reads, so the build stays green -- which is the only reason this is MINOR rather than a failing gate. A reader reconciling the appendix by hand would remove the value.
+Response:  WORKED AROUND -- the fixture is updated, the document is not (a document is never edited here)
+Action:    `OPERATOR_ATTESTED` added to `db/checks/fixtures/appendix-a.json`. The withdrawn A1.1 block further down that file is untouched: it is history, not the catalogue.
+Ruling needed: ADU-DB-01 v1.13 to add the value to Appendix A. **This is the third time this document has produced this exact shape** -- v1.10 announced a withdrawal it did not perform, v1.11 said so, and v1.12 says it again in S0.2: "an assertion in prose that nothing executes will drift."
+
+### D-59 - Appendix B's reconciliation was declared and not performed
+Severity:  MINOR
+Phase:     T5
+Source:    v1.12 S30 -- "D-18, D-40: Appendix B omits two tables the bodies require -> Both exist. **Appendix B reconciled**; check 14 bidirectional." S0.1 -- "112 tables (111 after D-18/D-40's two, plus `seller_courier_invite`)"
+Found by:  diffing Appendix B's manifest against `information_schema` on the built database
+Effect:    Appendix B names **neither** `core.category_market_availability` (D-18) **nor** `core.notification_preference` (D-40) -- the two tables it says it was reconciled for -- and does not name `core.seller_courier_invite` either, though S0.1's arithmetic counts it and S6.3a defines it. Its core heading reads **84** above a list of **85**. So the appendix that opens "the number is derived, not asserted" carries an asserted number, a heading that disagrees with its own list, and the omissions it claims to have closed.
+Response:  RECORDED. Check 14 reads the repository fixture, not the document, so the build is unaffected and green.
+Action:    None in code. `apps/api/CLAUDE.md` now states that the build's counts are the fixtures' and that v1.12's printed ones differ, so the next reader does not "correct" a green check against a stale appendix.
+Ruling needed: ADU-DB-01 v1.13 to reconcile Appendix B **from the database**, as its own preamble says it is. **The lesson is the one v1.11 already drew about itself:** a correction announced in a change table and not performed in the body is indistinguishable, to the next reader, from one that was.

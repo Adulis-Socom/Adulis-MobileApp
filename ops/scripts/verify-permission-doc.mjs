@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
 const SQL_FILE = path.join(root, 'docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql');
-const DOC_FILE = path.join(root, 'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_4.md');
+const DOC_FILE = path.join(root, 'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md');
 
 const ROLES = ['OWNER', 'ADMIN', 'SALES_SUPPORT', 'INVENTORY', 'ANALYST', 'CAMPAIGN_MANAGER'];
 const PER_ROLE = { OWNER: 42, ADMIN: 40, SALES_SUPPORT: 19, INVENTORY: 16, ANALYST: 10, CAMPAIGN_MANAGER: 12 };

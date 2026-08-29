@@ -4,14 +4,24 @@
 
 | Document | Governs at | Where |
 |---|---|---|
-| **ADU-DB-01** | **v1.10**, as amended by **A3** | [`docs/ADU-DB-01_..._v1_10.md`](../ADU-DB-01_Database_and_Data_Model_v1_10.md) |
-| **ADU-AUTH-01** | **v2.4** | [`docs/ADU-AUTH-01_..._v2_4.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_4.md) |
-| **ADU-API-01** | **v1.6** | [`docs/ADU-API-01_API_Contract_v1_6.md`](../ADU-API-01_API_Contract_v1_6.md) |
+| **ADU-DB-01** | **v1.12** | [`docs/ADU-DB-01_..._v1_12.md`](../ADU-DB-01_Database_and_Data_Model_v1_12.md) |
+| **ADU-AUTH-01** | **v2.5** | [`docs/ADU-AUTH-01_..._v2_5.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
+| **ADU-API-01** | **v1.7** | [`docs/ADU-API-01_API_Contract_v1_7.md`](../ADU-API-01_API_Contract_v1_7.md) |
+| **ADU-CON-02** | **v3.1** | [`docs/ADU-CON-02_..._v3_1.md`](../ADU-CON-02_Seller_Console_System_Design_v3_1.md) |
 | **ADU-VAL-01** | **v1.0** — a register, not a specification | [`docs/registers/`](../registers/) |
-| The permission seed, §16.2a | v2.4, unchanged from v2.3 | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
+| The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
-**Amendments A1 and A2 are absorbed into v1.10** and cease to apply separately.
-**Amendment A3 is live and governs where it and v1.10 disagree** — see below.
+**Installed at T5. The superseded copies are in [`docs/superseded/`](../superseded/)** rather than
+deleted, because a register entry that cites "v1.10 §5.5" needs the text it cited.
+
+> **[!] v1.11 was never installed here, and v1.12 is a complete document rather than a
+> patch, so nothing is lost.** This repository governed at **v1.10 as amended by A3**;
+> T5's table says v1.12 supersedes v1.11. A3's three rulings are all carried into v1.12's
+> own §0.2 and §30, so the amendment is absorbed rather than dropped — but the jump is
+> two revisions, not one, and it is recorded here rather than left for someone to notice.
+
+**Amendments A1, A2 and A3 are all absorbed into the installed text** and cease to apply
+separately. A3's history is retained below because the *reasoning* is not repeated in v1.12.
 
 > **The three large documents were not installable until A3.5.** Every copy
 > supplied in-session carried the same transit damage: three-byte UTF-8 glyphs
@@ -75,10 +85,10 @@ A rule nothing executes will drift. Each of these is a standing CI gate.
 
 | Rule | Check |
 |---|---|
-| §16.2's matrix agrees with §16.2a's SQL, all 252 cells, both directions | `pnpm verify:permission-doc` |
+| §16.2's matrix agrees with §16.2a's SQL, all 252 cells, both directions | `pnpm verify:permission-doc` — reads **v2.5** since T5 |
 | Governed specifications are ASCII (A3.5) | `pnpm verify:docs-ascii` |
 | Appendix A agrees with `pg_type`, both directions | Appendix C **check 16** |
-| Appendix B's 109-table manifest | Appendix C **check 14** (live from Tier 2) |
+| Appendix B's table manifest | Appendix C **check 14** (live from Tier 2) — **bidirectional since v1.12**, and the count is reconciled from the database rather than asserted |
 | Eleven load-bearing absences | Appendix C checks 1–4, 6, 11, 15 |
 | Every column, constraint and function | the migration that transcribes it, citing its section in its header |
 
