@@ -35,6 +35,7 @@
     "generate:openapi": "pnpm --filter @adulis/api generate:openapi",
     "generate:api-client": "pnpm --filter @adulis/api-client generate",
     "verify:error-locale": "node ops/scripts/verify-error-locale.mjs",
+    "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
     "worker:install": "node ops/scripts/install-worker-schema.mjs"
   },
   "devDependencies": {

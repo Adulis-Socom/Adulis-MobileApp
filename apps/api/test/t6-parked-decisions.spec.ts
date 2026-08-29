@@ -151,6 +151,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       [SELLER_OWNER, BUYER, STRANGER],
     ]);
     await admin.query(`DELETE FROM core."order" WHERE seller_id = $1`, [SELLER]);
+    await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = ANY($1::uuid[])`, [
       [SELLER_OWNER, BUYER, STRANGER],

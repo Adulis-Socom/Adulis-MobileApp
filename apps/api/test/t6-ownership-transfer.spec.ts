@@ -211,6 +211,7 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
                         (SELECT id FROM core."order" WHERE seller_id = $1)`, [SELLER]);
     await admin.query(`DELETE FROM core."order" WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.payout_details WHERE seller_id = $1`, [SELLER]);
+    await admin.query(`DELETE FROM core.seller_public_stats WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.seller WHERE id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = ANY($1::uuid[])`, [
       [OWNER, RECIPIENT, ANALYST],

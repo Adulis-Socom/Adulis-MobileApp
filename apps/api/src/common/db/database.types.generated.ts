@@ -631,20 +631,29 @@ export interface CoreIdentityConfig {
 export interface CoreLadderConfig {
   created_at: Generated<Timestamp>;
   created_by_account_id: string | null;
-  demotion_max_cancellation_rate: Numeric;
-  demotion_max_claim_rate: Numeric;
-  demotion_min_scan_completion_rate: Numeric;
-  demotion_window: Interval;
+  demotion_max_cancellation_rate: Numeric | null;
+  demotion_max_claim_rate: Numeric | null;
+  demotion_min_scan_completion_rate: Numeric | null;
+  /**
+   * ADU-VAL-01 v1.1 S1.1 row 12, OPEN. NULL = the three demotion rates come back NULL from the 0010 helpers and the OR-gate collapses to false: nobody is demoted except by an upheld claim, which ignores every value here (S5.2). Fail closed. NOTE the OR semantics: a PARTIALLY configured demotion set still demotes on its configured legs -- NULL OR TRUE is TRUE -- which is intended, not a bug (hysteresis needs its own numbers, S1.2).
+   */
+  demotion_window: Interval | null;
   /**
    * How many times one buyer's handoffs may count toward one seller's level inside distinct_buyer_window. NOTE: section 8.2 calls this column max_handoffs_per_buyer while section 5.5 names it distinct_buyer_max_count. Section 5.5 is the column definition and governs; reported for v1.11.
    */
-  distinct_buyer_max_count: number;
-  distinct_buyer_window: Interval;
+  distinct_buyer_max_count: number | null;
+  /**
+   * ADU-VAL-01 v1.1 S1.1 row 13 (Group C), OPEN. NULL = fn_handoff_scan_validity leaves counts_toward_level false (0013:159): scans complete orders but earn no level credit, and handoff_scan is append-only, so scans recorded before Group C is seeded are PERMANENTLY non-counting. Fail closed, with a memory.
+   */
+  distinct_buyer_window: Interval | null;
   effective: Generated<string>;
-  established_max_claim_rate: Numeric;
-  established_min_avg_rating: Numeric;
-  established_min_handoffs: number;
-  established_window: Interval;
+  established_max_claim_rate: Numeric | null;
+  established_min_avg_rating: Numeric | null;
+  /**
+   * ADU-VAL-01 v1.1 S1.1 row 1, OPEN. NULL = the value is not yet decided; read by NOTHING since A1.3 rewired the NEW exit (retained, unread -- 0028). Fail closed.
+   */
+  established_min_handoffs: number | null;
+  established_window: Interval | null;
   id: string;
   market_id: string;
   new_level_product_cap: Generated<number>;

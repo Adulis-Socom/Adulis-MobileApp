@@ -8,7 +8,7 @@
 | **ADU-AUTH-01** | **v2.5** | [`docs/ADU-AUTH-01_..._v2_5.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
 | **ADU-API-01** | **v1.7** | [`docs/ADU-API-01_API_Contract_v1_7.md`](../ADU-API-01_API_Contract_v1_7.md) |
 | **ADU-CON-02** | **v3.1** | [`docs/ADU-CON-02_..._v3_1.md`](../ADU-CON-02_Seller_Console_System_Design_v3_1.md) |
-| **ADU-VAL-01** | **v1.1** -- a register, not a specification; S1.1 is machine-read, enforced by the T7 Phase 3 gate | [`docs/registers/`](../registers/) |
+| **ADU-VAL-01** | **v1.1** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, gate 16 of the one list) | [`docs/registers/`](../registers/) |
 | The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
 **Installed at T5. The superseded copies are in [`docs/superseded/`](../superseded/)** rather than

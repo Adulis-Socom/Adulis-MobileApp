@@ -61,19 +61,16 @@ describe('T6 / G1.2 -- NEW leaves only on tenure AND orders', () => {
     // migration's DEFAULTs -- that is what makes these tests assert the
     // SHIPPED numbers rather than numbers the fixture chose.
     //
-    // NO trusted_* column is named either, so all four are NULL: ADU-VAL-01
-    // Group A, deferred, and since T6 expressible as such. The established_*
-    // and demotion_* columns are supplied only because they are still NOT
-    // NULL; nothing reads established_* since A1.3.
+    // And NOTHING ELSE is named at all. This fixture used to supply
+    // established_*, demotion_* and distinct_buyer_* "only because they are
+    // still NOT NULL" (its own words) -- T7 Phase 3 (ADU-RUL-02) dropped
+    // those NOT NULLs, so the row is now exactly what a real market seed
+    // looks like before the OPEN values are decided: SET values from
+    // defaults, every deferred threshold NULL, and the ladder fail-closed
+    // beyond ESTABLISHED. The row D-61 said could not be written.
     await c.query(
-      `INSERT INTO core.ladder_config (id, market_id,
-         established_min_handoffs, established_window,
-         established_min_avg_rating, established_max_claim_rate,
-         demotion_max_claim_rate, demotion_max_cancellation_rate,
-         demotion_min_scan_completion_rate, demotion_window,
-         distinct_buyer_window, distinct_buyer_max_count)
-       VALUES (gen_random_uuid(), $1, 1, '90 days', 1.0, 0.99,
-               0.99, 0.99, 0.0, '60 days', '30 days', 3)`,
+      `INSERT INTO core.ladder_config (id, market_id)
+       VALUES (gen_random_uuid(), $1)`,
       [market],
     );
     await c.query(
@@ -191,8 +188,10 @@ describe('T6 / G1.2 -- NEW leaves only on tenure AND orders', () => {
     tx(async (c) => {
       // A1.3: "Test that the deferral is real, not just believed." The
       // seller below satisfies every NEW->ESTABLISHED arm many times over
-      // and has counting handoffs; TRUSTED still cannot be reached, because
-      // its own four thresholds are ADU-VAL-01 Group A and NULL.
+      // (completed orders; no counting handoff exists, and none can be
+      // staged while distinct_buyer_* are NULL -- 0013:159); TRUSTED still
+      // cannot be reached, because its own four thresholds are ADU-VAL-01
+      // Group A and NULL.
       const { market, seller, buyer } = await seedMarket(c, '5');
       await enterLadder(c, seller, 4000);
       await completedOrders(c, market, seller, buyer, 500);

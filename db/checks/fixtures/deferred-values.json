@@ -1,0 +1,21 @@
+{
+  "_provenance": "ADU-VAL-01 v1.1 S1.1, transcribed row for row -- the machine-read half of the register (S0.3 form 2 of 3). Form 1 is the S1.1 table itself; form 3 is the live schema; ops/scripts/verify-deferred-values.mjs is the comparator that holds all three together, both directions, like verify:permission-doc does for the permission matrix. nullable_required is false only for row 16: the embedding's deferral is the vector DIMENSION (D-05), not nullability -- S1.4 says so in as many words. new_level_transaction_cap_minor is deliberately ABSENT: it is nullable but SET (S2: NULL means no cap, fail OPEN) -- the opposite of the fail-closed reading ADU-RUL-02 gives this list. (One included row is contested: row 15, where PRD S4.1 reads NULL as no-threshold, fail OPEN, while the code fails closed -- D-92 parks that; this fixture asserts nullability only, never NULL semantics.), and a generator that includes every nullable config column reintroduces exactly the concept drift S1.1 exists to end.",
+  "columns": [
+    { "n": 1,  "schema": "core", "table": "ladder_config",      "column": "established_min_handoffs",           "type": "int",          "group": "A",  "nullable_required": true },
+    { "n": 2,  "schema": "core", "table": "ladder_config",      "column": "established_window",                 "type": "interval",     "group": "A",  "nullable_required": true },
+    { "n": 3,  "schema": "core", "table": "ladder_config",      "column": "established_min_avg_rating",         "type": "numeric(3,2)", "group": "A",  "nullable_required": true },
+    { "n": 4,  "schema": "core", "table": "ladder_config",      "column": "established_max_claim_rate",         "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 5,  "schema": "core", "table": "ladder_config",      "column": "trusted_min_handoffs",               "type": "int",          "group": "A",  "nullable_required": true },
+    { "n": 6,  "schema": "core", "table": "ladder_config",      "column": "trusted_window",                     "type": "interval",     "group": "A",  "nullable_required": true },
+    { "n": 7,  "schema": "core", "table": "ladder_config",      "column": "trusted_min_scan_completion_rate",   "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 8,  "schema": "core", "table": "ladder_config",      "column": "trusted_max_claim_rate",             "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 9,  "schema": "core", "table": "ladder_config",      "column": "demotion_max_claim_rate",            "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 10, "schema": "core", "table": "ladder_config",      "column": "demotion_max_cancellation_rate",     "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 11, "schema": "core", "table": "ladder_config",      "column": "demotion_min_scan_completion_rate",  "type": "numeric(5,4)", "group": "A",  "nullable_required": true },
+    { "n": 12, "schema": "core", "table": "ladder_config",      "column": "demotion_window",                    "type": "interval",     "group": "A",  "nullable_required": true },
+    { "n": 13, "schema": "core", "table": "ladder_config",      "column": "distinct_buyer_window",              "type": "interval",     "group": "C",  "nullable_required": true },
+    { "n": 14, "schema": "core", "table": "ladder_config",      "column": "distinct_buyer_max_count",           "type": "int",          "group": "C",  "nullable_required": true },
+    { "n": 15, "schema": "core", "table": "eligibility_config", "column": "follower_threshold",                 "type": "int",          "group": "--", "nullable_required": true },
+    { "n": 16, "schema": "nlu",  "table": "intent_phrase",      "column": "embedding",                          "type": "vector(N)",    "group": "--", "nullable_required": false }
+  ]
+}

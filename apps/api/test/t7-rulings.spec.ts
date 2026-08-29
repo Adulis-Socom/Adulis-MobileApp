@@ -156,6 +156,10 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
         persons.rows.map((r: { person_id: string }) => r.person_id),
       ]);
     }
+    await admin.query(
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id = $1)`,
+      [M],
+    );
     await admin.query(`DELETE FROM core.seller WHERE market_id = $1`, [M]);
     await admin.query(`DELETE FROM core.session WHERE id = ANY($1::uuid[])`, [[OWNER_S, BUYER_S]]);
     await admin.query(`DELETE FROM core.device WHERE id = $1`, [DEVICE]);

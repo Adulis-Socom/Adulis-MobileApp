@@ -261,6 +261,7 @@ describe('C7 — chat, claims, reviews', () => {
       `DELETE FROM core.product WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
       `DELETE FROM core.seller_eligibility_evaluation WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
       `DELETE FROM core.seller_level_state WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
       `DELETE FROM core.session WHERE account_id IN ('${OWNER}','${BUYER}','${STRANGER}','${OWNER2}')`,
       `DELETE FROM core.idempotency_record WHERE actor_id::text LIKE 'dddd7777%' OR actor_id IN ('${OWNER}','${BUYER}','${STRANGER}','${OWNER2}')`,

@@ -885,3 +885,46 @@ Effect:    An invite to a phone with NO account creates a PENDING row with no AU
 Response:  RECORDED, not built
 Action:    Building the claim-at-sign-in leg touches the auth path (otp/verify) for a courier feature no ruling has specified end-to-end -- the exact "helpful completion" failure mode. The invite surface remains correct for phones that already hold accounts (immediate claim, in the invite transaction).
 Ruling needed: the claim mechanism -- at sign-in (which purposes? MOBILE only?), with what notification to the seller, and what expiry a pending invite carries (today: none -- a typo'd number is pending forever and shows in the list).
+
+### D-90 - Three documents carry three different counts of the still-NOT-NULL deferred columns, and all three are wrong
+
+Severity:  MINOR (prose drift; the schema was always the authority and now a gate reads it)
+Phase:     T7 - 3
+Source:    D-61:577 says 8 remain ("established_* (4), demotion_* (3), distinct_buyer_max_count" -- it forgot demotion_window and distinct_buyer_window); ADU-VAL-01 v1.1 S1.1:88 says "0028 made 5 of them so" (0028's fifth drop was new_to_established... -- no: new_level_transaction_cap_minor, an S2 row outside S1.1; only the four trusted_* count); information_schema said TEN of the fourteen were still NOT NULL
+Found by:  enumerating from the schema before writing 0039, per v1.1 S0.3's own rule ("where the list and the schema disagree, the schema wins")
+Effect:    An implementer transcribing any of the three prose counts drops NOT NULL on the wrong set and leaves one or two interval columns undeferrable -- the Ethiopian market seed still cannot be written without inventing values, which is D-61 half-closed and looking closed.
+Response:  ENUMERATED FROM THE SCHEMA; 0039 alters exactly ten and its header names all three wrong counts
+Action:    verify-deferred-values now holds the three forms together permanently, so the next drift is a red gate rather than a register entry. ADU-VAL-01 v1.2 owes the corrected sentence at S1.1:88.
+Ruling needed: none -- reissue arithmetic, listed for the register owner.
+
+### D-91 - ADU-VAL-01 v1.1 S2 places media_retention in legal_config; the schema and ADU-DB-01 both say timing_config
+
+Severity:  MINOR
+Phase:     T7 - 3
+Source:    v1.1 S2's table row: "Media retention | `legal_config.media_retention` | 90 days"; the column lives at core.timing_config (0002:295) and legal_config (0002:399-418) carries evidence/chat/analytics retention and no media column; ADU-DB-01 v1.12:590 and :1467 agree with the schema
+Found by:  the Phase 3 survey, checking every S2 row against the schema while S1.1 was being fixtured
+Effect:    A reader following v1.1's S2 to tune media retention edits a column that does not exist where stated. S2 is not machine-read (only S1.1 is), so no gate catches the drift -- this entry is the catch.
+Response:  RECORDED; the schema wins (v1.1 S0.3's own rule)
+Action:    ADU-VAL-01 v1.2 owes the corrected table cell. Nothing in code changes: every consumer already reads timing_config.
+Ruling needed: none -- a reissue correction.
+
+### D-92 - follower_threshold's NULL means two opposite things in one governing register
+
+Severity:  QUESTION (parked; the code fails closed today and ADU-RUL-02 blesses that reading)
+Phase:     T7 - 3
+Source:    ADU-VAL-01 v1.1 S0.2 / ADU-RUL-02: "every column in S1.1 is nullable, and its consumer FAILS CLOSED on NULL" -- row 15 is in S1.1. v1.1 S1.1's own note: "Row 15 is already nullable and PRD S4.1 rules that NULL means NO THRESHOLD" (fail OPEN). The code (0018:146, coalesce(v_best >= threshold, false)) fails CLOSED: a NULL threshold leaves the audience gate unsatisfied
+Found by:  the Phase 3 survey, reading the two sentences against the one consumer
+Effect:    Under fail-closed, a market with audience_required = true and follower_threshold NULL refuses every seller with FOLLOWER_THRESHOLD_NOT_MET -- the beta posture ("no threshold is enforced", ADU-CON-01:82) is only achievable by audience_required = false, never by a NULL threshold. Under PRD S4.1's reading, NULL should satisfy the gate. Both sentences are in force; they cannot both hold.
+Response:  PARKED. The code stands as built (fail closed), the seed ships audience_required = false, and the deferred-values gate asserts nullability only -- never NULL semantics.
+Ruling needed: which reading governs row 15. If PRD S4.1 (NULL = no threshold), fn_evaluate_eligibility's audience arm becomes coalesce(v_best >= threshold, TRUE) when the threshold is NULL -- one line, plus a test that a NULL-threshold market admits an audience-less seller.
+
+### D-93 - The console build-output gates failed every scoped CI run that did not select the console
+
+Severity:  MINOR (loud, not silent -- CI went red on the first qualifying PR)
+Phase:     T7 - 3 (defect introduced at T6 Phase D)
+Source:    ops/scripts/gates.mjs -- gates 'no-unsafe-eval' and 'production-react' hard-failed when apps/console/dist was absent; in CI the Build gate is scoped to `...[origin/main]`, so a diff selecting nothing the console depends on (PR #22: db, ops, apps/api, docs only) correctly skips the console build and produces no dist
+Found by:  CI on PR #22 -- the first PR since the T6 convergence whose diff pulled in no console dependency (every earlier PR touched packages/locale or the console itself)
+Effect:    Any backend-only PR failed gate 17 with "dist is absent - build first" -- a red that teaches people the gate lies, which is the exact failure class the one-list convergence exists to prevent.
+Response:  FIXED
+Action:    Under a scope filter, an absent dist now passes with a note naming why (the console was not selected; the assertion runs on every build that produces one). Unscoped -- every local run -- an absent dist stays a hard fail, because an unscoped build always produces one.
+Ruling needed: none.
