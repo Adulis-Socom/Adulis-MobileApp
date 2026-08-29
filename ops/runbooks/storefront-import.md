@@ -42,8 +42,9 @@ git subtree add --prefix apps/storefront <STOREFRONT_REPO_URL> main
 #    Do this AFTER the import, never before.
 $EDITOR apps/storefront/CLAUDE.md
 
-# 3. Give it an owner. Until then it has no CODEOWNERS line, which is deliberate -
-#    an owner invented for an unstaffed workstream is a review nobody performs.
+# 3. Confirm its CODEOWNERS line. Since T7 Phase 4 every path routes to the one
+#    remaining owner (register D-94), so the storefront already has one; give it a
+#    dedicated line when it gets a dedicated owner.
 $EDITOR .github/CODEOWNERS
 
 # 4. Confirm the workspace picked it up and the boundary holds.

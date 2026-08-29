@@ -1,27 +1,25 @@
-# ADU-REPO-01 §3 — ownership
+# ADU-REPO-01 S3 -- ownership, as amended by WORK ORDER T7 S0/S6.
 #
-# GitHub applies the LAST matching pattern, so order matters: the broad workstream
-# rules come first and the shared paths that need two reviewers come last.
+# ONE OWNER. The COO/CTO has left (T7 S0); there is one engineer. A
+# CODEOWNERS line naming a person who has left requests review from nobody
+# -- T7 S6's exact warning -- and on this repository that was ALREADY the
+# standing state: neither `@naod` nor `@abenezer` has ever been a
+# collaborator here. Both handles exist on GitHub (they belong to accounts
+# ids 5516146 and 6717001, evidently not this project's people); the ONLY
+# collaborator is `NaodSolomon`, the account every commit in history
+# carries. This file has therefore been requesting review from nobody
+# since the day it was written -- verified against the API at T7, recorded
+# in register D-94.
 #
-# An unassigned path has no owner line and gets a review from whoever is nearest
-# until it does. That is deliberate: an owner invented for an unstaffed workstream
-# is a review that nobody actually performs.
+# The previous file's unstaffed-workstream doctrine (no owner line at all
+# for mobile/storefront) is superseded while there is one human: every
+# path is his, including the three unstaffed front-end surfaces, because
+# review-by-nobody and review-by-the-only-engineer are now the same thing
+# stated honestly.
+#
+# Branch protection note (ADU-CON-02 v3.1 S21): rules do not APPLY on the
+# current plan, so this file is documentation of intent either way -- and
+# when protection becomes enforceable, required approvals must be 0, not
+# 1: nobody can approve their own PR, and 1 would deadlock every merge.
 
-/apps/api/          @naod
-/db/                @naod
-/contracts/         @naod
-/ops/               @naod
-/docs/              @naod
-
-/apps/console/      @abenezer
-
-# /apps/mobile/     — unassigned (ADU-REPO-01 §1)
-# /apps/storefront/ — unassigned (ADU-REPO-01 §1)
-
-# Both owners. A change here reaches every workstream, which is the whole reason
-# `packages/` exists — see §4 rule 2. The correct way past a dependency rule is to
-# move the shared thing here, and that move is meant to be a deliberate, reviewed
-# act rather than a convenience.
-/packages/          @naod @abenezer
-/.github/           @naod @abenezer
-/CLAUDE.md          @naod @abenezer
+*   @NaodSolomon

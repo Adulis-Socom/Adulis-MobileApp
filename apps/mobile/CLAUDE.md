@@ -62,6 +62,7 @@ native secure storage - never a cookie, never a JWT.
 
 ## Before this workstream starts
 
-It needs an owner in `.github/CODEOWNERS`, an Expo project, and its own
-`.claude/settings.json`. Until then this file exists so that whoever picks it up
+It needs an Expo project. Two items this list used to carry are already done: every
+path has an owner in `.github/CODEOWNERS` since T7 Phase 4 (register D-94), and
+`.claude/settings.json` exists. Until then this file exists so that whoever picks it up
 inherits the rule above rather than discovering it in an App Store rejection.

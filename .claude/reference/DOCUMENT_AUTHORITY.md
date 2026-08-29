@@ -30,7 +30,7 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 6. **Browser security:** `ADU-SEC-01 v1.0` governs.
 7. **Public website:** `ADU-WEB-01 v1.0` governs, subject to PRD on product facts.
 8. **Business doctrine:** `ADU-00 v9.1` governs.
-9. **Build/operations sequencing:** `ADU-CON-02 v3.0` governs unless doing so requires an unreissued dependent specification.
+9. **Build/operations sequencing:** `ADU-CON-02 v3.1` governs unless doing so requires an unreissued dependent specification.
 
 ## Known version gaps — fail closed
 

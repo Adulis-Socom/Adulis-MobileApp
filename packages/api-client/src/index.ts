@@ -13,7 +13,7 @@
  * it believing it came from the contract.
  *
  * If a type you need is missing, **the endpoint does not exist yet.** The answer
- * is the Prism mock, never a reach into `apps/api/` (rule 2).
+ * is the contract (the mock serves it), never a reach into `apps/api/` (rule 2).
  */
 
 /** Where `pnpm mock:api` serves the contract. Matches ADU-REPO-01 §9.4. */
@@ -29,7 +29,7 @@ export const MOCK_API_BASE_URL = 'http://127.0.0.1:4010';
  * `/v1` there would 404 on every mocked route; and a base URL carrying `/v1` stops
  * being a clean origin swap the moment anything non-versioned is added.
  *
- * Dev is deliberately **cross-origin** against the mock rather than proxied
+ * Dev is deliberately **cross-origin** against the API rather than proxied
  * through Vite. Production is genuinely cross-origin — the console's CSP carries
  * `connect-src 'self' https://api...` and the API applies an exact-`Origin` CSRF
  * check against `CONSOLE_ORIGIN` with `credentials: 'include'`. A dev proxy makes
@@ -41,7 +41,7 @@ export function resolveApiBaseUrl(configured: string | undefined): string {
   if (!value) {
     throw new Error(
       'API base URL is not configured. Set VITE_API_BASE_URL — for local work ' +
-        `run \`pnpm mock:api\` and point it at ${MOCK_API_BASE_URL}.`,
+        `point it at the running API (http://localhost:3000), or run \`pnpm mock:api\` at ${MOCK_API_BASE_URL} for contract-only work.`,
     );
   }
   if (/\/v1\/?$/.test(value)) {
