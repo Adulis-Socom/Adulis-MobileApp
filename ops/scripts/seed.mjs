@@ -6,10 +6,12 @@
  *
  * Idempotent: fixed uuids, ON CONFLICT DO NOTHING -- run it twice, get one
  * seller. Prints everything the console dev loop needs, including the
- * device id (VITE_DEVICE_ID): a web console has no honest value for
- * core.device_platform (ANDROID|IOS -- register D-95) and nowhere
- * permitted to persist a minted id, so the seed provisions the device row
- * the sign-in flow requires until that enum is ruled.
+ * NO DEVICE IS SEEDED ANY MORE. It used to provision one, labelled ANDROID,
+ * because a browser had no honest platform value and nowhere to persist an
+ * id (D-95/D-102). ADU-RUL-03 S2 settles both: core.device_platform has WEB,
+ * and /v1/bootstrap mints the row and sets an httpOnly cookie the first time
+ * the console loads. The dev loop needs no device configuration at all, and
+ * the seed no longer writes a false platform.
  *
  * The INDIVIDUAL seller is seeded WITH its person row -- D-57 is honored
  * even here, where a fixture could technically skip it.
@@ -34,7 +36,6 @@ const M = '5eed0000-0000-4000-8000-000000000001';
 const ACCOUNT = '5eed0000-0000-4000-8000-000000000002';
 const PERSON = '5eed0000-0000-4000-8000-000000000003';
 const SELLER = '5eed0000-0000-4000-8000-000000000004';
-const DEVICE = '5eed0000-0000-4000-8000-000000000005';
 const PHONE = '+251900000001';
 
 const client = new pg.Client({ connectionString: CONNECTION });
@@ -116,11 +117,6 @@ try {
     [ACCOUNT, PHONE, M],
   );
   await client.query(
-    `INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')
-     ON CONFLICT (id) DO NOTHING`,
-    [DEVICE],
-  );
-  await client.query(
     `INSERT INTO core.person (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`,
     [PERSON],
   );
@@ -149,12 +145,12 @@ Seeded (idempotent -- reruns change nothing):
 
   phone      ${PHONE}
   seller     ${SELLER}
-  device     ${DEVICE}
 
 Console dev loop (three terminals):
   1. pnpm dev:api            # OTP codes print here (dev SMS adapter)
   2. pnpm dev:console        # with VITE_API_BASE_URL=http://localhost:3000
-                             # and  VITE_DEVICE_ID=${DEVICE}
+                             # (no device configuration: the first load of the
+                             #  console is issued its own by /v1/bootstrap)
   3. sign in at http://localhost:5173/sign-in with ${PHONE},
      read the 6-digit code from apps/api/.dev-sms.log (T8: it is no
      longer printed to the terminal -- see D-106), and open

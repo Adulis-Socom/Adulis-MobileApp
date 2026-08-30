@@ -18,7 +18,15 @@ export const otpVerifyBody = z.object({
   phone,
   code,
   audience: z.enum(['MOBILE', 'CONSOLE']),
-  device_id: z.uuid(),
+  /**
+   * MOBILE only. A native client generates its device id, persists it in the
+   * platform keystore and presents it here. A CONSOLE request carries no
+   * device id at all: the browser's identity is the httpOnly cookie
+   * /v1/bootstrap minted, which JavaScript cannot read and therefore cannot
+   * send (ADU-RUL-03 S2). A device_id sent by a console client is IGNORED,
+   * not honoured -- accepting it as a fallback is the arm the ruling closes.
+   */
+  device_id: z.uuid().optional(),
   /**
    * Required the first time this phone signs in (identity creation blocks
    * below 18 — ADU-AUTH-01 section 13); ignored for an existing account.
@@ -26,7 +34,14 @@ export const otpVerifyBody = z.object({
   age_declared_over_18: z.boolean().optional(),
   /** R17 — console only; asserts "this is not the borrowed laptop". */
   remember_device: z.boolean().optional(),
-});
+})
+  .refine((b) => b.audience !== 'MOBILE' || typeof b.device_id === 'string', {
+    // Optional in the shape, REQUIRED on the surface that has one. Without
+    // this, relaxing device_id for the console would have let a mobile client
+    // omit it and reach a lookup with nothing to look up.
+    path: ['device_id'],
+    message: 'device_id is required for MOBILE',
+  });
 
 export const stepUpRequestBody = z.object({
   action: z.enum([

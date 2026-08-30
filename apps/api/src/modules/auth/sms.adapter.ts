@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 import { createLogger } from '../../common/logging';
@@ -48,8 +48,26 @@ export class FakeSmsAdapter implements SmsAdapter {
   constructor() {
     assertFakeIsPermitted('FakeSmsAdapter');
     if (nodeEnv() === 'development') {
+      // REMOVED, then created 0600 (#25 review, corrected by #26's). Two
+      // reasons, both about a file holding live codes and phone numbers: it
+      // must not grow across months of development, and on a shared machine
+      // another user must not be able to read it.
+      //
+      // The unlink is what makes the mode real ON POSIX: writeFileSync with
+      // a mode opens O_CREAT|O_TRUNC, which truncates the EXISTING inode and
+      // leaves its permissions alone, so without the unlink the mode was
+      // silently ignored and the file stayed as permissive as it was.
+      //
+      // ON WINDOWS THE MODE BUYS NOTHING and it is worth saying so rather
+      // than implying protection that is not there: Node maps mode to the
+      // read-only bit alone, ACLs are inherited from the directory, and a
+      // measured run shows 0666 with the machine's other principals able to
+      // read it. A developer on a shared Windows machine should treat this
+      // file as world-readable -- or point DEV_SMS_LOG somewhere protected.
+      rmSync(devSmsLogPath(), { force: true });
+      writeFileSync(devSmsLogPath(), '', { encoding: 'utf8', mode: 0o600 });
       // The PATH is safe to log; what the file contains is not.
-      log.warn({ msg: `[FAKE SMS] development codes are appended to ${devSmsLogPath()}` });
+      log.warn({ msg: `[FAKE SMS] development codes are written to ${devSmsLogPath()}` });
     }
   }
 

@@ -92,10 +92,51 @@ export class AuthService {
         VALUES (${accountId}, ${body.phone}, ${live.id}, 'ACTIVE', true, now())`.execute(trx);
     }
 
-    const device = await sql<{ id: string }>`
-      SELECT id FROM core.device WHERE id = ${body.device_id}`.execute(trx);
-    if (!first(device.rows)) {
-      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'device_id' } });
+    const device = await sql<{ id: string; platform: string; account_id: string | null }>`
+      SELECT id, platform::text AS platform, account_id
+        FROM core.device WHERE id = ${body.device_id}`.execute(trx);
+    const deviceRow = first(device.rows);
+
+    /**
+     * THE COOKIE IS NOT A CREDENTIAL AND IS NOT TREATED AS ONE.
+     *
+     * httpOnly stops a browser's JavaScript; it does not stop a client that
+     * writes its own Cookie header. So the device a CONSOLE sign-in claims is
+     * checked here, not merely looked up:
+     *
+     *   - it must be a WEB row. /v1/bootstrap already refuses to reuse a
+     *     native row; without the same check here a console session could be
+     *     anchored to a row whose platform says ANDROID -- the exact false
+     *     statement migration 0040 exists to prevent, in a column the
+     *     new-device payout lock's neighbourhood reads.
+     *   - it must be unbound, or already this account's. The bind below is
+     *     guarded by `account_id IS NULL` and nothing read its row count, so
+     *     a cookie naming ANOTHER account's device was refused the bind and
+     *     given a session anyway -- pinning a stranger's device row against
+     *     the retention purge, which is the D-64 residue class by a new route.
+     *
+     * All three failures answer identically, so the response says nothing
+     * about which device ids exist or whom they belong to.
+     */
+    const deviceUnusable =
+      !deviceRow ||
+      // A WEB ROW IS ADDRESSED BY ITS COOKIE AND NEVER BY A BODY FIELD,
+      // whatever audience the caller claims. The first version scoped this
+      // whole check to audience === 'CONSOLE', and the audience is a field
+      // the caller fills in: sending `audience: 'MOBILE'` with another
+      // account's WEB device_id walked straight past it and minted a session
+      // on a stranger's browser row. Server-minted identities are not
+      // nameable by clients, which is the entire point of minting them.
+      (deviceRow.platform === 'WEB' && body.audience !== 'CONSOLE') ||
+      (body.audience === 'CONSOLE' &&
+        (deviceRow.platform !== 'WEB' ||
+          (deviceRow.account_id !== null && deviceRow.account_id !== accountId)));
+    if (deviceUnusable) {
+      throw new AdulisException('VALIDATION_FAILED', {
+        // A console client has no device_id field to correct; what it can do
+        // is call /v1/bootstrap again and get an identity that works.
+        slots: { path: body.audience === 'CONSOLE' ? 'bootstrap' : 'device_id' },
+      });
     }
     // Binds at identity creation, never before (S11.1) — and never rebinds.
     await sql`

@@ -9,6 +9,7 @@ import type { Request } from 'express';
 import type { RequestContext } from '../db/request-context';
 import { AdulisException } from '../errors/adulis-exception';
 import { SessionService, type SessionContext } from './session.service';
+import { SESSION_COOKIE, readCookie } from '../http/cookies';
 
 /**
  * The authenticate + seller-context stages of the section 5 pipeline, as a
@@ -81,15 +82,6 @@ function requiresSellerContext(path: string, method: string): boolean {
   return path.startsWith('/v1/seller') || path.startsWith('/v1/billing');
 }
 
-function readCookie(header: string | undefined, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
-  }
-  return null;
-}
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -109,7 +101,7 @@ export class AuthGuard implements CanActivate {
     const bearer = req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.slice('Bearer '.length).trim()
       : null;
-    const cookie = readCookie(req.headers.cookie, '__Host-adulis_session');
+    const cookie = readCookie(req.headers.cookie, SESSION_COOKIE);
     const token = bearer ?? cookie;
 
     if (isPublic) {

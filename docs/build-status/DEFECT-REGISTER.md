@@ -1071,3 +1071,91 @@ Effect:    Five runtime guards existed. (1) fake-guard.ts's production refusal -
 Response:  FIXED where the guard was in the API process; recorded where it is not
 Action:    apps/api consults common/env.ts's memoised value, never process.env['NODE_ENV']. The ops scripts (.mjs) still read process.env because they are separate processes with their own lifecycle and no build step; that is a deliberate boundary, not an oversight.
 Ruling needed: none.
+
+### D-108 - core.device_platform gains WEB, and ADU-DB-01 v1.13 owes the value
+
+Severity:  MINOR (documentation debt; the schema change itself is ruled)
+Phase:     T8 - 2
+Source:    ADU-RUL-03 S2 requires the server to CREATE the core.device row for a browser; core.device.platform is NOT NULL over an enum that held only ANDROID and IOS, so the ruling cannot be implemented without a third value. T8 Phase 2 S1 confirms it in as many words: "Add WEB."
+Found by:  routing ADU-RUL-03 S2 before building it -- a row cannot exist without a value for a NOT NULL column
+Effect:    Declaring a browser ANDROID to satisfy the constraint would put a false statement in a column the new-device payout lock's neighbourhood reads (S7.2). The same reasoning gave verification.verifier_kind its OPERATOR_ATTESTED value rather than reusing KYC_VENDOR: an audit-adjacent column that says something other than what happened is worse than one that says less. This also closes the D-95 question, which asked exactly this and was parked because no ruling had answered it.
+Response:  BUILT (0040, alone in its file -- a new enum value cannot be USED in the transaction that adds it)
+Action:    db/checks/fixtures/appendix-a.json carries WEB (66 types, 234 values), so check 16 and the migration-01 catalogue test both hold the new shape. The type's COMMENT states the two mechanisms and why there are two.
+Ruling needed: none -- ADU-DB-01 v1.13 owes the enum value in Appendix A, per ADU-RUL-03 S6's list.
+
+### D-109 - The console cannot satisfy ADU-CON-02 S13's dev-loop promise without a device it no longer has
+
+Severity:  MINOR (dev-loop documentation; nothing in the product depends on it)
+Phase:     T8 - 2
+Source:    ops/scripts/seed.mjs seeded a core.device row and printed VITE_DEVICE_ID so a developer could sign the seeded seller into the console; ADU-RUL-03 S2 removes VITE_DEVICE_ID and mints the row at /v1/bootstrap
+Found by:  implementing Phase 2 -- the seeded device had no consumer left
+Effect:    None adverse: the dev loop is simpler, not harder. The seed no longer writes a device at all, which also retires the ANDROID label D-95 named as a knowing lie. A developer now starts the console and the first load is issued its own identity, so there is no device configuration step to get wrong.
+Response:  REMOVED, and recorded because a runbook reader may look for the step
+Action:    seed.mjs's header and printed instructions say the device comes from bootstrap; .env.example no longer carries VITE_DEVICE_ID and says why.
+Ruling needed: none.
+
+### D-110 - The idempotency key is still minted client-side, and T8 Phase 2's grep says it should not be
+
+Severity:  QUESTION (a gate's wording against a documented rule; the code follows the rule)
+Phase:     T8 - 2
+Source:    T8 Phase 2 S6 -- "grep for VITE_DEVICE_ID and for crypto.randomUUID in apps/console/src returns nothing"; ADU-CON-02 v3.1 S7 and WORK ORDER T7 S7.3 rule 7 -- idempotency keys are minted WHEN THE CONTROL MOUNTS, by the client
+Found by:  running the gate
+Effect:    VITE_DEVICE_ID is gone (the one remaining hit is a comment recording that it used to exist). crypto.randomUUID has exactly one call left, in lib/idempotency.ts, and removing it would break a different rule: only the client knows when two taps are one intent, so only the client can mint the key that says so. The two mintings are different in kind -- an identity is a claim the server trusts about WHO this is, and a browser may not choose one for itself; an idempotency key is an opaque per-intent nonce the server never interprets. The gate's grep does not distinguish them.
+Response:  KEPT, with the reasoning at the call site
+Action:    The gate is met in intent and not in letter, and this entry is the letter. If the grep is meant literally, the console cannot mint idempotency keys and something else must -- which is a contract change, not a console change.
+Ruling needed: confirm the grep targets device IDENTITY minting only, or rule where idempotency keys come from if not the client.
+
+### D-111 - The device cookie is presented before any session exists, so only one of the two CSRF controls covers it
+
+Severity:  QUESTION (not exploitable today; the doctrine no longer describes the request)
+Phase:     T8 - 2
+Source:    apps/api/src/common/http/origin.middleware.ts fires only when the request carries __Host-adulis_session, and its own header states the doctrine: "Two INDEPENDENT controls ... Neither is trusted alone." ADU-RUL-03 S2 introduces __Host-adulis_browser, which is presented on the sign-in request -- before any session exists
+Found by:  the Phase 2 adversarial pass
+Effect:    The exact Origin check is skipped for a request that carries a device identity, so that identity rides on SameSite=Strict alone. Strict does withhold the cookie cross-site, so there is no live exploit; what is gone is the second, independent control the file says it never relies on singly. The value at stake is not a credential -- stealing it authenticates nobody -- but it is what the new-device payout lock reads, so a forged one is a suppressed new-device signal rather than an account takeover.
+Response:  RECORDED, not changed
+Action:    None. Extending the middleware to fire on the device cookie would make every anonymous GET /v1/bootstrap Origin-checked, and bootstrap is the one call a client makes before it knows anything -- refusing it on a missing Origin would break the first request of every client to enforce a control against a value that is not a credential. That trade is a ruling, not a cleanup.
+Ruling needed: whether the Origin check should extend to requests carrying only the device cookie, and if so what an absent Origin means on the anonymous bootstrap path.
+
+### D-112 - Nothing seeds core.timing_config, so a freshly migrated database cannot complete a sign-in
+
+Severity:  MINOR (development and first-deploy ergonomics; found while fixing a branch of Phase 2)
+Phase:     T8 - 2
+Source:    core.timing_config is written only by ops/scripts/seed.mjs and ops/load/db-loads.mjs; no migration inserts a row. The OTP paths resolve their configuration through it, and bootstrap derives the device cookie's Max-Age from media_retention
+Found by:  the Phase 2 adversarial pass, checking the no-configuration branch
+Effect:    On a database that has been migrated but not seeded there is no configuration in force, so the device cookie gets no Max-Age (it is now still SET, as a session cookie -- the earlier version omitted it entirely, which made console sign-in permanently impossible), and any OTP path whose phone has no account reaches a configuration lookup with no row. The values themselves are ADU-VAL-01's to rule, so a migration cannot simply invent them.
+Response:  the cookie branch is FIXED; the configuration gap is RECORDED
+Action:    bootstrap always sets the cookie now, with a session lifetime where no retention is configured, which fails toward deletion without disabling the flow. Nothing else changed: seeding real configuration is D-61's territory and inventing intervals in a migration is what ADU-VAL-01 exists to prevent.
+Ruling needed: none for this phase -- but a deployment runbook step that asserts timing_config is in force before a market is opened would turn a confusing 500 into a refusal at the right moment.
+
+### D-113 - POST /v1/devices is anonymous and unlimited, so the flood the mint limit stops is available one endpoint along
+
+Severity:  MAJOR (an unauthenticated write with no budget; pre-existing, surfaced by fixing its neighbour)
+Phase:     T8 - 2
+Source:    apps/api/src/modules/auth/auth.controller.ts -- @Public() @Post('devices') inserts core.device on a CLIENT-CHOSEN id with no rate limit; measured at ~280 rows/second from one connection
+Found by:  the skeptic pass on Phase 2's fixes, checking whether the new bootstrap-device-mint limit closed the class or only one instance
+Effect:    Phase 2 rate-limited the bootstrap mint path because it was an unauthenticated unbounded write. The device registration endpoint is the same write with the same properties and no limit, so the rate limit closed one door of two. Each row survives until media_retention of inactivity expires it.
+Response:  RECORDED, not fixed in this phase
+Action:    None here. The endpoint is the MOBILE surface's device registration and belongs to that client's contract; adding a budget to it changes what a native app may do at install time, which is an ADU-AUTH-01 question rather than a console one. Phase 2's own door is closed and this entry is the other one.
+Ruling needed: what budget POST /v1/devices carries, and per what subject -- IP is the only anonymous subject available and it is the wrong one behind a carrier NAT.
+
+### D-114 - No trust-proxy setting, so every IP-keyed rate limit becomes a global one behind a proxy
+
+Severity:  MAJOR (silently converts per-caller budgets into per-deployment ones)
+Phase:     T8 - 2
+Source:    grep for 'trust proxy' across apps/api returns nothing; req.ip is used as the rate-limit subject at bootstrap.controller.ts (bootstrap-device-mint) and, since before this phase, at auth.controller.ts (otp-request-ip, 10/hour)
+Found by:  the skeptic pass on Phase 2's fixes
+Effect:    Behind a CDN or a platform load balancer, Express reports the PROXY's address for every request unless trust proxy is configured. Every IP-keyed bucket then has one subject for the whole deployment: the 10/hour OTP limit becomes ten OTP requests per hour for all of Ethiopia, and the 600/hour mint limit becomes six hundred new browsers per hour in total. The failure is silent and looks like a working rate limiter.
+Response:  RECORDED, not fixed
+Action:    None in this phase. Setting trust proxy is a deployment-shaped decision -- it must name how many proxies are in front, because trusting one too many lets a client forge X-Forwarded-For and choose its own bucket, which is worse than the current state. D-80 is the neighbouring gap: no ops/render.yaml exists, so the deployment this depends on is not described anywhere.
+Ruling needed: the deployment topology, then `app.set('trust proxy', <n>)` with n named rather than `true`.
+
+### D-115 - A device row is nameable by any MOBILE client, and only WEB rows are now protected
+
+Severity:  QUESTION (pre-existing; Phase 2 narrowed it rather than closing it)
+Phase:     T8 - 2
+Source:    apps/api/src/modules/auth/auth.service.ts -- a MOBILE verify names its device in the body, and the bind is `WHERE account_id IS NULL`, so a second account signing in on a device already bound to a first is refused the bind and given a session anyway
+Found by:  the skeptic pass, testing whether the audience-scoped guard should apply to every audience
+Effect:    Phase 2 makes a WEB row unnameable by any client under any audience, because those rows are server-minted. A MOBILE row is still client-chosen and client-named, so one client can claim another's device id and take a session anchored to it -- which pins that row against the retention purge. Refusing it outright was considered and rejected: two people sharing one phone is an ordinary case in this market, and S11.1's "binds at identity creation, never rebinds" reads as a first-identity record rather than an exclusive lock. Refusing would have broken the shared phone to close a gap that predates this phase.
+Response:  NARROWED and recorded
+Action:    None further. The WEB half is closed because those identities are the server's; the MOBILE half needs a rule about what a device row means when two accounts use one handset.
+Ruling needed: whether a MOBILE device id is an exclusive claim (refuse a second account) or a first-identity record (today's behaviour), and if the latter, what stops a client naming a device it has never held.

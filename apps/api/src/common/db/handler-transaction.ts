@@ -12,6 +12,9 @@ import {
   type IdempotencyActor,
   type StoredResponse,
 } from '../idempotency/idempotency';
+import { BROWSER_DEVICE_COOKIE, clientSurface, readCookie } from '../http/cookies';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The handler stage of the section 5 pipeline: TRANSACTION, SETTINGS, ONE
@@ -194,8 +197,25 @@ export class HandlerTransaction {
     if (typeof device === 'string' && device !== '') {
       return { kind: 'DEVICE', id: device };
     }
+    // A BROWSER HAS NO SUCH HEADER, and after ADU-RUL-03 S2 it must not: its
+    // device identity is the httpOnly cookie /v1/bootstrap minted, which
+    // JavaScript cannot read and therefore cannot put in a header. Without
+    // this branch every anonymous console POST -- including the first step of
+    // sign-in -- answered 400 naming a header the ruling forbids the console
+    // to send, which is both a break and an instruction to re-open the arm
+    // the ruling closes.
+    // VALIDATED, because actor_id is a uuid column and this value is
+    // attacker-supplied. Taking it verbatim answered 500 to any anonymous
+    // caller on any @Public idempotent endpoint -- the same defect that was
+    // just fixed at otp/verify, re-opened one door along, and invisible
+    // because the test for it only covered the door that was fixed.
+    const browser = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
+    if (browser && UUID_RE.test(browser)) return { kind: 'DEVICE', id: browser };
+    // Name what THIS surface can actually supply: a browser has no
+    // X-Adulis-Device to send and never will.
+    const web = clientSurface(req.headers['x-adulis-client']) === 'web';
     throw new AdulisException('IDEMPOTENCY_KEY_MISSING', {
-      slots: { path: 'X-Adulis-Device' },
+      slots: { path: web ? 'bootstrap' : 'X-Adulis-Device' },
     });
   }
 }

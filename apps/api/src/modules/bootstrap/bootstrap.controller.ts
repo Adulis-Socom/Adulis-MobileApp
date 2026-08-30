@@ -1,4 +1,6 @@
-import { Controller, Get, Inject, Req } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Controller, Get, Inject, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiOkResponse, ApiOperation } from '@nestjs/swagger';
 import { sql, type Kysely } from 'kysely';
 import { APP_DATABASE } from '../../common/db/database.module';
@@ -6,6 +8,15 @@ import type { Database } from '../../common/db/database.types';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { BootstrapResponseDto } from './bootstrap.dto';
+import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
+import { resolveKey } from '../../common/crypto/aead';
+import {
+  BROWSER_DEVICE_COOKIE,
+  clientSurface,
+  hostCookie,
+  readCookie,
+  sessionHostCookie,
+} from '../../common/http/cookies';
 
 /**
  * GET /v1/bootstrap (ADU-API-01 v1.6 section 3.1). Client version is
@@ -38,25 +49,50 @@ export interface BootstrapResponse {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Same derivation the auth surface uses, so one IP is one subject. */
+const rateLimitKey = (): string =>
+  resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
+
 @Controller('bootstrap')
 export class BootstrapController {
-  constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(APP_DATABASE) private readonly db: Kysely<Database>,
+    private readonly rateLimit: RateLimitService,
+  ) {}
 
   @Public()
   @Get()
   @ApiOperation({ summary: 'Client floor, market configuration and the clock reference.' })
   @ApiOkResponse({ type: BootstrapResponseDto })
-  async bootstrap(@Req() req: AuthedRequest): Promise<BootstrapResponse> {
+  async bootstrap(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<BootstrapResponse> {
     const r = await sql<{
       id: string;
       code: string;
       display_currency: string;
       display_timezone: string;
       default_locale: string;
+      device_ttl_seconds: string | null;
     }>`
-      SELECT id, code, display_currency, display_timezone, default_locale
-        FROM core.market
-       ORDER BY is_live DESC, created_at ASC
+      SELECT m.id, m.code, m.display_currency, m.display_timezone, m.default_locale,
+             -- The browser's device cookie lives exactly as long as the row it
+             -- names would survive without being seen: a device is purged after
+             -- media_retention of inactivity (G1.11 / S11.5), and every
+             -- bootstrap refreshes both. Deriving it means no invented number
+             -- and no cookie that outlives its row by a rule nobody wrote.
+             -- Where the market has no configuration in force, the SHORTEST in
+             -- force is used, because a retention default must fail toward
+             -- deletion (0032's reasoning, applied to the cookie).
+             extract(epoch FROM coalesce(
+               (SELECT tc.media_retention FROM core.timing_config tc
+                 WHERE tc.market_id = m.id AND tc.effective @> now() LIMIT 1),
+               (SELECT min(tc2.media_retention) FROM core.timing_config tc2
+                 WHERE tc2.effective @> now())
+             ))::bigint::text AS device_ttl_seconds
+        FROM core.market m
+       ORDER BY m.is_live DESC, m.created_at ASC
        LIMIT 1`.execute(this.db);
 
     const market = r.rows[0];
@@ -70,27 +106,101 @@ export class BootstrapController {
       });
     }
 
-    // G1.11 — the device is assigned this market, once, here.
-    //
-    // Bootstrap already resolves a market, and it is the first call every
-    // client makes, so this is where a device stops being marketless. It is
-    // written ONLY when the device is not already placed: a market is a
-    // fact about where a device first appeared, and re-stamping it on every
-    // bootstrap would let a device drift between markets and quietly change
-    // which retention applies to it.
-    //
-    // Best-effort and never fatal. A device that has not registered yet has
-    // no row, and bootstrap is the ANONYMOUS call every client makes before
-    // anything else -- failing it because a header was absent or malformed
-    // would break the client's first request to say something about
-    // retention. A device that misses this stays NULL, which now means the
-    // SHORTEST retention rather than the longest, so the fallback is safe.
-    const deviceHeader = req.headers['x-adulis-device'];
-    if (typeof deviceHeader === 'string' && UUID_RE.test(deviceHeader)) {
-      await sql`
-        UPDATE core.device
-           SET market_id = ${market.id}
-         WHERE id = ${deviceHeader} AND market_id IS NULL`.execute(this.db);
+    // TWO SURFACES, TWO DEVICE MECHANISMS (ADU-RUL-03 S2, T8 Phase 2 S2).
+    // The difference is not a preference: a native app has a platform
+    // keystore and a browser does not, so a browser cannot be trusted to
+    // carry an identity it is able to read.
+    const surface = clientSurface(req.headers['x-adulis-client']);
+
+    if (surface === 'web') {
+      // THE CLOSED ARM STAYS CLOSED. A web client's X-Adulis-Device is
+      // ignored outright -- not read, not used as a fallback. Honouring it
+      // would restore exactly the arm the ruling closes: a client-chosen
+      // identity for the value that gates the new-device payout lock.
+      const presented = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
+      let deviceId: string | null = null;
+
+      if (presented && UUID_RE.test(presented)) {
+        // Returning browser: the row must still exist (it is purged after
+        // media_retention of silence). Its market is stamped only if unset,
+        // for the same reason as before -- a market is where a device FIRST
+        // appeared, and re-stamping lets it drift.
+        const seen = await sql<{ id: string }>`
+          UPDATE core.device
+             SET last_seen_at = now(),
+                 market_id = coalesce(market_id, ${market.id})
+           WHERE id = ${presented} AND platform = 'WEB'
+       RETURNING id`.execute(this.db);
+        deviceId = seen.rows[0]?.id ?? null;
+      }
+
+      if (!deviceId) {
+        // MINTING IS THE ONLY WRITE AN ANONYMOUS CALLER CAN CAUSE HERE, and
+        // before this limit it was unbounded: a bare loop produced hundreds of
+        // core.device rows a second, each surviving until media_retention
+        // (90 days on the seeded config) expired it. Reading is never limited
+        // -- a returning browser, which is the common case, presents a cookie
+        // and takes the branch above without consuming any budget.
+        await this.rateLimit.consume('IP_HASH', subjectHash(req.ip ?? '', rateLimitKey()), {
+          bucketKey: 'bootstrap-device-mint',
+          windowSeconds: 3600,
+          // GENEROUS ON PURPOSE. A browser mints once and then presents a
+          // cookie forever, so the honest population behind one address is
+          // first-time visitors -- and in this market that address is often a
+          // carrier NAT with a great many people behind it. A tight limit
+          // would lock out a whole ISP to stop a flood that this one stops
+          // anyway: the measured attack was ~230 rows/second from a single
+          // connection, which this cuts by three orders of magnitude.
+          max: 600,
+        });
+
+        // First load, or a cookie whose row is gone. The row and the
+        // identifier are created by the SAME act, so an identifier can never
+        // exist without its row -- which was the failure of the arm where the
+        // client minted a uuid and verify rejected it.
+        deviceId = randomUUID();
+        await sql`
+          INSERT INTO core.device (id, platform, market_id)
+          VALUES (${deviceId}, 'WEB', ${market.id})`.execute(this.db);
+      }
+
+      // Two simultaneous first loads can mint two rows: the second was in
+      // flight before this response set the cookie. The browser keeps the
+      // last cookie, so the other row is orphaned -- unbound, so
+      // device.purge_unbound reaches it (T8 Phase 2 S3.2).
+      // A COOKIE IS ALWAYS SET. The earlier version skipped it when no
+      // timing_config was in force, which sounded conservative and was not:
+      // with no cookie the browser can never present a device, so
+      // otp/verify's console branch refuses forever and tells the client to
+      // call the endpoint it just called. A freshly migrated database is
+      // exactly that state -- no migration seeds timing_config.
+      //
+      // Without configuration there is no honest MAX-AGE, so none is given
+      // and the browser keeps it for the session. That is a real cookie the
+      // browser will send back, so sign-in works; it simply does not survive
+      // a restart, which is the conservative half done correctly.
+      const ttl = Number(market.device_ttl_seconds ?? 0);
+      res.setHeader(
+        'Set-Cookie',
+        ttl > 0
+          ? hostCookie(BROWSER_DEVICE_COOKIE, deviceId, ttl)
+          : sessionHostCookie(BROWSER_DEVICE_COOKIE, deviceId),
+      );
+    } else {
+      // App clients (ADU-API-01 S3: X-Adulis-Device is an app header). The
+      // device is client-generated, keystore-persisted and registered via
+      // POST /v1/devices; bootstrap only places it in a market.
+      //
+      // Best-effort and never fatal, as before: bootstrap is the anonymous
+      // first call, and failing it because a header was absent would break a
+      // client's first request in order to say something about retention.
+      const deviceHeader = req.headers['x-adulis-device'];
+      if (typeof deviceHeader === 'string' && UUID_RE.test(deviceHeader)) {
+        await sql`
+          UPDATE core.device
+             SET market_id = ${market.id}
+           WHERE id = ${deviceHeader} AND market_id IS NULL`.execute(this.db);
+      }
     }
 
     return {

@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+
 
 /**
  * The producer of contracts/openapi.json — the one seam between the backend
@@ -28,7 +28,23 @@ import { AppModule } from './app.module';
  * regeneration on an unchanged tree is byte-identical — which is what lets
  * CI regenerate and `git diff --exit-code` as the hand-edit tripwire.
  */
+/**
+ * APP.MODULE IS IMPORTED DYNAMICALLY, and that is the fix rather than a
+ * flourish (#25 review, corrected by #26's).
+ *
+ * app.module constructs its adapters at MODULE LOAD, so the declaration in
+ * ./build-tool-env only works if it runs first. The previous attempt asserted
+ * that ordering by checking NODE_ENV afterwards, which cannot detect the
+ * failure it names: with the imports reordered, app.module throws during its
+ * own evaluation and the assertion never runs; with an ambient NODE_ENV it
+ * passes in either order. It was a check that could not fail -- the family
+ * ADU-RUL-03 S5.2 is about.
+ *
+ * A dynamic import makes the order a matter of control flow instead, which no
+ * formatter or bundler reorders.
+ */
 async function generate(): Promise<void> {
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule, { logger: false });
 
   const config = new DocumentBuilder()

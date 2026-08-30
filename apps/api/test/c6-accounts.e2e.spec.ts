@@ -68,6 +68,24 @@ describe('C6 — accounts, team, billing, deletion', () => {
 
   const key = () => randomUUID();
   const http = () => request(app.getHttpServer());
+
+/**
+ * T8 Phase 2 -- a console sign-in is a BROWSER sign-in, and a browser's
+ * device identity comes from /v1/bootstrap in an httpOnly cookie
+ * (ADU-RUL-03 S2). These tests used to send a device_id in the body; the
+ * server now ignores that on a CONSOLE request, so they do what a browser
+ * does instead.
+ */
+const webDevices: string[] = [];
+const browserCookie = async (): Promise<string> => {
+  const res = await http().get('/v1/bootstrap').set('X-Adulis-Client', 'web/9.9.9').expect(200);
+  const raw = res.headers['set-cookie'] as unknown as string[];
+  const line = raw.find((c) => c.startsWith('__Host-adulis_browser='));
+  if (!line) throw new Error('bootstrap issued no device cookie');
+  const id = line.split('=', 2)[1]?.split(';')[0] as string;
+  webDevices.push(id);
+  return `__Host-adulis_browser=${id}`;
+};
   const cookie = (t: string) => `__Host-adulis_session=${t}`;
 
   const codeFor = (phone: string): string => {
@@ -325,6 +343,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
     ]) {
       await admin.query(q);
     }
+    // The WEB devices /v1/bootstrap minted for this suite's browser sign-ins.
+    // A bound one is already gone with its account above; an unbound one would
+    // merely be purgeable, and "purgeable" is not "cleaned up" -- the residue
+    // class T7 Phase 3 spent a commit on.
+    if (webDevices.length) {
+      await admin.query(`DELETE FROM core.device WHERE id = ANY($1::uuid[])`, [webDevices]);
+    }
     await admin.query(`SET session_replication_role = DEFAULT`);
     await purgeRateBuckets();
     await admin.end();
@@ -529,13 +554,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
       const r = await http()
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
-        .set('X-Adulis-Device', d)
+        .set('Cookie', await browserCookie())
+        .set('X-Adulis-Client', 'web/9.9.9')
         .set('Origin', CONSOLE_ORIGIN)
         .send({
           phone: P_OWNER,
           code: codeFor(P_OWNER),
           audience: 'CONSOLE',
-          device_id: d,
           remember_device: true,
         })
         .expect(200);
@@ -1034,13 +1059,13 @@ describe('C6 — accounts, team, billing, deletion', () => {
       const consoleSignin = await http()
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
-        .set('X-Adulis-Device', d)
+        .set('Cookie', await browserCookie())
+        .set('X-Adulis-Client', 'web/9.9.9')
         .set('Origin', CONSOLE_ORIGIN)
         .send({
           phone: P_WEBDEL,
           code: codeFor(P_WEBDEL),
           audience: 'CONSOLE',
-          device_id: d,
           remember_device: true,
         })
         .expect(200);
