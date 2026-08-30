@@ -40,12 +40,18 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
   let admin: Pool;
   const sms = new FakeSmsAdapter();
   /**
-   * The market that has timing_config in force. The OTP paths resolve their
-   * configuration through the ACCOUNT's market, so an account created
-   * anywhere else reaches a lookup with no row -- which is a real fragility
-   * (D-104, removed in Phase 3) but not this phase's subject.
+   * THIS SUITE BUILDS ITS OWN MARKET AND CONFIGURATION, and the first version
+   * did not -- it borrowed whichever market happened to have timing_config in
+   * force, which is a row nothing seeds. Locally, after `pnpm db:seed`, that
+   * worked; in CI the database is migrated and never seeded, so the lookup
+   * returned nothing and every test in the file died on it. That divergence
+   * is D-112, and a suite that depends on it is a suite that passes for the
+   * author and fails for everyone else.
+   *
+   * It is deliberately NOT live: bootstrap orders by is_live and this suite
+   * must not become the market other suites resolve.
    */
-  let configuredMarket: string;
+  const M = '77e00328-0000-4000-8000-000000000001';
   const minted: string[] = [];
   /** Only ids a COOKIE issued -- the invariant is about those. */
   const issued: string[] = [];
@@ -69,7 +75,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     const id = randomUUID();
     await admin.query(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES ($1,$2,$3,'ACTIVE')`,
-      [id, phone, configuredMarket],
+      [id, phone, M],
     );
     accounts.push(id);
     return id;
@@ -101,10 +107,45 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     await app.init();
     admin = new Pool({ connectionString: ADMIN });
     await purgeBuckets();
-    const m = await admin.query(
-      `SELECT market_id FROM core.timing_config WHERE effective @> now() LIMIT 1`,
+    // A crashed earlier run can leave rows pointing at this market, and they
+    // are foreign keys, so they come out in dependency order first.
+    await admin.query(
+      `DELETE FROM core.session WHERE account_id IN (SELECT id FROM core.account WHERE market_id = $1)`,
+      [M],
     );
-    configuredMarket = m.rows[0].market_id as string;
+    await admin.query(
+      `UPDATE core.device SET account_id = NULL
+        WHERE account_id IN (SELECT id FROM core.account WHERE market_id = $1)`,
+      [M],
+    );
+    await admin.query(`DELETE FROM core.device WHERE market_id = $1`, [M]);
+    await admin.query(`DELETE FROM core.account WHERE market_id = $1`, [M]);
+    await admin.query(`DELETE FROM core.timing_config WHERE market_id = $1`, [M]);
+    await admin.query(`DELETE FROM core.market WHERE id = $1`, [M]);
+    await admin.query(
+      `INSERT INTO core.market (id, code, display_name, phase, display_currency,
+                                display_timezone, default_locale, is_live)
+       VALUES ($1,'T8D','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',false)`,
+      [M],
+    );
+    await admin.query(
+      `INSERT INTO core.timing_config (id, market_id, reservation_window,
+         payment_confirmation_window, fulfilment_window, offline_sync_horizon,
+         payout_activation_delay, recovery_cooling_period,
+         deleted_number_cooling_period, refund_ack_window, media_retention,
+         level_credit_grace, mobile_session_lifetime, console_session_lifetime,
+         console_idle_timeout, console_remembered_lifetime,
+         console_remembered_idle, otp_ttl, otp_max_attempts, step_up_freshness,
+         new_device_payout_lock, same_seller_cancellation_threshold,
+         same_seller_cooldown, cross_seller_cooldown_ladder,
+         cancellation_counter_decay)
+       VALUES (gen_random_uuid(), $1, '48 hours','24 hours','72 hours','7 days',
+         '24 hours','7 days','30 days','48 hours','90 days','24 hours',
+         '30 days','12 hours','30 minutes','7 days','8 hours','5 minutes',5,
+         '5 minutes','24 hours',3,'1 hour',
+         ARRAY['1 day','2 days','4 days']::interval[],'30 days')`,
+      [M],
+    );
   });
 
   /**
@@ -138,6 +179,8 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     if (accounts.length) {
       await admin.query(`DELETE FROM core.account WHERE id = ANY($1::uuid[])`, [accounts]);
     }
+    await admin.query(`DELETE FROM core.timing_config WHERE market_id = $1`, [M]);
+    await admin.query(`DELETE FROM core.market WHERE id = $1`, [M]);
     await admin.end();
     await app.close();
   });
