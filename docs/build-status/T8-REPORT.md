@@ -303,7 +303,14 @@ S4  the numbering ruling      PR #33 -- docs/build-status/README.md
 
 S6  this report               this PR
 
-new entries                   D-125..D-134 (ten)
+second adversarial round      78 agents, refute-by-default across #30-#34
+    findings raised           34
+    survived unanimously      9  -> D-134, D-135, D-136(renumber), D-137,
+                                    D-138, D-139, and D-126's corrected count
+    BLOCKER among them        1  -- the D-128 teardown orphaned the row a
+                                    trigger made for its seller
+
+new entries                   D-125..D-139 (fifteen)
 gates                         21 on #32's branch, all green -- pnpm ci:local
                               main still has 20 until #32 merges
 ```
@@ -350,13 +357,22 @@ now deletes what it created, by id, under `session_replication_role =
 replica` -- required rather than convenient, because `core.stock_event` is
 append-only and its trigger raises on DELETE for every role.
 
-`pnpm db:reset` is the recovery. Three defects in it were found by **running**
-it: an invented role password that left the API reporting its database down;
-a dropped `jobs` schema never reinstalled, which failed
-`worker-runtime.spec.ts` with `permission denied for database adulis`; and an
-unconditional `PASS` that two documents already claimed was a check (D-132).
-It also took the permissive default on an unset `NODE_ENV` -- D-105's own
-defect, inside the order that fixed D-105 (D-133).
+`pnpm db:reset` is the recovery. **Two** defects in it were found by
+**running** it: an invented role password that left the API reporting its
+database down, and a dropped `jobs` schema never reinstalled, which failed
+`worker-runtime.spec.ts` with `permission denied for database adulis`.
+
+A third was found by **reading** it, and the distinction is the rule this
+block opens with. D-132 -- an unconditional `PASS` that two documents already
+claimed was a check -- is precisely the defect a run cannot surface: there was
+no branch between the counts and the print, so every run, correct or not,
+printed PASS and exited 0. The adversarial pass recorded its verdict as
+"CONFIRMED by reading, and by construction". This paragraph first credited it
+to running, which named an instrument that could not have produced it, in a
+block whose second line promises the opposite (D-139).
+
+`db:reset` also took the permissive default on an unset `NODE_ENV` -- D-105's
+own defect, inside the order that fixed D-105 (D-133).
 
 D-131: `pnpm test` never loaded `.env`. From a clean shell, 420 of 459 tests
 failed on `client password must be a string`. CI sets the environment in the
@@ -406,7 +422,7 @@ sits with, in the directory they govern. No new register entry: the ruling is
 already D-127's, and a second entry saying the same thing would be an entry
 written to have written one.
 
-Writing that file is also what caught D-134's own misattribution -- it
+Writing that file is also what caught D-136's own misattribution -- it
 credited "Gate 20's boot smoke test" to D-123, and the line is D-120's. Every
 claim was checked against the register rather than against the entry
 asserting it, which is the only way that kind of error is ever found.
@@ -440,6 +456,10 @@ Not fixed, and recorded rather than left silent:
   change to make quietly.
 - **D-130**: ADU-CON-02 v3.2 S13 gains `db:reset` and `worker:install`, or
   rules that the repository README is where operational commands live.
-- **D-134**: ADU-RUL-03 S5.2 gains gate ids at its next reissue, after which
+- **D-136**: ADU-RUL-03 S5.2 gains gate ids at its next reissue, after which
   the gate list stops being append-only for citation reasons and can be
   ordered by subject.
+- **D-138**: whether `boot-smoke` should build a second, throwaway bundle with
+  `VITE_API_BASE_URL` set to a forbidden origin purely to prove `connect-src`
+  blocks it -- or whether that belongs to the console harness owed at C-3.
+  Today the gate exercises load-time directives only, and says so.

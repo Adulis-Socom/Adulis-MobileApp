@@ -1276,3 +1276,14 @@ Effect:    On main at 9fad3d7 a full `npx jest` run failed two tests -- one in e
 Response:  RECORDED here; already FIXED on the T8 Phase 4 branch
 Action:    Phase 4 (PR #28, unmerged at the time of writing) adds a per-test purge of those two buckets to both T8 suites, with the reasoning that nothing asserts them -- the 429s that ARE asserted belong to the probe endpoint, the per-challenge attempt counter and the courier-invite bucket. Merging #28 removes the flake from main. Nothing is done here, because T8-R is a records order and this is a code change.
 Ruling needed: none for the flake. The underlying shape is D-114's: an IP is the wrong subject when every caller shares one, and that is true of the tests for the same reason it is true behind a carrier NAT.
+
+### D-139 - The report named an instrument that could not have produced the finding it credited
+
+Severity:  MINOR (records; the finding and its fix are unaffected)
+Phase:     T8-C
+Source:    docs/build-status/T8-REPORT.md, the WORK ORDER T8-C REPORT block, S2 paragraph -- "Three defects in it were found by **running** it: ... and an unconditional `PASS` ... (D-132)"
+Found by:  the T8-C S6 adversarial pass, second round -- raised twice independently
+Effect:    D-132 is precisely the defect that running `db:reset` cannot expose. There was no branch between the counts and the print, so every run -- correct or not -- printed PASS and exited 0. The S2 commit says "two defects ... both found by running it rather than by reading it" and lists the other two; the review records D-132's verdict as "CONFIRMED by reading, and by construction"; the register entry says "Found by: the T8-C S2 adversarial pass". Three artifacts agree, and the report contradicted all three -- in a block whose second line is "Every claim below names what produced it (ADU-RUL-03 S5.1)". A reader following the named instrument would run the script, see PASS, and conclude the entry was wrong.
+Response:  FIXED
+Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
+Ruling needed: none.
