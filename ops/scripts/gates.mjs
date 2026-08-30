@@ -100,7 +100,7 @@ const pnpm = (script, { scoped = false } = {}) =>
  * SCOPED run legitimately never produces when the diff selects nothing the
  * console depends on (found by PR #22, the first PR since the T6
  * convergence to touch only db/ops/api: the Build gate correctly skipped
- * @adulis/console and gate 17 then failed on the missing dist -- register
+ * @adulis/console and `no-unsafe-eval` then failed on the missing dist -- register
  * D-93). Under a scope filter, an absent dist means "not selected" and the
  * gate passes WITH A NOTE; unscoped (every local run), an absent dist is
  * still a hard fail, because an unscoped build always produces one.
@@ -173,6 +173,21 @@ function grepDir(dir, needle) {
  */
 const CONTRACT_PATHS = ['contracts/', 'packages/api-client/src/schema.d.ts'];
 
+/**
+ * CITE A GATE BY ITS `id`, NEVER BY ITS POSITION (T8-C S3).
+ *
+ * Positions are not stable and the instability is silent: `mt-keys` had to be
+ * APPENDED rather than slotted beside the console gates precisely because
+ * inserting it would have renumbered five live citations, one of them inside
+ * a governed document this repository does not edit. So the list is
+ * append-only to protect numbers that should never have been written down.
+ *
+ * Names do not have that problem. `pnpm gates --list` prints them, every
+ * citation converted in T8-C S3 now uses them, and the numbering stays an
+ * implementation detail of an array. The list is still append-only -- the
+ * governed documents that cite positions have not been reissued -- but
+ * nothing new should add to that debt.
+ */
 const GATES = [
   { id: 'typecheck', title: 'Typecheck (strict, no exceptions)', cmd: pnpm('typecheck', { scoped: true }) },
   { id: 'lint', title: 'Lint', cmd: ['pnpm', 'lint'] },
@@ -220,6 +235,20 @@ const GATES = [
    * is exactly the kind of rule that wants a machine to check it.
    */
   { id: 'mt-keys', title: 'The translation work list is current and the HUMAN-REQUIRED gate holds', cmd: ['pnpm', 'verify:mt-keys'] },
+
+  /**
+   * APPENDED, like mt-keys above it, and for the same reason: positions in
+   * this list are cited elsewhere, so the list is append-only in practice
+   * whatever its shape suggests. `boot-smoke` belongs beside `no-unsafe-eval`
+   * and `production-react` by subject and is at the end by rule.
+   *
+   * It is the only gate that RUNS the console rather than reading it. The two
+   * console gates above grep the bundle as text, and a bundle that throws
+   * before React mounts is textually perfect -- T7 Phase 5 shipped one, and
+   * the review that caught it did so by loading the page. This gate loads it,
+   * under the production _headers policy, and asserts #root has children.
+   */
+  { id: 'boot-smoke', title: 'The built console actually mounts in a browser', cmd: ['pnpm', 'verify:boot-smoke'] },
 ];
 
 if (process.argv.includes('--list')) {

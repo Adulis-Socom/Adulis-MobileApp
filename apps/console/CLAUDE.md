@@ -49,7 +49,7 @@ route tree, **no seller navigation**.
   `VITE_`-prefixed variables from `process.env`, and this app's `envDir` is
   deliberately its own directory, never the workspace root: pointing it at the
   root would pull in `NODE_ENV=development` and ship React's development build
-  (gate 18 fails on exactly that). The mock (`pnpm mock:api`,
+  (the `production-react` gate fails on exactly that). The mock (`pnpm mock:api`,
   `http://127.0.0.1:4010`) remains for contract-only work; its purpose was to unblock
   a workstream that no longer needs unblocking.
 
@@ -65,8 +65,10 @@ STAGING decision, not a deviation from the ruled stack -- recorded here, in
 library when its screen arrives instead of re-deciding the stack.
 
 **There is no test harness here yet.** `pnpm --filter @adulis/console test` is
-an echo. C-1/C-2 are held up by typecheck, lint, gates 17 and 18 (which
-inspect the production build) and a live sign-in against the real API --
+an echo. C-1/C-2 are held up by typecheck, lint, the `no-unsafe-eval`,
+`production-react` and `boot-smoke` gates (the first two inspect the
+production build; the third loads it) and a live sign-in against the real
+API --
 verification, but not coverage. A harness is owed at C-3, and until it exists
 a regression here is caught by a person, not by CI.
 
