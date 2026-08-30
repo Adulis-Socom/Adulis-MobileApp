@@ -1192,3 +1192,25 @@ Effect:    An app that calls bootstrap BEFORE registering gets a device row with
 Response:  RECORDED, not changed
 Action:    None in this phase. Making bootstrap create the row would be minting a device for an app client, which is the console's mechanism and not the app's (ADU-RUL-03 S2 keeps them separate on purpose); making register resolve a market would put a second market choice back in the tree, which is what D-104 removed. The fix is a contract sentence, not code.
 Ruling needed: state the order in ADU-API-01 S3 -- register, then bootstrap -- or rule that bootstrap may create an app device row on first sight of an unknown X-Adulis-Device.
+
+### D-119 - The console cannot ask whether a phone is new, so the age declaration is shown to everyone
+
+Severity:  MINOR (a product consequence of a security rule, recorded because it looks like a bug and is not)
+Phase:     T8 - 4
+Source:    ADU-RUL-03 S4 requires the declaration at FIRST sign-in; ADU-AUTH-01 S22 forbids any response that distinguishes a registered number from an unregistered one
+Found by:  building the control
+Effect:    The obvious design shows the declaration only to people creating an account. The console cannot know who they are without asking the server whether a phone is already registered -- which is precisely the enumeration oracle S22 forbids, and which T8 Phase 3 spent a commit closing after I opened it. So the box is shown to everyone on the code step: an existing seller leaves it alone and signs in, a new one cannot proceed without it. The server enforces the rule and the console never learns which case it is in.
+Response:  BUILT this way deliberately
+Action:    The checkbox is never pre-checked, is sent only when ticked, and the refusal is rendered from the server's own slots.path rather than guessed at. A future design could move the declaration to a dedicated first-run screen, but only if something other than the phone tells the client it is a first run.
+Ruling needed: none. Recorded so the next reader does not "fix" it into an oracle.
+
+### D-120 - The rendered age control was not observed in a browser
+
+Severity:  MINOR (verification gap, stated rather than papered over)
+Phase:     T8 - 4
+Source:    ADU-RUL-03 S5.1 -- "a report claim asserting verification names the command, file or artifact that produced it ... or it is not claimed"
+Found by:  attempting the verification
+Effect:    The declaration sits on the CODE step of sign-in, which a headless page load cannot reach: getting there needs a phone typed, a submit clicked and an OTP round trip, and this run has a browser that can load a URL and dump a DOM but no driver that can interact. What IS verified: both sentences appear verbatim in the shipped bundle (grep of apps/console/dist), the control's only initial state in source is false, the value is sent only when true, and the API refuses identity creation without it and records age_declared_at (t8-market-from-device.e2e.spec.ts). What is NOT verified: that the box renders unchecked on screen and that the refusal text appears where a person will look.
+Response:  RECORDED as an unverified claim rather than asserted
+Action:    Gate 20's boot smoke test (T8 Phase 5) brings a real driver into CI. The first interaction test belongs there, and this control is the obvious first customer.
+Ruling needed: none.

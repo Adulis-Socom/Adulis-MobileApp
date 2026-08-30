@@ -157,6 +157,23 @@ export const am: Catalogue = {
   'console.shell.signed_in': 'ገብተዋል',
   'console.signin.phone_label': 'ስልክ ቁጥር',
   'console.signin.phone_invalid': 'ስልክ ቁጥርዎን ከአገር ኮድ ጋር ያስገቡ፣ ለምሳሌ +251911234567።',
+  /**
+   * DELIBERATELY NOT TRANSLATED, and deliberately not machine-translated.
+   *
+   * ADU-RUL-03 S4: "a machine-translated placeholder is not acceptable for a
+   * string a person is legally bound by ... an attestation whose wording was
+   * never verified is not evidence of anything." Every other string in this
+   * file ships MT and improves later; these two do not.
+   *
+   * The English stands here until a human translator supplies Amharic. A
+   * person reading a sentence in a language they may not prefer is a worse
+   * experience and an honest one; an unverified Amharic attestation would be
+   * a better experience and evidence of nothing. AM_ENABLED is off, so no
+   * seller sees either today.
+   */
+  'console.signin.age_declaration': 'I confirm that I am 18 years of age or older.', // HUMAN-REQUIRED
+  'console.signin.age_refused':
+    'Adulis is available to people aged 18 and over. You cannot create an account at this time.', // HUMAN-REQUIRED
   'console.signin.remember_label': 'ይህን መሣሪያ አስታውስ',
   'console.signin.remember_help': 'ይህ መሣሪያ ለአንድ ሳምንት ገብቶ ይቆያል፤ ገንዘብ የሚነካ ማንኛውም ነገር አሁንም ኮድ ይጠይቃል።',
   'console.signin.request_button': 'ኮድ ላክልኝ',

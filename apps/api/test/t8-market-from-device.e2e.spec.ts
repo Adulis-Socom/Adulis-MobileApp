@@ -94,16 +94,39 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     }
   });
 
+  /**
+   * ORDER MATTERS, and the first version had it wrong: it tried to drop the
+   * markets while its own accounts still pointed at them, so the guarded
+   * DELETE correctly declined and the next run collided on the primary key.
+   * Rows first, then configuration, then the market.
+   */
   async function cleanup(): Promise<void> {
     await admin.query(`DELETE FROM core.rate_limit_bucket
        WHERE bucket_key IN ('otp-request','otp-request-ip','bootstrap-device-mint')`);
-    await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 = $1`, [PHONE]);
+    await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519119980%'`);
+
+    // This suite's own phones, and the devices its markets hold. Unbound
+    // devices only: a BOUND one belongs to an account this file did not
+    // create, and deleting it is not this file's business.
+    const mine = await admin.query<{ id: string }>(
+      `SELECT id FROM core.account WHERE phone_e164 LIKE '+2519119980%'`,
+    );
+    const ids = mine.rows.map((r) => r.id);
+    if (ids.length) {
+      await admin.query(`DELETE FROM core.session WHERE account_id = ANY($1::uuid[])`, [ids]);
+      await admin.query(`UPDATE core.device SET account_id = NULL WHERE account_id = ANY($1::uuid[])`, [ids]);
+      await admin.query(`DELETE FROM core.idempotency_record WHERE actor_id = ANY($1::uuid[])`, [ids]);
+      await admin.query(`DELETE FROM core.account WHERE id = ANY($1::uuid[])`, [ids]);
+    }
     for (const m of [MA, MB]) {
-      // BY ID, never by market: another suite's rows may have landed here and
-      // deleting them is not this file's business. The markets go only when
-      // nothing points at them; a leftover market row is harmless, and far
-      // cheaper than destroying a parallel suite's fixtures.
+      await admin.query(
+        `DELETE FROM core.device WHERE market_id = $1 AND account_id IS NULL`,
+        [m],
+      );
       await admin.query(`DELETE FROM core.timing_config WHERE market_id = $1`, [m]);
+      // Still guarded: if anything this file did not create still points at
+      // the market, the market stays. A leftover market row is harmless; a
+      // parallel suite losing its fixtures is not.
       await admin.query(
         `DELETE FROM core.market m WHERE m.id = $1
           AND NOT EXISTS (SELECT 1 FROM core.account a WHERE a.market_id = m.id)
@@ -111,8 +134,6 @@ describe('T8 Phase 3 - the market comes from the device', () => {
         [m],
       );
     }
-    await admin.query(`DELETE FROM core.account WHERE phone_e164 LIKE '+2519119980%'`);
-    await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519119980%'`);
   }
 
   afterAll(async () => {
@@ -275,6 +296,86 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .send({ phone: '+251911998012', purpose: 'SIGN_IN' });
     expect(r1.status).toBe(400);
     expect(shape(r2)).toBe(shape(r1));
+  });
+
+  /**
+   * T8 Phase 4 / ADU-RUL-03 S4 -- the age declaration.
+   *
+   * The API half was already built (ADU-AUTH-01 S13); what was missing was a
+   * console that could send it, which made first-time sign-in impossible
+   * (D-101). These assert the server side of the contract the console now
+   * satisfies: the declaration is REQUIRED to create an identity, it is
+   * recorded, and it is ignored once an account exists.
+   */
+  it('an identity cannot be created without the declaration, and the refusal names it', async () => {
+    const device = randomUUID();
+    devices.push(device);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [device, MA],
+    );
+    const phone = '+251911998020';
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, purpose: 'SIGN_IN' })
+      .expect(202);
+    const code = sms.lastTo(phone)?.slots['code'] as string;
+
+    const refused = await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, code, audience: 'MOBILE', device_id: device })
+      .expect(400);
+    expect((refused.body as { slots?: { path?: string } }).slots?.path).toBe(
+      'age_declared_over_18',
+    );
+
+    const none = await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [phone]);
+    expect(none.rowCount).toBe(0);
+  });
+
+  it('the declaration is RECORDED, not just checked', async () => {
+    const device = randomUUID();
+    devices.push(device);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [device, MA],
+    );
+    const phone = '+251911998021';
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, purpose: 'SIGN_IN' })
+      .expect(202);
+    const code = sms.lastTo(phone)?.slots['code'] as string;
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({
+        phone,
+        code,
+        audience: 'MOBILE',
+        device_id: device,
+        age_declared_over_18: true,
+      })
+      .expect(200);
+
+    // ADU-AUTH-01 S13: "store the confirmation, not the date."
+    const row = await admin.query(
+      `SELECT id, age_declared_over_18, age_declared_at FROM core.account WHERE phone_e164 = $1`,
+      [phone],
+    );
+    expect(row.rows[0].age_declared_over_18).toBe(true);
+    expect(row.rows[0].age_declared_at).not.toBeNull();
+    accounts.push(row.rows[0].id as string);
   });
 
   it('the auth path chooses no market of its own: only bootstrap does', async () => {

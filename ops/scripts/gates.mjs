@@ -193,6 +193,11 @@ const GATES = [
   // sixteen (a governed set), and its loader would count a check-*.mjs
   // dropped there whether or not anything referenced it.
   { id: 'deferred-values', title: 'ADU-VAL-01 S1.1 - three forms agree, deferred values are nullable', cmd: ['pnpm', 'verify:deferred-values'] },
+  // T8 Phase 4: nothing in CI touched MT-KEYS.md, so it drifted from en.ts
+  // silently -- and did, inside one work order. It also carries the
+  // HUMAN-REQUIRED gate now (ADU-RUL-03 S4), which is a rule about what may
+  // NOT be machine-translated and therefore wants a machine to check it.
+  { id: 'mt-keys', title: 'The translation work list is current and the HUMAN-REQUIRED gate holds', cmd: ['pnpm', 'verify:mt-keys'] },
   { id: 'no-unsafe-eval', title: "'unsafe-eval' absent from the console build", fn: assertNoUnsafeEval },
   { id: 'production-react', title: 'The console shipped React production', fn: assertProductionReact },
   {

@@ -1,8 +1,24 @@
 # MT-KEYS -- the human translation work list
 
+## HUMAN-REQUIRED -- a gate, not an item
+
+These keys carry the ENGLISH text in `am.ts`, not a machine translation,
+and they must not be machine-translated at all (ADU-RUL-03 S4). A person
+cannot attest, in a language they read, to a sentence nobody has checked --
+and an attestation whose wording was never verified is not evidence of
+anything. A human translator writes these, or they stay English.
+
+2 key(s):
+
+- `console.signin.age_declaration`
+- `console.signin.age_refused`
+
+## Machine-translated placeholders
+
 Every key below carries a MACHINE-TRANSLATION placeholder in `am.ts`.
 The placeholders satisfy the completeness gate (a missing key is a compile
-error) and nothing else. `AM_ENABLED` stays off until this list is empty.
+error) and nothing else. `AM_ENABLED` stays off until BOTH lists are
+clear.
 
 When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
