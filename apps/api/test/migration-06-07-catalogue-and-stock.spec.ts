@@ -102,7 +102,48 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
     if (!CONNECTION_STRING) throw new Error('DATABASE_URL is not set.');
     pool = new Pool({ connectionString: CONNECTION_STRING, max: 4 });
   });
+  /**
+   * THE RACE TEST CANNOT USE A ROLLED-BACK TRANSACTION -- two connections have
+   * to contend for real -- so it is the one place in this file that writes
+   * rows which outlive the test. It never deleted them, and 179 of its markets
+   * had accumulated by T8-C, one per run, each with an account, a seller, a
+   * product and a variant behind it.
+   *
+   * A suite deletes what it created, by id (ADU-RUL-04 S3 via T8-C S2.1; that
+   * document is cited and not supplied -- D-125).
+   *
+   * `session_replication_role = replica` is required and is not a shortcut
+   * around foreign keys here: core.stock_event is APPEND-ONLY, enforced by a
+   * trigger that raises on DELETE for every role including this one. Turning
+   * triggers off for the teardown is the only way to remove rows the suite
+   * itself wrote -- and it is scoped to ids this file generated.
+   */
+  const raceRows: Array<{
+    market: string;
+    account: string;
+    seller: string;
+    product: string;
+    variant: string;
+  }> = [];
+
   afterAll(async () => {
+    if (raceRows.length) {
+      const c = await pool.connect();
+      try {
+        await c.query('SET session_replication_role = replica');
+        for (const r of raceRows) {
+          await c.query('DELETE FROM core.stock_event WHERE variant_id = $1', [r.variant]);
+          await c.query('DELETE FROM core.product_variant WHERE id = $1', [r.variant]);
+          await c.query('DELETE FROM core.product WHERE id = $1', [r.product]);
+          await c.query('DELETE FROM core.seller WHERE id = $1', [r.seller]);
+          await c.query('DELETE FROM core.account WHERE id = $1', [r.account]);
+          await c.query('DELETE FROM core.market WHERE id = $1', [r.market]);
+        }
+      } finally {
+        await c.query('SET session_replication_role = DEFAULT').catch(() => {});
+        c.release();
+      }
+    }
     await pool.end();
   });
 
@@ -268,6 +309,10 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
       const rp = uniq.rows[0].d as string;
       const rv = uniq.rows[0].e as string;
       const tag = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+
+      // Recorded before the first INSERT, so a failure part-way through still
+      // leaves the teardown something to delete.
+      raceRows.push({ market: rm, account: ra, seller: rs, product: rp, variant: rv });
 
       const setup = await pool.connect();
       try {
