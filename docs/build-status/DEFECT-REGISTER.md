@@ -1322,3 +1322,25 @@ Effect:    MEASURED: `pnpm --filter @adulis/api test` from a clean shell failed 
 Response:  FIXED
 Action:    `"test": "node --env-file-if-exists=../../.env node_modules/jest/bin/jest.js"`. `--env-file-if-exists` rather than `--env-file` for the reason install-worker-schema.mjs already gives in its own comment: CI has no `.env` and its absence must not be an error, or the command fails on every machine that supplies its environment properly. Proven by running the full suite from a shell with nothing exported: 459/459. This is the same pattern as `pnpm gates` and `ops/scripts/*.mjs`, so the repository now loads its environment one way rather than two.
 Ruling needed: none.
+
+### D-132 - db:reset printed PASS unconditionally, and two documents said it checked
+
+Severity:  MAJOR (a green that does not depend on the thing it names -- the class T8-C S1 was raised to attack)
+Phase:     T8-C
+Source:    ops/scripts/db-reset.mjs printed `PASS  the database is what ... gives` immediately after printing the row counts. Nothing between the counts and the print read the counts
+Found by:  the T8-C S2 adversarial pass (docs/build-status/reviews/T8-C-S2-db-reset-and-the-test-leak.md, F1), run against 719f448
+Effect:    The seed could produce zero markets, or no `timing_config` row, and the script would print PASS and exit 0. That matters here more than it would elsewhere: a market without a timing row is precisely D-128's symptom -- bootstrap succeeds, the OTP request fails, and a console sign-in cannot complete. The reset existed to recover from that state and would have certified it. Worse than the missing check: README and the S2 commit message BOTH claimed "fails if the result is not what a fresh clone gives", so the repository documented a verification that did not exist. This is S1's finding one section later by a different door, written by the same hand that had just fixed S1's.
+Response:  FIXED
+Action:    The counts are compared against `EXPECTED = { markets: 1, accounts: 1, sellers: 1, devices: 0, timing: 1 }` -- pinned on S1's rule, with db/seeds named as what fixes them and the requirement that a seed change moves the pin in the same commit. A mismatch prints each wrong count with expected and got, and exits 1. PROVEN by planting: changing the seed's `WHERE NOT EXISTS ...` to `WHERE false AND NOT EXISTS ...` -- so the seed still runs cleanly and simply writes no timing row -- gave `FAIL ... timing: expected 1, got 0`, exit 1. The first plant attempt is worth recording too: a deliberate SQL syntax error made `pnpm db:seed` throw, the script died at the seed step with exit 1, and that exit code proved nothing about the assertion. A plant has to leave the checked thing REACHABLE.
+Ruling needed: none.
+
+### D-133 - The destructive script refused only the literal 'production', inside the order that banned that pattern
+
+Severity:  MAJOR (D-105's defect, in a script that drops every schema)
+Phase:     T8-C
+Source:    ops/scripts/db-reset.mjs guarded `if (process.env.NODE_ENV === 'production')` and nothing else
+Found by:  the T8-C S2 adversarial pass (F2), run against 719f448
+Effect:    An unset `NODE_ENV` proceeded. So did `staging`, `prod`, and any typo. ADU-RUL-03 S1 -- the ruling this entire work order implements -- says a service that cannot determine its environment must not pick the permissive default, and D-105 made the API refuse to boot without one. A script written inside that order, whose only job is destruction, took the permissive default. The host allow-list is a second guard and in practice the stronger one, which is the argument for fixing this rather than against: the guard whose absence is survivable is the one that gets copied into the next script.
+Response:  FIXED
+Action:    Inverted to an allow-list: `RESETTABLE = ['development', 'test']`, and anything else -- including unset -- exits 2 naming what it saw. PROVEN both ways: `NODE_ENV=staging` gives "NODE_ENV is 'staging'; this script runs only under development or test"; running with `NODE_ENV` unset and `DATABASE_URL_MIGRATE` supplied by hand gives "NODE_ENV is unset". The same pass produced three smaller fixes, recorded in the review rather than here: `before:` and `after:` printed different units under paired labels (F3); a `DATABASE_URL_JOBS` set without a password silently received the app role's (F4); and the header called the host check "the only thing between it and a database somebody cares about", which oversells a guard a port-forward defeats (F5).
+Ruling needed: none.

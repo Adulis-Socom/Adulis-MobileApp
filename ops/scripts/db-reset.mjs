@@ -28,10 +28,15 @@
  *      NOLOGIN, because a password in a migration is a secret in git
  *   6. pnpm db:seed
  *
- * IT REFUSES ANYTHING THAT LOOKS LIKE A REAL DEPLOYMENT. NODE_ENV=production
- * is refused outright, and so is a connection string that is not local --
- * this script's whole job is destruction, and the guard is the only thing
- * between it and a database somebody cares about.
+ * IT REFUSES ANYTHING IT CANNOT NAME. NODE_ENV must be development or test --
+ * unset is refused with the rest, because a process that cannot determine its
+ * environment must not pick the permissive default (D-105) -- and the host in
+ * the connection string must be local.
+ *
+ * THE HOST GUARD IS NOT PROOF. A port-forward to production presents as
+ * localhost:5432 and passes it. It is worth having and it is not sufficient,
+ * and saying so here is the point: a comment that oversells a guard is how
+ * the next reader decides no further care is needed.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -46,8 +51,21 @@ if (!CONNECTION) {
   console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: docker compose up -d && cp .env.example .env');
   process.exit(2);
 }
-if (process.env.NODE_ENV === 'production') {
-  console.error('FAIL  refusing to reset with NODE_ENV=production.');
+/**
+ * F2 (T8-C S2 adversarial pass). The first version refused only the literal
+ * string 'production' -- so an unset NODE_ENV, or 'staging', or a typo, all
+ * proceeded to drop every schema. That is D-105's defect exactly, committed
+ * inside the work order raised to fix it: a process that cannot determine
+ * its environment must not pick the permissive default. The allow-list is
+ * the inverse of the old check, and unset is refused with the rest.
+ */
+const RESETTABLE = ['development', 'test'];
+if (!RESETTABLE.includes(process.env.NODE_ENV ?? '')) {
+  console.error(
+    `FAIL  NODE_ENV is ${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}; ` +
+      `this script runs only under ${RESETTABLE.join(' or ')}.`,
+  );
+  console.error('      It drops every application schema, so it refuses anything it cannot name.');
   process.exit(2);
 }
 const host = (() => {
@@ -76,12 +94,41 @@ const run = (cmd, args) => {
 const client = new pg.Client({ connectionString: CONNECTION });
 await client.connect();
 
-const before = await client.query(
+/**
+ * F3 (adversarial pass): `before:` used to print TABLE counts and `after:`
+ * ROW counts, under labels that read as a pair. The number this script exists
+ * for -- 180 markets before, 1 after -- was in neither, and had to be
+ * gathered by hand for D-128. Both ends now print the same five rows.
+ *
+ * `to_regclass` rather than a try/catch: on a genuinely fresh clone there is
+ * no core.market yet, and "no tables" is the expected state, not an error.
+ */
+const rowCounts = async (c) => {
+  const present = await c.query(`SELECT to_regclass('core.market') IS NOT NULL AS ok`);
+  if (!present.rows[0].ok) return null;
+  const r = await c.query(`
+    SELECT (SELECT count(*)::int FROM core.market) AS markets,
+           (SELECT count(*)::int FROM core.account) AS accounts,
+           (SELECT count(*)::int FROM core.seller) AS sellers,
+           (SELECT count(*)::int FROM core.device) AS devices,
+           (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing`);
+  return r.rows[0];
+};
+const show = (label, c) =>
+  console.log(
+    c === null
+      ? `${label}: no core.market -- nothing has been migrated here yet`
+      : `${label}: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
+        `devices ${c.devices}, timing_config in force ${c.timing}`,
+  );
+
+const tables = await client.query(
   `SELECT (SELECT count(*)::int FROM information_schema.tables
             WHERE table_schema = ANY($1::text[])) AS tables`,
   [SCHEMAS],
 );
-console.log(`\nbefore: ${before.rows[0].tables} table(s) across ${SCHEMAS.length} schema(s)`);
+console.log(`\n${tables.rows[0].tables} table(s) across ${SCHEMAS.length} schema(s)`);
+show('before', await rowCounts(client));
 
 for (const s of SCHEMAS) {
   await client.query(`DROP SCHEMA IF EXISTS ${s} CASCADE`);
@@ -126,9 +173,14 @@ const passwordFrom = (url) => {
     return null;
   }
 };
+// F4 (adversarial pass): fall back to DATABASE_URL only when
+// DATABASE_URL_JOBS is ABSENT. If it is present but carries no password, the
+// old `??` handed adulis_jobs the app's password -- one that matches nothing
+// the worker will ever present, failing later and somewhere else.
+const jobsUrl = process.env.DATABASE_URL_JOBS;
 const wanted = [
   ['adulis_app', passwordFrom(process.env.DATABASE_URL)],
-  ['adulis_jobs', passwordFrom(process.env.DATABASE_URL_JOBS) ?? passwordFrom(process.env.DATABASE_URL)],
+  ['adulis_jobs', jobsUrl ? passwordFrom(jobsUrl) : passwordFrom(process.env.DATABASE_URL)],
 ];
 for (const [role, pw] of wanted) {
   if (!pw) {
@@ -149,16 +201,35 @@ run('pnpm', ['db:seed']);
 
 const after = new pg.Client({ connectionString: CONNECTION });
 await after.connect();
-const counts = await after.query(`
-  SELECT (SELECT count(*)::int FROM core.market) AS markets,
-         (SELECT count(*)::int FROM core.account) AS accounts,
-         (SELECT count(*)::int FROM core.device) AS devices,
-         (SELECT count(*)::int FROM core.seller) AS sellers,
-         (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing`);
+const c = await rowCounts(after);
 await after.end();
-const c = counts.rows[0];
-console.log(
-  `\nafter: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
-    `devices ${c.devices}, timing_config in force ${c.timing}`,
-);
-console.log('\nPASS  the database is what migrate, worker:install and seed give on a fresh clone.\n');
+show('after', c);
+
+/**
+ * F1 (adversarial pass), and the most important line in this file. The first
+ * version printed PASS unconditionally: nothing between the counts and the
+ * print read the counts. The README and the commit message both claimed it
+ * "fails if the result is not what a fresh clone gives", so the repository
+ * documented a check that did not exist -- which is T8-C S1's finding
+ * arriving one section later by a different door.
+ *
+ * The numbers are PINNED, on S1's rule: what fixes them is db/seeds -- one
+ * market, one account with a seller, no devices, one timing_config in force.
+ * When the seed changes, this moves in the same commit, and until then a
+ * seed that silently stops producing a timing row turns this red instead of
+ * leaving a database where bootstrap succeeds and sign-in cannot (D-128).
+ */
+const EXPECTED = { markets: 1, accounts: 1, sellers: 1, devices: 0, timing: 1 };
+const wrong = c === null
+  ? [['core.market', 'present', 'absent']]
+  : Object.entries(EXPECTED)
+      .filter(([k, v]) => c[k] !== v)
+      .map(([k, v]) => [k, v, c[k]]);
+
+if (wrong.length) {
+  console.error(`\nFAIL  the reset did not produce what the seed defines:`);
+  for (const [k, want, got] of wrong) console.error(`        ${k}: expected ${want}, got ${got}`);
+  console.error('      The schemas were dropped. Fix the seed or the migrations and run this again.');
+  process.exit(1);
+}
+console.log('\nPASS  markets/accounts/sellers/devices/timing_config are what the seed defines.\n');

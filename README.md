@@ -100,15 +100,22 @@ is unset, rather than picking the permissive default (ADU-RUL-03 S1, D-105).
 pnpm db:reset                          # DESTRUCTIVE: drops all application data
 ```
 
-Drops the ten application schemas and `public.pgmigrations`, re-runs
-`db/init/00-extensions.sql`, `db:migrate` and `db:seed`, and gives the runtime
-roles the password your `.env` already uses (migration 01 creates them
-NOLOGIN, because a password in a migration is a secret in git). It prints the
-row counts before and after and fails if the result is not what a fresh clone
-gives.
+Drops the ten application schemas and `public.pgmigrations`, then re-runs
+`db/init/00-extensions.sql`, `db:migrate`, `worker:install` and `db:seed`, and
+gives the runtime roles the password your `.env` already uses (migration 01
+creates them NOLOGIN, because a password in a migration is a secret in git).
+It prints the same five row counts before and after, and **fails** if the
+result is not what the seed defines -- one market, one account, one seller, no devices, one
+`timing_config` in force. The counts are pinned, so a seed that silently stops
+producing a timing row turns this red instead of leaving a database where
+bootstrap succeeds and sign-in cannot.
 
-It refuses to run when `NODE_ENV=production` or when the host in
-`DATABASE_URL` is not local.
+It runs only under `NODE_ENV=development` or `test`. An unset or unrecognised
+`NODE_ENV` is refused with the rest, on the same rule the API boots by: a
+process that cannot determine its environment must not pick the permissive
+default (D-105). The host in the connection string must also be local -- and
+that guard is worth having without being proof, since a port-forward to
+production presents as `localhost`.
 
 **Use it when a local run stops resembling a fresh clone.** Test suites that
 create rows and do not delete them accumulate: by T8-C the development
