@@ -90,20 +90,48 @@ export class OtpService {
     trx: Transaction<Database>,
     phone: string,
     deviceId: string | null,
+    requireDevice: boolean,
   ): Promise<TimingRow> {
-    // WHICH MARKET, resolved first and on its own, so the two ways of
-    // having no answer stay distinguishable. "This device has never
-    // bootstrapped" is the caller's to fix and gets a refusal naming the
-    // call to make; "this market has no configuration in force" is the
-    // deployment's and stays a 500, because no client action helps.
+    /**
+     * THE REFUSAL LOOKS AT THE CALLER'S OWN DEVICE, NEVER AT THE PHONE.
+     *
+     * The first version refused when coalesce(account market, device market)
+     * came back NULL, which made the refusal depend on whether the phone had
+     * an account -- so `POST /v1/auth/otp/resend` answered 202 for a
+     * registered number and 400 for an unregistered one. That is an
+     * account-enumeration oracle on an unauthenticated, unthrottled endpoint,
+     * and ADU-AUTH-01 S22 forbids it in as many words: "a rate-limit
+     * rejection never reveals whether the number belongs to an account...
+     * otherwise the sign-in form is an account-enumeration oracle, and in
+     * this product an account is a business." This file's own header says the
+     * same thing. I wrote the oracle while removing a different defect.
+     *
+     * So the device is checked FIRST and ALONE. Every anonymous caller on a
+     * phone-taking endpoint must present a bootstrapped device, whoever the
+     * phone belongs to, and the answer is identical either way.
+     */
+    let deviceMarket: string | null = null;
+    if (requireDevice) {
+      const d = await sql<{ market_id: string | null }>`
+        SELECT market_id FROM core.device WHERE id = ${deviceId}`.execute(trx);
+      deviceMarket = result_first(d.rows)?.market_id ?? null;
+      if (!deviceMarket) {
+        throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+      }
+    }
+
+    // The account's market still governs where one exists -- timing is
+    // per-market configuration and a person's account names their market.
     const m = await sql<{ market_id: string | null }>`
       SELECT coalesce(
         (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
-        (SELECT d.market_id FROM core.device d WHERE d.id = ${deviceId})
+        ${deviceMarket}::uuid
       ) AS market_id`.execute(trx);
     const marketId = result_first(m.rows)?.market_id ?? null;
     if (!marketId) {
-      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+      // Reachable only on the authenticated paths, where an account always
+      // exists; a missing one there is our problem, not the caller's.
+      throw new AdulisException('INTERNAL');
     }
 
     const r = await sql<TimingRow>`
@@ -186,14 +214,23 @@ export class OtpService {
       templateKey: string;
       extraSlots?: Record<string, string>;
       /**
-       * The device this request speaks for. Required in practice only on the
-       * SIGN_IN path, which is the one that runs before an account exists;
-       * every other caller has an account and resolves through it.
+       * The device this request speaks for. Required on every ANONYMOUS
+       * phone-taking path -- sign-in and account deletion both let a caller
+       * name any phone, so both must answer identically whether or not that
+       * phone is known, and the only phone-independent thing to check is the
+       * caller's own device.
        */
       deviceId?: string | null;
+      /** False only for authenticated paths, which resolve via the account. */
+      requireDevice?: boolean;
     },
   ): Promise<{ challengeId: string; expiresAt: Date; sms: SmsMessage }> {
-    const timing = await this.timingFor(trx, args.phone, args.deviceId ?? null);
+    const timing = await this.timingFor(
+      trx,
+      args.phone,
+      args.deviceId ?? null,
+      args.requireDevice ?? true,
+    );
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);
 
     await sql`
@@ -241,9 +278,15 @@ export class OtpService {
       purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION';
       code: string;
       deviceId?: string | null;
+      requireDevice?: boolean;
     },
   ): Promise<OtpChallengeRow> {
-    const timing = await this.timingFor(trx, args.phone, args.deviceId ?? null);
+    const timing = await this.timingFor(
+      trx,
+      args.phone,
+      args.deviceId ?? null,
+      args.requireDevice ?? true,
+    );
 
     // No FOR UPDATE here: the attempt counter writes on a second
     // connection (burnAttempt), and a row lock held by this transaction
@@ -342,10 +385,13 @@ export class OtpService {
     if (!row || row.consumed_at) throw new AdulisException('OTP_INVALID');
     if (new Date() > row.expires_at) throw new AdulisException('OTP_EXPIRED');
 
-    // No device here, and none needed: this path verifies a challenge by id
-    // for step-up and deletion, which both require an existing account, so
-    // the first arm of the coalesce always resolves.
-    const timing = await this.timingFor(trx, row.phone_e164, null);
+    // No device, and none required: this path verifies a challenge by ID and
+    // its ONLY caller is step-up (auth.service), which is authenticated --
+    // the account exists, so the account arm always resolves and there is no
+    // anonymous caller to leak anything to. Deletion does NOT come through
+    // here; it uses verifyCode, and it threads a device like every other
+    // anonymous phone-taking path.
+    const timing = await this.timingFor(trx, row.phone_e164, null, false);
     if (row.attempt_count >= timing.otp_max_attempts) {
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }

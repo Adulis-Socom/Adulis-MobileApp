@@ -338,6 +338,11 @@ export class AuthService {
     if (!phone) throw new AdulisException('INTERNAL');
 
     const issued = await this.otp.issueChallenge(trx, {
+      // Authenticated: req.ctx.accountId is set, the account names the
+      // market, and no anonymous caller can learn anything from the answer.
+      // Demanding a device here would refuse a signed-in seller a step-up
+      // code for no security gain.
+      requireDevice: false,
       phone,
       purpose: 'STEP_UP',
       stepUpAction: body.action,

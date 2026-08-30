@@ -76,10 +76,17 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       [MA, 'T8A'],
       [MB, 'T8B'],
     ] as const) {
+      // LIVE, because the removed lookup filtered on is_live and the test has
+      // to be discriminating -- but created in the FUTURE, so bootstrap's
+      // `is_live DESC, created_at ASC` prefers any other suite's live market
+      // over these two. A parallel suite whose devices landed here would have
+      // had its rows deleted by this file's teardown, which is the same
+      // reach-across that t8-device-bootstrap avoids by staying non-live.
       await admin.query(
         `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                  display_timezone, default_locale, is_live)
-         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',true)`,
+                                  display_timezone, default_locale, is_live, created_at)
+         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',true,
+                 now() + interval '10 years')`,
         [id, code],
       );
       const [q, p] = timingFor(id);
@@ -92,21 +99,20 @@ describe('T8 Phase 3 - the market comes from the device', () => {
        WHERE bucket_key IN ('otp-request','otp-request-ip','bootstrap-device-mint')`);
     await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 = $1`, [PHONE]);
     for (const m of [MA, MB]) {
-      await admin.query(
-        `DELETE FROM core.session WHERE account_id IN (SELECT id FROM core.account WHERE market_id = $1)`,
-        [m],
-      );
-      await admin.query(
-        `UPDATE core.device SET account_id = NULL
-          WHERE account_id IN (SELECT id FROM core.account WHERE market_id = $1)`,
-        [m],
-      );
-      await admin.query(`DELETE FROM core.device WHERE market_id = $1`, [m]);
-      await admin.query(`DELETE FROM core.account WHERE market_id = $1`, [m]);
+      // BY ID, never by market: another suite's rows may have landed here and
+      // deleting them is not this file's business. The markets go only when
+      // nothing points at them; a leftover market row is harmless, and far
+      // cheaper than destroying a parallel suite's fixtures.
       await admin.query(`DELETE FROM core.timing_config WHERE market_id = $1`, [m]);
-      await admin.query(`DELETE FROM core.market WHERE id = $1`, [m]);
+      await admin.query(
+        `DELETE FROM core.market m WHERE m.id = $1
+          AND NOT EXISTS (SELECT 1 FROM core.account a WHERE a.market_id = m.id)
+          AND NOT EXISTS (SELECT 1 FROM core.device d WHERE d.market_id = m.id)`,
+        [m],
+      );
     }
-    await admin.query(`DELETE FROM core.account WHERE phone_e164 = $1`, [PHONE]);
+    await admin.query(`DELETE FROM core.account WHERE phone_e164 LIKE '+2519119980%'`);
+    await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519119980%'`);
   }
 
   afterAll(async () => {
@@ -170,9 +176,15 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     expect(acct.rows[0].market_id).toBe(MB);
   });
 
-  it('a device with no market cannot create an identity, and is told what to call', async () => {
+  it('a device with no market is refused at the first step, and told what to call', async () => {
     // Fail closed, and say why. The old code would have picked a market for
     // this person; there is no honest one to pick.
+    //
+    // NOTE what this does and does not cover: the refusal fires at
+    // otp/request, so identity creation is never reached. auth.service keeps
+    // its own market check for the same condition, and that one is now
+    // unreachable through the API -- defence in depth behind a door that
+    // shuts first, not a second door anyone can knock on.
     const orphan = randomUUID();
     devices.push(orphan);
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [orphan]);
@@ -186,19 +198,109 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     expect(JSON.stringify(res.body)).toContain('bootstrap');
   });
 
+  /**
+   * ADU-AUTH-01 S22, and the reason this test exists: the first version of
+   * Phase 3 refused when coalesce(account market, device market) was NULL,
+   * which made the refusal depend on whether the phone had an account. An
+   * unregistered number got 400 where a registered one got 202 -- an
+   * enumeration oracle on unauthenticated endpoints, in a product where an
+   * account is a business. The answers must be indistinguishable.
+   */
+  it('a known and an unknown phone are indistinguishable on every anonymous path', async () => {
+    const device = randomUUID();
+    devices.push(device);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [device, MA],
+    );
+
+    const known = '+251911998010';
+    const unknown = '+251911998011';
+    const acct = randomUUID();
+    accounts.push(acct);
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES ($1,$2,$3,'ACTIVE')`,
+      [acct, known, MA],
+    );
+
+    const shape = (r: request.Response): string =>
+      `${r.status}:${(r.body as { code?: string }).code ?? ''}`;
+
+    // Sign-in request
+    const a1 = await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone: known, purpose: 'SIGN_IN' });
+    const a2 = await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone: unknown, purpose: 'SIGN_IN' });
+    expect(shape(a2)).toBe(shape(a1));
+
+    // Deletion request -- @Public and phone-taking, the door the first
+    // version left widest open.
+    const d1 = await request(app.getHttpServer())
+      .post('/v1/deletion/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone: known });
+    const d2 = await request(app.getHttpServer())
+      .post('/v1/deletion/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone: unknown });
+    expect(shape(d2)).toBe(shape(d1));
+  });
+
+  it('and the refusal for a market-less device is the same for both phones', async () => {
+    // The refusal is about the CALLER'S device, so it must fire identically
+    // whoever the phone belongs to.
+    const orphan2 = randomUUID();
+    devices.push(orphan2);
+    await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [orphan2]);
+
+    const shape = (r: request.Response): string =>
+      `${r.status}:${JSON.stringify((r.body as { slots?: unknown }).slots ?? {})}`;
+    const r1 = await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', orphan2)
+      .send({ phone: '+251911998010', purpose: 'SIGN_IN' });
+    const r2 = await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', orphan2)
+      .send({ phone: '+251911998012', purpose: 'SIGN_IN' });
+    expect(r1.status).toBe(400);
+    expect(shape(r2)).toBe(shape(r1));
+  });
+
   it('the auth path chooses no market of its own: only bootstrap does', async () => {
     // A structural assertion, because the defect was structural. If a future
     // change reintroduces a market lookup in the auth path, this fails.
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
-    const root = join(__dirname, '..', 'src', 'modules', 'auth');
-    for (const f of ['auth.service.ts', 'otp.service.ts']) {
-      const text = readFileSync(join(root, f), 'utf8');
-      const code = text
+    const root = join(__dirname, '..', 'src', 'modules');
+    const files = [
+      join(root, 'auth', 'auth.service.ts'),
+      join(root, 'auth', 'otp.service.ts'),
+      // The controller does the device resolution now, so it is the third
+      // place a market lookup could plausibly reappear.
+      join(root, 'auth', 'auth.controller.ts'),
+      join(root, 'deletion', 'deletion.controller.ts'),
+    ];
+    for (const f of files) {
+      const code = readFileSync(f, 'utf8')
         .split('\n')
         .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*'))
         .join('\n');
+      // Not just `is_live`: any read of core.market from the auth path is the
+      // thing the ruling removed. A lookup written a different way is still
+      // the same lookup.
       expect(code).not.toContain('is_live');
+      expect(code).not.toContain('core.market');
     }
   });
 });

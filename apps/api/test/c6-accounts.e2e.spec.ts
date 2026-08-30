@@ -117,18 +117,22 @@ const browserCookie = async (): Promise<string> => {
 
 
   /**
-   * What an app does after registering: call /v1/bootstrap, which places the
-   * device in a market (G1.11). Since T8 Phase 3 the market a new identity
-   * joins is read off that row, so a device that never bootstrapped cannot
-   * create an account -- deliberately, because the alternative was picking a
-   * market for a person nobody asked about.
+   * Place a registered device in THIS SUITE'S market. In production
+   * /v1/bootstrap does it (G1.11), and since T8 Phase 3 the market a new
+   * identity joins is read off that row -- a device that never bootstrapped
+   * cannot create an account, deliberately.
+   *
+   * The suite does it EXPLICITLY rather than by calling bootstrap, because
+   * bootstrap resolves a GLOBAL market (is_live DESC, created_at ASC) and a
+   * test that goes through it silently asserts "my market is the earliest
+   * live one in this database" -- true only by scheduling luck, and false the
+   * moment another suite's live market is older. That reproduced D-104's
+   * exact recorded symptom: this suite's accounts landing in a foreign
+   * market, invisible to its market-scoped teardown, and the NEXT run
+   * answering 200 where 400 belongs.
    */
   const bootDevice = async (id: string): Promise<void> => {
-    await http()
-      .get('/v1/bootstrap')
-      .set('X-Adulis-Client', 'android/1.0.0')
-      .set('X-Adulis-Device', id)
-      .expect(200);
+    await admin.query(`UPDATE core.device SET market_id = $1 WHERE id = $2`, [M, id]);
   };
   const purgeRateBuckets = async () => {
     await admin.query(
@@ -1132,6 +1136,10 @@ const browserCookie = async (): Promise<string> => {
       expect(sms.lastTo(P_WEBDEL)?.templateKey).toBe('sms.otp.account_deletion');
       const verified = await http()
         .post('/v1/deletion/otp/verify')
+        // Anonymous and phone-taking, so it identifies its device like every
+        // other such call -- the check is what keeps the answer the same for
+        // a known and an unknown number (ADU-AUTH-01 S22).
+        .set('X-Adulis-Device', d)
         .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL) })
         .expect(200);
       const ticket = verified.body.ticket as string;

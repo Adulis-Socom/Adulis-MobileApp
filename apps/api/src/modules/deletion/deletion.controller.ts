@@ -17,6 +17,7 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
 import { resolveKey } from '../../common/crypto/aead';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
+import { requestingDevice } from '../../common/http/cookies';
 import { OtpService } from '../auth/otp.service';
 import { SMS_ADAPTER, type SmsAdapter, type SmsMessage } from '../auth/sms.adapter';
 import {
@@ -87,6 +88,10 @@ export class DeletionController {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
         templateKey: 'sms.otp.account_deletion',
+        // Anonymous and phone-taking, exactly like sign-in: the caller's own
+        // device is the only thing that can be checked without revealing
+        // whether the phone is known (ADU-AUTH-01 S22).
+        deviceId: requestingDevice(req.headers),
       });
       toSend = issued.sms;
       return {};
@@ -109,6 +114,7 @@ export class DeletionController {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
         code: body.code,
+        deviceId: requestingDevice(req.headers),
       });
       return {
         ticket: challenge.id,

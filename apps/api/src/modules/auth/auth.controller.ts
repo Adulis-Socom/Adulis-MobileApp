@@ -28,6 +28,7 @@ import {
   SESSION_COOKIE,
   hostCookie,
   readCookie,
+  requestingDevice,
 } from '../../common/http/cookies';
 import {
   deviceRegisterBody,
@@ -45,17 +46,6 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Which device is speaking, by surface: the app header for a native client,
- * the httpOnly cookie for a browser (ADU-RUL-03 S2). Both are validated as
- * uuids -- these values reach uuid columns.
- */
-const requestingDevice = (req: LocalizedRequest): string | null => {
-  const header = req.headers['x-adulis-device'];
-  if (typeof header === 'string' && UUID_RE.test(header)) return header;
-  const cookie = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
-  return cookie && UUID_RE.test(cookie) ? cookie : null;
-};
 
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
@@ -105,7 +95,7 @@ export class AuthController {
         templateKey: 'sms.otp.sign_in',
         // Before an account exists, the device is what says which market's
         // timing governs this code (ADU-RUL-03 S3).
-        deviceId: requestingDevice(req),
+        deviceId: requestingDevice(req.headers),
       });
       toSend = issued.sms;
       return {};
@@ -130,7 +120,7 @@ export class AuthController {
         phone: body.phone,
         purpose: 'SIGN_IN',
         templateKey: 'sms.otp.sign_in',
-        deviceId: requestingDevice(req),
+        deviceId: requestingDevice(req.headers),
       });
       toSend = issued.sms;
     });

@@ -1181,3 +1181,14 @@ Effect:    The assertion holds only while no other suite has an outstanding coll
 Response:  FIXED
 Action:    The test now asserts what it is about: this record is stamped once, and this seller's phone receives one message. Both are scoped to its own fixtures, so no other suite can move them.
 Ruling needed: none.
+
+### D-118 - The order "register, then bootstrap" is required and written nowhere
+
+Severity:  MINOR (a client that gets it wrong is locked out until it calls bootstrap again, with no message saying so)
+Phase:     T8 - 3
+Source:    /v1/bootstrap's app branch is `UPDATE core.device SET market_id = ... WHERE id = <header> AND market_id IS NULL`, a silent no-op when the row does not exist yet; POST /v1/devices inserts with no market; ADU-API-01 S3.1/S3.2 states no ordering between them
+Found by:  the Phase 3 adversarial pass
+Effect:    An app that calls bootstrap BEFORE registering gets a device row with a NULL market, and since Phase 3 that means every anonymous OTP path refuses it -- with slots.path 'bootstrap', naming a call the client has already made. Calling it a second time fixes it, and nothing tells the client that. The same trap catches a returning app whose unbound row was purged by retention and which re-registers before its next bootstrap. The reasoning in bootstrap's own comment ("the anonymous first call... failing it because a header was absent would break a client's first request") was sound while a device's market was cosmetic; it gates sign-in now.
+Response:  RECORDED, not changed
+Action:    None in this phase. Making bootstrap create the row would be minting a device for an app client, which is the console's mechanism and not the app's (ADU-RUL-03 S2 keeps them separate on purpose); making register resolve a market would put a second market choice back in the tree, which is what D-104 removed. The fix is a contract sentence, not code.
+Ruling needed: state the order in ADU-API-01 S3 -- register, then bootstrap -- or rule that bootstrap may create an app device row on first sight of an unknown X-Adulis-Device.
