@@ -115,6 +115,21 @@ const browserCookie = async (): Promise<string> => {
     return id;
   };
 
+
+  /**
+   * What an app does after registering: call /v1/bootstrap, which places the
+   * device in a market (G1.11). Since T8 Phase 3 the market a new identity
+   * joins is read off that row, so a device that never bootstrapped cannot
+   * create an account -- deliberately, because the alternative was picking a
+   * market for a person nobody asked about.
+   */
+  const bootDevice = async (id: string): Promise<void> => {
+    await http()
+      .get('/v1/bootstrap')
+      .set('X-Adulis-Client', 'android/1.0.0')
+      .set('X-Adulis-Device', id)
+      .expect(200);
+  };
   const purgeRateBuckets = async () => {
     await admin.query(
       `DELETE FROM core.rate_limit_bucket
@@ -182,8 +197,8 @@ const browserCookie = async (): Promise<string> => {
       [OWNER, BUYER, MEMBER1, MEMBER2, COURIER_ACC, OWNER2, MEMBER3, M],
     );
     await admin.query(
-      `INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`,
-      [DEVICE],
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [DEVICE, M],
     );
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
@@ -368,6 +383,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', deviceId)
         .send({ id: deviceId, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(deviceId);
       await http()
         .patch(`/v1/devices/${deviceId}`)
         .send({ notification_permission: 'GRANTED' })
@@ -448,6 +464,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'IOS' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -476,6 +493,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       const oldCode = codeFor(P_RESEND);
       // Step past the 30s resend backoff without waiting it out.
       await admin.query(
@@ -485,6 +503,10 @@ const browserCookie = async (): Promise<string> => {
       );
       await http()
         .post('/v1/auth/otp/resend')
+        // The device is what says which market's timing governs this code
+        // before an account exists (T8 Phase 3). An app has one; this call
+        // simply never sent it, and used to be carried by "some live market".
+        .set('X-Adulis-Device', d)
         .send({ phone: P_RESEND, purpose: 'SIGN_IN' })
         .expect(202);
       const newCode = codeFor(P_RESEND);
@@ -513,6 +535,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -545,6 +568,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -1029,6 +1053,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())

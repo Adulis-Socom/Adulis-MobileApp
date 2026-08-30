@@ -633,12 +633,31 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
         [sub.rows[0].id],
       );
       h.clock.set(T0);
-      const before = h.sms.sent.length;
-      expect((await subscriptionCollectReminder.run(h.ctx))['sent']).toBe(1);
-      expect(h.sms.sent.length).toBe(before + 1);
-      // Inside the seven-day window, no second nag.
-      expect((await subscriptionCollectReminder.run(h.ctx))['sent']).toBe(0);
-      expect(h.sms.sent.length).toBe(before + 1);
+      // SCOPED TO THIS SELLER, not to a global count. The job's `sent` is
+      // repository-wide, so asserting it equals 1 asserts that no other suite
+      // has an outstanding collection at that instant -- which is D-83's own
+      // rule ("no global sweep") broken by the test that relies on it, and it
+      // fails the moment suite scheduling shifts. What this test is actually
+      // about is: this record is stamped once and its seller is told once.
+      const mine = () => h.sms.sent.filter((m) => m.phone === '+251912001701').length;
+      const stamp = async (): Promise<Date | null> => {
+        const r = await admin.query(
+          `SELECT reminder_sent_at FROM billing.collection_record WHERE subscription_id = $1`,
+          [sub.rows[0].id],
+        );
+        return r.rows[0].reminder_sent_at as Date | null;
+      };
+
+      const before = mine();
+      await subscriptionCollectReminder.run(h.ctx);
+      const first = await stamp();
+      expect(first).not.toBeNull();
+      expect(mine()).toBe(before + 1);
+
+      // Inside the seven-day window, no second nag and no re-stamp.
+      await subscriptionCollectReminder.run(h.ctx);
+      expect(await stamp()).toEqual(first);
+      expect(mine()).toBe(before + 1);
     });
 
     it('nlu.harvest_unmatched carries text and NO identity across the store boundary', async () => {

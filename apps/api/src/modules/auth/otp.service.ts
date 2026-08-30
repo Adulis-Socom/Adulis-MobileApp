@@ -73,21 +73,44 @@ export class OtpService {
   }
 
   /**
-   * The market timing that governs this phone: the account's market where
-   * an account exists, the live market before one does (identity creation
-   * lands there too). Absent configuration fails closed.
+   * The market timing that governs this phone: the account's market where an
+   * account exists, and THE DEVICE'S market before one does -- which is the
+   * same market the account is about to be created in (ADU-RUL-03 S3).
+   *
+   * The second arm was `SELECT m.id FROM core.market m WHERE m.is_live LIMIT
+   * 1`: unordered, unconstrained, and answering a question nobody asked --
+   * which market a person belongs to. /v1/bootstrap is the only place that
+   * is decided now, and this reads its answer off the device.
+   *
+   * Absent configuration still fails closed, and so does an absent device:
+   * both leave the coalesce NULL, no row matches, and the caller gets a
+   * refusal rather than a guess.
    */
   private async timingFor(
     trx: Transaction<Database>,
     phone: string,
+    deviceId: string | null,
   ): Promise<TimingRow> {
+    // WHICH MARKET, resolved first and on its own, so the two ways of
+    // having no answer stay distinguishable. "This device has never
+    // bootstrapped" is the caller's to fix and gets a refusal naming the
+    // call to make; "this market has no configuration in force" is the
+    // deployment's and stays a 500, because no client action helps.
+    const m = await sql<{ market_id: string | null }>`
+      SELECT coalesce(
+        (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
+        (SELECT d.market_id FROM core.device d WHERE d.id = ${deviceId})
+      ) AS market_id`.execute(trx);
+    const marketId = result_first(m.rows)?.market_id ?? null;
+    if (!marketId) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+    }
+
     const r = await sql<TimingRow>`
       SELECT tc.otp_ttl::text AS otp_ttl, tc.otp_max_attempts
         FROM core.timing_config tc
        WHERE tc.effective @> now()
-         AND tc.market_id = coalesce(
-           (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
-           (SELECT m.id FROM core.market m WHERE m.is_live LIMIT 1))
+         AND tc.market_id = ${marketId}
        LIMIT 1`.execute(trx);
     const row = result_first(r.rows);
     if (!row) throw new AdulisException('INTERNAL');
@@ -162,9 +185,15 @@ export class OtpService {
       stepUpAction?: string;
       templateKey: string;
       extraSlots?: Record<string, string>;
+      /**
+       * The device this request speaks for. Required in practice only on the
+       * SIGN_IN path, which is the one that runs before an account exists;
+       * every other caller has an account and resolves through it.
+       */
+      deviceId?: string | null;
     },
   ): Promise<{ challengeId: string; expiresAt: Date; sms: SmsMessage }> {
-    const timing = await this.timingFor(trx, args.phone);
+    const timing = await this.timingFor(trx, args.phone, args.deviceId ?? null);
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);
 
     await sql`
@@ -207,9 +236,14 @@ export class OtpService {
    */
   async verifyCode(
     trx: Transaction<Database>,
-    args: { phone: string; purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION'; code: string },
+    args: {
+      phone: string;
+      purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION';
+      code: string;
+      deviceId?: string | null;
+    },
   ): Promise<OtpChallengeRow> {
-    const timing = await this.timingFor(trx, args.phone);
+    const timing = await this.timingFor(trx, args.phone, args.deviceId ?? null);
 
     // No FOR UPDATE here: the attempt counter writes on a second
     // connection (burnAttempt), and a row lock held by this transaction
@@ -308,7 +342,10 @@ export class OtpService {
     if (!row || row.consumed_at) throw new AdulisException('OTP_INVALID');
     if (new Date() > row.expires_at) throw new AdulisException('OTP_EXPIRED');
 
-    const timing = await this.timingFor(trx, row.phone_e164);
+    // No device here, and none needed: this path verifies a challenge by id
+    // for step-up and deletion, which both require an existing account, so
+    // the first arm of the coalesce always resolves.
+    const timing = await this.timingFor(trx, row.phone_e164, null);
     if (row.attempt_count >= timing.otp_max_attempts) {
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }
