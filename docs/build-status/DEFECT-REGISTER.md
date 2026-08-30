@@ -1050,6 +1050,25 @@ Response:  the reachable trigger is REMOVED; the underlying lookup is NOT change
 Action:    ops/scripts/seed.mjs now writes its market with is_live = false and re-asserts that on every run, so a database seeded by the earlier version corrects itself. That is sound because both live-market lookups are fallbacks used only when a phone has NO account, and the seed creates its account outright. The unordered SELECT itself is untouched: making it deterministic is a change to how every future account is assigned, which is a ruling, not a cleanup.
 Ruling needed: whether more than one live market is legal. If NO, a partial unique index (`CREATE UNIQUE INDEX ... ON core.market ((true)) WHERE is_live`) makes the LIMIT 1 honest and turns a silent misassignment into a constraint violation. If YES, both lookups need a deterministic ORDER BY and a documented rule for which live market a new account joins -- and "the first one the planner returns" cannot be it.
 
+### D-105 - NODE_ENV=production is set nowhere, so every guard on it was a no-op
+
+Severity:  MAJOR (a class, not an instance; the [FAKE SMS] leak was one member of it)
+Phase:     T8 - 1
+Source:    ADU-RUL-03 S1, which names this finding and rules on it. ops/render.yaml does not exist (D-80), so nothing in this repository sets NODE_ENV=production -- and every `NODE_ENV === 'production'` check was therefore a no-op, INCLUDING WORK ORDER T7 S3.2's own rule that each fake adapter must refuse to run in production
+Found by:  the CEO, generalising from the [FAKE SMS] defect T7 Phase 5 found
+Effect:    Two halves. (1) console.warn bypasses Pino's redaction allow-list entirely, so ADU-CON-02 S20.2's guarantee -- fields are logged because they were named -- held only for code that used the logger, and nothing stopped any module writing a phone number and a live OTP to stdout. The allow-list was a control over one code path described as a control over logging. (2) A guard on an environment nobody sets is not a guard: the rule was true as written and false in effect, and the permissive default it fell through to was "print OTP codes".
+Response:  BUILT (T8 Phase 1, 6b082eb)
+Action:    A lint rule bans bare console.* in apps/api, proven by planting one. NODE_ENV is asserted at a boundary: common/env.ts reads it once, validates it against a closed set and refuses to start if it is unset or unrecognised, in BOTH entrypoints; call sites consult the memoised value rather than process.env. The fake-adapter refusal T7 S3.2 wrote is provable for the first time. D-106 records the ADU-CON-02 S13 deviation this forced; D-107 records the sweep of every other guard.
+Ruling needed: none -- ADU-RUL-03 S1 is the ruling.
+
+WRITTEN LATE, AND OUT OF ORDER, AND THAT IS THE POINT. This entry did not exist
+until T8-R. ADU-RUL-03 S1 is titled after it, DOCUMENT_AUTHORITY.md cites it,
+T8 Phase 1 was built to discharge it, and the register had no D-105 -- a number
+cited in two documents and resolving to nothing, which is D-56's complaint in
+its original direction. It is inserted at its numeric position rather than
+appended, because a reader who follows the citation looks for the number, not
+for the date it was written.
+
 ### D-106 - ADU-CON-02 S13's promise that the local SMS adapter prints OTPs to the terminal is no longer implementable
 
 Severity:  MINOR (a deviation from an installed document, taken deliberately and recorded here rather than kept quietly)
@@ -1236,3 +1255,24 @@ Effect:    The commit claimed the gate worked "like the contract gate". It did n
 Response:  FIXED
 Action:    The gate restores the file it read before failing. Red stays red across runs, and the fix has to be made deliberately.
 Ruling needed: none.
+### D-123 - No adversarial review was ever committed, and the register cites their findings
+
+Severity:  MAJOR (the evidence for a large part of this register does not exist in the tree)
+Phase:     T8-R
+Source:    `git log --diff-filter=A -- docs/build-status` lists ten files and no review; `git log --diff-filter=A` repo-wide matches no path containing "review" but the skills pack, the reviews module, migration 0014 and SECURITY-REVIEW.md; docs/build-status/reviews/ did not exist
+Found by:  WORK ORDER T8-R, which asked the question
+Effect:    Every adversarial pass this project has run -- the primary review control since T7 S0, and the thing that found the console bundle that never booted, the enumeration oracle, the gate defeated by deleting a comment -- lived in a session and vanished with it. The register cites their findings by number; the evidence for each, the measured tables and response codes and byte offsets, existed nowhere a reader could reach. This is D-56 from the other side: D-56 is a citation pointing at no entry, this was an entry pointing at no evidence. It also means nobody can audit a review's REASONING, only its outcome -- and two of those reviews were wrong in ways a later pass caught, which is exactly the case where reasoning matters.
+Response:  FIXED forward, and back-filled as far as the tree allows
+Action:    docs/build-status/reviews/ is the convention (T8-R S3): a review lands as a committed artifact, written before the fixes it prompts, naming the ref it ran against, and every register entry it produces cites it by path. Four T7 reviews were recovered VERBATIM from run artifacts that happened to survive on disk (Phase 1's six reviewers, Phase 3, Phase 4, Phase 5's four skeptic verdicts). Six more are stubs recording what was found, which commit applied it and which entries it produced, each stating plainly that the text is lost. No stub reconstructs a reviewer's reasoning: a fabricated review is worse than a missing one, because the next reader cannot tell.
+Ruling needed: none. The convention is stated in docs/build-status/reviews/README.md and holds from T8 Phase 5 onward.
+
+### D-124 - main's full local test run is intermittently red, and the fix is on an unmerged branch
+
+Severity:  MINOR (test infrastructure; CI is unaffected, which is why it went unnoticed)
+Phase:     T8-R
+Source:    the OTP rate limiter's IP-keyed buckets (otp-request-ip, 10/hour) are shared by every suite, because every suite comes from the same address; jest runs suites in parallel
+Found by:  T8-R, running the full suite on main while auditing the records
+Effect:    On main at 9fad3d7 a full `npx jest` run failed two tests -- one in each T8 suite, both OTP-dependent -- while each suite passed in isolation. Purging the two OTP buckets and re-running gave 455/455. So the failure is contention DURING a run rather than leftover state, and it is intermittent: whichever suite happens to spend the tenth request in the hour sees a 429 about nothing. CI has not shown it, because CI starts from an empty database with different scheduling, which is exactly how a local-only flake survives.
+Response:  RECORDED here; already FIXED on the T8 Phase 4 branch
+Action:    Phase 4 (PR #28, unmerged at the time of writing) adds a per-test purge of those two buckets to both T8 suites, with the reasoning that nothing asserts them -- the 429s that ARE asserted belong to the probe endpoint, the per-challenge attempt counter and the courier-invite bucket. Merging #28 removes the flake from main. Nothing is done here, because T8-R is a records order and this is a code change.
+Ruling needed: none for the flake. The underlying shape is D-114's: an IP is the wrong subject when every caller shares one, and that is true of the tests for the same reason it is true behind a carrier NAT.
