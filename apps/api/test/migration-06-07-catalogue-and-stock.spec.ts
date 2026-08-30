@@ -135,6 +135,16 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
           await c.query('DELETE FROM core.stock_event WHERE variant_id = $1', [r.variant]);
           await c.query('DELETE FROM core.product_variant WHERE id = $1', [r.variant]);
           await c.query('DELETE FROM core.product WHERE id = $1', [r.product]);
+          // A TRIGGER MADE THIS ROW, SO THE TEARDOWN HAS TO KNOW ABOUT IT.
+          // 0010:191 `trg_create_public_stats` fires AFTER INSERT ON core.seller
+          // and writes one core.seller_public_stats row, whose seller_id is
+          // `REFERENCES core.seller(id)` with no ON DELETE (0010:156). Under
+          // replica the FK is not enforced either, so the first version of this
+          // teardown deleted the seller and left the stats row pointing at
+          // nothing -- one orphan per run, measured at 1 before this line
+          // existed. Deleting what you created means what your INSERT caused,
+          // not only what your INSERT named.
+          await c.query('DELETE FROM core.seller_public_stats WHERE seller_id = $1', [r.seller]);
           await c.query('DELETE FROM core.seller WHERE id = $1', [r.seller]);
           await c.query('DELETE FROM core.account WHERE id = $1', [r.account]);
           await c.query('DELETE FROM core.market WHERE id = $1', [r.market]);
@@ -292,15 +302,24 @@ describe('migrations 06-07 — catalogue, media, and the derived stock count', (
      * application would let both read 7, both write 1, and lose an event.
      *
      * This needs two real connections and committed rows, so it cleans up after
-     * itself rather than using the rollback helper — and it cannot delete the
-     * stock events it made, because they are append-only. It uses a variant of
-     * its own and leaves it, which is why the fixture ids differ.
+     * itself rather than using the rollback helper. It uses ids of its own,
+     * which is why they differ from the fixture's.
+     *
+     * It DOES delete its stock events, in `afterAll`, under
+     * `session_replication_role = replica` -- which is the only way, because
+     * they are append-only and the trigger raises on DELETE for every role.
+     * This comment previously said the opposite, and said it four lines above
+     * the code that does it (T8-C S2, adversarial pass): a stale justification
+     * is worse than none, because it is what a later reader reaches for when
+     * removing the `replica` line as an unnecessary sledgehammer.
      */
     it('lets exactly one decrement win, and never goes negative', async () => {
-      // FRESH IDS EVERY RUN. The first version of this test reused fixed ones
-      // and could not run twice: its own stock events are append-only, so the
-      // variant they reference cannot be deleted, and the second run collided
-      // on the primary key. The fixture is small and left behind deliberately.
+      // FRESH IDS EVERY RUN. The first version reused fixed ones and could not
+      // run twice: nothing deleted its rows, so the second run collided on the
+      // primary key. Fresh ids fixed the collision and turned the collision
+      // into a leak instead -- 179 markets by T8-C. `afterAll` now deletes
+      // every row recorded in raceRows, so both problems are closed; the ids
+      // stay fresh because two runs may still overlap in CI.
       const uniq = await pool.query('SELECT gen_random_uuid() AS a, gen_random_uuid() AS b, ' +
         'gen_random_uuid() AS c, gen_random_uuid() AS d, gen_random_uuid() AS e');
       const rm = uniq.rows[0].a as string;

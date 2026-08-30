@@ -109,3 +109,82 @@ decides the guard is sufficient.
 - **`--env-file-if-exists` rather than `--env-file`.** CI has no `.env`;
   `--env-file` would fail every properly-configured machine. This is the
   reasoning `install-worker-schema.mjs` already carries.
+
+---
+
+# Second round -- run against 99c49a6, after the first round's fixes
+
+Fifteen agents re-read this branch under a refute-by-default protocol: a
+finding survived only if every verifier independently failed to refute it.
+Three survived here.
+
+## R1 -- BLOCKER -- the teardown left the row a trigger made for the seller
+
+`core.seller_public_stats.seller_id` is `uuid PRIMARY KEY REFERENCES
+core.seller(id)` with no `ON DELETE` (0010:155-156), and
+`trg_create_public_stats` (0010:191) writes one row per seller AFTER INSERT.
+
+`session_replication_role = replica` suppresses the foreign key's
+referential-integrity triggers along with the append-only one -- so
+`DELETE FROM core.seller` succeeded and left the stats row pointing at
+nothing.
+
+**Verified independently before acting on it**, by querying every one of the
+98 single-column foreign keys into `core.seller/account/market/product/
+product_variant` for rows whose parent is gone. Exactly one orphan, in
+`seller_public_stats`.
+
+The first teardown did not close D-128's leak so much as change its shape:
+from a tree of live rows to one orphan per run, in a table read on every
+storefront page load. Worse in one respect -- a leaked market is visible as a
+market; an orphaned stats row is visible only to a query nobody runs.
+
+**Verdict: CONFIRMED and FIXED** (D-134). Proven by measurement: orphan
+cleared, suite 25/25, count stayed at 0 where it had grown by one per run.
+
+## R2 -- MINOR -- two comments said the opposite of what the file now does
+
+Lines 295-297 still read "it cannot delete the stock events it made, because
+they are append-only. It uses a variant of its own and leaves it", and line
+303 "The fixture is small and left behind deliberately" -- four lines from an
+`afterAll` that deletes exactly those stock events.
+
+Two reviewers raised this independently, and both landed on the same reason
+it matters: the surviving text is not merely stale, it is the justification a
+later reader would use to remove the `replica` line as an unnecessary
+sledgehammer, or to reinstate fixed fixture ids. **Verdict: CONFIRMED and
+FIXED.**
+
+## R3 -- MAJOR, pre-existing -- market deletes under replica orphan devices
+
+Ten suites end with `DELETE FROM core.market` under `replica`.
+`core.device.market_id` references it. Measured: **6 orphaned device rows
+before a full run, 9 after** -- three per run.
+
+This corrects D-128, which recorded those three rows as harmless residue.
+They are not merely unclaimed; they point at markets that no longer exist.
+**Verdict: CONFIRMED, recorded as D-135, not fixed here** -- the fix is an
+untested edit to ten suites this branch does not otherwise touch.
+
+## Refuted, and worth recording as refuted
+
+Twelve further findings were raised and did not survive. Three are worth
+naming because they look right:
+
+- *"the replica setting leaks to other tests"* -- refuted: `SET` without
+  `LOCAL` is session-scoped, the connection is released in `finally`, and no
+  other test observes it.
+- *"`DATABASE_URL_MIGRATE` fails on a virgin volume because `adulis_migrate`
+  has no LOGIN"* -- true of the repository, and not a defect of this PR:
+  nothing in the diff causes, introduces or worsens it.
+- *"db:reset's host allow-list can be defeated"* -- only by a port-forward,
+  which the header already says in as many words.
+
+## One unexplained red
+
+A full `pnpm --filter @adulis/api test` run exited 1 during this round
+**without its output being captured**, and three consecutive runs
+immediately after passed 459/459. The failing test is therefore not named
+here, because it is not known. It is recorded rather than omitted: D-124's
+class (shared rate-limit buckets) is the standing candidate, and an
+intermittent red that nobody writes down is one nobody looks for.

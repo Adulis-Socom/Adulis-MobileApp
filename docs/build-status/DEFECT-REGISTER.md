@@ -1344,3 +1344,25 @@ Effect:    An unset `NODE_ENV` proceeded. So did `staging`, `prod`, and any typo
 Response:  FIXED
 Action:    Inverted to an allow-list: `RESETTABLE = ['development', 'test']`, and anything else -- including unset -- exits 2 naming what it saw. PROVEN both ways: `NODE_ENV=staging` gives "NODE_ENV is 'staging'; this script runs only under development or test"; running with `NODE_ENV` unset and `DATABASE_URL_MIGRATE` supplied by hand gives "NODE_ENV is unset". The same pass produced three smaller fixes, recorded in the review rather than here: `before:` and `after:` printed different units under paired labels (F3); a `DATABASE_URL_JOBS` set without a password silently received the app role's (F4); and the header called the host check "the only thing between it and a database somebody cares about", which oversells a guard a port-forward defeats (F5).
 Ruling needed: none.
+
+### D-134 - The teardown deleted the seller and left behind the row a trigger had made for it
+
+Severity:  BLOCKER (referential corruption in the development database, introduced by the fix for D-128)
+Phase:     T8-C
+Source:    apps/api/test/migration-06-07-catalogue-and-stock.spec.ts, the `afterAll` added in this PR. `core.seller_public_stats.seller_id` is `uuid PRIMARY KEY REFERENCES core.seller(id)` with no ON DELETE (0010:155-156), and `trg_create_public_stats` (0010:191) writes one row per seller AFTER INSERT
+Found by:  the T8-C S2 adversarial pass, second round -- docs/build-status/reviews/T8-C-S2-db-reset-and-the-test-leak.md, run against 719f448 and 99c49a6
+Effect:    MEASURED, not supposed. `session_replication_role = replica` suppresses the foreign key's referential-integrity triggers along with the append-only one, so `DELETE FROM core.seller` succeeded and left the stats row pointing at a seller that no longer exists. A query across all 98 single-column foreign keys into core.seller/account/market/product/product_variant found exactly one such row. The first teardown therefore did not close D-128's leak so much as change its shape: from a whole tree of live rows to one orphan per run, in a table read on every storefront page load. It is worse than what it replaced in one respect -- a leaked market is visible as a market, and an orphaned stats row is visible only to a query nobody runs.
+Response:  FIXED
+Action:    `DELETE FROM core.seller_public_stats WHERE seller_id = $1` before the seller, with the reasoning in the code: deleting what you created means what your INSERT CAUSED, not only what your INSERT named. Proven by measurement: the pre-existing orphan was removed, the suite ran 25/25, and the orphan count stayed at 0 -- where before the fix it grew by one per run. The two comments four lines apart that still said the test "cannot delete the stock events it made" and that "the fixture is small and left behind deliberately" are corrected in the same commit; they were the justification a later reader would have used to remove the `replica` line.
+Ruling needed: none.
+
+### D-135 - Suites delete their market under replica, orphaning devices other suites minted
+
+Severity:  MAJOR (pre-existing; the same class as D-134 and not introduced by it)
+Phase:     T8-C
+Source:    roughly twenty suites take the same teardown shape -- `SET session_replication_role = replica`, delete, `SET ... DEFAULT` -- and ten of them end with `DELETE FROM core.market WHERE id = ...` (c1..c8, e1, e2-e6). `core.device.market_id` references `core.market(id)`
+Found by:  T8-C S2, checking every foreign key for orphans after fixing D-134
+Effect:    MEASURED: 6 orphaned `core.device` rows before a full suite run and **9 after** -- three per run, growing. These are the same three unclaimed device rows D-128 recorded as harmless residue, which is the correction this entry makes to that one: they are not merely unclaimed, they point at markets that no longer exist. The mechanism is D-134's exactly -- replica mode suppresses the FK triggers as well as the append-only one, so a market delete that would have been refused succeeds and leaves the reference dangling. Which suite orphans which device is NOT established here: it would need a run instrumented per suite, and attributing it without that would be a guess in a register entry.
+Response:  RECORDED, not fixed
+Action:    None in this PR, deliberately. The fix is a teardown change in ten suites this PR does not otherwise touch, and an untested edit to ten files does not belong in a branch whose subject is a leak in one. What this PR does contribute is the method: after any teardown that runs under `replica`, check every foreign key into the tables it deleted from, because the setting that lets the delete succeed is the same setting that stops the database telling you it should not have.
+Ruling needed: none. It is buildable work: either each suite deletes its dependents by id, or the shared teardown becomes a helper that does it once and correctly.
