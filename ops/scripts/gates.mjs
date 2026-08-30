@@ -204,6 +204,22 @@ const GATES = [
       ['git', 'diff', '--exit-code', 'HEAD', '--', ...CONTRACT_PATHS],
     ],
   },
+
+  /**
+   * APPENDED, NOT INSERTED, and that is the finding rather than the fix.
+   *
+   * Slotting this in beside the other console gates renumbered five live
+   * references -- including ADU-RUL-03 S5.2's own "Gates 17 and 18 inspect
+   * the bundle", in a governed document this repository does not edit. A list
+   * whose positions are cited elsewhere is append-only in practice, whatever
+   * its shape suggests.
+   *
+   * Nothing in CI touched MT-KEYS.md, so it drifted from en.ts silently --
+   * and did, inside one work order. It also carries the HUMAN-REQUIRED gate
+   * (ADU-RUL-03 S4), a rule about what may NOT be machine-translated, which
+   * is exactly the kind of rule that wants a machine to check it.
+   */
+  { id: 'mt-keys', title: 'The translation work list is current and the HUMAN-REQUIRED gate holds', cmd: ['pnpm', 'verify:mt-keys'] },
 ];
 
 if (process.argv.includes('--list')) {

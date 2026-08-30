@@ -36,6 +36,13 @@ export function SignIn() {
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('+251');
   const [remember, setRemember] = useState(false);
+  /**
+   * ADU-RUL-03 S4: an EXPLICIT AFFIRMATIVE ACT, never pre-checked. `false`
+   * is the initial state and there is no code path that sets it without a
+   * person clicking -- a box that arrives ticked is not a declaration.
+   */
+  const [ageDeclared, setAgeDeclared] = useState(false);
+  const [ageRefused, setAgeRefused] = useState(false);
   const [code, setCode] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<ApiError | null>(null);
@@ -110,6 +117,10 @@ export function SignIn() {
 
   const verify = async () => {
     setProblem(null);
+    // Cleared per ATTEMPT, not on success. Left standing, the refusal
+    // sentence rendered underneath the NEXT error -- so an expired code read
+    // as "You cannot create an account at this time."
+    setAgeRefused(false);
     if (!/^\d{6}$/.test(code)) {
       setFieldErrors({ code: en['console.signin.code_invalid'] });
       return;
@@ -128,6 +139,15 @@ export function SignIn() {
           // /v1/bootstrap minted, which this code cannot read and the server
           // reads for itself. Sending one would be ignored anyway.
           remember_device: remember,
+          /**
+           * Sent only when TRUE, and only because a person ticked it. The
+           * server ignores it for an account that already exists and refuses
+           * identity creation without it (ADU-AUTH-01 S13), so the console
+           * does not need to know -- and must not: asking the server whether
+           * this phone is new, in order to decide whether to show the box,
+           * would be an account-enumeration oracle (S22).
+           */
+          age_declared_over_18: ageDeclared ? true : undefined,
         },
       });
       void r;
@@ -135,11 +155,20 @@ export function SignIn() {
       // checkbox: remembered-ness is decided by the device cookie the server
       // received, and the verify response carries neither that nor the
       // session id that signing out needs.
+      setAgeRefused(false);
       await refresh();
       const from = (location.state as { from?: string } | null)?.from;
       nav(from && from !== '/sign-in' ? from : '/', { replace: true });
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        // The server names the field it refused on. This is the only place
+        // that sentence belongs, and it is quoted rather than composed.
+        if (e.problem.slots?.['path'] === 'age_declared_over_18') {
+          setAgeRefused(true);
+        } else {
+          setProblem(e);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -225,6 +254,30 @@ export function SignIn() {
               {fieldErrors['code']}
             </p>
           ) : null}
+
+          {/*
+            The declaration sits on the step that CREATES the account, and is
+            shown to everyone: the console cannot ask whether this phone is
+            already known without turning the form into an enumeration oracle.
+            An existing seller leaves it alone and signs in; a new one cannot
+            proceed without it, which is the whole control (ADU-RUL-03 S4).
+          */}
+          <div className="remember">
+            <input
+              id="signin-age"
+              type="checkbox"
+              checked={ageDeclared}
+              onChange={(e) => setAgeDeclared(e.target.checked)}
+              aria-describedby={ageRefused ? 'signin-age-refused' : undefined}
+            />
+            <label htmlFor="signin-age">{en['console.signin.age_declaration']}</label>
+          </div>
+          {ageRefused ? (
+            <p id="signin-age-refused" className="field-error" role="alert">
+              {en['console.signin.age_refused']}
+            </p>
+          ) : null}
+
           <button type="submit" aria-busy={busy}>
             {en['console.signin.verify_button']}
           </button>
@@ -241,6 +294,15 @@ export function SignIn() {
               setStep('phone');
               setCode('');
               setProblem(null);
+              // A different number is a different person until proven
+              // otherwise: the declaration does not travel with the form.
+              // Leaving `ageDeclared` set carried a TICKED box to the next
+              // number's code step, which is the one thing ADU-RUL-03 S4
+              // names -- never pre-checked -- and leaving `ageRefused` set
+              // showed the refusal before that number had been submitted at
+              // all.
+              setAgeDeclared(false);
+              setAgeRefused(false);
               // A different number is a DIFFERENT request. Reusing the key
               // made the server compare body hashes and answer 409
               // IDEMPOTENCY_KEY_REUSED -- "This retry key was already used

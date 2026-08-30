@@ -173,6 +173,15 @@ export const en = {
   'console.shell.signed_in': 'Signed in',
   'console.signin.phone_label': 'Phone number',
   'console.signin.phone_invalid': 'Enter your phone number with the country code, like +251911234567.',
+  /**
+   * ADU-RUL-03 S4, VERBATIM. This is an attestation a person is legally
+   * bound by, not product copy: it is not paraphrased, not shortened for a
+   * narrow screen, and not machine-translated (see MT-KEYS.md's
+   * HUMAN-REQUIRED list). Changing a word here changes what someone swore.
+   */
+  'console.signin.age_declaration': 'I confirm that I am 18 years of age or older.',
+  'console.signin.age_refused':
+    'Adulis is available to people aged 18 and over. You cannot create an account at this time.',
   'console.signin.remember_label': 'Remember this device',
   'console.signin.remember_help': 'This device stays signed in for a week; anything touching money still asks for a code.',
   'console.signin.request_button': 'Send me a code',
