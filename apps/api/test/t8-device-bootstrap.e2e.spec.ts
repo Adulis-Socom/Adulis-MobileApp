@@ -192,6 +192,24 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     return r;
   };
 
+  /**
+   * The OTP buckets are keyed by IP, and every suite in this repository comes
+   * from the same one -- so a file that legitimately makes several OTP
+   * requests spends a budget the others are also drawing on, and whichever
+   * suite runs last sees a 429 that has nothing to do with its subject. This
+   * file frees them before each test.
+   *
+   * Safe because nothing asserts these two buckets: the 429s that ARE
+   * asserted live on the probe endpoint (pipeline), the per-challenge attempt
+   * counter (c6) and the courier-invite bucket (t6). The real fix is a
+   * per-caller subject rather than an IP, which is D-114's territory and a
+   * deployment question.
+   */
+  beforeEach(async () => {
+    await admin.query(`DELETE FROM core.rate_limit_bucket
+       WHERE bucket_key IN ('otp-request','otp-request-ip')`);
+  });
+
   it('a fresh browser is issued a device it did not choose, with the __Host- flags', async () => {
     const res = await boot().expect(200);
     const raw = rawCookie(res, '__Host-adulis_browser');

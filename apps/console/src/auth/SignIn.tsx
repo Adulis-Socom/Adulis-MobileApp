@@ -117,6 +117,10 @@ export function SignIn() {
 
   const verify = async () => {
     setProblem(null);
+    // Cleared per ATTEMPT, not on success. Left standing, the refusal
+    // sentence rendered underneath the NEXT error -- so an expired code read
+    // as "You cannot create an account at this time."
+    setAgeRefused(false);
     if (!/^\d{6}$/.test(code)) {
       setFieldErrors({ code: en['console.signin.code_invalid'] });
       return;
@@ -290,6 +294,15 @@ export function SignIn() {
               setStep('phone');
               setCode('');
               setProblem(null);
+              // A different number is a different person until proven
+              // otherwise: the declaration does not travel with the form.
+              // Leaving `ageDeclared` set carried a TICKED box to the next
+              // number's code step, which is the one thing ADU-RUL-03 S4
+              // names -- never pre-checked -- and leaving `ageRefused` set
+              // showed the refusal before that number had been submitted at
+              // all.
+              setAgeDeclared(false);
+              setAgeRefused(false);
               // A different number is a DIFFERENT request. Reusing the key
               // made the server compare body hashes and answer 409
               // IDEMPOTENCY_KEY_REUSED -- "This retry key was already used

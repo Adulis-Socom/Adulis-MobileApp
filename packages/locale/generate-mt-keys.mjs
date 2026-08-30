@@ -25,26 +25,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { markedHumanRequired } from './mt-keys-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const en = await readFile(path.join(here, 'src', 'en.ts'), 'utf8');
 const am = await readFile(path.join(here, 'src', 'am.ts'), 'utf8');
 const keys = [...en.matchAll(/^ {2}'([^']+)':/gm)].map((m) => m[1]);
 
-/**
- * A key is HUMAN-REQUIRED when its am.ts entry carries the marker. The value
- * may span lines, so the marker is looked for anywhere between this key and
- * the next one.
- */
-const amKeyPositions = [...am.matchAll(/^ {2}'([^']+)':/gm)];
-const humanRequired = new Set();
-for (let i = 0; i < amKeyPositions.length; i += 1) {
-  const start = amKeyPositions[i].index ?? 0;
-  const end = i + 1 < amKeyPositions.length ? (amKeyPositions[i + 1].index ?? am.length) : am.length;
-  if (am.slice(start, end).includes('HUMAN-REQUIRED')) {
-    humanRequired.add(amKeyPositions[i][1]);
-  }
-}
+// One reader for both this file and the gate (mt-keys-lib.mjs).
+const humanRequired = new Set(markedHumanRequired(am));
 const mtKeys = keys.filter((k) => !humanRequired.has(k));
 const gated = keys.filter((k) => humanRequired.has(k));
 

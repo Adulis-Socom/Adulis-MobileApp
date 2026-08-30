@@ -153,6 +153,24 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     await app.close();
   });
 
+  /**
+   * The OTP buckets are keyed by IP, and every suite in this repository comes
+   * from the same one -- so a file that legitimately makes several OTP
+   * requests spends a budget the others are also drawing on, and whichever
+   * suite runs last sees a 429 that has nothing to do with its subject. This
+   * file frees them before each test.
+   *
+   * Safe because nothing asserts these two buckets: the 429s that ARE
+   * asserted live on the probe endpoint (pipeline), the per-challenge attempt
+   * counter (c6) and the courier-invite bucket (t6). The real fix is a
+   * per-caller subject rather than an IP, which is D-114's territory and a
+   * deployment question.
+   */
+  beforeEach(async () => {
+    await admin.query(`DELETE FROM core.rate_limit_bucket
+       WHERE bucket_key IN ('otp-request','otp-request-ip')`);
+  });
+
   it('a new identity joins the market its DEVICE was placed in, not "a live one"', async () => {
     // The device is placed in MB by hand -- which is what /v1/bootstrap does,
     // and doing it explicitly is what makes the assertion mean something: MA
@@ -338,6 +356,59 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     expect(none.rowCount).toBe(0);
   });
 
+  it('a refusal does NOT burn the code: the same one works once the box is ticked', async () => {
+    /**
+     * The declaration is checked AFTER verifyCode has consumed the challenge,
+     * which would be a nasty little defect on its own -- a person who did not
+     * tick the box would have to ask for a new code, and would not be told
+     * why. It is not one, because the whole verify runs in ONE transaction
+     * and the refusal rolls the consume back. That is worth an assertion
+     * rather than an argument: it depends on a transaction boundary two files
+     * away, and nothing else states it.
+     */
+    const device = randomUUID();
+    devices.push(device);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [device, MA],
+    );
+    const phone = '+251911998022';
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, purpose: 'SIGN_IN' })
+      .expect(202);
+    const code = sms.lastTo(phone)?.slots['code'] as string;
+
+    // Refused: no declaration.
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, code, audience: 'MOBILE', device_id: device })
+      .expect(400);
+
+    const still = await admin.query(
+      `SELECT consumed_at FROM core.otp_challenge WHERE phone_e164 = $1 ORDER BY created_at DESC LIMIT 1`,
+      [phone],
+    );
+    expect(still.rows[0].consumed_at).toBeNull();
+
+    // The SAME code, now with the declaration.
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Idempotency-Key', randomUUID())
+      .set('X-Adulis-Device', device)
+      .send({ phone, code, audience: 'MOBILE', device_id: device, age_declared_over_18: true })
+      .expect(200);
+
+    const acct = await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [phone]);
+    expect(acct.rowCount).toBe(1);
+    accounts.push(acct.rows[0].id as string);
+  });
+
   it('the declaration is RECORDED, not just checked', async () => {
     const device = randomUUID();
     devices.push(device);
@@ -376,6 +447,72 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     expect(row.rows[0].age_declared_over_18).toBe(true);
     expect(row.rows[0].age_declared_at).not.toBeNull();
     accounts.push(row.rows[0].id as string);
+  });
+
+  it('the CONSOLE shape works too: cookie device, no device_id, declaration ticked', async () => {
+    /**
+     * Every other age test here uses the MOBILE shape -- a body device_id --
+     * because that is the easy one to write. The console sends neither: its
+     * device is the httpOnly cookie /v1/bootstrap minted, and its declaration
+     * rides the same request. That is the path a person actually takes to
+     * become a seller, and until now nothing exercised it.
+     */
+    const boot = await request(app.getHttpServer())
+      .get('/v1/bootstrap')
+      .set('X-Adulis-Client', 'web/9.9.9')
+      .expect(200);
+    const raw = boot.headers['set-cookie'] as unknown as string[];
+    const line = raw.find((c) => c.startsWith('__Host-adulis_browser='));
+    expect(line).toBeTruthy();
+    const browser = (line as string).split('=', 2)[1]?.split(';')[0] as string;
+    devices.push(browser);
+    const cookie = `__Host-adulis_browser=${browser}`;
+    const phone = '+251911998023';
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/request')
+      .set('Origin', CONSOLE_ORIGIN)
+      .set('X-Adulis-Client', 'web/9.9.9')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cookie)
+      .send({ phone, purpose: 'SIGN_IN' })
+      .expect(202);
+    const code = sms.lastTo(phone)?.slots['code'] as string;
+
+    // Without the declaration: refused, and the account is not created.
+    await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Origin', CONSOLE_ORIGIN)
+      .set('X-Adulis-Client', 'web/9.9.9')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cookie)
+      .send({ phone, code, audience: 'CONSOLE' })
+      .expect(400);
+    expect((await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [phone])).rowCount).toBe(0);
+
+    // With it: signed in, on the cookie's device, with the confirmation stored.
+    const ok = await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('Origin', CONSOLE_ORIGIN)
+      .set('X-Adulis-Client', 'web/9.9.9')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cookie)
+      .send({ phone, code, audience: 'CONSOLE', age_declared_over_18: true })
+      .expect(200);
+    expect((ok.body as { token?: string }).token).toBeUndefined();
+
+    const acct = await admin.query(
+      `SELECT id, age_declared_over_18, age_declared_at, market_id FROM core.account WHERE phone_e164 = $1`,
+      [phone],
+    );
+    expect(acct.rowCount).toBe(1);
+    accounts.push(acct.rows[0].id as string);
+    expect(acct.rows[0].age_declared_over_18).toBe(true);
+    expect(acct.rows[0].age_declared_at).not.toBeNull();
+
+    const bound = await admin.query(`SELECT account_id, platform::text AS p FROM core.device WHERE id = $1`, [browser]);
+    expect(bound.rows[0].account_id).toBe(acct.rows[0].id);
+    expect(bound.rows[0].p).toBe('WEB');
   });
 
   it('the auth path chooses no market of its own: only bootstrap does', async () => {
