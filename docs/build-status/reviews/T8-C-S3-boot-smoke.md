@@ -71,6 +71,14 @@ at the console harness still owed at C-3.
   quietly test an unprotected page. Measured: the console mounts under the
   full production policy with **zero** violations, which nothing in CI had
   previously established.
+
+  **Corrected in the second round (D-138):** the reason given for those zero
+  violations was wrong. This section said the sign-in page makes no API call
+  until a person acts; it makes two on mount. The real reason is that CI
+  builds without `VITE_API_BASE_URL`, so the base-URL resolver throws before
+  `fetch`. `connect-src` is therefore not exercised by this gate, and the
+  claim that the policy and the bundle "meet" here holds only for load-time
+  directives.
 - **Path traversal.** `path.resolve(DIST, rel)` plus a `startsWith`
   containment check; `new URL()` has already normalised `..` segments. A
   traversal falls back to `index.html` rather than reading outside `dist`.
@@ -83,3 +91,61 @@ at the console harness still owed at C-3.
   `#root has 0 children`, `uncaught error: Uncaught Error: VITE_SMOKE_BREAK:
   deliberate module-scope throw`, and the flag leak -- exit 1. Rebuilt
   normally: three PASSes, exit 0.
+
+---
+
+# Second round -- fifteen agents, refute-by-default
+
+A finding survived only where every verifier independently failed to refute
+it. Four were raised against this branch; two survived, and both are real.
+
+## R1 -- MAJOR -- the gate reintroduced D-93
+
+Raised independently by two reviewers. `boot-smoke` was registered as a plain
+`cmd` entry shelling straight at `verify-boot-smoke.mjs`, whose first
+statement exits 1 on an absent `apps/console/dist`.
+
+Under a scoped CI run -- a backend-only PR, the exact shape of PR #22 -- the
+`build` gate correctly does not select `@adulis/console`, `dist` is
+gitignored, and the two console gates above pass with the scope note via
+`consoleDistAbsent()`. This one would have failed the run.
+
+That is D-93 verbatim, reintroduced by the branch that added the gate, and
+reintroduced *because the new gate was a different shape from the two it sits
+beside*. A gate that inherits its neighbours' subject must inherit their
+contract.
+
+**Verdict: CONFIRMED and FIXED** (D-137). Now an `fn` gate,
+`assertConsoleBoots`. Proven by simulating a backend-only PR -- `dist` moved
+away, `ADULIS_SCOPE_FILTER='@adulis/api...' pnpm gates`:
+
+```
+--- [21] The built console actually mounts in a browser ---
+  PASS  console not selected by the scope filter (...dist\index.html absent)
+PASS  all 21 gates.
+exit 0
+```
+
+## R2 -- MAJOR -- the header's reason for zero CSP violations was false
+
+The header said the console "makes no API call until a person acts". It makes
+two on mount: `session.tsx:80-95` awaits `/bootstrap` then `/auth/sessions`,
+under a comment reading "FIRST CALL, ALWAYS".
+
+The real reason nothing is blocked is undisclosed and accidental: CI builds
+without `VITE_API_BASE_URL`, so `apiBase()` throws inside `resolveApiBaseUrl`
+before `fetch` is reached, and the app converts it to `ApiError('CONFIG')`.
+
+So `connect-src` is never exercised, and "the only place in CI where the
+policy and the bundle meet" is true only of load-time directives.
+
+**Verdict: CONFIRMED. The claim is fixed; the gap is recorded, not closed**
+(D-138) -- closing it needs a decision, not a patch.
+
+## Refuted
+
+- *"the break flag could survive with the literal string absent"* -- refuted:
+  Vite substitutes the flag at build time and the throw's message carries the
+  string, so a surviving throw carries a detectable string by construction.
+- *"the comment above ImportMetaEnv misleads a maintainer about CI"* --
+  refuted as prose-reading, with no failure scenario behind it.

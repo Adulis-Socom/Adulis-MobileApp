@@ -1277,7 +1277,7 @@ Response:  RECORDED here; already FIXED on the T8 Phase 4 branch
 Action:    Phase 4 (PR #28, unmerged at the time of writing) adds a per-test purge of those two buckets to both T8 suites, with the reasoning that nothing asserts them -- the 429s that ARE asserted belong to the probe endpoint, the per-challenge attempt counter and the courier-invite bucket. Merging #28 removes the flake from main. Nothing is done here, because T8-R is a records order and this is a code change.
 Ruling needed: none for the flake. The underlying shape is D-114's: an IP is the wrong subject when every caller shares one, and that is true of the tests for the same reason it is true behind a carrier NAT.
 
-### D-134 - Gates were cited by position, so the list could not be reordered and the records disagree about a number
+### D-136 - Gates were cited by position, so the list could not be reordered and the records disagree about a number
 
 Severity:  MINOR (records and maintainability; no runtime effect)
 Phase:     T8-C
@@ -1287,3 +1287,25 @@ Effect:    A position is not a name. `mt-keys` had to be APPENDED in T8 Phase 4 
 Response:  FIXED for every citation this repository owns; the governed documents keep the debt
 Action:    Five citations converted to gate ids: `deferred-values`, `no-unsafe-eval`, `production-react` (three sites) and `boot-smoke`. The rule is recorded above `const GATES` in ops/scripts/gates.mjs -- cite a gate by its id, never by its position -- and `pnpm gates --list` prints the ids. NOT edited: ADU-RUL-03 S5.2 (governed, and its "Gates 17 and 18" is still true because `mt-keys` and `boot-smoke` were both appended); DEFECT-REGISTER entries and docs/build-status reports (records of what was true when written, and this entry is the correction rather than a rewrite); docs/superseded and _superseded. ADU-DB-01's "gate 0 / gate 4" is a different subject entirely -- permission checks inside a function -- and is untouched.
 Ruling needed: ADU-RUL-03 S5.2 gains the gate ids at its next reissue, at which point the list stops being append-only for citation reasons and can be ordered by subject.
+
+### D-137 - The new gate reintroduced D-93: a backend-only PR would have gone red on an absent console dist
+
+Severity:  MAJOR (a false red in CI, on PRs with nothing wrong with them)
+Phase:     T8-C
+Source:    ops/scripts/gates.mjs registered `boot-smoke` as a plain `cmd` entry shelling at ops/scripts/verify-boot-smoke.mjs, whose first statement is `if (!existsSync(DIST/index.html)) process.exit(1)`
+Found by:  the T8-C S3 adversarial pass, second round -- two independent reviewers, then verified by re-reading the runner
+Effect:    CI runs `pnpm gates` with `ADULIS_SCOPE_FILTER`. On a PR whose diff selects nothing the console depends on -- db/ops/api/docs only, the exact shape of PR #22 -- the `build` gate correctly does not select @adulis/console, and apps/console/dist is gitignored, so no dist exists. `no-unsafe-eval` and `production-react` handle this: both route through `consoleDistAbsent()`, which under a scope filter passes WITH A NOTE. The third console gate did not, so it would have failed the run outright. That is D-93 verbatim -- "a red that teaches people the gate lies, which is the exact failure class the one-list convergence exists to prevent" -- reintroduced by the branch that added the gate, and reintroduced BECAUSE the new gate was a different shape from the two it sits beside.
+Response:  FIXED
+Action:    `boot-smoke` is now an `fn` gate, `assertConsoleBoots`, which calls `consoleDistAbsent(dist/index.html)` first and only then shells at the script -- the same shape as the two gates above it. PROVEN by simulating a backend-only PR: `apps/console/dist` moved away, `ADULIS_SCOPE_FILTER='@adulis/api...' pnpm gates` gave `PASS  console not selected by the scope filter (...index.html absent)` at gate 21 and `PASS  all 21 gates`, exit 0. Unscoped, an absent dist is still a hard fail, because an unscoped build always produces one.
+Ruling needed: none. The general lesson is in gates.mjs: a new gate over the console build inherits the scope contract of the ones beside it, or it is not the same kind of gate.
+
+### D-138 - boot-smoke does not exercise connect-src, and its header said the wrong reason why
+
+Severity:  MINOR (a limitation stated wrongly; the gate's load-time assertions are unaffected)
+Phase:     T8-C
+Source:    ops/scripts/verify-boot-smoke.mjs's header claimed zero CSP violations "because the sign-in page makes no API call until a person acts", and the S3 review repeated it
+Found by:  the T8-C S3 adversarial pass, second round
+Effect:    The console makes two API calls on mount: apps/console/src/auth/session.tsx:80-95 awaits `/bootstrap` then `/auth/sessions`, and its own comment reads "FIRST CALL, ALWAYS". No person has acted. The real reason nothing is blocked is that CI builds without `VITE_API_BASE_URL`, so `apiBase()` throws inside `resolveApiBaseUrl` BEFORE `fetch` is reached and the app turns it into an ApiError('CONFIG'). So `connect-src` -- the one directive in this policy constraining what the console does at RUNTIME rather than at load -- is never exercised, and the claim that this is "the only place in CI where the policy and the bundle meet" holds only for load-time directives. A gate that quietly benefits from a misconfiguration it does not name is this repository's recurring shape.
+Response:  the CLAIM is FIXED; the GAP is recorded, not closed
+Action:    The header and the review now state what is and is not exercised. Closing the gap needs a decision rather than a patch: exercising `connect-src` means building the console with a base URL and either standing an API up inside the gate or pointing it at an origin the policy forbids and asserting the violation fires. The second is cheap and tests the policy rather than the app, and it also means the gate would assert on a bundle nobody ships.
+Ruling needed: whether `boot-smoke` should build a second, throwaway bundle with `VITE_API_BASE_URL` set to a forbidden origin purely to prove `connect-src` blocks it -- or whether that belongs to the console harness owed at C-3.

@@ -11,10 +11,23 @@
  *
  * IT SERVES THE REAL SECURITY HEADERS. apps/console/dist/_headers is the
  * production policy (ADU-CON-02 v3.1 S3.9), and the smoke server replays its
- * `/*` block verbatim. A CSP that breaks the console is a boot failure, and
- * this is the only place in CI where the policy and the bundle meet. Measured
- * at the time of writing: the console mounts under the full policy with zero
- * violations, because the sign-in page makes no API call until a person acts.
+ * `/*` block verbatim. A CSP that breaks the console at LOAD time -- a
+ * blocked script, style, font or worker -- is a boot failure, and this gate
+ * catches it. Measured: zero violations.
+ *
+ * WHAT IT DOES NOT EXERCISE, and the first version of this comment got this
+ * wrong (D-138). It said the console "makes no API call until a person acts".
+ * It does: SessionProvider's mount effect calls `/bootstrap` and then
+ * `/auth/sessions`, and its own comment reads "FIRST CALL, ALWAYS". The
+ * reason no `connect-src` violation is measured is different and was
+ * undisclosed -- CI builds without VITE_API_BASE_URL, so `apiBase()` throws
+ * inside `resolveApiBaseUrl` BEFORE fetch is reached, the app converts it to
+ * an ApiError('CONFIG'), and no request is ever attempted.
+ *
+ * So `connect-src` -- the one directive in this policy that constrains what
+ * the console does at RUNTIME rather than at load -- is not tested here.
+ * Saying so is the point: a gate that quietly benefits from a misconfiguration
+ * it does not name is the class this repository keeps finding.
  *
  * THE ONE THING IT ADDS TO THE PAGE is `<script src="/__smoke.js">`, injected
  * after <head> so its handlers are installed before the deferred module

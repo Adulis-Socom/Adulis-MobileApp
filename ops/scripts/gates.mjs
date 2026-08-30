@@ -135,6 +135,33 @@ function assertNoUnsafeEval() {
  * connections S23 names as the binding performance constraint. A check
  * rather than a convention, because the build succeeds either way.
  */
+/**
+ * D-93 AGAIN, AND THIS TIME BEFORE IT SHIPPED. The first version of this gate
+ * was a plain `cmd` entry shelling straight at verify-boot-smoke.mjs, whose
+ * first statement exits 1 on an absent dist. Under a SCOPED run -- which is
+ * what CI does, ADULIS_SCOPE_FILTER in ci.yml -- a backend-only PR correctly
+ * does not select @adulis/console, dist is gitignored and therefore absent,
+ * and this gate would have failed a PR with nothing wrong with it.
+ *
+ * That is exactly D-93: "a red that teaches people the gate lies, which is
+ * the exact failure class the one-list convergence exists to prevent." The
+ * two console gates above already route through consoleDistAbsent(); a third
+ * console gate that did not was a regression of a registered defect,
+ * introduced by the branch that added it. Caught by an adversarial pass
+ * before merge (D-137).
+ *
+ * Unscoped -- every local `pnpm ci:local` -- an absent dist is still a hard
+ * fail, because an unscoped build always produces one.
+ */
+function assertConsoleBoots() {
+  const dist = path.join(root, 'apps', 'console', 'dist');
+  const absent = consoleDistAbsent(path.join(dist, 'index.html'));
+  if (absent) return absent;
+  return run(['pnpm', 'verify:boot-smoke'])
+    ? { ok: true, detail: 'the built console mounted under the production _headers policy' }
+    : { ok: false, detail: 'see the gate output above' };
+}
+
 function assertProductionReact() {
   const assets = path.join(root, 'apps', 'console', 'dist', 'assets');
   const absent = consoleDistAbsent(assets);
@@ -248,7 +275,7 @@ const GATES = [
    * the review that caught it did so by loading the page. This gate loads it,
    * under the production _headers policy, and asserts #root has children.
    */
-  { id: 'boot-smoke', title: 'The built console actually mounts in a browser', cmd: ['pnpm', 'verify:boot-smoke'] },
+  { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
 ];
 
 if (process.argv.includes('--list')) {
