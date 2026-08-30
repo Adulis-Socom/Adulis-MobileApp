@@ -40,7 +40,7 @@ edited — including when it turns out to be wrong about something. A correction
 to a landed entry is a **new entry** that says what the old one got wrong.
 
 An entry still on its own branch has not been read by anyone and is corrected
-in place, in a commit that says what was wrong and why it was caught. D-134
+in place, in a commit that says what was wrong and why it was caught. D-136
 was: it attributed "Gate 20's boot smoke test" to D-123, and the line is
 D-120's. It was found by checking this file's claims against the register
 instead of against the entry that made them — which is the only way that kind
@@ -54,10 +54,10 @@ Two consequences worth stating, because both have been met:
   that no line was lost against either parent.
 - **Records are not rewritten when the world moves.** `T8-REPORT.md` and D-120
   both call the boot smoke test "gate 20" — true when written, false once
-  `mt-keys` took that position. The gate is 21, and the fix is D-134, not an
+  `mt-keys` took that position. The gate is 21, and the fix is D-136, not an
   edit to either record.
 
-> Bought by **D-134** (T8-C S3), and by the merge described in WORK ORDER T8-C S0.
+> Bought by **D-136** (T8-C S3), and by the merge described in WORK ORDER T8-C S0.
 
 ## 3. A report written after the fact says so in its first line
 
@@ -81,7 +81,7 @@ have been written down, and new gates land at the end regardless of subject.
 
 `pnpm gates --list` prints the ids. Use them.
 
-> Bought by **D-134** (T8-C S3).
+> Bought by **D-136** (T8-C S3).
 
 ---
 
