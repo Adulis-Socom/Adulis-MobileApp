@@ -146,7 +146,13 @@ export class AuthController {
     // On CONSOLE the answer is the browser cookie bootstrap minted, and a
     // client-supplied X-Adulis-Device or body.device_id is IGNORED -- reading
     // either as a fallback would re-open the arm the ruling closes.
-    const browserDeviceId = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
+    // Validated here, because zod no longer covers it: device_id became
+    // optional for the console, so a malformed cookie would otherwise reach a
+    // uuid column and answer 500 to an unauthenticated caller. Bootstrap has
+    // tested the same shape since it was written; this is the other door.
+    const browserCookieRaw = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
+    const browserDeviceId =
+      browserCookieRaw && UUID_RE.test(browserCookieRaw) ? browserCookieRaw : null;
     const isConsole = body.audience === 'CONSOLE';
     const effectiveDeviceId = isConsole ? browserDeviceId : (body.device_id ?? null);
     if (isConsole && !effectiveDeviceId) {

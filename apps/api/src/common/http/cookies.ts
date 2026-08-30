@@ -27,6 +27,16 @@ export const REMEMBERED_DEVICE_COOKIE = '__Host-adulis_device';
 export const hostCookie = (name: string, value: string, maxAgeSeconds: number): string =>
   `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Strict`;
 
+/**
+ * The same cookie with no Max-Age: the browser keeps it for the session and
+ * forgets it on restart. Used where there is no configured lifetime to state
+ * honestly -- a cookie that lasts one session is still a cookie the browser
+ * sends back, where omitting it entirely would silently disable the flow
+ * that depends on it.
+ */
+export const sessionHostCookie = (name: string, value: string): string =>
+  `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict`;
+
 /** Read one cookie out of a request's Cookie header, or null. */
 export function readCookie(header: string | undefined, name: string): string | null {
   if (!header) return null;

@@ -6,8 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-import { nodeEnv } from './common/env';
+
 
 /**
  * The producer of contracts/openapi.json — the one seam between the backend
@@ -30,26 +29,22 @@ import { nodeEnv } from './common/env';
  * CI regenerate and `git diff --exit-code` as the hand-edit tripwire.
  */
 /**
- * THE IMPORT ABOVE IS LOAD-BEARING AND NOTHING ENFORCED IT (#25 review).
+ * APP.MODULE IS IMPORTED DYNAMICALLY, and that is the fix rather than a
+ * flourish (#25 review, corrected by #26's).
  *
- * build-tool-env must be imported before app.module, because app.module
- * constructs its adapters at module load. A formatter, a bundler or a tidy
- * alphabetical sort would reorder the two silently, and the symptom is not a
- * lint error -- it is a contract emitted from a process that should have
- * refused to start. So the order is asserted, not assumed.
+ * app.module constructs its adapters at MODULE LOAD, so the declaration in
+ * ./build-tool-env only works if it runs first. The previous attempt asserted
+ * that ordering by checking NODE_ENV afterwards, which cannot detect the
+ * failure it names: with the imports reordered, app.module throws during its
+ * own evaluation and the assertion never runs; with an ambient NODE_ENV it
+ * passes in either order. It was a check that could not fail -- the family
+ * ADU-RUL-03 S5.2 is about.
+ *
+ * A dynamic import makes the order a matter of control flow instead, which no
+ * formatter or bundler reorders.
  */
-if (process.env['NODE_ENV'] === undefined || process.env['NODE_ENV'] === '') {
-  throw new Error(
-    'generate-openapi: NODE_ENV was still unset after the imports ran, which means ' +
-      "./build-tool-env was not imported before ./app.module. Restore the import order; " +
-      'the declaration only works if it runs first.',
-  );
-}
-// And the value must be the one the tool declares it needs.
-const BUILD_ENV = nodeEnv();
-
 async function generate(): Promise<void> {
-  void BUILD_ENV;
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule, { logger: false });
 
   const config = new DocumentBuilder()

@@ -1104,3 +1104,25 @@ Effect:    VITE_DEVICE_ID is gone (the one remaining hit is a comment recording 
 Response:  KEPT, with the reasoning at the call site
 Action:    The gate is met in intent and not in letter, and this entry is the letter. If the grep is meant literally, the console cannot mint idempotency keys and something else must -- which is a contract change, not a console change.
 Ruling needed: confirm the grep targets device IDENTITY minting only, or rule where idempotency keys come from if not the client.
+
+### D-111 - The device cookie is presented before any session exists, so only one of the two CSRF controls covers it
+
+Severity:  QUESTION (not exploitable today; the doctrine no longer describes the request)
+Phase:     T8 - 2
+Source:    apps/api/src/common/http/origin.middleware.ts fires only when the request carries __Host-adulis_session, and its own header states the doctrine: "Two INDEPENDENT controls ... Neither is trusted alone." ADU-RUL-03 S2 introduces __Host-adulis_browser, which is presented on the sign-in request -- before any session exists
+Found by:  the Phase 2 adversarial pass
+Effect:    The exact Origin check is skipped for a request that carries a device identity, so that identity rides on SameSite=Strict alone. Strict does withhold the cookie cross-site, so there is no live exploit; what is gone is the second, independent control the file says it never relies on singly. The value at stake is not a credential -- stealing it authenticates nobody -- but it is what the new-device payout lock reads, so a forged one is a suppressed new-device signal rather than an account takeover.
+Response:  RECORDED, not changed
+Action:    None. Extending the middleware to fire on the device cookie would make every anonymous GET /v1/bootstrap Origin-checked, and bootstrap is the one call a client makes before it knows anything -- refusing it on a missing Origin would break the first request of every client to enforce a control against a value that is not a credential. That trade is a ruling, not a cleanup.
+Ruling needed: whether the Origin check should extend to requests carrying only the device cookie, and if so what an absent Origin means on the anonymous bootstrap path.
+
+### D-112 - Nothing seeds core.timing_config, so a freshly migrated database cannot complete a sign-in
+
+Severity:  MINOR (development and first-deploy ergonomics; found while fixing a branch of Phase 2)
+Phase:     T8 - 2
+Source:    core.timing_config is written only by ops/scripts/seed.mjs and ops/load/db-loads.mjs; no migration inserts a row. The OTP paths resolve their configuration through it, and bootstrap derives the device cookie's Max-Age from media_retention
+Found by:  the Phase 2 adversarial pass, checking the no-configuration branch
+Effect:    On a database that has been migrated but not seeded there is no configuration in force, so the device cookie gets no Max-Age (it is now still SET, as a session cookie -- the earlier version omitted it entirely, which made console sign-in permanently impossible), and any OTP path whose phone has no account reaches a configuration lookup with no row. The values themselves are ADU-VAL-01's to rule, so a migration cannot simply invent them.
+Response:  the cookie branch is FIXED; the configuration gap is RECORDED
+Action:    bootstrap always sets the cookie now, with a session lifetime where no retention is configured, which fails toward deletion without disabling the flow. Nothing else changed: seeding real configuration is D-61's territory and inventing intervals in a migration is what ADU-VAL-01 exists to prevent.
+Ruling needed: none for this phase -- but a deployment runbook step that asserts timing_config is in force before a market is opened would turn a confusing 500 into a refusal at the right moment.

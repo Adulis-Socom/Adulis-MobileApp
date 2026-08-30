@@ -8,11 +8,14 @@ import type { Database } from '../../common/db/database.types';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { BootstrapResponseDto } from './bootstrap.dto';
+import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
+import { resolveKey } from '../../common/crypto/aead';
 import {
   BROWSER_DEVICE_COOKIE,
   clientSurface,
   hostCookie,
   readCookie,
+  sessionHostCookie,
 } from '../../common/http/cookies';
 
 /**
@@ -46,9 +49,16 @@ export interface BootstrapResponse {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Same derivation the auth surface uses, so one IP is one subject. */
+const rateLimitKey = (): string =>
+  resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
+
 @Controller('bootstrap')
 export class BootstrapController {
-  constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(APP_DATABASE) private readonly db: Kysely<Database>,
+    private readonly rateLimit: RateLimitService,
+  ) {}
 
   @Public()
   @Get()
@@ -125,6 +135,25 @@ export class BootstrapController {
       }
 
       if (!deviceId) {
+        // MINTING IS THE ONLY WRITE AN ANONYMOUS CALLER CAN CAUSE HERE, and
+        // before this limit it was unbounded: a bare loop produced hundreds of
+        // core.device rows a second, each surviving until media_retention
+        // (90 days on the seeded config) expired it. Reading is never limited
+        // -- a returning browser, which is the common case, presents a cookie
+        // and takes the branch above without consuming any budget.
+        await this.rateLimit.consume('IP_HASH', subjectHash(req.ip ?? '', rateLimitKey()), {
+          bucketKey: 'bootstrap-device-mint',
+          windowSeconds: 3600,
+          // GENEROUS ON PURPOSE. A browser mints once and then presents a
+          // cookie forever, so the honest population behind one address is
+          // first-time visitors -- and in this market that address is often a
+          // carrier NAT with a great many people behind it. A tight limit
+          // would lock out a whole ISP to stop a flood that this one stops
+          // anyway: the measured attack was ~230 rows/second from a single
+          // connection, which this cuts by three orders of magnitude.
+          max: 600,
+        });
+
         // First load, or a cookie whose row is gone. The row and the
         // identifier are created by the SAME act, so an identifier can never
         // exist without its row -- which was the failure of the arm where the
@@ -139,13 +168,24 @@ export class BootstrapController {
       // flight before this response set the cookie. The browser keeps the
       // last cookie, so the other row is orphaned -- unbound, so
       // device.purge_unbound reaches it (T8 Phase 2 S3.2).
+      // A COOKIE IS ALWAYS SET. The earlier version skipped it when no
+      // timing_config was in force, which sounded conservative and was not:
+      // with no cookie the browser can never present a device, so
+      // otp/verify's console branch refuses forever and tells the client to
+      // call the endpoint it just called. A freshly migrated database is
+      // exactly that state -- no migration seeds timing_config.
+      //
+      // Without configuration there is no honest MAX-AGE, so none is given
+      // and the browser keeps it for the session. That is a real cookie the
+      // browser will send back, so sign-in works; it simply does not survive
+      // a restart, which is the conservative half done correctly.
       const ttl = Number(market.device_ttl_seconds ?? 0);
-      if (ttl > 0) {
-        res.setHeader('Set-Cookie', hostCookie(BROWSER_DEVICE_COOKIE, deviceId, ttl));
-      }
-      // No configuration in force means no honest lifetime to give the
-      // cookie, so none is set: the device is minted, the browser forgets it
-      // at the end of the session, and retention fails toward deletion.
+      res.setHeader(
+        'Set-Cookie',
+        ttl > 0
+          ? hostCookie(BROWSER_DEVICE_COOKIE, deviceId, ttl)
+          : sessionHostCookie(BROWSER_DEVICE_COOKIE, deviceId),
+      );
     } else {
       // App clients (ADU-API-01 S3: X-Adulis-Device is an app header). The
       // device is client-generated, keystore-persisted and registered via

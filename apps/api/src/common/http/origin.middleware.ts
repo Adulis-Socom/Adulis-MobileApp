@@ -1,6 +1,7 @@
 import type { NextFunction, Response } from 'express';
 import { AdulisException } from '../errors/adulis-exception';
 import type { AuthedRequest } from '../auth/auth.guard';
+import { SESSION_COOKIE } from './cookies';
 
 /**
  * The Origin half of the CSRF pair (ADU-API-01 section 5.1). Two
@@ -27,7 +28,7 @@ export function makeOriginMiddleware(consoleOrigin: string) {
   ): void {
     if (!WRITE_METHODS.has(req.method)) return next();
 
-    const carriesCookie = (req.headers.cookie ?? '').includes('__Host-adulis_session=');
+    const carriesCookie = (req.headers.cookie ?? '').includes(`${SESSION_COOKIE}=`);
     if (!carriesCookie) return next();
 
     const origin = req.headers.origin;

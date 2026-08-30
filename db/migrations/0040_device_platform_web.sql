@@ -20,8 +20,11 @@
 -- has committed. A migration that added the value and then used it would
 -- fail on a value the same file had just created.
 --
--- IF NOT EXISTS keeps `pnpm db:determinism` happy: re-running the migration
--- set must be a no-op, and ADD VALUE is not otherwise idempotent.
+-- IF NOT EXISTS is belt-and-braces, and the reason first written here was
+-- wrong: db:determinism migrates two FRESH databases once each and diffs the
+-- dumps, and node-pg-migrate records what it has applied, so nothing ever
+-- re-runs this file against a database that has it. The clause costs nothing
+-- and covers a hand-run, which is the only way it can happen.
 
 ALTER TYPE core.device_platform ADD VALUE IF NOT EXISTS 'WEB';
 
