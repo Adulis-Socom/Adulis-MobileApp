@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 import { createLogger } from '../../common/logging';
@@ -48,8 +48,15 @@ export class FakeSmsAdapter implements SmsAdapter {
   constructor() {
     assertFakeIsPermitted('FakeSmsAdapter');
     if (nodeEnv() === 'development') {
+      // TRUNCATED AT BOOT, and created 0600 (#25 review). Two reasons, both
+      // about a file that holds live codes and phone numbers: it must not
+      // grow without bound across months of development, and on a shared
+      // machine another user must not be able to read it. mode is applied
+      // only at creation, so the truncation is what makes it reliable --
+      // an existing world-readable file from an earlier run is replaced.
+      writeFileSync(devSmsLogPath(), '', { encoding: 'utf8', mode: 0o600 });
       // The PATH is safe to log; what the file contains is not.
-      log.warn({ msg: `[FAKE SMS] development codes are appended to ${devSmsLogPath()}` });
+      log.warn({ msg: `[FAKE SMS] development codes are written to ${devSmsLogPath()}` });
     }
   }
 

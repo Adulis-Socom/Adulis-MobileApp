@@ -48,15 +48,27 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 }
 
 /**
- * The device identity, minted per app load. A web console has nowhere
- * PERMITTED to persist one (storage is banned wholesale) and no honest
- * platform value to register it with (core.device_platform is ANDROID|IOS
- * -- register D-95), so: VITE_DEVICE_ID carries the seeded device for
- * local development, and a fresh uuid otherwise. Both facts are the
- * register entry's, not this file's, to resolve.
+ * THE CONSOLE HAS NO DEVICE ID, and that is the point (ADU-RUL-03 S2).
+ *
+ * It used to mint one -- VITE_DEVICE_ID, or a uuid per load -- and both arms
+ * were broken: a build constant is shared by every browser loading the
+ * bundle, so the new-device payout lock read "known device" for a machine it
+ * had never seen; a per-load uuid had no core.device row and verify rejected
+ * it before sign-in could start (D-102).
+ *
+ * The server mints the row at /v1/bootstrap and returns the identity in an
+ * httpOnly __Host- cookie. This file cannot read it, does not need to, and
+ * must not try: a value JavaScript can read is a value XSS can forge, and
+ * this one gates a payout lock. The browser sends it because the browser
+ * sends cookies; every request already rides credentials: 'include'.
  */
-export const deviceId: string =
-  (import.meta.env.VITE_DEVICE_ID as string | undefined) ?? crypto.randomUUID();
+
+/**
+ * ADU-API-01 S3: X-Adulis-Client is sent on every request, formatted
+ * `surface/version`. It is the signal that tells the server which device
+ * mechanism this request uses, so it is not optional decoration.
+ */
+const CLIENT_ID = `web/${__APP_VERSION__}`;
 
 export class ApiError extends Error {
   constructor(readonly problem: AdulisProblem) {
@@ -76,7 +88,7 @@ export interface RequestOptions {
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    'X-Adulis-Device': deviceId,
+    'X-Adulis-Client': CLIENT_ID,
   };
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;

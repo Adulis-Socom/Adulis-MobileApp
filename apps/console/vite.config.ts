@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -15,7 +17,13 @@ import react from '@vitejs/plugin-react';
  * authenticated response, no offline queue — and a new worker prompts rather
  * than silently reloading under a seller mid-payout-change (section 3.11).
  */
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+) as { version: string };
+
 export default defineConfig({
+  // X-Adulis-Client carries `web/<version>` on every request (ADU-API-01 S3).
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   /**
    * envDir is deliberately NOT pointed at the workspace root. Doing so makes
    * the console's build read the root `.env`, which carries

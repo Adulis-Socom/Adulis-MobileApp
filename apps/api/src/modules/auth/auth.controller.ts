@@ -23,6 +23,13 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { SMS_ADAPTER, type SmsAdapter, type SmsMessage } from './sms.adapter';
 import {
+  BROWSER_DEVICE_COOKIE,
+  REMEMBERED_DEVICE_COOKIE,
+  SESSION_COOKIE,
+  hostCookie,
+  readCookie,
+} from '../../common/http/cookies';
+import {
   deviceRegisterBody,
   devicePatchBody,
   otpRequestBody,
@@ -41,19 +48,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
 
-function readCookie(header: string | undefined, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
-  }
-  return null;
-}
 
-/** __Host- prefix requires Secure, Path=/, no Domain (ADU-SEC-01 S4). */
-const hostCookie = (name: string, value: string, maxAgeSeconds: number): string =>
-  `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Strict`;
 
 @Controller()
 export class AuthController {
@@ -147,10 +142,27 @@ export class AuthController {
     if (typeof key !== 'string' || key === '') {
       throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
     }
+    // WHICH DEVICE THIS REQUEST SPEAKS FOR, by surface (ADU-RUL-03 S2).
+    // On CONSOLE the answer is the browser cookie bootstrap minted, and a
+    // client-supplied X-Adulis-Device or body.device_id is IGNORED -- reading
+    // either as a fallback would re-open the arm the ruling closes.
+    const browserDeviceId = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
+    const isConsole = body.audience === 'CONSOLE';
+    const effectiveDeviceId = isConsole ? browserDeviceId : (body.device_id ?? null);
+    if (isConsole && !effectiveDeviceId) {
+      // The browser has not called /v1/bootstrap, so it has no device row and
+      // no cookie. That is a client sequencing error, and naming the header
+      // it is missing would be a lie -- there is no header to send.
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+    }
     const device = req.headers['x-adulis-device'];
     const actor = {
       kind: 'DEVICE' as const,
-      id: typeof device === 'string' && device !== '' ? device : body.device_id,
+      id: isConsole
+        ? (effectiveDeviceId as string)
+        : typeof device === 'string' && device !== ''
+          ? device
+          : (body.device_id ?? ''),
     };
     const endpoint = `${req.method} ${req.path}`;
     const requestHash = hashRequest(req.method, req.path, req.body);
@@ -161,9 +173,13 @@ export class AuthController {
       return this.presentSession(res, replay.body as Record<string, unknown>);
     }
 
-    const deviceCookie = readCookie(req.headers.cookie, '__Host-adulis_device');
+    const deviceCookie = readCookie(req.headers.cookie, REMEMBERED_DEVICE_COOKIE);
     const stored = await this.tx.run(req, async (trx) => {
-      const minted = await this.auth.verifySignIn(trx, body, deviceCookie);
+      const minted = await this.auth.verifySignIn(
+        trx,
+        { ...body, device_id: effectiveDeviceId as string },
+        deviceCookie,
+      );
       const record: Record<string, unknown> = {
         session_token: minted.token,
         audience: minted.audience,
@@ -194,10 +210,10 @@ export class AuthController {
     };
     if (audience === 'CONSOLE') {
       const maxAge = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-      const cookies = [hostCookie('__Host-adulis_session', token, maxAge)];
+      const cookies = [hostCookie(SESSION_COOKIE, token, maxAge)];
       const deviceToken = stored['device_cookie_token'] as string | null;
       if (deviceToken) {
-        cookies.push(hostCookie('__Host-adulis_device', deviceToken, 7 * 24 * 3600));
+        cookies.push(hostCookie(REMEMBERED_DEVICE_COOKIE, deviceToken, 7 * 24 * 3600));
       }
       res.setHeader('Set-Cookie', cookies);
     } else {

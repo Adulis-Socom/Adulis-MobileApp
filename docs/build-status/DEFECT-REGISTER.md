@@ -1071,3 +1071,36 @@ Effect:    Five runtime guards existed. (1) fake-guard.ts's production refusal -
 Response:  FIXED where the guard was in the API process; recorded where it is not
 Action:    apps/api consults common/env.ts's memoised value, never process.env['NODE_ENV']. The ops scripts (.mjs) still read process.env because they are separate processes with their own lifecycle and no build step; that is a deliberate boundary, not an oversight.
 Ruling needed: none.
+
+### D-108 - core.device_platform gains WEB, and ADU-DB-01 v1.13 owes the value
+
+Severity:  MINOR (documentation debt; the schema change itself is ruled)
+Phase:     T8 - 2
+Source:    ADU-RUL-03 S2 requires the server to CREATE the core.device row for a browser; core.device.platform is NOT NULL over an enum that held only ANDROID and IOS, so the ruling cannot be implemented without a third value. T8 Phase 2 S1 confirms it in as many words: "Add WEB."
+Found by:  routing ADU-RUL-03 S2 before building it -- a row cannot exist without a value for a NOT NULL column
+Effect:    Declaring a browser ANDROID to satisfy the constraint would put a false statement in a column the new-device payout lock's neighbourhood reads (S7.2). The same reasoning gave verification.verifier_kind its OPERATOR_ATTESTED value rather than reusing KYC_VENDOR: an audit-adjacent column that says something other than what happened is worse than one that says less. This also closes the D-95 question, which asked exactly this and was parked because no ruling had answered it.
+Response:  BUILT (0040, alone in its file -- a new enum value cannot be USED in the transaction that adds it)
+Action:    db/checks/fixtures/appendix-a.json carries WEB (66 types, 234 values), so check 16 and the migration-01 catalogue test both hold the new shape. The type's COMMENT states the two mechanisms and why there are two.
+Ruling needed: none -- ADU-DB-01 v1.13 owes the enum value in Appendix A, per ADU-RUL-03 S6's list.
+
+### D-109 - The console cannot satisfy ADU-CON-02 S13's dev-loop promise without a device it no longer has
+
+Severity:  MINOR (dev-loop documentation; nothing in the product depends on it)
+Phase:     T8 - 2
+Source:    ops/scripts/seed.mjs seeded a core.device row and printed VITE_DEVICE_ID so a developer could sign the seeded seller into the console; ADU-RUL-03 S2 removes VITE_DEVICE_ID and mints the row at /v1/bootstrap
+Found by:  implementing Phase 2 -- the seeded device had no consumer left
+Effect:    None adverse: the dev loop is simpler, not harder. The seed no longer writes a device at all, which also retires the ANDROID label D-95 named as a knowing lie. A developer now starts the console and the first load is issued its own identity, so there is no device configuration step to get wrong.
+Response:  REMOVED, and recorded because a runbook reader may look for the step
+Action:    seed.mjs's header and printed instructions say the device comes from bootstrap; .env.example no longer carries VITE_DEVICE_ID and says why.
+Ruling needed: none.
+
+### D-110 - The idempotency key is still minted client-side, and T8 Phase 2's grep says it should not be
+
+Severity:  QUESTION (a gate's wording against a documented rule; the code follows the rule)
+Phase:     T8 - 2
+Source:    T8 Phase 2 S6 -- "grep for VITE_DEVICE_ID and for crypto.randomUUID in apps/console/src returns nothing"; ADU-CON-02 v3.1 S7 and WORK ORDER T7 S7.3 rule 7 -- idempotency keys are minted WHEN THE CONTROL MOUNTS, by the client
+Found by:  running the gate
+Effect:    VITE_DEVICE_ID is gone (the one remaining hit is a comment recording that it used to exist). crypto.randomUUID has exactly one call left, in lib/idempotency.ts, and removing it would break a different rule: only the client knows when two taps are one intent, so only the client can mint the key that says so. The two mintings are different in kind -- an identity is a claim the server trusts about WHO this is, and a browser may not choose one for itself; an idempotency key is an opaque per-intent nonce the server never interprets. The gate's grep does not distinguish them.
+Response:  KEPT, with the reasoning at the call site
+Action:    The gate is met in intent and not in letter, and this entry is the letter. If the grep is meant literally, the console cannot mint idempotency keys and something else must -- which is a contract change, not a console change.
+Ruling needed: confirm the grep targets device IDENTITY minting only, or rule where idempotency keys come from if not the client.

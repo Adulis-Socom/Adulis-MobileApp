@@ -19,7 +19,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { en } from '@adulis/locale';
-import { api, ApiError, deviceId } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useIdempotencyKey } from '../lib/idempotency';
 import { fillTemplate } from '../lib/intl';
 import { useSession } from './session';
@@ -124,7 +124,9 @@ export function SignIn() {
           phone,
           code,
           audience: 'CONSOLE',
-          device_id: deviceId,
+          // No device_id: the browser's identity is the httpOnly cookie
+          // /v1/bootstrap minted, which this code cannot read and the server
+          // reads for itself. Sending one would be ignored anyway.
           remember_device: remember,
         },
       });

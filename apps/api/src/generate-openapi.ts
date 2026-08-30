@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { nodeEnv } from './common/env';
 
 /**
  * The producer of contracts/openapi.json — the one seam between the backend
@@ -28,7 +29,27 @@ import { AppModule } from './app.module';
  * regeneration on an unchanged tree is byte-identical — which is what lets
  * CI regenerate and `git diff --exit-code` as the hand-edit tripwire.
  */
+/**
+ * THE IMPORT ABOVE IS LOAD-BEARING AND NOTHING ENFORCED IT (#25 review).
+ *
+ * build-tool-env must be imported before app.module, because app.module
+ * constructs its adapters at module load. A formatter, a bundler or a tidy
+ * alphabetical sort would reorder the two silently, and the symptom is not a
+ * lint error -- it is a contract emitted from a process that should have
+ * refused to start. So the order is asserted, not assumed.
+ */
+if (process.env['NODE_ENV'] === undefined || process.env['NODE_ENV'] === '') {
+  throw new Error(
+    'generate-openapi: NODE_ENV was still unset after the imports ran, which means ' +
+      "./build-tool-env was not imported before ./app.module. Restore the import order; " +
+      'the declaration only works if it runs first.',
+  );
+}
+// And the value must be the one the tool declares it needs.
+const BUILD_ENV = nodeEnv();
+
 async function generate(): Promise<void> {
+  void BUILD_ENV;
   const app = await NestFactory.create(AppModule, { logger: false });
 
   const config = new DocumentBuilder()
