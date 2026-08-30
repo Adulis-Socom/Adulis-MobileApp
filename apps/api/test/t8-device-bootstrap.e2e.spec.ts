@@ -380,6 +380,65 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     expect(still.rows[0].account_id).toBeNull();
   });
 
+  it('a malformed cookie is a refusal on EVERY anonymous idempotent endpoint', async () => {
+    // The first fix validated the cookie at otp/verify and the test covered
+    // only that door, while the idempotency actor took the same value
+    // verbatim into a uuid column one endpoint along -- 500 to any
+    // anonymous caller. The test is per-door now because the defect was.
+    for (const junk of ['not-a-uuid', "' OR 1=1 --"]) {
+      const req1 = await request(app.getHttpServer())
+        .post('/v1/auth/otp/request')
+        .set('Origin', CONSOLE_ORIGIN)
+        .set('X-Adulis-Client', WEB)
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', `__Host-adulis_browser=${junk}`)
+        .send({ phone: '+251911999007', purpose: 'SIGN_IN' });
+      expect(req1.status).toBeLessThan(500);
+
+      const req2 = await request(app.getHttpServer())
+        .post('/v1/devices')
+        .set('X-Adulis-Client', WEB)
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', `__Host-adulis_browser=${junk}`)
+        .send({ id: randomUUID(), platform: 'ANDROID' });
+      expect(req2.status).toBeLessThan(500);
+    }
+  });
+
+  it('a WEB device row cannot be named in a request body under ANY audience', async () => {
+    // The ownership guard was scoped to audience === 'CONSOLE', and the
+    // audience is a field the caller fills in: `audience: 'MOBILE'` with
+    // someone else's WEB device_id walked past it and minted a session on a
+    // stranger's browser row. A server-minted identity is not nameable by a
+    // client, which is the whole reason for minting it.
+    const res = await boot().expect(200);
+    const victim = cookieFrom(res, '__Host-adulis_browser') as string;
+    minted.push(victim);
+    issued.push(victim);
+
+    await makeAccount('+251911999008');
+    const cookie = `__Host-adulis_browser=${victim}`;
+    const code = await realCode('+251911999008', cookie);
+
+    const attack = await request(app.getHttpServer())
+      .post('/v1/auth/otp/verify')
+      .set('X-Adulis-Client', 'android/1.0.0')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        phone: '+251911999008',
+        code,
+        audience: 'MOBILE',
+        device_id: victim,
+      });
+    expect(attack.status).toBe(400);
+
+    const sessions = await admin.query(
+      `SELECT count(*)::int AS n FROM core.session WHERE device_id = $1`,
+      [victim],
+    );
+    expect(sessions.rows[0].n).toBe(0);
+  });
+
   it('a cookie naming a device bound to ANOTHER account is refused outright', async () => {
     // The bind was guarded by `account_id IS NULL` and nobody read the row
     // count, so the bind was refused and the SESSION created anyway --

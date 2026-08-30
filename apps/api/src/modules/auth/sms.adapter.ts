@@ -53,11 +53,17 @@ export class FakeSmsAdapter implements SmsAdapter {
       // must not grow across months of development, and on a shared machine
       // another user must not be able to read it.
       //
-      // The unlink is what makes the mode real. writeFileSync with a mode
-      // opens O_CREAT|O_TRUNC, which truncates the EXISTING inode and leaves
-      // its permissions alone -- so on every machine that had already run
-      // this repo, the mode was silently ignored and the file stayed as
-      // permissive as it was. Same file id, zero length, unchanged mode.
+      // The unlink is what makes the mode real ON POSIX: writeFileSync with
+      // a mode opens O_CREAT|O_TRUNC, which truncates the EXISTING inode and
+      // leaves its permissions alone, so without the unlink the mode was
+      // silently ignored and the file stayed as permissive as it was.
+      //
+      // ON WINDOWS THE MODE BUYS NOTHING and it is worth saying so rather
+      // than implying protection that is not there: Node maps mode to the
+      // read-only bit alone, ACLs are inherited from the directory, and a
+      // measured run shows 0666 with the machine's other principals able to
+      // read it. A developer on a shared Windows machine should treat this
+      // file as world-readable -- or point DEV_SMS_LOG somewhere protected.
       rmSync(devSmsLogPath(), { force: true });
       writeFileSync(devSmsLogPath(), '', { encoding: 'utf8', mode: 0o600 });
       // The PATH is safe to log; what the file contains is not.

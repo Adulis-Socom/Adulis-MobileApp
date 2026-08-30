@@ -120,6 +120,14 @@ export class AuthService {
      */
     const deviceUnusable =
       !deviceRow ||
+      // A WEB ROW IS ADDRESSED BY ITS COOKIE AND NEVER BY A BODY FIELD,
+      // whatever audience the caller claims. The first version scoped this
+      // whole check to audience === 'CONSOLE', and the audience is a field
+      // the caller fills in: sending `audience: 'MOBILE'` with another
+      // account's WEB device_id walked straight past it and minted a session
+      // on a stranger's browser row. Server-minted identities are not
+      // nameable by clients, which is the entire point of minting them.
+      (deviceRow.platform === 'WEB' && body.audience !== 'CONSOLE') ||
       (body.audience === 'CONSOLE' &&
         (deviceRow.platform !== 'WEB' ||
           (deviceRow.account_id !== null && deviceRow.account_id !== accountId)));

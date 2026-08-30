@@ -1126,3 +1126,36 @@ Effect:    On a database that has been migrated but not seeded there is no confi
 Response:  the cookie branch is FIXED; the configuration gap is RECORDED
 Action:    bootstrap always sets the cookie now, with a session lifetime where no retention is configured, which fails toward deletion without disabling the flow. Nothing else changed: seeding real configuration is D-61's territory and inventing intervals in a migration is what ADU-VAL-01 exists to prevent.
 Ruling needed: none for this phase -- but a deployment runbook step that asserts timing_config is in force before a market is opened would turn a confusing 500 into a refusal at the right moment.
+
+### D-113 - POST /v1/devices is anonymous and unlimited, so the flood the mint limit stops is available one endpoint along
+
+Severity:  MAJOR (an unauthenticated write with no budget; pre-existing, surfaced by fixing its neighbour)
+Phase:     T8 - 2
+Source:    apps/api/src/modules/auth/auth.controller.ts -- @Public() @Post('devices') inserts core.device on a CLIENT-CHOSEN id with no rate limit; measured at ~280 rows/second from one connection
+Found by:  the skeptic pass on Phase 2's fixes, checking whether the new bootstrap-device-mint limit closed the class or only one instance
+Effect:    Phase 2 rate-limited the bootstrap mint path because it was an unauthenticated unbounded write. The device registration endpoint is the same write with the same properties and no limit, so the rate limit closed one door of two. Each row survives until media_retention of inactivity expires it.
+Response:  RECORDED, not fixed in this phase
+Action:    None here. The endpoint is the MOBILE surface's device registration and belongs to that client's contract; adding a budget to it changes what a native app may do at install time, which is an ADU-AUTH-01 question rather than a console one. Phase 2's own door is closed and this entry is the other one.
+Ruling needed: what budget POST /v1/devices carries, and per what subject -- IP is the only anonymous subject available and it is the wrong one behind a carrier NAT.
+
+### D-114 - No trust-proxy setting, so every IP-keyed rate limit becomes a global one behind a proxy
+
+Severity:  MAJOR (silently converts per-caller budgets into per-deployment ones)
+Phase:     T8 - 2
+Source:    grep for 'trust proxy' across apps/api returns nothing; req.ip is used as the rate-limit subject at bootstrap.controller.ts (bootstrap-device-mint) and, since before this phase, at auth.controller.ts (otp-request-ip, 10/hour)
+Found by:  the skeptic pass on Phase 2's fixes
+Effect:    Behind a CDN or a platform load balancer, Express reports the PROXY's address for every request unless trust proxy is configured. Every IP-keyed bucket then has one subject for the whole deployment: the 10/hour OTP limit becomes ten OTP requests per hour for all of Ethiopia, and the 600/hour mint limit becomes six hundred new browsers per hour in total. The failure is silent and looks like a working rate limiter.
+Response:  RECORDED, not fixed
+Action:    None in this phase. Setting trust proxy is a deployment-shaped decision -- it must name how many proxies are in front, because trusting one too many lets a client forge X-Forwarded-For and choose its own bucket, which is worse than the current state. D-80 is the neighbouring gap: no ops/render.yaml exists, so the deployment this depends on is not described anywhere.
+Ruling needed: the deployment topology, then `app.set('trust proxy', <n>)` with n named rather than `true`.
+
+### D-115 - A device row is nameable by any MOBILE client, and only WEB rows are now protected
+
+Severity:  QUESTION (pre-existing; Phase 2 narrowed it rather than closing it)
+Phase:     T8 - 2
+Source:    apps/api/src/modules/auth/auth.service.ts -- a MOBILE verify names its device in the body, and the bind is `WHERE account_id IS NULL`, so a second account signing in on a device already bound to a first is refused the bind and given a session anyway
+Found by:  the skeptic pass, testing whether the audience-scoped guard should apply to every audience
+Effect:    Phase 2 makes a WEB row unnameable by any client under any audience, because those rows are server-minted. A MOBILE row is still client-chosen and client-named, so one client can claim another's device id and take a session anchored to it -- which pins that row against the retention purge. Refusing it outright was considered and rejected: two people sharing one phone is an ordinary case in this market, and S11.1's "binds at identity creation, never rebinds" reads as a first-identity record rather than an exclusive lock. Refusing would have broken the shared phone to close a gap that predates this phase.
+Response:  NARROWED and recorded
+Action:    None further. The WEB half is closed because those identities are the server's; the MOBILE half needs a rule about what a device row means when two accounts use one handset.
+Ruling needed: whether a MOBILE device id is an exclusive claim (refuse a second account) or a first-identity record (today's behaviour), and if the latter, what stops a client naming a device it has never held.
