@@ -108,8 +108,10 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       [SELLER_OWNER, BUYER, STRANGER, FRESH, P_OWNER, P_BUYER, P_STRANGER, P_FRESH, M],
     );
     await admin.query(
-      `INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID'), ($2,'ANDROID')`,
-      [DEVICE, FRESH_DEVICE],
+      // market_id is what /v1/bootstrap stamps (G1.11), and since T8 Phase 3
+      // it is where an anonymous OTP path reads the governing timing from.
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$3), ($2,'ANDROID',$3)`,
+      [DEVICE, FRESH_DEVICE, M],
     );
     await admin.query(
       `INSERT INTO core.session (id, account_id, audience, device_id, expires_at) VALUES

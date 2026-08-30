@@ -73,21 +73,72 @@ export class OtpService {
   }
 
   /**
-   * The market timing that governs this phone: the account's market where
-   * an account exists, the live market before one does (identity creation
-   * lands there too). Absent configuration fails closed.
+   * The market timing that governs this phone: the account's market where an
+   * account exists, and THE DEVICE'S market before one does -- which is the
+   * same market the account is about to be created in (ADU-RUL-03 S3).
+   *
+   * The second arm was `SELECT m.id FROM core.market m WHERE m.is_live LIMIT
+   * 1`: unordered, unconstrained, and answering a question nobody asked --
+   * which market a person belongs to. /v1/bootstrap is the only place that
+   * is decided now, and this reads its answer off the device.
+   *
+   * Absent configuration still fails closed, and so does an absent device:
+   * both leave the coalesce NULL, no row matches, and the caller gets a
+   * refusal rather than a guess.
    */
   private async timingFor(
     trx: Transaction<Database>,
     phone: string,
+    deviceId: string | null,
+    requireDevice: boolean,
   ): Promise<TimingRow> {
+    /**
+     * THE REFUSAL LOOKS AT THE CALLER'S OWN DEVICE, NEVER AT THE PHONE.
+     *
+     * The first version refused when coalesce(account market, device market)
+     * came back NULL, which made the refusal depend on whether the phone had
+     * an account -- so `POST /v1/auth/otp/resend` answered 202 for a
+     * registered number and 400 for an unregistered one. That is an
+     * account-enumeration oracle on an unauthenticated, unthrottled endpoint,
+     * and ADU-AUTH-01 S22 forbids it in as many words: "a rate-limit
+     * rejection never reveals whether the number belongs to an account...
+     * otherwise the sign-in form is an account-enumeration oracle, and in
+     * this product an account is a business." This file's own header says the
+     * same thing. I wrote the oracle while removing a different defect.
+     *
+     * So the device is checked FIRST and ALONE. Every anonymous caller on a
+     * phone-taking endpoint must present a bootstrapped device, whoever the
+     * phone belongs to, and the answer is identical either way.
+     */
+    let deviceMarket: string | null = null;
+    if (requireDevice) {
+      const d = await sql<{ market_id: string | null }>`
+        SELECT market_id FROM core.device WHERE id = ${deviceId}`.execute(trx);
+      deviceMarket = result_first(d.rows)?.market_id ?? null;
+      if (!deviceMarket) {
+        throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+      }
+    }
+
+    // The account's market still governs where one exists -- timing is
+    // per-market configuration and a person's account names their market.
+    const m = await sql<{ market_id: string | null }>`
+      SELECT coalesce(
+        (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
+        ${deviceMarket}::uuid
+      ) AS market_id`.execute(trx);
+    const marketId = result_first(m.rows)?.market_id ?? null;
+    if (!marketId) {
+      // Reachable only on the authenticated paths, where an account always
+      // exists; a missing one there is our problem, not the caller's.
+      throw new AdulisException('INTERNAL');
+    }
+
     const r = await sql<TimingRow>`
       SELECT tc.otp_ttl::text AS otp_ttl, tc.otp_max_attempts
         FROM core.timing_config tc
        WHERE tc.effective @> now()
-         AND tc.market_id = coalesce(
-           (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
-           (SELECT m.id FROM core.market m WHERE m.is_live LIMIT 1))
+         AND tc.market_id = ${marketId}
        LIMIT 1`.execute(trx);
     const row = result_first(r.rows);
     if (!row) throw new AdulisException('INTERNAL');
@@ -162,9 +213,24 @@ export class OtpService {
       stepUpAction?: string;
       templateKey: string;
       extraSlots?: Record<string, string>;
+      /**
+       * The device this request speaks for. Required on every ANONYMOUS
+       * phone-taking path -- sign-in and account deletion both let a caller
+       * name any phone, so both must answer identically whether or not that
+       * phone is known, and the only phone-independent thing to check is the
+       * caller's own device.
+       */
+      deviceId?: string | null;
+      /** False only for authenticated paths, which resolve via the account. */
+      requireDevice?: boolean;
     },
   ): Promise<{ challengeId: string; expiresAt: Date; sms: SmsMessage }> {
-    const timing = await this.timingFor(trx, args.phone);
+    const timing = await this.timingFor(
+      trx,
+      args.phone,
+      args.deviceId ?? null,
+      args.requireDevice ?? true,
+    );
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);
 
     await sql`
@@ -207,9 +273,20 @@ export class OtpService {
    */
   async verifyCode(
     trx: Transaction<Database>,
-    args: { phone: string; purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION'; code: string },
+    args: {
+      phone: string;
+      purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION';
+      code: string;
+      deviceId?: string | null;
+      requireDevice?: boolean;
+    },
   ): Promise<OtpChallengeRow> {
-    const timing = await this.timingFor(trx, args.phone);
+    const timing = await this.timingFor(
+      trx,
+      args.phone,
+      args.deviceId ?? null,
+      args.requireDevice ?? true,
+    );
 
     // No FOR UPDATE here: the attempt counter writes on a second
     // connection (burnAttempt), and a row lock held by this transaction
@@ -308,7 +385,13 @@ export class OtpService {
     if (!row || row.consumed_at) throw new AdulisException('OTP_INVALID');
     if (new Date() > row.expires_at) throw new AdulisException('OTP_EXPIRED');
 
-    const timing = await this.timingFor(trx, row.phone_e164);
+    // No device, and none required: this path verifies a challenge by ID and
+    // its ONLY caller is step-up (auth.service), which is authenticated --
+    // the account exists, so the account arm always resolves and there is no
+    // anonymous caller to leak anything to. Deletion does NOT come through
+    // here; it uses verifyCode, and it threads a device like every other
+    // anonymous phone-taking path.
+    const timing = await this.timingFor(trx, row.phone_e164, null, false);
     if (row.attempt_count >= timing.otp_max_attempts) {
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }

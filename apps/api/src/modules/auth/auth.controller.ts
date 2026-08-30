@@ -28,6 +28,7 @@ import {
   SESSION_COOKIE,
   hostCookie,
   readCookie,
+  requestingDevice,
 } from '../../common/http/cookies';
 import {
   deviceRegisterBody,
@@ -44,6 +45,7 @@ import {
 /** C6 — identity and session (ADU-API-01 v1.6 section 12.2). */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
@@ -91,6 +93,9 @@ export class AuthController {
         phone: body.phone,
         purpose: 'SIGN_IN',
         templateKey: 'sms.otp.sign_in',
+        // Before an account exists, the device is what says which market's
+        // timing governs this code (ADU-RUL-03 S3).
+        deviceId: requestingDevice(req.headers),
       });
       toSend = issued.sms;
       return {};
@@ -115,6 +120,7 @@ export class AuthController {
         phone: body.phone,
         purpose: 'SIGN_IN',
         templateKey: 'sms.otp.sign_in',
+        deviceId: requestingDevice(req.headers),
       });
       toSend = issued.sms;
     });

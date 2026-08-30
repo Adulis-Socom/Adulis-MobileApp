@@ -56,7 +56,26 @@ export class AuthService {
       phone: body.phone,
       purpose: 'SIGN_IN',
       code: body.code,
+      // Same reason as the issue path: before an account exists, the device
+      // carries the market whose timing governs this code.
+      deviceId: body.device_id ?? null,
     });
+
+    /**
+     * THE DEVICE IS READ FIRST, because it carries the market (ADU-RUL-03
+     * S3). It used to be read after the account was created, which was fine
+     * while a new identity took "the live market" from a lookup; now the
+     * market comes from this row, so it has to exist before the INSERT.
+     */
+    const device = await sql<{
+      id: string;
+      platform: string;
+      account_id: string | null;
+      market_id: string | null;
+    }>`
+      SELECT id, platform::text AS platform, account_id, market_id
+        FROM core.device WHERE id = ${body.device_id}`.execute(trx);
+    const deviceRow = first(device.rows);
 
     const existing = await sql<{ id: string; status: string; market_id: string }>`
       SELECT id, status, market_id FROM core.account
@@ -80,22 +99,34 @@ export class AuthService {
           slots: { path: 'age_declared_over_18' },
         });
       }
-      const market = await sql<{ id: string }>`
-        SELECT id FROM core.market WHERE is_live LIMIT 1`.execute(trx);
-      const live = first(market.rows);
-      if (!live) throw new AdulisException('INTERNAL');
+      /**
+       * THE MARKET COMES FROM THE DEVICE, and there is no fallback (D-104,
+       * ADU-RUL-03 S3).
+       *
+       * This was `SELECT id FROM core.market WHERE is_live LIMIT 1` -- no
+       * ORDER BY, nothing keeping there to be one live market, and a second
+       * one silently decided which country a person's account belonged to.
+       * Adding an ORDER BY would have made it deterministic and still wrong:
+       * it would deterministically pick a market for a person nobody asked
+       * about.
+       *
+       * /v1/bootstrap is now the only place a market is chosen. It assigns
+       * one to the device at first contact (G1.11) and this reads it back.
+       * A device with no market has not bootstrapped, and the honest answer
+       * is to refuse rather than to guess on that person's behalf.
+       */
+      if (!deviceRow?.market_id) {
+        throw new AdulisException('VALIDATION_FAILED', {
+          slots: { path: body.audience === 'CONSOLE' ? 'bootstrap' : 'device_id' },
+        });
+      }
       accountId = randomUUID();
-      marketId = live.id;
+      marketId = deviceRow.market_id;
       await sql`
         INSERT INTO core.account
           (id, phone_e164, market_id, status, age_declared_over_18, age_declared_at)
-        VALUES (${accountId}, ${body.phone}, ${live.id}, 'ACTIVE', true, now())`.execute(trx);
+        VALUES (${accountId}, ${body.phone}, ${marketId}, 'ACTIVE', true, now())`.execute(trx);
     }
-
-    const device = await sql<{ id: string; platform: string; account_id: string | null }>`
-      SELECT id, platform::text AS platform, account_id
-        FROM core.device WHERE id = ${body.device_id}`.execute(trx);
-    const deviceRow = first(device.rows);
 
     /**
      * THE COOKIE IS NOT A CREDENTIAL AND IS NOT TREATED AS ONE.
@@ -307,6 +338,11 @@ export class AuthService {
     if (!phone) throw new AdulisException('INTERNAL');
 
     const issued = await this.otp.issueChallenge(trx, {
+      // Authenticated: req.ctx.accountId is set, the account names the
+      // market, and no anonymous caller can learn anything from the answer.
+      // Demanding a device here would refuse a signed-in seller a step-up
+      // code for no security gain.
+      requireDevice: false,
       phone,
       purpose: 'STEP_UP',
       stepUpAction: body.action,

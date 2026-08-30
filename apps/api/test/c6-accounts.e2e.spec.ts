@@ -115,6 +115,25 @@ const browserCookie = async (): Promise<string> => {
     return id;
   };
 
+
+  /**
+   * Place a registered device in THIS SUITE'S market. In production
+   * /v1/bootstrap does it (G1.11), and since T8 Phase 3 the market a new
+   * identity joins is read off that row -- a device that never bootstrapped
+   * cannot create an account, deliberately.
+   *
+   * The suite does it EXPLICITLY rather than by calling bootstrap, because
+   * bootstrap resolves a GLOBAL market (is_live DESC, created_at ASC) and a
+   * test that goes through it silently asserts "my market is the earliest
+   * live one in this database" -- true only by scheduling luck, and false the
+   * moment another suite's live market is older. That reproduced D-104's
+   * exact recorded symptom: this suite's accounts landing in a foreign
+   * market, invisible to its market-scoped teardown, and the NEXT run
+   * answering 200 where 400 belongs.
+   */
+  const bootDevice = async (id: string): Promise<void> => {
+    await admin.query(`UPDATE core.device SET market_id = $1 WHERE id = $2`, [M, id]);
+  };
   const purgeRateBuckets = async () => {
     await admin.query(
       `DELETE FROM core.rate_limit_bucket
@@ -182,8 +201,8 @@ const browserCookie = async (): Promise<string> => {
       [OWNER, BUYER, MEMBER1, MEMBER2, COURIER_ACC, OWNER2, MEMBER3, M],
     );
     await admin.query(
-      `INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`,
-      [DEVICE],
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`,
+      [DEVICE, M],
     );
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
@@ -368,6 +387,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', deviceId)
         .send({ id: deviceId, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(deviceId);
       await http()
         .patch(`/v1/devices/${deviceId}`)
         .send({ notification_permission: 'GRANTED' })
@@ -448,6 +468,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'IOS' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -476,6 +497,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       const oldCode = codeFor(P_RESEND);
       // Step past the 30s resend backoff without waiting it out.
       await admin.query(
@@ -485,6 +507,10 @@ const browserCookie = async (): Promise<string> => {
       );
       await http()
         .post('/v1/auth/otp/resend')
+        // The device is what says which market's timing governs this code
+        // before an account exists (T8 Phase 3). An app has one; this call
+        // simply never sent it, and used to be carried by "some live market".
+        .set('X-Adulis-Device', d)
         .send({ phone: P_RESEND, purpose: 'SIGN_IN' })
         .expect(202);
       const newCode = codeFor(P_RESEND);
@@ -513,6 +539,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -545,6 +572,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -1029,6 +1057,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ id: d, platform: 'ANDROID' })
         .expect(201);
+      await bootDevice(d);
       await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
@@ -1107,6 +1136,10 @@ const browserCookie = async (): Promise<string> => {
       expect(sms.lastTo(P_WEBDEL)?.templateKey).toBe('sms.otp.account_deletion');
       const verified = await http()
         .post('/v1/deletion/otp/verify')
+        // Anonymous and phone-taking, so it identifies its device like every
+        // other such call -- the check is what keeps the answer the same for
+        // a known and an unknown number (ADU-AUTH-01 S22).
+        .set('X-Adulis-Device', d)
         .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL) })
         .expect(200);
       const ticket = verified.body.ticket as string;

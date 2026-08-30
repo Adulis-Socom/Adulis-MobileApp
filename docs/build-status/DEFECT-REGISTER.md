@@ -1159,3 +1159,36 @@ Effect:    Phase 2 makes a WEB row unnameable by any client under any audience, 
 Response:  NARROWED and recorded
 Action:    None further. The WEB half is closed because those identities are the server's; the MOBILE half needs a rule about what a device row means when two accounts use one handset.
 Ruling needed: whether a MOBILE device id is an exclusive claim (refuse a second account) or a first-identity record (today's behaviour), and if the latter, what stops a client naming a device it has never held.
+
+### D-116 - The cart still chooses a market, so "exactly one place" is not yet true
+
+Severity:  MINOR (deterministic, unlike D-104's; but it is a second place making the assumption)
+Phase:     T8 - 3
+Source:    ADU-RUL-03 S3 -- "there is exactly one place a market is chosen, and it is /v1/bootstrap ... D-20's warning stops being a warning, because there is no longer a second place making the assumption"; apps/api/src/modules/orders/orders.service.ts resolves a cart's market as coalesce(the account's market, the first market by is_live DESC, created_at ASC)
+Found by:  the Phase 3 sweep, checking the ruling's own claim after removing the two auth lookups
+Effect:    The ruling's headline is true of the AUTH path, which is what D-104 named, and not true of the tree. Cart creation still picks a market for an anonymous device, and it does so with a deterministic ORDER BY rather than D-104's unordered LIMIT 1 -- so it is the safer half of the same shape: it will not vary between calls, but the day a second market goes live it will quietly put every anonymous cart in the older one.
+Response:  RECORDED, not changed
+Action:    None. The one-line change is available and obvious -- the function already holds the device id, so it could read d.market_id exactly as identity creation now does -- but a cart for a device that has never bootstrapped would then be refused, and that is a change to the buyer flow rather than to the auth path this phase was given. Doing it silently inside a phase scoped to D-104 is how scope stops meaning anything.
+Ruling needed: whether cart creation reads the device's market too (and refuses a device with none), or whether an anonymous cart is allowed a default market. If the former, the ruling's "exactly one place" becomes true; if the latter, S3's sentence should say "exactly one place a PERSON's market is chosen".
+
+### D-117 - A global-count assertion in the jobs suite made an unrelated phase's tests fail
+
+Severity:  MINOR (test fragility; the third instance of a rule this repository already wrote down)
+Phase:     T8 - 3
+Source:    apps/api/test/e2-e6.jobs.spec.ts -- "subscription.collect_reminder sends once and stamps the record" asserted the job's REPOSITORY-WIDE `sent` counter equals 1; D-83's rule is that no test may assert over a global sweep
+Found by:  adding the Phase 3 suite, whose two live markets shifted parallel scheduling
+Effect:    The assertion holds only while no other suite has an outstanding collection at that instant, so it fails on scheduling changes that have nothing to do with billing. The job's own SQL is correctly market-scoped -- the fragility is entirely in the test.
+Response:  FIXED
+Action:    The test now asserts what it is about: this record is stamped once, and this seller's phone receives one message. Both are scoped to its own fixtures, so no other suite can move them.
+Ruling needed: none.
+
+### D-118 - The order "register, then bootstrap" is required and written nowhere
+
+Severity:  MINOR (a client that gets it wrong is locked out until it calls bootstrap again, with no message saying so)
+Phase:     T8 - 3
+Source:    /v1/bootstrap's app branch is `UPDATE core.device SET market_id = ... WHERE id = <header> AND market_id IS NULL`, a silent no-op when the row does not exist yet; POST /v1/devices inserts with no market; ADU-API-01 S3.1/S3.2 states no ordering between them
+Found by:  the Phase 3 adversarial pass
+Effect:    An app that calls bootstrap BEFORE registering gets a device row with a NULL market, and since Phase 3 that means every anonymous OTP path refuses it -- with slots.path 'bootstrap', naming a call the client has already made. Calling it a second time fixes it, and nothing tells the client that. The same trap catches a returning app whose unbound row was purged by retention and which re-registers before its next bootstrap. The reasoning in bootstrap's own comment ("the anonymous first call... failing it because a header was absent would break a client's first request") was sound while a device's market was cosmetic; it gates sign-in now.
+Response:  RECORDED, not changed
+Action:    None in this phase. Making bootstrap create the row would be minting a device for an app client, which is the console's mechanism and not the app's (ADU-RUL-03 S2 keeps them separate on purpose); making register resolve a market would put a second market choice back in the tree, which is what D-104 removed. The fix is a contract sentence, not code.
+Ruling needed: state the order in ADU-API-01 S3 -- register, then bootstrap -- or rule that bootstrap may create an app device row on first sight of an unknown X-Adulis-Device.

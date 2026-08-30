@@ -360,7 +360,10 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     // a console session could be anchored to a row whose platform says
     // ANDROID -- the false statement 0040 exists to prevent.
     const native = randomUUID();
-    await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'IOS')`, [native]);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'IOS',$2)`,
+      [native, M],
+    );
     minted.push(native);
     await makeAccount('+251911999004');
     const cookie = `__Host-adulis_browser=${native}`;
@@ -445,10 +448,10 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     // pinning a stranger's device row against the retention purge.
     const foreign = randomUUID();
     const stranger = await makeAccount('+251911999005');
-    await admin.query(`INSERT INTO core.device (id, platform, account_id) VALUES ($1,'WEB',$2)`, [
-      foreign,
-      stranger,
-    ]);
+    await admin.query(
+      `INSERT INTO core.device (id, platform, account_id, market_id) VALUES ($1,'WEB',$2,$3)`,
+      [foreign, stranger, M],
+    );
     minted.push(foreign);
     await makeAccount('+251911999006');
     const cookie = `__Host-adulis_browser=${foreign}`;

@@ -63,3 +63,31 @@ export function clientSurface(header: unknown): ClientSurface {
   const token = header.split('/', 1)[0]?.trim().toLowerCase();
   return token === 'web' || token === 'android' || token === 'ios' ? token : 'unknown';
 }
+
+/**
+ * Which device a request speaks for, BY SURFACE (ADU-RUL-03 S2).
+ *
+ * A web caller's identity is the httpOnly cookie /v1/bootstrap minted and
+ * nothing else: its X-Adulis-Device is ignored here exactly as bootstrap and
+ * otp/verify ignore it. An app presents its keystore id in the header. Both
+ * are uuid-validated, because both reach uuid columns.
+ *
+ * Lives here rather than in a controller because two controllers need the
+ * same answer, and a second copy of a security-relevant rule is how one of
+ * them drifts.
+ */
+export function requestingDevice(headers: {
+  cookie?: string | undefined;
+  'x-adulis-device'?: string | string[] | undefined;
+  'x-adulis-client'?: string | string[] | undefined;
+}): string | null {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const cookie = readCookie(headers.cookie, BROWSER_DEVICE_COOKIE);
+  const fromCookie = cookie && uuid.test(cookie) ? cookie : null;
+  if (clientSurface(headers['x-adulis-client']) === 'web') return fromCookie;
+  const header = headers['x-adulis-device'];
+  if (typeof header === 'string' && uuid.test(header)) return header;
+  // An app that sent no header, or a caller naming no surface, may still be a
+  // browser -- the cookie is httpOnly, so its presence is evidence.
+  return fromCookie;
+}
