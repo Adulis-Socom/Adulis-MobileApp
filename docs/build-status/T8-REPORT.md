@@ -258,3 +258,188 @@ MINOR    D-124 main's full local test run is intermittently red from shared
 - **D-112**: a deployment runbook step asserting timing_config is in force before
   a market opens would turn a confusing 500 into a refusal at the right moment.
 - **Phase 5's gate number**: 20 is taken; the smoke test is 21 unless swapped.
+
+---
+
+# WORK ORDER T8-C REPORT
+
+**Written as the work happened**, section by section, by the agent that did it
+-- unlike the T8 block above, which says in its own first line that it was
+assembled later. The distinction is the point of both sentences.
+
+**Every claim below names what produced it** (ADU-RUL-03 S5.1). A number that
+cannot be produced on demand is not printed.
+
+```
+WORK ORDER T8-C REPORT
+
+S0  the register conflict     efd5c91 -- VERIFIED, not re-resolved
+    entries in order          D-110..D-124, grep on main
+    deleted lines vs parents  0 (686a30b) / 0 (ed9aee8)
+
+S1  the two comparators       PR #30
+    verify:deferred-values    EXPOSED -> pinned at 16 rows, plant re-run
+    verify:permission-doc     NOT exposed -- RED on 8 checks under the same attack
+    checks 14 and 16          NOT exposed -- expected side is the live database
+
+S2  db:reset                  PR #31
+    markets before/after      180 / 1
+    devices before/after      458 / 0
+    console sign-in completes headless Edge: bootstrap -> otp/request -> code
+                              from apps/api/.dev-sms.log -> otp/verify ->
+                              GET /v1/auth/sessions
+                              = 200, current=true remembered=true
+    full suite                459/459, from a shell with nothing exported
+    residue after a full run  markets 1, accounts 1, sellers 1, products 0
+                              + 3 unclaimed device rows (recorded, not fixed)
+
+S3  boot-smoke                PR #32 -- gate 21 of 21, APPENDED not swapped
+    green                     3 PASS, exit 0
+    proven red                VITE_SMOKE_BREAK=1 -> 3 FAIL, exit 1
+    citations converted       5, to gate ids
+
+S4  the numbering ruling      PR #33 -- docs/build-status/README.md
+    new register entries      none, deliberately: the ruling is D-127's
+
+S6  this report               this PR
+
+new entries                   D-125..D-134 (ten)
+gates                         21 on #32's branch, all green -- pnpm ci:local
+                              main still has 20 until #32 merges
+```
+
+## S0 -- the conflict was already resolved, so it was verified rather than redone
+
+The merge is `efd5c91`. It was in place before this order reached it, which
+changes the job from resolving to proving: on an append-only file, a
+resolution that looks right and quietly dropped an entry is indistinguishable
+from a correct one by reading.
+
+`git diff <parent> <merge> -- docs/build-status/DEFECT-REGISTER.md | grep -c
+'^-[^-]'` prints **0** against both parents, and D-110 through D-124 appear
+once each, in order. Nothing was lost. `git merge --abort` was not needed.
+
+## S1 -- one comparator was exposed and one was not, and the difference is a rule
+
+A comparator gate asserts that two forms agree. It is **exposed** when the
+expected side is a document or fixture a person edits: delete the same row
+from both and the gate reports agreement about a smaller world.
+
+`verify:deferred-values` was exposed, and that is measured rather than
+supposed. Removing `core.ladder_config.established_min_handoffs` from both
+ADU-VAL-01 S1.1 and the fixture produced three PASSes and exit 0.
+`EXPECTED_ROWS = 16` is now pinned in the gate, and re-planting the same
+attack turns it red twice (D-126).
+
+`verify:permission-doc` was **not** exposed: the same attack put it red on
+eight checks, because it already pins 42 permissions, 139 grants, six
+per-role totals and eight step-up codes by name. Appendix C checks 14 and 16
+are not exposed either, and the reason is general enough to be written down
+in `gates.mjs`: **their expected side is the live database, and nothing
+leaves it without a migration.**
+
+## S2 -- the environment had degraded until the product would not run in it
+
+180 markets, 179 of them created one per test run, with a single
+`timing_config` in force. `/v1/bootstrap` assigns by `(is_live DESC,
+created_at ASC)`, so a browser could be handed a market with no timing row,
+and the OTP request that follows fails -- D-112 at the scale a leak gave it.
+
+The leak is closed at its source (D-128): the concurrent-decrement race test
+now deletes what it created, by id, under `session_replication_role =
+replica` -- required rather than convenient, because `core.stock_event` is
+append-only and its trigger raises on DELETE for every role.
+
+`pnpm db:reset` is the recovery. Three defects in it were found by **running**
+it: an invented role password that left the API reporting its database down;
+a dropped `jobs` schema never reinstalled, which failed
+`worker-runtime.spec.ts` with `permission denied for database adulis`; and an
+unconditional `PASS` that two documents already claimed was a check (D-132).
+It also took the permissive default on an unset `NODE_ENV` -- D-105's own
+defect, inside the order that fixed D-105 (D-133).
+
+D-131: `pnpm test` never loaded `.env`. From a clean shell, 420 of 459 tests
+failed on `client password must be a string`. CI sets the environment in the
+workflow, and `pnpm ci:local` loads it once for every gate to inherit, so the
+only way to meet it is to run the command the README gives a new developer.
+
+**D-129 is the connection this order asked for.** D-124 and D-114 are one
+defect at two scales: an IP stops identifying a caller whenever callers share
+one -- in the tests because every suite runs on one machine, in production
+because a city sits behind one carrier NAT. Both are also how the two
+environments come apart: **local and CI diverge in STATE, not
+configuration.** CI builds from empty every run; this machine had been
+accumulating since Tier 1. D-124 was red locally and green in CI. D-128 was
+too.
+
+## S3 -- the first gate that runs the console instead of reading it
+
+`no-unsafe-eval` and `production-react` grep the bundle, and a bundle that
+throws at module scope before React mounts is textually perfect. T7 Phase 5
+shipped one.
+
+`boot-smoke` serves `apps/console/dist`, replaying the `/*` block of
+`dist/_headers` verbatim, drives headless Chromium, and asserts `#root` has
+children with no uncaught error, no unhandled rejection and no CSP violation.
+**The console mounts under the full production policy with zero violations**
+-- new information, because this is the only place in CI where the policy and
+the bundle meet.
+
+**It is gate 21.** The T8 block above leaves that open ("20 is taken; the
+smoke test is 21 unless swapped"); this is the answer, and it was appended
+rather than swapped because positions in that list are cited in a governed
+document. Gates 17 and 18 remain the console pair and ADU-RUL-03 S5.2 stays
+true.
+
+Proven rather than trusted: `main.tsx` carries a module-scope throw behind
+`VITE_SMOKE_BREAK`, the exact shape of the Phase 5 defect. Built with it, the
+gate reports zero children, the uncaught error, and the flag's survival into
+the bundle. The flag cannot ship -- Vite drops the branch, and the gate fails
+if the string appears in any emitted bundle.
+
+## S4 -- rulings name findings; the register assigns numbers
+
+ADU-RUL-03 S1's heading cites D-105 and `DOCUMENT_AUTHORITY.md` repeats it,
+and the register skipped from D-104 to D-106. The citation pointed at
+nothing. `docs/build-status/README.md` now states that rule, and the three it
+sits with, in the directory they govern. No new register entry: the ruling is
+already D-127's, and a second entry saying the same thing would be an entry
+written to have written one.
+
+Writing that file is also what caught D-134's own misattribution -- it
+credited "Gate 20's boot smoke test" to D-123, and the line is D-120's. Every
+claim was checked against the register rather than against the entry
+asserting it, which is the only way that kind of error is ever found.
+
+## What this order did NOT do
+
+Out of scope by S5, and still owed: the console C-2 end-to-end and C-3;
+vendor adapters; the operator surface; `ops/render.yaml` (D-80); D-73;
+Amharic quality beyond the HUMAN-REQUIRED gate; and the four documents the
+CEO owes.
+
+Not fixed, and recorded rather than left silent:
+
+- **Three unclaimed `core.device` rows survive a full test run** (bootstrap
+  suites, `account_id NULL`). The same class as D-128 at a size that breaks
+  nothing: a device with no account is never assigned to a sign-in. Fixing it
+  belongs to an order that touches those suites.
+- **D-114 stays parked**, and correctly -- `trust proxy` needs the deployment
+  topology named, because trusting one hop too many lets a client forge
+  `X-Forwarded-For` and choose its own bucket, which is worse than today.
+
+## S-Parked -- what T8-C adds to the ruling list
+
+- **D-125**: supply ADU-RUL-04 and ADU-RUL-05, or confirm that the "via
+  T8-C" citation form stands permanently. Both are cited by section number
+  against documents that were never delivered.
+- **D-129**: D-114's ruling, plus one it adds -- when the subject collapses
+  anyway, what identifies a caller for the OTP budget? The phone is already
+  the subject of the per-challenge counter; whether it should also be the
+  subject of the hourly one is a decision about enumeration cost, not a code
+  change to make quietly.
+- **D-130**: ADU-CON-02 v3.2 S13 gains `db:reset` and `worker:install`, or
+  rules that the repository README is where operational commands live.
+- **D-134**: ADU-RUL-03 S5.2 gains gate ids at its next reissue, after which
+  the gate list stops being append-only for citation reasons and can be
+  ordered by subject.
