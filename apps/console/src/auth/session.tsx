@@ -21,6 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import type { AdulisProblem } from '../lib/states';
 import { api, ApiError, requestClock, setUnauthorizedHandler } from '../api/client';
+import { useMarket } from '../lib/market';
 
 /** ADU-VAL-01 S3 defaults; D-96 owes the real per-market values a field. */
 const IDLE_MS_UNREMEMBERED = 30 * 60 * 1000;
@@ -65,6 +66,7 @@ interface SessionContextValue {
 const Ctx = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const { booting: marketBooting } = useMarket();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [booting, setBooting] = useState(true);
   const [idleWarningAt, setIdleWarningAt] = useState<number | null>(null);
@@ -79,20 +81,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // BOOTSTRAP FIRST, AND IT IS NO LONGER THIS FILE'S CALL (C-3, D-103).
+    // /v1/bootstrap is where the browser's device row is minted and its
+    // httpOnly __Host- cookie set (ADU-RUL-03 S2); the server reads the
+    // device from that cookie and there is nothing else to read, so nothing
+    // session-shaped may precede it (D-118). MarketProvider makes that call
+    // and now KEEPS what it returns, which is what D-103 owed intl.ts. This
+    // probe waits for it rather than issuing a second one -- two bootstraps
+    // per load worked, and minting the same device twice to read a field
+    // once is not a design anyone would choose on purpose.
+    if (marketBooting) return undefined;
     let cancelled = false;
     (async () => {
       try {
-        // FIRST CALL, ALWAYS, and it is not optional decoration: /v1/bootstrap
-        // is where this browser's device row is minted and its httpOnly
-        // __Host- cookie set (ADU-RUL-03 S2). Sign-in cannot succeed before
-        // it -- the server reads the device from that cookie and there is
-        // nothing else to read. It is also idempotent: a browser returning
-        // with a valid cookie gets the same row, not a new one.
-        //
-        // Deliberately not stored. The market context this returns is what
-        // D-103 owes intl.ts; wiring it is C-3's job, and calling it here for
-        // the cookie does not make that wiring this phase's work.
-        await api<unknown>('/bootstrap');
         const r = await api<{ data: SessionRow[] }>('/auth/sessions');
         const current = r.data.find((s) => s.current);
         if (!cancelled && current) {
@@ -117,7 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [marketBooting]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     const r = await api<{ data: SessionRow[] }>('/auth/sessions');

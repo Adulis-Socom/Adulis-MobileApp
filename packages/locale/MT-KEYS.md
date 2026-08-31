@@ -15,7 +15,10 @@ anything. A human translator writes these, or they stay English.
 
 ## Machine-translated placeholders
 
-Every key below carries a MACHINE-TRANSLATION placeholder in `am.ts`.
+Every key below is AWAITING THE HUMAN TRANSLATION PASS. Most carry a
+machine-translation placeholder in `am.ts`; C-3's keys carry the English
+untranslated, because unverifiable text in a seller's own language is worse
+than text they can see is untranslated (D-144). Neither is a translation.
 The placeholders satisfy the completeness gate (a missing key is a compile
 error) and nothing else. `AM_ENABLED` stays off until BOTH lists are
 clear.
@@ -24,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-150 keys:
+182 keys:
 
 - `app.title`
 - `health.ok`
@@ -175,4 +178,36 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.demo.title`
 - `console.demo.hint`
 - `console.demo.ready_content`
+- `console.home.title`
+- `console.home.readiness_title`
+- `console.home.progress`
+- `console.home.not_a_wizard`
+- `console.home.resolve`
+- `console.home.item_done`
+- `console.home.item_todo`
+- `console.home.no_items`
+- `console.home.brief_title`
+- `console.home.brief_pending`
+- `console.home.item.account_created`
+- `console.home.item.seller_type_declared`
+- `console.home.item.eligibility_satisfied`
+- `console.home.item.identity_verified`
+- `console.home.item.company_details`
+- `console.home.item.store_profile`
+- `console.home.item.payout_details`
+- `console.home.item.fulfilment_config`
+- `console.home.item.at_least_one_product`
+- `console.become.title`
+- `console.become.type_legend`
+- `console.become.type_individual`
+- `console.become.type_company`
+- `console.become.choose_prompt`
+- `console.become.company_adds_item`
+- `console.become.company_identity_meaning`
+- `console.become.individual_identity_meaning`
+- `console.become.not_reversible`
+- `console.become.store_name_label`
+- `console.become.handle_label`
+- `console.become.handle_hint`
+- `console.become.submit`
 - `console.placeholder`

@@ -64,13 +64,19 @@ STAGING decision, not a deviation from the ruled stack -- recorded here, in
 `src/console.css`'s header and in the T7 report, so the next agent adds the
 library when its screen arrives instead of re-deciding the stack.
 
-**There is no test harness here yet.** `pnpm --filter @adulis/console test` is
-an echo. C-1/C-2 are held up by typecheck, lint, the `no-unsafe-eval`,
-`production-react` and `boot-smoke` gates (the first two inspect the
-production build; the third loads it) and a live sign-in against the real
-API --
-verification, but not coverage. A harness is owed at C-3, and until it exists
-a regression here is caught by a person, not by CI.
+**There is still no test harness here, and C-3 has now landed without it.**
+`pnpm --filter @adulis/console test` is an echo. C-1, C-2 and C-3 are held up
+by typecheck, lint, the `no-unsafe-eval`, `production-react` and `boot-smoke`
+gates (the first two inspect the production build; the third loads it), and by
+browser-driven verification recorded per stage -- for C-3, nine readiness rows
+read out of a real DOM against a reset database, and R26's disclosure observed
+by clicking the radio rather than by reading the source. That is verification,
+not coverage: it proves the screen worked once, on the day it was built.
+
+The harness was owed AT C-3 and is now overdue. Until it exists a regression
+here is caught by a person, not by CI -- and the three defects the C-3
+adversarial pass found (D-145, D-146, D-147) were all found that way, which is
+the argument for the harness rather than against it.
 
 ## The rules an agent working here needs
 
@@ -137,7 +143,7 @@ the shell, the states and the client first.
 |---|---|
 | **C-1** | A placeholder route renders inside the shell at both breakpoints, with the twelve states demonstrable |
 | **C-2** | A seeded seller signs in against the real API and is warned before idle expiry (T7 §7.1; was "the mock" before Tier 3 existed) |
-| **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable |
+| **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable -- **landed T9 Phase 4**: SC-01 Life 1 and SC-02, with the market-context provider (D-103). Life 2, the daily brief, waits for C-4's clock rules (D-148) |
 | **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted |
 | **C-5** | Set-count and confirm-stock are visibly **two** actions |
 | **C-6** | Payout's five disclosures; cancel present **only** with a pending change |
