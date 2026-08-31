@@ -308,6 +308,22 @@ const GATES = [
    * under the production _headers policy, and asserts #root has children.
    */
   { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
+
+  /**
+   * APPENDED, and its POSITION AFTER `test` is the point rather than an
+   * accident of the append-only rule. `session_replication_role = replica`
+   * suppresses the constraint triggers that implement referential integrity,
+   * so a teardown using it to defeat an append-only guard also defeats
+   * ON DELETE CASCADE -- and raises nothing. The violation exists and the
+   * database will never mention it, so the only way to know is to ask after
+   * the suite has run.
+   *
+   * The class was fixed at T7 in ten suites and D-128's fix reintroduced it in
+   * an eleventh. Ten edits are not a rule: fixing a class in N places does
+   * nothing about the N+1th, because nothing carries the reasoning to a change
+   * nobody had written yet.
+   */
+  { id: 'orphan-sweep', title: 'No orphaned rows against any FK into core.seller', cmd: ['pnpm', 'verify:orphan-sweep'] },
 ];
 
 if (process.argv.includes('--list')) {
