@@ -21,6 +21,16 @@ const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
+/**
+ * T11 Phase 1: index.html carries data-build-id="%VITE_BUILD_ID%". Vite's HTML
+ * env replacement substitutes VITE_-prefixed variables; an UNDEFINED one is
+ * left as the literal token, which would ship "%VITE_BUILD_ID%" to sellers on
+ * every build the harness did not mint an id for. Defaulted here, at config
+ * load, so the ordinary build stamps 'untagged' and only the harness stamps a
+ * per-run identity.
+ */
+process.env['VITE_BUILD_ID'] ??= 'untagged';
+
 export default defineConfig({
   // X-Adulis-Client carries `web/<version>` on every request (ADU-API-01 S3).
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },

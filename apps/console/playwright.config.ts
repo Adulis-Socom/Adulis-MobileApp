@@ -55,7 +55,27 @@ export default defineConfig({
   webServer: {
     command: `node e2e/serve.mjs ${PORT}`,
     url: `http://localhost:${PORT}/`,
-    reuseExistingServer: !process.env['CI'],
+    /*
+     * NEVER REUSED BY DEFAULT (T11 Phase 2, D-160's other half). The first
+     * version reused any existing server whenever CI was unset -- which is
+     * every local run -- so the suite would drive WHATEVER was on the port:
+     * a dev server with no CSP, a stale bundle, anything. Combined with the
+     * production connect-src bug, that is the only way sixteen tests ever
+     * went green, and it meant the built artifact was never once under test.
+     *
+     * Reuse is now an explicit, human act (E2E_REUSE_SERVER=1) for tight
+     * dev loops only. The gate never sets it, and even when a human does,
+     * the identity spec still asserts the served page carries this run's
+     * build id -- two independent controls; neither trusted alone.
+     */
+    reuseExistingServer: process.env['E2E_REUSE_SERVER'] === '1',
     timeout: 30_000,
+    // serve.mjs derives its connect-src from this -- the same value the
+    // build consumed -- so the policy and the origin cannot drift apart.
+    env: {
+      ...(process.env['E2E_API_BASE_URL']
+        ? { E2E_API_BASE_URL: process.env['E2E_API_BASE_URL'] }
+        : {}),
+    },
   },
 });

@@ -1,5 +1,12 @@
 <!doctype html>
-<html lang="en">
+<!-- data-build-id: T11 Phase 1. The harness mints an id per run, the build
+     stamps it here via Vite's HTML env replacement, and the FIRST e2e test
+     asserts the served page carries that exact id. A stale server, a previous
+     bundle or a different origin fails immediately, by name -- instead of
+     sixteen tests passing quietly against the wrong artifact, which is what
+     T10's adversarial pass caught this harness doing. Outside the harness the
+     id is 'untagged' (vite.config.ts defaults it), never a literal token. -->
+<html lang="en" data-build-id="%VITE_BUILD_ID%">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

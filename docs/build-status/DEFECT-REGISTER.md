@@ -1561,3 +1561,61 @@ Effect:    MEASURED. With the route removed the router's catch-all -- `<Navigate
 Response:  FIXED
 Action:    The assertion is now `expect(page).toHaveURL(...)` -- where the browser ENDED UP, which is stable under a redirect because Playwright retries it -- with the readiness-list check kept as a second, weaker statement. Proven both ways: with the `payouts` route deleted the suite reports `1 failed, 7 passed` and the message names the item and the href; with it restored, `8 passed`.
 Ruling needed: none. The general form is worth carrying: **an assertion about a page's contents cannot catch a navigation defect, because contents are what the wrong page also lacks for an instant.** Assert the URL.
+### D-162 - Gate `console-e2e` could not run in CI at all: gates.mjs strips NODE_ENV and the entry carried no env
+
+Severity:  BLOCKER (a gate red on every CI run from the moment it merges)
+Phase:     T11 - 2 (found by T10's adversarial pass)
+Source:    ops/scripts/gates.mjs -- the `console-e2e` entry as T10 Phase 4 wrote it
+Found by:  T10 adversarial pass, lens `vacuous-tests`, 3/3 refuters upheld; confirmed by reading before repair
+Effect:    gates.mjs deliberately drops NODE_ENV=development from every child (its own header says why), CI sets none, and verify-console-e2e's D-142 guard refuses an unset NODE_ENV with exit 2. So gate 22 fails on EVERY CI run -- while passing locally, because `pnpm verify:console-e2e` re-loads `.env`, which restores NODE_ENV=development. Red everywhere it matters, green on the one machine that already knows the answer. The `determinism` gate two hundred lines up carries `env: { NODE_ENV: 'test' }` for precisely this reason; this entry did not get one.
+Response:  FIXED
+Action:    `env: { NODE_ENV: 'test' }` on the gate entry, with a comment naming this failure. Verified that an exported NODE_ENV survives the pnpm script's `--env-file-if-exists=.env` (the env file fills only unset variables), so the value reaches the guard on both paths. Proven red the way CI would produce it: `env -u NODE_ENV node ops/scripts/verify-console-e2e.mjs` exits 2 with the D-142 message.
+Ruling needed: none.
+
+### D-163 - The gate built and tested a DEVELOPMENT React bundle -- the artifact its sibling gate exists to reject
+
+Severity:  BLOCKER (every claim the suite made was about a bundle that must never ship)
+Phase:     T11 - 2 (found by T10's adversarial pass)
+Source:    ops/scripts/verify-console-e2e.mjs -- the console build step passing `{ ...process.env }`
+Found by:  T10 adversarial pass; confirmed by measurement before repair: NODE_ENV=development build = 611,928 bytes, production = 370,308, matching the reviewer's figure exactly
+Effect:    In the only environment the gate's own guard permits, process.env carries NODE_ENV=development, Vite folds it into the define, and React's development build is emitted -- carrying the very marker (`Each child in a list`) the `production-react` gate greps for. The gate meant to test the shipping artifact manufactured the non-shipping one, tested that, and printed PASS.
+Response:  FIXED
+Action:    The build env now sets NODE_ENV='production' explicitly, and the gate PROVES what it just built before serving it: it greps the fresh dist for the dev-only marker (the same one assertProductionReact uses -- checked here as well because that gate inspects whatever dist holds at ITS list position, and this gate has just overwritten dist) and dies naming a DEVELOPMENT bundle. Proven red by planting NODE_ENV='development' into the build env: "the console build under test is a DEVELOPMENT bundle (...) NODE_ENV leaked into the build." Removed; clean run 322.69 kB, confirmed production.
+Ruling needed: none.
+
+### D-164 - The harness's CSP forbade its own API, so the built console was NEVER the thing under test
+
+Severity:  BLOCKER (sixteen green tests about an artifact that could not make one API call)
+Phase:     T11 - 1 and 2 (found by T10's adversarial pass)
+Source:    apps/console/e2e/serve.mjs replaying `connect-src 'self' https://api.adulis.example` verbatim; apps/console/playwright.config.ts `reuseExistingServer: !CI`
+Found by:  T10 adversarial pass; confirmed empirically before repair -- msedge against the real dist and serve.mjs: "Connecting to 'http://localhost:3000/v1/bootstrap' violates the following Content Security Policy directive: connect-src 'self' https://api.adulis.example. The action has been blocked."
+Effect:    The gate builds the console against http://localhost:3000 and serves it under a policy that permits only the production API origin. Every fetch the page makes is refused BEFORE it leaves the browser. Under that configuration no C-4 or C-3 data assertion can pass -- so the fact that sixteen DID pass means the suite was driving something else: `reuseExistingServer: !CI` reused whatever already held the console port, and nothing ever checked what that was. **The plants proved each assertion discriminates; nothing proved the assertions were pointed at the right thing. Two different properties, and this project had been treating the first as evidence of the second.**
+Response:  FIXED, as an INVARIANT rather than a patch: **the harness proves the IDENTITY of the artifact under test, not its liveness.**
+Action:    Three parts.
+           1. THE CSP IS DERIVED, NOT REPLAYED. A policy hardcoded in one file and an origin configured in another will drift silently, so serve.mjs rebuilds connect-src from E2E_API_BASE_URL -- the same variable the build consumes as VITE_API_BASE_URL. Same shape as production ('self' plus exactly one API origin); one source for both. Everything else in the policy is served byte for byte.
+           2. A BUILD ID, minted per run, stamped into the page by the build (index.html data-build-id via Vite's HTML env replacement; vite.config defaults it to 'untagged' so ordinary builds never ship the literal token), asserted by the suite's FIRST test (e2e/00-identity.spec.ts) against the page the server ACTUALLY served -- plus, in the same test, a real fetch to the API origin from the page's own context, so a blocking policy fails on test one with the browser's refusal quoted instead of sixteen green tests.
+           3. THE API'S IDENTITY IS IN-BAND TOO: the gate mints a boot marker, passes it as ADULIS_BOOT_MARKER, /healthz echoes it (additive field), and the gate asserts the echo. The T10-era rebuild and early-exit detection narrow the stale-process window; the marker closes it. Decision recorded per the order: the rebuild alone does NOT suffice, because a stale listener makes the fresh child die on EADDRINUSE and everything after that is theatre.
+           Proven red three ways (S2.1's plants 1-3): a stale server -> port guard, named; the same stale server with the guard deliberately bypassed -> "BUILD ID MISMATCH ... STALE OR FOREIGN SERVER", both ids named; the production CSP replayed verbatim -> "THE PAGE CANNOT REACH THE API ... refused it as POLICY, not network", refusal quoted.
+Ruling needed: none.
+
+### D-165 - reuseExistingServer meant any local run could test whatever held the console port
+
+Severity:  MAJOR on its own; the enabling half of D-164's disaster in combination
+Phase:     T11 - 2 (found by T10's adversarial pass)
+Source:    apps/console/playwright.config.ts -- `reuseExistingServer: !process.env['CI']`
+Found by:  T10 adversarial pass (three separate lenses found it independently)
+Effect:    CI is unset on every local machine, so every local run would silently adopt an existing listener: a dev server with no CSP, a stale serve.mjs, anything. D-160 fixed exactly this hole for the API port and its Response said "FIXED, both halves" -- the console port had the identical hole one line further out, unfixed, and it is the port the sixteen green tests came through.
+Response:  FIXED
+Action:    Reuse is now an explicit human act (`E2E_REUSE_SERVER=1`, for tight dev loops); the gate never sets it, and the gate ALSO refuses to start when anything answers the console port -- two independent controls, neither trusted alone, and the build-id assertion still stands behind both even when a human opts into reuse.
+Ruling needed: none.
+
+### D-166 - A plant that is not proven to be in force tests nothing: the CSP plant silently lost a port race
+
+Severity:  MINOR (caught during T11 itself, before anything was recorded on its evidence)
+Phase:     T11 - 1
+Source:    the S2.1 plant procedure, first attempt at the wrong-CSP plant
+Found by:  T11, because the planted run came back GREEN and green was investigated instead of shrugged at
+Effect:    The planted serve.mjs lost the port to the previous, healthy server (`pkill` does not reliably kill detached node processes on this platform; the plant died on EADDRINUSE in a background log nobody was reading) and the identity spec correctly PASSED -- against the unplanted configuration. Had that green been misread, the record would say the self-test fails to catch a wrong CSP, when in fact the wrong CSP was never served. This is the T10 lesson in miniature, applied to the proving procedure itself: T8 established that a plant must leave the checked thing reachable; this adds that A PLANT MUST BE PROVEN IN FORCE before its result is read.
+Response:  FIXED in procedure
+Action:    The plant was re-run after killing the holder BY PID and curling the served policy first -- the planted directive was confirmed on the wire (`connect-src 'self' https://api.adulis.example`) before the spec ran, and only then was the red recorded. Register entry so the next plant procedure starts from this rule.
+Ruling needed: none.
