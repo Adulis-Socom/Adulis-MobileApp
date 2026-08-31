@@ -20,6 +20,8 @@ const ORDER = {
   submitted: '5eed0000-0000-4000-8000-000000000012',
   confirmed: '5eed0000-0000-4000-8000-000000000013',
   completed: '5eed0000-0000-4000-8000-000000000014',
+  /** PAYMENT_SUBMITTED with the confirmation deadline ALREADY PAST (D-167). */
+  lapsed: '5eed0000-0000-4000-8000-000000000015',
 };
 
 const detail = (id: string) => `/s/${SEEDED.sellerId}/orders/${id}`;
@@ -34,7 +36,7 @@ test.describe('SC-03 -- the orders list', () => {
     await page.goto(`/s/${SEEDED.sellerId}/orders`);
 
     const rows = page.locator('[data-order]');
-    await expect(rows).toHaveCount(4);
+    await expect(rows).toHaveCount(5);
 
     /*
      * THE THREE TREATMENTS, ADU-CON-03 S7. `data-clock` carries WHICH clock,
@@ -79,11 +81,12 @@ test.describe('SC-03 -- the orders list', () => {
 
   test('the filter groups the loaded rows, and says that is what it does', async ({ page }) => {
     await page.goto(`/s/${SEEDED.sellerId}/orders`);
-    await expect(page.locator('[data-order]')).toHaveCount(4);
+    await expect(page.locator('[data-order]')).toHaveCount(5);
 
     await page.locator('[data-filter="needs_action"]').click();
-    await expect(page.locator('[data-order]')).toHaveCount(1);
+    await expect(page.locator('[data-order]')).toHaveCount(2);
     await expect(page.locator(`[data-order="${ORDER.submitted}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-order="${ORDER.lapsed}"]`)).toHaveCount(1);
 
     await page.locator('[data-filter="completed"]').click();
     await expect(page.locator(`[data-order="${ORDER.completed}"]`)).toHaveCount(1);
@@ -308,22 +311,48 @@ test.describe('SC-05 -- payment evidence', () => {
     await expect(modal.locator('[data-verbatim="verify-in-your-own-bank"]')).toBeVisible();
 
     /*
-     * REVOKED ON UNMOUNT. Asserted by FETCHING THE URL after closing: a
-     * revoked blob URL is not resolvable, and this is the only check that
-     * distinguishes a real revoke from a cleanup function nobody called.
-     * Checking that the <img> is gone would pass with the blob still alive.
+     * REVOKED ON UNMOUNT -- ASSERTED BY A MECHANISM THE CSP DOES NOT
+     * PRE-EMPT, AND PROVEN LIVE BEFORE IT IS TRUSTED (T11 Phase 4, D-168).
+     *
+     * The first version fetch()ed the URL after closing and required the
+     * fetch to fail. It always failed: connect-src does not list blob:, so
+     * the CSP refused the fetch whether or not the URL was revoked. The
+     * assertion passed for a reason unrelated to what it claimed -- the
+     * D-132/D-152 class, in the phase's proudest test.
+     *
+     * The honest instrument is an IMAGE LOAD: img-src explicitly allows
+     * blob: (it is how the evidence renders at all), and an Image given a
+     * live blob URL fires `load` while a revoked one fires `error`. Run
+     * BOTH SIDES: while the modal is open the probe must say ALIVE --
+     * proving the instrument can distinguish, so the later "revoked" is a
+     * measurement and not a default. Then close, and the same probe must
+     * say revoked.
      */
+    const probeBlob = (url: string) =>
+      page.evaluate(
+        (u) =>
+          new Promise<'alive' | 'revoked'>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve('alive');
+            img.onerror = () => resolve('revoked');
+            img.src = u;
+          }),
+        url,
+      );
+
+    expect(
+      await probeBlob(src as string),
+      'the probe must see a LIVE blob while the modal is open -- if it cannot, ' +
+        'the revoked verdict below would be vacuous (D-168)',
+    ).toBe('alive');
+
     await page.locator('.modal.evidence .modal-close').click();
     await expect(page.locator('.modal.evidence')).toHaveCount(0);
 
-    const stillAlive = await page.evaluate(
-      (url) =>
-        fetch(url)
-          .then(() => true)
-          .catch(() => false),
-      src as string,
-    );
-    expect(stillAlive, 'the blob URL must be revoked when the modal unmounts').toBe(false);
+    expect(
+      await probeBlob(src as string),
+      'the blob URL must be revoked when the modal unmounts',
+    ).toBe('revoked');
   });
 });
 
@@ -332,6 +361,23 @@ test.describe('SC-04 -- terminal orders', () => {
     await openDetail(page, ORDER.completed);
 
     await expect(page.locator('[data-state="TERMINAL"]')).toHaveCount(1);
+
+    /*
+     * SHOW QR IS PRESENT AND DISABLED (D-169). It used to stay operable
+     * here: `paid` includes COMPLETED, so a terminal screen offered a live
+     * signed handoff token for an order that is over. Present rather than
+     * gone -- the handoff region renders-not-hides -- but inert, and clicking
+     * it (force, past the disabled attribute) opens nothing.
+     */
+    const qr = page.locator('[data-action="show-qr"]');
+    await expect(qr).toHaveCount(1);
+    await expect(qr).toBeDisabled();
+    await qr.click({ force: true });
+    await expect(page.locator('.modal.qr')).toHaveCount(0);
+
+    // The line's state is a LABEL, not the raw enum (D-171): a seller reads
+    // "Fulfilled", and the word came through the catalogue.
+    await expect(page.locator('.line-state')).toHaveText('Fulfilled');
 
     // The history is the order's own, from core.order_state_transition --
     // five transitions for the completed fixture, ending at COMPLETED.
@@ -346,5 +392,78 @@ test.describe('SC-04 -- terminal orders', () => {
     await expect(page.locator('[data-decision="confirm"]')).toHaveCount(0);
     await expect(page.locator('[data-action="cant-fulfil"]')).toHaveCount(0);
     await expect(page.locator('[data-action="reissue-instructions"]')).toHaveCount(0);
+  });
+
+  test('reissue is not offered where the database would refuse it', async ({ page }) => {
+    /*
+     * D-170. fn_reissue_instructions accepts CREATED, NOTIFIED and
+     * PAYMENT_SUBMITTED; the control used to render enabled on
+     * PAYMENT_CONFIRMED, where the POST always raises "order is not payable"
+     * -- AFTER the seller has spent an OTP on the step-up the action
+     * requires. A control the server will refuse must not cost a step-up to
+     * find out. Both sides asserted: absent where refused, present where
+     * accepted.
+     */
+    await openDetail(page, ORDER.confirmed);
+    await expect(page.locator('[data-action="reissue-instructions"]')).toHaveCount(0);
+
+    await openDetail(page, ORDER.submitted);
+    await expect(page.locator('[data-action="reissue-instructions"]')).toHaveCount(1);
+  });
+
+  test('the SC-04 gap sentences carry their markers, and the markers are load-bearing', async ({
+    page,
+  }) => {
+    /*
+     * T10's report claimed all six stated gaps were e2e-asserted; only
+     * SC-03's two were (the T10 adversarial pass, upheld 3/3). These are the
+     * SC-04 two. Asserted BY MARKER, so deleting the data-gap attribute --
+     * not just the sentence -- fails the suite: a marker a test never reads
+     * is decorative (D-121's class).
+     */
+    await openDetail(page, ORDER.submitted);
+    await expect(page.locator('.buyer-region [data-gap="D-153"]')).toBeVisible();
+    await expect(page.locator('.handoff-region [data-gap="D-157"]')).toBeVisible();
+  });
+});
+
+test.describe('a deadline already past -- D-167', () => {
+  /*
+   * THE ASSERTION IS A REQUEST COUNT, NOT A RENDERING. D-167: <Deadline>'s
+   * once-only guard was a ref, ScreenState remounted its subtree on every
+   * READY<->STALE flip, and the refetch the guard permitted caused the very
+   * remount that reset the guard -- ~68 requests/second, unbounded, on any
+   * order whose displayed deadline had passed. Every RENDERING assertion
+   * passed throughout: the screen looked perfect while it hammered the API.
+   *
+   * The seeded `lapsed` order exists for this test: PAYMENT_SUBMITTED, its
+   * confirmation deadline hours behind now(). Legal state (the clock
+   * consistency constraint binds clock_stopped_at, not sla_deadline), and no
+   * worker runs under the harness, so the expiry sweep cannot move it.
+   *
+   * Budget: initial load, at most one elapsed refetch, plus modest headroom
+   * for React strict-effects double-invocation. The broken code blows past
+   * this in the first second.
+   */
+  test('refetches at most once, instead of forever', async ({ page }) => {
+    let detailRequests = 0;
+    page.on('request', (r) => {
+      if (r.url().includes(`/v1/seller/orders/${ORDER.lapsed}`)) detailRequests += 1;
+    });
+
+    await openDetail(page, ORDER.lapsed);
+    // The elapsed treatment renders -- the CONFIRMATION clock, saying the
+    // time has passed, deciding nothing.
+    await expect(page.locator('[data-clock="CONFIRMATION"]')).toHaveCount(1);
+    await expect(page.locator('.deadline-value')).toContainText(/passed/i);
+
+    // Hold the screen open across several would-be loop iterations.
+    await page.waitForTimeout(4_000);
+
+    expect(
+      detailRequests,
+      `the screen made ${detailRequests} requests for one order in ~4s -- ` +
+        'the elapsed-deadline refetch is looping (D-167)',
+    ).toBeLessThanOrEqual(4);
   });
 });

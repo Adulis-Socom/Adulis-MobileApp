@@ -112,7 +112,10 @@ const rowCounts = async (c) => {
            (SELECT count(*)::int FROM core.seller) AS sellers,
            (SELECT count(*)::int FROM core.device) AS devices,
            (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing,
-           (SELECT count(*)::int FROM core."order") AS orders`);
+           (SELECT count(*)::int FROM core."order") AS orders,
+           (SELECT count(*)::int FROM core.product_variant v
+             WHERE v.stock_count <> coalesce((SELECT sum(e.delta) FROM core.stock_event e
+                                              WHERE e.variant_id = v.id), 0)) AS stock_drift`);
   return r.rows[0];
 };
 const show = (label, c) =>
@@ -120,7 +123,8 @@ const show = (label, c) =>
     c === null
       ? `${label}: no core.market -- nothing has been migrated here yet`
       : `${label}: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
-        `devices ${c.devices}, timing_config in force ${c.timing}, orders ${c.orders}`,
+        `devices ${c.devices}, timing_config in force ${c.timing}, orders ${c.orders}, ` +
+        `stock drift ${c.stock_drift}`,
   );
 
 const tables = await client.query(
@@ -221,13 +225,21 @@ show('after', c);
  * seed that silently stops producing a timing row turns this red instead of
  * leaving a database where bootstrap succeeds and sign-in cannot (D-128).
  *
+ * (5 since T11: the fifth is D-167's already-lapsed deadline.)
  * `orders` was added with C-4's trade fixture, and it is the count that most
  * needs pinning: three of the four exist to carry ONE CLOCK TREATMENT EACH,
  * so a seed that quietly stops producing the PAYMENT_SUBMITTED order leaves
  * SC-03 rendering correctly and the confirmation-window branch untested --
  * green, and covering nothing.
  */
-const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 4 };
+/*
+ * stock_drift: variants whose stock_count disagrees with the sum of their
+ * ledger (T11 Phase 6, D-173). Zero, always -- fn_apply_stock_event is the
+ * only writer of the column, so any drift means rows were written around the
+ * ledger, which is exactly what the first trade fixture did: reservations
+ * holding stock no event ever deducted, so a release INVENTED two units.
+ */
+const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 5, stock_drift: 0 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)

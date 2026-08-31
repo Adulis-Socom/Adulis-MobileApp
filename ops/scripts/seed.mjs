@@ -83,6 +83,7 @@ const PRODUCT = '5eed0000-0000-4000-8000-000000000006';
  */
 const VARIANT = {
   created: '5eed0000-0000-4000-8000-000000000007',
+  lapsed: '5eed0000-0000-4000-8000-00000000000b',
   submitted: '5eed0000-0000-4000-8000-000000000008',
   confirmed: '5eed0000-0000-4000-8000-000000000009',
   completed: '5eed0000-0000-4000-8000-00000000000a',
@@ -90,12 +91,22 @@ const VARIANT = {
 const BUYER_PHONE = '+251900000002';
 const ORDER = {
   created: '5eed0000-0000-4000-8000-000000000011',
+  /*
+   * T11 Phase 4 (D-167). A PAYMENT_SUBMITTED order whose confirmation
+   * deadline has ALREADY PASSED -- the state every real order reaches by
+   * simply existing, and the one the fixture deliberately lacked, which is
+   * why the unbounded-refetch defect never fired here. The harness asserts a
+   * REQUEST COUNT against this order, not a rendering. No worker runs under
+   * the harness, so the expiry sweep cannot move it mid-test.
+   */
+  lapsed: '5eed0000-0000-4000-8000-000000000015',
   submitted: '5eed0000-0000-4000-8000-000000000012',
   confirmed: '5eed0000-0000-4000-8000-000000000013',
   completed: '5eed0000-0000-4000-8000-000000000014',
 };
 const LINE = {
   created: '5eed0000-0000-4000-8000-000000000021',
+  lapsed: '5eed0000-0000-4000-8000-000000000025',
   submitted: '5eed0000-0000-4000-8000-000000000022',
   confirmed: '5eed0000-0000-4000-8000-000000000023',
   completed: '5eed0000-0000-4000-8000-000000000024',
@@ -213,11 +224,29 @@ try {
      ON CONFLICT (id) DO NOTHING`,
     [PRODUCT, SELLER, M],
   );
+  /*
+   * VARIANTS START AT ZERO AND THE LEDGER PRODUCES THE COUNT (T11 Phase 6,
+   * D-173's fixture half). The first version set stock_count = 40 directly
+   * and wrote NO core.stock_event rows -- so every seeded reservation held
+   * stock that was never deducted, and releasing one (Can't Fulfil, or the
+   * expiry sweep) INVENTED INVENTORY: fn_cancel_line inserts +quantity and
+   * fn_apply_stock_event applied it to a count that had never gone down --
+   * 40 became 42 on a variant that was only ever stocked at 40.
+   *
+   * Now the fixture tells the ledger's story: SELLER_SET +42, then
+   * ORDER_CREATED -2 per reservation (below, after the orders exist for the
+   * FKs), and stock_count is OUTPUT -- fn_apply_stock_event, the only writer
+   * of the column, computes 40. A release then correctly returns held stock.
+   *
+   * The schema question underneath -- nothing PREVENTS a reservation without
+   * its reserving event -- is D-173 and needs a ruling; a fixture cannot fix
+   * that and does not try.
+   */
   for (const [key, vid] of Object.entries(VARIANT)) {
     await client.query(
       `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor,
                                          price_currency, stock_count, variant_key)
-       VALUES ($1,$2,$3,48000,'ETB',40,$4)
+       VALUES ($1,$2,$3,48000,'ETB',0,$4)
        ON CONFLICT (id) DO NOTHING`,
       [vid, PRODUCT, SELLER, key],
     );
@@ -262,6 +291,41 @@ try {
     'PAYMENT_CONFIRMED', '-30 hours', true, '78 hours');
   await order(ORDER.completed, LINE.completed, VARIANT.completed,
     'COMPLETED', '-90 hours', true, '140 hours');
+  await order(ORDER.lapsed, LINE.lapsed, VARIANT.lapsed,
+    'PAYMENT_SUBMITTED', '-40 hours', false, '80 hours');
+
+  /*
+   * THE STOCK LEDGER (D-173's fixture half; see the variant block above).
+   * WHERE NOT EXISTS rather than ON CONFLICT, and that is load-bearing for
+   * idempotency: fn_apply_stock_event is a BEFORE INSERT trigger, and BEFORE
+   * triggers FIRE EVEN WHEN ON CONFLICT DO NOTHING then discards the row --
+   * so a re-run under ON CONFLICT would re-apply every delta and the counts
+   * would climb by 40 per seeding. With NOT EXISTS the INSERT selects zero
+   * rows on a re-run and the trigger never fires.
+   */
+  const stockEvent = async (id, variantId, delta, reason, orderId, resId) => {
+    await client.query(
+      `INSERT INTO core.stock_event
+         (id, variant_id, seller_id, delta, reason, order_id, reservation_id,
+          actor_account_id)
+       SELECT $1, $2, $3, $4, $5::core.stock_event_reason, $6, $7, $8
+        WHERE NOT EXISTS (SELECT 1 FROM core.stock_event WHERE id = $1)`,
+      [id, variantId, SELLER, delta, reason, orderId, resId,
+       reason === 'SELLER_SET' ? ACCOUNT : BUYER],
+    );
+  };
+  const keys = ['created', 'submitted', 'confirmed', 'completed', 'lapsed'];
+  for (let i = 0; i < keys.length; i += 1) {
+    const k = keys[i];
+    await stockEvent(
+      `5eed0000-0000-4000-8000-0000000000a${i}`, VARIANT[k], 42, 'SELLER_SET',
+      null, null,
+    );
+    await stockEvent(
+      `5eed0000-0000-4000-8000-0000000000b${i}`, VARIANT[k], -2, 'ORDER_CREATED',
+      ORDER[k], LINE[k],
+    );
+  }
 
   /*
    * The open submission carries the 24h confirmation deadline that the SC-03
@@ -284,6 +348,15 @@ try {
      ON CONFLICT (id) DO NOTHING`,
     ['5eed0000-0000-4000-8000-000000000032', ORDER.submitted,
      '5eed0000-0000-4000-8000-0000000000e1', M],
+  );
+  await client.query(
+    `INSERT INTO core.payment_submission
+       (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
+     VALUES ($1,$2, now() - interval '30 hours', $3, 'SUBMITTED',
+             now() - interval '6 hours')
+     ON CONFLICT (id) DO NOTHING`,
+    ['5eed0000-0000-4000-8000-000000000035', ORDER.lapsed,
+     '5eed0000-0000-4000-8000-0000000000e3'],
   );
   await client.query(
     `INSERT INTO core.payment_submission
@@ -358,9 +431,10 @@ Seeded (idempotent -- reruns change nothing):
 
   phone      ${PHONE}
   seller     ${SELLER}
-  orders     4, one per clock treatment (C-4): CREATED (reservation window),
-             PAYMENT_SUBMITTED (confirmation window), PAYMENT_CONFIRMED
-             (clock stopped) and COMPLETED (terminal).
+  orders     5: CREATED (reservation window), PAYMENT_SUBMITTED
+             (confirmation window), PAYMENT_CONFIRMED (clock stopped),
+             COMPLETED (terminal), and PAYMENT_SUBMITTED with the
+             confirmation deadline ALREADY PAST (D-167's regression state).
 
 Console dev loop (three terminals):
   1. pnpm dev:api            # OTP codes print here (dev SMS adapter)

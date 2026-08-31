@@ -298,6 +298,12 @@ export const en = {
   'console.trade.filter.completed': 'Completed',
   'console.trade.filter.cancelled': 'Cancelled',
 
+  'console.trade.line.active': 'Reserved',
+  'console.trade.line.fulfilled': 'Fulfilled',
+  'console.trade.line.cancelled_by_buyer': 'Cancelled by the buyer',
+  'console.trade.line.cancelled_by_seller': 'Cancelled by you',
+  'console.trade.line.refunded': 'Refunded',
+  'console.trade.line.expired': 'Expired',
   'console.trade.payment.verify_first': 'Verify the payment in your own bank or payment account before confirming.',
   'console.trade.payment.confirm': 'Confirm Payment Received',
   'console.trade.payment.reject': 'Payment Not Received',

@@ -76,6 +76,23 @@ PR #40.
 
 ## Phase 4 -- the console harness
 
+> **T11 CORRECTION -- THE VERIFICATION CLAIMS OF THIS SECTION ARE WITHDRAWN.**
+> Under ADU-RUL-03 S5.1 a claim names its instrument, and the instrument was
+> wrong: the harness's own CSP forbade the built console from reaching the API
+> (D-164), `reuseExistingServer` let the suite adopt whatever already held the
+> console port (D-165), the gate could not run in CI at all (D-162), and its
+> build produced a development bundle (D-163). So "8 passed", the D-146 plant
+> counts, and every "the harness caught / proved" sentence below were produced
+> against an UNVERIFIED artifact -- most consistent with a leftover dev server
+> on the port; never identified, and now unidentifiable. The claims are
+> withdrawn as UNSUPPORTED, not asserted false.
+>
+> What survives as read-derived: the harness's design (one sign-in, sign-in in
+> one file, storageState, the D-152 lesson about asserting URLs). What was
+> re-derived at T11 under an identity-proving harness (build id, boot marker,
+> derived CSP -- see T11-REPORT): the full suite passes for real, and the
+> D-146 plant fails it for real.
+
 **Playwright, against the built console and the real API, on a database reset
 immediately before.** Appended as gate `console-e2e`.
 
@@ -122,6 +139,16 @@ PR #41.
 ---
 
 ## Phase 5 -- C-4, Trade
+
+> **T11 CORRECTION -- the run-derived claims of this section are withdrawn**
+> for the same instrument failure as Phase 4's (D-162..D-165): "16 passed" and
+> the plant table below were produced against an unverified artifact. At T11,
+> under the identity-proving harness, the suite was re-run and ALL FOUR plants
+> re-proven red (the three C-4 plants and D-146's), so the section's
+> conclusions stand -- but on T11's evidence, not on the runs reported here.
+> The screens' code-level facts (verbatim labels, the clock mapping, R20's
+> disabled-not-hidden markup) are read-derived and were never in doubt; what
+> the runs claimed to add was proof, and that arrived at T11.
 
 SC-03 Orders, SC-04 Order detail, SC-05 Payment evidence, SC-06 Handoff and QR.
 Every rule below is asserted by `console-e2e` and **proved by planting its
@@ -183,9 +210,13 @@ six digits, verifies and hands back an id.
 
 ### What the phase found
 
-**Six gaps, stated rather than filled.** Each is on screen with a
-`data-gap` attribute and an e2e assertion, so a later agent cannot quietly
-delete an awkward sentence:
+**Six gaps, stated rather than filled.** *(T11 correction: the sentence that
+followed -- "each is on screen with a data-gap attribute and an e2e assertion"
+-- was true of two of the six when written. The three SELLER-VISIBLE gaps
+(D-153 on both screens, D-154, D-157) carry markers, all four markers asserted
+since T11; D-155, D-156 and D-158 are internal-facing and live in the register
+and the source headers, not on screen -- a seller's screen is not the place to
+document an API's missing field.)*
 
 | | |
 |---|---|
@@ -198,8 +229,12 @@ delete an awkward sentence:
 
 **One thing owed build, and built** -- D-159. The seller order endpoints
 returned neither the confirmation deadline, nor a line count, nor any history.
-`core.order_state_transition` has existed since migration 11, is written by a
-trigger, is protected against mutation, and **nothing had ever read it.**
+*(T11 correction: this entry's flourish -- "nothing had ever read it" -- was
+false. `claims.service.ts` builds claim evidence from `core.order_state_transition`
+and `jobs/e1-clock.ts` reads it to decide confirmation-window expiry. The
+OWED-BUILD half stands: no SELLER-FACING endpoint returned the history. The
+source header carrying the false version is corrected in place; the register
+carries D-174.)*
 
 **And two defects in the harness itself**, both found on C-4's first run:
 

@@ -45,7 +45,7 @@
  * order becomes is the server's answer, arriving the only way it ever does.
  * Nothing in this module returns a state, hides a control, or disables one.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { en } from '@adulis/locale';
 import { fillTemplate } from './intl';
 import { useMarket } from './market';
@@ -146,11 +146,35 @@ function remaining(deadlineIso: string, nowMs: number): { h: number; m: number }
   return { h: Math.floor(ms / 3_600_000), m: Math.floor((ms % 3_600_000) / 60_000) };
 }
 
+/**
+ * THE ONCE-ONLY GUARD LIVES ABOVE THE COMPONENT, IN MODULE STATE (T11 Phase
+ * 4, D-167). It was a ref -- and a ref dies with its component. The thing
+ * onElapsed causes (a refetch) used to cause the component's own remount
+ * (ScreenState rebuilt its subtree on every READY<->STALE flip), so the ref
+ * reset and the "once" fired again, forever: ~68 requests/second measured on
+ * any order whose displayed deadline was already past.
+ *
+ * IF THE THING A GUARD PREVENTS CAN CAUSE THE GUARD'S OWN REMOUNT, IT IS NOT
+ * A GUARD. ScreenState no longer remounts on that flip (the other half of
+ * the fix), but this module does not rely on it: a deadline string fires
+ * onElapsed AT MOST ONCE PER PAGE LIFE, whatever mounts and unmounts around
+ * it. Two independent controls; neither trusted alone.
+ *
+ * Correctness of at-most-once-per-page-life: a deadline that has passed
+ * before a later mount needs no elapsed refetch -- the mount's own initial
+ * load already fetched post-deadline truth. A NEW deadline (a new
+ * submission's window) is a new string and fires again. The set holds
+ * short strings and grows by one per deadline ever displayed; a page life
+ * displays a handful.
+ */
+const elapsedFired = new Set<string>();
+
 interface DeadlineProps {
   readonly clock: Clock;
   /**
-   * Called ONCE when the displayed deadline passes. The screen refetches;
-   * this component neither knows nor guesses what the order becomes.
+   * Called at most once PER DEADLINE STRING PER PAGE LIFE, when the displayed
+   * deadline passes. The screen refetches; this component neither knows nor
+   * guesses what the order becomes.
    */
   readonly onElapsed?: () => void;
 }
@@ -167,13 +191,11 @@ export function Deadline({ clock, onElapsed }: DeadlineProps) {
   // so the suppression would be a comment that silences nothing.
   const skew = useServerSkew();
   const [now, setNow] = useState(() => Date.now() + skew);
-  const fired = useRef(false);
 
   const deadline = clock.kind === 'NONE' ? null : clock.deadline;
 
   useEffect(() => {
     if (!deadline) return;
-    fired.current = false;
     setNow(Date.now() + skew);
     // Once a minute: this displays hours and minutes, and a per-second timer
     // would wake the tab sixty times for each change a person can see.
@@ -182,9 +204,11 @@ export function Deadline({ clock, onElapsed }: DeadlineProps) {
   }, [deadline, skew]);
 
   useEffect(() => {
-    if (!deadline || fired.current) return;
+    if (!deadline || elapsedFired.has(deadline)) return;
     if (remaining(deadline, now) === null) {
-      fired.current = true;
+      // Marked BEFORE the callback: onElapsed sets parent state, and marking
+      // after would leave a window where a re-render re-enters this effect.
+      elapsedFired.add(deadline);
       // REFETCH, not a local transition. Everything the screen shows after
       // this moment is the server's answer.
       onElapsed?.();

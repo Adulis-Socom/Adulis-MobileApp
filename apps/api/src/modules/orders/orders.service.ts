@@ -414,10 +414,18 @@ export class OrdersService {
         FROM core.payment_submission
        WHERE order_id = ${orderId}
        ORDER BY submitted_at DESC`.execute(trx);
-    // SC-04 region 6, the append-only transition list. The table has existed
-    // since migration 11 and nothing read it: `core.order_state_transition`
-    // is written by trg_log_order_transition and protected by trg_append_only,
-    // so this is the order's own history rather than a reconstruction.
+    // SC-04 region 6, the append-only transition list, written by
+    // trg_log_order_transition and protected by trg_append_only -- the
+    // order's own history rather than a reconstruction.
+    //
+    // NOT THE ONLY READER, and this comment used to say it was (T11 Phase 7,
+    // correcting D-159's false claim -- a wrong report gets fact-checked; a
+    // wrong comment gets believed). Two readers predate this query:
+    // claims.service.ts builds a claim's evidence bundle from this table
+    // with nearly this SELECT, and jobs/e1-clock.ts reads it to decide which
+    // PAYMENT_SUBMITTED orders have lapsed their confirmation window. Change
+    // this table's columns, ordering, grants or filters and you are changing
+    // THREE consumers, one of which decides expiry on the money path.
     const history = await sql<Record<string, unknown>>`
       SELECT from_state::text AS from_state, to_state::text AS to_state,
              reason, occurred_at

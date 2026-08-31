@@ -1729,3 +1729,96 @@ Effect:    The planted serve.mjs lost the port to the previous, healthy server (
 Response:  FIXED in procedure
 Action:    The plant was re-run after killing the holder BY PID and curling the served policy first -- the planted directive was confirmed on the wire (`connect-src 'self' https://api.adulis.example`) before the spec ran, and only then was the red recorded. Register entry so the next plant procedure starts from this rule.
 Ruling needed: none.
+### D-167 - A past deadline produced an unbounded refetch loop: the once-only guard died with its component
+
+Severity:  BLOCKER (a sustained self-inflicted request flood on the console's most important screen)
+Phase:     T11 - 4 (found by T10's adversarial pass; measured there at ~68 req/s)
+Source:    apps/console/src/lib/clock.tsx (the `fired` ref) with apps/console/src/components/ScreenState.tsx (READY/STALE as two element shapes)
+Found by:  T10 adversarial pass, reproduced with a minimal harness; re-measured at T11 by the new request-count test: 1067 requests in ~4 seconds
+Effect:    `onElapsed` refetches; the refetch flips READY<->STALE; ScreenState's two branches put the children at different positions, so React UNMOUNTS AND REMOUNTS the subtree on every flip; the remount resets the `fired` ref and the "once-only" callback fires again. Forever, on any order whose displayed deadline has already passed -- which is the state every real order reaches by simply existing. The fixture never triggered it because both its live deadlines were deliberately in the future, so every RENDERING assertion passed while the defect sat one seeded row away.
+           **If the thing a guard prevents can cause the guard's own remount, it is not a guard.**
+           The remount was also destroying focus, scroll and any half-typed rejection reason on every background refresh -- a defect in its own right that nothing had noticed.
+Response:  FIXED, twice over -- two independent controls, neither trusted alone.
+Action:    1. ScreenState renders READY and STALE as ONE element shape (children at a stable position; a null slot is a position), so the flip no longer remounts the subtree.
+           2. The guard moved above the remount boundary: a module-level set of deadline strings -- a deadline fires onElapsed at most once per page life, whatever mounts around it. (Correct as well as safe: a deadline that passed before a later mount needs no elapsed refetch; the mount's own load already fetched post-deadline truth.)
+           The fixture gained a fifth order -- PAYMENT_SUBMITTED, confirmation deadline hours past -- and the harness a REQUEST-COUNT test (<= 4 requests in ~4s), because every rendering assertion had passed throughout the flood. Proven: both controls out -> 1067 requests, red; the guard alone with the remount re-planted -> 20 passed; restored -> 20 passed.
+Ruling needed: none.
+
+### D-168 - The blob-revoke assertion could not fail: the CSP refused the probe whether or not the URL was revoked
+
+Severity:  BLOCKER for the claim it protected (the phase's proudest test, asserting nothing)
+Phase:     T11 - 4 (found by T10's adversarial pass)
+Source:    apps/console/e2e/trade.spec.ts -- `fetch(blobUrl)` after closing the modal, required to fail
+Found by:  T10 adversarial pass, two lenses independently
+Effect:    `connect-src` does not list `blob:`, so the fetch was refused by POLICY before the blob's liveness was ever consulted. The assertion passed for a reason unrelated to what it claimed -- D-132/D-152's class. Delete the `URL.revokeObjectURL` call and the suite stayed green while decrypted payment evidence lived in the tab for as long as the tab did.
+Response:  FIXED
+Action:    The instrument is an IMAGE LOAD -- `img-src` explicitly allows `blob:` (it is how evidence renders at all), and an Image on a live blob fires `load` while a revoked one fires `error`. Run BOTH SIDES: while the modal is open the probe must report ALIVE, proving the instrument discriminates, so the later "revoked" is a measurement and not a default. Proven: revoke call deleted -> exactly one failure, "the blob URL must be revoked when the modal unmounts"; restored -> 20 passed.
+Ruling needed: none. Carried beside D-152 and D-161: an assertion whose failure path is pre-empted by an unrelated mechanism is green about nothing.
+
+### D-169 - Show QR stayed operable on a COMPLETED order: a terminal screen minting a live signed handoff token
+
+Severity:  MAJOR
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived, so it survived the instrument failure)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- `disabled={!paid}`, and `paid` includes COMPLETED
+Found by:  T10 adversarial pass, two lenses independently
+Effect:    TERMINAL is "history, no actions" (ADU-CON-03 S3), and the QR token is not a picture -- scanning it is a state-transition instrument. A completed order kept an enabled control that fetched and displayed a live signed token for an order that is over.
+Response:  FIXED
+Action:    `disabled={!paid || ended}` -- present and inert, per the region's render-don't-hide doctrine. The terminal e2e test now asserts it: present, disabled, and a forced click opens nothing.
+Ruling needed: none for C-4. Whether the QR should also close at HANDED_OFF (the scan has already happened) is a smaller question left with C-8's courier work, where R25 lives.
+
+### D-170 - Reissue was offered where the database always refuses -- after charging the seller a step-up to find out
+
+Severity:  MAJOR
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- reissue gated on `!ended` only
+Found by:  T10 adversarial pass; confirmed against db/migrations/0022: fn_reissue_instructions accepts CREATED, NOTIFIED, PAYMENT_SUBMITTED and raises "order is not payable" otherwise
+Effect:    On PAYMENT_CONFIRMED and HANDED_OFF the console rendered an enabled control for an action the server will always refuse -- and because reissue is challengeRequired, the refusal arrived only AFTER an OTP was sent and six digits typed. One of three hourly OTPs spent on an impossibility; a second try walks into D-124's 429-about-nothing.
+Response:  FIXED
+Action:    The control renders only in the three states the function accepts, cited to the migration. ABSENT rather than disabled, deliberately: unlike R20's handoff region this is not "opens later in the sequence" -- once payment is confirmed there are never instructions to reissue, and a disabled control would teach a seller to wait for something that never comes. Asserted both ways: absent on the confirmed fixture, present on the submitted one.
+Ruling needed: none.
+
+### D-171 - Order lines rendered the raw core.reservation_state enum as seller-visible text
+
+Severity:  MAJOR (untranslated seller-visible strings that bypassed the catalogue's compile-error guarantee)
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- `{l.state}` in the lines region
+Found by:  T10 adversarial pass
+Effect:    ACTIVE, FULFILLED, CANCELLED_BY_BUYER rendered verbatim. "A missing Amharic key is a compile error" held vacuously for these strings BECAUSE THEY NEVER ENTERED THE CATALOGUE -- the guarantee only covers what goes through it.
+Response:  FIXED
+Action:    Six keys in both catalogues (declared in MT-KEYS.md as awaiting the human pass, like every console key), a label map with the render-unknown-as-code fallback Home and StateBadge already use, and a terminal-order assertion that the seller reads "Fulfilled", not FULFILLED.
+Ruling needed: none.
+
+### D-172 - The readiness link test skipped exactly the rows whose links were broken -- and two live server kinds already had no route
+
+Severity:  MAJOR (a vacuous guard over D-146's exact regression, plus the regression itself, live for COMPANY sellers)
+Phase:     T11 - 5 (found by T10's adversarial pass)
+Source:    apps/console/e2e/readiness.spec.ts (`if (!t.href) continue;`) and apps/console/src/features/entry/Home.tsx (ACTION_ROUTE)
+Found by:  T10 adversarial pass, 3/3 upheld; kinds confirmed against fn_publication_readiness in migration 0018
+Effect:    Two halves.
+           THE TEST: Home renders an UNROUTED SPAN -- not an anchor -- for any resolving-action kind missing from its table, and the test's loop skipped rows without hrefs. So deleting a route key turned rows into spans and the test quietly stopped checking them: it could not fail for the one regression it was written against.
+           THE TABLE: the server emits DECLARE_SELLER_TYPE and PROVIDE_COMPANY_DETAILS; the console's table had neither -- it had COMPLETE_COMPANY_DETAILS, a key the server never sends. A COMPANY seller with company details outstanding got a dead span for a BLOCKING requirement: D-146's shape, invisible in the fixture because the seeded seller is INDIVIDUAL and both rows are satisfied for it.
+Response:  FIXED, both halves
+Action:    The table's keys are now the server's verbatim (routes per ADU-CON-03 S6: item 2 -> SC-02, item 5 -> SC-17), and the test asserts ZERO unrouted rows before navigating every link -- a new server kind without a route now fails the suite by name at the moment it is introduced. Recorded fixture limit: the two corrected rows are satisfied for the seeded INDIVIDUAL seller, so their routes are exercised by table review, not by the navigation loop; a COMPANY fixture seller is future work.
+Ruling needed: none.
+
+### D-173 - Nothing prevents a reservation existing without its ORDER_CREATED stock event -- and a release then invents stock
+
+Severity:  MAJOR, on the money path; found by the fixture, true of production
+Phase:     T11 - 6 (read-derived from migrations 0008, 0011, 0012, 0021, 0028; needs no running database)
+Source:    the pairing of core.reservation and core.stock_event exists only PROCEDURALLY, inside fn_create_order
+Found by:  T10's adversarial pass flagged the fixture (reservations seeded with no events; Can't Fulfil took a variant from 40 to 42). T11 Phase 6 asked the question underneath.
+Effect:    There is NO trigger on core.reservation, no constraint, and no check anywhere that a reservation has a reserving event. fn_create_order writes both in one transaction -- and is the only place that does. Any other writer (a fixture, a manual repair, a future code path, a partial restore) can create a reservation that holds stock nothing ever deducted. The release side then makes it worse: fn_cancel_line and the expiry sweep insert +quantity keyed on (reservation_id, reason) -- idempotent per A3.2 -- WITHOUT checking that the reserving event exists. **If the reserving event can be absent, the release invents stock**: fn_apply_stock_event applies +2 to a count that never went down, and the storefront offers goods that do not exist.
+Response:  THE FIXTURE IS FIXED; THE SCHEMA QUESTION IS REGISTERED, NOT ANSWERED.
+Action:    The seed now creates variants at stock_count 0 and writes the real ledger -- SELLER_SET +42, ORDER_CREATED -2 per reservation -- so fn_apply_stock_event, the only writer of the column, produces the 40 (and a release correctly returns held stock instead of minting it). Written with WHERE NOT EXISTS rather than ON CONFLICT, because BEFORE INSERT triggers fire even when ON CONFLICT DO NOTHING discards the row, and a re-seed would have re-applied every delta. db:reset now pins `stock_drift: 0` -- variants whose stock_count disagrees with their ledger sum -- so the class is caught structurally on every reset.
+Ruling needed: YES -- whether the pairing should be database-enforced (a constraint trigger on core.reservation asserting its ORDER_CREATED event in-transaction, or a release that refuses when no reserving event exists, or a documented statement that fn_create_order's monopoly is the enforcement). Each has costs; none is a fixture's decision. NOT fixed in this order, per its S7.
+
+### D-174 - D-159's claim "nothing had ever read core.order_state_transition" was false, and it was load-bearing in a source header
+
+Severity:  MAJOR (an inaccurate register entry, repeated as fact where later agents read it)
+Phase:     T11 - 7
+Source:    register D-159; docs/build-status/T10-REPORT.md; the header comment above the history query in apps/api/src/modules/orders/orders.service.ts
+Found by:  T10 adversarial pass, 3/3 upheld: claims.service.ts builds claim evidence bundles from the table with nearly the identical SELECT, and jobs/e1-clock.ts reads it to decide which PAYMENT_SUBMITTED orders lapsed their confirmation window
+Effect:    An agent trusting the header would treat the seller history query as the table's sole consumer and change its columns, ordering, grants or filters accordingly -- breaking claim evidence and confirmation-window expiry, the second of which is the money path. A wrong report gets fact-checked; a wrong comment gets believed.
+Response:  CORRECTED where each copy sits (the register itself is append-only, so the correction is this entry).
+Action:    The source header now names all three consumers and warns that the expiry decision is one of them; the T10 report carries the correction inline, marked as a T11 edit; D-159's OWED-BUILD substance -- no SELLER-FACING endpoint returned the history -- stands.
+Ruling needed: none.

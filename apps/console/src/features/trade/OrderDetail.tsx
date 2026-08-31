@@ -64,6 +64,16 @@ import { PaymentEvidence } from './PaymentEvidence';
 import { HandoffQr } from './HandoffQr';
 import { isTerminal, openSubmission, type OrderDetail as Detail } from './types';
 
+/** core.reservation_state -> what a seller reads. Unknown values render as code. */
+const LINE_STATE_LABEL: Readonly<Record<string, string>> = {
+  ACTIVE: en['console.trade.line.active'],
+  FULFILLED: en['console.trade.line.fulfilled'],
+  CANCELLED_BY_BUYER: en['console.trade.line.cancelled_by_buyer'],
+  CANCELLED_BY_SELLER: en['console.trade.line.cancelled_by_seller'],
+  REFUNDED: en['console.trade.line.refunded'],
+  EXPIRED: en['console.trade.line.expired'],
+};
+
 export function OrderDetail() {
   const { sellerId, orderId } = useParams<{ sellerId: string; orderId: string }>();
   const market = useMarketContext();
@@ -199,7 +209,14 @@ export function OrderDetail() {
                     <span className="line-price">
                       {market ? formatMinor(market, Number(l.unit_price_minor)) : ''}
                     </span>
-                    <span className="line-state">{l.state}</span>
+                    {/* A label, not the raw enum (T11 Phase 5, D-171):
+                        core.reservation_state values rendered verbatim are
+                        untranslated seller-visible text that never entered
+                        the catalogue -- so the missing-Amharic-is-a-compile-
+                        error guarantee silently did not apply to them. An
+                        unknown value renders as its code, the Home/StateBadge
+                        precedent. */}
+                    <span className="line-state">{LINE_STATE_LABEL[l.state] ?? l.state}</span>
                     {/*
                       "Per-line Can't Fulfil where permitted." THERE IS NO
                       ACCEPT-RESERVATION COUNTERPART, and there must not be:
@@ -264,11 +281,21 @@ export function OrderDetail() {
                 without one earns a 400 from zod, never the 403 that the
                 interception path is for. Both doors end in the same retry.
 
-                Withheld once the order has ended: reissuing instructions for
-                a completed order sends a buyer a payment request for
-                something they have already received.
+                OFFERED ONLY IN THE STATES fn_reissue_instructions ACCEPTS --
+                CREATED, NOTIFIED, PAYMENT_SUBMITTED (migration 0022, "order
+                is not payable" otherwise). The first version withheld it only
+                on `ended`, so PAYMENT_CONFIRMED and HANDED_OFF rendered an
+                enabled control the database always refuses (T11 Phase 5,
+                D-170) -- and because this action is challengeRequired, the
+                seller spent an OTP and six digits BEFORE the refusal arrived.
+                A control the server will refuse must not cost a step-up to
+                find out. Absent rather than disabled: unlike R20's handoff
+                region, this is not "opens later in the sequence" -- once
+                payment is confirmed there are no instructions to reissue,
+                ever, so a disabled control would teach a seller to wait for
+                something that never comes.
               */}
-              {!ended ? (
+              {['CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED'].includes(order.state) ? (
                 <>
                   <button
                     type="button"
@@ -350,10 +377,18 @@ export function OrderDetail() {
                 <button type="button" data-action="custody-transfer" disabled>
                   {en['console.trade.detail.custody_transfer']}
                 </button>
+                {/*
+                  AND NOT ON AN ENDED ORDER (T11 Phase 5, D-169). `paid`
+                  includes COMPLETED, so this used to stay operable on a
+                  terminal screen -- a "history, no actions" state minting a
+                  live signed handoff token for an order that is over. R20
+                  opens the QR at PAYMENT_CONFIRMED; nothing says it survives
+                  completion, and TERMINAL says it must not.
+                */}
                 <button
                   type="button"
                   data-action="show-qr"
-                  disabled={!paid}
+                  disabled={!paid || ended}
                   onClick={() => setModal('qr')}
                 >
                   {en['console.trade.detail.show_qr']}

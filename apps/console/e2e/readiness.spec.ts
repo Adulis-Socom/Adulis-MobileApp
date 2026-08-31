@@ -52,9 +52,36 @@ test.describe('SC-01 -- the readiness hub', () => {
       rows.map((row) => ({
         code: row.getAttribute('data-item'),
         href: row.querySelector('a.readiness-action')?.getAttribute('href') ?? null,
+        unrouted: row.querySelector('.readiness-action.unrouted') !== null,
       })),
     );
     expect(targets.length).toBeGreaterThan(0);
+
+    /*
+     * NO ROW IS SKIPPED (T11 Phase 5, D-172). The first version did
+     * `if (!t.href) continue;` -- and Home renders an UNROUTED SPAN, not an
+     * anchor, for any resolving-action kind missing from ACTION_ROUTE. So
+     * the test skipped exactly the rows whose links were broken: delete a
+     * route key and every affected row became a span, the loop body never
+     * ran, and the suite stayed green while a seller lost the way to a
+     * blocking requirement. Now every unsatisfied row must carry a ROUTED
+     * link; a new server kind without a route fails here, by name, at the
+     * moment it is introduced.
+     *
+     * (The unrouted-span rendering itself stays -- it is the right runtime
+     * fallback for a kind this build does not know. What must be zero is
+     * the count of rows that NEED it, in a build whose table is current.
+     * Fixture limit, recorded: the seeded seller is INDIVIDUAL, so the
+     * DECLARE_SELLER_TYPE and PROVIDE_COMPANY_DETAILS rows are satisfied
+     * here and their routes are exercised only by this table being checked
+     * at review, not by this navigation loop.)
+     */
+    const unrouted = targets.filter((t) => t.unrouted || !t.href);
+    expect(
+      unrouted.map((t) => t.code),
+      'every unsatisfied readiness row must carry a routed resolving link -- ' +
+        'these have none, which is D-146 wearing a span',
+    ).toEqual([]);
 
     // D-146: four of six links fell through the router's catch-all and
     // navigated the seller straight back to Home -- a control that appears to
@@ -62,8 +89,7 @@ test.describe('SC-01 -- the readiness hub', () => {
     // decorative. Following each one is the only way to know; reading the
     // route table is what missed it.
     for (const t of targets) {
-      if (!t.href) continue;
-      await page.goto(t.href);
+      await page.goto(t.href as string);
 
       // THE URL IS THE ASSERTION, and the first version of this test got that
       // wrong. It checked that Home's readiness list was absent -- which is

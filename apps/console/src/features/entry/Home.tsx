@@ -73,9 +73,22 @@ const ITEM_LABEL: Readonly<Record<string, string>> = {
  * about being ready.
  */
 const ACTION_ROUTE: Readonly<Record<string, string>> = {
+  /*
+   * THE KEYS ARE THE SERVER'S, VERBATIM -- fn_publication_readiness in
+   * migration 0018, and nothing else. The first version carried
+   * COMPLETE_COMPANY_DETAILS, a key the server never sends, while the two it
+   * does send for those rows -- DECLARE_SELLER_TYPE and
+   * PROVIDE_COMPANY_DETAILS -- were missing (T11 Phase 5, D-172). A COMPANY
+   * seller with company details outstanding therefore got a dead unrouted
+   * span for a BLOCKING requirement: exactly D-146's shape, invisible in
+   * the fixture because the seeded seller is INDIVIDUAL and both rows are
+   * satisfied for it. Routes are ADU-CON-03 S6's table: item 2 -> SC-02,
+   * item 5 -> SC-17.
+   */
+  DECLARE_SELLER_TYPE: '/s/new',
   COMPLETE_ELIGIBILITY: 'eligibility',
   COMPLETE_IDENTITY_VERIFICATION: 'eligibility',
-  COMPLETE_COMPANY_DETAILS: 'profile',
+  PROVIDE_COMPANY_DETAILS: 'profile',
   COMPLETE_STORE_PROFILE: 'profile',
   ADD_PAYOUT_DETAILS: 'payouts',
   ADD_FULFILMENT_METHOD: 'fulfilment',
