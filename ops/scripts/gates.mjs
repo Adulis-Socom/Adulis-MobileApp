@@ -100,7 +100,7 @@ const pnpm = (script, { scoped = false } = {}) =>
  * SCOPED run legitimately never produces when the diff selects nothing the
  * console depends on (found by PR #22, the first PR since the T6
  * convergence to touch only db/ops/api: the Build gate correctly skipped
- * @adulis/console and gate 17 then failed on the missing dist -- register
+ * @adulis/console and `no-unsafe-eval` then failed on the missing dist -- register
  * D-93). Under a scope filter, an absent dist means "not selected" and the
  * gate passes WITH A NOTE; unscoped (every local run), an absent dist is
  * still a hard fail, because an unscoped build always produces one.
@@ -135,6 +135,33 @@ function assertNoUnsafeEval() {
  * connections S23 names as the binding performance constraint. A check
  * rather than a convention, because the build succeeds either way.
  */
+/**
+ * D-93 AGAIN, AND THIS TIME BEFORE IT SHIPPED. The first version of this gate
+ * was a plain `cmd` entry shelling straight at verify-boot-smoke.mjs, whose
+ * first statement exits 1 on an absent dist. Under a SCOPED run -- which is
+ * what CI does, ADULIS_SCOPE_FILTER in ci.yml -- a backend-only PR correctly
+ * does not select @adulis/console, dist is gitignored and therefore absent,
+ * and this gate would have failed a PR with nothing wrong with it.
+ *
+ * That is exactly D-93: "a red that teaches people the gate lies, which is
+ * the exact failure class the one-list convergence exists to prevent." The
+ * two console gates above already route through consoleDistAbsent(); a third
+ * console gate that did not was a regression of a registered defect,
+ * introduced by the branch that added it. Caught by an adversarial pass
+ * before merge (D-137).
+ *
+ * Unscoped -- every local `pnpm ci:local` -- an absent dist is still a hard
+ * fail, because an unscoped build always produces one.
+ */
+function assertConsoleBoots() {
+  const dist = path.join(root, 'apps', 'console', 'dist');
+  const absent = consoleDistAbsent(path.join(dist, 'index.html'));
+  if (absent) return absent;
+  return run(['pnpm', 'verify:boot-smoke'])
+    ? { ok: true, detail: 'the built console mounted under the production _headers policy' }
+    : { ok: false, detail: 'see the gate output above' };
+}
+
 function assertProductionReact() {
   const assets = path.join(root, 'apps', 'console', 'dist', 'assets');
   const absent = consoleDistAbsent(assets);
@@ -173,6 +200,44 @@ function grepDir(dir, needle) {
  */
 const CONTRACT_PATHS = ['contracts/', 'packages/api-client/src/schema.d.ts'];
 
+/**
+ * WHICH GATES CAN GO GREEN WHILE THEIR SUBJECT EMPTIES (T8-C S1).
+ *
+ * A comparator asserts that two forms AGREE. That is not the same as asserting
+ * what they agree ABOUT, and the difference decides whether a gate can be
+ * defeated by editing both sides:
+ *
+ *   EXPOSED -- the expected side is a document or a fixture a person edits
+ *   directly. Delete a row from both and they agree perfectly at n-1. This was
+ *   true of verify:deferred-values until a pinned count was added, and it is
+ *   the same shape as D-121, where the HUMAN-REQUIRED class lived in the file
+ *   the translation pass rewrites.
+ *
+ *   NOT EXPOSED -- the expected side is the LIVE DATABASE. A table cannot
+ *   leave check 14, nor a type check 16, without a migration, and migrations
+ *   are append-only after merge and loud. Nothing a person edits in passing
+ *   can shrink the set.
+ *
+ * So: a gate whose expected side is a document or fixture needs a pinned
+ * count, held where neither form can reach it, beside the ruling that fixes
+ * the number. verify:permission-doc already had one (42 permissions, 139
+ * grants, six per-role totals, eight step-up codes by name) and survived the
+ * same attack.
+ *
+ * CITE A GATE BY ITS `id`, NEVER BY ITS POSITION (T8-C S3).
+ *
+ * Positions are not stable and the instability is silent: `mt-keys` had to be
+ * APPENDED rather than slotted beside the console gates precisely because
+ * inserting it would have renumbered five live citations, one of them inside
+ * a governed document this repository does not edit. So the list is
+ * append-only to protect numbers that should never have been written down.
+ *
+ * Names do not have that problem. `pnpm gates --list` prints them, every
+ * citation converted in T8-C S3 now uses them, and the numbering stays an
+ * implementation detail of an array. The list is still append-only -- the
+ * governed documents that cite positions have not been reissued -- but
+ * nothing new should add to that debt.
+ */
 const GATES = [
   { id: 'typecheck', title: 'Typecheck (strict, no exceptions)', cmd: pnpm('typecheck', { scoped: true }) },
   { id: 'lint', title: 'Lint', cmd: ['pnpm', 'lint'] },
@@ -220,6 +285,20 @@ const GATES = [
    * is exactly the kind of rule that wants a machine to check it.
    */
   { id: 'mt-keys', title: 'The translation work list is current and the HUMAN-REQUIRED gate holds', cmd: ['pnpm', 'verify:mt-keys'] },
+
+  /**
+   * APPENDED, like mt-keys above it, and for the same reason: positions in
+   * this list are cited elsewhere, so the list is append-only in practice
+   * whatever its shape suggests. `boot-smoke` belongs beside `no-unsafe-eval`
+   * and `production-react` by subject and is at the end by rule.
+   *
+   * It is the only gate that RUNS the console rather than reading it. The two
+   * console gates above grep the bundle as text, and a bundle that throws
+   * before React mounts is textually perfect -- T7 Phase 5 shipped one, and
+   * the review that caught it did so by loading the page. This gate loads it,
+   * under the production _headers policy, and asserts #root has children.
+   */
+  { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
 ];
 
 if (process.argv.includes('--list')) {

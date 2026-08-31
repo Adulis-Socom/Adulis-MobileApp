@@ -29,8 +29,8 @@ export default defineConfig({
    * the console's build read the root `.env`, which carries
    * NODE_ENV=development -- and Vite then selects React's DEVELOPMENT build,
    * doubling the bundle and shipping development warnings to sellers. That
-   * is the hazard `.env.example` warns about in as many words, and gate 18
-   * exists to catch it. VITE_API_BASE_URL reaches Vite from the SHELL
+   * is the hazard `.env.example` warns about in as many words, and the
+   * `production-react` gate exists to catch it. VITE_API_BASE_URL reaches Vite from the SHELL
    * instead (Vite reads VITE_-prefixed vars out of process.env), which is
    * what `apps/console/CLAUDE.md`'s recipe loads.
    */

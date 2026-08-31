@@ -1277,6 +1277,162 @@ Response:  RECORDED here; already FIXED on the T8 Phase 4 branch
 Action:    Phase 4 (PR #28, unmerged at the time of writing) adds a per-test purge of those two buckets to both T8 suites, with the reasoning that nothing asserts them -- the 429s that ARE asserted belong to the probe endpoint, the per-challenge attempt counter and the courier-invite bucket. Merging #28 removes the flake from main. Nothing is done here, because T8-R is a records order and this is a code change.
 Ruling needed: none for the flake. The underlying shape is D-114's: an IP is the wrong subject when every caller shares one, and that is true of the tests for the same reason it is true behind a carrier NAT.
 
+### D-125 - ADU-RUL-04 and ADU-RUL-05 are cited as governing and were never supplied
+
+Severity:  MINOR (documentation debt; the work order restates every rule it cites, so nothing is blocked)
+Phase:     T8-C
+Source:    WORK ORDER T8-C cites ADU-RUL-05 S1.1 (comparator pins), S2 (gate lists are append-only), S3 (db:reset) and ADU-RUL-04 S3 (a suite deletes what it created, by id). Neither document is in docs/, and `git grep` finds neither name anywhere in the tree
+Found by:  routing T8-C before building it
+Effect:    Four rules are cited by section number against documents a reader cannot open. This is D-84 exactly -- ADU-RUL-02 was named as installable and its text never arrived -- and the same resolution applies: the work order states each rule in full, so the rule is followed and the CITATION is the thing that dangles. Every comment written under them in this order therefore reads "ADU-RUL-05 via T8-C S1.1" rather than pretending to quote a document I have never seen.
+Response:  PARKED, and the citation form records the gap
+Action:    None buildable. The rules themselves are implemented: the comparator pin (S1.1), the append-only gate list (S2, and gate 21 appended rather than swapped), db:reset (S3), and the teardown fix (ADU-RUL-04 S3).
+Ruling needed: supply ADU-RUL-04 and ADU-RUL-05, or confirm the via-T8-C citation form stands permanently. ADU-RUL-03 arrived as a file and is GOVERNED; these two are cited as though they had.
+
+### D-126 - verify:deferred-values asserted that two forms agree, not what they agree about
+
+Severity:  MAJOR (a gate that goes green while the thing it guards empties)
+Phase:     T8-C
+Source:    ops/scripts/verify-deferred-values.mjs compared S1.1's table against db/checks/fixtures/deferred-values.json in both directions and asserted only that the row count was non-zero
+Found by:  T8-C S1, attacking it deliberately rather than reading it
+Effect:    MEASURED, not supposed. Deleting core.ladder_config.established_min_handoffs from BOTH ADU-VAL-01 S1.1 and the fixture produced: "PASS S1.1 parsed: 15 rows", "PASS fixture and S1.1 agree on all 15 rows, both directions", "PASS three forms agree", exit 0. A deferred value can leave the register and the fixture together and the gate calls it agreement -- which is D-121's class arriving at a second gate: a rule whose membership lives in something a person edits directly.
+Response:  FIXED
+Action:    EXPECTED_ROWS = 16 is pinned in the gate, with what fixes the number (S1.1's fourteen ladder_config columns, follower_threshold, and the embedding whose deferral is the vector dimension). Both forms are checked against it. Proven by replanting the exact attack: it now fails twice and exits 1. The same attack was run against verify:permission-doc and it went RED on TWELVE checks -- four counts, all six per-role totals, `twelve permissions are mobile-reachable` and `OWNER holds all 42`. That gate pins 42 permissions, 139 grants, six per-role totals and the eight step-up codes by name, so it was never exposed. (This entry first said EIGHT. The number was wrong and the gate prints the right one in its own summary line: `FAIL  12 check(s) failed.` It was caught by an adversarial pass that re-planted the attack instead of reading the claim, and corrected in place before this entry reached main -- an entry badged MEASURED is worth exactly its numbers.) Checks 14 and 16 are not exposed either, and the reason is the general rule, now recorded in gates.mjs: their expected side is the live database, and nothing leaves it without a migration.
+Ruling needed: none. When ADU-VAL-01 v1.2 changes the count, it moves the pin in the same commit.
+
+### D-127 - A ruling minted a register number, and the register had to break append-only to honour it
+
+Severity:  MINOR (recorded so the exception does not read as the rule bending quietly)
+Phase:     T8-C
+Source:    ADU-RUL-03 S1's heading names D-105; DOCUMENT_AUTHORITY.md cites it; the register skipped from D-104 to D-106 until T8-R wrote the entry
+Found by:  the CEO, correcting himself in T8-C S4
+Effect:    A ruling document minted a number in the register's space, so the citation existed before anything it could point at. The register then had two bad options: append D-105 after D-124, where a reader following the citation would not find it, or insert it at its numeric position and stop being strictly append-only. T8-R chose the insertion, because a reader looks for the number rather than the date -- and that choice cost the file its strongest property.
+Response:  RECORDED, and the rule it produced is the fix
+Action:    The ruling: rulings NAME findings; the register ASSIGNS numbers. A ruling document that mints a D- number creates a citation with nothing behind it. Nothing in the tree changes -- D-105 stays where it was inserted, and this entry is the note saying the exception was taken deliberately and once.
+Ruling needed: none. The rule is stated in T8-C S4.
+
+### D-128 - A suite created 179 markets and deleted none, until a console sign-in could not complete locally
+
+Severity:  MAJOR (development environment; it makes every finding made against that environment suspect)
+Phase:     T8-C
+Source:    apps/api/test/migration-06-07-catalogue-and-stock.spec.ts, the concurrent-decrement race test. It creates market, account, seller, product and variant on a raw pool connection deliberately -- two connections have to contend for the same row -- and `afterAll` did `await pool.end()` and nothing else
+Found by:  the CEO, observing that a console sign-in would not complete locally; T8-C S2 traced it to its source
+Effect:    MEASURED, before the reset: 180 markets, 180 accounts, 180 sellers, 458 devices, and exactly ONE `timing_config` row in force -- the seeded one. 179 of those markets are named 'Race' and were created one per full test run. `/v1/bootstrap` assigns a market by `(is_live DESC, created_at ASC)`, so a fresh browser could be assigned any leftover, and the OTP request that follows fails on the missing timing row. That is D-112's defect at the scale the leak gave it: a market without a `timing_config` is unusable, and the leak manufactured 179 of them. The environment had degraded until the product did not run in it.
+Response:  FIXED at the source, and the environment rebuilt
+Action:    `afterAll` now deletes what the test created, by id, in dependency order (stock_event, variant, product, seller, account, market) under `SET session_replication_role = replica`. The replica setting is required rather than convenient: `core.stock_event` is append-only and its trigger raises on DELETE for every role, so the append-only guarantee and the teardown cannot both hold on the same connection unless triggers are off for it. Proven by running the suite twice: 25/25 both times, and the count of 'Race' markets stayed at 179 instead of reaching 181. Then `pnpm db:reset` (new, `ops/scripts/db-reset.mjs`) rebuilt the database from migrations plus seed: after, `markets 1, accounts 1, sellers 1, devices 0, timing_config in force 1`. A console sign-in was then driven in headless Edge against it -- bootstrap, otp/request, the code read from `apps/api/.dev-sms.log`, otp/verify, `GET /v1/auth/sessions` -- and returned `sessions=200 current=true remembered=true`, leaving one WEB device and one live session.
+           MEASURED AFTER THE FIX, on the reset database: a full `pnpm --filter @adulis/api test` run passed 459/459 and left `markets 1, accounts 1, sellers 1, products 0` -- the same counts the seed produces. It also left THREE unclaimed `core.device` rows (IOS, ANDROID, ANDROID, all `account_id NULL`), created by the bootstrap suites and not deleted. That is the same defect at a size that does not break anything: a device with no account is never assigned to a sign-in and carries no `timing_config` dependency, so it accumulates without degrading the environment. It is recorded rather than fixed because fixing it belongs to whichever order touches those suites, and inventing a teardown for a suite this PR does not otherwise change would put an untested edit in a records-heavy branch.
+Ruling needed: none. The rule is ADU-RUL-04 S3 via T8-C: a suite deletes what it created, by id.
+
+### D-129 - D-124 and D-114 are one defect at two scales, and both are how local and CI diverge in STATE
+
+Severity:  MAJOR (inherits D-114's; recorded as a class so the two are not fixed as though they were unrelated)
+Phase:     T8-C
+Source:    D-114 (no `trust proxy`, so `req.ip` is the proxy's address for every request) and D-124 (jest suites share one address, so they share the `otp-request-ip` bucket)
+Found by:  T8-C S2, asked to state the connection
+Effect:    They are the same defect. An IP is the rate limiter's subject, and an IP stops identifying a caller whenever callers share one. In the test run they share one because every suite runs on this machine. In production they share one because every request arrives through the CDN, or because a whole city is behind one carrier NAT -- the commonest network shape in the market this is built for. The 429 a suite sees about nothing is the production defect running at a scale small enough to observe, which is the only reason it was observed at all.
+           The second thing the pair shows is how the two environments come apart. **Local and CI diverge in STATE, not in configuration.** Same code, same migrations, same `.env` shape; what differs is that CI builds its database from empty on every run and this machine has been accumulating since Tier 1. That direction of drift hides defects in both directions: D-124 was red locally and green in CI, because CI's scheduling never spends the tenth request in an hour; D-128 was red locally and green in CI, because CI never has 179 leftover markets to assign. Neither would have been caught by comparing configuration files, and a green CI is not evidence about the environment findings are actually made in.
+Response:  RECORDED as the class. The instances stay where they live
+Action:    D-124 is fixed by the per-test bucket purge merged in #28. D-128 is fixed at its source in this PR. D-114 stays PARKED, and correctly: setting `trust proxy` needs the deployment topology named, because trusting one hop too many lets a client forge `X-Forwarded-For` and choose its own bucket -- worse than the current state, not better. `pnpm db:reset` is what makes the state divergence testable: it is now possible to ask whether a local failure survives a fresh database, and that question was previously unanswerable.
+Ruling needed: D-114's, unchanged -- the deployment topology, then `app.set('trust proxy', <n>)` with n named rather than `true`. The class adds one to it: when the subject collapses anyway, what identifies a caller for the OTP budget? The phone is already the subject of the per-challenge counter; whether it should also be the subject of the hourly one is a decision about enumeration cost, not a code change to make quietly.
+
+### D-130 - ADU-CON-02 v3.1 S13 does not describe db:reset, and the command now exists
+
+Severity:  MINOR (documentation debt; the command is documented in the repo, so nothing is blocked)
+Phase:     T8-C
+Source:    ADU-CON-02_Seller_Console_System_Design_v3_1.md S13 is the setup script the README says it follows; `pnpm db:reset` was added in T8-C S2 and appears in neither
+Found by:  T8-C S2, writing the command down
+Effect:    Small, and the same shape as every entry of this kind: the governed document describes a setup that is no longer the whole setup, so a reader following S13 alone recovers nothing when their environment drifts (D-128). The document is governed and is not edited here.
+Response:  RECORDED; documented in the repo instead
+Action:    README S"Day-one setup" now carries `pnpm db:reset` -- what it drops, that it takes the runtime-role password from `.env` rather than inventing one, that it refuses `NODE_ENV=production` and a non-local host, and when to reach for it. The section states plainly which parts still diverge from S13 rather than implying agreement. The same section was stale in two other ways and is now accurate: it described `db:check` as empty and `db:seed` as a stub that cannot sign a seller in, both true at Tier 0 and false since Tier 1.
+Ruling needed: ADU-CON-02 v3.2 S13 adds `db:reset`, or rules that the repo README is where operational commands live and S13 stops being the source.
+
+### D-131 - `pnpm test` never loaded .env, so the README's own day-one script could not work on a fresh clone
+
+Severity:  MINOR (developer experience; CI and `pnpm ci:local` were both unaffected, which is why it survived eight tiers)
+Phase:     T8-C
+Source:    apps/api/package.json ran `"test": "jest"`, and apps/api/jest.config.js has no `setupFiles`, no `globalSetup` and nothing that reads a `.env`
+Found by:  T8-C S2, running the suite from a shell that had not exported the environment
+Effect:    MEASURED: `pnpm --filter @adulis/api test` from a clean shell failed 420 of 459 tests with `SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string` -- pg being handed `undefined` for a password. Two things hid it. CI sets `DATABASE_URL` and friends in the workflow `env:` block, so it never reads a file. And `pnpm ci:local` runs `node --env-file-if-exists=.env ops/scripts/gates.mjs`, so every gate the script spawns INHERITS an environment the script loaded -- including the test gate. The only way to meet the defect is to run the command the README tells a new developer to run, which is a thing no one on this project had done since Tier 0.
+Response:  FIXED
+Action:    `"test": "node --env-file-if-exists=../../.env node_modules/jest/bin/jest.js"`. `--env-file-if-exists` rather than `--env-file` for the reason install-worker-schema.mjs already gives in its own comment: CI has no `.env` and its absence must not be an error, or the command fails on every machine that supplies its environment properly. Proven by running the full suite from a shell with nothing exported: 459/459. This is the same pattern as `pnpm gates` and `ops/scripts/*.mjs`, so the repository now loads its environment one way rather than two.
+Ruling needed: none.
+
+### D-132 - db:reset printed PASS unconditionally, and two documents said it checked
+
+Severity:  MAJOR (a green that does not depend on the thing it names -- the class T8-C S1 was raised to attack)
+Phase:     T8-C
+Source:    ops/scripts/db-reset.mjs printed `PASS  the database is what ... gives` immediately after printing the row counts. Nothing between the counts and the print read the counts
+Found by:  the T8-C S2 adversarial pass (docs/build-status/reviews/T8-C-S2-db-reset-and-the-test-leak.md, F1), run against 719f448
+Effect:    The seed could produce zero markets, or no `timing_config` row, and the script would print PASS and exit 0. That matters here more than it would elsewhere: a market without a timing row is precisely D-128's symptom -- bootstrap succeeds, the OTP request fails, and a console sign-in cannot complete. The reset existed to recover from that state and would have certified it. Worse than the missing check: README and the S2 commit message BOTH claimed "fails if the result is not what a fresh clone gives", so the repository documented a verification that did not exist. This is S1's finding one section later by a different door, written by the same hand that had just fixed S1's.
+Response:  FIXED
+Action:    The counts are compared against `EXPECTED = { markets: 1, accounts: 1, sellers: 1, devices: 0, timing: 1 }` -- pinned on S1's rule, with db/seeds named as what fixes them and the requirement that a seed change moves the pin in the same commit. A mismatch prints each wrong count with expected and got, and exits 1. PROVEN by planting: changing the seed's `WHERE NOT EXISTS ...` to `WHERE false AND NOT EXISTS ...` -- so the seed still runs cleanly and simply writes no timing row -- gave `FAIL ... timing: expected 1, got 0`, exit 1. The first plant attempt is worth recording too: a deliberate SQL syntax error made `pnpm db:seed` throw, the script died at the seed step with exit 1, and that exit code proved nothing about the assertion. A plant has to leave the checked thing REACHABLE.
+Ruling needed: none.
+
+### D-133 - The destructive script refused only the literal 'production', inside the order that banned that pattern
+
+Severity:  MAJOR (D-105's defect, in a script that drops every schema)
+Phase:     T8-C
+Source:    ops/scripts/db-reset.mjs guarded `if (process.env.NODE_ENV === 'production')` and nothing else
+Found by:  the T8-C S2 adversarial pass (F2), run against 719f448
+Effect:    An unset `NODE_ENV` proceeded. So did `staging`, `prod`, and any typo. ADU-RUL-03 S1 -- the ruling this entire work order implements -- says a service that cannot determine its environment must not pick the permissive default, and D-105 made the API refuse to boot without one. A script written inside that order, whose only job is destruction, took the permissive default. The host allow-list is a second guard and in practice the stronger one, which is the argument for fixing this rather than against: the guard whose absence is survivable is the one that gets copied into the next script.
+Response:  FIXED
+Action:    Inverted to an allow-list: `RESETTABLE = ['development', 'test']`, and anything else -- including unset -- exits 2 naming what it saw. PROVEN both ways: `NODE_ENV=staging` gives "NODE_ENV is 'staging'; this script runs only under development or test"; running with `NODE_ENV` unset and `DATABASE_URL_MIGRATE` supplied by hand gives "NODE_ENV is unset". The same pass produced three smaller fixes, recorded in the review rather than here: `before:` and `after:` printed different units under paired labels (F3); a `DATABASE_URL_JOBS` set without a password silently received the app role's (F4); and the header called the host check "the only thing between it and a database somebody cares about", which oversells a guard a port-forward defeats (F5).
+Ruling needed: none.
+
+### D-134 - The teardown deleted the seller and left behind the row a trigger had made for it
+
+Severity:  BLOCKER (referential corruption in the development database, introduced by the fix for D-128)
+Phase:     T8-C
+Source:    apps/api/test/migration-06-07-catalogue-and-stock.spec.ts, the `afterAll` added in this PR. `core.seller_public_stats.seller_id` is `uuid PRIMARY KEY REFERENCES core.seller(id)` with no ON DELETE (0010:155-156), and `trg_create_public_stats` (0010:191) writes one row per seller AFTER INSERT
+Found by:  the T8-C S2 adversarial pass, second round -- docs/build-status/reviews/T8-C-S2-db-reset-and-the-test-leak.md, run against 719f448 and 99c49a6
+Effect:    MEASURED, not supposed. `session_replication_role = replica` suppresses the foreign key's referential-integrity triggers along with the append-only one, so `DELETE FROM core.seller` succeeded and left the stats row pointing at a seller that no longer exists. A query across all 98 single-column foreign keys into core.seller/account/market/product/product_variant found exactly one such row. The first teardown therefore did not close D-128's leak so much as change its shape: from a whole tree of live rows to one orphan per run, in a table read on every storefront page load. It is worse than what it replaced in one respect -- a leaked market is visible as a market, and an orphaned stats row is visible only to a query nobody runs.
+Response:  FIXED
+Action:    `DELETE FROM core.seller_public_stats WHERE seller_id = $1` before the seller, with the reasoning in the code: deleting what you created means what your INSERT CAUSED, not only what your INSERT named. Proven by measurement: the pre-existing orphan was removed, the suite ran 25/25, and the orphan count stayed at 0 -- where before the fix it grew by one per run. The two comments four lines apart that still said the test "cannot delete the stock events it made" and that "the fixture is small and left behind deliberately" are corrected in the same commit; they were the justification a later reader would have used to remove the `replica` line.
+Ruling needed: none.
+
+### D-135 - Suites delete their market under replica, orphaning devices other suites minted
+
+Severity:  MAJOR (pre-existing; the same class as D-134 and not introduced by it)
+Phase:     T8-C
+Source:    roughly twenty suites take the same teardown shape -- `SET session_replication_role = replica`, delete, `SET ... DEFAULT` -- and ten of them end with `DELETE FROM core.market WHERE id = ...` (c1..c8, e1, e2-e6). `core.device.market_id` references `core.market(id)`
+Found by:  T8-C S2, checking every foreign key for orphans after fixing D-134
+Effect:    MEASURED: 6 orphaned `core.device` rows before a full suite run and **9 after** -- three per run, growing. These are the same three unclaimed device rows D-128 recorded as harmless residue, which is the correction this entry makes to that one: they are not merely unclaimed, they point at markets that no longer exist. The mechanism is D-134's exactly -- replica mode suppresses the FK triggers as well as the append-only one, so a market delete that would have been refused succeeds and leaves the reference dangling. Which suite orphans which device is NOT established here: it would need a run instrumented per suite, and attributing it without that would be a guess in a register entry.
+Response:  RECORDED, not fixed
+Action:    None in this PR, deliberately. The fix is a teardown change in ten suites this PR does not otherwise touch, and an untested edit to ten files does not belong in a branch whose subject is a leak in one. What this PR does contribute is the method: after any teardown that runs under `replica`, check every foreign key into the tables it deleted from, because the setting that lets the delete succeed is the same setting that stops the database telling you it should not have.
+Ruling needed: none. It is buildable work: either each suite deletes its dependents by id, or the shared teardown becomes a helper that does it once and correctly.
+
+### D-136 - Gates were cited by position, so the list could not be reordered and the records disagree about a number
+
+Severity:  MINOR (records and maintainability; no runtime effect)
+Phase:     T8-C
+Source:    `gate 16 of the one list` (docs/amendments/README.md), `gates 17 and 18` (apps/console/CLAUDE.md, ADU-RUL-03 S5.2), `gate 18` (apps/console/vite.config.ts), `gate 17` (ops/scripts/gates.mjs), `Gate 20's boot smoke test` (D-120)
+Found by:  T8-C S3, adding a gate to a list that had already been forced to grow only at the end
+Effect:    A position is not a name. `mt-keys` had to be APPENDED in T8 Phase 4 rather than placed beside the console gates it belongs with, because inserting it would have renumbered five live citations -- one of them inside ADU-RUL-03, a governed document this repository does not edit. So the list became append-only to protect numbers that should never have been written down, and the ordering of gates is now decided by citation debt rather than by subject. The records also drifted while nobody was watching: T8-REPORT.md and D-120 both call the boot smoke test "gate 20", which was true when they were written and stopped being true when `mt-keys` took that position. The smoke gate is **21**.
+Response:  FIXED for every citation this repository owns; the governed documents keep the debt
+Action:    Five citations converted to gate ids: `deferred-values`, `no-unsafe-eval`, `production-react` (three sites) and `boot-smoke`. The rule is recorded above `const GATES` in ops/scripts/gates.mjs -- cite a gate by its id, never by its position -- and `pnpm gates --list` prints the ids. NOT edited: ADU-RUL-03 S5.2 (governed, and its "Gates 17 and 18" is still true because `mt-keys` and `boot-smoke` were both appended); DEFECT-REGISTER entries and docs/build-status reports (records of what was true when written, and this entry is the correction rather than a rewrite); docs/superseded and _superseded. ADU-DB-01's "gate 0 / gate 4" is a different subject entirely -- permission checks inside a function -- and is untouched.
+Ruling needed: ADU-RUL-03 S5.2 gains the gate ids at its next reissue, at which point the list stops being append-only for citation reasons and can be ordered by subject.
+
+### D-137 - The new gate reintroduced D-93: a backend-only PR would have gone red on an absent console dist
+
+Severity:  MAJOR (a false red in CI, on PRs with nothing wrong with them)
+Phase:     T8-C
+Source:    ops/scripts/gates.mjs registered `boot-smoke` as a plain `cmd` entry shelling at ops/scripts/verify-boot-smoke.mjs, whose first statement is `if (!existsSync(DIST/index.html)) process.exit(1)`
+Found by:  the T8-C S3 adversarial pass, second round -- two independent reviewers, then verified by re-reading the runner
+Effect:    CI runs `pnpm gates` with `ADULIS_SCOPE_FILTER`. On a PR whose diff selects nothing the console depends on -- db/ops/api/docs only, the exact shape of PR #22 -- the `build` gate correctly does not select @adulis/console, and apps/console/dist is gitignored, so no dist exists. `no-unsafe-eval` and `production-react` handle this: both route through `consoleDistAbsent()`, which under a scope filter passes WITH A NOTE. The third console gate did not, so it would have failed the run outright. That is D-93 verbatim -- "a red that teaches people the gate lies, which is the exact failure class the one-list convergence exists to prevent" -- reintroduced by the branch that added the gate, and reintroduced BECAUSE the new gate was a different shape from the two it sits beside.
+Response:  FIXED
+Action:    `boot-smoke` is now an `fn` gate, `assertConsoleBoots`, which calls `consoleDistAbsent(dist/index.html)` first and only then shells at the script -- the same shape as the two gates above it. PROVEN by simulating a backend-only PR: `apps/console/dist` moved away, `ADULIS_SCOPE_FILTER='@adulis/api...' pnpm gates` gave `PASS  console not selected by the scope filter (...index.html absent)` at gate 21 and `PASS  all 21 gates`, exit 0. Unscoped, an absent dist is still a hard fail, because an unscoped build always produces one.
+Ruling needed: none. The general lesson is in gates.mjs: a new gate over the console build inherits the scope contract of the ones beside it, or it is not the same kind of gate.
+
+### D-138 - boot-smoke does not exercise connect-src, and its header said the wrong reason why
+
+Severity:  MINOR (a limitation stated wrongly; the gate's load-time assertions are unaffected)
+Phase:     T8-C
+Source:    ops/scripts/verify-boot-smoke.mjs's header claimed zero CSP violations "because the sign-in page makes no API call until a person acts", and the S3 review repeated it
+Found by:  the T8-C S3 adversarial pass, second round
+Effect:    The console makes two API calls on mount: apps/console/src/auth/session.tsx:80-95 awaits `/bootstrap` then `/auth/sessions`, and its own comment reads "FIRST CALL, ALWAYS". No person has acted. The real reason nothing is blocked is that CI builds without `VITE_API_BASE_URL`, so `apiBase()` throws inside `resolveApiBaseUrl` BEFORE `fetch` is reached and the app turns it into an ApiError('CONFIG'). So `connect-src` -- the one directive in this policy constraining what the console does at RUNTIME rather than at load -- is never exercised, and the claim that this is "the only place in CI where the policy and the bundle meet" holds only for load-time directives. A gate that quietly benefits from a misconfiguration it does not name is this repository's recurring shape.
+Response:  the CLAIM is FIXED; the GAP is recorded, not closed
+Action:    The header and the review now state what is and is not exercised. Closing the gap needs a decision rather than a patch: exercising `connect-src` means building the console with a base URL and either standing an API up inside the gate or pointing it at an origin the policy forbids and asserting the violation fires. The second is cheap and tests the policy rather than the app, and it also means the gate would assert on a bundle nobody ships.
+Ruling needed: whether `boot-smoke` should build a second, throwaway bundle with `VITE_API_BASE_URL` set to a forbidden origin purely to prove `connect-src` blocks it -- or whether that belongs to the console harness owed at C-3.
+
 ### D-139 - The report named an instrument that could not have produced the finding it credited
 
 Severity:  MINOR (records; the finding and its fix are unaffected)
