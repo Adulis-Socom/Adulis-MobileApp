@@ -25,6 +25,30 @@ for (const line of readFileSync(new URL('../../.env', import.meta.url), 'utf8').
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 
+/**
+ * A DESTRUCTIVE SCRIPT ASSERTS ITS ENVIRONMENT (WORK ORDER T9 S3.3, D-133).
+ *
+ * D-107's exemption covers ops scripts that READ. This one does not read: it
+ * DELETEs from eight core tables. An unset NODE_ENV is refused with everything else,
+ * because a process that cannot determine its environment must not pick the
+ * permissive default -- which is D-105, the finding this whole tier began
+ * with.
+ *
+ * DUPLICATED, NOT IMPORTED, and deliberately so. Reaching into
+ * apps/api/src/common/env.ts would couple an ops script to the API's module
+ * graph, which is the coupling D-107 avoided; five lines are cheaper than
+ * that, and far cheaper than an unguarded DELETE FROM core.order.
+ */
+const DESTRUCTIVE_ENVS = ['development', 'test'];
+if (!DESTRUCTIVE_ENVS.includes(process.env.NODE_ENV ?? '')) {
+  console.error(
+    `FAIL  NODE_ENV is ${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}; ` +
+      `this script runs only under ${DESTRUCTIVE_ENVS.join(' or ')}.`,
+  );
+  console.error('      It DELETEs from eight core tables, so it refuses an environment it cannot name.');
+  process.exit(2);
+}
+
 const MARKET = 'ffff9999-0000-4000-8000-000000000001';
 const SELLER = 'ffff9999-0000-4000-8000-000000000002';
 const OWNER = 'ffff9999-0000-4000-8000-000000000003';
