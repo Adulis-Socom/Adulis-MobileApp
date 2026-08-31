@@ -48,6 +48,31 @@ if (!CONNECTION) {
   process.exit(2);
 }
 
+/**
+ * THE PINNED COUNT, and it is the difference between a comparator and a gate.
+ *
+ * This script asserted that S1.1 and the fixture AGREE. It did not assert what
+ * they agree ABOUT -- so deleting a column from both forms left fifteen rows
+ * agreeing perfectly, and the gate printed "PASS ... all 15 rows, both
+ * directions" and exited 0. Two forms that shrink together agree beautifully.
+ * Measured, not supposed: removing core.ladder_config.established_min_handoffs
+ * from S1.1 and from deferred-values.json gave a green run (T8-C S1).
+ *
+ * That is D-121's class -- a rule whose membership lives in something a person
+ * edits directly -- and the fix is the same: pin the number where neither form
+ * can reach it, beside what fixes it.
+ *
+ * SIXTEEN. ADU-VAL-01 v1.1 S1.1 enumerates sixteen columns: fourteen
+ * ladder_config rows (Groups A and C), eligibility_config.follower_threshold
+ * (row 15), and nlu.intent_phrase.embedding (row 16, whose deferral is the
+ * vector DIMENSION rather than nullability -- S1.4). A seventeenth row means a
+ * value was deferred and this gate had not heard; a fifteenth means one was
+ * decided or dropped, and either way the register owes a v1.2 that says so.
+ * The number moves when a reissue moves it, in the same commit, with the
+ * sentence that moved it.
+ */
+const EXPECTED_ROWS = 16;
+
 let failures = 0;
 const pass = (m) => console.log(`  PASS  ${m}`);
 const fail = (m) => { failures += 1; console.error(`  FAIL  ${m}`); };
@@ -71,8 +96,24 @@ const docRows = [...register.matchAll(rowRe)].map(([, n, schema, table, column, 
 
 if (docRows.length === 0) {
   fail('parsed zero rows from S1.1 -- the table format or the parser moved.');
+} else if (docRows.length !== EXPECTED_ROWS) {
+  fail(
+    `S1.1 lists ${docRows.length} columns; this gate is pinned to ${EXPECTED_ROWS}. ` +
+      'A row leaving S1.1 is a deferred value decided, dropped or lost -- none of ' +
+      'which the agreement checks below can see, because they compare the two forms ' +
+      'against each other. If the reissue is real, move the pin in the same commit.',
+  );
 } else {
-  pass(`S1.1 parsed: ${docRows.length} rows`);
+  pass(`S1.1 parsed: ${docRows.length} rows (pinned at ${EXPECTED_ROWS})`);
+}
+
+if (fx.length !== EXPECTED_ROWS) {
+  fail(
+    `the fixture holds ${fx.length} columns; this gate is pinned to ${EXPECTED_ROWS}. ` +
+      'Both forms shrinking together is the failure this pin exists for.',
+  );
+} else {
+  pass(`fixture holds ${fx.length} columns (pinned at ${EXPECTED_ROWS})`);
 }
 
 // ---- 1 == 2, both directions ----------------------------------------------
