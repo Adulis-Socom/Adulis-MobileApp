@@ -1277,6 +1277,39 @@ Response:  RECORDED here; already FIXED on the T8 Phase 4 branch
 Action:    Phase 4 (PR #28, unmerged at the time of writing) adds a per-test purge of those two buckets to both T8 suites, with the reasoning that nothing asserts them -- the 429s that ARE asserted belong to the probe endpoint, the per-challenge attempt counter and the courier-invite bucket. Merging #28 removes the flake from main. Nothing is done here, because T8-R is a records order and this is a code change.
 Ruling needed: none for the flake. The underlying shape is D-114's: an IP is the wrong subject when every caller shares one, and that is true of the tests for the same reason it is true behind a carrier NAT.
 
+### D-125 - ADU-RUL-04 and ADU-RUL-05 are cited as governing and were never supplied
+
+Severity:  MINOR (documentation debt; the work order restates every rule it cites, so nothing is blocked)
+Phase:     T8-C
+Source:    WORK ORDER T8-C cites ADU-RUL-05 S1.1 (comparator pins), S2 (gate lists are append-only), S3 (db:reset) and ADU-RUL-04 S3 (a suite deletes what it created, by id). Neither document is in docs/, and `git grep` finds neither name anywhere in the tree
+Found by:  routing T8-C before building it
+Effect:    Four rules are cited by section number against documents a reader cannot open. This is D-84 exactly -- ADU-RUL-02 was named as installable and its text never arrived -- and the same resolution applies: the work order states each rule in full, so the rule is followed and the CITATION is the thing that dangles. Every comment written under them in this order therefore reads "ADU-RUL-05 via T8-C S1.1" rather than pretending to quote a document I have never seen.
+Response:  PARKED, and the citation form records the gap
+Action:    None buildable. The rules themselves are implemented: the comparator pin (S1.1), the append-only gate list (S2, and gate 21 appended rather than swapped), db:reset (S3), and the teardown fix (ADU-RUL-04 S3).
+Ruling needed: supply ADU-RUL-04 and ADU-RUL-05, or confirm the via-T8-C citation form stands permanently. ADU-RUL-03 arrived as a file and is GOVERNED; these two are cited as though they had.
+
+### D-126 - verify:deferred-values asserted that two forms agree, not what they agree about
+
+Severity:  MAJOR (a gate that goes green while the thing it guards empties)
+Phase:     T8-C
+Source:    ops/scripts/verify-deferred-values.mjs compared S1.1's table against db/checks/fixtures/deferred-values.json in both directions and asserted only that the row count was non-zero
+Found by:  T8-C S1, attacking it deliberately rather than reading it
+Effect:    MEASURED, not supposed. Deleting core.ladder_config.established_min_handoffs from BOTH ADU-VAL-01 S1.1 and the fixture produced: "PASS S1.1 parsed: 15 rows", "PASS fixture and S1.1 agree on all 15 rows, both directions", "PASS three forms agree", exit 0. A deferred value can leave the register and the fixture together and the gate calls it agreement -- which is D-121's class arriving at a second gate: a rule whose membership lives in something a person edits directly.
+Response:  FIXED
+Action:    EXPECTED_ROWS = 16 is pinned in the gate, with what fixes the number (S1.1's fourteen ladder_config columns, follower_threshold, and the embedding whose deferral is the vector dimension). Both forms are checked against it. Proven by replanting the exact attack: it now fails twice and exits 1. The same attack was run against verify:permission-doc and it went RED on TWELVE checks -- four counts, all six per-role totals, `twelve permissions are mobile-reachable` and `OWNER holds all 42`. That gate pins 42 permissions, 139 grants, six per-role totals and the eight step-up codes by name, so it was never exposed. (This entry first said EIGHT. The number was wrong and the gate prints the right one in its own summary line: `FAIL  12 check(s) failed.` It was caught by an adversarial pass that re-planted the attack instead of reading the claim, and corrected in place before this entry reached main -- an entry badged MEASURED is worth exactly its numbers.) Checks 14 and 16 are not exposed either, and the reason is the general rule, now recorded in gates.mjs: their expected side is the live database, and nothing leaves it without a migration.
+Ruling needed: none. When ADU-VAL-01 v1.2 changes the count, it moves the pin in the same commit.
+
+### D-127 - A ruling minted a register number, and the register had to break append-only to honour it
+
+Severity:  MINOR (recorded so the exception does not read as the rule bending quietly)
+Phase:     T8-C
+Source:    ADU-RUL-03 S1's heading names D-105; DOCUMENT_AUTHORITY.md cites it; the register skipped from D-104 to D-106 until T8-R wrote the entry
+Found by:  the CEO, correcting himself in T8-C S4
+Effect:    A ruling document minted a number in the register's space, so the citation existed before anything it could point at. The register then had two bad options: append D-105 after D-124, where a reader following the citation would not find it, or insert it at its numeric position and stop being strictly append-only. T8-R chose the insertion, because a reader looks for the number rather than the date -- and that choice cost the file its strongest property.
+Response:  RECORDED, and the rule it produced is the fix
+Action:    The ruling: rulings NAME findings; the register ASSIGNS numbers. A ruling document that mints a D- number creates a citation with nothing behind it. Nothing in the tree changes -- D-105 stays where it was inserted, and this entry is the note saying the exception was taken deliberately and once.
+Ruling needed: none. The rule is stated in T8-C S4.
+
 ### D-128 - A suite created 179 markets and deleted none, until a console sign-in could not complete locally
 
 Severity:  MAJOR (development environment; it makes every finding made against that environment suspect)
