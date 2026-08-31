@@ -1443,3 +1443,17 @@ Effect:    D-132 is precisely the defect that running `db:reset` cannot expose. 
 Response:  FIXED
 Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
 Ruling needed: none.
+
+### D-140 - MISSING_SOURCE: the four documents WORK ORDER T9 Phase 2 installs did not arrive
+
+Severity:  BLOCKER for T9 Phase 2, and for two of Phase 3's three gate changes
+Phase:     T9 - 2
+Source:    WORK ORDER T9 S2 names `ADU-DB-01_..._v1_13_ASCII.md`, `ADU-REPO-01_..._v1_3.md`, `ADU-CON-02_..._v3_2_ASCII.md` and `ADU-VAL-01_..._v1_2.md`
+Found by:  T9 Phase 2, looking for them before installing them
+Effect:    None of the four is on this machine. `find` across the working tree, `docs/`, `docs/registers/`, `_staging/` (which holds one file, `Adulis_Claude_Skills_Pack_v1.1.zip`) and the parent directory returns nothing for any of the four names, and nothing was attached to the order. The installed baseline is unchanged: ADU-DB-01 **v1.12**, ADU-CON-02 **v3.1**, ADU-VAL-01 **v1.1**, and ADU-REPO-01 **absent entirely**.
+           This blocks Phase 3.1 and 3.2, and not for want of trying. **3.1** moves `verify:deferred-values` from 16 to 14 because ADU-VAL-01 v1.2 removes two rows -- but that gate compares three forms, and one of them IS the document's S1.1 table. Moving the pin to 14 while the installed v1.1 still lists 16 makes the gate red on a correct tree, which is the failure class this repository has spent two work orders removing. **3.2** adds a comparator over ADU-DB-01 v1.13's generated Appendix A and B; v1.12's appendices are not generated from the fixtures and are not what the gate is specified against.
+           What is NOT blocked was built instead, and is in the Phase 3 PR: the D-92 ruling (3.1's other half, stated in full in the order), the destructive-script NODE_ENV rule (3.3, likewise), and the `appendix-a.json` `_provenance` defect (3.2's sub-item, which is about a fixture that IS here).
+Response:  PARKED. Do not invent a governed document
+Action:    None buildable. The four are the CEO's to supply; every rule T9 states in its own text has been followed, because the order restates each one -- which is D-84's and D-125's pattern for the third time: a rule arrives in a work order, is followed, and the DOCUMENT it belongs to does not arrive.
+           One number worth recording while this is open, because it is larger than "a citation dangles": ADU-REPO-01 is cited **77 times across 33 files** -- `.dependency-cruiser.cjs`, `.github/CODEOWNERS`, `.github/workflows/ci.yml`, the root and per-app `CLAUDE.md`, `apps/api/src/generate-openapi.ts`, and the title of gate `deps` ("Dependency rules (ADU-REPO-01 S4)"). A CI gate names a section of a document nobody in this repository can open. D-94 recorded the absence; this records its size.
+Ruling needed: supply the four files, or rule which of Phase 3's changes proceed against the order's own restatement of the rules rather than against the documents.
