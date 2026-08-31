@@ -1,0 +1,11 @@
+{
+  "//": "The harness is typechecked SEPARATELY from the app. It needs @playwright/test and node types the app must not have, and the app's `build` runs `tsc --noEmit` -- so folding e2e into tsconfig.json would either loosen the app's types or fail its build. A harness with no type gate is a harness whose own typo surfaces as a red test about the product.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

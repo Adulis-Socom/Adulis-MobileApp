@@ -1548,3 +1548,16 @@ Effect:    C-3's done-clause is the readiness hub, and that is built and verifie
 Response:  NOT BUILT, and the screen says so in one line rather than rendering a plausible fake
 Action:    None. It belongs with C-4, beside the clock treatments its rows depend on. R23 is already transcribed in the code that will carry it: rolling 7 days against the preceding 7, fixed, no picker -- the picker belongs on SC-12.
 Ruling needed: none.
+
+### D-152 - The harness's own regression test passed against the regression it was written for
+
+Severity:  MAJOR (a test that cannot fail is worse than no test, because it is trusted)
+Phase:     T10 - 4
+Source:    apps/console/e2e/readiness.spec.ts, first version -- it asserted that Home's readiness list was ABSENT after following a resolving link
+Found by:  T10 Phase 4, planting D-146's exact regression (deleting the `payouts` route) to prove the new harness fires
+Effect:    MEASURED. With the route removed the router's catch-all -- `<Navigate to=".." relative="path" replace />` -- sends the seller straight back to Home, which is D-146 precisely. The suite reported **8 passed.**
+           The assertion was true at the moment it ran and false a moment later: `page.goto(href)` resolves before the catch-all's `<Navigate>` has run, so `[data-item]` really is absent right then. **A redirect is a thing that happens slightly later**, and a test that checks the destination's contents rather than the destination itself races it.
+           This is the harness's whole justification arriving on its first day. The reason C-3 needed one is that T9's three defects were not found by reading; the reason a harness needs PROVING is that a test written from the same understanding as the code inherits the same blind spot. **The plant is not a formality.**
+Response:  FIXED
+Action:    The assertion is now `expect(page).toHaveURL(...)` -- where the browser ENDED UP, which is stable under a redirect because Playwright retries it -- with the readiness-list check kept as a second, weaker statement. Proven both ways: with the `payouts` route deleted the suite reports `1 failed, 7 passed` and the message names the item and the href; with it restored, `8 passed`.
+Ruling needed: none. The general form is worth carrying: **an assertion about a page's contents cannot catch a navigation defect, because contents are what the wrong page also lacks for an instant.** Assert the URL.

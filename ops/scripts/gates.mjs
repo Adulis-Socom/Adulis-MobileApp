@@ -308,6 +308,30 @@ const GATES = [
    * under the production _headers policy, and asserts #root has children.
    */
   { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
+
+  /**
+   * APPENDED. `boot-smoke` asserts the console STARTS; this asserts it WORKS.
+   *
+   * C-3 landed without a harness and T9's three defects are the argument --
+   * a link that navigated back to Home, a provider nothing read, a state that
+   * could not fire, and none of them found by reading the diff. Every console
+   * verification through C-3 was a browser driven once, by hand, on the day
+   * the screen was built: that proves the screen worked, not that it keeps
+   * working.
+   *
+   * IT IS THE MOST EXPENSIVE GATE IN THIS LIST, and knowingly. It resets the
+   * database, rebuilds the console with a base URL, starts the API and drives
+   * a real browser. Cheaper shapes were available and each drops the thing
+   * that makes it worth having: a mocked API tests the mock, an unbuilt
+   * console tests the dev server's bundle rather than the seller's, and a
+   * seeded session tests the screens without testing that a seller can reach
+   * them.
+   *
+   * Its sign-in lives in ONE helper (`e2e/helpers/session.ts`) because
+   * ADU-AUTH-01 v2.6 is under evaluation: when the mechanism is ruled, one
+   * function changes and no test does.
+   */
+  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'] },
 ];
 
 if (process.argv.includes('--list')) {

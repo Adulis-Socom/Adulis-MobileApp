@@ -23,3 +23,6 @@ apps/api/dist/
 # console.* is banned in apps/api. Never commit it; it holds live codes and
 # phone numbers for whoever ran the dev loop.
 .dev-sms.log
+apps/console/e2e/.auth/
+apps/console/test-results/
+apps/console/playwright-report/
