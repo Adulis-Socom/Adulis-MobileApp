@@ -1443,3 +1443,38 @@ Effect:    D-132 is precisely the defect that running `db:reset` cannot expose. 
 Response:  FIXED
 Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
 Ruling needed: none.
+
+### D-141 - The eligibility register's own defect: D-92 is ruled, and NULL there means no bar
+
+Severity:  MAJOR (a market configured for the beta posture refused every seller)
+Phase:     T9 - 3
+Source:    D-92, PARKED since T7 Phase 3 with two governing sentences that could not both hold. WORK ORDER T9 S3.1 rules it: PRD S4.1 governs, `follower_threshold` NULL is a DECIDED value -- "this market sets no bar" -- and the consumer fails OPEN
+Found by:  the CEO, ruling D-92 in T9 S3.1
+Effect:    `core.fn_evaluate_eligibility`'s audience arm read `v_audience := coalesce(v_best >= v_cfg.follower_threshold, false)`. `v_best >= NULL` is NULL, coalesced to false, so a market with `audience_required = true` and no threshold refused EVERY seller for FOLLOWER_THRESHOLD_NOT_MET -- the exact opposite of what an absent bar means, and the reason the beta posture was reachable only through `audience_required = false`.
+           This also removes the row from ADU-VAL-01's machine-read table, which is why T9 moves the `deferred-values` pin from 16 to 14: a NULL that is DECIDED is not a deferral, and the register was carrying it as one. That half is blocked on ADU-VAL-01 v1.2 (D-140).
+Response:  BUILT
+Action:    Migration `0041_d92_follower_threshold_fails_open.sql`. The body was EXTRACTED with `pg_get_functiondef` and patched -- one statement replaced, everything else byte-for-byte as the database holds it; 0005 is merged and is not edited. THE TWO NULLS ARE KEPT APART, which is the part a one-line fix gets wrong: a NULL threshold is an absent RULE and now passes; a NULL `v_best` is absent EVIDENCE and still fails closed. The old single `coalesce` collapsed both into "no".
+           `apps/api/test/t9-d92-follower-threshold.spec.ts` pins both arms, and was PROVEN RED before being trusted: reverting the live function to the pre-0041 body gives `Expected "SATISFIED", Received "NOT_SATISFIED"` on the no-bar arm, while the absent-evidence arm passes under BOTH definitions -- which is what shows the fix did not simply open the gate.
+Ruling needed: none. D-92 is closed by T9 S3.1.
+
+### D-142 - An exemption made a class, and nothing re-checked what fell into it later
+
+Severity:  MAJOR (two destructive scripts, one of them running DROP DATABASE, took the permissive default)
+Phase:     T9 - 3
+Source:    D-107 exempted ops scripts from the NODE_ENV boundary assertion, having enumerated five guards and found them sound. WORK ORDER T9 S3.3 rules the exemption covers scripts that READ and not scripts that DESTROY
+Found by:  T9 S3.3, grepping for `DROP|TRUNCATE|DELETE FROM` across ops/ and db/
+Effect:    **The generalisable half, and it is the point of this entry: an exemption creates a class where the rule does not apply, and nobody re-checks what falls into that class later.** D-107's five scripts were all read-only when it was written. `ops/scripts/db-reset.mjs` did not exist yet (D-133), and neither did anyone re-examine `ops/scripts/db-determinism.mjs`, which has always run `DROP DATABASE IF EXISTS` on two databases, or `ops/load/db-loads.mjs`, which DELETEs from eight core tables. Both proceeded on an unset NODE_ENV.
+Response:  FIXED
+Action:    Both now validate NODE_ENV against `['development', 'test']` and exit 2 on anything else, including unset -- DUPLICATED rather than imported, per the ruling: reaching into apps/api's env module would recreate the coupling D-107 avoided, and five lines are cheaper than that. In `db-determinism.mjs` the guard is lifted ABOVE the DATABASE_URL check, because the environment is the first thing a destructive script must be sure of. `db/checks/check-10` matched the grep and is a FALSE POSITIVE: its "TRUNCATE" is a privilege name in a SQL VALUES list.
+           THE CALLER NOW DECLARES. CI deliberately leaves NODE_ENV unset (an inherited `development` ships a development console bundle), so the `determinism` gate would have refused. `gates.mjs` gained per-gate `env` and that gate declares `NODE_ENV: 'test'` -- both rules were right, and what was missing was anyone SAYING which environment a CI gate run is. Proven: unset and `production` both refused with exit 2; the gate green with NODE_ENV unset in the parent process.
+Ruling needed: none.
+
+### D-143 - The Phase D load harness has not been runnable since product.slug landed
+
+Severity:  MINOR (a measurement harness, not a shipped path; nothing depends on it)
+Phase:     T9 - 3
+Source:    `ops/load/db-loads.mjs`, found while adding D-142's guard to it
+Effect:    Running it fails on `null value in column "slug" of relation "product" violates not-null constraint`. The script inserts synthetic products without a slug, and `core.product.slug` became NOT NULL at T6 (G1.9). So ADU-CON-02-A1 S6's three DB-level loads -- the expiry sweep against 1M orders, the stats-trigger path at 100 scans/s, the 08:00 dispatch at 10k notifications -- have not been measurable since, and nothing noticed because no gate runs this file. It is the same shape as D-121 and D-126 one level out: a thing nothing executes drifts from the schema it reads.
+Response:  RECORDED, not fixed
+Action:    None here. The guard was added (D-142) and the breakage found by running the guarded script; fixing the harness is a separate change with its own verification, and this PR's subject is the gates. Worth knowing before the next capacity question is asked: the answer currently cannot be produced.
+Ruling needed: none. Buildable whenever the capacity numbers are wanted.

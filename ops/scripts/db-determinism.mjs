@@ -19,6 +19,30 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
+/**
+ * A DESTRUCTIVE SCRIPT ASSERTS ITS ENVIRONMENT (WORK ORDER T9 S3.3, D-133).
+ *
+ * D-107's exemption covers ops scripts that READ. This one does not read: it
+ * DROPs and re-CREATEs two databases. An unset NODE_ENV is refused with everything else,
+ * because a process that cannot determine its environment must not pick the
+ * permissive default -- which is D-105, the finding this whole tier began
+ * with.
+ *
+ * DUPLICATED, NOT IMPORTED, and deliberately so. Reaching into
+ * apps/api/src/common/env.ts would couple an ops script to the API's module
+ * graph, which is the coupling D-107 avoided; five lines are cheaper than
+ * that, and far cheaper than an unguarded DROP DATABASE.
+ */
+const DESTRUCTIVE_ENVS = ['development', 'test'];
+if (!DESTRUCTIVE_ENVS.includes(process.env.NODE_ENV ?? '')) {
+  console.error(
+    `FAIL  NODE_ENV is ${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}; ` +
+      `this script runs only under ${DESTRUCTIVE_ENVS.join(' or ')}.`,
+  );
+  console.error('      It DROPs and re-CREATEs two databases, so it refuses an environment it cannot name.');
+  process.exit(2);
+}
+
 const CONTAINER = process.env['ADULIS_PG_CONTAINER'] ?? 'adulis-postgres';
 const ADMIN_URL = process.env['DATABASE_URL_MIGRATE'];
 
@@ -30,6 +54,7 @@ if (!ADMIN_URL) {
 const url = new URL(ADMIN_URL);
 const adminUser = decodeURIComponent(url.username);
 const suffix = randomUUID().slice(0, 8).replace(/-/g, '');
+
 const dbs = [`adulis_det_a_${suffix}`, `adulis_det_b_${suffix}`];
 
 /** Run psql/pg_dump inside the container, so no client tooling is required. */
