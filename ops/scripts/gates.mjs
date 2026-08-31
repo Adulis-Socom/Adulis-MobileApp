@@ -250,7 +250,16 @@ const GATES = [
   { id: 'migrate', title: 'Migrations apply', cmd: ['pnpm', 'db:migrate'] },
   { id: 'worker-schema', title: 'The worker queue schema is installed', cmd: ['pnpm', 'worker:install'] },
   { id: 'test', title: 'Test', cmd: pnpm('test', { scoped: true }) },
-  { id: 'determinism', title: 'Migrations are deterministic', cmd: ['pnpm', 'db:determinism'] },
+  /**
+   * THE CALLER DECLARES THE ENVIRONMENT, because the script now refuses to
+   * guess. db:determinism DROPs and re-CREATEs two databases, so under T9
+   * S3.3 it validates NODE_ENV against a closed set and refuses if unset --
+   * and CI deliberately leaves NODE_ENV unset (see the note at the top of
+   * this file: an inherited NODE_ENV=development ships a development console
+   * bundle). Both rules are right; what was missing was anyone SAYING which
+   * environment a CI gate run is. It is `test`, and it is said here.
+   */
+  { id: 'determinism', title: 'Migrations are deterministic', cmd: ['pnpm', 'db:determinism'], env: { NODE_ENV: 'test' } },
   { id: 'permission-doc', title: 'The permission matrix agrees with its own generated SQL', cmd: ['pnpm', 'verify:permission-doc'] },
   { id: 'docs-ascii', title: 'A3.5 - governed specifications are ASCII', cmd: ['pnpm', 'verify:docs-ascii'] },
   { id: 'appendix-c', title: 'Appendix C - sixteen checks', cmd: ['pnpm', 'db:check'] },
@@ -309,11 +318,12 @@ if (process.argv.includes('--list')) {
 const only = process.argv.indexOf('--only');
 const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
 
-function run(cmd) {
+function run(cmd, extraEnv) {
   const r = spawnSync(cmd[0], cmd.slice(1), {
     cwd: root,
     stdio: 'inherit',
     shell: process.platform === 'win32',
+    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
   return r.status === 0;
 }
@@ -337,7 +347,7 @@ for (const gate of GATES) {
   } else if (gate.steps) {
     ok = gate.steps.every((s) => run(s));
   } else {
-    ok = run(gate.cmd);
+    ok = run(gate.cmd, gate.env);
   }
   if (!ok) {
     console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);

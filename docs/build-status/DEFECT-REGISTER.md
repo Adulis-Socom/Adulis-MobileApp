@@ -1444,6 +1444,55 @@ Response:  FIXED
 Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
 Ruling needed: none.
 
+### D-140 - MISSING_SOURCE: the four documents WORK ORDER T9 Phase 2 installs did not arrive
+
+Severity:  BLOCKER for T9 Phase 2, and for two of Phase 3's three gate changes
+Phase:     T9 - 2
+Source:    WORK ORDER T9 S2 names `ADU-DB-01_..._v1_13_ASCII.md`, `ADU-REPO-01_..._v1_3.md`, `ADU-CON-02_..._v3_2_ASCII.md` and `ADU-VAL-01_..._v1_2.md`
+Found by:  T9 Phase 2, looking for them before installing them
+Effect:    None of the four is on this machine. `find` across the working tree, `docs/`, `docs/registers/`, `_staging/` (which holds one file, `Adulis_Claude_Skills_Pack_v1.1.zip`) and the parent directory returns nothing for any of the four names, and nothing was attached to the order. The installed baseline is unchanged: ADU-DB-01 **v1.12**, ADU-CON-02 **v3.1**, ADU-VAL-01 **v1.1**, and ADU-REPO-01 **absent entirely**.
+           This blocks Phase 3.1 and 3.2, and not for want of trying. **3.1** moves `verify:deferred-values` from 16 to 14 because ADU-VAL-01 v1.2 removes two rows -- but that gate compares three forms, and one of them IS the document's S1.1 table. Moving the pin to 14 while the installed v1.1 still lists 16 makes the gate red on a correct tree, which is the failure class this repository has spent two work orders removing. **3.2** adds a comparator over ADU-DB-01 v1.13's generated Appendix A and B; v1.12's appendices are not generated from the fixtures and are not what the gate is specified against.
+           What is NOT blocked was built instead, and is in the Phase 3 PR: the D-92 ruling (3.1's other half, stated in full in the order), the destructive-script NODE_ENV rule (3.3, likewise), and the `appendix-a.json` `_provenance` defect (3.2's sub-item, which is about a fixture that IS here).
+Response:  PARKED. Do not invent a governed document
+Action:    None buildable. The four are the CEO's to supply; every rule T9 states in its own text has been followed, because the order restates each one -- which is D-84's and D-125's pattern for the third time: a rule arrives in a work order, is followed, and the DOCUMENT it belongs to does not arrive.
+           One number worth recording while this is open, because it is larger than "a citation dangles": ADU-REPO-01 is cited **77 times across 33 files** -- `.dependency-cruiser.cjs`, `.github/CODEOWNERS`, `.github/workflows/ci.yml`, the root and per-app `CLAUDE.md`, `apps/api/src/generate-openapi.ts`, and the title of gate `deps` ("Dependency rules (ADU-REPO-01 S4)"). A CI gate names a section of a document nobody in this repository can open. D-94 recorded the absence; this records its size.
+Ruling needed: supply the four files, or rule which of Phase 3's changes proceed against the order's own restatement of the rules rather than against the documents.
+
+### D-141 - The eligibility register's own defect: D-92 is ruled, and NULL there means no bar
+
+Severity:  MAJOR (a market configured for the beta posture refused every seller)
+Phase:     T9 - 3
+Source:    D-92, PARKED since T7 Phase 3 with two governing sentences that could not both hold. WORK ORDER T9 S3.1 rules it: PRD S4.1 governs, `follower_threshold` NULL is a DECIDED value -- "this market sets no bar" -- and the consumer fails OPEN
+Found by:  the CEO, ruling D-92 in T9 S3.1
+Effect:    `core.fn_evaluate_eligibility`'s audience arm read `v_audience := coalesce(v_best >= v_cfg.follower_threshold, false)`. `v_best >= NULL` is NULL, coalesced to false, so a market with `audience_required = true` and no threshold refused EVERY seller for FOLLOWER_THRESHOLD_NOT_MET -- the exact opposite of what an absent bar means, and the reason the beta posture was reachable only through `audience_required = false`.
+           This also removes the row from ADU-VAL-01's machine-read table, which is why T9 moves the `deferred-values` pin from 16 to 14: a NULL that is DECIDED is not a deferral, and the register was carrying it as one. That half is blocked on ADU-VAL-01 v1.2 (D-140).
+Response:  BUILT
+Action:    Migration `0041_d92_follower_threshold_fails_open.sql`. The body was EXTRACTED with `pg_get_functiondef` and patched -- one statement replaced, everything else byte-for-byte as the database holds it; 0005 is merged and is not edited. THE TWO NULLS ARE KEPT APART, which is the part a one-line fix gets wrong: a NULL threshold is an absent RULE and now passes; a NULL `v_best` is absent EVIDENCE and still fails closed. The old single `coalesce` collapsed both into "no".
+           `apps/api/test/t9-d92-follower-threshold.spec.ts` pins both arms, and was PROVEN RED before being trusted: reverting the live function to the pre-0041 body gives `Expected "SATISFIED", Received "NOT_SATISFIED"` on the no-bar arm, while the absent-evidence arm passes under BOTH definitions -- which is what shows the fix did not simply open the gate.
+Ruling needed: none. D-92 is closed by T9 S3.1.
+
+### D-142 - An exemption made a class, and nothing re-checked what fell into it later
+
+Severity:  MAJOR (two destructive scripts, one of them running DROP DATABASE, took the permissive default)
+Phase:     T9 - 3
+Source:    D-107 exempted ops scripts from the NODE_ENV boundary assertion, having enumerated five guards and found them sound. WORK ORDER T9 S3.3 rules the exemption covers scripts that READ and not scripts that DESTROY
+Found by:  T9 S3.3, grepping for `DROP|TRUNCATE|DELETE FROM` across ops/ and db/
+Effect:    **The generalisable half, and it is the point of this entry: an exemption creates a class where the rule does not apply, and nobody re-checks what falls into that class later.** D-107's five scripts were all read-only when it was written. `ops/scripts/db-reset.mjs` did not exist yet (D-133), and neither did anyone re-examine `ops/scripts/db-determinism.mjs`, which has always run `DROP DATABASE IF EXISTS` on two databases, or `ops/load/db-loads.mjs`, which DELETEs from eight core tables. Both proceeded on an unset NODE_ENV.
+Response:  FIXED
+Action:    Both now validate NODE_ENV against `['development', 'test']` and exit 2 on anything else, including unset -- DUPLICATED rather than imported, per the ruling: reaching into apps/api's env module would recreate the coupling D-107 avoided, and five lines are cheaper than that. In `db-determinism.mjs` the guard is lifted ABOVE the DATABASE_URL check, because the environment is the first thing a destructive script must be sure of. `db/checks/check-10` matched the grep and is a FALSE POSITIVE: its "TRUNCATE" is a privilege name in a SQL VALUES list.
+           THE CALLER NOW DECLARES. CI deliberately leaves NODE_ENV unset (an inherited `development` ships a development console bundle), so the `determinism` gate would have refused. `gates.mjs` gained per-gate `env` and that gate declares `NODE_ENV: 'test'` -- both rules were right, and what was missing was anyone SAYING which environment a CI gate run is. Proven: unset and `production` both refused with exit 2; the gate green with NODE_ENV unset in the parent process.
+Ruling needed: none.
+
+### D-143 - The Phase D load harness has not been runnable since product.slug landed
+
+Severity:  MINOR (a measurement harness, not a shipped path; nothing depends on it)
+Phase:     T9 - 3
+Source:    `ops/load/db-loads.mjs`, found while adding D-142's guard to it
+Effect:    Running it fails on `null value in column "slug" of relation "product" violates not-null constraint`. The script inserts synthetic products without a slug, and `core.product.slug` became NOT NULL at T6 (G1.9). So ADU-CON-02-A1 S6's three DB-level loads -- the expiry sweep against 1M orders, the stats-trigger path at 100 scans/s, the 08:00 dispatch at 10k notifications -- have not been measurable since, and nothing noticed because no gate runs this file. It is the same shape as D-121 and D-126 one level out: a thing nothing executes drifts from the schema it reads.
+Response:  RECORDED, not fixed
+Action:    None here. The guard was added (D-142) and the breakage found by running the guarded script; fixing the harness is a separate change with its own verification, and this PR's subject is the gates. Worth knowing before the next capacity question is asked: the answer currently cannot be produced.
+Ruling needed: none. Buildable whenever the capacity numbers are wanted.
+
 ### D-144 - C-3's thirty-two keys carry English in am.ts, and are not machine translations
 
 Severity:  MINOR (recorded so the manifest stays true; AM_ENABLED is off either way)
