@@ -1432,3 +1432,14 @@ Effect:    The console makes two API calls on mount: apps/console/src/auth/sessi
 Response:  the CLAIM is FIXED; the GAP is recorded, not closed
 Action:    The header and the review now state what is and is not exercised. Closing the gap needs a decision rather than a patch: exercising `connect-src` means building the console with a base URL and either standing an API up inside the gate or pointing it at an origin the policy forbids and asserting the violation fires. The second is cheap and tests the policy rather than the app, and it also means the gate would assert on a bundle nobody ships.
 Ruling needed: whether `boot-smoke` should build a second, throwaway bundle with `VITE_API_BASE_URL` set to a forbidden origin purely to prove `connect-src` blocks it -- or whether that belongs to the console harness owed at C-3.
+
+### D-139 - The report named an instrument that could not have produced the finding it credited
+
+Severity:  MINOR (records; the finding and its fix are unaffected)
+Phase:     T8-C
+Source:    docs/build-status/T8-REPORT.md, the WORK ORDER T8-C REPORT block, S2 paragraph -- "Three defects in it were found by **running** it: ... and an unconditional `PASS` ... (D-132)"
+Found by:  the T8-C S6 adversarial pass, second round -- raised twice independently
+Effect:    D-132 is precisely the defect that running `db:reset` cannot expose. There was no branch between the counts and the print, so every run -- correct or not -- printed PASS and exited 0. The S2 commit says "two defects ... both found by running it rather than by reading it" and lists the other two; the review records D-132's verdict as "CONFIRMED by reading, and by construction"; the register entry says "Found by: the T8-C S2 adversarial pass". Three artifacts agree, and the report contradicted all three -- in a block whose second line is "Every claim below names what produced it (ADU-RUL-03 S5.1)". A reader following the named instrument would run the script, see PASS, and conclude the entry was wrong.
+Response:  FIXED
+Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
+Ruling needed: none.
