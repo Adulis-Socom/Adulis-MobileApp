@@ -310,6 +310,36 @@ const GATES = [
   { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
 
   /**
+   * APPENDED, like the two before it. ADU-CON-02 v3.2 S16 now states the rule
+   * this list has followed since mt-keys: the gate list is append-only and
+   * gates are cited by NAME -- "a number is a reference that breaks silently
+   * when the list moves; a name is one that breaks loudly or not at all."
+   *
+   * ADU-DB-01 v1.13's appendices are GENERATED from db/checks/fixtures/ and
+   * from pg_class. Three revisions running, that document announced an
+   * appendix correction and did not perform it, and every one stayed green
+   * because checks 14 and 16 read the fixtures and NOTHING READ THE DOCUMENT.
+   * This is the gate that makes a fourth impossible.
+   */
+  { id: 'appendix', title: 'ADU-DB-01 Appendix A and B agree with what generated them', cmd: ['pnpm', 'verify:appendix'] },
+
+  /**
+   * APPENDED, and its POSITION AFTER `test` is the point rather than an
+   * accident of the append-only rule. `session_replication_role = replica`
+   * suppresses the constraint triggers that implement referential integrity,
+   * so a teardown using it to defeat an append-only guard also defeats
+   * ON DELETE CASCADE -- and raises nothing. The violation exists and the
+   * database will never mention it, so the only way to know is to ask after
+   * the suite has run.
+   *
+   * The class was fixed at T7 in ten suites and D-128's fix reintroduced it in
+   * an eleventh. Ten edits are not a rule: fixing a class in N places does
+   * nothing about the N+1th, because nothing carries the reasoning to a change
+   * nobody had written yet.
+   */
+  { id: 'orphan-sweep', title: 'No orphaned rows against any FK into core.seller', cmd: ['pnpm', 'verify:orphan-sweep'] },
+
+  /**
    * APPENDED. `boot-smoke` asserts the console STARTS; this asserts it WORKS.
    *
    * C-3 landed without a harness and T9's three defects are the argument --
@@ -340,8 +370,7 @@ const GATES = [
    * red everywhere it matters and green on the one machine that already knows
    * the answer.
    */
-  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'], env: { NODE_ENV: 'test' } },
-];
+  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'], env: { NODE_ENV: 'test' } },];
 
 if (process.argv.includes('--list')) {
   for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);

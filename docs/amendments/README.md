@@ -4,11 +4,12 @@
 
 | Document | Governs at | Where |
 |---|---|---|
-| **ADU-DB-01** | **v1.12** | [`docs/ADU-DB-01_..._v1_12.md`](../ADU-DB-01_Database_and_Data_Model_v1_12.md) |
+| **ADU-DB-01** | **v1.13** -- the appendices are GENERATED from `db/checks/fixtures/`, and `verify:appendix` compares document to fixture both ways | [`docs/ADU-DB-01_..._v1_13_ASCII.md`](../ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md) |
 | **ADU-AUTH-01** | **v2.5** | [`docs/ADU-AUTH-01_..._v2_5.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
 | **ADU-API-01** | **v1.7** | [`docs/ADU-API-01_API_Contract_v1_7.md`](../ADU-API-01_API_Contract_v1_7.md) |
-| **ADU-CON-02** | **v3.1** | [`docs/ADU-CON-02_..._v3_1.md`](../ADU-CON-02_Seller_Console_System_Design_v3_1.md) |
-| **ADU-VAL-01** | **v1.1** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, the `deferred-values` gate of the one list) | [`docs/registers/`](../registers/) |
+| **ADU-CON-02** | **v3.2** | [`docs/ADU-CON-02_..._v3_2_ASCII.md`](../ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md) |
+| **ADU-REPO-01** | **v1.3** -- installed for the FIRST TIME at T10. It was cited 77 times across 33 files, including the `deps` gate's own title, and lived nowhere (D-94, D-140) | [`docs/ADU-REPO-01_..._v1_3.md`](../ADU-REPO-01_Repository_Structure_and_Concurrent_Development_v1_3.md) |
+| **ADU-VAL-01** | **v1.2** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, the `deferred-values` gate of the one list), **pinned at 14** since v1.2 removed `follower_threshold` (D-92: NULL there is decided) and the embedding dimension (a type question) | [`docs/registers/`](../registers/) |
 | The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
 **Installed at T5. The superseded copies are in [`docs/superseded/`](../superseded/)** rather than

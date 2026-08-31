@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `pnpm verify:deferred-values` -- ADU-VAL-01 v1.1 S0.3, made executable.
+ * `pnpm verify:deferred-values` -- ADU-VAL-01 v1.2 S0.3, made executable.
  *
  * "Three forms, one source, and something compares them" -- the S16.6
  * pattern that caught the collapsed permission matrix:
@@ -62,16 +62,33 @@ if (!CONNECTION) {
  * edits directly -- and the fix is the same: pin the number where neither form
  * can reach it, beside what fixes it.
  *
- * SIXTEEN. ADU-VAL-01 v1.1 S1.1 enumerates sixteen columns: fourteen
- * ladder_config rows (Groups A and C), eligibility_config.follower_threshold
- * (row 15), and nlu.intent_phrase.embedding (row 16, whose deferral is the
- * vector DIMENSION rather than nullability -- S1.4). A seventeenth row means a
- * value was deferred and this gate had not heard; a fifteenth means one was
- * decided or dropped, and either way the register owes a v1.2 that says so.
- * The number moves when a reissue moves it, in the same commit, with the
+ * FOURTEEN, AND IT WAS SIXTEEN UNTIL v1.2. ADU-VAL-01 v1.2 S1.1 enumerates
+ * fourteen columns, all on core.ladder_config -- Groups A and C.
+ *
+ * v1.1 carried two more, and v1.2 removes both because NEITHER WAS A
+ * NULLABILITY QUESTION:
+ *
+ *   eligibility_config.follower_threshold -- NULL there is a DECIDED value
+ *   ("this market sets no bar") and the consumer fails OPEN on it. D-92,
+ *   ruled in T9 S3.1 and built in migration 0041. A column where NULL carries
+ *   meaning cannot also be a deferral marker: the two readings are
+ *   indistinguishable in the data and only the document can tell them apart.
+ *
+ *   nlu.intent_phrase.embedding -- the deferral is the vector DIMENSION, a
+ *   TYPE question. Still OPEN, in v1.2 S1.4, and out of the machine-read
+ *   table.
+ *
+ * THE PIN MOVED ON ITS FIRST DAY, AND THAT IS THE PIN WORKING. A gate that
+ * compares two forms cannot ask whether either is right; pinning a count
+ * forces someone to say what the count IS, and saying it out loud is what
+ * exposed two rows that never belonged (ADU-VAL-01 v1.2 S0.2).
+ *
+ * A fifteenth row means a value was deferred and this gate had not heard; a
+ * thirteenth means one was decided or dropped. Either way the register owes a
+ * reissue that says so, and the number moves in the same commit as the
  * sentence that moved it.
  */
-const EXPECTED_ROWS = 16;
+const EXPECTED_ROWS = 14;
 
 let failures = 0;
 const pass = (m) => console.log(`  PASS  ${m}`);
@@ -86,7 +103,7 @@ const fx = fixture.columns;
 
 // ---- form 1: S1.1's table, parsed from the governed register --------------
 const registerPath = path.join(
-  root, 'docs', 'registers', 'ADU-VAL-01_Deferred_Value_Decisions_Register_v1_1.md',
+  root, 'docs', 'registers', 'ADU-VAL-01_Deferred_Value_Decisions_Register_v1_2.md',
 );
 const register = await readFile(registerPath, 'utf8');
 const rowRe = /^\| (\d+) \| `([a-z_]+)\.([a-z_]+)` \| `([a-z_]+)` \| ([^|]+) \| ([^|]+) \|$/gm;

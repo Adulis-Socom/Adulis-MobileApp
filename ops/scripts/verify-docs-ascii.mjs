@@ -33,17 +33,23 @@ const root = path.resolve(here, '..', '..');
 
 /** Enforced. A failure here fails the build. */
 const GOVERNED = [
-  'docs/ADU-DB-01_Database_and_Data_Model_v1_12.md',
+  'docs/ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md',
   'docs/ADU-API-01_API_Contract_v1_7.md',
   // T5: ADU-CON-02 becomes GOVERNED at v3.1 -- it was supplied ASCII, so it
   // is enforced rather than merely reported as debt.
-  'docs/ADU-CON-02_Seller_Console_System_Design_v3_1.md',
+  'docs/ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md',
   // T7: v1.1 supersedes v1.0 and is GOVERNED with real teeth: S1.1 is
   // machine-read -- verify-deferred-values.mjs parses it and compares it to
   // db/checks/fixtures/deferred-values.json and the live schema, so a
   // corrupted byte here corrupts a gate's source of truth, not just prose.
-  'docs/registers/ADU-VAL-01_Deferred_Value_Decisions_Register_v1_1.md',
+  'docs/registers/ADU-VAL-01_Deferred_Value_Decisions_Register_v1_2.md',
+  // T10: ADU-REPO-01 is GOVERNED from its FIRST installation. It was cited
+  // 77 times across 33 files -- including this gate's neighbour, the `deps`
+  // gate title -- and existed in no directory until now (D-94, D-140). Its
+  // own S0.4 says a structure document that governs a tree it does not live
+  // in is a document an agent cannot read.
+  'docs/ADU-REPO-01_Repository_Structure_and_Concurrent_Development_v1_3.md',
   // T8: ADU-RUL-03 is GOVERNED from installation, and for a reason the other
   // entries do not have: its S4 carries the age declaration's wording
   // VERBATIM -- the sentence a person is legally bound by, which the console
