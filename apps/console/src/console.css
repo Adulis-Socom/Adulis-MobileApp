@@ -261,3 +261,212 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .consequence p { margin: 0 0 var(--adu-space-xs); }
 .consequence p:last-child { margin-bottom: 0; }
 .consequence .warn { font-weight: 600; }
+
+/* =========================================================================
+   C-4 -- Group B, Trade (SC-03..SC-06)
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   THE PAYMENT DECISIONS. THE MOST IMPORTANT RULE IN THIS STYLESHEET.
+
+   `.decision` has NO variant. There is no `.decision.primary`, no
+   `.decision.danger`, no `.decision--safe`. Both buttons are the same size,
+   the same weight, the same colour and the same border, and the only thing
+   distinguishing them is the words on them.
+
+   That is ADU-CON-03 S7 and it is not a styling preference: "Confirm Payment
+   Received and Payment Not Received are equally weighted. Neither is styled
+   as the safe default." A styled default is a recommendation, and neither
+   decision is recommended -- the seller's own bank account is the only thing
+   that knows which is true. A seller who confirms a payment that never
+   arrived has given away goods, and this product has no path that gets them
+   back.
+
+   IF YOU ARE ADDING A VARIANT HERE, STOP. The screen is specified.
+   ------------------------------------------------------------------------- */
+.payment-decisions { margin-top: var(--adu-space-md); }
+
+.decision-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adu-space-md);
+  margin-top: var(--adu-space-sm);
+}
+
+.decision {
+  flex: 1 1 14rem;
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  font: inherit;
+  font-weight: 600;
+  /* No fixed height: Amharic runs 30-50% longer and these labels are the
+     ones that must not be clipped. */
+  text-align: center;
+}
+.decision:disabled { opacity: 0.6; }
+
+/* Adjacent, always visible, never behind a disclosure. Rendered before both
+   controls in document order so a screen reader reaches it first. */
+.verify-first {
+  margin: 0 0 var(--adu-space-sm);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border-left: 3px solid var(--adu-color-warn, var(--adu-color-border));
+  font-weight: 600;
+}
+
+.reject-confirm { margin-top: var(--adu-space-sm); }
+.reject-confirm textarea {
+  width: 100%;
+  min-height: 5rem;
+  font: inherit;
+  padding: var(--adu-space-sm);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-sm);
+  background: var(--adu-color-bg);
+  color: var(--adu-color-text);
+}
+
+/* ------------------------------------------------------------- SC-03 list */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adu-space-xs);
+  margin: var(--adu-space-md) 0 var(--adu-space-xs);
+}
+.filter-row button {
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-xs) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-sm);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  font: inherit;
+}
+.filter-row button[aria-pressed='true'] {
+  background: var(--adu-color-accent);
+  color: var(--adu-color-accent-text);
+}
+
+.order-list { list-style: none; margin: 0; padding: 0; }
+.order-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--adu-space-sm);
+  padding: var(--adu-space-sm) 0;
+  border-bottom: 1px solid var(--adu-color-border);
+}
+.order-link {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--adu-space-sm);
+  min-width: 0;
+  color: inherit;
+}
+.state-badge {
+  flex: 0 0 auto;
+  padding: 0.125rem var(--adu-space-sm);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-sm);
+  font-size: 0.8125rem;
+}
+.order-total { font-weight: 600; }
+
+/* The clock. `.deadline` styles BOTH treatments identically -- which one is
+   running is said in words by `.deadline-label`, not in colour, because a
+   colour is not a label and cannot be read aloud. There is no rule for a
+   stopped clock, because a stopped clock renders nothing at all. */
+.deadline { flex: 0 0 auto; font-size: 0.875rem; }
+.deadline-label { color: var(--adu-color-text-muted); }
+.deadline-value { font-variant-numeric: tabular-nums; }
+
+.load-more { margin-top: var(--adu-space-md); min-height: var(--adu-touch-min); }
+
+/* ----------------------------------------------------------- SC-04 detail */
+.region {
+  margin-top: var(--adu-space-lg);
+  padding-top: var(--adu-space-md);
+  border-top: 1px solid var(--adu-color-border);
+}
+.region h2 { font-size: 1rem; margin: 0 0 var(--adu-space-sm); }
+
+.order-lines { list-style: none; margin: 0; padding: 0; }
+.order-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adu-space-sm);
+  align-items: baseline;
+  padding: var(--adu-space-xs) 0;
+}
+.line-product { flex: 1 1 12rem; font-weight: 600; }
+
+.handoff-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adu-space-sm);
+  margin-top: var(--adu-space-sm);
+}
+.handoff-controls button {
+  min-height: var(--adu-touch-min);
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+  font: inherit;
+}
+/* R20: DISABLED, NOT HIDDEN. The region keeps its space and its outline; a
+   region that disappears makes a seller wonder what they broke. There is
+   deliberately no `display: none` anywhere in this block. */
+.handoff-region[data-gated='true'] .handoff-controls button { opacity: 0.55; }
+.handoff-controls button:disabled { cursor: not-allowed; }
+
+.ready-fact { margin: 0 0 var(--adu-space-sm); color: var(--adu-color-text-muted); }
+
+.history { margin: 0; padding-left: var(--adu-space-lg); }
+.history li { padding: 0.125rem 0; }
+.history-when { color: var(--adu-color-text-muted); margin-right: var(--adu-space-sm); }
+
+/* --------------------------------------------------------- SC-05 evidence */
+.modal.evidence { max-width: 40rem; }
+.evidence-frame {
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--adu-color-bg);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-sm);
+}
+/* No download, no print, no share, no save, and no "looks valid" affordance
+   of any kind. These two properties discourage a long-press save WITHOUT
+   pretending to prevent it -- a screenshot is always possible and this
+   screen makes no claim otherwise. There is no `download` attribute in the
+   component, no anchor around the image, and no border, tint or icon that
+   could read as a verdict on what the picture shows. */
+.evidence-image {
+  display: block;
+  max-width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.evidence-submitted { color: var(--adu-color-text-muted); margin: var(--adu-space-xs) 0 0; }
+
+/* --------------------------------------------------------------- SC-06 QR */
+/* Large and high-contrast, and NOT theme-aware: an inverted QR fails on many
+   readers, and a doorway after dark is exactly when this is used. The fills
+   are set on the SVG itself for the same reason. */
+.handoff-qr {
+  display: block;
+  width: min(20rem, 70vw);
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+}
+.qr-explain { text-align: center; margin-top: var(--adu-space-md); }
+.modal.qr .offline { text-align: center; }

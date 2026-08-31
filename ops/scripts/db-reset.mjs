@@ -111,7 +111,8 @@ const rowCounts = async (c) => {
            (SELECT count(*)::int FROM core.account) AS accounts,
            (SELECT count(*)::int FROM core.seller) AS sellers,
            (SELECT count(*)::int FROM core.device) AS devices,
-           (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing`);
+           (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing,
+           (SELECT count(*)::int FROM core."order") AS orders`);
   return r.rows[0];
 };
 const show = (label, c) =>
@@ -119,7 +120,7 @@ const show = (label, c) =>
     c === null
       ? `${label}: no core.market -- nothing has been migrated here yet`
       : `${label}: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
-        `devices ${c.devices}, timing_config in force ${c.timing}`,
+        `devices ${c.devices}, timing_config in force ${c.timing}, orders ${c.orders}`,
   );
 
 const tables = await client.query(
@@ -213,13 +214,20 @@ show('after', c);
  * documented a check that did not exist -- which is T8-C S1's finding
  * arriving one section later by a different door.
  *
- * The numbers are PINNED, on S1's rule: what fixes them is db/seeds -- one
- * market, one account with a seller, no devices, one timing_config in force.
+ * The numbers are PINNED, on S1's rule: what fixes them is the seed -- one
+ * market, TWO accounts (the seller's and the trade fixture's buyer), one
+ * seller, no devices, one timing_config in force, and four orders.
  * When the seed changes, this moves in the same commit, and until then a
  * seed that silently stops producing a timing row turns this red instead of
  * leaving a database where bootstrap succeeds and sign-in cannot (D-128).
+ *
+ * `orders` was added with C-4's trade fixture, and it is the count that most
+ * needs pinning: three of the four exist to carry ONE CLOCK TREATMENT EACH,
+ * so a seed that quietly stops producing the PAYMENT_SUBMITTED order leaves
+ * SC-03 rendering correctly and the confirmation-window branch untested --
+ * green, and covering nothing.
  */
-const EXPECTED = { markets: 1, accounts: 1, sellers: 1, devices: 0, timing: 1 };
+const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 4 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)
@@ -232,4 +240,4 @@ if (wrong.length) {
   console.error('      The schemas were dropped. Fix the seed or the migrations and run this again.');
   process.exit(1);
 }
-console.log('\nPASS  markets/accounts/sellers/devices/timing_config are what the seed defines.\n');
+console.log('\nPASS  markets/accounts/sellers/devices/timing_config/orders are what the seed defines.\n');

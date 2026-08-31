@@ -50,8 +50,32 @@ const die = (msg, code = 1) => {
 console.log('\nConsole e2e -- the built console, the real API, a reset database\n');
 
 /* -- 1. the artifact under test ------------------------------------------- */
+/*
+ * THE API IS REBUILT HERE, and the first version of this gate did not do it.
+ *
+ * It checked that `dist/main.js` EXISTED and ran whatever was in it, while
+ * rebuilding the console two steps below. That asymmetry is a check that does
+ * not check: inside `ci:local` the `build` gate runs first so dist is fresh,
+ * but run directly -- which is how anyone works on a console change -- it
+ * drives a NEW console against an OLD API.
+ *
+ * It cost a real diagnosis on its first outing. C-4's list rendered
+ * "undefined items" and no confirmation clock, and both readings were correct
+ * for the binary that was running: `line_count` and `payment_sla_deadline`
+ * had been added to orders.service.ts minutes earlier and compiled into
+ * nothing. The failure was indistinguishable from a product defect, which is
+ * the expensive kind of wrong answer for a gate to give.
+ *
+ * A rebuild costs seconds. A gate that tests a stale artifact costs an hour
+ * of looking in the wrong file, and it is the same class as D-132: a check
+ * whose PASS meant less than its message claimed.
+ */
+console.log('-- build the api ----------------------------------------------');
+if (sh('pnpm', ['--filter', '@adulis/api', 'build']).status !== 0) {
+  die('the api build failed');
+}
 if (!existsSync(path.join(root, 'apps', 'api', 'dist', 'main.js'))) {
-  die('apps/api/dist/main.js is missing. This gate runs after `build`.');
+  die('apps/api/dist/main.js is missing after a successful build.');
 }
 
 console.log('-- reset ------------------------------------------------------');
@@ -74,6 +98,39 @@ if (sh('pnpm', ['--filter', '@adulis/console', 'build'], {
 
 /* -- 2. the API, with the environment its dev SMS adapter needs ----------- */
 console.log('\n-- api --------------------------------------------------------');
+
+/*
+ * THE PORT MUST BE FREE, AND THIS CHECK EXISTS BECAUSE ITS ABSENCE COST AN
+ * AFTERNOON.
+ *
+ * The gate spawns an API and then waits for /healthz to answer. But /healthz
+ * answering proves that AN api is up -- not that THIS one is. With a stale
+ * process already holding the port (a dev server, a previous run that was
+ * interrupted between spawn and kill), the child dies instantly on
+ * EADDRINUSE, the health check succeeds against the ZOMBIE, and the whole
+ * suite runs against whatever binary that process was built from.
+ *
+ * That is what happened on C-4's first run: seven tests failed, the console
+ * showed "undefined items" and no confirmation clock, and both were true
+ * readings of an API compiled before those fields existed. Every symptom
+ * pointed at the screens. The gate was green about being up and wrong about
+ * what was up -- the same shape as D-132, where the check ran and the answer
+ * meant nothing.
+ *
+ * So: refuse to start if anything is already listening, and name what to do.
+ * A gate that silently tests someone else's process is worse than one that
+ * will not start.
+ */
+const portTaken = await fetch(`${API_BASE}/healthz`).then(() => true).catch(() => false);
+if (portTaken) {
+  die(
+    `something is already listening on ${API_BASE}.\n` +
+      '      This gate starts its own API and would otherwise test THAT process\n' +
+      '      instead -- a stale binary answering /healthz looks exactly like a\n' +
+      '      healthy start. Stop the other server and run this again.',
+  );
+}
+
 const api = spawn('node', ['dist/main.js'], {
   cwd: path.join(root, 'apps', 'api'),
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -87,8 +144,16 @@ const stopApi = () => { try { api.kill(); } catch { /* already gone */ } };
 process.on('exit', stopApi);
 process.on('SIGINT', () => { stopApi(); process.exit(130); });
 
+// The other half of the same lesson: if the child exits before /healthz
+// answers, stop waiting for it. Without this the loop spends 30 seconds
+// polling for a process that is already dead, then reports a timeout rather
+// than the exit code and the stderr that say exactly what went wrong.
+let apiExited = null;
+api.on('exit', (code, signal) => { apiExited = signal ?? code ?? 0; });
+
 const healthy = await (async () => {
   for (let i = 0; i < 60; i += 1) {
+    if (apiExited !== null) return false;
     try {
       const r = await fetch(`${API_BASE}/healthz`);
       if (r.ok) return true;

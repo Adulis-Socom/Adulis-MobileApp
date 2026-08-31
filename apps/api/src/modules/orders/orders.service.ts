@@ -230,6 +230,10 @@ export class OrdersService {
     return {
       data: page.map((o) => ({
         ...o,
+        // count(*) is bigint; node-pg hands bigint back as a STRING, and a
+        // string reaching a client that renders "{n} items" prints it fine
+        // and compares wrong. Narrowed here, at the one place that knows.
+        line_count: Number(o['line_count']),
         total: { amount_minor: Number(o['total_minor']), currency: o['total_currency'] },
       })),
       has_more: r.rows.length > limit,
@@ -346,9 +350,22 @@ export class OrdersService {
     cursor: string | undefined,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.orders:read');
+    // SC-03 needs the line count and THE CLOCK THAT MATTERS IN THE CURRENT
+    // STATE, and this query used to return neither -- only `expires_at`, the
+    // reservation window, which is the WRONG clock for a PAYMENT_SUBMITTED
+    // row. The 24h confirmation deadline lives on the open submission
+    // (`sla_deadline`, written by financial.service on submit), so the row
+    // cannot show it without this join and the screen cannot compute it: the
+    // console has no window value and must not have one.
     const r = await sql<Record<string, unknown> & { created_at: Date }>`
       SELECT o.id, o.state::text, o.total_minor, o.total_currency,
-             o.expires_at, o.ready_at, o.created_at
+             o.expires_at, o.ready_at, o.clock_stopped_at, o.created_at,
+             (SELECT count(*) FROM core.reservation r WHERE r.order_id = o.id)
+               AS line_count,
+             (SELECT ps.sla_deadline
+                FROM core.payment_submission ps
+               WHERE ps.order_id = o.id AND ps.state = 'SUBMITTED'
+               ORDER BY ps.submitted_at DESC LIMIT 1) AS payment_sla_deadline
         FROM core."order" o
        WHERE o.seller_id = ${req.ctx?.sellerId}
          AND (${cursor ?? null}::timestamptz IS NULL
@@ -387,16 +404,32 @@ export class OrdersService {
         JOIN core.product_variant v ON v.id = r.variant_id
         JOIN core.product p ON p.id = v.product_id
        WHERE r.order_id = ${orderId}`.execute(trx);
+    // `sla_deadline` added at T10 P5: it IS the confirmation window SC-04's
+    // clock region renders in PAYMENT_SUBMITTED. Without it the screen has
+    // only `expires_at` -- the reservation clock, which is irrelevant once
+    // payment is submitted and actively misleading if displayed.
     const submissions = await sql<Record<string, unknown>>`
-      SELECT id, submitted_at, state::text, decided_at, rejection_reason
+      SELECT id, submitted_at, state::text, decided_at, rejection_reason,
+             sla_deadline
         FROM core.payment_submission
        WHERE order_id = ${orderId}
        ORDER BY submitted_at DESC`.execute(trx);
+    // SC-04 region 6, the append-only transition list. The table has existed
+    // since migration 11 and nothing read it: `core.order_state_transition`
+    // is written by trg_log_order_transition and protected by trg_append_only,
+    // so this is the order's own history rather than a reconstruction.
+    const history = await sql<Record<string, unknown>>`
+      SELECT from_state::text AS from_state, to_state::text AS to_state,
+             reason, occurred_at
+        FROM core.order_state_transition
+       WHERE order_id = ${orderId}
+       ORDER BY occurred_at ASC`.execute(trx);
     return {
       ...order,
       total: { amount_minor: Number(order['total_minor']), currency: order['total_currency'] },
       lines: lines.rows,
       payment_submissions: submissions.rows,
+      history: history.rows,
     };
   }
 
