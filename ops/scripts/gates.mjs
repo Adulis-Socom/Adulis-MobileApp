@@ -308,6 +308,20 @@ const GATES = [
    * under the production _headers policy, and asserts #root has children.
    */
   { id: 'boot-smoke', title: 'The built console actually mounts in a browser', fn: assertConsoleBoots },
+
+  /**
+   * APPENDED, like the two before it. ADU-CON-02 v3.2 S16 now states the rule
+   * this list has followed since mt-keys: the gate list is append-only and
+   * gates are cited by NAME -- "a number is a reference that breaks silently
+   * when the list moves; a name is one that breaks loudly or not at all."
+   *
+   * ADU-DB-01 v1.13's appendices are GENERATED from db/checks/fixtures/ and
+   * from pg_class. Three revisions running, that document announced an
+   * appendix correction and did not perform it, and every one stayed green
+   * because checks 14 and 16 read the fixtures and NOTHING READ THE DOCUMENT.
+   * This is the gate that makes a fourth impossible.
+   */
+  { id: 'appendix', title: 'ADU-DB-01 Appendix A and B agree with what generated them', cmd: ['pnpm', 'verify:appendix'] },
 ];
 
 if (process.argv.includes('--list')) {

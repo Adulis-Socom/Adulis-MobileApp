@@ -1548,3 +1548,32 @@ Effect:    C-3's done-clause is the readiness hub, and that is built and verifie
 Response:  NOT BUILT, and the screen says so in one line rather than rendering a plausible fake
 Action:    None. It belongs with C-4, beside the clock treatments its rows depend on. R23 is already transcribed in the code that will carry it: rolling 7 days against the preceding 7, fixed, no picker -- the picker belongs on SC-12.
 Ruling needed: none.
+
+### D-149 - ADU-CON-02 v3.2 announced the stale-number correction and did not perform it, in six places
+
+Severity:  MAJOR (one of the six is the expected value a deploy is conditioned on)
+Phase:     T10 - 2
+Source:    docs/ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md, installed at T10 -- S13's setup block, S14.4's checklist, S16's pipeline line, **S18.2's mandatory provider verification**, S20.1's restore drill, S1's diagram, S14.3's AGENTS.md line, S21 and the closing summary
+Found by:  T10 Phase 2, checking the four documents against the build on install rather than after
+Effect:    MEASURED. `pnpm db:check` prints **16 PASS**; the live schema holds **114** tables; `pnpm gates --list` prints **22** (21 before this order added `appendix`). The document says:
+           - `db:check` = **15** in FIVE places -- S13's bash block (`# must print 15 passes`), S14.4 (`pnpm db:check` (15) passes), S16 (`Appendix C, all 15`), **S18.2** (`pnpm db:check` = 15 passes) and S20.1 (`db:check` (15)).
+           - **107** tables in TWO places -- S1's topology diagram and S14.3's AGENTS.md line ("table count 107").
+           - **sixteen** CI gates in TWO places -- S21's branch-protection note and the closing summary.
+           S13 contradicts itself across two lines: the bash block says 15 and the "Definition of a working setup" directly beneath it says **sixteen**.
+           And v3.2's own change table, entry 1, is self-contradicting: *"S14.2 and S18.2 said `db:check` prints **sixteen** passes and check 14 = 114. The code is at **sixteen** checks and **114** tables."* It names the stale value and the correct value as the same value, so as written it describes no defect at all -- while the stale values (15 and 107) are still in the body it claims to have corrected.
+           **S18.2 is the one that matters.** It is the four-step provider verification a hosting commitment is conditioned on, and v3.2's own S0.2 calls a stale expected value there "the sharpest": *"a check whose expected value is stale is a check that passes when it should fail."* A provider that produced 15 passes today would fail the gate and be disqualified; one that produced 16 would fail the document.
+Response:  RECORDED. The document is GOVERNED and is not edited here
+Action:    None in the tree. This is the fifth instance of the class the document names about itself ("This document has now been the source of the same defect it warns about, four times") and the same class ADU-DB-01 v1.13 S0.1 opens with -- an announced correction that was not performed. The difference is that DB v1.13 fixed the class by GENERATING its appendices; CON-02 v3.2 fixed three numbers in a change table and left nine occurrences in the body, so the mechanism it needed is the one its neighbour adopted.
+Ruling needed: reissue ADU-CON-02 v3.3 with the body's numbers corrected -- or, better and in v1.13's shape, stop printing counts a check already owns. `db:check`, the table count and the gate count are all producible by command; a document that prints them is a fourth copy of three facts that have each drifted at least twice.
+
+### D-150 - Appendix B names a per-table fixture that does not exist
+
+Severity:  MINOR (the count agrees; the enumeration it points at is absent)
+Phase:     T10 - 2
+Source:    ADU-DB-01 v1.13 Appendix B: *"The full per-table list lives in `db/checks/fixtures/` and is compared against this section by `verify:appendix`."* That directory holds `appendix-a.json` and `deferred-values.json`, and nothing else
+Found by:  T10 Phase 2, building `verify:appendix` against the sources each appendix names
+Effect:    Appendix B's substance is correct and was verified on install: **114 tables**, and every per-schema count matches `pg_class` with partitions excluded -- core 88, verification 2, financial 3, chat 3, nlu 6, billing 7, ledger 2, analytics 2, waitlist 1. The five body-over-manifest tables it flags all exist. What is missing is the artifact the sentence points at, so the appendix names a comparison that has no second side.
+           Appendix A has no such gap: `appendix-a.json` exists, and the document and the fixture agree on all **66** enum types in both directions.
+Response:  RECORDED, and the gate reads the database instead
+Action:    WORK ORDER T10 S2 rules this case before it arose -- "the fixture wins and the difference is a register entry". So `verify:appendix` compares Appendix B against `pg_class`, **which is what Appendix B itself says generated it**, and the missing enumeration is recorded rather than invented. Writing a fixture to satisfy the sentence would be manufacturing the evidence the sentence claims, which is the same act in the other direction.
+Ruling needed: either generate the per-table fixture in the same pass that generates the appendix, or reword Appendix B to name `pg_class` as the comparison's second side. The gate is correct under either.
