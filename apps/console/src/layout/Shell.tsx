@@ -16,6 +16,7 @@
 import { NavLink, Outlet, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { IdleWarning } from '../auth/IdleWarning';
+import { useMarketContext } from '../lib/market';
 import { useSession } from '../auth/session';
 
 const NAV = [
@@ -27,6 +28,7 @@ const NAV = [
 ] as const;
 
 export function Shell() {
+  const market = useMarketContext();
   const { sellerId } = useParams();
   const { signOut } = useSession();
   return (
@@ -75,7 +77,7 @@ export function Shell() {
           ))}
         </ul>
       </nav>
-      <IdleWarning timezone="Africa/Addis_Ababa" />
+      <IdleWarning market={market} />
     </div>
   );
 }

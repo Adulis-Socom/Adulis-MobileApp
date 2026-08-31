@@ -4,6 +4,8 @@ import { RouterProvider } from 'react-router/dom';
 import '@adulis/tokens/tokens.css';
 import './console.css';
 import { SessionProvider } from './auth/session';
+import { MarketProvider } from './lib/market';
+import { UpgradeGate } from './lib/UpgradeGate';
 import { router } from './router';
 
 /**
@@ -29,8 +31,19 @@ if (!el) throw new Error('#root missing from index.html');
 
 createRoot(el).render(
   <StrictMode>
-    <SessionProvider>
-      <RouterProvider router={router} />
-    </SessionProvider>
+    {/*
+      MarketProvider OUTSIDE SessionProvider, and the nesting is the contract
+      rather than a preference: it makes the one /v1/bootstrap call, which
+      mints the __Host- device cookie the server reads on every session
+      request. Nothing session-shaped may precede it (D-118), so the session
+      probe waits on this provider's `booting`.
+    */}
+    <MarketProvider>
+      <SessionProvider>
+        <UpgradeGate>
+          <RouterProvider router={router} />
+        </UpgradeGate>
+      </SessionProvider>
+    </MarketProvider>
   </StrictMode>,
 );

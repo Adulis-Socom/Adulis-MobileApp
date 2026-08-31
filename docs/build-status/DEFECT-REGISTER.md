@@ -1492,3 +1492,59 @@ Effect:    Running it fails on `null value in column "slug" of relation "product
 Response:  RECORDED, not fixed
 Action:    None here. The guard was added (D-142) and the breakage found by running the guarded script; fixing the harness is a separate change with its own verification, and this PR's subject is the gates. Worth knowing before the next capacity question is asked: the answer currently cannot be produced.
 Ruling needed: none. Buildable whenever the capacity numbers are wanted.
+
+### D-144 - C-3's thirty-two keys carry English in am.ts, and are not machine translations
+
+Severity:  MINOR (recorded so the manifest stays true; AM_ENABLED is off either way)
+Phase:     T9 - 4
+Source:    packages/locale/src/am.ts, the C-3 block; packages/locale/MT-KEYS.md
+Found by:  T9 Phase 4, attempting to write the Amharic
+Effect:    The first attempt at these strings produced CORRUPTED Amharic -- truncated unicode escapes mid-word, which the tooling refused to parse and which would have shipped mojibake to sellers if it had parsed. That is the honest finding: this agent cannot produce Amharic it can verify, and unverifiable text in a seller's own language is worse than text they can plainly see is untranslated. The keys therefore carry the ENGLISH.
+           They are NOT marked HUMAN-REQUIRED. That class is a legal one (ADU-RUL-03 S4 -- a person cannot attest, in a language they read, to a sentence nobody has checked) and these are ordinary strings awaiting the translation pass. The marker would have put thirty-two ordinary keys into a gate meant for two.
+Response:  RECORDED, and the manifest corrected so it does not lie
+Action:    MT-KEYS.md's own sentence used to read "Every key below carries a MACHINE-TRANSLATION placeholder in am.ts", which these thirty-two would have made false. The generator now says the list is everything AWAITING THE HUMAN PASS -- most a machine placeholder, C-3's the untranslated English -- and that neither is a translation. 182 machine-translated + 2 HUMAN-REQUIRED; `pnpm verify:mt-keys` green.
+Ruling needed: none. The translation pass replaces both kinds and deletes them from the list.
+
+### D-145 - The market-context provider exists, and D-103's literals were still in the tree
+
+Severity:  MAJOR (the defect the change claimed to fix, surviving the change)
+Phase:     T9 - 4
+Source:    apps/console/src/layout/Shell.tsx passed `timezone="Africa/Addis_Ababa"`; apps/console/src/auth/IdleWarning.tsx paired it with a hardcoded `currency: 'ETB'`
+Found by:  the T9 Phase 4 adversarial pass, F2 -- grepping for the literals the new provider was supposed to remove
+Effect:    D-103 says the console never calls /v1/bootstrap, so the market timezone and currency are literals. Phase 4 built `lib/market.tsx`, which calls it and keeps the answer -- and then NOTHING CONSUMED IT. The one sentence in this console that prints a TIME (the idle warning: "You will be signed out at {time}") was still formatted against a hardcoded zone. A provider nothing reads is not a fix; it is the same defect with a new file beside it.
+Response:  FIXED
+Action:    `IdleWarning` now takes the `MarketContext` the server sent and renders NOTHING while it is null, rather than falling back to a default. A sign-out time in the wrong zone is worse than no sign-out time, because a seller acts on it. `Shell` passes `useMarketContext()`. The literals are gone from the tree.
+Ruling needed: none.
+
+### D-146 - Four of the six resolving links on SC-01 navigated the seller back to where they started
+
+Severity:  MAJOR (the primary control on the stage's primary screen)
+Phase:     T9 - 4
+Source:    apps/console/src/features/entry/Home.tsx's ACTION_ROUTE named `eligibility`, `profile`, `payouts`, `fulfilment` and `products`; only `products` was a route
+Found by:  the T9 Phase 4 adversarial pass, F1
+Effect:    The router's catch-all is `<Navigate to=".." relative="path" replace />`, so "Complete this" on four of the six outstanding items navigated straight back to Home. Worse than a dead link or a 404: a control that appears to work, does nothing visible, and teaches the seller that the readiness list is decorative. The code's own comment claimed "the link is never dead and never lies about being ready", which is what makes this a defect rather than an omission.
+Response:  FIXED
+Action:    The four screens ADU-CON-03 S6's table names are now routes, as placeholders: SC-22 (eligibility and identity), SC-17 (company details and store profile), SC-24 (payout), SC-18 (fulfilment). Verified by loading each in a browser and reading which screen answered. An action code with no route still renders -- as its own code, unlinked -- because a readiness row the seller cannot see is a block they cannot clear.
+Ruling needed: none.
+
+### D-147 - UPGRADE_REQUIRED is now reachable in the client and unreachable in production
+
+Severity:  MINOR (a state that cannot fire; the client half is correct and inert)
+Phase:     T9 - 4
+Source:    apps/api/src/modules/bootstrap/bootstrap.controller.ts returns `client_status: 'OK'` as a LITERAL, beside `MIN_SUPPORTED_CLIENT = '0.0.0'`. No comparison is performed
+Found by:  the T9 Phase 4 adversarial pass, F3 -- trying to prove the new gate fires
+Effect:    C-3 added `UpgradeGate` above the router so the state can honour S3's "reload prompt, no other content". The claim that this makes UPGRADE_REQUIRED reachable is FALSE: the only thing that can produce the value is a field the server never varies. D-20 already recorded the floor as a value-arrives-later ("floored at 0.0.0 so every client passes until a floor is ruled"); what was not recorded is that a whole UI state depends on it.
+Response:  the CLAIM is corrected; the client half is PROVEN; the server gap is RECORDED
+Action:    Proven by planting `client_status: 'UPGRADE_REQUIRED'` in the controller, rebuilding and loading the console: `data-state="UPGRADE_REQUIRED"`, zero readiness rows, no sign-in form, reload control present -- "no other content" holds. The plant was reverted and `git diff` on that file is empty. Nothing in the API changes here: choosing a floor is a product decision, not a patch.
+Ruling needed: the `min_supported_client` floor, and whether the server compares `X-Adulis-Client` against it. Until then this gate is correct and cannot fire.
+
+### D-148 - SC-01's second life is not built, and the reason is a forbidden control
+
+Severity:  MINOR (stage scope, stated rather than stubbed quietly)
+Phase:     T9 - 4
+Source:    ADU-CON-03 v1.1 S6, SC-01 "Life 2 -- daily brief"
+Found by:  T9 Phase 4, scoping the stage against C-3's done-clause
+Effect:    C-3's done-clause is the readiness hub, and that is built and verified. The daily brief needs `GET /v1/seller/orders?status=needs_action`, `/v1/seller/analytics/overview` and `/v1/notifications` -- all of which exist -- but every row also needs SC-03's clock rules, and those are C-4's. The countdown means a different thing in each order state, and at PAYMENT_CONFIRMED there must be NO countdown at all: ADU-CON-03 S16 lists "a countdown on a confirmed order" among the forbidden controls. Building the brief as a list of numbers before those rules exist is precisely how that control ships.
+Response:  NOT BUILT, and the screen says so in one line rather than rendering a plausible fake
+Action:    None. It belongs with C-4, beside the clock treatments its rows depend on. R23 is already transcribed in the code that will carry it: rolling 7 days against the preceding 7, fixed, no picker -- the picker belongs on SC-12.
+Ruling needed: none.

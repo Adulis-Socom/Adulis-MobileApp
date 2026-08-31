@@ -216,5 +216,43 @@ export const am: Catalogue = {
   'console.demo.title': 'አሥራ ሁለቱ የማያ ገጽ ሁኔታዎች',
   'console.demo.hint': 'በዚህ መተግበሪያ ያለ እያንዳንዱ ማያ ገጽ ከእነዚህ ሁኔታዎች በአንዱ በኩል ይታያል፤ በእነዚህ ብቻ። ለማየት አንዱን ይምረጡ።',
   'console.demo.ready_content': 'ይህ READY ነው፦ ማያ ገጹ ራሱ።',
+  // C-3's keys carry the ENGLISH, and are NOT machine translations.
+  // They are untranslated: this agent cannot produce Amharic it can
+  // verify, and unverifiable text in a seller's own language is worse
+  // than text they can see is untranslated. No HUMAN-REQUIRED marker --
+  // that class is a legal one (ADU-RUL-03 S4) and these are ordinary
+  // strings awaiting the translation pass. MT-KEYS.md lists them (D-144).
+  'console.home.title': 'Home',
+  'console.home.readiness_title': 'What is left before you can publish',
+  'console.home.progress': '{done} of {total} done.',
+  'console.home.not_a_wizard': 'Do these in any order, over as many days as you need. Nothing is lost when you leave this page.',
+  'console.home.resolve': 'Complete this',
+  'console.home.item_done': 'done',
+  'console.home.item_todo': 'still to do',
+  'console.home.no_items': 'Your store has no setup steps outstanding.',
+  'console.home.brief_title': 'Today',
+  'console.home.brief_pending': 'The daily brief arrives with the orders screens.',
+  'console.home.item.account_created': 'Account created',
+  'console.home.item.seller_type_declared': 'Seller type declared',
+  'console.home.item.eligibility_satisfied': 'Eligibility satisfied',
+  'console.home.item.identity_verified': 'Identity verified',
+  'console.home.item.company_details': 'Company details',
+  'console.home.item.store_profile': 'Store profile',
+  'console.home.item.payout_details': 'Payout details',
+  'console.home.item.fulfilment_config': 'Fulfilment configuration',
+  'console.home.item.at_least_one_product': 'At least one product',
+  'console.become.title': 'Become a seller',
+  'console.become.type_legend': 'Are you selling as an individual or as a company?',
+  'console.become.type_individual': 'An individual',
+  'console.become.type_company': 'A company',
+  'console.become.choose_prompt': 'Choose one to see what it means for the rest of your setup.',
+  'console.become.company_adds_item': 'Selling as a company adds one more setup step: your company details.',
+  'console.become.company_identity_meaning': 'It also changes what identity verification means. The attestation is about a named individual who represents the company, not about the business itself.',
+  'console.become.individual_identity_meaning': 'Identity verification will be an attestation about you.',
+  'console.become.not_reversible': 'This choice cannot be changed later without contacting support.',
+  'console.become.store_name_label': 'Store name',
+  'console.become.handle_label': 'Store address',
+  'console.become.handle_hint': 'Lowercase letters, numbers and hyphens, 3 to 40 characters. Buyers will see it in your store web address.',
+  'console.become.submit': 'Create my store',
   'console.placeholder': 'ማያ ገጽ {screen} ገና አልተገነባም። ከግንባታ ደረጃው ጋር ይመጣል።',
 };
