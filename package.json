@@ -39,6 +39,7 @@
     "verify:mt-keys": "node ops/scripts/verify-mt-keys.mjs",
     "verify:boot-smoke": "node ops/scripts/verify-boot-smoke.mjs",
     "verify:appendix": "node --env-file-if-exists=.env ops/scripts/verify-appendix.mjs",
+    "verify:orphan-sweep": "node --env-file-if-exists=.env ops/scripts/verify-orphan-sweep.mjs",
     "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
     "worker:install": "node ops/scripts/install-worker-schema.mjs"
   },

@@ -106,10 +106,29 @@ describe('D-92 -- a NULL follower_threshold is no bar, not an unmeetable one', (
         [S_OPEN, ACC_OPEN, M_OPEN],
         [S_BARRED, ACC_BARRED, M_BARRED],
       ] as const) {
-        // The evaluation row is written by the function under test, and
-        // seller_public_stats by a trigger on core.seller (0010:191) -- both
-        // are rows this suite CAUSED rather than named, and D-134 is what
-        // happens when a teardown forgets that difference.
+        // THREE ROWS THIS SUITE CAUSED AND DID NOT NAME, and the third was
+        // missed by the comment that named the first two.
+        //
+        //   seller_eligibility_evaluation  written by the function under test
+        //   seller_public_stats            trg_create_public_stats, on the
+        //                                  core.seller INSERT (0010:191)
+        //   seller_level_state             trg_enter_ladder, on the
+        //                                  seller_eligibility_evaluation
+        //                                  INSERT (0008) -- one trigger further
+        //                                  out, and therefore not where anyone
+        //                                  looking at `core.seller` would look
+        //
+        // The first version of this teardown deleted the first two, under a
+        // comment citing D-134 and the rule that deleting what you created
+        // means what your INSERT CAUSED. It still missed the third, because
+        // the cause was two steps away: the seller insert fires one trigger,
+        // and the evaluation THAT function writes fires another.
+        //
+        // The orphan-sweep gate found it on its first run (D-151). That is the
+        // argument for the gate rather than for more care: this teardown was
+        // written by someone who had just read D-134 and was thinking about
+        // exactly this, and it was still wrong.
+        await c.query('DELETE FROM core.seller_level_state WHERE seller_id = $1', [seller]);
         await c.query('DELETE FROM core.seller_eligibility_evaluation WHERE seller_id = $1', [seller]);
         await c.query('DELETE FROM core.seller_public_stats WHERE seller_id = $1', [seller]);
         await c.query('DELETE FROM core.seller WHERE id = $1', [seller]);
