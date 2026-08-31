@@ -71,7 +71,9 @@ on the diff. `.env.example` names every variable with a fake value; the real
 
 ## Day-one setup
 
-ADU-CON-02 §13, adjusted to what exists at Tier 0.
+ADU-CON-02 v3.1 S13, adjusted to what exists at Tier 8. The document is
+governed and is not edited here; where this section and S13 differ, the
+difference is named below.
 
 ```bash
 fnm install 22 && fnm use 22          # matches .nvmrc
@@ -80,24 +82,59 @@ git clone <this repo> && cd adulis-platform
 pnpm install
 docker compose up -d                   # Postgres 17 + the four extensions
 cp .env.example .env                   # fill local values
-pnpm db:verify-extensions              # must print 4 PASSes  <- the Tier 0 gate
-pnpm db:migrate                        # "No migrations to run!" — there are none yet
-pnpm db:check                          # prints "0 checks present (pre-v1.7)"
-pnpm db:seed                           # prints "no seed until Tier 1"
-pnpm test
-pnpm dev                               # api :3000 · worker · console :5173
+pnpm db:verify-extensions              # must print 4 PASSes
+pnpm db:migrate                        # runs db/migrations in order
+pnpm worker:install                    # graphile-worker's tables, as the DDL role
+pnpm db:check                          # 16 checks, ADU-DB-01 v1.12 Appendix C
+pnpm db:seed                           # one market, one account, one seller
+pnpm test                              # 459 tests; loads .env itself
+pnpm dev                               # api :3000 - worker - console :5173
 ```
 
-**Three ways Tier 0 differs from §13's script, all expected:**
+`NODE_ENV` must be set. The API asserts it at boot and refuses to start if it
+is unset, rather than picking the permissive default (ADU-RUL-03 S1, D-105).
 
-- **`db:check` is empty and prints `0 checks present (pre-v1.7)`.** §13 wants
-  fifteen passes. ADU-DB-01 v1.6 Appendix C defines fourteen checks and its check
-  14 expects 105 tables where ADU-CON-02 v3.0 requires 107; check 15 arrives with
-  the **v1.7** reissue. Writing checks now would mean inventing v1.7.
-- **`db:seed` is a stub and the console cannot sign in a seeded seller.** Both
-  need migrations that are Tier 1 work.
+### Resetting the development database
+
+```bash
+pnpm db:reset                          # DESTRUCTIVE: drops all application data
+```
+
+Drops the ten application schemas and `public.pgmigrations`, then re-runs
+`db/init/00-extensions.sql`, `db:migrate`, `worker:install` and `db:seed`, and
+gives the runtime roles the password your `.env` already uses (migration 01
+creates them NOLOGIN, because a password in a migration is a secret in git).
+It prints the same five row counts before and after, and **fails** if the
+result is not what the seed defines -- one market, one account, one seller, no devices, one
+`timing_config` in force. The counts are pinned, so a seed that silently stops
+producing a timing row turns this red instead of leaving a database where
+bootstrap succeeds and sign-in cannot.
+
+It runs only under `NODE_ENV=development` or `test`. An unset or unrecognised
+`NODE_ENV` is refused with the rest, on the same rule the API boots by: a
+process that cannot determine its environment must not pick the permissive
+default (D-105). The host in the connection string must also be local -- and
+that guard is worth having without being proof, since a port-forward to
+production presents as `localhost`.
+
+**Use it when a local run stops resembling a fresh clone.** Test suites that
+create rows and do not delete them accumulate: by T8-C the development
+database held 180 markets, of which one carried a `timing_config` row, so
+`/v1/bootstrap` could assign a market on which a console sign-in could not
+complete (D-128). A development environment that has degraded until the
+product does not run in it makes every local finding suspect. The leak is
+fixed at its source; this command is how you recover an environment that
+already drifted.
+
+**Still divergent from ADU-CON-02 v3.1 S13:**
+
+- **S13 does not describe `db:reset` or `worker:install`.** Both are real and
+  live here; the document owes them a line at v3.2 (D-130). `worker:install`
+  is not optional: the worker is deliberately not allowed to create its own
+  schema (D-52), so without it `worker-runtime.spec.ts` fails with
+  `permission denied for database adulis`.
 - **If you already run PostgreSQL locally on 5432**, both it and the container
-  will listen and *yours answers first* — which shows up as
+  will listen and *yours answers first* -- which shows up as
   `password authentication failed`, not as a port clash. Set
   `POSTGRES_HOST_PORT=5433` and match the port in `DATABASE_URL`.
 

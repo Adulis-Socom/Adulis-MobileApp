@@ -10,3 +10,16 @@
  * rather than a wrong version. It becomes useful the day releases are cut.
  */
 declare const __APP_VERSION__: string;
+
+/**
+ * The build-time flags this app reads. VITE_SMOKE_BREAK is set ONLY by the
+ * `boot-smoke` gate when it is proving that it fires; a normal build leaves
+ * it unset and Vite drops the branch that reads it. See main.tsx.
+ */
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL?: string;
+  readonly VITE_SMOKE_BREAK?: string;
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
