@@ -201,6 +201,29 @@ function grepDir(dir, needle) {
 const CONTRACT_PATHS = ['contracts/', 'packages/api-client/src/schema.d.ts'];
 
 /**
+ * WHICH GATES CAN GO GREEN WHILE THEIR SUBJECT EMPTIES (T8-C S1).
+ *
+ * A comparator asserts that two forms AGREE. That is not the same as asserting
+ * what they agree ABOUT, and the difference decides whether a gate can be
+ * defeated by editing both sides:
+ *
+ *   EXPOSED -- the expected side is a document or a fixture a person edits
+ *   directly. Delete a row from both and they agree perfectly at n-1. This was
+ *   true of verify:deferred-values until a pinned count was added, and it is
+ *   the same shape as D-121, where the HUMAN-REQUIRED class lived in the file
+ *   the translation pass rewrites.
+ *
+ *   NOT EXPOSED -- the expected side is the LIVE DATABASE. A table cannot
+ *   leave check 14, nor a type check 16, without a migration, and migrations
+ *   are append-only after merge and loud. Nothing a person edits in passing
+ *   can shrink the set.
+ *
+ * So: a gate whose expected side is a document or fixture needs a pinned
+ * count, held where neither form can reach it, beside the ruling that fixes
+ * the number. verify:permission-doc already had one (42 permissions, 139
+ * grants, six per-role totals, eight step-up codes by name) and survived the
+ * same attack.
+ *
  * CITE A GATE BY ITS `id`, NEVER BY ITS POSITION (T8-C S3).
  *
  * Positions are not stable and the instability is silent: `mt-keys` had to be
