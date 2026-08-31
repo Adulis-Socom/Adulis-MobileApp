@@ -10,6 +10,18 @@
  * a CSP that breaks a screen is a defect of that screen, and a harness that
  * serves the app without its policy would never see it.
  *
+ * EXCEPT connect-src, WHICH IS DERIVED, NOT REPLAYED (T11 Phase 2). The
+ * production policy names the production API origin; the build under test is
+ * pointed at a local one. The first version replayed the production directive
+ * verbatim, so the built console could not make a single API call under its
+ * own harness -- every fetch refused by connect-src before it left the
+ * browser -- and the suite only ever went green against something else
+ * serving the port. A POLICY HARDCODED IN ONE FILE AND AN ORIGIN CONFIGURED
+ * IN ANOTHER WILL DRIFT, AND THE DRIFT IS SILENT: so the directive is rebuilt
+ * here from E2E_API_BASE_URL, the same value the gate hands the build as
+ * VITE_API_BASE_URL. Same shape as production ('self' plus exactly one API
+ * origin); only the origin token differs, and both come from one variable.
+ *
  * SPA fallback: any path that is not a file is `index.html`, because
  * `/s/:id/orders` is a route rather than a directory.
  */
@@ -34,6 +46,13 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
+/**
+ * The API origin under test -- the SAME configuration the build consumed.
+ * The gate exports it; the default matches the recipe in
+ * apps/console/CLAUDE.md so a by-hand run behaves like the dev loop.
+ */
+const API_ORIGIN = new URL(process.env['E2E_API_BASE_URL'] ?? 'http://localhost:3000').origin;
+
 /** The `/*` block of dist/_headers -- the policy the seller's browser gets. */
 const headers = (() => {
   const f = path.join(DIST, '_headers');
@@ -45,6 +64,15 @@ const headers = (() => {
     if (!inGlob) continue;
     const m = line.match(/^\s{2}([A-Za-z-]+):\s*(.+)$/);
     if (m) out[m[1]] = m[2];
+  }
+  const csp = out['Content-Security-Policy'];
+  if (csp) {
+    // Derive, do not replay -- see the header. Everything but connect-src is
+    // the production policy byte for byte.
+    out['Content-Security-Policy'] = csp.replace(
+      /connect-src [^;]+/,
+      "connect-src 'self' " + API_ORIGIN,
+    );
   }
   return out;
 })();
@@ -61,4 +89,9 @@ createServer((req, res) => {
   if (!file.startsWith(path.resolve(DIST)) || !existsSync(file)) file = path.join(DIST, 'index.html');
   res.writeHead(200, { ...headers, 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream' });
   res.end(readFileSync(file));
-}).listen(PORT, () => console.log(`console dist on :${PORT}`));
+}).listen(PORT, () =>
+  console.log(
+    `console dist on :${PORT} -- connect-src derived for ${API_ORIGIN}; ` +
+      `CSP: ${headers['Content-Security-Policy'] ? 'on' : 'ABSENT (no dist/_headers)'}`,
+  ),
+);

@@ -12,6 +12,17 @@ export interface HealthResponse {
   db: 'up' | 'down';
   worker: 'up' | 'stale' | 'never_started';
   worker_last_beat_at?: string | null;
+  /**
+   * T11 Phase 1 -- process identity, not liveness. The console-e2e gate mints
+   * a marker per run and passes it as ADULIS_BOOT_MARKER; this echoes it back
+   * so the gate can prove the /healthz that answered is THE PROCESS IT
+   * SPAWNED. The gate's first outing ran sixteen tests against a zombie from
+   * a previous run, and /healthz answering was read as a healthy start
+   * (D-160): "is it up?" and "is MY one up?" are different questions, and
+   * this field answers the second. Null outside the harness; additive, so no
+   * client changes (ADU-API-01's additive-compatibility rule).
+   */
+  boot_marker?: string | null;
 }
 
 /**
@@ -93,6 +104,7 @@ export class HealthController {
       status: worker === 'up' ? 'ok' : 'degraded',
       db: 'up',
       worker,
+      boot_marker: process.env['ADULIS_BOOT_MARKER'] ?? null,
       worker_last_beat_at: lastBeat,
     };
     // 200 even when degraded: this instance can serve. See the DECIDED note.

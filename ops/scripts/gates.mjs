@@ -331,7 +331,16 @@ const GATES = [
    * ADU-AUTH-01 v2.6 is under evaluation: when the mechanism is ruled, one
    * function changes and no test does.
    */
-  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'] },
+  /*
+   * env for the same reason db:determinism carries one, found the same way a
+   * work order later (T11): gates.mjs strips NODE_ENV=development on purpose,
+   * CI never sets one, and verify-console-e2e's D-142 guard refuses an unset
+   * NODE_ENV -- so without this entry the gate exits 2 on EVERY CI run, while
+   * passing locally because `pnpm verify:console-e2e` re-loads `.env`. A gate
+   * red everywhere it matters and green on the one machine that already knows
+   * the answer.
+   */
+  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'], env: { NODE_ENV: 'test' } },
 ];
 
 if (process.argv.includes('--list')) {
