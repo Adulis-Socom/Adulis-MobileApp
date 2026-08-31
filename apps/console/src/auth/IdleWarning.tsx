@@ -12,14 +12,23 @@ import { en } from '@adulis/locale';
 import { ApiError } from '../api/client';
 import { keepAlive, useSession } from './session';
 import { fillTemplate, timeFormatter } from '../lib/intl';
+import type { MarketContext } from '../lib/intl';
 
-export function IdleWarning({ timezone }: { timezone: string }) {
+/**
+ * THE MARKET COMES FROM /v1/bootstrap, NOT FROM A LITERAL (D-103, C-3).
+ * This component used to take a `timezone` string that Shell passed as
+ * "Africa/Addis_Ababa" and pair it with a hardcoded 'ETB' -- so the one
+ * sentence in the console that prints a TIME was formatted against a guess.
+ * It now takes the market the server sent. While the market is still null
+ * (bootstrap in flight, or failed) this renders NOTHING rather than
+ * formatting against a fallback: a sign-out time in the wrong zone is worse
+ * than no sign-out time, because a seller acts on it.
+ */
+export function IdleWarning({ market }: { market: MarketContext | null }) {
   const { idleWarningAt, touch, signedOut } = useSession();
   const [failed, setFailed] = useState(false);
-  if (idleWarningAt === null) return null;
-  const at = timeFormatter({ timezone, currency: 'ETB', locale: 'en' }).format(
-    new Date(idleWarningAt),
-  );
+  if (idleWarningAt === null || market === null) return null;
+  const at = timeFormatter(market).format(new Date(idleWarningAt));
   return (
     <div role="alert" className="idle-warning">
       <p>{fillTemplate(en['console.idle.warning'], { time: at })}</p>

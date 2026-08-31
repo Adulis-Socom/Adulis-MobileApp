@@ -1443,3 +1443,108 @@ Effect:    D-132 is precisely the defect that running `db:reset` cannot expose. 
 Response:  FIXED
 Action:    The paragraph now says two were found by running and one by reading, and states why the distinction is the rule the block opens with. The lesson is narrower than "check your facts": ADU-RUL-03 S5.1 asks a claim to name its instrument, and naming ONE instrument for a group of findings is how a wrong one gets attached to the member that does not share it. Three findings, three instruments, or the sentence splits.
 Ruling needed: none.
+
+### D-140 - MISSING_SOURCE: the four documents WORK ORDER T9 Phase 2 installs did not arrive
+
+Severity:  BLOCKER for T9 Phase 2, and for two of Phase 3's three gate changes
+Phase:     T9 - 2
+Source:    WORK ORDER T9 S2 names `ADU-DB-01_..._v1_13_ASCII.md`, `ADU-REPO-01_..._v1_3.md`, `ADU-CON-02_..._v3_2_ASCII.md` and `ADU-VAL-01_..._v1_2.md`
+Found by:  T9 Phase 2, looking for them before installing them
+Effect:    None of the four is on this machine. `find` across the working tree, `docs/`, `docs/registers/`, `_staging/` (which holds one file, `Adulis_Claude_Skills_Pack_v1.1.zip`) and the parent directory returns nothing for any of the four names, and nothing was attached to the order. The installed baseline is unchanged: ADU-DB-01 **v1.12**, ADU-CON-02 **v3.1**, ADU-VAL-01 **v1.1**, and ADU-REPO-01 **absent entirely**.
+           This blocks Phase 3.1 and 3.2, and not for want of trying. **3.1** moves `verify:deferred-values` from 16 to 14 because ADU-VAL-01 v1.2 removes two rows -- but that gate compares three forms, and one of them IS the document's S1.1 table. Moving the pin to 14 while the installed v1.1 still lists 16 makes the gate red on a correct tree, which is the failure class this repository has spent two work orders removing. **3.2** adds a comparator over ADU-DB-01 v1.13's generated Appendix A and B; v1.12's appendices are not generated from the fixtures and are not what the gate is specified against.
+           What is NOT blocked was built instead, and is in the Phase 3 PR: the D-92 ruling (3.1's other half, stated in full in the order), the destructive-script NODE_ENV rule (3.3, likewise), and the `appendix-a.json` `_provenance` defect (3.2's sub-item, which is about a fixture that IS here).
+Response:  PARKED. Do not invent a governed document
+Action:    None buildable. The four are the CEO's to supply; every rule T9 states in its own text has been followed, because the order restates each one -- which is D-84's and D-125's pattern for the third time: a rule arrives in a work order, is followed, and the DOCUMENT it belongs to does not arrive.
+           One number worth recording while this is open, because it is larger than "a citation dangles": ADU-REPO-01 is cited **77 times across 33 files** -- `.dependency-cruiser.cjs`, `.github/CODEOWNERS`, `.github/workflows/ci.yml`, the root and per-app `CLAUDE.md`, `apps/api/src/generate-openapi.ts`, and the title of gate `deps` ("Dependency rules (ADU-REPO-01 S4)"). A CI gate names a section of a document nobody in this repository can open. D-94 recorded the absence; this records its size.
+Ruling needed: supply the four files, or rule which of Phase 3's changes proceed against the order's own restatement of the rules rather than against the documents.
+
+### D-141 - The eligibility register's own defect: D-92 is ruled, and NULL there means no bar
+
+Severity:  MAJOR (a market configured for the beta posture refused every seller)
+Phase:     T9 - 3
+Source:    D-92, PARKED since T7 Phase 3 with two governing sentences that could not both hold. WORK ORDER T9 S3.1 rules it: PRD S4.1 governs, `follower_threshold` NULL is a DECIDED value -- "this market sets no bar" -- and the consumer fails OPEN
+Found by:  the CEO, ruling D-92 in T9 S3.1
+Effect:    `core.fn_evaluate_eligibility`'s audience arm read `v_audience := coalesce(v_best >= v_cfg.follower_threshold, false)`. `v_best >= NULL` is NULL, coalesced to false, so a market with `audience_required = true` and no threshold refused EVERY seller for FOLLOWER_THRESHOLD_NOT_MET -- the exact opposite of what an absent bar means, and the reason the beta posture was reachable only through `audience_required = false`.
+           This also removes the row from ADU-VAL-01's machine-read table, which is why T9 moves the `deferred-values` pin from 16 to 14: a NULL that is DECIDED is not a deferral, and the register was carrying it as one. That half is blocked on ADU-VAL-01 v1.2 (D-140).
+Response:  BUILT
+Action:    Migration `0041_d92_follower_threshold_fails_open.sql`. The body was EXTRACTED with `pg_get_functiondef` and patched -- one statement replaced, everything else byte-for-byte as the database holds it; 0005 is merged and is not edited. THE TWO NULLS ARE KEPT APART, which is the part a one-line fix gets wrong: a NULL threshold is an absent RULE and now passes; a NULL `v_best` is absent EVIDENCE and still fails closed. The old single `coalesce` collapsed both into "no".
+           `apps/api/test/t9-d92-follower-threshold.spec.ts` pins both arms, and was PROVEN RED before being trusted: reverting the live function to the pre-0041 body gives `Expected "SATISFIED", Received "NOT_SATISFIED"` on the no-bar arm, while the absent-evidence arm passes under BOTH definitions -- which is what shows the fix did not simply open the gate.
+Ruling needed: none. D-92 is closed by T9 S3.1.
+
+### D-142 - An exemption made a class, and nothing re-checked what fell into it later
+
+Severity:  MAJOR (two destructive scripts, one of them running DROP DATABASE, took the permissive default)
+Phase:     T9 - 3
+Source:    D-107 exempted ops scripts from the NODE_ENV boundary assertion, having enumerated five guards and found them sound. WORK ORDER T9 S3.3 rules the exemption covers scripts that READ and not scripts that DESTROY
+Found by:  T9 S3.3, grepping for `DROP|TRUNCATE|DELETE FROM` across ops/ and db/
+Effect:    **The generalisable half, and it is the point of this entry: an exemption creates a class where the rule does not apply, and nobody re-checks what falls into that class later.** D-107's five scripts were all read-only when it was written. `ops/scripts/db-reset.mjs` did not exist yet (D-133), and neither did anyone re-examine `ops/scripts/db-determinism.mjs`, which has always run `DROP DATABASE IF EXISTS` on two databases, or `ops/load/db-loads.mjs`, which DELETEs from eight core tables. Both proceeded on an unset NODE_ENV.
+Response:  FIXED
+Action:    Both now validate NODE_ENV against `['development', 'test']` and exit 2 on anything else, including unset -- DUPLICATED rather than imported, per the ruling: reaching into apps/api's env module would recreate the coupling D-107 avoided, and five lines are cheaper than that. In `db-determinism.mjs` the guard is lifted ABOVE the DATABASE_URL check, because the environment is the first thing a destructive script must be sure of. `db/checks/check-10` matched the grep and is a FALSE POSITIVE: its "TRUNCATE" is a privilege name in a SQL VALUES list.
+           THE CALLER NOW DECLARES. CI deliberately leaves NODE_ENV unset (an inherited `development` ships a development console bundle), so the `determinism` gate would have refused. `gates.mjs` gained per-gate `env` and that gate declares `NODE_ENV: 'test'` -- both rules were right, and what was missing was anyone SAYING which environment a CI gate run is. Proven: unset and `production` both refused with exit 2; the gate green with NODE_ENV unset in the parent process.
+Ruling needed: none.
+
+### D-143 - The Phase D load harness has not been runnable since product.slug landed
+
+Severity:  MINOR (a measurement harness, not a shipped path; nothing depends on it)
+Phase:     T9 - 3
+Source:    `ops/load/db-loads.mjs`, found while adding D-142's guard to it
+Effect:    Running it fails on `null value in column "slug" of relation "product" violates not-null constraint`. The script inserts synthetic products without a slug, and `core.product.slug` became NOT NULL at T6 (G1.9). So ADU-CON-02-A1 S6's three DB-level loads -- the expiry sweep against 1M orders, the stats-trigger path at 100 scans/s, the 08:00 dispatch at 10k notifications -- have not been measurable since, and nothing noticed because no gate runs this file. It is the same shape as D-121 and D-126 one level out: a thing nothing executes drifts from the schema it reads.
+Response:  RECORDED, not fixed
+Action:    None here. The guard was added (D-142) and the breakage found by running the guarded script; fixing the harness is a separate change with its own verification, and this PR's subject is the gates. Worth knowing before the next capacity question is asked: the answer currently cannot be produced.
+Ruling needed: none. Buildable whenever the capacity numbers are wanted.
+
+### D-144 - C-3's thirty-two keys carry English in am.ts, and are not machine translations
+
+Severity:  MINOR (recorded so the manifest stays true; AM_ENABLED is off either way)
+Phase:     T9 - 4
+Source:    packages/locale/src/am.ts, the C-3 block; packages/locale/MT-KEYS.md
+Found by:  T9 Phase 4, attempting to write the Amharic
+Effect:    The first attempt at these strings produced CORRUPTED Amharic -- truncated unicode escapes mid-word, which the tooling refused to parse and which would have shipped mojibake to sellers if it had parsed. That is the honest finding: this agent cannot produce Amharic it can verify, and unverifiable text in a seller's own language is worse than text they can plainly see is untranslated. The keys therefore carry the ENGLISH.
+           They are NOT marked HUMAN-REQUIRED. That class is a legal one (ADU-RUL-03 S4 -- a person cannot attest, in a language they read, to a sentence nobody has checked) and these are ordinary strings awaiting the translation pass. The marker would have put thirty-two ordinary keys into a gate meant for two.
+Response:  RECORDED, and the manifest corrected so it does not lie
+Action:    MT-KEYS.md's own sentence used to read "Every key below carries a MACHINE-TRANSLATION placeholder in am.ts", which these thirty-two would have made false. The generator now says the list is everything AWAITING THE HUMAN PASS -- most a machine placeholder, C-3's the untranslated English -- and that neither is a translation. 182 machine-translated + 2 HUMAN-REQUIRED; `pnpm verify:mt-keys` green.
+Ruling needed: none. The translation pass replaces both kinds and deletes them from the list.
+
+### D-145 - The market-context provider exists, and D-103's literals were still in the tree
+
+Severity:  MAJOR (the defect the change claimed to fix, surviving the change)
+Phase:     T9 - 4
+Source:    apps/console/src/layout/Shell.tsx passed `timezone="Africa/Addis_Ababa"`; apps/console/src/auth/IdleWarning.tsx paired it with a hardcoded `currency: 'ETB'`
+Found by:  the T9 Phase 4 adversarial pass, F2 -- grepping for the literals the new provider was supposed to remove
+Effect:    D-103 says the console never calls /v1/bootstrap, so the market timezone and currency are literals. Phase 4 built `lib/market.tsx`, which calls it and keeps the answer -- and then NOTHING CONSUMED IT. The one sentence in this console that prints a TIME (the idle warning: "You will be signed out at {time}") was still formatted against a hardcoded zone. A provider nothing reads is not a fix; it is the same defect with a new file beside it.
+Response:  FIXED
+Action:    `IdleWarning` now takes the `MarketContext` the server sent and renders NOTHING while it is null, rather than falling back to a default. A sign-out time in the wrong zone is worse than no sign-out time, because a seller acts on it. `Shell` passes `useMarketContext()`. The literals are gone from the tree.
+Ruling needed: none.
+
+### D-146 - Four of the six resolving links on SC-01 navigated the seller back to where they started
+
+Severity:  MAJOR (the primary control on the stage's primary screen)
+Phase:     T9 - 4
+Source:    apps/console/src/features/entry/Home.tsx's ACTION_ROUTE named `eligibility`, `profile`, `payouts`, `fulfilment` and `products`; only `products` was a route
+Found by:  the T9 Phase 4 adversarial pass, F1
+Effect:    The router's catch-all is `<Navigate to=".." relative="path" replace />`, so "Complete this" on four of the six outstanding items navigated straight back to Home. Worse than a dead link or a 404: a control that appears to work, does nothing visible, and teaches the seller that the readiness list is decorative. The code's own comment claimed "the link is never dead and never lies about being ready", which is what makes this a defect rather than an omission.
+Response:  FIXED
+Action:    The four screens ADU-CON-03 S6's table names are now routes, as placeholders: SC-22 (eligibility and identity), SC-17 (company details and store profile), SC-24 (payout), SC-18 (fulfilment). Verified by loading each in a browser and reading which screen answered. An action code with no route still renders -- as its own code, unlinked -- because a readiness row the seller cannot see is a block they cannot clear.
+Ruling needed: none.
+
+### D-147 - UPGRADE_REQUIRED is now reachable in the client and unreachable in production
+
+Severity:  MINOR (a state that cannot fire; the client half is correct and inert)
+Phase:     T9 - 4
+Source:    apps/api/src/modules/bootstrap/bootstrap.controller.ts returns `client_status: 'OK'` as a LITERAL, beside `MIN_SUPPORTED_CLIENT = '0.0.0'`. No comparison is performed
+Found by:  the T9 Phase 4 adversarial pass, F3 -- trying to prove the new gate fires
+Effect:    C-3 added `UpgradeGate` above the router so the state can honour S3's "reload prompt, no other content". The claim that this makes UPGRADE_REQUIRED reachable is FALSE: the only thing that can produce the value is a field the server never varies. D-20 already recorded the floor as a value-arrives-later ("floored at 0.0.0 so every client passes until a floor is ruled"); what was not recorded is that a whole UI state depends on it.
+Response:  the CLAIM is corrected; the client half is PROVEN; the server gap is RECORDED
+Action:    Proven by planting `client_status: 'UPGRADE_REQUIRED'` in the controller, rebuilding and loading the console: `data-state="UPGRADE_REQUIRED"`, zero readiness rows, no sign-in form, reload control present -- "no other content" holds. The plant was reverted and `git diff` on that file is empty. Nothing in the API changes here: choosing a floor is a product decision, not a patch.
+Ruling needed: the `min_supported_client` floor, and whether the server compares `X-Adulis-Client` against it. Until then this gate is correct and cannot fire.
+
+### D-148 - SC-01's second life is not built, and the reason is a forbidden control
+
+Severity:  MINOR (stage scope, stated rather than stubbed quietly)
+Phase:     T9 - 4
+Source:    ADU-CON-03 v1.1 S6, SC-01 "Life 2 -- daily brief"
+Found by:  T9 Phase 4, scoping the stage against C-3's done-clause
+Effect:    C-3's done-clause is the readiness hub, and that is built and verified. The daily brief needs `GET /v1/seller/orders?status=needs_action`, `/v1/seller/analytics/overview` and `/v1/notifications` -- all of which exist -- but every row also needs SC-03's clock rules, and those are C-4's. The countdown means a different thing in each order state, and at PAYMENT_CONFIRMED there must be NO countdown at all: ADU-CON-03 S16 lists "a countdown on a confirmed order" among the forbidden controls. Building the brief as a list of numbers before those rules exist is precisely how that control ships.
+Response:  NOT BUILT, and the screen says so in one line rather than rendering a plausible fake
+Action:    None. It belongs with C-4, beside the clock treatments its rows depend on. R23 is already transcribed in the code that will carry it: rolling 7 days against the preceding 7, fixed, no picker -- the picker belongs on SC-12.
+Ruling needed: none.

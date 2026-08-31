@@ -210,3 +210,54 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   min-height: 0;
   flex: none;
 }
+
+/* ---------------------------------------------------------------------------
+   C-3 -- SC-01 Home and SC-02 Become a seller.
+
+   NO FIXED HEIGHTS ON ANYTHING HOLDING TRANSLATED TEXT (console CLAUDE.md):
+   Amharic runs 30-50% longer, so every box here grows with its content and
+   the readiness rows wrap rather than truncate. A row that clips is a row
+   that hides which setup step is outstanding.
+   --------------------------------------------------------------------------- */
+
+.readiness-list { list-style: none; margin: 0; padding: 0; }
+
+.readiness-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--adu-space-sm);
+  flex-wrap: wrap;
+  padding: var(--adu-space-md) 0;
+  border-bottom: 1px solid var(--adu-color-border);
+}
+
+.readiness-status { flex: 0 0 auto; width: 1.25rem; }
+.readiness-item.done .readiness-status { color: var(--adu-color-success, currentColor); }
+.readiness-label { flex: 1 1 12rem; min-width: 0; }
+.readiness-item.done .readiness-label { color: var(--adu-color-text-muted); }
+
+.readiness-action { flex: 0 0 auto; }
+
+/* An action the server named that this build has no route for: shown, not
+   linked, and visibly not a control. Hiding it would hide a blocking
+   requirement. */
+.readiness-action.unrouted {
+  color: var(--adu-color-text-muted);
+  font-family: var(--adu-font-mono, monospace);
+  font-size: 0.8125rem;
+}
+
+.progress { font-weight: 600; margin-bottom: var(--adu-space-xs); }
+
+/* R26's disclosure. It sits beside the choice, never behind a disclosure
+   widget -- both facts surprise people, and a seller surprised mid-
+   verification abandons it. */
+.consequence {
+  margin: var(--adu-space-md) 0;
+  padding: var(--adu-space-md);
+  border-left: 3px solid var(--adu-color-border);
+  background: var(--adu-color-surface-muted, transparent);
+}
+.consequence p { margin: 0 0 var(--adu-space-xs); }
+.consequence p:last-child { margin-bottom: 0; }
+.consequence .warn { font-weight: 600; }

@@ -18,6 +18,14 @@ import { ok, bad, CHECKS_DIR } from './_lib.mjs';
  *    appendix and pg_type agree in both directions. A number in prose drifts
  *    because nothing checks it; a number produced by a query cannot."
  *
+ * `_provenance` IS PROSE AND IS NOT READ (T9 S3.2, D-141). This check parses
+ * `.types` and nothing else. That was already true and was never written
+ * down, and the string had twice drifted from the data it sits beside -- it
+ * asserted 230 values until T8 S7, and before that missed OPERATOR_ATTESTED.
+ * The counts are now gone from it entirely rather than corrected, which is
+ * this check's own doctrine turned on the file it reads: a number in prose
+ * drifts because nothing checks it.
+ *
  * TWO DEPARTURES FROM THE CHECK AS WRITTEN, both recorded in db/checks/README.md.
  *
  * 1. SCHEMA-QUALIFIED, NOT BARE `typname`. The query in Appendix C selects
