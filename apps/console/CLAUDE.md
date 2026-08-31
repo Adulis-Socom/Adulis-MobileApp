@@ -64,19 +64,35 @@ STAGING decision, not a deviation from the ruled stack -- recorded here, in
 `src/console.css`'s header and in the T7 report, so the next agent adds the
 library when its screen arrives instead of re-deciding the stack.
 
-**There is still no test harness here, and C-3 has now landed without it.**
-`pnpm --filter @adulis/console test` is an echo. C-1, C-2 and C-3 are held up
-by typecheck, lint, the `no-unsafe-eval`, `production-react` and `boot-smoke`
-gates (the first two inspect the production build; the third loads it), and by
-browser-driven verification recorded per stage -- for C-3, nine readiness rows
-read out of a real DOM against a reset database, and R26's disclosure observed
-by clicking the radio rather than by reading the source. That is verification,
-not coverage: it proves the screen worked once, on the day it was built.
+**The harness landed at T10 Phase 4, one stage late.** `pnpm verify:console-e2e`
+(gate `console-e2e`) builds the console, resets the database, starts the real API
+and drives the built artifact with Playwright. `pnpm --filter @adulis/console test`
+is still an echo -- there are no unit tests here and none are owed; the console
+computes no business state, so what is worth asserting is what a browser does.
 
-The harness was owed AT C-3 and is now overdue. Until it exists a regression
-here is caught by a person, not by CI -- and the three defects the C-3
-adversarial pass found (D-145, D-146, D-147) were all found that way, which is
-the argument for the harness rather than against it.
+**Sign-in lives in exactly one file: `e2e/helpers/session.ts`.** No test names a
+phone number and no test knows what an OTP is. ADU-AUTH-01 v2.6 is under
+evaluation and NOT installed -- when the mechanism is ruled, `signInAs` changes
+and no test does. Keep it that way.
+
+**One sign-in per run.** `globalSetup` signs in and saves `storageState`; the OTP
+budget is 3/hour per phone and a per-test sign-in spent it by the fourth test
+(D-124's class -- a 429 about nothing). The sign-in path is still exercised for
+real on every run.
+
+**Assert where the browser ENDED UP, not what the page contains** (D-152). The
+first regression test written here PASSED against the regression it was written
+for: `page.goto(href)` resolves before the router's catch-all `<Navigate>` has
+run, so a check that Home's list was absent was true for an instant and false
+after. A redirect happens slightly later. Use `toHaveURL`.
+
+C-1 through C-3 are also held up by typecheck (which covers `e2e/` via
+`tsconfig.e2e.json` -- a harness with no type gate is one whose own typo surfaces
+as a red test about the product), lint, and the `no-unsafe-eval`,
+`production-react` and `boot-smoke` gates. What the harness does NOT yet cover is
+most of C-1 and C-2: T10 S4 scoped it to the twelve states, SC-01's readiness,
+the chooser's labelled gap and a planted `UPGRADE_REQUIRED`, and said not to
+backfill. It earns its place on C-4.
 
 ## The rules an agent working here needs
 
