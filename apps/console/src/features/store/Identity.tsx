@@ -89,9 +89,25 @@ export function Identity() {
       // "As of" is the moment THIS SESSION witnessed the capture -- the wire
       // carries no captured_at, and stamping the witnessed moment is the only
       // date this client can truthfully attach (R24; absence registered).
-      setVerified({ count: r.follower_count_at_verification ?? null, at: new Date() });
+      // An already-VERIFIED answer carries NO count (the server short-circuits
+      // before the platform fetch) -- keep what the session holds rather than
+      // replacing a number the seller is reading with nothing (pass B2).
+      if (r.already) {
+        setVerified((v) => v ?? { count: null, at: new Date() });
+      } else {
+        setVerified({ count: r.follower_count_at_verification ?? null, at: new Date() });
+      }
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        const reason = e.problem.slots?.['reason'];
+        if (reason === 'CODE_NOT_FOUND_IN_BIO') {
+          setFieldError(en['console.store.identity.code_not_in_bio']);
+        } else if (reason === 'CHALLENGE_EXPIRED') {
+          setFieldError(en['console.store.identity.code_expired']);
+        } else {
+          setProblem(e);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -166,11 +182,14 @@ export function Identity() {
                 })}
               </p>
             ) : null}
-            {/* R24, on screen: no background refresh, ever. */}
+            {/* R24, on screen: no background refresh, ever. R24 ALSO asks
+                for a Re-check control -- but the server short-circuits a
+                verified account before the platform fetch (already:true, no
+                count), so a Re-check button here would be a control the
+                server refuses (the G1.1 class). The gap is said in words and
+                registered (D-225); the control arrives with the wire. */}
             <p className="hint">{en['console.store.identity.no_auto_refresh']}</p>
-            <button type="button" className="button" disabled={busy} onClick={() => void check()}>
-              {en['console.store.identity.recheck']}
-            </button>
+            <p className="hint">{en['console.store.identity.recheck_owed']}</p>
           </div>
         ) : null}
 

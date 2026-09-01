@@ -131,6 +131,11 @@ export function Subscription() {
       <h1 id="subscription-heading">{en['console.admin.subscription.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
 
       {s?.state === 'BETA' ? (
         <section aria-labelledby="beta-heading" className="beta">
@@ -217,10 +222,11 @@ export function Subscription() {
             <p>
               {fillTemplate(en['console.admin.subscription.intent_open'], {
                 tier: openIntent.tier,
-                amount: market ? formatMinor(market, openIntent.amount_minor) : String(openIntent.amount_minor),
+                amount: market ? formatMinor(market, Number(openIntent.amount_minor)) : String(openIntent.amount_minor),
                 time: when(openIntent.expires_at),
               })}
             </p>
+            <p className="hint">{en['console.admin.subscription.reference_owed']}</p>
             {!openIntent.marked_transferred_at ? (
               <button
                 type="button"

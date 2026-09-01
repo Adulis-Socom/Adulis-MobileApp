@@ -111,6 +111,7 @@ export function NotificationPrefs() {
         { sellerId },
       );
       setPrefs(r.preferences);
+      setFlips({});
       setState('READY');
     } catch (e) {
       setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
@@ -163,6 +164,11 @@ export function NotificationPrefs() {
       <h1 id="notifprefs-heading">{en['console.admin.notifprefs.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
 
       <fieldset>
         <legend>{en['console.admin.notifprefs.legend']}</legend>

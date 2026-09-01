@@ -38,6 +38,17 @@ import { useMarketContext } from '../../lib/market';
 import { timeFormatter, fillTemplate } from '../../lib/intl';
 import type { PayoutState, PayoutHistoryRow } from '../admin/types';
 
+/**
+ * The history outcome is a server enum; a seller reads a WORD, not a token
+ * (S7: no server prose/codes on screen). Unknown values render as
+ * themselves -- visible and greppable, the ITEM_LABEL rule.
+ */
+const OUTCOME_LABEL: Readonly<Record<string, string>> = {
+  REQUESTED: en['console.admin.payout.outcome_requested'],
+  ACTIVATED: en['console.admin.payout.outcome_activated'],
+  CANCELLED: en['console.admin.payout.outcome_cancelled'],
+};
+
 export function Payout() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const market = useMarketContext();
@@ -75,7 +86,7 @@ export function Payout() {
   const change = async () => {
     if (!sellerId) return;
     setFieldError(null);
-    if (!bankCode.trim() || !/^\d{6,24}$/.test(accountNumber.trim()) || !accountName.trim()) {
+    if (bankCode.trim().length < 2 || !/^\d{6,24}$/.test(accountNumber.trim()) || !accountName.trim()) {
       setFieldError(en['console.admin.payout.fields_required']);
       return;
     }
@@ -144,6 +155,11 @@ export function Payout() {
       <h1 id="payout-heading">{en['console.admin.payout.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}
@@ -247,7 +263,7 @@ export function Payout() {
               <li key={h.id}>
                 {fillTemplate(en['console.admin.payout.history_row'], {
                   time: when(h.occurred_at),
-                  outcome: h.outcome,
+                  outcome: OUTCOME_LABEL[h.outcome] ?? h.outcome,
                   last4: h.new_last4 ?? h.previous_last4 ?? '',
                 })}
               </li>

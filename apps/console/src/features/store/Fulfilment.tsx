@@ -22,7 +22,7 @@ import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
 import { ScreenState } from '../../components/ScreenState';
-import type { UiState } from '../../lib/states';
+import type { UiState, AdulisProblem } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import type { FulfilmentMethod, FulfilmentMethodCode } from './types';
 
@@ -40,6 +40,8 @@ interface Draft {
 export function Fulfilment() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const [state, setState] = useState<UiState>('LOADING');
+  const [loaded, setLoaded] = useState(false);
+  const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
   const [draft, setDraft] = useState<Record<FulfilmentMethodCode, Draft>>({
     BUYER_COLLECTION: { is_active: false, handoff_note: '' },
     SELLER_DELIVERY: { is_active: false, handoff_note: '' },
@@ -62,9 +64,14 @@ export function Fulfilment() {
         }
         return next;
       });
+      setLoaded(true);
+      setLoadProblem(null);
       setState('READY');
     } catch (e) {
-      setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
+      if (e instanceof ApiError) {
+        setLoadProblem(e.problem);
+        setState(stateFromProblem(e.problem));
+      } else setState('TRANSPORT_ERROR');
     }
   }, [sellerId]);
 
@@ -100,8 +107,14 @@ export function Fulfilment() {
   };
 
   if (state === 'NO_PERMISSION') return null;
-  if (state !== 'READY' && state !== 'STALE') {
-    return <ScreenState state={state} onRetry={() => void load()} />;
+  if (!loaded && state !== 'READY' && state !== 'STALE') {
+    return (
+      <ScreenState
+        state={state}
+        onRetry={() => void load()}
+        {...(loadProblem ? { problem: loadProblem } : {})}
+      />
+    );
   }
 
   return (
@@ -109,6 +122,11 @@ export function Fulfilment() {
       <h1 id="fulfilment-heading">{en['console.store.fulfilment.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {loaded && state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}

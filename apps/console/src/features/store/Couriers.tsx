@@ -27,7 +27,7 @@ import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
 import { ScreenState } from '../../components/ScreenState';
 import { useIdempotencyKey } from '../../lib/idempotency';
-import type { UiState } from '../../lib/states';
+import type { UiState, AdulisProblem } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import { useMarketContext } from '../../lib/market';
 import { timeFormatter } from '../../lib/intl';
@@ -38,6 +38,7 @@ export function Couriers() {
   const market = useMarketContext();
   const [rows, setRows] = useState<readonly CourierRow[] | null>(null);
   const [state, setState] = useState<UiState>('LOADING');
+  const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
   const [phone, setPhone] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,13 +48,17 @@ export function Couriers() {
 
   const load = useCallback(async () => {
     if (!sellerId) return;
-    setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
+    setState((s) => (s === 'READY' || s === 'EMPTY' ? 'STALE' : 'LOADING'));
     try {
       const r = await api<{ data: CourierRow[] }>(`/seller/couriers`, { sellerId });
       setRows(r.data);
+      setLoadProblem(null);
       setState(r.data.length === 0 ? 'EMPTY' : 'READY');
     } catch (e) {
-      setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
+      if (e instanceof ApiError) {
+        setLoadProblem(e.problem);
+        setState(stateFromProblem(e.problem));
+      } else setState('TRANSPORT_ERROR');
     }
   }, [sellerId]);
 
@@ -103,8 +108,14 @@ export function Couriers() {
   };
 
   if (state === 'NO_PERMISSION') return null;
-  if (state === 'LOADING' || state === 'TRANSPORT_ERROR') {
-    return <ScreenState state={state} onRetry={() => void load()} />;
+  if (rows === null) {
+    return (
+      <ScreenState
+        state={state}
+        onRetry={() => void load()}
+        {...(loadProblem ? { problem: loadProblem } : {})}
+      />
+    );
   }
 
   const fmt = market ? timeFormatter(market) : null;
@@ -114,6 +125,11 @@ export function Couriers() {
       <h1 id="couriers-heading">{en['console.store.couriers.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}
@@ -136,7 +152,7 @@ export function Couriers() {
         </button>
       </section>
 
-      {state === 'EMPTY' || (rows && rows.length === 0) ? (
+      {rows.length === 0 ? (
         <div className="empty" data-state="EMPTY">
           <h3>{en['console.store.couriers.empty_heading']}</h3>
           <p>{en['console.store.couriers.empty_body']}</p>

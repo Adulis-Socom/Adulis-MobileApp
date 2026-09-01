@@ -25,6 +25,17 @@ export function ProblemBanner({ problem }: { problem: AdulisProblem }) {
   return (
     <div role="alert" className="problem">
       <p>{render(problem.title_key, problem.slots)}</p>
+      {/* A 400/409 that names its failing parts in items[] renders EVERY one
+          as its message (the C-6 pass's M5: the generic title alone told a
+          seller "the request is not valid" about a phone format). Anchor
+          links per field remain owed where ids differ from slots.path. */}
+      {problem.items && problem.items.length > 0 ? (
+        <ul className="problem-items">
+          {problem.items.map((it, i) => (
+            <li key={`${it.code}-${i}`}>{render(it.message_key, it.slots)}</li>
+          ))}
+        </ul>
+      ) : null}
       {problem.status === 429 && problem.slots?.['retry_after_seconds'] !== undefined ? (
         <p>
           {fillTemplate(en['console.signin.rate_limited'], {

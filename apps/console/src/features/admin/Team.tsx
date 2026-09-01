@@ -35,6 +35,7 @@ import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
 import { ScreenState } from '../../components/ScreenState';
 import { useStepUp } from '../../auth/useStepUp';
+import { useIdempotencyKey } from '../../lib/idempotency';
 import type { UiState } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import { useMarketContext } from '../../lib/market';
@@ -79,6 +80,9 @@ export function Team() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [residualRole, setResidualRole] = useState('');
+  const inviteKey = useIdempotencyKey();
+  const transferKey = useIdempotencyKey();
   const { guard, modal } = useStepUp();
 
   const load = useCallback(async () => {
@@ -92,9 +96,12 @@ export function Team() {
           sellerId,
         });
         setTransfer(o.transfer);
-      } catch {
-        // A non-owner may not read transfers; the section renders nothing.
-        setTransfer(null);
+      } catch (e) {
+        // The server answers {transfer:null} to a non-party; only a 403 from
+        // a wider guard legitimately hides the section. Anything else is a
+        // real load failure and joins the screen's error path (pass A11).
+        if (e instanceof ApiError && e.problem.status === 403) setTransfer(null);
+        else throw e;
       }
       setState('READY');
     } catch (e) {
@@ -123,11 +130,13 @@ export function Team() {
           api(`/seller/team`, {
             method: 'POST',
             sellerId,
+            idempotencyKey: inviteKey.current(),
             body: { phone: phone.trim(), role, step_up_challenge_id: challengeId },
           }),
         { challengeRequired: true },
       );
       if (r !== null) {
+        inviteKey.remint();
         setPhone('');
         void load();
       }
@@ -179,12 +188,19 @@ export function Team() {
           api(`/seller/ownership-transfer`, {
             method: 'POST',
             sellerId,
-            body: { to_member_id: transferTo, step_up_challenge_id: challengeId },
+            idempotencyKey: transferKey.current(),
+            body: {
+              to_member_id: transferTo,
+              ...(residualRole ? { residual_role: residualRole } : {}),
+              step_up_challenge_id: challengeId,
+            },
           }),
         { challengeRequired: true },
       );
       if (r !== null) {
+        transferKey.remint();
         setTransferTo('');
+        setResidualRole('');
         void load();
       }
     } catch (e) {
@@ -231,6 +247,11 @@ export function Team() {
       <h1 id="team-heading">{en['console.admin.team.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}
@@ -312,6 +333,15 @@ export function Team() {
                   {admins.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.phone}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="tm-residual">{en['console.admin.team.residual_role']}</label>
+                <select id="tm-residual" value={residualRole} onChange={(e) => setResidualRole(e.target.value)}>
+                  <option value="">{en['console.admin.team.residual_keep_admin']}</option>
+                  {ROLES.filter((r) => r !== 'ADMIN').map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABEL[r]}
                     </option>
                   ))}
                 </select>

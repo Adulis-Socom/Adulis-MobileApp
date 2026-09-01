@@ -98,6 +98,11 @@ export function Sessions() {
       <h1 id="sessions-heading">{en['console.admin.sessions.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
 
       <section aria-labelledby="signed-in-heading" className="session-list">
         <h2 id="signed-in-heading">{en['console.admin.sessions.signed_in_heading']}</h2>

@@ -31,7 +31,7 @@ import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
 import { ScreenState } from '../../components/ScreenState';
-import type { UiState } from '../../lib/states';
+import type { UiState, AdulisProblem } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import type { AvailabilityOverride, OverridePage } from './types';
 
@@ -60,6 +60,9 @@ export function Availability() {
   const [past, setPast] = useState<readonly AvailabilityOverride[] | null>(null);
   const [pastOpen, setPastOpen] = useState(false);
   const [state, setState] = useState<UiState>('LOADING');
+  const [loaded, setLoaded] = useState(false);
+  const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -73,9 +76,15 @@ export function Availability() {
     try {
       const r = await api<OverridePage>(`/seller/availability-overrides?limit=50`, { sellerId });
       setOverrides(r.data);
+      setHasMore(r.has_more);
+      setLoaded(true);
+      setLoadProblem(null);
       setState('READY');
     } catch (e) {
-      setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
+      if (e instanceof ApiError) {
+        setLoadProblem(e.problem);
+        setState(stateFromProblem(e.problem));
+      } else setState('TRANSPORT_ERROR');
     }
   }, [sellerId]);
 
@@ -96,8 +105,12 @@ export function Availability() {
       });
       const today = new Date().toISOString().slice(0, 10);
       setPast(r.data.filter((o) => o.date < today));
-    } catch {
-      setPast([]);
+    } catch (e) {
+      // NOT setPast([]): rendering the success-empty state for a failed
+      // fetch is the purest C-5 class. past stays null, so toggling the
+      // disclosure again retries; the failure shows as the banner.
+      setPastOpen(false);
+      if (e instanceof ApiError) setProblem(e);
     }
   };
 
@@ -108,6 +121,14 @@ export function Availability() {
     for (const w of windows) {
       if (!HHMM.test(w.opens_at) || !HHMM.test(w.closes_at) || w.opens_at >= w.closes_at) {
         setFieldError(en['console.store.availability.window_invalid']);
+        return;
+      }
+      const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      if (minutes(w.closes_at) - minutes(w.opens_at) < 60) {
+        // The DATABASE enforces this (0005: >= 1 hour) and the unmapped
+        // 23514 renders as a retryable 500 -- the pass's B1. The rule is
+        // S11's, said here before the wire is spent.
+        setFieldError(en['console.store.availability.window_too_short']);
         return;
       }
     }
@@ -181,8 +202,14 @@ export function Availability() {
   };
 
   if (state === 'NO_PERMISSION') return null;
-  if (state !== 'READY' && state !== 'STALE') {
-    return <ScreenState state={state} onRetry={() => void load()} />;
+  if (!loaded && state !== 'READY' && state !== 'STALE') {
+    return (
+      <ScreenState
+        state={state}
+        onRetry={() => void load()}
+        {...(loadProblem ? { problem: loadProblem } : {})}
+      />
+    );
   }
 
   return (
@@ -190,6 +217,11 @@ export function Availability() {
       <h1 id="availability-heading">{en['console.store.availability.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {loaded && state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}
@@ -275,7 +307,13 @@ export function Availability() {
 
         <div className="form-block">
           <label htmlFor="ov-date">{en['console.store.availability.new_date']}</label>
-          <input id="ov-date" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+          <input
+            id="ov-date"
+            type="date"
+            min={new Date().toISOString().slice(0, 10)}
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+          />
           <label htmlFor="ov-note">{en['console.store.availability.new_note']}</label>
           <input id="ov-note" maxLength={120} value={newNote} onChange={(e) => setNewNote(e.target.value)} />
           <button type="button" className="button" disabled={busy} onClick={() => void addOverride()}>
@@ -283,6 +321,7 @@ export function Availability() {
           </button>
         </div>
 
+        {hasMore ? <p className="hint">{en['console.store.availability.overrides_more']}</p> : null}
         <button type="button" className="button" aria-expanded={pastOpen} onClick={() => void loadPast()}>
           {en['console.store.availability.past_toggle']}
         </button>

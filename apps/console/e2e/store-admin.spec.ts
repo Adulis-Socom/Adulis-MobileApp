@@ -30,9 +30,49 @@ test.describe('More menu and shell navigation', () => {
     for (const heading of ['Insights', 'Store', 'Settings', 'Billing']) {
       await expect(page.locator('.more-menu').getByRole('heading', { name: heading })).toBeVisible();
     }
+    // ALL fourteen entries, not a sample -- a typo in any one dead-ends a
+    // seller (the pass's vacuity note on this test).
+    for (const entry of [
+      'Analytics', 'Trust and level', 'Reviews',
+      'Profile', 'Fulfilment', 'Availability', 'Identity', 'Couriers',
+      'Sessions and devices', 'Notifications', 'Team', 'Closing',
+      'Subscription', 'Payout',
+    ]) {
+      await expect(page.locator('.more-menu').getByRole('link', { name: entry, exact: true })).toBeVisible();
+    }
     await page.locator('.more-menu').getByRole('link', { name: 'Fulfilment' }).click();
     await expect(page).toHaveURL(new RegExp(`${SEEDED.sellerId}/fulfilment$`));
     await expect(page.locator('[data-screen="SC-18"]')).toBeVisible();
+  });
+});
+
+test.describe('SC-17 Store profile -- write-only, and honest about it', () => {
+  test('names the read-back absence, refuses an empty save, and PATCHes for real', async ({ page }) => {
+    await page.goto(`${base}/profile`);
+    await expect(page.locator('[data-screen="SC-17"]')).toBeVisible();
+
+    // The absence IS the screen's first fact.
+    await expect(page.getByText(/cannot be shown here yet/).first()).toBeVisible();
+    // G1.9 and the logo, said in words where the controls would sit.
+    await expect(page.getByText(/handle is fixed when the store is created/)).toBeVisible();
+    await expect(page.getByText('A store logo is not supported yet.')).toBeVisible();
+
+    // An empty save REFUSES before the wire (the server would 400 an empty
+    // patch); the sentence says why.
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByText('Enter a change before saving.')).toBeVisible();
+
+    // A real PATCH lands: the preview reflects what is typed, the save
+    // confirms. (Read-back is the named absence, so the proof of landing is
+    // the 200 -> Saved, not a reload.)
+    await page.locator('#sp-name').fill('Seed Coffee Works');
+    await expect(page.locator('.preview-card').getByText('Seed Coffee Works')).toBeVisible();
+    const patched = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/profile') && r.request().method() === 'PATCH',
+    );
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await patched;
+    await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
   });
 });
 
@@ -93,6 +133,31 @@ test.describe('SC-19 Availability -- gates nothing; closures are dates', () => {
     await page.locator('.override-list li', { hasText: '2027-01-07' }).getByRole('button', { name: 'Remove' }).click();
     await expect(page.getByText(/No closure dates/)).toBeVisible();
   });
+
+  test('the weekly pattern SAVES for real, and a sub-hour window is refused in words', async ({ page }) => {
+    /*
+     * The pass's B1: the database enforces a one-hour minimum
+     * (availability_window_minimum) that neither the zod schema nor the
+     * first client transcribed, and the unmapped 23514 rendered as a
+     * retryable 500 -- "the platform is broken, try again", forever. The
+     * refusal now happens HERE, in words, before the wire; and the valid
+     * save is DRIVEN (this PUT had never been exercised by any test).
+     */
+    await page.goto(`${base}/availability`);
+    await page.locator('.weekday-row', { hasText: 'Monday' }).getByRole('button', { name: 'Add a time window' }).click();
+    await page.locator('#opens-0').fill('09:00');
+    await page.locator('#closes-0').fill('09:30');
+    await page.getByRole('button', { name: 'Save weekly hours' }).click();
+    await expect(page.getByText('A window must be at least one hour.')).toBeVisible();
+
+    await page.locator('#closes-0').fill('17:00');
+    const put = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/availability') && r.request().method() === 'PUT',
+    );
+    await page.getByRole('button', { name: 'Save weekly hours' }).click();
+    await put;
+    await expect(page.getByText('Saved.')).toBeVisible();
+  });
 });
 
 test.describe('SC-22 Identity -- the sentences that are the screen', () => {
@@ -107,13 +172,25 @@ test.describe('SC-22 Identity -- the sentences that are the screen', () => {
     await expect(page.getByText(/about the named representative as an individual/)).toBeVisible();
     // G1.1: identity verification is operator-performed; NO start button.
     await expect(page.getByText(/performed directly by Adulis/)).toBeVisible();
-    await expect(page.getByRole('button', { name: /identity check/i })).toHaveCount(0);
+    // The identity-check REGION exists and holds NO control of any name --
+    // scoping beats guessing what a wrong button would be called.
+    await expect(page.locator('.identity-check')).toBeVisible();
+    await expect(page.locator('.identity-check').getByRole('button')).toHaveCount(0);
 
     // Account control mints a REAL code against the real API.
     await page.locator('#id-handle').fill('senabeauty');
     await page.getByRole('button', { name: 'Get a code' }).click();
     await expect(page.getByText('Post this code:')).toBeVisible();
     await expect(page.getByText(/ADU-[0-9A-F]{8}/)).toBeVisible();
+
+    // And the CHECK is driven into the one deterministic answer this harness
+    // holds: the fake platform adapter knows no such handle, the service
+    // degrades to a retryable 503, and the failure renders as a banner WITH
+    // the request id (S4.6) -- never silence (the pass's M11).
+    await page.getByRole('button', { name: 'Check account control' }).click();
+    const banner = page.locator('.problem');
+    await expect(banner).toBeVisible();
+    await expect(banner.locator('code')).toBeVisible();
   });
 });
 
@@ -246,6 +323,38 @@ test.describe('SC-25 Team -- the entitlement is the server\'s answer', () => {
     await expect(gate.getByRole('button')).toBeDisabled();
     await expect(page.getByText('Business includes team access.')).toBeVisible();
   });
+
+  test('the invite drives step-up and the POST reaches the REAL server (planted seats)', async ({ page, context }) => {
+    /*
+     * The seed is not Business, so the gate hides the whole form -- which is
+     * exactly how the C-6 pass's A1 (no Idempotency-Key on the invite POST)
+     * shipped green. Plant ONLY the seats flag so the form renders, then
+     * drive the invite THROUGH the real step-up into the REAL server. The
+     * server's answer -- 409 TIER_LIMIT_REACHED, "Your current plan does not
+     * include this." -- can only arrive if the POST got PAST the
+     * idempotency-key gate (a keyless POST 400s with a different message),
+     * so this one assertion proves the key fix and the error rendering at
+     * once.
+     */
+    await context.route('**/v1/seller/team', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const real = await route.fetch();
+      const body = (await real.json()) as { data: unknown[]; seats: unknown };
+      await route.fulfill({ response: real, json: { ...body, seats: { allowed: true, cap: 5 } } });
+    });
+    await page.goto(`${base}/team`);
+    await page.locator('#tm-phone').fill('+251977000111');
+    const before = currentSmsCode();
+    await page.getByRole('button', { name: 'Add member - code required' }).click();
+
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByText('Enter the code to change your team.')).toBeVisible();
+    const code = await nextSmsCode(before);
+    await page.locator('#stepup-code').fill(code);
+    await page.getByRole('button', { name: 'Confirm' }).click();
+
+    await expect(page.getByText('Your current plan does not include this.')).toBeVisible();
+  });
 });
 
 test.describe('SC-26 Subscription -- honest about having none', () => {
@@ -288,8 +397,14 @@ test.describe('SC-28 Notification preferences -- R22, driven', () => {
 
     // Payments toggles OFF for real -- and the consequence renders AT THAT
     // MOMENT (R22), not in a tooltip, not never.
+    const patched = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/notification-preferences') && r.request().method() === 'PATCH',
+    );
     await page.locator('#pref-payments').uncheck();
     await expect(page.getByText(/Turning off payment alerts risks missing the 24-hour window/)).toBeVisible();
+    // The warning above renders from the click-time flip; the RELOAD proof
+    // must wait for the wire, or it races the in-flight PATCH (pass note).
+    await patched;
 
     // The write LANDED: reload reads the row back from the server.
     await page.reload();

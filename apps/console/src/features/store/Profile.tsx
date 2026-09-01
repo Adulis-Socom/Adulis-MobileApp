@@ -33,6 +33,7 @@ import type { CategoryRow } from './types';
 export function Profile() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const [categories, setCategories] = useState<readonly CategoryRow[]>([]);
+  const [categoriesFailed, setCategoriesFailed] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -51,7 +52,11 @@ export function Profile() {
     // Public endpoint; categories are market-shared vocabulary.
     api<{ data: CategoryRow[] }>(`/categories`)
       .then((r) => setCategories(r.data))
-      .catch(() => setCategories([]));
+      .catch(() => {
+        // Failure is not the same fact as an empty vocabulary; say which.
+        setCategories([]);
+        setCategoriesFailed(true);
+      });
   }, []);
 
   const saveProfile = async () => {
@@ -107,7 +112,13 @@ export function Profile() {
       });
       setSaved(true);
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        if (e.problem.slots?.['reason'] === 'SELLER_NOT_COMPANY') {
+          setFieldError(en['console.store.profile.not_company']);
+        } else {
+          setProblem(e);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -144,6 +155,17 @@ export function Profile() {
             </option>
           ))}
         </select>
+        {categoriesFailed ? (
+          <p className="field-error" role="alert">
+            {en['console.store.profile.categories_failed']}
+          </p>
+        ) : categories.length === 0 ? (
+          // No environment seeds core.category yet, and the wire carries only
+          // machine codes, no display names (D-225) -- both said, not faked.
+          <p className="hint">{en['console.store.profile.categories_none']}</p>
+        ) : (
+          <p className="hint">{en['console.store.profile.category_code_note']}</p>
+        )}
 
         {/* G1.9: no rename control exists to lie with. */}
         <p className="hint">{en['console.store.profile.handle_immutable']}</p>

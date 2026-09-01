@@ -42,7 +42,9 @@ export function Closure() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const closeKey = useIdempotencyKey();
+  const deleteKey = useIdempotencyKey();
   const { guard, modal } = useStepUp();
 
   const load = useCallback(async () => {
@@ -111,13 +113,15 @@ export function Closure() {
           api(`/seller/deletion`, {
             method: 'POST',
             sellerId,
+            idempotencyKey: deleteKey.current(),
             body: { step_up_challenge_id: challengeId },
           }),
         { challengeRequired: true },
       );
       if (r !== null) {
-        // The seller no longer exists; the shell's next fetch will say so.
-        void load();
+        // TERMINAL: the seller no longer exists. Nothing here refetches --
+        // every subsequent call would 403 about a store that is gone.
+        setDeleted(true);
       }
     } catch (e) {
       if (e instanceof ApiError) {
@@ -134,7 +138,19 @@ export function Closure() {
     }
   };
 
-  if (state === 'NO_PERMISSION') return null;
+  // No NO_PERMISSION gate: the one load is the blockers GET, whose 403
+  // (non-owner) deliberately maps to READY-without-the-deletion-region
+  // above. Closure's own permission failures arrive on the POST, as banners.
+  if (deleted) {
+    return (
+      <section aria-labelledby="closure-heading" data-screen="SC-29" className="closure">
+        <h1 id="closure-heading">{en['console.admin.closure.heading']}</h1>
+        <div data-state="TERMINAL">
+          <p>{en['console.admin.closure.deleted_terminal']}</p>
+        </div>
+      </section>
+    );
+  }
   if (state !== 'READY' && state !== 'STALE') {
     return <ScreenState state={state} onRetry={() => void load()} />;
   }
@@ -147,6 +163,9 @@ export function Closure() {
 
       <section aria-labelledby="close-heading" className="close-store">
         <h2 id="close-heading">{en['console.admin.closure.close_heading']}</h2>
+        {closed === null ? (
+          <p className="hint">{en['console.admin.closure.status_owed']}</p>
+        ) : null}
         {closed ? (
           <>
             <span className="badge badge-closed">{en['console.admin.closure.closed_badge']}</span>
