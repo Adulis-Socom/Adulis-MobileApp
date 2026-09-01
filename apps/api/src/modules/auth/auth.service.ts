@@ -395,7 +395,7 @@ export class AuthService {
     trx: Transaction<Database>,
     req: AuthedRequest,
     body: { action: string; target_ref?: string | null | undefined },
-  ): Promise<{ body: unknown; sms: SmsMessage }> {
+  ): Promise<{ body: unknown; sms: SmsMessage; challengeId: string; marketId: string }> {
     const accountId = req.ctx?.accountId as string;
     if (req.ctx?.audience !== 'CONSOLE') {
       throw new AdulisException('PERMISSION_DENIED');
@@ -428,6 +428,8 @@ export class AuthService {
     return {
       body: { challenge_id: stepUpId, expires_at: issued.expiresAt },
       sms: issued.sms,
+      challengeId: issued.challengeId,
+      marketId: issued.marketId,
     };
   }
 

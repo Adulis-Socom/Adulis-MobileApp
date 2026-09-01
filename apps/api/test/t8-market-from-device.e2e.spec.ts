@@ -84,9 +84,10 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       // reach-across that t8-device-bootstrap avoids by staying non-live.
       await admin.query(
         `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                  display_timezone, default_locale, is_live, created_at)
+                                  display_timezone, default_locale, is_live, created_at,
+                                  activation_state, otp_enabled, sms_primary_provider)
          VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',true,
-                 now() + interval '10 years')`,
+                 now() + interval '10 years', 'ACTIVE', true, 'AFROMESSAGE')`,
         [id, code],
       );
       const [q, p] = timingFor(id);

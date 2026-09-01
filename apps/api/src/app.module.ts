@@ -39,7 +39,11 @@ import {
 import { AuthController } from './modules/auth/auth.controller';
 import { AuthService } from './modules/auth/auth.service';
 import { OtpService } from './modules/auth/otp.service';
-import { FakeSmsAdapter, SMS_ADAPTER } from './modules/auth/sms.adapter';
+import { FakeSmsAdapter, SMS_ADAPTER, type SmsAdapter } from './modules/auth/sms.adapter';
+import { FakeSmsProviderSet, SMS_PROVIDERS } from './modules/auth/sms-provider';
+import { SmsProviderRouter } from './modules/auth/sms-provider.router';
+import { OtpDeliveryService } from './modules/auth/otp-delivery.service';
+import { OtpIssuancePolicy } from './modules/auth/otp-issuance.policy';
 import { DeletionController } from './modules/deletion/deletion.controller';
 import { DeletionService } from './modules/deletion/deletion.service';
 import { TeamController } from './modules/team/team.controller';
@@ -96,7 +100,30 @@ export const LOGGER = Symbol('LOGGER');
     AuthService,
     DeletionService,
     TeamService,
+    // Notifications (E2, E6) still transport through the plain adapter: they
+    // carry no challenge, so there is no delivery attempt to record and no
+    // failover rule that applies to them. OTP is what has a ledger.
     { provide: SMS_ADAPTER, useValue: new FakeSmsAdapter() },
+    /**
+     * The four fakes v2.6 S6 names as initial implementations. EVERY ONE IS
+     * A FAKE and each refuses to construct under NODE_ENV=production --
+     * AfroMessage, SMSEthiopia, Infobip and Twilio all require a registered
+     * business, which is blocked, so the interface is what is buildable now.
+     * Binding a real vendor is a change to this line, not to the layer.
+     */
+    {
+      provide: SMS_PROVIDERS,
+      // THROUGH DI, not `new FakeSmsProviderSet()`: a suite that overrides
+      // SMS_ADAPTER must have its own adapter receive what the fake vendors
+      // transport, or every existing OTP test reads an adapter nothing wrote
+      // to. Same reason development reads its code out of the dev SMS log.
+      inject: [SMS_ADAPTER],
+      useFactory: (sms: SmsAdapter): FakeSmsProviderSet =>
+        new FakeSmsProviderSet(sms),
+    },
+    SmsProviderRouter,
+    OtpDeliveryService,
+    OtpIssuancePolicy,
     ChatService,
     ClaimsService,
     // Layers 3-4 of the cascade are a deployment integration; Null answers

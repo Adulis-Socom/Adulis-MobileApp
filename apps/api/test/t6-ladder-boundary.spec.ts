@@ -53,8 +53,8 @@ describe('T6 / G1.2 -- NEW leaves only on tenure AND orders', () => {
 
     await c.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live)
-       VALUES ($1, $2, 'Boundary', 'PHASE_1', 'ETB', 'Africa/Addis_Ababa', 'en', false)`,
+                                display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider)
+       VALUES ($1, $2, 'Boundary', 'PHASE_1', 'ETB', 'Africa/Addis_Ababa', 'en',false, 'ACTIVE', true, 'AFROMESSAGE')`,
       [market, `B${suffix}`],
     );
     // NEITHER new_to_established column is named, so both arrive from the
