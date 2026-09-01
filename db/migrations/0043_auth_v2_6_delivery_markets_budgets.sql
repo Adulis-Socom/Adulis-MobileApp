@@ -281,9 +281,19 @@ SELECT unnest(ARRAY[
 -- --------------------------------------------------------------- 7. grants
 --
 -- The app writes delivery attempts (the router records every send) and reads
--- market/budget configuration. It never writes market activation: S9.4 makes
--- activation a privileged founder-run operation with a runbook, not an
--- application capability.
+-- market/budget configuration.
+--
+-- [!] AND IT CAN WRITE MARKET ACTIVATION, WHICH THIS COMMENT ONCE DENIED.
+-- The first version asserted "it never writes market activation: S9.4 makes
+-- activation a privileged founder-run operation". That is false in the
+-- database this migration produces: migration 0002 grants adulis_app full
+-- DML on core.market, nothing revokes it, no column-level REVOKE is issued
+-- here, and core.market has no RLS. Folding S9.1's configuration INTO
+-- core.market (D-187) inherited those grants -- a separate table would have
+-- started with none. A COMMENT CANNOT REVOKE A GRANT. Registered as D-186
+-- with three options, and deliberately not patched here: a privilege change
+-- against the live application role belongs with D-185's withdrawal of
+-- is_live, which rewrites who reads and writes this table anyway.
 GRANT SELECT, INSERT, UPDATE ON core.otp_delivery_attempt TO adulis_app;
 GRANT SELECT, INSERT, UPDATE ON core.otp_delivery_attempt TO adulis_jobs;
 GRANT SELECT ON core.platform_otp_budget TO adulis_app;

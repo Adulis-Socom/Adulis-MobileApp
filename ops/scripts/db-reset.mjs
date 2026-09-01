@@ -102,23 +102,55 @@ await client.connect();
  *
  * `to_regclass` rather than a try/catch: on a genuinely fresh clone there is
  * no core.market yet, and "no tables" is the expected state, not an error.
+ *
+ * ==========================================================================
+ * THE BEFORE SNAPSHOT DESCRIBES AN UNKNOWN DATABASE. IT MUST NOT ASSUME ONE.
+ * ==========================================================================
+ * Adversarial pass on #45, found by three lenses independently, and it is the
+ * worst kind of defect for THIS script: T13's first version added
+ * `activation_state` and `core.platform_otp_budget` to this query, both of
+ * which exist only after migration 0043 -- and this runs as `show('before')`,
+ * against whatever is there, BEFORE anything is dropped. `to_regclass` tests
+ * that core.market EXISTS, not that it carries the columns; every other
+ * column here has existed since migration 0011, which is why that guard was
+ * sufficient until it was not.
+ *
+ * So `pnpm db:reset` died on any database at 0042 or earlier -- which is
+ * precisely the database this script exists to repair, and it died BEFORE
+ * dropping anything, so the repair was unreachable by the tool built for it.
+ *
+ * THE FIX IS THE SEMANTIC DISTINCTION THE TWO CALLS ALWAYS HAD. `before` is
+ * diagnostic: it reports what was in a database whose migration state is by
+ * definition unknown, so it asks only for what has been true since 0011.
+ * `after` is an ASSERTION against a database this script has just migrated
+ * and seeded, so it asks for everything and EXPECTED pins it. A snapshot of
+ * an unknown world cannot depend on the newest thing in it.
  */
-const rowCounts = async (c) => {
+
+/** Columns present since migration 0011 -- safe against any migrated database. */
+const BASE_COUNTS = `
+    (SELECT count(*)::int FROM core.market) AS markets,
+    (SELECT count(*)::int FROM core.account) AS accounts,
+    (SELECT count(*)::int FROM core.seller) AS sellers,
+    (SELECT count(*)::int FROM core.device) AS devices,
+    (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing,
+    (SELECT count(*)::int FROM core."order") AS orders,
+    (SELECT count(*)::int FROM core.product_variant v
+      WHERE v.stock_count <> coalesce((SELECT sum(e.delta) FROM core.stock_event e
+                                       WHERE e.variant_id = v.id), 0)) AS stock_drift`;
+
+/** Added by 0043. Only ever read AFTER this script has migrated. */
+const T13_COUNTS = `
+    (SELECT count(*)::int FROM core.market
+      WHERE activation_state = 'ACTIVE' AND otp_enabled) AS active_markets,
+    (SELECT count(*)::int FROM core.platform_otp_budget) AS global_budget`;
+
+const rowCounts = async (c, { full }) => {
   const present = await c.query(`SELECT to_regclass('core.market') IS NOT NULL AS ok`);
   if (!present.rows[0].ok) return null;
-  const r = await c.query(`
-    SELECT (SELECT count(*)::int FROM core.market) AS markets,
-           (SELECT count(*)::int FROM core.account) AS accounts,
-           (SELECT count(*)::int FROM core.seller) AS sellers,
-           (SELECT count(*)::int FROM core.device) AS devices,
-           (SELECT count(*)::int FROM core.timing_config WHERE effective @> now()) AS timing,
-           (SELECT count(*)::int FROM core."order") AS orders,
-           (SELECT count(*)::int FROM core.product_variant v
-             WHERE v.stock_count <> coalesce((SELECT sum(e.delta) FROM core.stock_event e
-                                              WHERE e.variant_id = v.id), 0)) AS stock_drift,
-           (SELECT count(*)::int FROM core.market
-             WHERE activation_state = 'ACTIVE' AND otp_enabled) AS active_markets,
-           (SELECT count(*)::int FROM core.platform_otp_budget) AS global_budget`);
+  const r = await c.query(
+    `SELECT ${BASE_COUNTS}${full ? `,${T13_COUNTS}` : ''}`,
+  );
   return r.rows[0];
 };
 const show = (label, c) =>
@@ -127,7 +159,12 @@ const show = (label, c) =>
       ? `${label}: no core.market -- nothing has been migrated here yet`
       : `${label}: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
         `devices ${c.devices}, timing_config in force ${c.timing}, orders ${c.orders}, ` +
-        `stock drift ${c.stock_drift}, active markets ${c.active_markets}, global budget ${c.global_budget}`,
+        `stock drift ${c.stock_drift}` +
+        // Only the `after` snapshot carries these; `before` looked at a
+        // database whose migration state nobody knew.
+        (c.active_markets === undefined
+          ? ''
+          : `, active markets ${c.active_markets}, global budget ${c.global_budget}`),
   );
 
 const tables = await client.query(
@@ -136,7 +173,7 @@ const tables = await client.query(
   [SCHEMAS],
 );
 console.log(`\n${tables.rows[0].tables} table(s) across ${SCHEMAS.length} schema(s)`);
-show('before', await rowCounts(client));
+show('before', await rowCounts(client, { full: false }));
 
 for (const s of SCHEMAS) {
   await client.query(`DROP SCHEMA IF EXISTS ${s} CASCADE`);
@@ -209,7 +246,7 @@ run('pnpm', ['db:seed']);
 
 const after = new pg.Client({ connectionString: CONNECTION });
 await after.connect();
-const c = await rowCounts(after);
+const c = await rowCounts(after, { full: true });
 await after.end();
 show('after', c);
 

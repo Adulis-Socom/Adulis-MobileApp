@@ -1978,7 +1978,8 @@ Found by:  T13 Phase 1, adding activation_state beside a column v2.6 never menti
 Effect:    `is_live` exists, is NOT NULL, and is read where it matters: `/v1/bootstrap` assigns a device its market by `ORDER BY m.is_live DESC, m.created_at ASC` (D-104's fix), so is_live decides WHICH MARKET A NEW ACCOUNT BELONGS TO. `activation_state` now decides whether that market may issue OTP. Nothing connects them, so a market can be `is_live = true, activation_state = UNREVIEWED` -- devices bind to it and no one can ever sign in -- or `is_live = false, activation_state = ACTIVE`, which issues OTP for a market bootstrap will not hand anybody.
            v2.6 never mentions is_live, so collapsing, retiring or redefining it here would be the judgement call in SQL that "transcribe, do not design" forbids.
 Response:  BOTH KEPT, UNCONNECTED, and registered. Migration 0043 adds only the constraint v2.6 supports directly: otp_enabled implies activation_state = ACTIVE.
-Action:    Column comment on activation_state; this entry. The seed sets both consistently for the one market it creates, and db:reset now pins `active_markets = 1` so a second one cannot appear unnoticed.
+Action:    Column comment on activation_state; this entry. db:reset pins `active_markets = 1` so a second one cannot appear unnoticed.
+           [!] CORRECTION, adversarial pass on #45 (upheld by two lenses): the first version of this line read "the seed sets both consistently for the one market it creates". IT DOES NOT, AND CANNOT. seed.mjs sets `is_live = false` deliberately -- with a nine-line comment explaining that D-104's `ORDER BY is_live DESC` lookup makes a live fixture market capture other suites' devices and accounts (D-179) -- and then sets `activation_state = 'ACTIVE'` on the same row. That is `is_live = false, activation_state = ACTIVE`, which is VERBATIM the second of the two anomalies this entry's own Effect paragraph names. I described the divergence and shipped it six lines apart, in the entry that exists to report it. The two settings are not reconcilable while both columns exist, which is the finding rather than a defect in the seed.
 Ruling needed: YES. Either is_live becomes derived from activation_state (`activation_state = 'ACTIVE'`), or it keeps a separate meaning that some document states, or bootstrap starts reading activation_state and is_live retires. Until then the two can disagree and only a person would notice.
 
 ### D-184 - S30 names nineteen absent events, not four -- and two of them collide with existing names
@@ -1992,3 +1993,38 @@ Effect:    S30.1 calls out four "at minimum"; the work order predicted six; THE 
 Response:  ALL NINETEEN SEEDED in migration 0043.
 Action:    The seed, and a scripted diff (ops/scripts, run at build time) rather than a reading of the section.
 Ruling needed: YES, on the two collisions -- whether `step_up_challenged` and `otp_delivery_confirmed` are retired in favour of v2.6's names, or whether the pairs mean different things and both stay. Two live names for one event splits every query that counts it.
+### D-185 - RULED BY ADU-DB-01 v1.14: is_live is withdrawn, activation_state is the single truth (settles D-183)
+
+Severity:  (implements a founder ruling; D-183's underlying defect was MAJOR)
+Phase:     T13 - 2
+Source:    ADU-DB-01 v1.14 S30b.3, ruling on D-183
+Found by:  n/a -- D-183 is the finding
+Effect:    "Every market resolution reads `activation_state = 'ACTIVE'`. `is_live` is withdrawn." The ruling also names the gain a boolean could not express: SUSPENDED then means what suspension should mean -- no new OTP issued, no new device assigned to that market, and every account already there unaffected.
+           This also RESOLVES the contradiction D-183's own correction records: with `is_live` gone there are no longer two settings to reconcile, and the seed's deliberate `is_live = false` (which existed to stop a live fixture market capturing other suites' devices, D-179) has nothing to disagree with.
+Response:  NOT BUILT IN THIS PHASE, on the ruling's own instruction: "Sequence it as its own change. It touches /v1/bootstrap and orders.service.ts -- the two remaining market readers D-116 records -- and it drops a column on a populated table."
+Action:    This entry; the work is a migration plus the two readers, and it carries D-179's fixture-market reasoning with it (a non-live fixture market becomes expressible only as a non-ACTIVE one).
+Ruling needed: none. The BUILD is owed.
+
+### D-186 - The founder-only activation boundary does not exist: adulis_app already holds full DML on core.market
+
+Severity:  MAJOR (a claimed privilege boundary that no grant enforces, over seven controls including SMS spend)
+Phase:     T13 - 1
+Source:    migration 0043's grants block, which asserts of core.market "It never writes market activation: S9.4 makes activation a privileged founder-run operation with a runbook, not an application capability"
+Found by:  adversarial pass on #45
+Effect:    THE ASSERTION IS FALSE IN THE DATABASE THE MIGRATION PRODUCES. Migration 0002 grants `SELECT, INSERT, UPDATE, DELETE ON core.market` to `adulis_app`; no migration revokes it; 0043 issues no column-level REVOKE; and core.market carries no RLS. So the application role can write `activation_state`, `otp_enabled`, both provider columns, the sender columns and both daily OTP limits -- seven founder-only controls, two of which govern SMS spend.
+           THE FOLD IS WHY. S9.1's `market_config` was folded INTO core.market rather than given its own table (the one structural judgement call in the migration, and it went unregistered -- also a pass finding). A separate table would have started with no grants and acquired only what it was given; extending an existing row inherits whatever that row already had. A comment cannot revoke a grant.
+Response:  RECORDED, NOT PATCHED HERE, and deliberately so: revoking column-level UPDATE on core.market is a privilege change against a live application role, and it interacts with D-185's withdrawal of `is_live` (which rewrites who reads and writes this table). Doing both in one considered change is right; doing the second blind, in the phase that discovered the first, is how a privilege edit breaks bootstrap.
+Action:    The migration's grants comment is corrected to state what is true rather than what was intended. This entry.
+Ruling needed: YES, and it is small: whether S9.4's "privileged founder-run operation" is enforced by (a) column-level REVOKE on core.market from adulis_app, (b) moving the seven controls to their own table with its own grants -- unwinding the fold -- or (c) a documented statement that the runbook is the control and the grant is not. (a) and (b) are enforcement; (c) is a decision to accept it, which is legitimate for a founder-only system with one operator, but should be said rather than implied. Rides with D-185.
+
+### D-187 - The structural fold of S9.1 into core.market was a judgement call and went unregistered
+
+Severity:  MINOR (the decision is defensible; its absence from the record is not)
+Phase:     T13 - 1
+Source:    migration 0043's market-configuration block
+Found by:  adversarial pass on #45 -- "the one structural judgement call with no register entry"
+Effect:    v2.6 S9.1 says "maintain configuration similar to: market_config <fields>", and three of its fields already exist on core.market under other names (market_code/code, default_currency/display_currency, default_timezone/display_timezone). The migration extended core.market rather than creating a second table, reasoning that a separate table would carry a stale copy of those three -- the root CLAUDE.md's "a rule kept in two places grows a stale copy". Every OTHER decision in that migration was registered (D-181 through D-184); this one was argued in a comment and never recorded, which is the difference between a decision and an assumption.
+           It is not cost-free, and D-186 is the cost: the fold inherited core.market's existing grants.
+Response:  REGISTERED.
+Action:    This entry. The alternative (its own table, its own grants) stays open and is option (b) of D-186's ruling.
+Ruling needed: none independently -- it is decided with D-186.
