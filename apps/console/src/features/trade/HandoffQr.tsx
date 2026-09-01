@@ -33,7 +33,7 @@
  * the format). The buyer's Companion has to parse whatever this produces, so
  * the format IS a contract and this file is not entitled to author one.
  *
- * `encodeHandoffToken` below is therefore an INTERIM encoding, isolated in
+ * `encodeHandoffToken` (lib/qr.tsx since C-8) is therefore an INTERIM encoding, isolated in
  * one exported function so the ruling changes one line. It is compact JSON of
  * exactly the three fields the endpoint returns that the scanner cannot
  * derive -- `signed_at` is deliberately absent because the SCANNER stamps it
@@ -49,63 +49,16 @@
  * app rather than showing a stale token.
  */
 import { useEffect, useState } from 'react';
-import qrcode from 'qrcode-generator';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ScreenState } from '../../components/ScreenState';
 import { stateFromProblem, type UiState } from '../../lib/states';
 import type { QrToken } from './types';
-
-/**
- * INTERIM (D-156). One function, one line to change when the format is ruled.
- * Field order is fixed here so the string is deterministic -- a scanner
- * matching on a prefix would otherwise pass in development and fail in the
- * field for a reason nobody could reproduce.
- */
-export function encodeHandoffToken(t: QrToken): string {
-  return JSON.stringify({ o: t.order_ref, n: t.nonce, k: t.signing_key_version, s: t.signature });
-}
-
-/**
- * The QR as SVG rects built in JSX -- not `createSvgTag()` into
- * dangerouslySetInnerHTML, and not a canvas. Injecting a generated markup
- * string on the origin where payout details change is a habit worth not
- * having, and a canvas is a save affordance wearing another name (S7's
- * evidence rules are about a different screen, but the reasoning carries).
- *
- * Error correction M and a quiet zone of 4 modules: the printed-code
- * standard. High contrast is pure black on pure white, from tokens, and NOT
- * theme-aware -- an inverted QR does not scan on many readers, and a doorway
- * in the dark is exactly when this is used.
- */
-function QrSvg({ payload }: { readonly payload: string }) {
-  const qr = qrcode(0, 'M');
-  qr.addData(payload);
-  qr.make();
-  const n = qr.getModuleCount();
-  const quiet = 4;
-  const size = n + quiet * 2;
-  const cells: React.ReactElement[] = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (qr.isDark(r, c)) {
-        cells.push(<rect key={`${r}-${c}`} x={c + quiet} y={r + quiet} width={1} height={1} />);
-      }
-    }
-  }
-  return (
-    <svg
-      className="handoff-qr"
-      viewBox={`0 0 ${size} ${size}`}
-      role="img"
-      aria-label={en['console.trade.qr.alt']}
-      shapeRendering="crispEdges"
-    >
-      <rect x={0} y={0} width={size} height={size} fill="#ffffff" />
-      <g fill="#000000">{cells}</g>
-    </svg>
-  );
-}
+import { encodeHandoffToken, QrSvg } from '../../lib/qr';
+// The encoding and the SVG renderer moved to lib/qr.tsx at C-8 (SC-C1 needs
+// the SAME interim D-156 format); this file re-exports the encoder so its
+// existing importers and the register's citation stay true.
+export { encodeHandoffToken } from '../../lib/qr';
 
 interface Props {
   readonly sellerId: string;

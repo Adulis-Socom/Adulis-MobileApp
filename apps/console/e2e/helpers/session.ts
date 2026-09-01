@@ -161,9 +161,28 @@ export async function signInAs(
  * sign-in path is still exercised on every run -- once, for real, through the
  * wire -- and it is still the only place this harness knows what an OTP is.
  */
+/**
+ * The seeded BUYER account -- the other half of two-sided arms (SC-20/21's
+ * conversation, SC-C1's courier claim). Signed in ONCE per run by
+ * globalSetup, because the OTP budget is per phone and two specs each
+ * minting their own code spent it (the D-124 class, rediscovered at C-8).
+ */
+export const BUYER = {
+  phone: '+251900000002',
+  accountId: '5eed0000-0000-4000-8000-000000000005',
+};
+
 export async function saveSignedInState(browser: Browser, file: string): Promise<void> {
   const context = await browser.newContext();
   await signInAs(context);
+  await context.storageState({ path: file });
+  await context.close();
+}
+
+/** The buyer's session, saved beside the seller's (one OTP per run). */
+export async function saveBuyerState(browser: Browser, file: string): Promise<void> {
+  const context = await browser.newContext();
+  await signInAs(context, { phone: BUYER.phone, sellerId: SEEDED.sellerId });
   await context.storageState({ path: file });
   await context.close();
 }

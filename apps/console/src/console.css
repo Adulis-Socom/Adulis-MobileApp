@@ -676,3 +676,27 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .notifications-header { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
 .claim-evidence.readonly ul { padding-inline-start: 1.25rem; }
 .claim-remedy { display: grid; gap: var(--space-2, 0.5rem); max-width: 28rem; }
+
+/* ==========================================================================
+   C-8 -- SC-C1 courier. Mobile-first single column; no sidebar, no seller
+   chrome. The QR block stays pure black-on-white (lib/qr.tsx says why).
+   ========================================================================== */
+
+.courier-screen { max-width: 28rem; margin-inline: auto; padding: var(--space-3, 0.75rem); }
+.courier-header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3, 0.75rem); }
+.courier-orders { list-style: none; padding: 0; margin: 0; }
+.courier-order-row {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+  align-items: baseline;
+  flex-wrap: wrap;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3, 0.75rem);
+  border: 1px solid var(--color-border, #d4cec4);
+  border-radius: var(--radius-2, 8px);
+  margin-block: var(--space-2, 0.5rem);
+  background: transparent;
+  min-height: 44px;
+}
+.courier-qr { max-width: 20rem; margin-block: var(--space-3, 0.75rem); }

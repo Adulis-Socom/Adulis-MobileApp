@@ -10,7 +10,7 @@
  * seller-scoped screen keys on anyway.
  */
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { en } from '@adulis/locale';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,6 +38,13 @@ export function Chooser() {
         />
         <button type="submit">{en['console.chooser.open_button']}</button>
       </form>
+      {/* The courier's way in (C-8): the session carries no roles for the
+          client to gate on (the contract's roles[] rendering hint is the
+          owed refinement, D-228) -- so the link is plain, and a non-courier
+          who follows it meets the EMPTY state that explains itself. */}
+      <p className="courier-link">
+        <Link to="/courier">{en['console.courier.chooser_link']}</Link>
+      </p>
     </main>
   );
 }

@@ -24,10 +24,13 @@
  * proves the key plumbing and the error rendering at once (the C-6 lesson).
  */
 import { test, expect } from '@playwright/test';
-import { SEEDED, signInAs } from './helpers/session';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { SEEDED } from './helpers/session';
+
+const BUYER_STATE = path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth', 'buyer-state.json');
 
 const base = `/s/${SEEDED.sellerId}`;
-const BUYER_PHONE = '+251900000002';
 
 test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
   test('overview renders real counts; full renders the locked entitlement; the fixed window is said', async ({ page }) => {
@@ -201,17 +204,17 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
      * message travel the buyer wire; everything the seller side then does is
      * the console under test.
      */
-    // EXPLICITLY cookie-free: the test runner applies `use` options --
-    // including the SELLER's storageState -- to browser.newContext(), and a
-    // buyer request carrying the seller's session cookie trips the CSRF
-    // origin middleware (a cookie-carrying write with no Origin is 403).
-    const buyerCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    // The buyer session comes from globalSetup's ONE sign-in (the OTP
+    // budget is per phone; a per-spec sign-in spent it -- D-124's class,
+    // rediscovered when the courier arm arrived). The state file also keeps
+    // this context free of the SELLER's cookies, which the runner would
+    // otherwise apply to browser.newContext().
+    const buyerCtx = await browser.newContext({ storageState: BUYER_STATE });
     try {
       // BEFORE anything exists: the EMPTY state teaches the role split.
       await page.goto(`${base}/inbox`);
       await expect(page.getByText(/separate from any buyer-role conversations/)).toBeVisible();
 
-      await signInAs(buyerCtx, { phone: BUYER_PHONE, sellerId: SEEDED.sellerId });
       // A cookie-carrying WRITE must present the console's exact Origin
       // (the CSRF pair's server half) -- the browser does this for the app;
       // an API-context request says it explicitly.

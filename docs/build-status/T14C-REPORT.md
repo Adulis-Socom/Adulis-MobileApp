@@ -1,9 +1,9 @@
 # WORK ORDER T14-C REPORT
 
-**The Rest of the Console.** The install is complete and audited; C-5, C-6 and
-C-7 are built, adversarially passed, remediated, and proven in a browser; C-8
-remains. Every claim that asserts verification names its command. `State of
-main` is a ref.
+**The Rest of the Console.** COMPLETE. The install is audited; C-5, C-6, C-7
+and C-8 are each built, adversarially passed, remediated, and proven in a
+browser -- four stages, four PRs, a pass before every merge. Every claim that
+asserts verification names its command. `State of main` is a ref.
 
 ---
 
@@ -177,6 +177,38 @@ an explicitly cookie-free context writes through the buyer wire (console
 Origin presented); the seller console reads, sees the pin, and replies
 through its own wire, past the key gate.
 
+## S3 -- C-8 (SC-C1, the courier)
+
+**One screen for a different user** (`courier/CourierScreen.tsx`): no shell,
+no seller navigation, its own route tree, mobile single-column. The list IS
+the assignments (row-level security on the per-request actor role); the
+detail carries the buyer's phone and -- ONLY once custody is accepted -- the
+QR, with the server as R25's enforcement: before custody the payload is
+ABSENT FROM THE WIRE, and the e2e asserts that at the wire, not the DOM.
+The D-156 interim QR encoding moved to `lib/qr.tsx` -- SC-C1 renders the
+SAME payload as SC-06, one function, one line to change when the format is
+ruled. The who-scans sentence renders under the code.
+
+**The e2e drives the whole chain for real** (`courier.spec.ts`): the EMPTY
+teach before anything exists, the seller invites the seeded buyer's phone
+(immediate claim, G1.8's one shape), assigns the confirmed order, the
+courier reloads into the row -- order REFERENCE shown -- accepts custody
+(Event A, a real runIdempotent POST), the QR renders, and the post-custody
+wire read asserts the payload's order_ref. The revoke cleanup is asserted,
+leaving the world as found. The buyer identity signs in ONCE per run
+(globalSetup) -- the OTP budget is per phone, and two specs minting their
+own codes rediscovered D-124's class.
+
+**The pass (folded into D-228):** the order reference was missing (two
+orders from one store indistinguishable at a doorway); the screen never
+refetched (an ended assignment lingered as banner-over-stale); expires_at
+rendered as a stale deadline (the reservation clock is stopped for every
+state a courier holds -- removed); no path led to /courier (the Chooser
+links it). All fixed. Parked, API-side: the custody insert's missing unique
+arbiter and state gate, the courier list's uncursored LIMIT 50, the
+degenerate courier-is-the-buyer fixture, and the absent buyer-name/pickup/
+note joins.
+
 ## S5 -- the ten standing rules
 
 None broken across either stage. At C-5, the two bent by the first draft -- keys minted per click
@@ -200,7 +232,7 @@ commits (`pnpm verify:mt-keys` PASS; HUMAN-REQUIRED unchanged at 2).
 
 ## Browser and gates
 
-`pnpm verify:console-e2e`: **50 passed** (C-7's eleven on top of C-5/C-6's) -- C-5's renders and mutation arm
+`pnpm verify:console-e2e`: **51 passed** (all four stages) -- C-5's renders and mutation arm
 (create -> refuse blanks -> variant -> stock -> confirm -> real blocked
 publish, plus the planted 409) and C-6's fifteen (real fulfilment save with
 read-back, real closure round-trip, real courier invite/revoke, real
@@ -213,7 +245,7 @@ re-run). API tests 507/507.
 
 ## Register
 
-D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225, D-226, D-227.
+D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225, D-226, D-227, D-228.
 
 ## Parked -- long by design
 
@@ -239,10 +271,14 @@ D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225, D-226, D-227.
   from the seller, leaked to the buyer feed); a chatbot-entitled seed for
   BOT-render e2e; a poll-pause harness technique; Home's obligation
   surfacing (claims) with the daily brief.
-- **C-8: not started.** Its traps are in the order, unconsumed.
+- C-8's API-side debts (D-228): the custody-transfer unique arbiter and a
+  state gate on Event A; a cursor on the courier list; the buyer-name/
+  pickup/handoff-note joins on the courier read; a third seeded account so
+  the courier-buyer fixture stops being degenerate; a roles[] read so the
+  courier link can gate.
 
 ## State of main
 
-`main` = **ece194a** (T13 + T14 A/B + C-5 + C-6, all merged, 25 gates
-green). C-7 rides `tier14c/c7-insights-inbox`, pass remediated, 50/50 e2e
-and 25/25 gates on the branch.
+`main` = **20eda5e** at C-8's branch point (everything through C-7 merged,
+25 gates green). C-8 rides `tier14c/c8-courier` -- pass remediated, 51/51
+e2e and 25/25 gates on the branch -- and merges as the order's last stage.

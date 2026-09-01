@@ -802,6 +802,22 @@ export const en = {
   'console.insights.reviews.badge_unverified': 'Unverified',
   'console.inbox.thread.load_earlier': 'Load earlier messages',
   'console.more.claims': 'Claims',
+  'console.courier.heading': 'Your deliveries',
+  'console.courier.empty_heading': 'No assigned orders',
+  'console.courier.empty_body': 'Orders a seller assigns to you appear here. When an assignment ends, so does your access to its order.',
+  'console.courier.back': 'Back to your deliveries',
+  'console.courier.buyer_phone': 'Buyer phone:',
+  'console.courier.details_owed': 'The buyer name, the pickup point and the collection note are not reported to couriers yet; call the number above to arrange the handoff.',
+  'console.courier.qr_after_custody': 'The handoff code appears after you accept custody - it does not exist until the goods are with you.',
+  'console.courier.accept_custody': 'Accept custody',
+  'console.courier.buyer_scans': 'The BUYER scans this at the doorway. It is not for you to scan.',
+  'console.courier.qr_not_ready': 'The handoff code is not available for this order yet.',
+  'console.courier.state.awaiting_pickup': 'Awaiting pickup',
+  'console.courier.state.handed_off': 'Handed off',
+  'console.courier.state.completed': 'Completed',
+  'console.courier.order_ref': 'Order',
+  'console.courier.state.not_ready': 'Not ready for pickup',
+  'console.courier.chooser_link': 'Deliveries assigned to you',
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */
