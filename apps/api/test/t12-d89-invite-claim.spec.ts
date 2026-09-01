@@ -83,9 +83,19 @@ describe('D-89 -- the courier invite claim, second leg', () => {
   beforeAll(async () => {
     if (!ADMIN) throw new Error('DATABASE_URL_MIGRATE is not set.');
     admin = new Pool({ connectionString: ADMIN, max: 2 });
+  });
+
+  // Per TEST, not per suite: P_INVITED signs in four times across this file
+  // (claim, idempotence, revocation-durability, oracle) and the OTP budget
+  // is 3/hour/phone -- the fourth request 429s on a per-suite purge. The
+  // budget itself is under test nowhere here; c6 owns that.
+  beforeEach(async () => {
     await admin.query(
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key IN ('otp-request','otp-request-ip')`,
     );
+  });
+
+  beforeAll(async () => {
       /*
        * NOT LIVE, deliberately. Bootstrap binds a browser DEVICE to the
        * oldest LIVE market, and an account created at sign-in takes the
@@ -218,7 +228,18 @@ describe('D-89 -- the courier invite claim, second leg', () => {
     expect(rel.rows.map((x) => x.seller_id).sort()).toEqual([SELLER_A, SELLER_B].sort());
   });
 
-  test('idempotent: a second sign-in changes nothing and errors nothing', async () => {
+  test('idempotent: a second sign-in changes nothing -- INCLUDING the claim stamps', async () => {
+    // The stamps BEFORE the second sign-in. The adversarial pass on #44
+    // proved the first version of this test survived deleting the
+    // `claimed_at IS NULL` guard: a re-claim rewrote claimed_at invisibly,
+    // and a count-only assertion cannot see a rewrite. Stamp stability is
+    // the actual idempotence claim.
+    const before = await admin.query(
+      `SELECT seller_id, claimed_at FROM core.seller_courier_invite
+        WHERE phone = $1 ORDER BY seller_id`,
+      [P_INVITED],
+    );
+
     const r = await signIn(P_INVITED);
     expect(r.status).toBe(200);
     const rel = await admin.query(
@@ -228,6 +249,43 @@ describe('D-89 -- the courier invite claim, second leg', () => {
       [P_INVITED],
     );
     expect(rel.rows[0].n).toBe(2);
+
+    const after = await admin.query(
+      `SELECT seller_id, claimed_at FROM core.seller_courier_invite
+        WHERE phone = $1 ORDER BY seller_id`,
+      [P_INVITED],
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  test('a revoked RELATIONSHIP is not resurrected by the next sign-in', async () => {
+    /*
+     * The other thing the claimed_at guard is load-bearing for (same pass
+     * finding): with the guard gone, an already-claimed invite re-claims on
+     * every sign-in and its re-INSERT sails past the partial unique (a
+     * revoked relationship vacates the (seller, account) slot) -- a seller
+     * who revoked a courier finds them alive again after the courier's next
+     * sign-in. Revocation must be durable against sign-ins.
+     */
+    const account = await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [
+      P_INVITED,
+    ]);
+    await admin.query(
+      `UPDATE core.seller_courier SET revoked_at = now()
+        WHERE seller_id = $1 AND account_id = $2`,
+      [SELLER_A, account.rows[0].id],
+    );
+
+    const r = await signIn(P_INVITED);
+    expect(r.status).toBe(200);
+
+    const live = await admin.query(
+      `SELECT seller_id FROM core.seller_courier
+        WHERE account_id = $1 AND revoked_at IS NULL ORDER BY seller_id`,
+      [account.rows[0].id],
+    );
+    // SELLER_B's relationship stands; SELLER_A's stays revoked.
+    expect(live.rows.map((x) => x.seller_id)).toEqual([SELLER_B].sort());
   });
 
   test('a revoked invite is never claimed', async () => {
@@ -247,24 +305,52 @@ describe('D-89 -- the courier invite claim, second leg', () => {
     expect(rel.rows[0].n).toBe(0);
   });
 
-  test('NO ORACLE: the invited and uninvited sign-ins are indistinguishable to the caller', async () => {
-    // P_INVITED's and P_REVOKED's sign-ins already ran above; this compares a
-    // FRESH uninvited phone against the invited one on the axes a caller can
-    // observe: status, and the response body's KEY SET and non-variable
-    // values. (Ids, timestamps and tokens differ per sign-in by nature; what
-    // must not differ is anything an attacker could key on.)
+  test('NO ORACLE in the non-role fields -- and the ONE designed difference asserted by name', async () => {
+    /*
+     * The adversarial pass on #44 proved the first version of this test
+     * vacuous where it mattered: it compared key names and typeof, and the
+     * live oracle is a VALUE -- `roles`, computed after the claim, answers
+     * ["COURIER"] for an invited phone and [] for a plain one. Same key,
+     * same typeof, invisible to a shape check certifying "indistinguishable".
+     *
+     * The RULING this test now pins (D-178, for v2.6 to confirm): every
+     * non-role field is identical BY VALUE (modulo per-sign-in variables:
+     * token, accountId, expiresAt, deviceCookieToken -- each different on
+     * every sign-in by nature), and the roles difference is DESIGNED
+     * disclosure to the authenticated holder of the phone -- roles is "a
+     * rendering hint only" (S5) and the courier's own console needs it.
+     * Asserting it explicitly means it can never widen unexamined: a new
+     * distinguishable field fails this test by name.
+     */
     const plain = await signIn(P_PLAIN);
     expect(plain.status).toBe(200);
 
-    const invited = await signIn(P_INVITED); // third time; still pending-free
+    const invited = await signIn(P_INVITED); // still pending-free by now
     expect(invited.status).toBe(200);
 
-    const shape = (b: Record<string, unknown>) =>
-      Object.keys(b)
-        .sort()
-        .map((k) => `${k}:${typeof b[k]}`);
-    expect(shape(plain.body as Record<string, unknown>)).toEqual(
-      shape(invited.body as Record<string, unknown>),
+    // Wire names are snake_case (the response serializer); both spellings
+    // listed so a serializer change cannot silently re-admit a variable
+    // field into the value comparison.
+    const VARIABLE = new Set([
+      'token',
+      'accountId', 'account_id',
+      'expiresAt', 'expires_at',
+      'deviceCookieToken', 'device_cookie_token',
+      'roles',
+    ]);
+    const fixedFields = (b: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(b).filter(([k]) => !VARIABLE.has(k)));
+
+    // Key sets identical (no invited-only field can appear at all)...
+    expect(Object.keys(invited.body as object).sort()).toEqual(
+      Object.keys(plain.body as object).sort(),
     );
+    // ...non-variable fields identical BY VALUE...
+    expect(fixedFields(invited.body as Record<string, unknown>)).toEqual(
+      fixedFields(plain.body as Record<string, unknown>),
+    );
+    // ...and the designed difference, by name: the courier role, and only it.
+    expect((plain.body as { roles: string[] }).roles).toEqual([]);
+    expect((invited.body as { roles: string[] }).roles).toEqual(['COURIER']);
   });
 });

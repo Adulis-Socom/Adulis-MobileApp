@@ -16,9 +16,13 @@ execution and is stated first.
 
 ```
 Phase 0  #41 #42 merged: YES (both fast-forward -- each branch already
-         carried main). deleted lines, register and gates.mjs: 0 and 0,
-         verified against the pre-merge ref (git diff 3e142ca).
-         pnpm ci:local on merged main: PASS all 24 gates.
+         carried main). deleted lines (git diff 3e142ca 92933a1 --numstat):
+         register 274/0; gates.mjs 33/1 -- the one deletion is the GATES
+         array's closing `];` rewritten when console-e2e appended after it.
+         No gate entry was removed (git diff 3e142ca -- ops/scripts/gates.mjs
+         shows zero deleted `{ id:` lines); the first draft of this line said
+         "0 and 0", which its own instrument refutes -- corrected by the #44
+         adversarial pass. pnpm ci:local on merged main: PASS all 24 gates.
 
 Phase 1  release derives from stock_event:
            migration 0042 (fn_release_reservation_stock; fn_cancel_line and
@@ -83,22 +87,29 @@ Phase 5  AGE_DECLARATION_REQUIRED returned and rendered:
            db:reset clears buckets per gate run, so D-124 cannot accumulate).
            The control shows for a phone that HAS an account -- the console
            must not know which case it is in (S17).
-         courier claim idempotent, phone-matched, response identical:
-           pnpm --filter @adulis/api test -- t12-d89  -> 4 passed
+         courier claim idempotent, phone-matched, oracle pinned by VALUE:
+           pnpm --filter @adulis/api test -- t12-d89  -> 5 passed
            (claim-ALL atomically -- two sellers, one phone, two relationships
-           in the sign-in's own transaction; second sign-in changes nothing;
-           revoked invite untouched; and the ORACLE test: invited and
-           uninvited sign-ins identical in status and response shape).
-           One WITH ... RETURNING ... INSERT ... ON CONFLICT DO NOTHING
+           in the sign-in's own transaction; second sign-in changes nothing
+           INCLUDING the claim stamps; revoked invite untouched; a revoked
+           RELATIONSHIP not resurrected by the next sign-in; and the oracle
+           test comparing non-role fields BY VALUE with the roles difference
+           asserted by name -- see the #44 pass record below for the ruling).
+           Advisory locks per pending (seller, phone) -- the invite
+           endpoint's own lock, same key, seller_id order -- then one
+           WITH ... RETURNING ... INSERT ... ON CONFLICT DO NOTHING
            statement in verifySignIn, both account branches.
 
 Gates    24 gates: pnpm ci:local -> PASS all 24 (on main post-#43, and on
-           the Phase 5 branch)
-         API tests: pnpm --filter @adulis/api test -> 472 passed, 39 suites
+           the Phase 5 branch post-pass)
+         API tests: pnpm --filter @adulis/api test -> 473 passed, 40 suites
+           (re-measured after the #44 pass fixes; the first draft said
+           "472, 39" from a pre-merge tree -- its instrument disagreed)
          e2e: NODE_ENV=test pnpm verify:console-e2e -> 21 passed, identity
            verified (build id + boot marker + derived CSP)
          db:check: pnpm db:check -> PASS (sixteen checks)
-         db:determinism -> PASS (11305 lines compared)
+         db:determinism -> PASS (11326 lines compared; re-measured on the
+           branch carrying 0042 -- the draft's 11305 predated the merge)
 
 Register 5 new -- D-175 (Phase 1, ruled+discharged, carries the pass record),
          D-176 (MISSING_SOURCE, the BLOCKER for 2-4), D-177 (D-101 settled),
@@ -118,9 +129,37 @@ Parked   ADU-AUTH-01 v2.6's arrival unblocks Phases 2-4 (needs: the document)
            not urgent (the API suite runs in-process against a database it
            provisions).
 
-State of main: 05c7649 (PR #43 merged) -- unmerged: the Phase 5 PR
-         (tier12/t12-p5-auth-findings: D-177/D-178/D-179 + D-176's record),
-         adversarial pass pending before its merge.
+ADVERSARIAL PASS ON #44 (26 agents): 12 findings, 10 upheld, 2 refuted.
+         All addressed pre-merge:
+           BLOCKER (x2, converging): the NO-ORACLE claim and its test --
+             `roles` in the verify response IS a value-level difference
+             (invited -> ["COURIER"]) that a shape-only comparison certified
+             as "indistinguishable". RULED (D-178, for v2.6 to confirm):
+             non-role fields identical BY VALUE; roles is designed
+             disclosure to the authenticated holder of the phone (it is "a
+             rendering hint only", S5, and the courier's console needs it).
+             The test now compares values and asserts the roles difference
+             BY NAME, so it can never widen unexamined; the overclaiming
+             comment is corrected.
+           MAJOR (x2, converging): the claim bypassed the per-(seller,phone)
+             advisory lock the invite endpoint takes for exactly this
+             interleaving -- a claim racing a re-invite minted two live
+             CLAIMED invites (the phantom-courier anomaly the endpoint's own
+             comment documents). The claim now takes the identical
+             pg_advisory_xact_lock per pending pair, in seller_id order.
+           MAJOR: the idempotence test survived deleting the claimed_at
+             guard (mutation-style finding). It now pins stamp stability,
+             and a new test pins that a REVOKED relationship is not
+             resurrected by the next sign-in -- the guard's other job.
+           MINOR x4: the e2e label asserted visibility while claiming
+             wording (now toHaveText against the catalogue string); and
+             three of this report's own counts failed their instruments --
+             corrected above, marked.
+           Refuted x2: the am.ts English string (the declared, recorded
+             C-3+ treatment, D-177).
+
+State of main: 05c7649 + this PR (#44) on merge -- nothing else unmerged.
+         Phases 2-4 remain MISSING_SOURCE until ADU-AUTH-01 v2.6 arrives.
 ```
 
 ## The sentence worth keeping

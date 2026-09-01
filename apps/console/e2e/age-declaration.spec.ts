@@ -24,6 +24,7 @@
  * so two requests per run cannot accumulate into D-124's 429.
  */
 import { test, expect } from '@playwright/test';
+import { en } from '@adulis/locale';
 import { SEEDED } from './helpers/session';
 
 const BUYER_PHONE = '+251900000002';
@@ -68,9 +69,13 @@ test.describe('D-101 -- the age declaration control', () => {
       'a ticked declaration travelled through "change number" to the next code step (D-119)',
     ).not.toBeChecked();
 
-    // And the label is the HUMAN-REQUIRED attestation string, present in
-    // full -- not a paraphrase (its wording is load-bearing, MT-KEYS).
-    await expect(page.locator('label[for="signin-age"]')).toBeVisible();
+    // And the label IS the HUMAN-REQUIRED attestation string, verbatim from
+    // the catalogue -- not a paraphrase (its wording is load-bearing,
+    // MT-KEYS). The pass on #44 caught the first version asserting only
+    // visibility while the comment claimed the wording.
+    await expect(page.locator('label[for="signin-age"]')).toHaveText(
+      en['console.signin.age_declaration'],
+    );
     void SEEDED; // imported to anchor this file to the one place ids live
   });
 });

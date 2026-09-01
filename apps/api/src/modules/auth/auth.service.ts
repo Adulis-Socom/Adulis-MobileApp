@@ -141,17 +141,48 @@ export class AuthService {
      * finds no pending invites; an already-live relationship is DO NOTHING
      * under the seller_courier_live partial unique).
      *
-     * NO ORACLE: nothing about this write reaches the response, and nothing
-     * in it can throw for a claimable phone -- so a sign-in with a pending
-     * invite is byte-identical, to the caller, to one without. THE RESPONSE
-     * IS IDENTICAL; THE EFFECT IS NOT. Both branches run it: an invite may
-     * predate the account or arrive years after it.
+     * NO ORACLE, stated precisely (the adversarial pass on #44 caught the
+     * first version of this comment overclaiming): every NON-ROLE response
+     * field is identical for invited and uninvited phones, and nothing in
+     * this write can throw for a claimable phone. `roles` DOES reflect the
+     * claim -- an invited phone's verify answers roles:["COURIER"] -- and
+     * that is DISCLOSURE TO THE AUTHENTICATED HOLDER OF THE PHONE, not an
+     * oracle: the observer holds a valid OTP for this exact number, roles is
+     * "a rendering hint only" (S5) delivered so the courier's own console
+     * can route them, and the pre-auth surfaces S17/S19/S22 protect are
+     * untouched. The t12-d89 oracle test pins BOTH halves: non-role fields
+     * compared BY VALUE, and the roles difference asserted explicitly so it
+     * can never widen unexamined. Recorded in D-178 for ADU-AUTH-01 v2.6 to
+     * confirm or supersede. Both branches run it: an invite may predate the
+     * account or arrive years after it.
      *
      * The phone comparison is core.e164 against core.e164 -- both sides are
      * already normalized at their boundaries, which is what "that exact
      * normalized phone" requires (0029's index anticipates precisely this
      * lookup: seller_courier_invite_phone WHERE pending).
      */
+    /*
+     * SERIALIZE PER (seller, phone) FIRST -- the same pg_advisory_xact_lock
+     * the invite endpoint takes (couriers.controller.ts), for the same
+     * hazard it documents: the claim stamps the invite, which removes it
+     * from the seller_courier_invite_live partial index, so a CONCURRENT
+     * re-invite's ON CONFLICT recheck finds nothing to conflict with and
+     * inserts a fresh pending row -- two live CLAIMED invites for one
+     * (seller, phone), a phantom courier in the list forever. The
+     * adversarial pass on #44 found this unlocked writer racing the locked
+     * one (two lenses, independently). Locks are taken in seller_id order,
+     * so two concurrent claimers of the same phone acquire in the same
+     * sequence and cannot deadlock; the invite endpoint takes a single
+     * lock and orders with nobody.
+     */
+    await sql`
+      SELECT pg_advisory_xact_lock(
+               hashtextextended(p.seller_id::text || ':' || ${body.phone}, 7))
+        FROM (SELECT i.seller_id
+                FROM core.seller_courier_invite i
+               WHERE i.phone = ${body.phone}
+                 AND i.claimed_at IS NULL AND i.revoked_at IS NULL
+               ORDER BY i.seller_id) p`.execute(trx);
     await sql`
       WITH claimed AS (
         UPDATE core.seller_courier_invite i
