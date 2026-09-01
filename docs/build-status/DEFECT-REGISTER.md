@@ -2053,3 +2053,31 @@ Action:    Both documents in docs/, ASCII-verified (0 non-ASCII bytes each). GOV
            v1.14's body is v1.13's, spliced rather than retyped: the document says at the end of every history block that all else is carried forward unaltered, and retyping 2,400 lines carries transcription risk with no upside. The splice asserts every boundary it uses and was verified lossless -- no non-history heading lost, none duplicated, the fourteen history sections renumbered 0.1..0.14.
            `pnpm verify:permission-doc` -> PASS, 252 cells both directions, ACROSS the installation. That is v2.6 S0's own test that the split was recorded correctly, and it is why the gate is cited here rather than the reading of it.
 Ruling needed: none.
+### D-190 - ADU-DB-01 v1.14 Appendix B says "Reproducing 114 names" three lines under its own "116 tables"
+
+Severity:  MINOR (an internal inconsistency in the source document; the installed copy deviates from it by ONE WORD, deliberately)
+Phase:     T13 - 2
+Source:    ADU-DB-01 v1.14 Appendix B, final paragraph
+Found by:  T13 Phase 2 adversarial pass, comparing the installed document against the founder's attachment as sent
+Effect:    Appendix B opens "**116 tables.** Two are new in migration 0043" and closes "Reproducing **114** names here would be a fourth copy of a fact that has already drifted three times." 114 is v1.13's count. The sentence was carried forward and the headline updated; the number inside the sentence was not.
+           **The installed copy reads 116.** That is the count `verify:appendix` derives from `pg_class` and asserts, and it is the number the same section states two lines above -- but it is a deviation from the attachment, made by me, and the register is where that gets said rather than absorbed.
+           The irony is the sentence's own subject: it is the paragraph explaining why the enumeration is not reproduced, because a hand-maintained count "has already drifted three times". It drifted a fourth time, in the sentence saying so.
+Response:  DEVIATED FROM SOURCE, DELIBERATELY. Founder ruling invited.
+Action:    Installed as 116. Reverting to 114 would put a knowingly-false number in a binding document three lines under the true one; the alternative -- installing it wrong and registering it -- was rejected for that reason. **If the founder prefers strict transcription, the one-word revert is trivial and this entry is the record of what was changed.**
+           Everything else in the document is the attachment: **exactly one word differs across 3,063 lines**, proven mechanically rather than read (see D-191's method note).
+Ruling needed: **CONFIRM 116, or instruct strict transcription of 114.**
+
+### D-191 - the v1.14 splice duplicated a clause in the closing paragraph, and the check that should have caught it was pointed at the wrong document
+
+Severity:  MAJOR (a defect in a binding document, shipped by a verification that could not have detected it)
+Phase:     T13 - 2
+Source:    the assembly script for ADU-DB-01 v1.14; docs/build-status/T13-REPORT.md
+Found by:  T13 Phase 2 adversarial pass
+Effect:    v1.14's body was assembled by splicing v1.13's rather than retyping it. The closing paragraph was rebuilt the same way: the script prepended "From v1.13: the revision that stops writing its own appendices." to v1.13's carried closing -- **which already began with that clause.** The installed document said it twice.
+           **The verification is the real finding.** I verified the splice against v1.13: no heading lost, none duplicated, history renumbered. It passed, and it PROVED THE SPLICE WAS MADE OF v1.13 -- which was never in doubt. **The document the splice was supposed to reproduce is the founder's attachment, and I never compared against it.** The check ran, and the check could not fail for the reason the check existed.
+           That is D-132's class exactly (D-152, D-160, D-161, D-168, D-175), and it is the second time in two phases that the defect landed in my own verification rather than in the product.
+Response:  FIXED, and the check replaced with the one that discriminates.
+Action:    The closing is now the attachment's, word-for-word: taken from the founder's text, de-fragmented by a transform that deletes only emphasis markers and never letters, asserted word-identical to the source before writing.
+           **The whole document is now diffed against the attachment**, normalising only table-cell padding, emphasis-marker placement and markdown backslash escapes -- all artifacts of the founder's export, all of which the repository's rendering already corrects. Result: 2,027 canonical lines, 48 differences proven to be cell boundaries alone (same words, same order, unsplit header rows), and **exactly one differing word in the entire document: D-190's 114/116.**
+           ADU-AUTH-01 v2.6 was checked the same way and is **byte-identical** to its attachment.
+Ruling needed: none. Worth carrying: **when a document is assembled rather than transcribed, the reference for its verification is the source it claims to reproduce, never the material it was built from.** Building it out of X guarantees it matches X.
