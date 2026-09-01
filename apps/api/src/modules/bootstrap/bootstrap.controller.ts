@@ -98,7 +98,11 @@ export class BootstrapController {
                  WHERE tc2.effective @> now())
              ))::bigint::text AS device_ttl_seconds
         FROM core.market m
-       ORDER BY m.is_live DESC, m.created_at ASC
+        -- ACTIVE markets only, oldest first (D-183: is_live withdrawn; every
+        -- market resolution reads activation_state = 'ACTIVE'). No ACTIVE
+        -- market means an unprovisioned deployment, and the 503 below says so.
+       WHERE m.activation_state = 'ACTIVE'
+       ORDER BY m.created_at ASC
        LIMIT 1`.execute(this.db);
 
     const market = r.rows[0];

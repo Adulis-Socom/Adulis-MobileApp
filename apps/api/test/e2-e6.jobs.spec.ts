@@ -83,9 +83,9 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
     admin = new Pool({ connectionString: ADMIN, max: 2 });
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-         display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider) VALUES
-        ($1,'E2T','Addis','PHASE_1','ETB','Africa/Addis_Ababa','en',false, 'ACTIVE', true, 'AFROMESSAGE'),
-        ($2,'E2U','Utc','PHASE_1','ETB','UTC','en',false, 'ACTIVE', true, 'AFROMESSAGE')`,
+         display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider) VALUES
+        ($1,'E2T','Addis','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE'),
+        ($2,'E2U','Utc','PHASE_1','ETB','UTC','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [M, M_UTC],
     );
     for (const market of [M, M_UTC]) {

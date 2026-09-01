@@ -2389,3 +2389,15 @@ Effect:    Two constructible misses, both in the gate I built to close "the migr
 Response:  FIXED where a fix is sound, and made HONEST where it is not.
 Action:    Providers are now PARSED from S6.1's router config (the UPPER_SNAKE values after Primary =/Fallback =), compared both ways -- proven red by promoting a router provider the DB lacks. core.otp_delivery_attempt is now bidirectional, because the table IS exactly S12.1's field set. core.market STAYS document->database and the header SAYS SO: S9.1 is "configuration similar to", a subset of the market table, so an extra market column is not a drift. The "five blocks / both ways" header is corrected to state directionality per check.
 Ruling needed: none. Worth carrying: a gate's header is a claim like any other, and "both ways" is false the moment one direction is a filter that only runs one way.
+### D-215 - RESOLVED (ADU-RUL-06, D-183): is_live is withdrawn; every market resolution reads activation_state = 'ACTIVE'
+
+Severity:  (implements a founder ruling; the underlying overlap was D-104/D-183's)
+Phase:     T14 - A5
+Source:    ADU-RUL-06 v1.0 (D-183 ruling); WORK ORDER T14 S5; migration 0046
+Found by:  D-183, ruled by the founder
+Effect:    is_live and activation_state were two truths about one market, and is_live was the one deciding which market a new account joins (D-104's territory, which v2.6 never mentions). One boolean cannot express SUSPENDED -- no new entry, existing trade continues -- and activation_state can.
+Response:  BUILT. migration 0046 drops core.market.is_live and moves the 12.2.1 guard onto activation_state.
+Action:    fn_guard_market_live now fires on the transition INTO activation_state = 'ACTIVE' (was: setting is_live), same invariant, same ERRCODE, and check 13 confirms it stays attached. The two D-116 readers move to `WHERE activation_state = 'ACTIVE' ORDER BY created_at ASC`: /v1/bootstrap and orders.service's cart resolver. The seed stops writing is_live; ~35 test fixtures had it removed (30 by a shape-A sweep, 5 hand-fixed where the column sat mid-list or the value aligned to created_at).
+           THE STRUCTURAL TEST IS EXTENDED as the order required: beside the existing assertion that the AUTH path reads no market, a new arm pins that the two readers read `activation_state = 'ACTIVE'` and never is_live. Its own filter now strips SQL line-comments too, because a `-- is_live withdrawn` note in a reader would otherwise trip it.
+           `db:determinism` converges (11,625 lines), Appendix A/pg_type unchanged (dropping a column changes no type or table count), 507 API tests green from a clean reset.
+Ruling needed: none. Built to the ruling. SUSPENDED now means what it should: no new OTP and no new device assigned there (the issuance gate, D-207's neighbour), while every account already in the market is unaffected.

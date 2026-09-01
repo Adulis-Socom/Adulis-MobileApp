@@ -41,8 +41,8 @@ describe('T7 Phase 3 -- deferral is a state the schema holds, and every consumer
     admin = new Pool({ connectionString: ADMIN, max: 1 });
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'T7N','Nullable','PHASE_1','ETB','Africa/Addis_Ababa','en',false, 'ACTIVE', true, 'AFROMESSAGE')`,
+                                display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider)
+       VALUES ($1,'T7N','Nullable','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [M],
     );
     await admin.query(
