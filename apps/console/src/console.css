@@ -549,3 +549,81 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 
 /* success -- a satisfied readiness item, already keyed on .done */
 .readiness-item.done .readiness-status { color: var(--adu-color-success); }
+
+/* ==========================================================================
+   C-6 -- groups F and G (SC-17..19, 22..29). Layout only: the state visual
+   language above already carries every colour these screens use. Content
+   sizes containers; nothing translated gets a fixed height.
+   ========================================================================== */
+
+.more-menu .more-group { margin-block: var(--space-4, 1rem); }
+.more-menu ul { list-style: none; padding: 0; margin: 0; }
+.more-menu li { padding-block: var(--space-2, 0.5rem); }
+
+.sidenav-more { margin-top: var(--space-4, 1rem); }
+.sidenav-more h3 {
+  font-size: var(--text-sm, 0.875rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-block: var(--space-2, 0.5rem) 0;
+}
+.sidenav-more ul { list-style: none; padding: 0; margin: 0; }
+/* The bottom bar keeps plain More; the expanded groups are desktop only. */
+@media (max-width: 1023px) {
+  .sidenav-more { display: none; }
+}
+
+.form-block { display: grid; gap: var(--space-2, 0.5rem); max-width: 28rem; }
+.form-block label { font-weight: 600; }
+
+.fulfilment-method { margin-block: var(--space-3, 0.75rem); }
+.fulfilment-method .note-label { display: block; margin-top: var(--space-2, 0.5rem); }
+.fulfilment-method textarea { width: 100%; max-width: 28rem; }
+
+.weekday-row { margin-block: var(--space-3, 0.75rem); }
+.window-row { display: flex; gap: var(--space-2, 0.5rem); align-items: center; flex-wrap: wrap; }
+.override-list { list-style: none; padding: 0; }
+.override-list li {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+  align-items: baseline;
+  padding-block: var(--space-2, 0.5rem);
+  flex-wrap: wrap;
+}
+.override-note { opacity: 0.8; }
+
+.storefront-preview .preview-card {
+  border: 1px solid var(--color-border, #d4cec4);
+  border-radius: var(--radius-2, 8px);
+  padding: var(--space-3, 0.75rem);
+  max-width: 28rem;
+}
+
+.courier-list, .team-list, .session-list ul { list-style: none; padding: 0; margin: 0; }
+.courier-row, .team-row, .session-row {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding-block: var(--space-2, 0.5rem);
+  border-bottom: 1px solid var(--color-border, #d4cec4);
+}
+.confirm-remove { display: inline-flex; gap: var(--space-2, 0.5rem); align-items: baseline; flex-wrap: wrap; }
+
+.payout-actions { display: flex; gap: var(--space-3, 0.75rem); flex-wrap: wrap; margin-block: var(--space-3, 0.75rem); }
+.payout-facts ul { padding-inline-start: 1.25rem; }
+
+.pref-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2, 0.5rem);
+  align-items: start;
+  padding-block: var(--space-3, 0.75rem);
+  border-bottom: 1px solid var(--color-border, #d4cec4);
+}
+.pref-row .pref-covers { display: block; font-size: var(--text-sm, 0.875rem); opacity: 0.8; }
+.pref-row .hint, .pref-row .warn { grid-column: 1 / -1; }
+.pref-row.locked { opacity: 0.9; }
+
+.table-scroll { overflow-x: auto; }

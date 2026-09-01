@@ -1,10 +1,10 @@
 # WORK ORDER T14-C REPORT
 
-**The Rest of the Console.** The install is complete and audited; C-5 is built,
-adversarially passed, remediated, and proven in a browser; C-6, C-7 and C-8 were
-not started, deliberately -- a half-finished stage is worse than one not started,
-and the order says so. Every claim that asserts verification names its command.
-`State of main` is a ref.
+**The Rest of the Console.** The install is complete and audited; C-5 and C-6
+are built, adversarially passed, remediated, and proven in a browser; C-7 and
+C-8 were not started, deliberately -- a half-finished stage is worse than one
+not started, and the order says so. Every claim that asserts verification names
+its command. `State of main` is a ref.
 
 ---
 
@@ -83,9 +83,61 @@ sentences; the distinguishing fact is `slots.item`, SC-01's own vocabulary, so
 `ITEM_LABEL` moved to `lib/readiness.ts` (one mapping, no stale copy) and
 blockers render as readiness labels.
 
+## S3 -- C-6 (groups F and G)
+
+**Screens:** SC-17..19, SC-22, SC-23 (`features/store/`); SC-24..SC-29
+(`features/admin/`); the More menu and the desktop sidebar's expanded groups
+(S2.1/S2.3 -- names followed over the table's stale v1.0 numbers, D-224.11).
+271 locale keys; am at placeholder parity; MT-KEYS' true count 594 after
+D-223 exposed the generator's single-quote blindness (64 merged C-5 keys had
+been invisible to the translation work list with the gate equally blind).
+
+**The traps, each drawn by a browser** (`pnpm verify:console-e2e`, 42/42):
+
+```
+StepUpModal opens on the guard and RETRIES once      payout change: real modal, real dev-SMS code,
+                                                       verify, retry -> the seed's deterministic 24h
+                                                       NEW-DEVICE lock renders as a message
+                                                     team invite: same pipeline -> real 409
+                                                       TIER_LIMIT_REACHED past the key gate
+R21  cancel ABSENT with no pending row (real)        both peers render beside a planted pending row
+R27  weekly pattern / closure DATES, separate        duplicate date refused; sub-hour window refused
+                                                       in words (was a permanent retryable 500, D-225)
+R22  locked category OUTSIDE the group, reasoned     payments toggles off FOR REAL, consequence at the
+                                                       moment of choice, reload reads the row back
+R24  as-of + no-auto-refresh                         Re-check REMOVED: the wire cannot re-fetch
+                                                       (already:true short-circuit) -- owed, not faked
+R26  representative-as-a-person                      on SC-17 and SC-22, asserted
+G1.1 NO identity-check control                       the endpoint is operator-only; region asserted empty
+G1.3 blockers as messages, closure survives          seed's real obligations; close -> reopen driven
+G1.6 transfer to an ACTIVE ADMIN MEMBERSHIP id       residual_role reachable; items[] blockers render
+```
+
+**Built against absence, named on screen (D-224, thirteen items):** profile
+and weekly availability are WRITE-ONLY by the API's own shape; social
+accounts unlistable (follower count exists once, in the verify response);
+courier rows carry no name/assignments/activity/account_id; remembered
+devices unlistable apart; the payout lock is discovered on the attempt; five
+notification categories have no sender; team has no pending state; SC-22's
+KYC prose and SC-25's "no product rules" note are stale against G1.1/G1.6
+(later founder documents govern); S2.3's numbering; the closures upsert.
+
+**The pass (D-225).** Two agents, single-writer held. Five BLOCKERs -- three
+mutations that could NEVER succeed (no Idempotency-Key on team, transfer,
+deletion -- a seller spent a real step-up SMS and 400'd every time), a
+sub-hour window rendered as a permanent retryable 500 (the database's
+one-hour floor transcribed nowhere), Re-check erasing the count it promised
+to refresh -- plus the error-path family: refetch failures silent on five
+screens and form-destroying on two, request ids absent from TRANSPORT_ERROR,
+items[] dropped, reason-less 409 sentences, pagination caps silent, a failed
+fetch rendering the success-empty state, deletion success rendering nothing.
+ALL FIXED in-phase; the e2e gained seven arms including the two that prove
+the key fixes against the real server. The C-5 lesson held its shape: the
+three broken mutations were exactly the three the e2e had left undriven.
+
 ## S5 -- the ten standing rules
 
-None broken. The two that were bent by the first draft -- keys minted per click
+None broken across either stage. At C-5, the two bent by the first draft -- keys minted per click
 (the mount rule), and NO_PERMISSION rendering chrome -- were pass findings,
 fixed before merge, recorded in D-221.
 
@@ -106,16 +158,20 @@ commits (`pnpm verify:mt-keys` PASS; HUMAN-REQUIRED unchanged at 2).
 
 ## Browser and gates
 
-`pnpm verify:console-e2e`: **26 passed** -- renders of SC-07/08/11 plus the
-mutation arm (create -> refuse blanks -> variant -> stock -> confirm -> real
-blocked publish) and the planted 409. Nothing is described as verified that a
-browser did not draw. `pnpm ci:local`: **PASS all 25 gates** (one `test`-gate
-flake mid-run matched D-217's signature and protocol: green in isolation, green
-at --maxWorkers=2, green on re-run). API tests 507/507.
+`pnpm verify:console-e2e`: **42 passed** -- C-5's renders and mutation arm
+(create -> refuse blanks -> variant -> stock -> confirm -> real blocked
+publish, plus the planted 409) and C-6's fifteen (real fulfilment save with
+read-back, real closure round-trip, real courier invite/revoke, real
+notification PATCH with read-back, the full step-up pipeline twice, the
+one-hour refusal, the 503 degradation with request id, and the planted R21 /
+seats halves). Nothing is described as verified that a browser did not draw.
+`pnpm ci:local`: **PASS all 25 gates** (one `test`-gate flake matched D-217's
+signature and protocol: green in isolation, green at --maxWorkers=2, green on
+re-run). API tests 507/507.
 
 ## Register
 
-D-218 (amended), D-219, D-220, D-221, D-222.
+D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225.
 
 ## Parked -- long by design
 
@@ -130,10 +186,14 @@ D-218 (amended), D-219, D-220, D-221, D-222.
 - v1.15 S0's "109 tables" line; ADU-API-01's two idempotency markers -- both
   the founder's, at the next reissue of each.
 - D-208 / D-216.4 service halves (backend, out of scope, D-220).
-- **C-6, C-7, C-8: not started.** Their traps are in the order, unconsumed.
+- C-6's API-side debts (D-225): the zod one-hour refine + 23514 translator
+  row; courier account_id; the purchase-intent reference on the GET; a
+  seller-status read; core.category rows and display names; per-field anchor
+  links from slots.path; SC-26/SC-27 mutation arms (need a billing seed).
+- **C-7, C-8: not started.** Their traps are in the order, unconsumed.
 
 ## State of main
 
-`main` = **3e87574** (all of T13 + T14 A/B). PR **#52** carries the install and
-all of C-5 (`tier14c/t14c-install-docs`, head `fd690d7`), unmerged, pass
-remediated, 25 gates green on the branch.
+`main` = **ea40d6e** (T13 + T14 A/B + PR #52: the install and all of C-5,
+merged with 25 gates green). C-6 rides `tier14c/c6-store-admin`, pass
+remediated, 42/42 e2e and 25/25 gates on the branch.

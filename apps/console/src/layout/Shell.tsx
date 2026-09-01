@@ -18,6 +18,7 @@ import { en } from '@adulis/locale';
 import { IdleWarning } from '../auth/IdleWarning';
 import { useMarketContext } from '../lib/market';
 import { useSession } from '../auth/session';
+import { MORE_GROUPS } from './More';
 
 const NAV = [
   { key: 'home', to: '', label: en['console.nav.home'], end: true },
@@ -62,6 +63,23 @@ export function Shell() {
             </li>
           ))}
         </ul>
+        {/* Desktop shows More's four sections EXPANDED (v1.2 S2.1): the
+            console is used at a desk, and hiding settings behind a click
+            costs more than it saves. The bottom bar keeps plain More. */}
+        <div className="sidenav-more">
+          {MORE_GROUPS.map((g) => (
+            <div key={g.heading} className="sidenav-group">
+              <h3>{g.heading}</h3>
+              <ul>
+                {g.entries.map((e) => (
+                  <li key={e.to}>
+                    <NavLink to={`/s/${sellerId}/${e.to}`}>{e.label}</NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </nav>
       <main id="main">
         <Outlet />
