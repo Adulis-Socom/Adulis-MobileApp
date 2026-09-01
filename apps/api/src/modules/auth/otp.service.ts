@@ -124,14 +124,47 @@ export class OtpService {
       }
     }
 
-    // The account's market still governs where one exists -- timing is
-    // per-market configuration and a person's account names their market.
-    const m = await sql<{ market_id: string | null }>`
-      SELECT coalesce(
-        (SELECT a.market_id FROM core.account a WHERE a.phone_e164 = ${phone}),
-        ${deviceMarket}::uuid
-      ) AS market_id`.execute(trx);
-    const marketId = result_first(m.rows)?.market_id ?? null;
+    /**
+     * ON AN ANONYMOUS PATH THE DEVICE'S MARKET GOVERNS THE TIMING TOO. This
+     * used to coalesce the ACCOUNT's market over the device's on every path,
+     * and that leaked -- not subtly.
+     *
+     * `otp_max_attempts` is per-market configuration, and `verifyCode`
+     * answers OTP_INVALID until the budget is spent and
+     * OTP_ATTEMPTS_EXCEEDED after -- so THE NUMBER OF WRONG GUESSES BEFORE
+     * THE 429 IS THE RESOLVED MARKET'S SETTING. Two markets configured
+     * differently, and counting refusals tells an unauthenticated attacker
+     * which market answered, which is whether the phone has an account.
+     * `otp_ttl` leaks the same way through the expiry. No misconfiguration
+     * is needed -- only that two markets differ, which is the entire reason
+     * this configuration is per-market.
+     *
+     * A second, sharper arm needed no differing values at all: the refusal
+     * below fired when the ACCOUNT's market had no live `timing_config`,
+     * while an unknown phone fell through to the device's and succeeded.
+     * Nothing seeds `timing_config`, and its `EXCLUDE USING gist` leaves a
+     * gap whenever an operator rotates one.
+     *
+     * S17 has no "where practical" clause and names request, resend and
+     * verify together. Before authentication nothing may distinguish a known
+     * phone; after it, the account's own facts are the account's. So every
+     * anonymous path reads ONE market -- the caller's own device's -- and the
+     * account's market governs only where the caller is already
+     * authenticated (step-up, which passes requireDevice:false).
+     *
+     * TODAY THIS CHANGES NOTHING: Ethiopia is the only ACTIVE market, so the
+     * two are always the same value. It is done now because it stops being a
+     * no-op on the day a second market activates -- which is also the day it
+     * becomes exploitable. Found by the Phase 3 adversarial pass; the ruling
+     * is invited rather than assumed.
+     */
+    let marketId: string | null = deviceMarket;
+    if (!requireDevice) {
+      const m = await sql<{ market_id: string | null }>`
+        SELECT a.market_id FROM core.account a
+         WHERE a.phone_e164 = ${phone}`.execute(trx);
+      marketId = result_first(m.rows)?.market_id ?? null;
+    }
     if (!marketId) {
       // Reachable only on the authenticated paths, where an account always
       // exists; a missing one there is our problem, not the caller's.
@@ -262,9 +295,23 @@ export class OtpService {
     const gateMarket = anonymous ? timing.device_market_id : timing.market_id;
     if (!gateMarket) throw new AdulisException('INTERNAL');
 
-    // S9.2 before S16: a market that may not issue at all is not a market
-    // whose budget is worth reading.
-    await this.policy.assertMarketIssuesOtp(trx, gateMarket);
+    /**
+     * S9.2 BINDS NEW ENTRY, NOT EXISTING TRADE -- so the activation gate is
+     * anonymous-only, exactly like the budget's hard limit beside it.
+     *
+     * S9.2's own words are "only ACTIVE markets may receive ordinary new OTP
+     * ISSUANCE", and D-183's ruling says what SUSPENDED means: no new entry,
+     * existing trade continues, every account already there unaffected.
+     * Gating step-up on it would suspend a market and take payout
+     * confirmation, session revocation and every other step-up action away
+     * from sellers already inside -- the same failure the budget's
+     * `anonymous` carve-out exists to prevent, argued at length one file
+     * away from where the gate was being applied to both.
+     *
+     * The carve-out was written for the budget and forgotten for activation.
+     * Found by the Phase 3 adversarial pass.
+     */
+    if (anonymous) await this.policy.assertMarketIssuesOtp(trx, gateMarket);
     await this.policy.assertWithinBudget(trx, gateMarket, anonymous);
 
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);

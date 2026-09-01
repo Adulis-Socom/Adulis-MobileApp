@@ -31,11 +31,13 @@ is already wrong.
 says "during founder-only MVP, market activation is a privileged founder-run operation"
 and nothing in the product writes those columns.
 
-**It is the FOURTH hand-run privileged operation, and the runbook says so on its own first
-screen** - beside the founder grant, billing reconciliation and identity attestation. Each
-is a decision about the world that no code can make; each is one person acting alone. The
-pattern is only visible if the members are counted, which is why the fourth one names the
-other three instead of quietly joining them.
+**It joins the hand-run set and names that set on its own first screen**, because the
+concentration is only visible if the members are counted. An earlier draft called it "the
+fourth" and counted identity attestation among the three before it - wrong twice over:
+identity attestation happens THROUGH THE PRODUCT (`POST /v1/seller/identity-verification`
+calling `verification.write_attestation`), and `deploy.md`, which really is hand-run, had
+been left out to make the number come to four. **A count that has to choose its members is
+not a count**, so the page lists the set instead of numbering it.
 
 It also carries the two prerequisites for a SECOND active market that are not on the
 document's own checklist: per-market OTP spend is not attributable in the installed schema

@@ -12,19 +12,24 @@ ADU-DB-01 v1.14 S30b.
 privileged founder-run operation."** No console screen writes these columns, no API
 endpoint exposes them, and `core.market` carries no operator surface at all.
 
-**This is the FOURTH hand-run privileged operation**, and naming it as one is the point
-— the pattern is only visible if the members are counted:
+**It joins the hand-run set, and naming that set is the point** — the concentration is
+only visible if the members are counted. Every runbook here is one person acting alone on
+something outside the repository:
 
-| | Runbook | What it decides |
-|---|---|---|
-| 1 | [`grant-founder-operator.md`](grant-founder-operator.md) | who may review identity, claims and moderation |
-| 2 | [`billing-reconciliation.md`](billing-reconciliation.md) | that a bank transfer really arrived |
-| 3 | identity attestation | that a person is who they say (`verification.write_attestation`) |
-| 4 | **this one** | that a country may receive OTP at all |
+| Runbook | What it decides |
+|---|---|
+| [`grant-founder-operator.md`](grant-founder-operator.md) | who may review identity, claims and moderation |
+| [`billing-reconciliation.md`](billing-reconciliation.md) | that a bank transfer really arrived |
+| [`deploy.md`](deploy.md) | that this build is the one production runs |
+| [`storefront-import.md`](storefront-import.md) | *(blocked — needs the repository URL)* |
+| **this one** | that a country may receive OTP at all |
 
-Each is a decision about the world that no amount of code can make, each is
-irreversible-ish, and each is one person acting alone. **That is a concentration worth
-seeing on one page** rather than discovering four times.
+> **An earlier draft of this page called this "the fourth" and counted identity
+> attestation as one of the three before it. That was wrong twice over.** Identity
+> attestation is performed THROUGH THE PRODUCT — `POST /v1/seller/identity-verification`
+> calling `verification.write_attestation` — not by hand; and `deploy.md`, which really is
+> hand-run, was left out to make the number come to four. **A count that has to choose its
+> members is not a count.**
 
 > **[!] `adulis_app` can write these columns.** It holds ordinary DML on `core.market`,
 > inherited because S9.1's configuration was folded INTO that table rather than given its
@@ -60,9 +65,16 @@ ones that have actually blocked Adulis are marked:
 
 **Steps 5 and 7 are why no real vendor is bound.** Every provider named in v2.6 —
 AfroMessage, SMSEthiopia, Infobip, Twilio — needs a registered business, which Adulis does
-not yet have. The four adapters in `apps/api/src/modules/auth/sms-provider.ts` are fakes
-behind the interface, and each refuses to construct under `NODE_ENV=production`. **Binding
-a vendor is a change to one line in `app.module.ts`, not a rewrite of the layer.**
+not yet have. The four providers in `apps/api/src/modules/auth/sms-provider.ts` are ONE
+fake class instantiated under four names, and it refuses to construct under
+`NODE_ENV=production`.
+
+> **No vendor adapter exists yet — the interface is what was buildable.** Binding a real
+> one means WRITING an adapter (`implements SmsProvider`, with its own mapping from that
+> vendor's responses to `ACCEPTED` / `DEFINITIVE_NOT_SENT` / `DELIVERY_UNKNOWN`, which
+> S5.6 requires every adapter to document) and then changing one line in `app.module.ts`.
+> **Nothing above that line changes**, which is the property the layer was built for — but
+> "one line" describes the wiring, not the work.
 
 ---
 
@@ -87,12 +99,17 @@ can spend a quiet market's allowance.**
 
 ### 2. Sender registration is only half-enforced
 
-The router refuses a route whose `sender_registration_status` is `REJECTED`. It cannot
-enforce the rest of S10.2 — *"where registration is mandatory, status != APPROVED forces
-`otp_enabled` = false"* — because **the schema does not carry WHERE registration is
-mandatory**. Migration 0043's own comment admits this in its last clause.
+A `REJECTED` sender registration refuses AT ISSUE — in `OtpIssuancePolicy`, before a
+code is generated — and the router refuses it again before transporting. The second alone
+was not enough and is worth saying why: it runs after the challenge has committed, so it
+produced a live, verifiable, undeliverable code and a 500 instead of a refusal. S10.2's
+rule is "status != APPROVED forces `otp_enabled` = false", which is a refusal to ISSUE.
 
-So item 3 and item 5 of the checklist above are the enforcement. A human decides whether
+**The rest of S10.2 cannot be enforced**: `PENDING` and `NOT_REQUIRED` are not refused,
+because **the schema does not carry WHERE registration is mandatory** — migration 0043's
+own comment admits it in its last clause.
+
+So item 3 and item 5 of the checklist above are that enforcement. A human decides whether
 this market's sender registration was mandatory, and the answer lives nowhere but here.
 
 ---
@@ -114,8 +131,15 @@ SELECT code, display_name, activation_state, otp_enabled,
 
 **A market not listed here does not exist and cannot be activated.** Creating one is a
 separate act (`core.market` plus `core.timing_config`, `core.ladder_config`,
-`core.eligibility_config`, `core.legal_config`, `core.identity_config` — a market without
-timing configuration refuses OTP with `VALIDATION_FAILED`, not with a helpful message).
+`core.eligibility_config`, `core.legal_config`, `core.identity_config`).
+
+> **A market with no live `core.timing_config` answers `INTERNAL` — a 500, not a refusal.**
+> The OTP path reads timing BEFORE it reaches the activation gate, and a market configured
+> to serve but carrying no timing is our defect rather than the caller's mistake. It is not
+> the `VALIDATION_FAILED` the rest of this page describes.
+>
+> `timing_config` carries `EXCLUDE USING gist (market_id WITH =, effective WITH &&)`, so
+> **rotating one leaves a gap unless the new row's `effective` range abuts the old.**
 
 ### Step 1 — walk the state machine, do not jump to ACTIVE
 
@@ -178,8 +202,10 @@ invalidate a live code, does not log anyone out, and does not stop verification 
 control that ends a payout change mid-flight is a denial of service wearing a safeguard.
 Authenticated step-up is served past the hard limit deliberately (S16.2).
 
-`CHECK (otp_daily_soft_limit <= otp_daily_hard_limit)` — soft above hard would make the
-alert unreachable, so the database refuses it.
+`CHECK (otp_daily_soft_limit IS NULL OR otp_daily_hard_limit IS NULL OR
+otp_daily_soft_limit <= otp_daily_hard_limit)` — soft above hard would make the alert
+unreachable, so the database refuses it. **Either may be NULL**, meaning "no per-market
+ceiling"; the global row still applies, and both of ITS columns are `NOT NULL`.
 
 ### Step 4 — activate
 
@@ -192,9 +218,13 @@ UPDATE core.market
  WHERE code = 'XX';
 ```
 
-`CHECK (NOT otp_enabled OR activation_state = 'ACTIVE')` — the database will not let OTP
-be enabled on a market that is not ACTIVE. **The two flags are both required**: ACTIVE
-with `otp_enabled = false` is still a refusal.
+`CHECK (NOT otp_enabled OR activation_state = 'ACTIVE')` and
+`CHECK (NOT otp_enabled OR sms_primary_provider IS NOT NULL)` — the database will not let
+OTP be enabled on a market that is not ACTIVE, nor on one with nowhere to send.
+
+**The implication runs ONE WAY.** `otp_enabled = true` forces ACTIVE and forces a route;
+ACTIVE alone forces nothing, so `ACTIVE` with `otp_enabled = false` is a perfectly legal
+row and is still a refusal. Set both.
 
 ### Step 5 — verify from the outside
 

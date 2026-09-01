@@ -39,7 +39,20 @@ import { SmsProviderRouter } from './sms-provider.router';
 
 const log = createLogger();
 
-/** S12.2's statuses. `DELIVERED` and `FAILED_FINAL` are written by callbacks. */
+/**
+ * S12.2's six statuses.
+ *
+ * FOUR ARE EVER WRITTEN TODAY. `DELIVERED` and `FAILED_FINAL` are the two a
+ * delivery callback would write (S13), AND NO CALLBACK ROUTE EXISTS -- no
+ * vendor is integrated, so there is nothing to receive one from. The enum is
+ * still right (S12.2 is "at minimum"), but saying they "are written by
+ * callbacks" in the present tense would be a claim about a mechanism that is
+ * not there, which is the exact defect D-186 and D-195 were registered for.
+ *
+ * The consequence is worth stating rather than leaving implicit: nothing
+ * finalises an `ACCEPTED` and nothing resolves a `DELIVERY_UNKNOWN`, so this
+ * ledger records what WE did, never what arrived.
+ */
 type DeliveryStatus =
   | 'PENDING'
   | 'ACCEPTED'
@@ -89,7 +102,45 @@ export class OtpDeliveryService {
    */
   async transport(issued: IssuedOtp | null): Promise<DeliveryReport | null> {
     if (!issued) return null;
-    return this.deliver(issued.challengeId, issued.marketId, issued.sms);
+    try {
+      return await this.deliver(issued.challengeId, issued.marketId, issued.sms);
+    } catch (err) {
+      /**
+       * NOTHING ESCAPES THIS, AND THE REASON IS THE COMMIT THAT ALREADY
+       * HAPPENED.
+       *
+       * `deliver` is no-throw for transport OUTCOMES, which an earlier
+       * version of this file claimed was the whole story. It was wrong:
+       * `deliver` also raises for a market with no primary provider, a
+       * configured provider with no bound adapter, a REJECTED sender
+       * registration, and any SQL error on the two attempt statements. Every
+       * one happens AFTER the handler transaction committed the challenge
+       * AND its idempotency record.
+       *
+       * The consequence was not a 500, it was a PERMANENT one. The caller
+       * gets 500, retries with the SAME Idempotency-Key, and the stored 202
+       * replays with nothing to transport: no SMS, ever, while the client
+       * advances to the code step and starts a countdown. The console's
+       * sign-in does not remint its key on an error path, so the retry is
+       * always a replay -- verbatim the failure its own comment says was
+       * fixed once already.
+       *
+       * It also catches the ROLLED-BACK challenge: two concurrent requests
+       * on one Idempotency-Key leave the loser holding an `issued` whose
+       * `otp_challenge` row rolled back, so the attempt INSERT violates its
+       * foreign key. Swallowing that is CORRECT -- a replay must transport
+       * nothing -- and it is what this file's header already claimed.
+       *
+       * LOUD, THOUGH. This is the one place a person waits for a message
+       * nobody sent, so it is an error line, and D-196's ruling request is
+       * what closes it properly: the wire cannot say "issued, not sent".
+       */
+      log.error({
+        msg: 'otp transport raised after the challenge committed; no SMS sent',
+        err: err instanceof Error ? err.name : 'unknown',
+      });
+      return null;
+    }
   }
 
   /**
@@ -198,8 +249,9 @@ export class OtpDeliveryService {
 
   /** S12.2's statuses, and the two timestamps that mean different things. */
   private async record(attemptId: string, result: SendResult): Promise<void> {
-    const status: DeliveryStatus =
-      result.outcome === 'ACCEPTED' ? 'ACCEPTED' : result.outcome;
+    // The three send outcomes are three of the six statuses, by the same
+    // names. (This was a ternary whose arms were identical.)
+    const status: DeliveryStatus = result.outcome;
 
     /**
      * `accepted_at` is when a vendor took it. `finalized_at` is when the
@@ -217,14 +269,40 @@ export class OtpDeliveryService {
      *                        Finalising it here would be recording an answer
      *                        we do not have.
      */
+    /**
+     * `WHERE ... AND status = 'PENDING'` AND `coalesce` ON BOTH TIMESTAMPS,
+     * because this statement is a LATE WRITER BY CONSTRUCTION.
+     *
+     * The row is inserted before the vendor call (above) precisely so an S13
+     * callback arriving before the send's own response has somewhere to land.
+     * In that ordering this UPDATE runs LAST, and as first written it was a
+     * blind full-row overwrite: `CASE WHEN c THEN now() END` carries an
+     * implicit `ELSE NULL`, so it wrote NULL over any timestamp a callback
+     * had set, reverted `DELIVERED` to `ACCEPTED` and `FAILED_FINAL` to
+     * `DELIVERY_UNKNOWN`, and nulled a `provider_message_id` the callback
+     * supplied -- the throw path hardcodes null for it.
+     *
+     * So an attempt row would have contradicted what happened, and S12.2's
+     * two callback statuses would have been unwritable by the very ordering
+     * this file chose in order to support them. Latent only because the
+     * callback route does not exist yet, which is not a reason to leave it.
+     *
+     * The guard makes this write once-only and the coalesces make it
+     * additive: a row already moved past PENDING is left exactly as it is.
+     */
     await sql`
       UPDATE core.otp_delivery_attempt
          SET status              = ${status}::core.otp_delivery_status,
-             provider_message_id = ${result.providerMessageId},
-             failure_class       = ${result.failureClass},
-             accepted_at   = CASE WHEN ${status} = 'ACCEPTED' THEN now() END,
-             finalized_at  = CASE WHEN ${status} = 'DEFINITIVE_NOT_SENT'
-                                  THEN now() END
-       WHERE id = ${attemptId}`.execute(this.db);
+             provider_message_id = coalesce(${result.providerMessageId},
+                                            provider_message_id),
+             failure_class       = coalesce(${result.failureClass},
+                                            failure_class),
+             accepted_at   = coalesce(accepted_at,
+                               CASE WHEN ${status} = 'ACCEPTED' THEN now() END),
+             finalized_at  = coalesce(finalized_at,
+                               CASE WHEN ${status} = 'DEFINITIVE_NOT_SENT'
+                                    THEN now() END)
+       WHERE id = ${attemptId}
+         AND status = 'PENDING'`.execute(this.db);
   }
 }

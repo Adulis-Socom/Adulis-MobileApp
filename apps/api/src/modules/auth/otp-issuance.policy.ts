@@ -31,6 +31,7 @@ const log = createLogger();
 interface ActivationRow {
   activation_state: string;
   otp_enabled: boolean;
+  sender_registration_status: string;
 }
 
 interface BudgetRow {
@@ -65,7 +66,8 @@ export class OtpIssuancePolicy {
     marketId: string,
   ): Promise<void> {
     const r = await sql<ActivationRow>`
-      SELECT activation_state::text AS activation_state, otp_enabled
+      SELECT activation_state::text AS activation_state, otp_enabled,
+             sender_registration_status::text AS sender_registration_status
         FROM core.market WHERE id = ${marketId}`.execute(trx);
     const row = r.rows[0];
 
@@ -73,7 +75,30 @@ export class OtpIssuancePolicy {
     // not exist, which is ours to fail on rather than theirs.
     if (!row) throw new AdulisException('INTERNAL');
 
-    if (row.activation_state !== 'ACTIVE' || !row.otp_enabled) {
+    /**
+     * THREE CLAUSES, AND THE FIRST IS UNREACHABLE WHILE THE DATABASE HOLDS.
+     * Migration 0043's `market_otp_requires_active` is
+     * `CHECK (NOT otp_enabled OR activation_state = 'ACTIVE')`, so no row the
+     * database accepts has `otp_enabled` true outside ACTIVE.
+     *
+     * Worth saying rather than leaving as an apparent redundancy, because it
+     * bounds what a test can prove: a SUSPENDED fixture necessarily has
+     * `otp_enabled = false`, so deleting the activation clause alone leaves
+     * the suite green. It is defence against the constraint being dropped,
+     * not a second enforcement of it -- and the claim that a mutation
+     * "removes the activation check" was overstated for exactly this reason.
+     *
+     * THE THIRD CLAUSE IS S10.2's REFUSAL, MOVED TO WHERE IT BELONGS. The
+     * router also refuses a REJECTED sender and that stays as defence, but
+     * it runs AFTER the challenge commits -- on its own it produced a live,
+     * verifiable, undeliverable code and a 500. S10.2's rule is "status !=
+     * APPROVED forces `otp_enabled` = false", which is a refusal to ISSUE.
+     */
+    if (
+      row.activation_state !== 'ACTIVE' ||
+      !row.otp_enabled ||
+      row.sender_registration_status === 'REJECTED'
+    ) {
       /**
        * `SUSPENDED` means what suspension should mean (D-183's ruling in
        * ADU-DB-01 v1.14 S30b.3): no new entry, existing trade continues. No
@@ -83,11 +108,23 @@ export class OtpIssuancePolicy {
        * favour of this column.
        *
        * IT RAISES `VALIDATION_FAILED` BECAUSE ADU-API-01 S7.1'S TAXONOMY IS
-       * CLOSED and has no code for this refusal. Inventing
-       * `MARKET_UNAVAILABLE` here is the one thing that catalogue's header
-       * forbids by name -- "a code invented in a service is a code with no
-       * catalogue entry... never a decision taken in a pull request".
-       * Registered, amendment owed, the same way OTP_SUPERSEDED and
+       * CLOSED and has no code for this refusal.
+       *
+       * S7.1 IS TWO SENTENCES AND THEY SAY DIFFERENT THINGS. An earlier
+       * version of this comment spliced them into one that inverted the
+       * second. Verbatim:
+       *
+       *   "A code invented in a service is a code with no catalogue entry,
+       *    which renders to the buyer as a generic apology in the one moment
+       *    they needed to be told what to do."
+       *
+       *   "Adding a code within `/v1` is additive -- old clients render it
+       *    through the S7.2 fallback -- but it is a change to this document,
+       *    not a decision taken in a pull request."
+       *
+       * So the document PERMITS a new code and names the route: an amendment
+       * to ADU-API-01. What it forbids is inventing one HERE. Registered,
+       * amendment owed, the same way OTP_SUPERSEDED and
        * AGE_DECLARATION_REQUIRED were handled.
        *
        * And the substitute is better than a placeholder, which is why it is
@@ -205,8 +242,12 @@ export class OtpIssuancePolicy {
           slots: { retry_after_seconds: secondsUntilUtcMidnight() },
         });
       }
+      // NOT "from a reserve" -- there is no reserve, and naming one would
+      // describe a mechanism that does not exist. S16.2 PERMITS step-up to
+      // draw on a separately reserved budget; what is implemented is that
+      // the hard limit does not apply to it.
       log.warn({
-        msg: 'otp hard limit reached; authenticated step-up served from reserve',
+        msg: 'otp hard limit reached; authenticated step-up not blocked (S16.2)',
       });
     }
   }

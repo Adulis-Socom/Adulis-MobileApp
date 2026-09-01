@@ -194,6 +194,17 @@ ALTER TABLE core.market
   ADD CONSTRAINT market_otp_requires_active
     CHECK (NOT otp_enabled OR activation_state = 'ACTIVE');
 
+-- OTP ENABLED MEANS A ROUTE EXISTS. Without this, an operator could set
+-- activation_state='ACTIVE' and otp_enabled=true and leave
+-- sms_primary_provider NULL -- and every OTP request would commit a challenge
+-- and then fail in the router, giving the caller a 500 on an endpoint
+-- contracted at 202 while burning their 3/hour budget. S9.1 lists the routing
+-- columns as part of market configuration; this makes "part of" mean
+-- something. (Phase 3 adversarial pass.)
+ALTER TABLE core.market
+  ADD CONSTRAINT market_otp_requires_route
+    CHECK (NOT otp_enabled OR sms_primary_provider IS NOT NULL);
+
 -- A fallback that is the primary is not a fallback.
 ALTER TABLE core.market
   ADD CONSTRAINT market_fallback_differs
@@ -236,6 +247,21 @@ CREATE TABLE core.platform_otp_budget (
   CONSTRAINT platform_otp_budget_ordered
     CHECK (otp_global_daily_soft_limit <= otp_global_daily_hard_limit)
 );
+
+-- THE ROW IS CREATED HERE, NOT BY THE SEED. `OtpIssuancePolicy` CROSS JOINs
+-- this table on every OTP issue, so an empty table is not a missing setting --
+-- it is a 500 on every sign-in, including step-up, in any environment that
+-- migrated without running ops/scripts/seed.mjs. A one-row table whose row is
+-- optional is a dependency nobody declared. (Phase 3 adversarial pass.)
+--
+-- The values are deliberately GENEROUS rather than tuned: S16 gives no
+-- numbers, a ceiling is a business decision, and a migration inventing a tight
+-- one would throttle production on the day it ran. The activation runbook is
+-- where an operator sets the real ones.
+INSERT INTO core.platform_otp_budget
+  (id, otp_global_daily_soft_limit, otp_global_daily_hard_limit)
+VALUES (true, 2000, 5000)
+ON CONFLICT (id) DO NOTHING;
 
 COMMENT ON TABLE core.platform_otp_budget IS
   'ADU-AUTH-01 v2.6 S16 - the platform-wide OTP budget. ONE ROW, enforced by '
