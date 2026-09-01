@@ -2428,3 +2428,27 @@ Effect:    ci:local's `test` gate intermittently reports a suite "failed to run"
 Response:  Recorded; each affected commit verified by the equivalent commands rather than a single flaky ci:local.
 Action:    The tier's gates are confirmed green by running the post-test gates individually (determinism, permission-doc, docs-ascii, db:check, deferred-values, appendix, orphan-sweep, transcription, mt-keys all PASS on the current tree), the pre-test gates via ci:local's own sequence up to the test gate, and the full API suite at `--maxWorkers=2` (507/507 from clean). A claim of "all 25 gates" in a commit names those commands rather than a single ci:local when the flake bit.
 Ruling needed: none required to proceed. Worth carrying for whoever hardens CI: cap the API test gate's workers, or give it its own database, so the gate measures the code and not the machine. A gate that fails on load rather than on logic teaches people to re-run rather than to read.
+### D-218 - C-5 catalogue: five regions ADU-CON-03 v1.2 asks for that the catalogue endpoints do not supply
+
+Severity:  (build-against-absence, per T14-C S5.1 and ADU-CON-03 v1.2 S17 -- each inference registered, not absorbed)
+Phase:     T14-C - C-5
+Source:    apps/console/src/features/catalogue/*; contracts/openapi.json
+Found by:  building SC-07..SC-11 against the committed contract
+Effect:    The catalogue endpoints are schema-less in the contract (the D-98 class), and the SERVICE shapes they actually return omit fields the screens specify. Each region below is built against the absence and NAMED on screen (S17: "a region that depends on a contract names the endpoint and the field"), never faked and never silently dropped:
+             1. SC-07's CAP COUNTER. `GET /v1/seller/products` returns no effective limit, and the console computes no business state, so it cannot derive "N of 10" from the tier -- and "N of unlimited" is the bug report S8 warns about. Rendered as a plain statement that the server owns the limit; it becomes "N of M -- <what binds>" when allowed_actions / an effective-limit field lands (D-155).
+             2. SC-07 per-row VARIANT COUNT, AGGREGATE STOCK + CONFIDENCE, PRIMARY IMAGE. Absent from the list shape; fetching each product to compute them is the N+1 the payload budget forbids. The row shows name, publication state and price; the editor (SC-08) carries the rest and the row links to it.
+             3. SC-09 variant ATTRIBUTE LABELS. getProduct returns each variant's `variant_key` (the canonical serialisation), not its defining attributes as labelled values, so a variant reads by its key rather than "Size: L, Colour: red". Splitting a key back into attributes on the client is guessing at a format the server owns.
+             4. SC-11 stock CONFIDENCE LEVEL and its per-tier consequences. These are the server's v_stock_confidence and entitlement; neither the product read nor the stock endpoints return them. The screen shows stock_confirmed_at as a fact and does NOT derive a level (computing business state) or name a consequence a tier cannot experience (S4.3).
+             5. SC-08 the STRUCTURED-ATTRIBUTE editor (the two-layer descriptive/variant-defining distinction) needs the category attribute_definition catalogue the read does not return; name and description are editable, the structured editor is registered as owed.
+Response:  Built honestly; each gap is stated in the screen's own copy and registered here.
+Ruling needed: none new. All are the D-155 family (the console renders what the server resolved, and the server does not yet resolve these). When `allowed_actions` and richer list/variant reads land, these regions fill in without a redesign.
+
+### D-219 - C-5: the media UPLOAD pipeline (browser resize + signed PUT + commit) is a subsystem, deferred with the section stated
+
+Severity:  (a named owed piece within a built stage, not a defect)
+Phase:     T14-C - C-5
+Source:    apps/console/src/features/catalogue/Media.tsx
+Found by:  building SC-10
+Effect:    SC-10 requires an image upload that resizes to THREE derivatives IN THE BROWSER, signs a PUT per derivative (REQUEST_UPLOAD), then COMMITs -- canvas resize, three PUTs, progress across them. It is a real client subsystem, larger than the rest of SC-10 combined. The Media section renders and manages the media that EXISTS (display, delete, whole-order reorder in one request per the UNIQUE(product_id, position) rule) and states the upload as not-yet-on-this-screen rather than stubbing a control that pretends to work.
+Response:  Media display/delete/reorder built and rendered; the upload pipeline is its own unit.
+Ruling needed: none. Worth carrying: an upload control that looked done would be worse than its honest absence -- a seller who taps it and nothing lands learns the screen lies.
