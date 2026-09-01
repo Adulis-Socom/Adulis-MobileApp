@@ -58,14 +58,17 @@ async function expireOrder(
      WHERE order_id = ${orderId} AND state = 'ACTIVE'
      RETURNING id, variant_id, seller_id, quantity`.execute(trx);
 
-  // One release event per line — the A3.2 anchor. The BEFORE INSERT trigger
-  // applies the delta; stock_count is never written directly.
+  // One release event per line — the A3.2 anchor. Since T12 S1 (D-173) the
+  // quantity, variant and seller all DERIVE FROM THE RESERVING EVENT via
+  // fn_release_reservation_stock: a reservation with no ORDER_CREATED event
+  // fails this order's expiry loudly instead of inventing stock. Containment
+  // lives in the CALLERS' try/catch, not here -- the first version of this
+  // comment claimed the per-order transaction alone contained the failure,
+  // and it did not (adversarial pass on #43, finding 1).
   for (const line of lines.rows) {
     await sql`
-      INSERT INTO core.stock_event
-        (id, variant_id, seller_id, delta, reason, order_id, reservation_id)
-      VALUES (gen_random_uuid(), ${line.variant_id}, ${line.seller_id},
-              ${line.quantity}, 'ORDER_EXPIRED', ${orderId}, ${line.id})`.execute(trx);
+      SELECT core.fn_release_reservation_stock(
+        ${line.id}, ${orderId}, 'ORDER_EXPIRED')`.execute(trx);
   }
   return true;
 }
@@ -88,14 +91,33 @@ export const orderExpireSweep: Job = {
        LIMIT 500`.execute(ctx.db);
 
     let expired = 0;
+    let failed = 0;
     for (const row of due.rows) {
-      // One transaction PER ORDER: a bad row must not take the batch with
-      // it, and the batch must not hold one long transaction over 500 orders.
-      await ctx.db.transaction().execute(async (trx) => {
-        if (await expireOrder(trx, row.id, at)) expired += 1;
-      });
+      /*
+       * One transaction PER ORDER -- and CONTAINED, which the transaction
+       * alone never provided (adversarial pass on #43, finding 1, BLOCKER).
+       * The comment here used to claim "a bad row must not take the batch
+       * with it" while a single raise aborted the whole run -- and because
+       * candidates are ORDER BY expires_at, a poisoned order (exactly what
+       * fn_release_reservation_stock now raises on, D-173) would FRONT
+       * EVERY SUBSEQUENT RUN: a permanent, platform-wide expiry outage
+       * wearing an integrity guard. Loud AND contained: the failure is
+       * logged with the order id and the sweep moves on; the failed count
+       * is in the job result where the heartbeat monitors can see it.
+       */
+      try {
+        await ctx.db.transaction().execute(async (trx) => {
+          if (await expireOrder(trx, row.id, at)) expired += 1;
+        });
+      } catch (e) {
+        failed += 1;
+        ctx.log.error({
+          msg: `order.expire_sweep: order ${row.id} failed and was skipped`,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
-    return { considered: due.rows.length, expired };
+    return { considered: due.rows.length, expired, failed };
   },
 };
 
@@ -158,13 +180,25 @@ export const orderCloseConfirmationWindow: Job = {
        LIMIT 500`.execute(ctx.db);
 
     let retryWindowClosed = 0;
+    let retryFailed = 0;
     for (const row of rejected.rows) {
-      await ctx.db.transaction().execute(async (trx) => {
-        if (await expireOrder(trx, row.id, at)) retryWindowClosed += 1;
-      });
+      // Same containment as the expire sweep (finding 1): expireOrder can
+      // now raise, and one poisoned order must not close the branch.
+      try {
+        await ctx.db.transaction().execute(async (trx) => {
+          if (await expireOrder(trx, row.id, at)) retryWindowClosed += 1;
+        });
+      } catch (e) {
+        retryFailed += 1;
+        ctx.log.error({
+          msg: `order.close_confirmation_window: order ${row.id} failed and was skipped`,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
 
     return {
+      retry_failed: retryFailed,
       confirmation_window_candidates: submitted.rows.length,
       confirmation_window_lapsed: lapsed,
       retry_window_candidates: rejected.rows.length,

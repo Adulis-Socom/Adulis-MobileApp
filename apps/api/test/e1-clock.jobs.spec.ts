@@ -57,6 +57,8 @@ describe('E1 — the clock', () => {
     expiresAt: Date;
     clockStopped?: Date | null;
     qty?: number;
+    /** D-173's corrupt state: a reservation with NO reserving event. */
+    bare?: boolean;
   }): Promise<{ id: string; variant: string }> => {
     const id = randomUUID();
     const resId = randomUUID();
@@ -85,6 +87,21 @@ describe('E1 — the clock', () => {
       [resId, id, SELLER, BUYER, variant, opts.qty ?? 1],
     );
     await admin.query(`SET session_replication_role = DEFAULT`);
+    if (opts.bare) return { id, variant }; // D-173's corrupt state, for the containment test
+    // THE RESERVING EVENT, paired with the reservation (T12 S1, D-173) --
+    // and inserted AFTER replica mode ends, so fn_apply_stock_event actually
+    // fires and stock_count reflects the ledger (adversarial pass on #43,
+    // finding: the first placement sat inside the replica window, which
+    // suppressed the decrement and manufactured exactly the ledger drift
+    // the db:reset stock_drift pin exists to flag). A fixture must tell the
+    // ledger's story or the sweep it feeds tests a state production cannot
+    // reach.
+    await admin.query(
+      `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason,
+                                     order_id, reservation_id)
+       VALUES ($1,$2,$3,$4,'ORDER_CREATED',$5,$6)`,
+      [randomUUID(), variant, SELLER, -(opts.qty ?? 1), id, resId],
+    );
     return { id, variant };
   };
 
@@ -201,6 +218,52 @@ describe('E1 — the clock', () => {
       expect(await orderState(id)).toBe('EXPIRED_UNCLAIMED');
       // The stock came back — the whole point of the sweep.
       expect(await stock(variant)).toBe(before + 1);
+    });
+
+    it('CONTAINS a poisoned order: the corrupt one fails and is counted, the healthy one still expires', async () => {
+      /*
+       * Adversarial pass on #43, finding 1 (BLOCKER). Since 0042 a
+       * reservation with no ORDER_CREATED event makes expiry RAISE (D-173,
+       * by design) -- and candidates are ORDER BY expires_at, so without
+       * per-order containment the poisoned order fronts every run and
+       * expiry stops platform-wide, forever, wearing an integrity guard.
+       * This pins the containment: same sweep run, the bare order fails and
+       * is COUNTED, the healthy order behind it still expires, and the
+       * poisoned one is still there for somebody to look at (loud), not
+       * skipped into oblivion (silent).
+       */
+      const due = new Date(T0.getTime() + 300_000);
+      // The POISONED order expires FIRST -- fronting the batch is the case
+      // that mattered.
+      const poisoned = await makeOrder({
+        state: 'CREATED',
+        expiresAt: new Date(due.getTime() - 1000),
+        bare: true,
+      });
+      const healthy = await makeOrder({ state: 'CREATED', expiresAt: due });
+      const healthyBefore = await stock(healthy.variant);
+      const poisonedBefore = await stock(poisoned.variant);
+
+      h.clock.set(new Date(due.getTime() + 1000));
+      const run = await orderExpireSweep.run(h.ctx);
+      expect(run['considered']).toBe(2);
+      expect(run['expired']).toBe(1);
+      expect(run['failed']).toBe(1);
+
+      // The healthy order expired and its stock came back...
+      expect(await orderState(healthy.id)).toBe('EXPIRED_UNCLAIMED');
+      expect(await stock(healthy.variant)).toBe(healthyBefore + 1);
+      // ...the poisoned one is untouched: no state change, NO INVENTED
+      // STOCK, and it stays visible in the working set.
+      expect(await orderState(poisoned.id)).toBe('CREATED');
+      expect(await stock(poisoned.variant)).toBe(poisonedBefore);
+
+      // Clean the poisoned pair up here (its state blocks the shared
+      // teardown's assumptions about expired rows).
+      await admin.query(`SET session_replication_role = replica`);
+      await admin.query(`DELETE FROM core.reservation WHERE order_id = $1`, [poisoned.id]);
+      await admin.query(`DELETE FROM core."order" WHERE id = $1`, [poisoned.id]);
+      await admin.query(`SET session_replication_role = DEFAULT`);
     });
 
     it('runs twice and the second run changes nothing (S24 idempotency)', async () => {
