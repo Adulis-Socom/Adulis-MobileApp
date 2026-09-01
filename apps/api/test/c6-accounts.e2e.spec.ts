@@ -486,7 +486,7 @@ const browserCookie = async (): Promise<string> => {
           device_id: d,
         })
         .expect(400);
-      expect(r.body.code).toBe('VALIDATION_FAILED');
+      expect(r.body.code).toBe('AGE_DECLARATION_REQUIRED');
     });
 
     it('a resend supersedes: the old code says expired-check-newer, the new one works', async () => {

@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-258 keys:
+259 keys:
 
 - `app.title`
 - `health.ok`
@@ -38,6 +38,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `error.auth.otp_expired`
 - `error.auth.otp_attempts_exceeded`
 - `error.auth.otp_purpose_not_permitted`
+- `error.auth.age_declaration_required`
 - `error.auth.session_expired`
 - `error.auth.session_revoked`
 - `error.auth.audience_not_permitted`

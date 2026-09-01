@@ -40,6 +40,7 @@ export const en = {
   'error.auth.otp_expired': 'This code is no longer valid. Check your messages for a newer code, or request a new one.',
   'error.auth.otp_attempts_exceeded': 'Too many attempts. Request a new code.',
   'error.auth.otp_purpose_not_permitted': 'This code cannot be used for that action.',
+  'error.auth.age_declaration_required': 'To create an account, please confirm that you are over 18.',
   'error.auth.session_expired': 'Your session has ended. Sign in again.',
   'error.auth.session_revoked': 'This session has been signed out.',
   'error.auth.audience_not_permitted': 'This app cannot perform that action.',

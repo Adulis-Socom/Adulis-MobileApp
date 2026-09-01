@@ -95,7 +95,10 @@ export class AuthService {
       // self-declared confirmation is required, and the confirmation is
       // stored, never a date of birth.
       if (body.age_declared_over_18 !== true) {
-        throw new AdulisException('VALIDATION_FAILED', {
+        // ITS OWN CODE since T12 S5.1 (D-101): a bare VALIDATION_FAILED
+        // rendered as "The request is not valid" with nothing to correct.
+        // The slot stays for anything keying on the field name.
+        throw new AdulisException('AGE_DECLARATION_REQUIRED', {
           slots: { path: 'age_declared_over_18' },
         });
       }
@@ -127,6 +130,40 @@ export class AuthService {
           (id, phone_e164, market_id, status, age_declared_over_18, age_declared_at)
         VALUES (${accountId}, ${body.phone}, ${marketId}, 'ACTIVE', true, now())`.execute(trx);
     }
+
+    /**
+     * D-89's SECOND LEG (ruled at T12 S5.2; described by migrations 0029 and
+     * 0037's headers and implemented nowhere until now). After successful
+     * authentication of this exact normalized phone, every PENDING courier
+     * invite for it is claimed and the relationship created -- server-side
+     * only (a client cannot name an invite), in THIS transaction (the claim
+     * and the relationship are one atomic act), idempotent (a second sign-in
+     * finds no pending invites; an already-live relationship is DO NOTHING
+     * under the seller_courier_live partial unique).
+     *
+     * NO ORACLE: nothing about this write reaches the response, and nothing
+     * in it can throw for a claimable phone -- so a sign-in with a pending
+     * invite is byte-identical, to the caller, to one without. THE RESPONSE
+     * IS IDENTICAL; THE EFFECT IS NOT. Both branches run it: an invite may
+     * predate the account or arrive years after it.
+     *
+     * The phone comparison is core.e164 against core.e164 -- both sides are
+     * already normalized at their boundaries, which is what "that exact
+     * normalized phone" requires (0029's index anticipates precisely this
+     * lookup: seller_courier_invite_phone WHERE pending).
+     */
+    await sql`
+      WITH claimed AS (
+        UPDATE core.seller_courier_invite i
+           SET claimed_at = now(), claimed_by_account_id = ${accountId}
+         WHERE i.phone = ${body.phone}
+           AND i.claimed_at IS NULL AND i.revoked_at IS NULL
+         RETURNING i.seller_id
+      )
+      INSERT INTO core.seller_courier (id, seller_id, account_id)
+      SELECT gen_random_uuid(), claimed.seller_id, ${accountId} FROM claimed
+      ON CONFLICT (seller_id, account_id) WHERE revoked_at IS NULL
+      DO NOTHING`.execute(trx);
 
     /**
      * THE COOKIE IS NOT A CREDENTIAL AND IS NOT TREATED AS ONE.

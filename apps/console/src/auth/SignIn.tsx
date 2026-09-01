@@ -161,9 +161,14 @@ export function SignIn() {
       nav(from && from !== '/sign-in' ? from : '/', { replace: true });
     } catch (e) {
       if (e instanceof ApiError) {
-        // The server names the field it refused on. This is the only place
-        // that sentence belongs, and it is quoted rather than composed.
-        if (e.problem.slots?.['path'] === 'age_declared_over_18') {
+        // The server names the refusal. Detected by CODE since T12 S5.1
+        // (D-101: AGE_DECLARATION_REQUIRED replaced the bare
+        // VALIDATION_FAILED); the slot check stays as the compatibility arm
+        // so a console deployed ahead of the API still renders the field.
+        if (
+          e.problem.code === 'AGE_DECLARATION_REQUIRED' ||
+          e.problem.slots?.['path'] === 'age_declared_over_18'
+        ) {
           setAgeRefused(true);
         } else {
           setProblem(e);

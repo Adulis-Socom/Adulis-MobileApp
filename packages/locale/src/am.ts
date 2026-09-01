@@ -37,6 +37,7 @@ export const am: Catalogue = {
   'error.auth.otp_expired': 'ይህ ኮድ አሁን አይሠራም። ለአዲስ ኮድ መልዕክቶችዎን ይመልከቱ፣ ወይም አዲስ ይጠይቁ።',
   'error.auth.otp_attempts_exceeded': 'በጣም ብዙ ሙከራዎች። አዲስ ኮድ ይጠይቁ።',
   'error.auth.otp_purpose_not_permitted': 'ይህ ኮድ ለዚያ ተግባር መጠቀም አይቻልም።',
+  'error.auth.age_declaration_required': 'To create an account, please confirm that you are over 18.',
   'error.auth.session_expired': 'ክፍለ ጊዜዎ አብቅቷል። እንደገና ይግቡ።',
   'error.auth.session_revoked': 'ይህ ክፍለ ጊዜ ተዘግቷል።',
   'error.auth.audience_not_permitted': 'ይህ መተግበሪያ ያንን ተግባር ማከናወን አይችልም።',

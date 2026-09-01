@@ -1866,3 +1866,53 @@ Effect:    An agent trusting the header would treat the seller history query as 
 Response:  CORRECTED where each copy sits (the register itself is append-only, so the correction is this entry).
 Action:    The source header now names all three consumers and warns that the expiry decision is one of them; the T10 report carries the correction inline, marked as a T11 edit; D-159's OWED-BUILD substance -- no SELLER-FACING endpoint returned the history -- stands.
 Ruling needed: none.
+
+
+### D-176 - MISSING_SOURCE: ADU-AUTH-01 v2.6 is not in the tree, and T12 Phases 2-4 transcribe sections of it
+
+Severity:  BLOCKER for T12 Phases 2, 3 and 4 (nothing else is affected; Phases 0, 1 and 5 do not need it)
+Phase:     T12 - 2
+Source:    WORK ORDER T12 S2 ("Build from ADU-AUTH-01 v2.6 S9.1, S12.1 and S12.2, which are explicit"), S3 ("install AUTH v2.6"), S4 (S5.5, S7.1, S7.4, S15, S16, S31.2, S31.4)
+Found by:  T12 Phase 2, first step: locating the governing source before building (the adulis-spec-router protocol)
+Effect:    docs/ holds ADU-AUTH-01 v2.5 and nothing later; docs/amendments/ holds the v2.4 permission seed and the README; no v2.6 file exists anywhere in the repository and none arrived with the order. The order cites v2.6's sections by NUMBER and quotes fragments -- it names three of S12.2's six delivery-status values, describes S12.1's table without its field list, and references S9.1's market-configuration shape without its columns. "Transcribe, do not design": a migration built from three of six enum values and a described-but-unlisted field set is designed, not transcribed, and it would become the binding shape the real v2.6 then has to match. The T9 precedent (D-140) is exact: documents cited, not present, recorded rather than invented.
+Response:  PHASES 2-4 STOPPED at MISSING_SOURCE. Phase 1 built (its ruling is complete in the order's own text); Phase 5 built under founder-ruling authority (the order states D-101's and D-89's semantics fully; the unreissued-document debt is recorded there).
+Action:    This entry, and the report. When ADU-AUTH-01 v2.6 arrives: install per S3's section split, then Phase 2's migration transcribes S9.1/S12.1/S12.2/S16/S30 directly, and Phase 4 builds on it.
+Ruling needed: none -- the needed thing is the document itself.
+### D-177 - RULED AND DISCHARGED: the age declaration is a named refusal, rendered to everyone, required only at identity creation (settles D-101)
+
+Severity:  (implements a founder ruling; the underlying defect was MAJOR -- a new seller stopped by an error with nothing to correct)
+Phase:     T12 - 5
+Source:    WORK ORDER T12 S5.1, ruling under ADU-AUTH-01 v2.6 S18.1/S18.2/S17 -- the document itself is NOT installed (D-176); this is founder-ruled shape and the unreissued-document debt is recorded here
+Found by:  n/a -- the defect is D-101
+Effect:    The server refuses identity creation without the declaration using AGE_DECLARATION_REQUIRED -- its own code in the catalogue, with derived locale keys in both catalogues -- instead of a bare VALIDATION_FAILED that rendered as "The request is not valid". Required ONLY when creating an account: an existing account signing in without it succeeds, and that asymmetry is exactly why the console renders the control UNCONDITIONALLY -- asking the server which case applies is the S17 account-enumeration oracle. The console now detects the refusal by CODE (slot kept as the compatibility arm).
+Response:  BUILT, both sides, three instruments:
+           - t12-d101-age-declaration.spec.ts: a new phone without the declaration -> 400 AGE_DECLARATION_REQUIRED with the derived title_key, and NO account row; the same phone with it -> account created with the confirmation and its timestamp stored; an EXISTING account without it -> signs in.
+           - e2e/age-declaration.spec.ts: the control is on the code step FOR A PHONE THAT HAS AN ACCOUNT (unconditional -- the console must not know), never pre-checked, and cleared by "change number" (D-119's correction, now pinned by a machine). Runs signed-out on the seeded buyer phone: two OTP REQUESTS, no verify, and db:reset clears the buckets per gate run, so D-124's accumulation cannot occur.
+           - verify:error-locale: 62 codes, both catalogues complete.
+Action:    error-catalogue + auth.service + SignIn.tsx + locale (en/am; am carries English pending the human pass, the standing C-3+ treatment, declared in MT-KEYS).
+Ruling needed: none further. When ADU-AUTH-01 v2.6 installs, S18.1/S18.2 should confirm this shape or supersede it explicitly.
+
+### D-178 - RULED AND DISCHARGED: the courier invite's second leg -- claim on authentication, atomically, with no oracle (settles D-89)
+
+Severity:  (implements a founder ruling; the underlying gap was MAJOR -- two migration headers described a mechanism no code performed)
+Phase:     T12 - 5
+Source:    WORK ORDER T12 S5.2; migrations 0029 and 0037's headers (the describers); ADU-AUTH-01 v2.6 is NOT installed (D-176) -- founder-ruled shape, debt recorded here
+Found by:  n/a -- the gap is D-89
+Effect:    After successful authentication of the exact normalized phone (core.e164 against core.e164, both normalized at their boundaries -- 0029's partial index seller_courier_invite_phone anticipates precisely this lookup), every PENDING invite for that phone is claimed and its relationship created, in ONE statement in the SAME transaction as the sign-in: an UPDATE ... RETURNING CTE stamps claimed_at/claimed_by_account_id and feeds INSERT INTO core.seller_courier, ON CONFLICT on the seller_courier_live partial unique DO NOTHING. Server-side only; a client cannot name an invite. Idempotent: a second sign-in finds no pending rows. Claim-ALL: two sellers inviting one phone yield two relationships. A revoked invite is never touched.
+           NO ORACLE, and it is load-bearing: nothing about the claim reaches the response and nothing in the statement can throw for a claimable phone, so a sign-in with a pending invite is indistinguishable, to the caller, from one without -- THE RESPONSE IS IDENTICAL; THE EFFECT IS NOT. That is G1.8's rule (the reason 0029 exists) carried through the leg that finally uses the table.
+Response:  BUILT; t12-d89-invite-claim.spec.ts pins all four properties: claim-all-atomically, idempotence, revoked-untouched, and the oracle test comparing an invited and an uninvited sign-in on status and response shape.
+Action:    One WITH ... INSERT statement in auth.service's verifySignIn, both account branches (an invite may predate the account or arrive years after it).
+Ruling needed: none further; same v2.6 confirmation note as D-177.
+
+### D-179 - Two test-suite conventions found the hard way while building D-177/D-178's suites
+
+Severity:  MINOR (test infrastructure; no product code affected)
+Phase:     T12 - 5
+Source:    the first three runs of t12-d89/t12-d101, each of which failed its TEARDOWN or its successor's SETUP while all assertions passed
+Found by:  T12 Phase 5, because a failed teardown was investigated instead of re-run past
+Effect:    Two conventions worth recording for every future auth-touching suite:
+           1. A LIVE FIXTURE MARKET CAPTURES OTHER SUITES' ROWS. Bootstrap binds a browser device to the oldest LIVE market, and an account created at sign-in takes its market from the device (D-104) -- so two suites with live test markets under parallel jest workers steal each other's devices and accounts, and each teardown misses rows the other created. Symptom: market_code_key duplicates on the NEXT run, failing beforeAll before a single assertion. Convention: fixture markets are is_live=false unless liveness is the thing under test; teardown scopes by PHONE, not by market.
+           2. session -> otp_challenge and notification -> account FKs order the teardown: sessions before challenges, notifications before accounts.
+Response:  FIXED in both suites; proven by running the pair twice consecutively without a reset (7 passed, then 7 passed).
+Action:    The comments sit in the suites where the next author will copy them from.
+Ruling needed: none.

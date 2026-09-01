@@ -49,6 +49,17 @@ export const ERROR_CATALOGUE = {
   OTP_EXPIRED: { group: 'auth', status: 401, retryable: true },
   OTP_ATTEMPTS_EXCEEDED: { group: 'auth', status: 429, retryable: false },
   OTP_PURPOSE_NOT_PERMITTED: { group: 'auth', status: 403, retryable: false },
+  /**
+   * D-101 (ruled at T12 S5.1 under ADU-AUTH-01 v2.6 S18.1/S18.2 -- the
+   * document is not yet installed, D-176; this code is the founder-ruled
+   * shape). Identity creation without the age declaration gets ITS OWN CODE,
+   * not a bare VALIDATION_FAILED: the whole defect was a new seller reading
+   * "The request is not valid" with nothing to correct, because the API
+   * demanded a field the schema called optional. Required ONLY when creating
+   * an account; an existing account signing in without it succeeds -- and the
+   * client must never ask which case it is in (the S17 oracle).
+   */
+  AGE_DECLARATION_REQUIRED: { group: 'auth', status: 400, retryable: false },
   SESSION_EXPIRED: { group: 'auth', status: 401, retryable: false },
   SESSION_REVOKED: { group: 'auth', status: 401, retryable: false },
   AUDIENCE_NOT_PERMITTED: { group: 'auth', status: 403, retryable: false },
