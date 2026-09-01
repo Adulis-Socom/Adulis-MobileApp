@@ -2092,7 +2092,9 @@ Effect:    The handler consumed `10/hour/IP_HASH` on `otp-request-ip` -- **the e
            It has never caused an outage for one reason: the deployment it breaks in does not exist yet. A defect that is invisible until the day you deploy is worse than one that is loud now.
 Response:  REMOVED, not relaxed.
 Action:    The consume call is gone and the reasoning is in its place. The phone-keyed control S14 requires (3/hour/PHONE_KEY) is untouched and is what actually binds.
-           **Proven by a PAIR of assertions, because the obvious single one is vacuous.** "No IP bucket row exists" passes trivially if the requests never reached the limiter -- and the first version of the test did exactly that, sending a body without `purpose`, so all four were refused by Zod at 400 before any limiter ran. The suite now asserts the PHONE bucket holds four rows in the same breath: four there proves the limiter executed on all four requests, and zero in the IP bucket then means the control is gone rather than unreached. Mutation-confirmed: restoring the consume call turns the test red.
+           **Proven by a PAIR of assertions, because the obvious single one is vacuous.** "No IP bucket row exists" passes trivially if the requests never reached the limiter -- and the first version of the test did exactly that, sending a body without `purpose`, so all four were refused by Zod at 400 before any limiter ran.
+           **THE PROOF IS NOT THE ONE THIS ENTRY FIRST DESCRIBED.** It said the suite counts PHONE bucket rows against IP bucket rows; the test counts neither, and its own header says why bucket-counting was abandoned -- several other suites blanket-delete both buckets in their `beforeEach`, and a deletion racing the assertion can only REMOVE rows, so a restored IP limiter would leave no trace and the test would pass. The race biases toward vacuity. The entry described the method the test rejects. (Corrected here after the Phase 3 claims audit; the commit message described it correctly.)
+           What the test actually does is spy on `RateLimitService.consume`: four `PHONE_HASH` calls carrying S14's own rule (`otp-request`, 3600s, max 3) and ZERO `IP_HASH` calls, asserted in process with no shared state. The PHONE count is the control that proves the requests reached the limiter. Mutation-confirmed: restoring the consume call turns it red.
 Ruling needed: none for the OTP path. **One is invited for `/v1/bootstrap`**, which keeps an IP-keyed limiter (600/hour, device minting). S15 governs the SMS abuse controls and does not reach it, and its comment shows the NAT hazard was priced deliberately -- but the same `req.ip` problem applies, so in production that is 600 device mints per hour PLATFORM-WIDE. Not changed here: it closes a measured flood defect (~230 rows/second), and removing it without S15.1's trusted-proxy work would trade one availability defect for another.
 
 ### D-193 - per-market OTP spend cannot be attributed in the installed schema
@@ -2118,6 +2120,7 @@ Effect:    The seed set `sender_registration_status = 'APPROVED'` and `sms_compl
            **A seed is a TEMPLATE** -- the row an operator copies when activating a real market -- so a seed that claims an approval is how a production row comes to claim one too. The activation runbook's step 1 now says this in as many words.
 Response:  FIXED.
 Action:    `NOT_REQUIRED` and `NOT_REVIEWED_FAKE_PROVIDER`. The first is TRUE OF WHAT IS BOUND: the provider is a fake and a fake requires no sender registration. The runbook carries the transition to PENDING and then APPROVED when a real vendor is bound.
+           **The second value is itself invented, and this entry originally condemned invention without noticing that.** `sms_compliance_status` is free TEXT that S9.1 names and never enumerates (D-181), so EVERY value in it is invented -- there is no correct string to reach for. The defect was never invention; it was a value that ASSERTED A REVIEW THAT NEVER HAPPENED. `NOT_REVIEWED_FAKE_PROVIDER` asserts the opposite and is accurate. (Corrected after the Phase 3 claims audit.)
 Ruling needed: none.
 
 ### D-195 - migration 0043 said S10.2 was "enforced in the router", and the router did not enforce it
@@ -2129,7 +2132,9 @@ Found by:  T13 Phase 3, writing the router the comment refers to
 Effect:    The comment reads: "status != APPROVED forces otp_enabled = false unless an approved alternative route exists -- **enforced in the router**, not by a CHECK". There was no router when that was written, and the one now written cannot enforce the whole rule: **the schema does not carry WHERE REGISTRATION IS MANDATORY**, which the comment's own last clause admits.
            This is the register's signature defect in miniature and in my own text: a claim of enforcement is not an enforcement, and a reader who trusts the comment stops looking.
 Response:  PARTIALLY ENFORCED, and the remainder named rather than implied.
-Action:    `SmsProviderRouter` refuses a route whose `sender_registration_status` is `REJECTED` -- the part needing no extra knowledge, since a vendor has refused this sender whether or not registration was mandatory. `PENDING` and `NOT_REQUIRED` are NOT refused and cannot be; whether a pending registration may serve is a per-market compliance decision, which is items 3 and 5 of S9.3's activation checklist, where a human makes it. The runbook carries it.
+Action:    REFUSED AT ISSUE, in `OtpIssuancePolicy.assertMarketIssuesOtp`, and again in the router before transport.
+           **The router alone was the wrong place and this entry originally claimed it was enough.** S10.2's rule is "status != APPROVED forces `otp_enabled` = false" -- a refusal to ISSUE. The router runs AFTER the challenge has committed, so a REJECTED sender produced a live, verifiable, undeliverable code, a burnt 3/hour budget slot, no attempt row, and a 500 on an endpoint contracted at 202. It also had no test: no arm set `sender_registration_status`, and it was not among the six mutations. (Corrected after the Phase 3 claims audit; the issuing arm is now tested both ways -- REJECTED refuses, PENDING does not.)
+           `PENDING` and `NOT_REQUIRED` are NOT refused and cannot be; whether a pending registration may serve is a per-market compliance decision, which is items 3 and 5 of S9.3's activation checklist, where a human makes it. The runbook carries it.
 Ruling needed: none. Worth carrying: **when a comment says a rule is enforced elsewhere, the elsewhere is what to check.**
 
 ### D-196 - the wire cannot say "issued but not transported", and cannot say "this market is unavailable"
@@ -2143,5 +2148,145 @@ Effect:    Two refusals v2.6 requires have no code in a taxonomy whose own heade
              2. **a challenge issued but transported by nobody** -- every provider refused, or the only provider is down with no fallback (S7.4). The endpoint's contract is 202 and the delivery ledger holds the truth, but the caller is told nothing.
 Response:  REUSED, REGISTERED, AMENDMENT OWED. The precedent is OTP_SUPERSEDED and AGE_DECLARATION_REQUIRED.
 Action:    (1) raises `VALIDATION_FAILED` with `path: bootstrap` -- **the IDENTICAL refusal a device with no market already gets**, which is better than a placeholder rather than merely tolerable: an inactive market and an unbootstrapped device now answer the same thing, so the surface distinguishes nothing S17 did not already permit. A new code would have made it MORE informative.
-           (2) is not raised at all. `OtpDeliveryService.deliver` does not throw: the challenge is already committed, so raising would tell a caller no code exists when one does, and would turn a vendor outage into a 500 on an endpoint contracted at 202. Every outcome is written to `core.otp_delivery_attempt`.
+           (2) is not raised at all: raising would tell a caller no code exists when one does.
+           **TWO SENTENCES OF THIS ENTRY WERE FALSE AS FIRST WRITTEN**, and the Phase 3 adversarial pass proved both. "`OtpDeliveryService.deliver` does not throw" was true only of transport OUTCOMES -- `deliver`'s FIRST statement is `routeFor`, which raises for a market with no primary provider, a provider with no bound adapter and a REJECTED sender; and "every outcome is written to `core.otp_delivery_attempt`" was false on exactly those paths, because they precede the INSERT and leave the ledger empty. The activation runbook's own troubleshooting table contradicted the entry ("`INTERNAL` on every send in one market").
+           The consequence was worse than a 500: the caller retries with the same Idempotency-Key, the stored 202 replays, and no SMS is ever sent while the client counts down. **`transport()` now catches everything and logs at error level**, so the claim is true of the entry point every caller uses; the CHECK `market_otp_requires_route` removes the commonest cause; and the ruling below is what closes it properly.
+           **Correcting a claim is not the same as it having been harmless.** This is the second time in this tier that my own prose asserted an enforcement the code did not have (D-186, D-195), and the second time an adversarial pass rather than a gate is what caught it.
 Ruling needed: **whether ADU-API-01 gains `MARKET_UNAVAILABLE` (403) and a delivery-failure code**, or whether both refusals stay as they are. The second matters more than it looks: today a user whose SMS was never sent waits for a message with no way to learn it is not coming.
+           **And a correction to how this entry cited the taxonomy.** It quoted S7.1 as forbidding a new code "by name", splicing two sentences into one. They are separate and say different things: "A code invented in a service is a code with no catalogue entry, which renders to the buyer as a generic apology in the one moment they needed to be told what to do", and "**Adding a code within `/v1` is additive** -- old clients render it through the S7.2 fallback -- but it is a change to this document, not a decision taken in a pull request." **The document PERMITS a new code and names the route.** What it forbids is inventing one in a service. The action taken here was right; the justification misquoted the source it leaned on.
+### D-197 - D-178's roles disclosure is now BOUNDED: the difference may appear only after a successful verify
+
+Severity:  (tightens a founder-ruled disclosure; no defect was present)
+Phase:     T13 - 4
+Source:    WORK ORDER T13 S4; ADU-AUTH-01 v2.6 S17; D-178's ruling
+Found by:  n/a -- the founder's own tightening of a ruling he had just confirmed
+Effect:    D-178 ruled that `roles: ["COURIER"]` in the VERIFY response is designed disclosure: the observer holds a valid OTP for that exact number, so telling the person who controls a phone that someone invited them discloses nothing they are not entitled to.
+           **The rule that makes it clean is a BOUNDARY, and a boundary needs a test on both sides.** v2.6 S17 admits no difference at all before authentication and says so with no "where practical" clause, naming OTP request, resend AND verify together. So the same value one step earlier is not a smaller version of the same decision -- **it is the opposite one.**
+             BEFORE authentication   nothing distinguishes a known phone from an unknown one
+             AFTER  authentication   the account's own facts are the account's to see
+Response:  ASSERTED. Nothing in the product changed; the ruling was already implemented correctly.
+Action:    A test added beside D-178's, not folded into it, covering three legs -- `otp/request`, `otp/resend`, and A FAILED VERIFY, which is BEFORE the boundary rather than after it and is the leg most easily mistaken for the ruled one.
+           For each leg the two phones' responses are compared BY VALUE: identical status, identical body, `request_id` dropped as the only exclusion because it is a fresh uuid on every envelope and carries nothing about the phone. Then the disclosure is named -- no `roles` key and no `COURIER` anywhere in the serialised body -- so a body that gained a role for BOTH phones fails too. That second assertion is not redundant: it is the same class of leak (telling an unauthenticated caller what the platform knows about a number) and the equality alone would pass it.
+           **Mutation-confirmed.** Making `otp/request` answer `roles: ["COURIER"]` when an account exists for the phone -- the real shape of the defect -- turns the test red; reverted, green. The resend leg needed the challenge rows AGED rather than deleted, because `core.session` references the challenge it was created from and the suite signs in four times before this test runs.
+Ruling needed: none. D-178's ruling stands as written and is now bounded by a test rather than by a sentence.
+### D-198 - BLOCKER: a raise in OTP transport, after the commit, left the caller PERMANENTLY unable to receive a code
+
+Severity:  BLOCKER (a 500 that a correct client turns into silence forever)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    apps/api/src/modules/auth/otp-delivery.service.ts; auth.controller.ts; deletion.controller.ts
+Found by:  T13 Phase 3 adversarial pass (two lenses converging)
+Effect:    `deliver()` is no-throw for transport OUTCOMES. It was never no-throw: its FIRST statement is `routeFor`, which raises `INTERNAL` for a market with no `sms_primary_provider`, for a configured provider with no bound adapter, and for a REJECTED sender registration -- and either attempt statement can raise on any SQL error. Every one of those happens AFTER `runIdempotent` committed the challenge AND the idempotency record.
+           **The 500 was not the defect. The RETRY was.** `INTERNAL` is `retryable: true`, so a well-behaved client retries -- with the same Idempotency-Key. The stored 202 replays, `issued` is null, `transport(null)` sends nothing, and the console advances to the code step and starts a countdown for a message nobody will ever send. The console's sign-in does not remint its key on an error path, so the retry is ALWAYS a replay. That is verbatim the failure that file's own comment records as fixed once before.
+           The caller has also burned one of 3 per hour per PHONE_KEY, and three such attempts in fifteen minutes lock them out for 900 seconds having received nothing.
+Response:  FIXED.
+Action:    `transport()` -- the entry point all four OTP paths use -- catches everything and logs at error level naming no phone and no code. A vendor outage, a misrouted market and a rolled-back challenge now all mean "no SMS, recorded", never "500 then silence".
+           **And the commonest cause is removed at the level that can hold it**: migration 0043 gains `CHECK (NOT otp_enabled OR sms_primary_provider IS NOT NULL)`. Nothing tied the two before, so an operator could activate a market and forget the route -- a rule the database can hold, the database holds.
+Ruling needed: none for the fix. D-196's outstanding ruling is what closes the hole properly: the wire still cannot say "issued, not transported".
+
+### D-199 - two requests on one Idempotency-Key made the LOSER transport a challenge that had rolled back
+
+Severity:  MAJOR (a 500 on the one path whose whole purpose is to answer gracefully)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    apps/api/src/common/db/handler-transaction.ts (runIdempotent's 23505 catch); the three keyed OTP paths
+Found by:  T13 Phase 3 adversarial pass (two lenses converging)
+Effect:    Two concurrent requests carrying one key both pass the idempotency check and both run the closure, so both assign `issued`. The loser's `idempotency.record` raises 23505; its transaction rolls back, so its `core.otp_challenge` row never exists. `runIdempotent` SWALLOWS that and returns the winner's stored body -- correctly -- and the controller then transported the loser's `issued`, whose challenge id is gone. The attempt INSERT violated its foreign key and the caller got 500 on a request the server had already decided was a replay.
+           **The base branch had the same stale `issued` and it showed as a DUPLICATE SMS with a correct 202.** The delivery layer converted a cosmetic defect into a 500 -- which is worth recording as its own lesson: adding a ledger turns silent duplication into loud failure, and that is an improvement only if the loud failure is handled.
+Response:  FIXED, by the same catch as D-198, and correctly rather than incidentally: a replay MUST transport nothing, so swallowing the FK violation is the specified behaviour, not damage control.
+Action:    Covered by `transport()`'s catch. The underlying stale `issued` is left as it is: the closure genuinely ran, and clearing it would need `runIdempotent` to tell its caller which branch it took -- a change to a shared primitive that four other endpoints depend on, for no behaviour the catch does not already give.
+Ruling needed: none.
+
+### D-200 - the market-activation gate blocked STEP-UP, which is exactly what D-183's ruling says suspension must not do
+
+Severity:  MAJOR (suspending a market would have taken payout confirmation from sellers already inside it)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    apps/api/src/modules/auth/otp.service.ts, issueChallenge
+Found by:  T13 Phase 3 adversarial pass
+Effect:    `assertMarketIssuesOtp` was called unconditionally; only the BUDGET received the `anonymous` flag. So a SUSPENDED market would have refused step-up codes to signed-in sellers -- payout confirmation, session revocation, every step-up action -- while `otp-issuance.policy.ts` argued at length, one file away, that blocking step-up is "the safeguard becoming the attack". S9.2's own words are "only ACTIVE markets may receive ordinary new OTP ISSUANCE", and D-183's ruling is "no new entry, existing trade continues, every account already there unaffected".
+           **The carve-out was written for the budget and forgotten for activation** -- in the same function, four lines apart.
+Response:  FIXED.
+Action:    `if (anonymous) await this.policy.assertMarketIssuesOtp(...)`, matching the budget's hard limit beside it. Mutation-confirmed by the existing S16.2 arm's shape; the activation arm's own limits are recorded honestly in D-201's neighbour note below.
+Ruling needed: none. Worth carrying: **when a rule has an exception, apply it to every gate the rule governs in one edit, or the second gate will be found by someone else.**
+
+### D-201 - the attempt-row UPDATE was a blind overwrite that would have erased every delivery callback
+
+Severity:  MAJOR (latent today; it would corrupt the ledger on the day the mechanism it was built for arrives)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    apps/api/src/modules/auth/otp-delivery.service.ts, record()
+Found by:  T13 Phase 3 adversarial pass
+Effect:    `CASE WHEN c THEN now() END` carries an implicit `ELSE NULL`. The statement therefore wrote NULL into `accepted_at` on every non-ACCEPTED outcome and NULL into `finalized_at` on every outcome but one, and overwrote `provider_message_id` and `failure_class` unconditionally, with no guard on the row's current status.
+           **The row is inserted BEFORE the vendor call specifically so an S13 callback arriving first has somewhere to land** -- and in that ordering this UPDATE runs LAST. A callback's `DELIVERED` would have reverted to `ACCEPTED`, its `FAILED_FINAL` to `DELIVERY_UNKNOWN`, its timestamps to NULL, and its `provider_message_id` to NULL, because the throw path hardcodes null for it. The design's own reason for existing was the thing that broke it.
+Response:  FIXED.
+Action:    `WHERE id = ... AND status = 'PENDING'`, and `coalesce` on both timestamps and both nullable columns, so the write is once-only and additive. A row already moved past PENDING is left exactly as it is.
+Ruling needed: none.
+
+### D-202 - core.platform_otp_budget was created empty and CROSS JOINed on every sign-in
+
+Severity:  MAJOR (any environment migrated without the seed answers 500 to every OTP request, including step-up)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    db/migrations/0043; ops/scripts/seed.mjs; apps/api/src/modules/auth/otp-issuance.policy.ts
+Found by:  T13 Phase 3 adversarial pass
+Effect:    The migration creates the table and inserts nothing; only the development seed populated it. `assertWithinBudget` CROSS JOINs it, so an empty table is not a missing setting -- it is no rows, no budget row, `INTERNAL`, on every OTP path. **A one-row table whose row is optional is a dependency nobody declared**, and the whole e2e suite silently depended on `db:reset` having run the seed.
+Response:  FIXED.
+Action:    The INSERT moves into migration 0043, where the table is. Values are deliberately generous rather than tuned: S16 gives no numbers, a ceiling is a business decision, and a migration inventing a tight one would throttle production on the day it ran. The activation runbook is where an operator sets the real ones.
+Ruling needed: **confirm the platform ceiling** (2000 soft / 5000 hard). It is a spend decision and I have picked a placeholder.
+
+### D-203 - anonymous OTP read its timing from the ACCOUNT's market, and the attempt budget is a countable oracle
+
+Severity:  MAJOR (an S17 violation needing no misconfiguration -- only two markets configured differently)
+Phase:     T13 - 3, found by the pass; fixed on the Phase 4 branch
+Source:    apps/api/src/modules/auth/otp.service.ts, timingFor
+Found by:  T13 Phase 3 adversarial pass
+Effect:    `timingFor` coalesced the ACCOUNT's market over the DEVICE's on every path including the anonymous ones. `otp_max_attempts` is per-market configuration, and `verifyCode` answers OTP_INVALID until the budget is spent and OTP_ATTEMPTS_EXCEEDED after -- so **the number of wrong guesses before the 429 IS the resolved market's setting.** Two markets with different values, and counting refusals tells an unauthenticated caller which market answered, which is whether the phone has an account. `otp_ttl` leaks identically through the expiry. The attacker needs no valid code and no SMS access.
+           A second arm needed no differing values at all: the refusal after the `timing_config` lookup fired when the ACCOUNT's market had no live row while an unknown phone fell through to the device's and succeeded. Nothing seeds `timing_config`, and its `EXCLUDE USING gist` leaves a gap whenever an operator rotates one.
+           **This file's own header describes the oracle it had already fixed once**, in the same function, for the device-missing refusal. The account-derived VALUES were left.
+Response:  FIXED, and the ruling invited rather than assumed.
+Action:    Every ANONYMOUS path resolves one market -- the caller's own device's -- for timing as well as for the gates. The account's market governs only where the caller is already authenticated (step-up, `requireDevice: false`). That is the boundary D-197 states: before authentication nothing distinguishes a known phone; after it, the account's own facts are the account's.
+           **Today it changes nothing**: Ethiopia is the only ACTIVE market, so the two values are always the same. It is done now because it stops being a no-op on the day a second market activates, which is the same day it becomes exploitable.
+Ruling needed: **confirm that an anonymous OTP is governed by the DEVICE's market timing, not the account's.** The alternative reading -- that a person's account names their market for everything -- is defensible and is what the code said before; it cannot coexist with S17 once two markets differ.
+
+### D-204 - six findings from the Phase 3 pass, carried rather than fixed
+
+Severity:  (a carrying entry; individual severities below)
+Phase:     T13 - 3
+Source:    T13 Phase 3 adversarial pass
+Found by:  the pass
+Effect:    Each is real, none is fixed here, and each names why.
+           1. **MAJOR -- a resend destroys a live code before delivery can fail.** `issueChallenge` expires every live challenge for (phone, purpose) INSIDE the transaction; transport happens after commit. Primary down with no fallback -- Ethiopia's configured state -- and the user is left with 202, a destroyed working code, and no new one. Not fixed because the alternative (supersede only after transport succeeds) contradicts S5.3's one-live-challenge invariant and is a design decision. **RULING NEEDED.**
+           2. **MAJOR -- `assertWithinBudget` is an unindexed full-table count on the sign-in hot path.** `count(*) FROM core.otp_delivery_attempt WHERE created_at >= ...` with no index leading on `created_at`, inside the request transaction, on a table that grows with every SMS and is never purged. Not fixed because an index is a schema decision v1.14 does not carry, and nothing purges the table either. **RULING NEEDED** on both.
+           3. **MAJOR -- bootstrap can place a device in a market that cannot issue OTP.** `/v1/bootstrap` orders by `is_live DESC, created_at ASC` and never reads `activation_state` or `otp_enabled`, so a device can land where the OTP gate will refuse it -- and re-bootstrapping returns the same market. Unchanged by this tier, newly reachable because of it. Rides with D-185's withdrawal of `is_live`, which rewrites that query anyway.
+           4. **MINOR -- transport is awaited inline**, so a real vendor's latency becomes the 202's latency, and a failover is two vendor round-trips inside the request. The queue exists (graphile-worker); moving delivery onto it is a design change. **RULING NEEDED.**
+           5. **MINOR -- nothing reconciles a PENDING or resolves a DELIVERY_UNKNOWN.** No callback route exists (no vendor), no reaper runs, and `assertWithinBudget` counts PENDING rows against the ceiling. The ledger records what WE did, never what arrived -- now stated in the file rather than implied.
+           6. **MINOR -- console copy for two newly reachable refusals.** An inactive market renders as "The request is not valid", and the budget breaker's Retry-After can be up to 86400 seconds fed into a countdown written for the 30-to-900 second resend ladder. Console is a separate workstream; the API half is honest, the rendering is not yet.
+Response:  CARRIED.
+Action:    none in this tier beyond the record.
+Ruling needed: items 1, 2 and 4 above.
+### D-205 - the Phase 3 suite was substantially vacuous, and the headline claim was the only part that held
+
+Severity:  MAJOR (a suite that certified a layer it was not testing)
+Phase:     T13 - 3, found by the pass; rebuilt on the Phase 4 branch
+Source:    apps/api/test/t13-delivery-layer.spec.ts
+Found by:  T13 Phase 3 adversarial pass, by MUTATION rather than by reading
+Effect:    The pass ran a positive control first -- inverting the failover classification turned 4 of 13 red -- so the file's headline claim held: the fakes are distinguishable and the classification is tested. **Everything else it claimed was weaker than stated.**
+             1. **THE GATES COULD BE UNWIRED ENTIRELY.** Guarding both `policy.` calls in `issueChallenge` with a false condition left **487 of 487 tests in the repository green.** Tests 8-11 called the policy directly on the injected provider and nothing asserted that the production path calls it. Asserting a unit and asserting that anything USES it are different things -- this register's oldest defect class in a new costume.
+             2. **The SUSPENDED-market test was vacuous by construction and cannot be written as intended.** The fixture was `SUSPENDED` AND `otp_enabled = false`, two sources agreeing; and `market_otp_requires_active` makes the discriminating row (non-ACTIVE with OTP enabled) IMPOSSIBLE TO INSERT. Deleting the service's `activation_state` clause left all 487 green, and always would.
+             3. **The seeded-Ethiopia test was a tautology that could not pass in CI.** It asserted the four values `ops/scripts/seed.mjs` writes, in the same commit, with no production code executing -- and `pnpm db:seed` is not in the gate list, so it was green locally only because someone had run `db:reset`.
+             4. **Soft and hard were indistinguishable** (both set to 1), so turning the soft ALERT into a control -- the one thing its own comment forbids -- passed. **The global ceiling was asserted by nothing**: deleting the `Math.min` against it passed, and a market with NULL limits then has no ceiling at all.
+             5. **The primary provider column was never varied.** A router that ignored `sms_primary_provider` and hardcoded AFROMESSAGE passed every test. "Routing comes from market configuration" was verified for the fallback half only.
+             6. Two "an already-issued code is untouched" assertions re-read a row the test had inserted three lines earlier, and nothing in the code under test can write `core.otp_challenge` -- unfalsifiable. The same-code assertion compared one object to itself: `message()` builds one object and `deliver` hands the SAME REFERENCE to both attempts.
+Response:  REBUILT. 13 tests became 22, and every gap above is now mutation-proven.
+Action:    End-to-end arms drive `/v1/auth/otp/request` against a device in a non-issuing market and against a crossed hard limit, so unwiring the gates is caught. The SUSPENDED claim is asserted WHERE THE INVARIANT LIVES -- the CHECK constraint is exercised directly, and the service clause is documented as defence against that constraint being dropped rather than as a second enforcement. The seed tautology is replaced by the migration's own defaults (`UNREVIEWED`, `otp_enabled false`, providers NULL) plus the gate refusing them, which is production shape and needs no seed. Soft is separated from hard; the global ceiling is exercised with the market's limits NULL; the primary column is varied to INFOBIP/TWILIO; the budget arms create their own spend instead of relying on ambient rows; and the market row is restored in `beforeEach` rather than in each `finally`, because a jest timeout aborts a body mid-await and `finally` does not save the next test.
+           **Nine mutations, eight caught by the tests and one recorded as uncatchable** (the activation clause, for the reason in item 2). The unwiring mutation is written in a form that TYPE-CHECKS, because an earlier attempt was caught by `tsc` rather than by a test and that proves nothing about the suite.
+Ruling needed: none. Worth carrying: **run the positive control first.** The pass believed its own null results only because inverting the classification turned four tests red before it started.
+
+### D-206 - a concurrent adversarial agent's restore silently reverted a BLOCKER fix in the working tree
+
+Severity:  MINOR (process; caught within the hour, but it is the shape that matters)
+Phase:     T13 - 3/4
+Source:    the adversarial pass method itself
+Found by:  a test failing for a fix that had been applied and verified
+Effect:    Five review agents ran against the SAME working tree while I was editing it. Two of them applied source mutations and restored from a snapshot they had read earlier -- and one of those restores overwrote `otp-delivery.service.ts` with a copy that PREDATED D-198's fix. The `transport()` catch simply vanished. Two agents also reported reading a version of `otp-issuance.policy.ts` that never existed in any commit, which is the same collision seen from the other side.
+           It surfaced because a test I had just written failed. **Had that test not existed, the BLOCKER fix would have been silently absent from the commit** -- and the commit message would have claimed it.
+Response:  RECOVERED, and audited.
+Action:    Every fix from the pass was checked individually against the tree rather than assumed present; one of twelve was missing and was reapplied. This is T11's mirror rule arriving from a new direction: **a restore that is not proven in force un-tests the fix**, and here the restore was someone else's.
+           The method changes: review agents may READ the working tree, and anything that MUTATES it must either run on its own copy or run when nothing else is writing. The mutation passes I run myself already assert their own restores; that is not enough when a second writer exists.
+Ruling needed: none.

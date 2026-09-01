@@ -57,19 +57,26 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > fixture in both directions. So the document, the fixture and the database agree by
 > construction rather than by review.
 >
-> **Five of check 14's rows are still body-over-manifest and still pinned by name** --
+> **SEVEN of check 14's rows are body-over-manifest and pinned by name** --
 > `core.category_market_availability` (D-18), `core.notification_preference` (D-40),
 > `core.seller_courier_invite` (D-59), `billing.purchase_intent` (D-68),
-> `core.seller_ownership_transfer` (D-70). All five exist; each is a table a ruling
-> required and no document's manifest listed. They are folded into v1.14's Appendix B and
-> flagged there, which is what "generated" bought.
+> `core.seller_ownership_transfer` (D-70), and the two migration 0043 adds,
+> `core.otp_delivery_attempt` and `core.platform_otp_budget`. `pnpm db:check` prints the
+> split: **116 tables: manifest 109 + 7 body-over-manifest.**
 >
-> **[!] One number in v1.14 is still wrong and is registered rather than reconciled**
-> (D-190): Appendix B opens "116 tables" and its closing sentence says "Reproducing 114
-> names here" -- v1.13's count, carried forward when the headline was updated. The
-> installed copy reads 116; the deviation from the founder's text is recorded and a
-> ruling is invited. **Do not fix a count by editing the document to match the fixture, or
-> the fixture to match the document** -- find which one the database agrees with.
+> The first five are folded into v1.14's Appendix B and flagged there. **The last two are
+> not** -- check 14's own comment says v1.14 owes those two Appendix B rows -- so the
+> count agrees while the enumeration does not yet. Say seven, not five.
+>
+> **[!] The INSTALLED v1.14 is correct; the founder's source carried one stale number**
+> (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
+> **114** names here" -- v1.13's count, carried forward when the headline was updated. The
+> installed copy reads 116, which is a one-word deviation from the source, made
+> deliberately and registered; a ruling is invited. **Nothing in the binding document is
+> wrong.**
+>
+> **Do not fix a count by editing the document to match the fixture, or the fixture to
+> match the document** -- find which one the database agrees with.
 
 There is deliberately no asserted enum count in the document any more: v1.9 replaced the
 number with a check, because a number in prose drifts and a number from a query cannot.
