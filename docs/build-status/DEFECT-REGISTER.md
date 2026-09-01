@@ -2028,3 +2028,28 @@ Effect:    v2.6 S9.1 says "maintain configuration similar to: market_config <fie
 Response:  REGISTERED.
 Action:    This entry. The alternative (its own table, its own grants) stays open and is option (b) of D-186's ruling.
 Ruling needed: none independently -- it is decided with D-186.
+### D-188 - verify:appendix could not parse a column-aligned markdown table, and reported the document as empty
+
+Severity:  MAJOR (the gate was wrong about the document rather than the document wrong about the database -- the inversion of its purpose)
+Phase:     T13 - 2
+Source:    ops/scripts/verify-appendix.mjs, the Appendix B per-schema row parser
+Found by:  T13 Phase 2, installing ADU-DB-01 v1.14 -- and independently by the adversarial pass on #45 from the other side ("generate-appendix's Appendix B output is in a format verify-appendix cannot parse")
+Effect:    The parser required EXACTLY one space around each pipe: /^\| `([a-z_]+)` \| \*{0,2}(\d+)\*{0,2} \|$/. A COLUMN-ALIGNED table -- `| `core`         | **90** |` -- is ordinary markdown, is what v1.14 carries, and is what generate-appendix.mjs emits. It matched zero rows, and the gate then reported "Appendix B has no row for schema `core`" NINE TIMES about a document that has all nine.
+           The direction of the error is what makes it MAJOR. This gate exists to catch a document that has drifted from the database; here it declared a correct document wrong, which is the failure mode that teaches people to disbelieve a gate. It also broke the last link of the chain the generator's header claims: DATABASE -> fixture -> DOCUMENT was unverifiable for the document half, so Phase 2 would have installed v1.14 against a gate that could never have passed it.
+Response:  FIXED
+Action:    The row pattern is whitespace-tolerant (`\s*` around every pipe). Proven by the install itself: red with nine per-schema failures before, `PASS Appendix A and Appendix B agree with what generated them` after, against v1.14 with 116 tables and 71 types.
+Ruling needed: none. Worth carrying: a gate that parses a human-written document must accept every form of that document a human legitimately writes, or it is asserting a formatting convention nobody agreed to.
+
+### D-189 - ADU-DB-01 v1.14 and ADU-AUTH-01 v2.6 installed; AUTH is split across two installed revisions
+
+Severity:  (an installation record, not a defect)
+Phase:     T13 - 2
+Source:    ADU-AUTH-01 v2.6 S0 ("the repository amendment manifest must record this split"); ADU-DB-01 v1.14
+Found by:  n/a
+Effect:    v1.14 supersedes v1.13 outright (v1.13 -> docs/superseded/). ADU-AUTH-01 does NOT work that way and this is the entry that says so: v2.6 governs authentication, sessions, recovery, operator authentication and abuse control; **v2.5 REMAINS INSTALLED AND CANONICAL** for the permission catalogue, the 42x6 matrix and the executable seed, which v2.6 leaves unchanged and does not reproduce.
+           Moving v2.5 to superseded/ would break a gate rather than merely lose prose: `verify-permission-doc.mjs` parses that file for the 42 codes, 139 grants and the six per-role totals. v2.6 prints the checksums and says "v2.6 does not reconstruct permissions from checksums" -- the numbers there describe v2.5's content and are not a source it could be rebuilt from.
+Response:  INSTALLED.
+Action:    Both documents in docs/, ASCII-verified (0 non-ASCII bytes each). GOVERNED gains v1.14 and v2.6 and keeps v2.5. verify:appendix reads v1.14. DOCUMENT_AUTHORITY and docs/amendments/README record the split, the latter with the two-column "which question, read which revision" table v2.6 S0 asks for.
+           v1.14's body is v1.13's, spliced rather than retyped: the document says at the end of every history block that all else is carried forward unaltered, and retyping 2,400 lines carries transcription risk with no upside. The splice asserts every boundary it uses and was verified lossless -- no non-history heading lost, none duplicated, the fourteen history sections renumbered 0.1..0.14.
+           `pnpm verify:permission-doc` -> PASS, 252 cells both directions, ACROSS the installation. That is v2.6 S0's own test that the split was recorded correctly, and it is why the gate is cited here rather than the reading of it.
+Ruling needed: none.

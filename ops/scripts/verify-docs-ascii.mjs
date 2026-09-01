@@ -33,7 +33,14 @@ const root = path.resolve(here, '..', '..');
 
 /** Enforced. A failure here fails the build. */
 const GOVERNED = [
-  'docs/ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md',
+  'docs/ADU-DB-01_Database_and_Data_Model_v1_14_ASCII.md',
+  // T13: ADU-AUTH-01 governs at v2.6 for authentication, sessions, recovery,
+  // operators and abuse control -- and v2.5 REMAINS INSTALLED AND GOVERNED for
+  // the permission catalogue, the 42x6 matrix and the SQL seed, which v2.6 S0
+  // leaves canonical and does not reproduce. Both are enforced because both are
+  // read: verify-permission-doc.mjs parses v2.5, and a mangled byte in either
+  // corrupts a gate's source of truth rather than merely its prose.
+  'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_6.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md',
   'docs/ADU-API-01_API_Contract_v1_7.md',
   // T5: ADU-CON-02 becomes GOVERNED at v3.1 -- it was supplied ASCII, so it
