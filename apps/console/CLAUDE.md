@@ -127,7 +127,7 @@ backfill. It earns its place on C-4.
 
 ### C-4's four rules, and where each one lives
 
-Every one of these is transcribed from ADU-CON-03 v1.1 S7, not designed. They
+Every one of these is transcribed from ADU-CON-03 v1.1 S7 (carried unchanged into v1.2 S7), not designed. They
 are the rules most likely to be "improved" by someone who has not read why.
 
 - **The three clock treatments are ONE module** -- `lib/clock.tsx`. SC-03's row

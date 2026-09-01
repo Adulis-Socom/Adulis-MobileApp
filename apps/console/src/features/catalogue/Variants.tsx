@@ -24,11 +24,10 @@
 import { useState } from 'react';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
-import { ScreenState } from '../../components/ScreenState';
-import { stateFromProblem } from '../../lib/states';
+import { ProblemBanner } from '../../components/Feedback';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useMarketContext } from '../../lib/market';
-import { formatMinor } from '../../lib/intl';
+import { formatMinor, fillTemplate } from '../../lib/intl';
 import { Stock } from './Stock';
 import type { Variant } from './types';
 
@@ -48,10 +47,25 @@ export function Variants({ sellerId, productId, currency, variants, onChanged }:
   const [newKey, setNewKey] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState<Record<string, string>>({});
 
   const add = async () => {
+    setFieldError(null);
+    if (!newKey.trim()) {
+      setFieldError(en['console.catalogue.variants.key_required']);
+      return;
+    }
+    if (newPrice.trim() === '' || Number.isNaN(Number(newPrice))) {
+      // Number('') is 0, and a silent 0.00 variant is the pass's B4. Refuse.
+      setFieldError(en['console.catalogue.variants.price_required']);
+      return;
+    }
     const priceMinor = Math.round(Number(newPrice) * 100);
-    if (!newKey.trim() || !Number.isInteger(priceMinor) || priceMinor < 0) return;
+    if (!Number.isInteger(priceMinor) || priceMinor < 0) {
+      setFieldError(en['console.catalogue.variants.price_required']);
+      return;
+    }
     setBusy(true);
     setProblem(null);
     try {
@@ -64,6 +78,35 @@ export function Variants({ sellerId, productId, currency, variants, onChanged }:
       addKey.remint();
       setNewKey('');
       setNewPrice('');
+      onChanged();
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePrice = async (variantId: string) => {
+    setFieldError(null);
+    const raw = editingPrice[variantId] ?? '';
+    if (raw.trim() === '' || Number.isNaN(Number(raw))) {
+      setFieldError(en['console.catalogue.variants.price_required']);
+      return;
+    }
+    const priceMinor = Math.round(Number(raw) * 100);
+    if (!Number.isInteger(priceMinor) || priceMinor < 0) {
+      setFieldError(en['console.catalogue.variants.price_required']);
+      return;
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(`/seller/variants/${variantId}`, {
+        method: 'PATCH',
+        sellerId,
+        body: { price_minor: priceMinor },
+      });
+      setEditingPrice((m) => ({ ...m, [variantId]: '' }));
       onChanged();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
@@ -89,10 +132,18 @@ export function Variants({ sellerId, productId, currency, variants, onChanged }:
   return (
     <section aria-labelledby="variants-heading" className="variants">
       <h2 id="variants-heading">{en['console.catalogue.variants.heading']}</h2>
-      {problem ? <ScreenState state={stateFromProblem(problem.problem)} problem={problem.problem} /> : null}
+      {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {fieldError ? (
+        <p className="field-error" role="alert">
+          {fieldError}
+        </p>
+      ) : null}
+      <p className="hint">{en['console.catalogue.variants.labels_owed']}</p>
 
       {variants.length === 0 ? (
-        <ScreenState state="EMPTY" emptyText={en['console.catalogue.variants.empty']} />
+        <p className="empty" data-state="EMPTY">
+          {en['console.catalogue.variants.empty']}
+        </p>
       ) : (
         <ul className="variant-list">
           {variants.map((v) => (
@@ -106,7 +157,7 @@ export function Variants({ sellerId, productId, currency, variants, onChanged }:
                     : en['console.catalogue.variants.withdrawn']}
                 </span>
                 <span className="variant-stock">
-                  {en['console.catalogue.variants.in_stock'].replace('{n}', String(v.stock_count))}
+                  {fillTemplate(en['console.catalogue.variants.in_stock'], { n: String(v.stock_count) })}
                 </span>
                 <button
                   type="button"
@@ -121,6 +172,21 @@ export function Variants({ sellerId, productId, currency, variants, onChanged }:
                     {en['console.catalogue.variants.withdraw']}
                   </button>
                 ) : null}
+                <label htmlFor={`price-${v.id}`} className="visually-hidden">
+                  {en['console.catalogue.variants.edit_price']}
+                </label>
+                <input
+                  id={`price-${v.id}`}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={en['console.catalogue.variants.edit_price']}
+                  value={editingPrice[v.id] ?? ''}
+                  onChange={(e) => setEditingPrice((m) => ({ ...m, [v.id]: e.target.value }))}
+                />
+                <button type="button" className="button" disabled={busy} onClick={() => void savePrice(v.id)}>
+                  {en['console.catalogue.variants.save_price']}
+                </button>
               </div>
               {expanded === v.id ? (
                 <Stock

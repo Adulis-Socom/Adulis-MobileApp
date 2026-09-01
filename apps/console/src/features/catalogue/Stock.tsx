@@ -3,7 +3,7 @@
  *
  * Route /s/:sellerId/products/:productId/stock, and inline on SC-09.
  * POST /v1/seller/variants/{id}/stock - POST .../confirm-stock -
- * GET .../stock-events. Permissions seller.stock:write / seller.products:read.
+ * GET .../stock-events. Permissions seller.stock:write / seller.stock:read.
  *
  * ==========================================================================
  * TWO DISTINCT ACTIONS THAT MUST NEVER BE CONFLATED (S8)
@@ -35,11 +35,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ScreenState } from '../../components/ScreenState';
+import { ProblemBanner } from '../../components/Feedback';
 import type { UiState } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useMarketContext } from '../../lib/market';
-import { timeFormatter } from '../../lib/intl';
+import { timeFormatter, fillTemplate } from '../../lib/intl';
 import type { StockEventPage, StockEvent } from './types';
 
 interface Props {
@@ -55,6 +56,7 @@ export function Stock({ sellerId, variantId, stockCount, stockConfirmedAt, onCha
   const market = useMarketContext();
   const [count, setCount] = useState<string>(String(stockCount));
   const [busy, setBusy] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const setKey = useIdempotencyKey();
   const confirmKey = useIdempotencyKey();
@@ -83,9 +85,14 @@ export function Stock({ sellerId, variantId, stockCount, stockConfirmedAt, onCha
   }, [loadHistory]);
 
   const setStock = async () => {
+    setFieldError(null);
+    if (count.trim() === '' || Number.isNaN(Number(count))) {
+      setFieldError(en['console.catalogue.stock.count_required']);
+      return;
+    }
     const n = Number(count);
     if (!Number.isInteger(n) || n < 0) {
-      setProblem(null);
+      setFieldError(en['console.catalogue.stock.count_required']);
       return;
     }
     setBusy(true);
@@ -132,7 +139,12 @@ export function Stock({ sellerId, variantId, stockCount, stockConfirmedAt, onCha
 
   return (
     <div className="stock" data-screen="SC-11">
-      {problem ? <ScreenState state={stateFromProblem(problem.problem)} problem={problem.problem} /> : null}
+      {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {fieldError ? (
+        <p className="field-error" role="alert">
+          {fieldError}
+        </p>
+      ) : null}
 
       <div className="stock-set">
         <label htmlFor={`stock-${variantId}`}>{en['console.catalogue.stock.count_label']}</label>
@@ -153,12 +165,13 @@ export function Stock({ sellerId, variantId, stockCount, stockConfirmedAt, onCha
       <div className="stock-confirm">
         <p className="stock-confirmed-at">
           {stockConfirmedAt
-            ? en['console.catalogue.stock.confirmed_at'].replace('{time}', fmt(stockConfirmedAt))
+            ? fillTemplate(en['console.catalogue.stock.confirmed_at'], { time: fmt(stockConfirmedAt) })
             : en['console.catalogue.stock.never_confirmed']}
         </p>
         <button type="button" className="button" disabled={busy} onClick={() => void confirmStock()}>
           {en['console.catalogue.stock.confirm']}
         </button>
+        <p className="hint">{en['console.catalogue.stock.confidence_owed']}</p>
       </div>
 
       <section aria-labelledby={`hist-${variantId}`} className="stock-history">

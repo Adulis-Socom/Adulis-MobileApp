@@ -22,6 +22,7 @@ import { BecomeSeller } from './features/entry/BecomeSeller';
 import { Products } from './features/catalogue/Products';
 import { ProductEditor } from './features/catalogue/ProductEditor';
 import { ProductNew } from './features/catalogue/ProductNew';
+import { StockScreen } from './features/catalogue/StockScreen';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
           { path: 'products', element: <Products /> },
           { path: 'products/new', element: <ProductNew /> },
           { path: 'products/:productId', element: <ProductEditor /> },
+          { path: 'products/:productId/stock', element: <StockScreen /> },
           /*
             THE SCREENS SC-01's RESOLVING LINKS POINT AT (ADU-CON-03 S6's
             table: item 3/4 -> SC-22, 5/6 -> SC-17, 7 -> SC-24, 8 -> SC-18,

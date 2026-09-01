@@ -402,6 +402,19 @@ export const en = {
   "console.catalogue.stock.never_confirmed": "This stock has not been confirmed as accurate yet.",
   "console.catalogue.stock.history_heading": "Stock history",
   "console.catalogue.stock.history_empty": "No stock changes yet. Setting a count or reconciling stock appears here.",
+  "console.catalogue.products.row_summary_owed": "Stock, variants and images for each product are shown inside the product, not on this list yet.",
+  "console.catalogue.products.filter_empty": "No loaded products match this filter. Load more, or choose another filter.",
+  "console.catalogue.variants.labels_owed": "Variants are shown by their key for now; named options such as size and colour appear once the server lists them.",
+  "console.catalogue.variants.key_required": "Enter a variant name before adding it.",
+  "console.catalogue.variants.price_required": "Enter a price before saving. A blank price is not zero.",
+  "console.catalogue.variants.edit_price": "New price",
+  "console.catalogue.variants.save_price": "Save price",
+  "console.catalogue.stock.count_required": "Enter a stock count before setting it. A blank count is not zero.",
+  "console.catalogue.stock.confidence_owed": "How fresh this stock looks to buyers is worked out by the server and is not shown here yet.",
+  "console.catalogue.stock.screen_heading": "Stock for",
+  "console.catalogue.stock.back_to_product": "Back to the product",
+  "console.catalogue.new.name_price_required": "Enter a name and a starting price. A blank price is not zero.",
+  "console.catalogue.media.no_thumbnail": "No image holds the thumbnail slot right now; moving any image re-numbers them and fills it.",
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */

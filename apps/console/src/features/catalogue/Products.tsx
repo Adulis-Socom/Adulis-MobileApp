@@ -95,6 +95,11 @@ export function Products() {
   // on the next page is worse than no filter.
   const shown = filter === 'all' ? rows : rows.filter((r) => r.visibility === filter);
 
+  // S3.4: an absent permission renders NOTHING -- not a shell with a dead
+  // list slot. The pass's M2: header, cap note and New-product link were
+  // rendering around a null list on a 403.
+  if (state === 'NO_PERMISSION') return null;
+
   return (
     <section aria-labelledby="products-heading" data-screen="SC-07">
       <header className="screen-header">
@@ -128,11 +133,17 @@ export function Products() {
         ))}
       </div>
       <p className="filter-note">{en['console.catalogue.products.filter_note']}</p>
+      <p className="row-summary-note">{en['console.catalogue.products.row_summary_owed']}</p>
 
       {state === 'EMPTY' || (state === 'READY' && rows.length === 0) ? (
         <ScreenState state="EMPTY" emptyText={en['console.catalogue.products.empty']} />
       ) : state === 'READY' || state === 'STALE' ? (
         <ScreenState state={state}>
+          {shown.length === 0 ? (
+            <p className="empty" data-state="EMPTY">
+              {en['console.catalogue.products.filter_empty']}
+            </p>
+          ) : null}
           <ul className="product-list">
             {shown.map((p) => (
               <li key={p.id} className="product-row" data-product={p.id}>
