@@ -35,6 +35,14 @@ import { Subscription } from './features/admin/Subscription';
 import { Sessions } from './features/admin/Sessions';
 import { NotificationPrefs } from './features/admin/NotificationPrefs';
 import { Closure } from './features/admin/Closure';
+import { Analytics } from './features/trust/Analytics';
+import { TrustLevel } from './features/trust/TrustLevel';
+import { Reviews } from './features/trust/Reviews';
+import { Claims } from './features/trust/Claims';
+import { ClaimDetail } from './features/trust/ClaimDetail';
+import { Inbox } from './features/conversation/Inbox';
+import { Thread } from './features/conversation/Thread';
+import { NotificationCentre } from './features/notifications/NotificationCentre';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -91,12 +99,17 @@ export const router = createBrowserRouter([
           { path: 'sessions', element: <Sessions /> },
           { path: 'notification-preferences', element: <NotificationPrefs /> },
           { path: 'closure', element: <Closure /> },
-          // C-7's routes hold placeholders so More's entries never fall
-          // through the catch-all (the D-146 class).
-          { path: 'insights', element: <Placeholder screen="SC-12" /> },
-          { path: 'insights/trust', element: <Placeholder screen="SC-13" /> },
-          { path: 'insights/reviews', element: <Placeholder screen="SC-14" /> },
-          { path: 'inbox', element: <Placeholder screen="SC-20" /> },
+          // C-7, groups D and E plus SC-30 -- the placeholders discharged.
+          // SC-15/16 claims are filed under NO More section (S2.3: an open
+          // obligation surfaces on Home and Orders); the routes exist here.
+          { path: 'insights', element: <Analytics /> },
+          { path: 'insights/trust', element: <TrustLevel /> },
+          { path: 'insights/reviews', element: <Reviews /> },
+          { path: 'claims', element: <Claims /> },
+          { path: 'claims/:claimId', element: <ClaimDetail /> },
+          { path: 'inbox', element: <Inbox /> },
+          { path: 'inbox/:conversationId', element: <Thread /> },
+          { path: 'notifications', element: <NotificationCentre /> },
           { path: 'more', element: <More /> },
           // `to="."` resolves to the CURRENT path inside a splat, so this
           // rendered nothing into the shell's main. The seller home is the

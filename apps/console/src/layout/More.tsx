@@ -68,6 +68,14 @@ export function More() {
   return (
     <section aria-labelledby="more-heading" className="more-menu">
       <h1 id="more-heading">{en['console.nav.more']}</h1>
+      {/* Claims are FILED UNDER NO SECTION, deliberately (S2.3: an open
+          obligation is not an insight) -- but a deadline-bearing obligation
+          with zero navigation is worse than the D-146 class, so the entry
+          stands alone here until Home's daily brief surfaces it (C-7 pass
+          M4; the Home surfacing is registered as owed). */}
+      <p className="more-claims">
+        <Link to={`/s/${sellerId}/claims`}>{en['console.more.claims']}</Link>
+      </p>
       {GROUPS.map((g) => (
         <section key={g.heading} aria-label={g.heading} className="more-group">
           <h2>{g.heading}</h2>

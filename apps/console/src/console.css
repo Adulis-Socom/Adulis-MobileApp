@@ -627,3 +627,52 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .pref-row.locked { opacity: 0.9; }
 
 .table-scroll { overflow-x: auto; }
+
+/* ==========================================================================
+   C-7 -- groups D/E plus SC-30. Layout only; colours come from the state
+   visual language above. No fixed heights on translated text.
+   ========================================================================== */
+
+.kpi-tiles { display: flex; gap: var(--space-3, 0.75rem); flex-wrap: wrap; margin-block: var(--space-3, 0.75rem); }
+.kpi-tile {
+  border: 1px solid var(--color-border, #d4cec4);
+  border-radius: var(--radius-2, 8px);
+  padding: var(--space-3, 0.75rem);
+  min-width: 9rem;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+}
+.kpi-value { font-size: 1.5rem; font-weight: 700; }
+.analytics-full.locked { opacity: 0.75; }
+
+.review-list, .claim-list, .conversation-list, .notification-list { list-style: none; padding: 0; margin: 0; }
+.review-card, .claim-card, .notification-row {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding-block: var(--space-3, 0.75rem);
+  border-bottom: 1px solid var(--color-border, #d4cec4);
+}
+.review-body { flex-basis: 100%; margin: 0; }
+
+.conversation-row a { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; padding-block: var(--space-2, 0.5rem); }
+
+.message-list { list-style: none; padding: 0; display: grid; gap: var(--space-2, 0.5rem); }
+.message {
+  border: 1px solid var(--color-border, #d4cec4);
+  border-radius: var(--radius-2, 8px);
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  max-width: 42rem;
+}
+.message-seller, .message-team_member { margin-left: auto; }
+.message-bot { opacity: 0.9; }
+.message-sender { font-weight: 600; margin-right: var(--space-2, 0.5rem); }
+.message-time { font-size: var(--text-sm, 0.875rem); opacity: 0.75; }
+.message-body { margin-block: var(--space-1, 0.25rem) 0; }
+.composer { display: grid; gap: var(--space-2, 0.5rem); max-width: 42rem; margin-top: var(--space-4, 1rem); }
+.pinned-order { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; }
+
+.notifications-header { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.claim-evidence.readonly ul { padding-inline-start: 1.25rem; }
+.claim-remedy { display: grid; gap: var(--space-2, 0.5rem); max-width: 28rem; }

@@ -1,10 +1,9 @@
 # WORK ORDER T14-C REPORT
 
-**The Rest of the Console.** The install is complete and audited; C-5 and C-6
-are built, adversarially passed, remediated, and proven in a browser; C-7 and
-C-8 were not started, deliberately -- a half-finished stage is worse than one
-not started, and the order says so. Every claim that asserts verification names
-its command. `State of main` is a ref.
+**The Rest of the Console.** The install is complete and audited; C-5, C-6 and
+C-7 are built, adversarially passed, remediated, and proven in a browser; C-8
+remains. Every claim that asserts verification names its command. `State of
+main` is a ref.
 
 ---
 
@@ -135,6 +134,49 @@ ALL FIXED in-phase; the e2e gained seven arms including the two that prove
 the key fixes against the real server. The C-5 lesson held its shape: the
 three broken mutations were exactly the three the e2e had left undriven.
 
+## S3 -- C-7 (groups D and E plus SC-30)
+
+**Screens:** SC-12..16 (`features/trust/`), SC-20/21 (`features/conversation/`),
+SC-30 (`features/notifications/`); the shell bell became a LINK to SC-30.
+~120 locale keys; MT-KEYS 710.
+
+**The wire disagreed with the wireframe more than anywhere yet (D-226):**
+GET /v1/seller/level and POST analytics/export DO NOT EXIST (SC-13 renders
+its two wire-free sentences -- level is computed, level is independent of
+tier -- plus the named absence; no number invented); analytics accepts NO
+date parameters (the work order's 90-day picker is owed to the wire, the
+fixed 30-day window said in words); the seller conversation row is FOUR
+FIELDS (no buyer name, preview, unread marker, order link or unanswered
+filter -- the D-153 asymmetry, each named in one on-screen sentence).
+
+**The traps** (50/50 `pnpm verify:console-e2e`): reviews read-only -- the
+forbidden list IS the design, zero controls asserted; claims respond-only,
+the empty list good news with NO action; D-73's anchor rides the MESSAGE --
+the pin derives from what the thread said, proven by a real order-anchored
+buyer message; SC-30's read state is the server's read_at (why it syncs with
+the Companion), driven against the real NEW_DEVICE_SIGNIN row the harness's
+own sign-in mints; polling 30s, paused when hidden.
+
+**The pass (D-227).** One BLOCKER of a NEW class: SC-16's evidence labels
+were written from memory against enum values that do not exist, and the e2e
+plant COPIED THE FICTION -- green against invented data. The map is rebuilt
+verbatim from core.claim_evidence_kind, the plant derived from the DDL and
+the service SELECT, and the lesson joins D-221's: a vocabulary is
+transcribed, never recalled, and a plant derives from the server, never the
+component. Also fixed: the poll-vs-send race (generation counter), the
+50-message silent truncation, the false 30-day sentence, S14's forbidden
+empty-state action (which the e2e had certified), claims reachable only by
+typed URL, the blank VALIDATION main (closing D-225's parked question), and
+the vocabulary class twice more (claim states, review badges). One API
+defect PARKED and recorded: the notifications seller-scope predicate hides
+ownership-transfer/stock/trial notices from the seller and leaks them into
+the buyer feed (D-227 S1).
+
+The e2e's centrepiece: a REAL two-sided conversation -- the seeded buyer on
+an explicitly cookie-free context writes through the buyer wire (console
+Origin presented); the seller console reads, sees the pin, and replies
+through its own wire, past the key gate.
+
 ## S5 -- the ten standing rules
 
 None broken across either stage. At C-5, the two bent by the first draft -- keys minted per click
@@ -158,7 +200,7 @@ commits (`pnpm verify:mt-keys` PASS; HUMAN-REQUIRED unchanged at 2).
 
 ## Browser and gates
 
-`pnpm verify:console-e2e`: **42 passed** -- C-5's renders and mutation arm
+`pnpm verify:console-e2e`: **50 passed** (C-7's eleven on top of C-5/C-6's) -- C-5's renders and mutation arm
 (create -> refuse blanks -> variant -> stock -> confirm -> real blocked
 publish, plus the planted 409) and C-6's fifteen (real fulfilment save with
 read-back, real closure round-trip, real courier invite/revoke, real
@@ -171,7 +213,7 @@ re-run). API tests 507/507.
 
 ## Register
 
-D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225.
+D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225, D-226, D-227.
 
 ## Parked -- long by design
 
@@ -190,10 +232,17 @@ D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225.
   row; courier account_id; the purchase-intent reference on the GET; a
   seller-status read; core.category rows and display names; per-field anchor
   links from slots.path; SC-26/SC-27 mutation arms (need a billing seed).
-- **C-7, C-8: not started.** Their traps are in the order, unconsumed.
+- C-7's API-side debts (D-226/D-227): GET /v1/seller/level (and history);
+  analytics date parameters and export; the conversation row's buyer-name/
+  preview/unread/order fields and unanswered filter; the notifications
+  seller-scope predicate (D-227 S1 -- transfer/stock/trial notices hidden
+  from the seller, leaked to the buyer feed); a chatbot-entitled seed for
+  BOT-render e2e; a poll-pause harness technique; Home's obligation
+  surfacing (claims) with the daily brief.
+- **C-8: not started.** Its traps are in the order, unconsumed.
 
 ## State of main
 
-`main` = **ea40d6e** (T13 + T14 A/B + PR #52: the install and all of C-5,
-merged with 25 gates green). C-6 rides `tier14c/c6-store-admin`, pass
-remediated, 42/42 e2e and 25/25 gates on the branch.
+`main` = **ece194a** (T13 + T14 A/B + C-5 + C-6, all merged, 25 gates
+green). C-7 rides `tier14c/c7-insights-inbox`, pass remediated, 50/50 e2e
+and 25/25 gates on the branch.
