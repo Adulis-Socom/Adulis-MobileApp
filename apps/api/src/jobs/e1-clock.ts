@@ -58,14 +58,15 @@ async function expireOrder(
      WHERE order_id = ${orderId} AND state = 'ACTIVE'
      RETURNING id, variant_id, seller_id, quantity`.execute(trx);
 
-  // One release event per line — the A3.2 anchor. The BEFORE INSERT trigger
-  // applies the delta; stock_count is never written directly.
+  // One release event per line — the A3.2 anchor. Since T12 S1 (D-173) the
+  // quantity, variant and seller all DERIVE FROM THE RESERVING EVENT via
+  // fn_release_reservation_stock: a reservation with no ORDER_CREATED event
+  // fails this order's expiry loudly instead of inventing stock, and the
+  // per-order transaction keeps one bad order from blocking the sweep.
   for (const line of lines.rows) {
     await sql`
-      INSERT INTO core.stock_event
-        (id, variant_id, seller_id, delta, reason, order_id, reservation_id)
-      VALUES (gen_random_uuid(), ${line.variant_id}, ${line.seller_id},
-              ${line.quantity}, 'ORDER_EXPIRED', ${orderId}, ${line.id})`.execute(trx);
+      SELECT core.fn_release_reservation_stock(
+        ${line.id}, ${orderId}, 'ORDER_EXPIRED')`.execute(trx);
   }
   return true;
 }

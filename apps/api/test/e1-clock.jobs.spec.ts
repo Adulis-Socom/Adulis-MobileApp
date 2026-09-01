@@ -84,6 +84,18 @@ describe('E1 — the clock', () => {
        VALUES ($1,$2,$3,$4,$5,$6,1000,'ETB','ACTIVE')`,
       [resId, id, SELLER, BUYER, variant, opts.qty ?? 1],
     );
+    // THE RESERVING EVENT, paired with the reservation (T12 S1, D-173).
+    // Since migration 0042 every release DERIVES its quantity from this row
+    // and refuses loudly when it is absent -- this fixture predated the
+    // ruling, created bare reservations, and became the first thing the new
+    // refusal caught. A fixture must tell the ledger's story or the sweep
+    // it feeds is testing a state production cannot reach.
+    await admin.query(
+      `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason,
+                                     order_id, reservation_id)
+       VALUES ($1,$2,$3,$4,'ORDER_CREATED',$5,$6)`,
+      [randomUUID(), variant, SELLER, -(opts.qty ?? 1), id, resId],
+    );
     await admin.query(`SET session_replication_role = DEFAULT`);
     return { id, variant };
   };
