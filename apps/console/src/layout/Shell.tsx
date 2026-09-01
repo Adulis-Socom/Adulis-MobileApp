@@ -41,11 +41,17 @@ export function Shell() {
         <span className="store-name">{en['console.shell.store']}</span>
         {/* SellerSwitcher: only with >1 seller; the sellers-list contract
             gap (D-97) means it cannot render yet. */}
-        {/* SC-26's unread count arrives with its stage; the control exists
-            so the top bar's three regions are real from C-1. */}
-        <button type="button" className="bell" aria-label={en['console.shell.notifications']}>
+        {/* SC-30 exists now (C-7): the bell is a LINK, not a dead control.
+            Its unread COUNT stays owed -- drawing one would need a
+            shell-level poll on every route, and the list itself carries the
+            markers (D-226). */}
+        <NavLink
+          to={`/s/${sellerId}/notifications`}
+          className="bell"
+          aria-label={en['console.shell.notifications']}
+        >
           {'\u2022'}
-        </button>
+        </NavLink>
         {/* Sign-out was reachable from nowhere: this control had no handler,
             `common.signOut` had no render site, and a 401 left the shell up.
             A console holding a seller's money cannot lack an exit. */}
