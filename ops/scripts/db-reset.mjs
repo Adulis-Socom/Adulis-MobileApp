@@ -115,7 +115,10 @@ const rowCounts = async (c) => {
            (SELECT count(*)::int FROM core."order") AS orders,
            (SELECT count(*)::int FROM core.product_variant v
              WHERE v.stock_count <> coalesce((SELECT sum(e.delta) FROM core.stock_event e
-                                              WHERE e.variant_id = v.id), 0)) AS stock_drift`);
+                                              WHERE e.variant_id = v.id), 0)) AS stock_drift,
+           (SELECT count(*)::int FROM core.market
+             WHERE activation_state = 'ACTIVE' AND otp_enabled) AS active_markets,
+           (SELECT count(*)::int FROM core.platform_otp_budget) AS global_budget`);
   return r.rows[0];
 };
 const show = (label, c) =>
@@ -124,7 +127,7 @@ const show = (label, c) =>
       ? `${label}: no core.market -- nothing has been migrated here yet`
       : `${label}: markets ${c.markets}, accounts ${c.accounts}, sellers ${c.sellers}, ` +
         `devices ${c.devices}, timing_config in force ${c.timing}, orders ${c.orders}, ` +
-        `stock drift ${c.stock_drift}`,
+        `stock drift ${c.stock_drift}, active markets ${c.active_markets}, global budget ${c.global_budget}`,
   );
 
 const tables = await client.query(
@@ -239,7 +242,15 @@ show('after', c);
  * ledger, which is exactly what the first trade fixture did: reservations
  * holding stock no event ever deducted, so a release INVENTED two units.
  */
-const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 5, stock_drift: 0 };
+/*
+ * active_markets and global_budget pinned at T13 (ADU-AUTH-01 v2.6 S9/S16).
+ * ONE active market is the whole of S9's default-deny made checkable: a seed
+ * that switched a second market on -- or that stopped switching Ethiopia on
+ * -- would leave the delivery layer's routing tests asserting against a
+ * world nobody chose. The global budget row is S16's, and there can only
+ * ever be one.
+ */
+const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 5, stock_drift: 0, active_markets: 1, global_budget: 1 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)

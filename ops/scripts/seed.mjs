@@ -185,6 +185,47 @@ try {
      WHERE NOT EXISTS (SELECT 1 FROM core.eligibility_config WHERE market_id = $1)`,
     [M],
   );
+  /*
+   * THE SMS/ACTIVATION CONFIGURATION (ADU-AUTH-01 v2.6 S9.1, S9.2, S7.1).
+   *
+   * ETHIOPIA IS THE ONLY ACTIVE MARKET and everything else stays off -- S9
+   * denies by default, and the column defaults say so (UNREVIEWED, every
+   * flag false), so this UPDATE is the ONLY place a market is switched on.
+   *
+   * FALLBACK IS NULL, DELIBERATELY. S7.1 makes SMSEthiopia a CANDIDATE, not
+   * a route, until S7.2's fourteen-point acceptance checklist passes -- and
+   * that needs a registered business, which is blocked. So +251 is
+   * AfroMessage with no fallback, and S7.4's accepted limitation holds: an
+   * outage blocks NEW sends while already-issued codes still verify, because
+   * verification is local.
+   */
+  await client.query(
+    `UPDATE core.market
+        SET activation_state = 'ACTIVE',
+            registration_enabled = true,
+            buyer_registration_enabled = true,
+            seller_registration_enabled = true,
+            otp_enabled = true,
+            sms_primary_provider = 'AFROMESSAGE',
+            sms_fallback_provider = NULL,
+            sender_mode = 'ALPHANUMERIC_SENDER',
+            sender_id = 'Adulis',
+            sender_registration_status = 'APPROVED',
+            sms_compliance_status = 'REVIEWED_FOR_SEED',
+            otp_daily_soft_limit = 500,
+            otp_daily_hard_limit = 1000
+      WHERE id = $1`,
+    [M],
+  );
+
+  // S16's platform-wide budget. One row, and the table's boolean primary key
+  // makes a second impossible.
+  await client.query(
+    `INSERT INTO core.platform_otp_budget
+       (id, otp_global_daily_soft_limit, otp_global_daily_hard_limit)
+     VALUES (true, 2000, 5000) ON CONFLICT (id) DO NOTHING`,
+  );
+
   await client.query(
     `INSERT INTO core.account (id, phone_e164, market_id, status, age_declared_over_18)
      VALUES ($1,$2,$3,'ACTIVE', true) ON CONFLICT (id) DO NOTHING`,
@@ -431,6 +472,8 @@ Seeded (idempotent -- reruns change nothing):
 
   phone      ${PHONE}
   seller     ${SELLER}
+  market     ACTIVE, otp_enabled, AfroMessage primary, NO fallback (v2.6 S7.1:
+             SMSEthiopia is a candidate until S7.2's checklist passes)
   orders     5: CREATED (reservation window), PAYMENT_SUBMITTED
              (confirmation window), PAYMENT_CONFIRMED (clock stopped),
              COMPLETED (terminal), and PAYMENT_SUBMITTED with the

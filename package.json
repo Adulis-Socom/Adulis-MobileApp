@@ -40,8 +40,10 @@
     "verify:boot-smoke": "node ops/scripts/verify-boot-smoke.mjs",
     "verify:appendix": "node --env-file-if-exists=.env ops/scripts/verify-appendix.mjs",
     "verify:orphan-sweep": "node --env-file-if-exists=.env ops/scripts/verify-orphan-sweep.mjs",
-    "verify:console-e2e": "node --env-file-if-exists=.env ops/scripts/verify-console-e2e.mjs",    "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
-    "worker:install": "node ops/scripts/install-worker-schema.mjs"
+    "verify:console-e2e": "node --env-file-if-exists=.env ops/scripts/verify-console-e2e.mjs",
+    "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
+    "worker:install": "node ops/scripts/install-worker-schema.mjs",
+    "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

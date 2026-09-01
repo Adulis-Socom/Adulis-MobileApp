@@ -1935,3 +1935,60 @@ Effect:    Two conventions worth recording for every future auth-touching suite:
 Response:  FIXED in both suites; proven by running the pair twice consecutively without a reset (7 passed, then 7 passed).
 Action:    The comments sit in the suites where the next author will copy them from.
 Ruling needed: none.
+### D-180 - Audience is chosen at VERIFY, not bound at challenge creation: R39/S5.2 is not implemented
+
+Severity:  MAJOR (a ruled authentication invariant that the code does not hold)
+Phase:     T13 - 1
+Source:    ADU-AUTH-01 v2.6 R39, S5.2 -- "Audience is persisted at challenge creation" and "The verification request does not accept `audience`"
+Found by:  T13 Phase 1, checking S12.3's "OTP audience binding if not already present" rather than assuming it
+Effect:    `core.otp_challenge` had NO audience column (id, purpose, phone_e164, code_hash, attempt_count, expires_at, consumed_at, step_up_action, created_at), and `auth.schemas.ts` takes `audience` in the VERIFY body. So the audience is chosen by the caller AT VERIFICATION, which is exactly the shape S5.2 forbids: a challenge requested for MOBILE can mint a CONSOLE session, and the invariants S5.2 prints -- "MOBILE challenge -> MOBILE session only", "CONSOLE challenge -> CONSOLE session only" -- are unenforced. The two audiences have materially different session lifetimes and, through the eight console-only step-up permissions (S21.1/S26.4), different reachable capability.
+Response:  SCHEMA HALF BUILT (migration 0043 adds `core.otp_challenge.audience`, nullable so the migration cannot fail against a challenge in flight). THE SERVICE HALF IS NOT BUILT and is not silently assumed: writing the audience at request, refusing a mismatch at verify, and removing `audience` from the verify body is an authentication-semantics change, and T13's scope is the delivery layer.
+Action:    The column, its comment, and this entry. S31.1's three tests ("MOBILE -> MOBILE only", "CONSOLE -> CONSOLE only", "verify endpoint cannot override audience") are the acceptance criteria and are owed with the fix.
+Ruling needed: none -- v2.6 already rules it. What is owed is the BUILD, plus a decision on the in-flight window: removing `audience` from the verify body is a breaking contract change for any client mid-upgrade, so the fix likely accepts the field, ignores it, and refuses a mismatch, before dropping it a revision later.
+
+### D-181 - v2.6 names two fields and enumerates neither: `failure_class` and `sms_compliance_status`
+
+Severity:  MINOR (both are transcribed as TEXT; the risk is a later invented enum becoming binding)
+Phase:     T13 - 1
+Source:    ADU-AUTH-01 v2.6 S12.1 (`failure_class nullable`) and S9.1 (`sms_compliance_status`)
+Found by:  T13 Phase 1, writing migration 0043
+Effect:    Both fields are named in a field list and neither has a value set anywhere in v2.6. An enum invented in the migration would become the shape ADU-DB-01 v1.14 then has to match and every adapter then has to map onto -- design wearing transcription's clothes.
+           They are NOT the same as S5.6's send classifications. ACCEPTED / DEFINITIVE_NOT_SENT / DELIVERY_UNKNOWN classify a SEND and are carried by `status` (S12.2's six); `failure_class` is the provider-specific reason beneath a classification, which S5.6's last line makes each adapter document.
+Response:  BOTH ARE TEXT, with column comments saying why.
+Action:    Migration 0043's comments; this entry.
+Ruling needed: YES, eventually -- whether either becomes an enum, and if so with which values. Cheap to defer: a text column narrows to an enum later; an enum invented now is a value set every adapter has already been written against.
+
+### D-182 - S7.1's provider lifecycle has no schema home, and needs none yet
+
+Severity:  MINOR (recorded so the absence is deliberate rather than forgotten)
+Phase:     T13 - 1
+Source:    ADU-AUTH-01 v2.6 S7.1 -- CANDIDATE -> ACCEPTANCE_TESTING -> APPROVED -> PRODUCTION_FALLBACK
+Found by:  T13 Phase 1
+Effect:    v2.6 gives a four-state lifecycle for a provider's progress toward being a real route, and gives it no table, no column and no owner. The only fact the running system needs today is whether a market HAS a fallback route, and that is `core.market.sms_fallback_provider IS NULL` -- which is Ethiopia's state exactly (S7.1: "Before approval: Fallback = NONE").
+Response:  NO TABLE. The lifecycle is S7.2's fourteen-point acceptance checklist plus S7.3's upstream-independence review, both of which are runbook procedures against a vendor account that does not exist yet, not rows.
+Action:    Column comment on sms_fallback_provider; this entry.
+Ruling needed: only if the lifecycle must be queryable before a second provider is integrated. It cannot be until then.
+
+### D-183 - `core.market.is_live` and the new `activation_state` are two truths about one market
+
+Severity:  MAJOR (two overlapping sources for "is this market on", which is the shape that grows a stale copy)
+Phase:     T13 - 1
+Source:    ADU-AUTH-01 v2.6 S9.2 (the seven activation states) against the installed `core.market.is_live`
+Found by:  T13 Phase 1, adding activation_state beside a column v2.6 never mentions
+Effect:    `is_live` exists, is NOT NULL, and is read where it matters: `/v1/bootstrap` assigns a device its market by `ORDER BY m.is_live DESC, m.created_at ASC` (D-104's fix), so is_live decides WHICH MARKET A NEW ACCOUNT BELONGS TO. `activation_state` now decides whether that market may issue OTP. Nothing connects them, so a market can be `is_live = true, activation_state = UNREVIEWED` -- devices bind to it and no one can ever sign in -- or `is_live = false, activation_state = ACTIVE`, which issues OTP for a market bootstrap will not hand anybody.
+           v2.6 never mentions is_live, so collapsing, retiring or redefining it here would be the judgement call in SQL that "transcribe, do not design" forbids.
+Response:  BOTH KEPT, UNCONNECTED, and registered. Migration 0043 adds only the constraint v2.6 supports directly: otp_enabled implies activation_state = ACTIVE.
+Action:    Column comment on activation_state; this entry. The seed sets both consistently for the one market it creates, and db:reset now pins `active_markets = 1` so a second one cannot appear unnoticed.
+Ruling needed: YES. Either is_live becomes derived from activation_state (`activation_state = 'ACTIVE'`), or it keeps a separate meaning that some document states, or bootstrap starts reading activation_state and is_live retires. Until then the two can disagree and only a person would notice.
+
+### D-184 - S30 names nineteen absent events, not four -- and two of them collide with existing names
+
+Severity:  MAJOR (a closed, fail-closed catalogue; an unseeded name is a runtime refusal at the moment it is first emitted)
+Phase:     T13 - 1
+Source:    ADU-AUTH-01 v2.6 S30 and S30.1; `analytics.event_definition`
+Found by:  T13 Phase 1, diffing the WHOLE of S30 against the catalogue programmatically rather than working from S30.1's callout
+Effect:    S30.1 calls out four "at minimum"; the work order predicted six; THE DIFF IS NINETEEN. `otp_generated`, `otp_delivery_attempted`, `otp_delivery_accepted`, `otp_delivery_unknown`, `otp_delivery_failed`, `otp_delivered`, `otp_provider_failover_started`, `otp_provider_failover_completed`, `otp_verified`, `otp_market_soft_limit`, `otp_market_hard_limit`, `otp_global_soft_limit`, `otp_global_hard_limit`, `step_up_requested`, `step_up_satisfied`, `step_up_failed`, `courier_invite_claimed`, `social_account_verification_started`, `social_account_verification_completed`. The catalogue is closed and fail-closed, so every one of these is a refusal at first emission -- which for `otp_delivery_unknown` means the first provider timeout, exactly as S30.1 warns.
+           TWO ARE NEAR-DUPLICATES OF INSTALLED NAMES, and both are seeded rather than reconciled: S30's `step_up_requested` beside the catalogue's `step_up_challenged`, and S30's `otp_delivered` beside `otp_delivery_confirmed`. Choosing which name wins is a ruling, not a migration's decision.
+Response:  ALL NINETEEN SEEDED in migration 0043.
+Action:    The seed, and a scripted diff (ops/scripts, run at build time) rather than a reading of the section.
+Ruling needed: YES, on the two collisions -- whether `step_up_challenged` and `otp_delivery_confirmed` are retired in favour of v2.6's names, or whether the pairs mean different things and both stay. Two live names for one event splits every query that counts it.

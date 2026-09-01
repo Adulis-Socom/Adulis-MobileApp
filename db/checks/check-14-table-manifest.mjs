@@ -63,6 +63,14 @@ const BODY_OVER_MANIFEST = [
   // printing a signature or a table. Migration 0034 adds
   // core.seller_ownership_transfer; Appendix B owes the row.
   'core.seller_ownership_transfer',
+  // Register D-176/T13 S1: ADU-AUTH-01 v2.6 S12.1 DEFINES
+  // core.otp_delivery_attempt and S16 requires a platform-wide OTP budget
+  // that no per-market config table can hold. Migration 0043 adds both;
+  // ADU-DB-01 v1.14 owes the two Appendix B rows, and this file loses these
+  // two names the day it lands. Same mechanism as D-40/D-59/D-68/D-70,
+  // pinned BY NAME so any other stray table still fails.
+  'core.otp_delivery_attempt',
+  'core.platform_otp_budget',
 ];
 
 export default {
