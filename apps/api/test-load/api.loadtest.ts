@@ -74,8 +74,8 @@ describe('Phase D — API loads (A1 section 6)', () => {
     admin = new Pool({ connectionString: ADMIN, max: 2 });
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-         display_timezone, default_locale, is_live)
-       VALUES ($1,'LDA','LoadApi','PHASE_1','ETB','Africa/Addis_Ababa','en',false)`,
+         display_timezone, default_locale)
+       VALUES ($1,'LDA','LoadApi','PHASE_1','ETB','Africa/Addis_Ababa','en')`,
       [M],
     );
     await admin.query(

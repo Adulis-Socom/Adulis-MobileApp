@@ -69,8 +69,8 @@ async function seedBase() {
   await c.query(`SET session_replication_role = replica`);
   await c.query(
     `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-       display_timezone, default_locale, is_live)
-     VALUES ($1,'LDT','LoadTest','PHASE_1','ETB','Africa/Addis_Ababa','en',false)
+       display_timezone, default_locale)
+     VALUES ($1,'LDT','LoadTest','PHASE_1','ETB','Africa/Addis_Ababa','en')
      ON CONFLICT (id) DO NOTHING`,
     [MARKET],
   );
