@@ -41,6 +41,15 @@ DECLARE
   v_seller  uuid;
   v_qty     int;
 BEGIN
+  -- ADVERSARIAL PASS ON #43, finding 4 (MINOR): only the two ruled release
+  -- reasons may travel through this function. Anything else would escape
+  -- the stock_release_once partial index -- the A3.2 anchor -- entirely.
+  IF p_reason NOT IN ('ORDER_EXPIRED', 'LINE_CANCELLED') THEN
+    RAISE EXCEPTION
+      '% is not a release reason; fn_release_reservation_stock releases only ORDER_EXPIRED and LINE_CANCELLED (A3.2)',
+      p_reason;
+  END IF;
+
   -- STRICT does the enforcement: zero reserving events -> NO_DATA_FOUND ->
   -- the loud failure the ruling demands, with the reservation named; a
   -- GROUP BY yielding more than one row -> TOO_MANY_ROWS -> a reserving
@@ -53,6 +62,18 @@ BEGIN
     FROM core.stock_event e
    WHERE e.reservation_id = p_reservation AND e.reason = 'ORDER_CREATED'
    GROUP BY e.variant_id, e.seller_id;
+
+  -- ADVERSARIAL PASS ON #43, finding 2 (MAJOR): the derived quantity must
+  -- be POSITIVE. A zero- or positive-delta ORDER_CREATED row (reachable by
+  -- exactly the foreign-writer class D-173 records; no delta-sign CHECK
+  -- exists anywhere) would otherwise become a silent stock DECREMENT here --
+  -- wrong data instead of a raise, the precise failure mode the ruling
+  -- exists to prevent, applied blindly by fn_apply_stock_event.
+  IF v_qty IS NULL OR v_qty <= 0 THEN
+    RAISE EXCEPTION
+      'reservation % has a non-positive reserving quantity (%); the ledger is corrupt (D-173)',
+      p_reservation, v_qty;
+  END IF;
 
   -- The A3.2 anchor is unchanged: (reservation_id, reason) stays unique, so
   -- a second release of the same reservation still refuses on the index.

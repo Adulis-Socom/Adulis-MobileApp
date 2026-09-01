@@ -104,9 +104,19 @@ describe('D-173 -- the release derives from the reserving ledger event', () => {
       );
     }
 
-    for (const [o, r, v] of [
-      [O_PAIRED, R_PAIRED, V_PAIRED],
-      [O_BARE, R_BARE, V_BARE],
+    /*
+     * THE ROW LIES, DELIBERATELY (adversarial pass on #43, finding 3 --
+     * mutation-confirmed): the paired reservation says quantity FIVE while
+     * its reserving event says three. The first fixture had the two numbers
+     * agreeing, and a row-derivation implementation -- the exact wrong fix
+     * the ruling exists to prevent -- passed every assertion. With the row
+     * lying, ledger-derivation releases 3 (stock 7 -> 10) and row-derivation
+     * releases 5 (stock -> 12): arm 1 now DISCRIMINATES. Nothing prevents
+     * the disagreement existing, which is D-173's whole point.
+     */
+    for (const [o, r, v, qty] of [
+      [O_PAIRED, R_PAIRED, V_PAIRED, 5],
+      [O_BARE, R_BARE, V_BARE, 3],
     ] as const) {
       await admin.query(
         `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
@@ -119,8 +129,8 @@ describe('D-173 -- the release derives from the reserving ledger event', () => {
         `INSERT INTO core.reservation (id, order_id, variant_id, seller_id,
                                        buyer_account_id, quantity, unit_price_minor,
                                        unit_price_currency, state)
-         VALUES ($1, $2, $3, $4, $5, 3, 1000, 'ETB', 'ACTIVE')`,
-        [r, o, v, SELLER, BUYER_ACC],
+         VALUES ($1, $2, $3, $4, $5, $6, 1000, 'ETB', 'ACTIVE')`,
+        [r, o, v, SELLER, BUYER_ACC, qty],
       );
     }
 
@@ -164,8 +174,9 @@ describe('D-173 -- the release derives from the reserving ledger event', () => {
     await admin.end();
   });
 
-  test('arm 1: a reservation WITH its event releases exactly what the ledger took', async () => {
+  test('arm 1: a reservation WITH its event releases what the LEDGER took, not what the row claims', async () => {
     // Ledger story so far: SELLER_SET +10, ORDER_CREATED -3 -> 7 available.
+    // The reservation ROW says 5. The row is lying; the ledger is not.
     expect(await stock(V_PAIRED)).toBe(7);
 
     await admin.query(`SELECT core.fn_cancel_line($1, $2, $3, true)`, [
@@ -174,9 +185,9 @@ describe('D-173 -- the release derives from the reserving ledger event', () => {
       SELLER_ACC,
     ]);
 
-    // Back to 10 -- the release returned the LEDGER's 3, not a row's copy of
-    // it. The release event's provenance is asserted too: quantity, variant
-    // and seller all match the reserving event.
+    // Back to 10, NOT 12: the release returned the LEDGER's 3, not the
+    // row's 5. This is the assertion that failed the mutation (a
+    // row-derivation implementation) and the reason the fixture lies.
     expect(await stock(V_PAIRED)).toBe(10);
     const rel = await admin.query(
       `SELECT delta, variant_id, seller_id FROM core.stock_event
