@@ -19,11 +19,13 @@ export interface AnalyticsFull {
   readonly product_views_30d: number;
   readonly reservations_30d: number;
   readonly completed_30d: number;
-  readonly confirmation_rate: number | null;
-  readonly cancellation_rate: number | null;
-  readonly scan_completion_rate: number | null;
+  // numeric columns with no pg type parser: STRINGS on the wire (D-225's
+  // bigint lesson); coerce with Number() at any render site.
+  readonly confirmation_rate: number | string | null;
+  readonly cancellation_rate: number | string | null;
+  readonly scan_completion_rate: number | string | null;
   readonly unresolved_claim_count: number;
-  readonly scope: string;
+  readonly scope: string | null;
   readonly view_to_reservation_rate: number | null;
 }
 
@@ -49,11 +51,17 @@ export interface ClaimRow {
   readonly order_id: string;
   readonly reservation_id: string | null;
   readonly trigger: string;
-  readonly state: 'AWAITING_SELLER_EVIDENCE' | 'UNDER_REVIEW' | 'RESOLVED';
+  readonly state:
+    | 'AWAITING_SELLER_EVIDENCE'
+    | 'AWAITING_BUYER_EVIDENCE'
+    | 'AWAITING_BANK_TRACE'
+    | 'UNDER_REVIEW'
+    | 'RESOLVED';
   readonly remedy: string | null;
   readonly outcome: string | null;
   readonly opened_at: string;
-  readonly review_deadline: string | null;
+  // NOT NULL at the schema; typed so, the defensive render guards stay cheap.
+  readonly review_deadline: string;
 }
 export interface ClaimPage {
   readonly data: readonly ClaimRow[];

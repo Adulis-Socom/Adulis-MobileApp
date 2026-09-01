@@ -17,7 +17,7 @@
  * Polling: 30s while visible, paused when hidden (usePoll -- the rule is
  * S9's, the ~26%-of-origin-traffic number is ADU-CON-02-A1's).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -38,19 +38,25 @@ export function Inbox() {
   const [state, setState] = useState<UiState>('LOADING');
   const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
   const [problem, setProblem] = useState<ApiError | null>(null);
+  const loadGen = useRef(0);
+  const pagedRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!sellerId) return;
+    const gen = ++loadGen.current;
     setState((s) => (s === 'READY' || s === 'EMPTY' ? 'STALE' : 'LOADING'));
     try {
       const r = await api<ConversationPage>(`/conversations?as=seller&seller_id=${sellerId}`, {
         sellerId,
       });
+      if (gen !== loadGen.current) return;
       setRows(r.data);
       setNextCursor(r.next_cursor);
+      pagedRef.current = false;
       setLoadProblem(null);
       setState(r.data.length === 0 ? 'EMPTY' : 'READY');
     } catch (e) {
+      if (gen !== loadGen.current) return;
       if (e instanceof ApiError) {
         setLoadProblem(e.problem);
         setState(stateFromProblem(e.problem));
@@ -61,7 +67,9 @@ export function Inbox() {
   useEffect(() => {
     void load();
   }, [load]);
-  usePoll(() => void load(), 30_000);
+  usePoll(() => {
+    if (!pagedRef.current) void load();
+  }, 30_000);
 
   const loadMore = async () => {
     if (!sellerId || !nextCursor) return;
@@ -71,6 +79,7 @@ export function Inbox() {
         `/conversations?as=seller&seller_id=${sellerId}&cursor=${encodeURIComponent(nextCursor)}`,
         { sellerId },
       );
+      pagedRef.current = true;
       setRows((prev) => [...(prev ?? []), ...r.data]);
       setNextCursor(r.next_cursor);
     } catch (e) {
@@ -96,10 +105,14 @@ export function Inbox() {
       <h1 id="inbox-heading">{en['console.inbox.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
-      {state === 'TRANSPORT_ERROR' ? (
-        <p className="problem" role="alert">
-          {en['console.common.refetch_failed']}
-        </p>
+      {state !== 'READY' && state !== 'STALE' && state !== 'EMPTY' ? (
+        loadProblem ? (
+          <ProblemBanner problem={loadProblem} />
+        ) : (
+          <p className="problem" role="alert">
+            {en['console.common.refetch_failed']}
+          </p>
+        )
       ) : null}
 
       {rows.length === 0 ? (

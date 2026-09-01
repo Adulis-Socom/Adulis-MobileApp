@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-700 keys:
+710 keys:
 
 - `app.title`
 - `health.ok`
@@ -648,7 +648,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.insights.reviews.heading`
 - `console.insights.reviews.empty_heading`
 - `console.insights.reviews.empty_body`
-- `console.insights.reviews.open_orders`
 - `console.insights.reviews.rating`
 - `console.insights.reviews.item_ratings`
 - `console.insights.reviews.open_order`
@@ -677,11 +676,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.claims.detail.evidence_heading`
 - `console.claims.detail.evidence_none`
 - `console.claims.detail.evidence_readonly`
-- `console.claims.evidence.reservation`
 - `console.claims.evidence.payment`
-- `console.claims.evidence.decision`
-- `console.claims.evidence.conversation`
-- `console.claims.evidence.stock`
 - `console.claims.detail.remedy_legend`
 - `console.claims.detail.remedy_refund`
 - `console.claims.detail.remedy_fulfil`
@@ -726,6 +721,21 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.notifications.tpl.transfer_requested`
 - `console.notifications.tpl.transfer_activated`
 - `console.notifications.tpl.transfer_cancelled`
-- `console.notifications.tpl.order_awaiting_payment`
 - `console.notifications.tpl.stock_nudge`
 - `console.notifications.tpl.trial_ending`
+- `console.claims.evidence.chat_history`
+- `console.claims.evidence.scan_record`
+- `console.claims.evidence.bank_record`
+- `console.claims.evidence.stock_events`
+- `console.claims.evidence.order_transitions`
+- `console.claims.evidence.level_at_order`
+- `console.claims.evidence.acting_team_member`
+- `console.claims.state.awaiting_buyer`
+- `console.claims.state.awaiting_bank`
+- `console.claims.detail.already_resolved`
+- `console.insights.reviews.badge_claim_upheld`
+- `console.insights.reviews.badge_verified`
+- `console.insights.reviews.badge_confirmed`
+- `console.insights.reviews.badge_unverified`
+- `console.inbox.thread.load_earlier`
+- `console.more.claims`

@@ -39,7 +39,6 @@ const NOTIF_LABEL: Readonly<Record<string, string>> = {
   OWNERSHIP_TRANSFER_REQUESTED: en['console.notifications.tpl.transfer_requested'],
   OWNERSHIP_TRANSFER_ACTIVATED: en['console.notifications.tpl.transfer_activated'],
   OWNERSHIP_TRANSFER_CANCELLED: en['console.notifications.tpl.transfer_cancelled'],
-  ORDER_AWAITING_PAYMENT_MORNING: en['console.notifications.tpl.order_awaiting_payment'],
   STOCK_CONFIDENCE_NUDGE: en['console.notifications.tpl.stock_nudge'],
   TRIAL_ENDING: en['console.notifications.tpl.trial_ending'],
 };
@@ -167,10 +166,14 @@ export function NotificationCentre() {
       </div>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
-      {state === 'TRANSPORT_ERROR' ? (
-        <p className="problem" role="alert">
-          {en['console.common.refetch_failed']}
-        </p>
+      {state !== 'READY' && state !== 'STALE' && state !== 'EMPTY' ? (
+        loadProblem ? (
+          <ProblemBanner problem={loadProblem} />
+        ) : (
+          <p className="problem" role="alert">
+            {en['console.common.refetch_failed']}
+          </p>
+        )
       ) : null}
 
       {rows.length === 0 ? (

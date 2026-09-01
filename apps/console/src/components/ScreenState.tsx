@@ -94,9 +94,14 @@ export function ScreenState(p: Props) {
     case 'CONFLICT':
       return p.problem ? <ProblemBanner problem={p.problem} /> : null;
     case 'VALIDATION':
-      return p.validationErrors ? (
-        <ValidationSummary errors={p.validationErrors} idPrefix={p.fieldIdPrefix ?? 'field'} />
-      ) : null;
+      // Field errors when the screen has fields; otherwise the problem
+      // itself -- a LOAD-time 400 (malformed URL id) has no fields, and
+      // rendering nothing left an empty main inside the shell (D-225's
+      // parked question; the C-7 pass's M6 closes it).
+      if (p.validationErrors) {
+        return <ValidationSummary errors={p.validationErrors} idPrefix={p.fieldIdPrefix ?? 'field'} />;
+      }
+      return p.problem ? <ProblemBanner problem={p.problem} /> : null;
     case 'TERMINAL':
       return (
         <div data-state="TERMINAL">

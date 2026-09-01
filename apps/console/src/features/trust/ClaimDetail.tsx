@@ -32,12 +32,21 @@ import { timeFormatter, fillTemplate } from '../../lib/intl';
 import { TRIGGER_LABEL, CLAIM_STATE_LABEL } from './Claims';
 import type { ClaimDetailRow } from './types';
 
+/**
+ * core.claim_evidence_kind (0001_foundation.sql), VERBATIM -- the C-7 pass's
+ * B1: the first version of this map was written from memory, the e2e plant
+ * copied the fiction, and every real claim would have rendered shouting
+ * enums. Vocabularies are transcribed from the DDL, never recalled.
+ */
 const EVIDENCE_LABEL: Readonly<Record<string, string>> = {
-  RESERVATION: en['console.claims.evidence.reservation'],
+  CHAT_HISTORY: en['console.claims.evidence.chat_history'],
+  SCAN_RECORD: en['console.claims.evidence.scan_record'],
   PAYMENT_EVIDENCE: en['console.claims.evidence.payment'],
-  PAYMENT_DECISION: en['console.claims.evidence.decision'],
-  CONVERSATION: en['console.claims.evidence.conversation'],
-  STOCK_SNAPSHOT: en['console.claims.evidence.stock'],
+  BANK_RECORD: en['console.claims.evidence.bank_record'],
+  STOCK_EVENTS: en['console.claims.evidence.stock_events'],
+  ORDER_TRANSITIONS: en['console.claims.evidence.order_transitions'],
+  SELLER_LEVEL_AT_ORDER: en['console.claims.evidence.level_at_order'],
+  ACTING_TEAM_MEMBER: en['console.claims.evidence.acting_team_member'],
 };
 
 export function ClaimDetail() {
@@ -49,6 +58,7 @@ export function ClaimDetail() {
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [remedy, setRemedy] = useState<'REFUND' | 'FULFIL'>('FULFIL');
   const [busy, setBusy] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const remedyKey = useIdempotencyKey();
 
   const load = useCallback(async () => {
@@ -85,7 +95,17 @@ export function ClaimDetail() {
       remedyKey.remint();
       void load();
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        if (e.problem.code === 'ORDER_ALREADY_TERMINAL') {
+          // The case ended under us: say it about the CLAIM and refetch so
+          // the controls leave with the state instead of sitting armed
+          // beneath a banner about "the order".
+          setFieldError(en['console.claims.detail.already_resolved']);
+          void load();
+        } else {
+          setProblem(e);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -111,6 +131,11 @@ export function ClaimDetail() {
       <h1 id="claim-heading">{en['console.claims.detail.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {fieldError ? (
+        <p className="field-error" role="alert">
+          {fieldError}
+        </p>
+      ) : null}
       {state === 'TRANSPORT_ERROR' ? (
         <p className="problem" role="alert">
           {en['console.common.refetch_failed']}
@@ -151,7 +176,7 @@ export function ClaimDetail() {
         <p className="hint">{en['console.claims.detail.evidence_readonly']}</p>
       </section>
 
-      {!resolved ? (
+      {!resolved && claim.viewer === 'SELLER' ? (
         <>
           {claim.review_deadline ? (
             <section aria-labelledby="deadline-heading" className="claim-deadline">

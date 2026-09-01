@@ -37,12 +37,12 @@ test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
     // The seed's exact numbers -- a wrong join breaks these.
     const tile = (label: string) => page.locator('.kpi-tile', { hasText: label });
     await expect(tile('Published products').locator('.kpi-value')).toHaveText('1');
-    await expect(tile('Orders').first().locator('.kpi-value')).toHaveText('5');
+    await expect(tile('Orders (last 30 days)').locator('.kpi-value')).toHaveText('5');
     await expect(tile('Active reservations').locator('.kpi-value')).toHaveText('4');
     await expect(tile('Completed handoffs').locator('.kpi-value')).toHaveText('0');
 
     // The 30-day window is the server's and FIXED; the absent picker is said.
-    await expect(page.getByText(/All figures cover the last 30 days/)).toBeVisible();
+    await expect(page.getByText(/A period picker arrives when the server accepts one/)).toBeVisible();
 
     // S3.5: the entitlement-locked section is VISIBLE, disabled, unlock named
     // -- and it is the REAL server's 409 that put it there.
@@ -65,8 +65,11 @@ test.describe('SC-13 Trust -- the two sentences, and the honest absence', () => 
       page.getByText('Trust level and subscription plan are independent. Paying for a plan does not change this level.'),
     ).toBeVisible();
     await expect(page.getByText(/cannot be shown yet/)).toBeVisible();
-    // NOTHING here is a control (S10).
-    await expect(page.locator('[data-screen="SC-13"]').getByRole('button')).toHaveCount(0);
+    // NOTHING here is a control (S10) -- buttons, links, or inputs.
+    const sc13 = page.locator('[data-screen="SC-13"]');
+    await expect(sc13.getByRole('button')).toHaveCount(0);
+    await expect(sc13.getByRole('link')).toHaveCount(0);
+    await expect(sc13.locator('input, select, textarea')).toHaveCount(0);
   });
 });
 
@@ -75,7 +78,12 @@ test.describe('SC-14 Reviews -- read-only, and the empty state teaches the gate'
     await page.goto(`${base}/insights/reviews`);
     await expect(page.locator('[data-screen="SC-14"]')).toBeVisible();
     await expect(page.getByText(/after a buyer scans the QR at handoff/)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open completed orders' })).toBeVisible();
+    // S14: this empty state offers NO action, deliberately -- an action here
+    // is an invitation to game the gate (the pass's M3 caught the first
+    // version offering one, with this very test asserting the violation).
+    const empty = page.locator('[data-screen="SC-14"] .empty');
+    await expect(empty.getByRole('button')).toHaveCount(0);
+    await expect(empty.getByRole('link')).toHaveCount(0);
   });
 });
 
@@ -92,48 +100,96 @@ test.describe('SC-15 Claims -- the empty list is good news', () => {
 });
 
 test.describe('SC-16 Claim detail -- planted render, real refusal', () => {
+  /*
+   * THE PLANT IS DERIVED FROM THE SERVICE AND THE DDL, NOT FROM THE
+   * COMPONENT (the pass's B1: the first plant copied the code's invented
+   * evidence vocabulary and certified fiction). Kinds below are
+   * core.claim_evidence_kind values the attach trigger actually inserts;
+   * reference_id is NOT NULL at the schema; severity is always ORDINARY on
+   * real buyer claims.
+   */
+  const CLAIM = '99999999-9999-4999-8999-999999999999';
+  const planted = (state: string, decided: string | null) => ({
+    id: CLAIM,
+    order_id: '5eed0000-0000-4000-8000-000000000013',
+    reservation_id: null,
+    trigger: 'SLA_BREACH',
+    state,
+    severity: 'ORDINARY',
+    remedy: null,
+    outcome: null,
+    outcome_reason: null,
+    opened_at: '2026-08-26T09:10:00Z',
+    review_deadline: '2026-09-27T14:00:00Z',
+    decided_at: decided,
+    viewer: 'SELLER',
+    evidence: [
+      {
+        kind: 'ORDER_TRANSITIONS',
+        reference_id: '5eed0000-0000-4000-8000-000000000013',
+        attached_at: '2026-08-26T09:10:00Z',
+      },
+      {
+        kind: 'CHAT_HISTORY',
+        reference_id: '5eed0000-0000-4000-8000-000000000013',
+        attached_at: '2026-08-26T09:10:00Z',
+      },
+    ],
+  });
+
   test('regions render from the wire shape; the remedy POST reaches the real server', async ({ page, context }) => {
-    const CLAIM = '99999999-9999-4999-8999-999999999999';
     await context.route(`**/v1/claims/${CLAIM}`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        json: {
-          id: CLAIM,
-          order_id: '5eed0000-0000-4000-8000-00000000000b',
-          reservation_id: null,
-          trigger: 'SLA_BREACH',
-          state: 'AWAITING_SELLER_EVIDENCE',
-          severity: null,
-          remedy: null,
-          outcome: null,
-          outcome_reason: null,
-          opened_at: '2026-08-26T09:10:00Z',
-          review_deadline: '2026-09-27T14:00:00Z',
-          decided_at: null,
-          viewer: 'SELLER',
-          evidence: [
-            { kind: 'RESERVATION', reference_id: null, attached_at: '2026-08-26T09:10:00Z' },
-            { kind: 'CONVERSATION', reference_id: null, attached_at: '2026-08-26T09:10:00Z' },
-          ],
-        },
+        json: planted('AWAITING_SELLER_EVIDENCE', null),
       });
     });
     await page.goto(`${base}/claims/${CLAIM}`);
     await expect(page.locator('[data-screen="SC-16"]')).toBeVisible();
 
-    // The factual-language rule, the read-only evidence, the deadline.
+    // The factual-language rule, the DDL's evidence kinds as words, the
+    // read-only sentence, the deadline.
     await expect(page.getByText('This is a statement of recorded facts, not an accusation.')).toBeVisible();
-    await expect(page.getByText('Reservation record')).toBeVisible();
+    await expect(page.getByText('Order history')).toBeVisible();
+    await expect(page.getByText('Conversation history')).toBeVisible();
+    await expect(page.getByText('ORDER_TRANSITIONS')).toHaveCount(0);
     await expect(page.getByText(/Evidence is read-only/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Deadline' })).toBeVisible();
 
-    // The remedy control is complete (radio + submit), and the POST goes to
-    // the REAL server, which 404s an unknown claim -- an answer that can
-    // only arrive past the idempotency-key gate. The refusal RENDERS.
+    // M7's discrimination: the POST is watched at the wire -- method, path,
+    // Idempotency-Key header, body -- and the REAL server's answer for an
+    // unknown claim renders as its OWN copy ('Not found.'), which no other
+    // failure on this path shares (a keyless POST says the retry-key
+    // sentence; a network drop says the transport one).
+    const posted = page.waitForRequest(
+      (r) =>
+        r.method() === 'POST' &&
+        r.url().includes(`/v1/seller/claims/${CLAIM}/remedy`) &&
+        Boolean(r.headers()['idempotency-key']) &&
+        r.postData() === '{"remedy":"REFUND"}',
+    );
     await page.locator('#remedy-refund').check();
     await page.getByRole('button', { name: 'Record this remedy' }).click();
-    await expect(page.locator('.problem')).toBeVisible();
+    await posted;
+    await expect(page.getByText('Not found.', { exact: true })).toBeVisible();
+  });
+
+  test('RESOLVED renders TERMINAL: the badge, the history, and NO controls', async ({ page, context }) => {
+    await context.route(`**/v1/claims/${CLAIM}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: planted('RESOLVED', '2026-08-27T10:20:00Z'),
+      });
+    });
+    await page.goto(`${base}/claims/${CLAIM}`);
+    await expect(page.locator('[data-screen="SC-16"]')).toBeVisible();
+    await expect(page.locator('[data-state="TERMINAL"]')).toBeVisible();
+    await expect(page.getByText(/Decided/)).toBeVisible();
+    // The case has ended: only history remains (S10 / wireframe annotation 3).
+    await expect(page.locator('.claim-remedy')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Record this remedy' })).toHaveCount(0);
   });
 });
 
@@ -151,6 +207,10 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
     // origin middleware (a cookie-carrying write with no Origin is 403).
     const buyerCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
+      // BEFORE anything exists: the EMPTY state teaches the role split.
+      await page.goto(`${base}/inbox`);
+      await expect(page.getByText(/separate from any buyer-role conversations/)).toBeVisible();
+
       await signInAs(buyerCtx, { phone: BUYER_PHONE, sellerId: SEEDED.sellerId });
       // A cookie-carrying WRITE must present the console's exact Origin
       // (the CSRF pair's server half) -- the browser does this for the app;
@@ -171,6 +231,18 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
       );
       expect(sent.status()).toBe(201);
 
+      // A SECOND buyer message carries an ORDER ANCHOR (D-73: the anchor
+      // rides the message; the seed's confirmed order belongs to this
+      // buyer-seller pair, so the ownership probe passes).
+      const anchored = await buyerCtx.request.post(
+        `http://localhost:3000/v1/conversations/${conversation_id}/messages`,
+        {
+          headers: { 'Idempotency-Key': crypto.randomUUID(), 'X-Adulis-Client': 'web/0.0.0', ...origin },
+          data: { text: 'Is my paid order ready?', order_id: '5eed0000-0000-4000-8000-000000000013' },
+        },
+      );
+      expect(anchored.status()).toBe(201);
+
       // The seller console: the list shows the thread (and says what the
       // wire does not carry), the thread shows the buyer's words, and the
       // reply is DRIVEN -- a real POST through the real key gate.
@@ -181,6 +253,15 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
 
       await expect(page.locator('[data-screen="SC-21"]')).toBeVisible();
       await expect(page.getByText('Can I collect after 5 PM?')).toBeVisible();
+
+      // The pin derives from the MESSAGES (D-73): the anchored message put
+      // an order in the thread, so the pinned card renders with its link.
+      await expect(page.locator('.pinned-order')).toBeVisible();
+      await expect(page.locator('.pinned-order').getByRole('link', { name: 'Open order' })).toBeVisible();
+
+      // Oldest first: the first message renders ABOVE the second.
+      const bodies = page.locator('.message-body');
+      await expect(bodies.first()).toHaveText('Can I collect after 5 PM?');
 
       await page.locator('#seller-message').fill('Yes, 5:30 PM works.');
       await page.getByRole('button', { name: 'Send' }).click();

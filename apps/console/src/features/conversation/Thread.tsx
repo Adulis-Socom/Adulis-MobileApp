@@ -22,7 +22,7 @@
  * level order on the wire, deliberately (D-73's whole point), so the pin is
  * a display of what the thread itself said, and absent when it said nothing.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { en, type MessageKey } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -58,18 +58,27 @@ export function Thread() {
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const sendKey = useIdempotencyKey();
+  // M2: only the LATEST load may commit state -- a slow poll response must
+  // never overwrite the refetch that followed a send.
+  const loadGen = useRef(0);
 
   const load = useCallback(async () => {
     if (!sellerId || !conversationId) return;
+    const gen = ++loadGen.current;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
     try {
       const r = await api<MessagePage>(`/conversations/${conversationId}/messages`, { sellerId });
-      // The wire is newest-first; a thread reads oldest-first.
+      if (gen !== loadGen.current) return; // a newer load owns the screen
+      // The wire is newest-first; a thread reads oldest-first. The page cap
+      // is 50: older pages load on demand below (M1).
       setMessages([...r.data].reverse());
+      setOlderCursor(r.next_cursor);
       setLoadProblem(null);
       setState('READY');
     } catch (e) {
+      if (gen !== loadGen.current) return;
       if (e instanceof ApiError) {
         setLoadProblem(e.problem);
         setState(stateFromProblem(e.problem));
@@ -77,10 +86,32 @@ export function Thread() {
     }
   }, [sellerId, conversationId]);
 
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+
   useEffect(() => {
     void load();
   }, [load]);
-  usePoll(() => void load(), 30_000);
+  // The poll never races a send: while busy, this tick is skipped and the
+  // send's own refetch is the update.
+  usePoll(() => {
+    if (!busyRef.current) void load();
+  }, 30_000);
+
+  const loadOlder = async () => {
+    if (!sellerId || !conversationId || !olderCursor) return;
+    setProblem(null);
+    try {
+      const r = await api<MessagePage>(
+        `/conversations/${conversationId}/messages?cursor=${encodeURIComponent(olderCursor)}`,
+        { sellerId },
+      );
+      setMessages((prev) => [...[...r.data].reverse(), ...(prev ?? [])]);
+      setOlderCursor(r.next_cursor);
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e);
+    }
+  };
 
   const send = async () => {
     if (!sellerId || !conversationId || !text.trim()) return;
@@ -97,7 +128,10 @@ export function Thread() {
       setText('');
       void load();
     } catch (e) {
-      if (e instanceof ApiError) setProblem(e);
+      if (e instanceof ApiError) {
+        if (e.problem.code === 'IDEMPOTENCY_KEY_REUSED') sendKey.remint();
+        setProblem(e);
+      }
     } finally {
       setBusy(false);
     }
@@ -125,10 +159,14 @@ export function Thread() {
       <h1 id="thread-heading">{en['console.inbox.thread.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
-      {state === 'TRANSPORT_ERROR' ? (
-        <p className="problem" role="alert">
-          {en['console.common.refetch_failed']}
-        </p>
+      {state !== 'READY' && state !== 'STALE' ? (
+        loadProblem ? (
+          <ProblemBanner problem={loadProblem} />
+        ) : (
+          <p className="problem" role="alert">
+            {en['console.common.refetch_failed']}
+          </p>
+        )
       ) : null}
 
       {pinnedOrder ? (
@@ -140,6 +178,11 @@ export function Thread() {
         </div>
       ) : null}
 
+      {olderCursor ? (
+        <button type="button" className="button" onClick={() => void loadOlder()}>
+          {en['console.inbox.thread.load_earlier']}
+        </button>
+      ) : null}
       <ol className="message-list">
         {messages.map((m) => (
           <li

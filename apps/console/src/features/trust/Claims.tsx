@@ -30,6 +30,8 @@ export const TRIGGER_LABEL: Readonly<Record<string, string>> = {
 };
 export const CLAIM_STATE_LABEL: Readonly<Record<string, string>> = {
   AWAITING_SELLER_EVIDENCE: en['console.claims.state.awaiting_seller'],
+  AWAITING_BUYER_EVIDENCE: en['console.claims.state.awaiting_buyer'],
+  AWAITING_BANK_TRACE: en['console.claims.state.awaiting_bank'],
   UNDER_REVIEW: en['console.claims.state.under_review'],
   RESOLVED: en['console.claims.state.resolved'],
 };
@@ -48,6 +50,7 @@ export function Claims() {
     setState((s) => (s === 'READY' || s === 'EMPTY' ? 'STALE' : 'LOADING'));
     try {
       const r = await api<ClaimPage>(`/seller/claims`, { sellerId });
+      setProblem(null);
       setRows(r.data);
       setNextCursor(r.next_cursor);
       setLoadProblem(null);
@@ -119,15 +122,13 @@ export function Claims() {
                 </span>
                 <span className="claim-trigger">{TRIGGER_LABEL[c.trigger] ?? c.trigger}</span>
                 <span className="claim-deadline">
-                  {c.state === 'RESOLVED'
-                    ? fillTemplate(en['console.claims.list.resolved_at'], {
-                        time: when(c.opened_at),
+                  {c.state === 'AWAITING_SELLER_EVIDENCE'
+                    ? fillTemplate(en['console.claims.list.respond_by'], {
+                        time: when(c.review_deadline),
                       })
-                    : c.review_deadline
-                      ? fillTemplate(en['console.claims.list.respond_by'], {
-                          time: when(c.review_deadline),
-                        })
-                      : ''}
+                    : fillTemplate(en['console.claims.list.resolved_at'], {
+                        time: when(c.opened_at),
+                      })}
                 </span>
                 <Link to={`/s/${sellerId}/claims/${c.id}`}>
                   {c.state === 'RESOLVED'

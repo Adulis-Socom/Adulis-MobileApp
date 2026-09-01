@@ -23,6 +23,14 @@ import { useMarketContext } from '../../lib/market';
 import { timeFormatter, fillTemplate } from '../../lib/intl';
 import type { ReviewPage, ReviewRow } from './types';
 
+/** core.review_badge (0001_foundation.sql), verbatim -- words, not enums. */
+const BADGE_LABEL: Readonly<Record<string, string>> = {
+  CLAIM_UPHELD: en['console.insights.reviews.badge_claim_upheld'],
+  VERIFIED_HANDOFF: en['console.insights.reviews.badge_verified'],
+  CONFIRMED_BY_BUYER: en['console.insights.reviews.badge_confirmed'],
+  UNVERIFIED: en['console.insights.reviews.badge_unverified'],
+};
+
 export function Reviews() {
   const { sellerId } = useParams<{ sellerId: string }>();
   const market = useMarketContext();
@@ -37,6 +45,7 @@ export function Reviews() {
     setState((s) => (s === 'READY' || s === 'EMPTY' ? 'STALE' : 'LOADING'));
     try {
       const r = await api<ReviewPage>(`/seller/reviews`, { sellerId });
+      setProblem(null);
       setRows(r.data);
       setNextCursor(r.next_cursor);
       setLoadProblem(null);
@@ -96,9 +105,8 @@ export function Reviews() {
         <div className="empty" data-state="EMPTY">
           <h3>{en['console.insights.reviews.empty_heading']}</h3>
           <p>{en['console.insights.reviews.empty_body']}</p>
-          <Link className="button primary" to={`/s/${sellerId}/orders`}>
-            {en['console.insights.reviews.open_orders']}
-          </Link>
+          {/* NO action, deliberately (S14): reviews cannot be caused by the
+              seller, and an action here is an invitation to game the gate. */}
         </div>
       ) : (
         <>
@@ -110,7 +118,9 @@ export function Reviews() {
                     n: String(r.seller_rating),
                   })}
                 </span>
-                {r.badge ? <span className="badge badge-review">{r.badge}</span> : null}
+                {r.badge ? (
+                  <span className="badge badge-review">{BADGE_LABEL[r.badge] ?? r.badge}</span>
+                ) : null}
                 <Link to={`/s/${sellerId}/orders/${r.order_id}`} className="review-order">
                   {en['console.insights.reviews.open_order']}
                 </Link>

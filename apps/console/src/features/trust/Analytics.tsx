@@ -41,6 +41,7 @@ export function Analytics() {
   const load = useCallback(async () => {
     if (!sellerId) return;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
+    setProblem(null);
     try {
       const o = await api<AnalyticsOverview>(`/seller/analytics/overview`, { sellerId });
       setOverview(o);
@@ -54,6 +55,12 @@ export function Analytics() {
         if (e instanceof ApiError && e.problem.code === 'TIER_LIMIT_REACHED') {
           setFull(null);
           setFullLocked(true);
+        } else if (e instanceof ApiError && e.problem.status === 403) {
+          // SALES_SUPPORT and INVENTORY hold basic:read and not full:read --
+          // an absent permission renders NOTHING for the section (S3.4),
+          // never a permission-denied banner on every visit.
+          setFull(null);
+          setFullLocked(false);
         } else if (e instanceof ApiError) {
           setProblem(e);
         }
@@ -84,9 +91,11 @@ export function Analytics() {
   }
 
   const noData =
+    overview.products_published === 0 &&
     overview.orders_30d === 0 &&
     overview.active_reservations === 0 &&
-    overview.completed_handoffs === 0;
+    overview.completed_handoffs === 0 &&
+    overview.followers === 0;
 
   return (
     <section aria-labelledby="analytics-heading" data-screen="SC-12" className="analytics">
