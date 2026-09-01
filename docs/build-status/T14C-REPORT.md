@@ -279,6 +279,7 @@ D-218 (amended), D-219, D-220, D-221, D-222, D-223, D-224, D-225, D-226, D-227, 
 
 ## State of main
 
-`main` = **20eda5e** at C-8's branch point (everything through C-7 merged,
-25 gates green). C-8 rides `tier14c/c8-courier` -- pass remediated, 51/51
-e2e and 25/25 gates on the branch -- and merges as the order's last stage.
+`main` = **d631757**: the install, C-5, C-6, C-7 and C-8 all merged -- PRs
+#52, #53, #54, #55, each with its adversarial pass remediated before merge
+-- and `pnpm ci:local` PASS all 25 gates on the merged result. WORK ORDER
+T14-C is complete; nothing of it rides a branch.
