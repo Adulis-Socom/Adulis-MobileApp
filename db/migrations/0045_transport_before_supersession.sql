@@ -24,7 +24,8 @@
 --   transported_at NULL      minted, not yet on its way -- NOT verifiable, and
 --                            it supersedes nothing
 --   transported_at set       a provider accepted it; it is THE live code, and
---                            accepting it expired every sibling in the same act
+--                            accepting it expired every other transported-live
+--                            sibling -- newest-wins, under an advisory lock
 -- ============================================================================
 
 ALTER TABLE core.otp_challenge
@@ -32,8 +33,10 @@ ALTER TABLE core.otp_challenge
 
 COMMENT ON COLUMN core.otp_challenge.transported_at IS
   'ADU-RUL-06 S5 (D-204.1). When a provider ACCEPTED transport of this code, '
-  'set by the delivery service in the same statement that expires every '
-  'sibling live challenge for the (phone, purpose) pair. NULL means minted '
+  'set by the delivery service inside a transaction that also expires every '
+  'other transported-live sibling for the (phone, purpose) pair, serialized '
+  'by a per-(phone, purpose) advisory lock so two concurrent acceptances '
+  'cannot zero each other out (Phase A adversarial pass). NULL means minted '
   'but not yet on its way: not verifiable, and superseding nothing, so a '
   'failed resend leaves the PREVIOUS code live. This is a security fact on '
   'the challenge, NOT a read of otp_delivery_status -- S12.2 forbids deriving '

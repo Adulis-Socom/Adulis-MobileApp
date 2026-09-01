@@ -234,23 +234,44 @@ export class AuthService {
      * All three failures answer identically, so the response says nothing
      * about which device ids exist or whom they belong to.
      */
+    /**
+     * WHAT THIS ENFORCES, STATED HONESTLY (Phase A pass corrected an earlier
+     * overclaim here).
+     *
+     * The invariant that HOLDS: a MOBILE-stamped challenge mints only a MOBILE
+     * session and a CONSOLE-stamped one only a CONSOLE session (S5.2), and
+     * every session is the phone's own account, gated by a valid OTP for that
+     * phone. No device trick below crosses an account.
+     *
+     * WHAT DOES NOT HOLD, and the earlier comment wrongly claimed it did: the
+     * server cannot ATTEST the client TYPE. A __Host- cookie is httpOnly to
+     * BROWSER JS, but any raw HTTP client reads the Set-Cookie off its own
+     * bootstrap response, so "arrived by cookie" is presentable by a script,
+     * and "arrived by body" is choosable by a browser. The channel is what the
+     * caller PRESENTS, not proof of what it is. So a caller can select which
+     * surface's credential FORM it receives for ITS OWN account -- a
+     * limitation inherent to not being able to authenticate a client type,
+     * and the same limitation the pre-stamp design had. Registered.
+     *
+     * The account-binding clause is on BOTH audiences: a device row bound to
+     * ANOTHER account is refused whichever surface asks, so a session can
+     * never be anchored to a stranger's device row (the D-64 residue class).
+     * The CONSOLE arm had it; the MOBILE arm did not, and the Phase A pass
+     * found the gap.
+     */
+    const boundElsewhere =
+      deviceRow.account_id !== null && deviceRow.account_id !== accountId;
     const deviceUnusable =
-      // A WEB ROW IS ADDRESSED BY ITS COOKIE AND NEVER BY A BODY FIELD. The
-      // audience used to gate this and the audience was a field the caller
-      // filled in; the CHANNEL is not fillable -- it is which door the id
-      // physically came through -- so the rule finally rests on something the
-      // caller cannot claim.
+      boundElsewhere ||
+      // A WEB row is addressed by its cookie; a body field naming one is refused.
       (deviceRow.platform === 'WEB' && body.deviceChannel !== 'cookie') ||
-      // The real cookie path can only name a WEB row; anything else arriving
-      // by cookie is a forged header, refused rather than reasoned about.
+      // A cookie can only name a WEB row; anything else arriving by cookie is
+      // a forged header, refused rather than reasoned about.
       (body.deviceChannel === 'cookie' && deviceRow.platform !== 'WEB') ||
-      // A CONSOLE-stamped challenge mints only through the browser's own
-      // cookie-addressed WEB row, unbound or already this account's.
-      (audience === 'CONSOLE' &&
-        (body.deviceChannel !== 'cookie' ||
-          (deviceRow.account_id !== null && deviceRow.account_id !== accountId))) ||
-      // A MOBILE-stamped challenge minting through a browser cookie is the
-      // surface conversion S5.2's invariants exist to stop (D-180).
+      // The stamped audience binds the surface: CONSOLE mints only through the
+      // cookie door, MOBILE only through the body door. This is the S5.2
+      // challenge->session binding, which does hold.
+      (audience === 'CONSOLE' && body.deviceChannel !== 'cookie') ||
       (audience === 'MOBILE' && body.deviceChannel !== 'body');
     if (deviceUnusable) {
       throw new AdulisException('VALIDATION_FAILED', {

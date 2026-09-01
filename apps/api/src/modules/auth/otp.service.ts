@@ -409,27 +409,76 @@ export class OtpService {
    * re-run cannot re-expire a sibling that has legitimately become live since.
    */
   async markTransported(challengeId: string): Promise<void> {
-    // Two statements, not a data-modifying CTE: an UPDATE ... FROM (SELECT of
-    // a sibling UPDATE) against the SAME table reads the pre-statement
-    // snapshot and, in practice, left the siblings un-expired. Two awaited
-    // statements are unambiguous, and the tiny window between them is safe --
-    // a verify landing in it sees the OLD code still live, which is the
-    // conservative direction.
-    const accepted = await sql<{ phone_e164: string; purpose: string }>`
-      UPDATE core.otp_challenge
-         SET transported_at = now()
-       WHERE id = ${challengeId} AND transported_at IS NULL
-       RETURNING phone_e164, purpose::text AS purpose`.execute(this.db);
-    const row = result_first(accepted.rows);
-    if (!row) return; // already transported (a callback, a retry) -- idempotent
-    await sql`
-      UPDATE core.otp_challenge
-         SET expires_at = now()
-       WHERE phone_e164 = ${row.phone_e164}
-         AND purpose = ${row.purpose}::core.otp_purpose
-         AND id <> ${challengeId}
-         AND consumed_at IS NULL
-         AND expires_at > now()`.execute(this.db);
+    /**
+     * ATOMIC, SERIALIZED PER (phone, purpose), AND NEWEST-WINS -- because the
+     * naive form zeroed the user's codes.
+     *
+     * The first version was mark-self then expire-siblings in two unlocked
+     * autocommit statements. The Phase A adversarial pass found the hole: two
+     * accepted deliveries for one (phone, purpose) interleaving as
+     *   C1.mark, C2.mark, C1.expire(C2), C2.expire(C1)
+     * leave BOTH expired -- zero verifiable codes -- even though a provider
+     * accepted and the SMS was sent. Reachable by two concurrent otp/request
+     * with different Idempotency-Keys (the phone limit is consumed on a
+     * separate connection, so both pass), i.e. a targeted sign-in / step-up
+     * denial aimed at a victim's public phone number.
+     *
+     * The database cannot hold "exactly one verifiable challenge" as a unique
+     * index: the predicate needs `expires_at > now()`, which is not IMMUTABLE
+     * and so cannot sit in a partial-index WHERE. So the application holds it,
+     * and it holds it with a transaction and a per-(phone, purpose) advisory
+     * lock, which is what makes the read-then-write below race-free.
+     *
+     * NEWEST-WINS: within the lock, a code that finds a NEWER transported
+     * sibling lost the race and expires ITSELF (a resend supersedes an
+     * earlier code, never the reverse). Otherwise it becomes the live code and
+     * expires every other transported-live sibling -- all necessarily older,
+     * so no guard beyond "transported" is needed. Un-transported siblings are
+     * left alone: they are not verifiable and will resolve themselves if and
+     * when they are accepted.
+     */
+    await this.db.transaction().execute(async (trx) => {
+      const me = await sql<{ phone_e164: string; purpose: string; created_at: Date }>`
+        SELECT phone_e164, purpose::text AS purpose, created_at
+          FROM core.otp_challenge
+         WHERE id = ${challengeId} AND transported_at IS NULL`.execute(trx);
+      const row = result_first(me.rows);
+      if (!row) return; // already transported (a callback, a retry) -- idempotent
+
+      // Serialize every markTransported for this (phone, purpose). The lock is
+      // transaction-scoped and releases on commit.
+      await sql`SELECT pg_advisory_xact_lock(
+                  hashtext(${row.phone_e164} || ':' || ${row.purpose}))`.execute(trx);
+
+      const newer = await sql<{ one: number }>`
+        SELECT 1 AS one FROM core.otp_challenge
+         WHERE phone_e164 = ${row.phone_e164}
+           AND purpose = ${row.purpose}::core.otp_purpose
+           AND transported_at IS NOT NULL
+           AND consumed_at IS NULL
+           AND expires_at > now()
+           AND created_at > ${row.created_at}
+         LIMIT 1`.execute(trx);
+      if (result_first(newer.rows)) {
+        // A newer code already went out and is live. This one lost; it never
+        // becomes verifiable and supersedes nothing.
+        await sql`UPDATE core.otp_challenge SET expires_at = now()
+                   WHERE id = ${challengeId}`.execute(trx);
+        return;
+      }
+
+      await sql`UPDATE core.otp_challenge SET transported_at = now()
+                 WHERE id = ${challengeId}`.execute(trx);
+      await sql`
+        UPDATE core.otp_challenge
+           SET expires_at = now()
+         WHERE phone_e164 = ${row.phone_e164}
+           AND purpose = ${row.purpose}::core.otp_purpose
+           AND id <> ${challengeId}
+           AND transported_at IS NOT NULL
+           AND consumed_at IS NULL
+           AND expires_at > now()`.execute(trx);
+    });
   }
 
   /**

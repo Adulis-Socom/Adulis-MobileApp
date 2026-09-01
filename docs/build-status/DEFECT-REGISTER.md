@@ -2350,3 +2350,42 @@ Action:    issueChallenge no longer supersedes at mint; the new challenge is min
            SO A FAILED RESEND LEAVES THE PREVIOUS CODE LIVE: the new challenge never becomes verifiable, the old is never expired. Exactly one verifiable challenge at every instant, which is what S5.3 protects -- and validity is gated on the CHALLENGE's own transported_at, NOT on otp_delivery_status, because S12.2 forbids deriving validity from transport status. markTransported is two statements rather than a data-modifying CTE against the same table (the CTE left siblings un-expired in practice; the two-statement form is unambiguous and the window between them is safe -- a verify landing in it sees the old code still live).
            t14-a4-transport-supersession.spec.ts pins four arms: un-transported not verifiable, acceptance makes it verifiable, a FAILED resend leaves the previous code live, a SUCCESSFUL resend supersedes at acceptance. Rides with D-198's transport catch, as the ruling said it would.
 Ruling needed: none. Built to the ruling. (D-208 -- whether supersession should also scope to audience -- remains parked; this tier scopes it to (phone, purpose), unchanged.)
+### D-212 - BLOCKER-adjacent MAJOR: markTransported could zero out both codes -- a targeted sign-in/step-up DoS
+
+Severity:  MAJOR (a transient auth denial an attacker can aim at a victim's public phone number, <=3/hour)
+Phase:     T14 - A, found by the pass on #49
+Source:    apps/api/src/modules/auth/otp.service.ts, markTransported (ADU-RUL-06 S5)
+Found by:  the Phase A adversarial pass (transport-gating lens)
+Effect:    markTransported enforced "exactly one verifiable challenge at every instant" in TWO unlocked autocommit statements: mark self transported, then expire siblings. Two accepted deliveries for one (phone, purpose) interleaving as C1.mark, C2.mark, C1.expire(C2), C2.expire(C1) left BOTH expired -- zero verifiable codes -- even though a provider ACCEPTED and the SMS went out.
+           Reachable: two concurrent POST /auth/otp/request with DIFFERENT Idempotency-Keys both pass (the phone limit is consumed on a separate connection), both issue, both transport. Aimed at a victim mid-sign-in, it zeroes their real code. Same shape on /auth/step-up/request -> payout-change step-up denial. The DB did not backstop it: 0045's otp_challenge_live index is non-unique, and a unique "live" index is impossible because the predicate needs expires_at > now(), which is not IMMUTABLE.
+           The in-code comment reasoned only about a concurrent VERIFY in the inter-statement window and called it safe; it never considered a concurrent second markTransported, which was the actual hazard. My "the tiny window is safe" was wrong.
+Response:  FIXED.
+Action:    markTransported is now one TRANSACTION, serialized per (phone, purpose) by pg_advisory_xact_lock, and NEWEST-WINS: a code that finds a newer transported sibling expires ITSELF; otherwise it marks transported and expires every other transported-live sibling (all necessarily older). Exactly one verifiable at every instant, never zero. t14-a4 gains a CONCURRENCY arm that fires two deliveries with Promise.all and asserts exactly one live challenge survives and verifies; run three times, stable.
+Ruling needed: none.
+
+### D-213 - the device-channel "cannot be faked" claim was false, and the MOBILE arm lacked the account-binding the CONSOLE arm had
+
+Severity:  MAJOR (an overstated security claim) + MINOR (the missing account clause)
+Phase:     T14 - A, found by the pass on #49
+Source:    apps/api/src/modules/auth/auth.controller.ts, auth.service.ts (deviceUnusable)
+Found by:  the Phase A adversarial pass (surface-conversion lens)
+Effect:    THE INVARIANT THAT MATTERS HOLDS and the pass confirmed it: a MOBILE-stamped challenge mints only a MOBILE session and CONSOLE only CONSOLE (S5.2), and every session is the phone's own account, OTP-gated -- no device trick crosses an account.
+           WHAT I CLAIMED FALSELY: that the device CHANNEL (cookie vs body) "cannot be faked" and "no longer depends on the caller's honesty". A __Host- cookie is httpOnly to browser JS, but any raw HTTP client reads its own bootstrap Set-Cookie and can present it, and a browser can omit its cookie and send a body device_id. So a caller can self-select which surface's credential FORM it receives FOR ITS OWN ACCOUNT. That is a limitation inherent to not being able to attest a client TYPE -- the same limitation the pre-stamp design had -- not a property the channel provides. This is the register's recurring defect (a claim of enforcement stronger than the code) in my own comment.
+           And the MOBILE arm of the coherence check omitted the account-binding clause the CONSOLE arm enforced: a MOBILE verify naming a body device bound to ANOTHER account minted a session anchored to a stranger's device row (no cross-account access; a D-64-residue mis-anchoring).
+Response:  CORRECTED and FIXED.
+Action:    The comments now state what actually holds (the challenge->session audience binding and the account boundary) and what does not (client-type attestation, which is not achievable here). The account-binding clause is hoisted to apply on BOTH audiences. t14-a3 gains an arm proving a stranger-bound device is refused on the MOBILE path and no session is anchored to it.
+Ruling needed: none for the fix. Worth carrying for the founder: the surface separation cannot be made client-type-attested over HTTP; if that property is wanted, it needs a mechanism the current design does not have (e.g. attested app integrity), and that is a decision, not a bug.
+
+### D-214 - the transcription gate was one-directional where it claimed "both ways", and checked the provider enum against a constant
+
+Severity:  MINOR (a gate weaker than its own header claimed -- two real misses)
+Phase:     T14 - A6, found by the pass on #49
+Source:    ops/scripts/verify-transcription.mjs
+Found by:  the Phase A adversarial pass (claims-audit lens)
+Effect:    Two constructible misses, both in the gate I built to close "the migration is the only witness to itself":
+             1. core.sms_provider was asserted against a HARDCODED ['AFROMESSAGE'...] constant, not parsed from the document. A change to S6.1's router promoting a provider would not be caught -- the gate compared the migration to a copy of the migration, the exact defect it exists to abolish.
+             2. the S12.1 field and S9.1 column checks were DOCUMENT -> DATABASE only, so an EXTRA database column was invisible, while the header claimed "both ways".
+           The header also said "five enum blocks" when four are parsed (the fifth was the constant).
+Response:  FIXED where a fix is sound, and made HONEST where it is not.
+Action:    Providers are now PARSED from S6.1's router config (the UPPER_SNAKE values after Primary =/Fallback =), compared both ways -- proven red by promoting a router provider the DB lacks. core.otp_delivery_attempt is now bidirectional, because the table IS exactly S12.1's field set. core.market STAYS document->database and the header SAYS SO: S9.1 is "configuration similar to", a subset of the market table, so an extra market column is not a drift. The "five blocks / both ways" header is corrected to state directionality per check.
+Ruling needed: none. Worth carrying: a gate's header is a claim like any other, and "both ways" is false the moment one direction is a filter that only runs one way.

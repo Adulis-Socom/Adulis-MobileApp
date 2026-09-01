@@ -178,6 +178,35 @@ describe('T14 A4 - transport before supersession', () => {
     expect((r as { id: string }).id).toBe(c1.id);
   });
 
+  it('TWO overlapping accepted deliveries leave exactly one live, never zero (Phase A pass)', async () => {
+    // The defect the pass found: markTransported was two unlocked statements,
+    // so C1.mark, C2.mark, C1.expire, C2.expire zeroed BOTH codes -- a
+    // targeted sign-in DoS. The fix serializes per (phone, purpose) with an
+    // advisory lock and is newest-wins. Fire the two deliveries CONCURRENTLY
+    // and assert exactly one verifiable code survives.
+    const c1 = await issue();
+    const c2 = await issue();
+    const msg = (code: string) => ({ phone: PP + '1', templateKey: 'sms.otp.sign_in', slots: { code } });
+    await Promise.all([
+      delivery.deliver(c1.id, MK, msg(c1.code)),
+      delivery.deliver(c2.id, MK, msg(c2.code)),
+    ]);
+    const live = await admin.query<{ id: string }>(
+      `SELECT id FROM core.otp_challenge
+        WHERE phone_e164 = $1 AND purpose = 'SIGN_IN'
+          AND transported_at IS NOT NULL AND consumed_at IS NULL
+          AND expires_at > now()`,
+      [PP + '1'],
+    );
+    // EXACTLY ONE -- not zero (the DoS), not two (the ambiguity).
+    expect(live.rows).toHaveLength(1);
+    // And it is verifiable: the surviving code signs in.
+    const survivor = live.rows[0]!.id;
+    const survivingCode = survivor === c1.id ? c1.code : c2.code;
+    const r = await verify(survivingCode);
+    expect(r).not.toBeInstanceOf(Error);
+  });
+
   it('a SUCCESSFUL resend supersedes the previous code at acceptance', async () => {
     const c1 = await issue();
     await delivery.deliver(c1.id, MK, {

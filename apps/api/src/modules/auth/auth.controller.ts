@@ -193,13 +193,16 @@ export class AuthController {
      * WHICH DEVICE THIS REQUEST SPEAKS FOR -- by WHAT IS PRESENTED, never by
      * a claimed audience (the body no longer carries one to claim).
      *
-     * Cookie first, and that precedence is factual rather than preferential:
-     * the only clients holding the httpOnly cookie are browsers, a browser's
-     * identity is never a body field (ADU-RUL-03 S2), and a native client
-     * has no cookie jar for this origin. The service then refuses any
-     * mismatch between the door the device came through and the audience the
-     * CHALLENGE was stamped with -- which is what actually stops a surface
-     * conversion, and it no longer depends on the caller's honesty.
+     * Cookie first: a browser's identity is never a body field (ADU-RUL-03
+     * S2), so if a valid __Host- cookie is present it is the device. The
+     * service then binds the surface to the CHALLENGE's stamped audience.
+     *
+     * NOT proof of client type, and the earlier wording here overclaimed it
+     * (Phase A pass). A raw HTTP client reads its own bootstrap Set-Cookie and
+     * can present it; a browser can omit its cookie and send a body id. So the
+     * channel is what the caller PRESENTS. What is actually enforced is the
+     * S5.2 challenge->session audience binding and the account boundary --
+     * never client-type attestation, which is not achievable here.
      *
      * The cookie shape is validated here because zod cannot see it: a
      * malformed cookie would otherwise reach a uuid column and answer 500 to

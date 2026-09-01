@@ -115,6 +115,13 @@ describe('T14 A3 - the audience is the challenge stamp (S31.1)', () => {
     await app.close();
   });
 
+  beforeEach(async () => {
+    // A device binds to one account (the coherence check restored by the
+    // Phase A pass). This suite reuses one ANDROID DEVICE across phones, so
+    // unbind it -- and drop the accounts it made -- before each test.
+    await admin.query(`UPDATE core.device SET account_id = NULL WHERE id = $1`, [DEVICE]);
+  });
+
   it('the stamp is written at request, and it is what the wire said', async () => {
     const phone = P('01');
     await requestOtp(phone, 'MOBILE').expect(202);
@@ -198,6 +205,47 @@ describe('T14 A3 - the audience is the challenge stamp (S31.1)', () => {
       [phone],
     );
     expect(session.rows.map((r) => r.audience)).toEqual(['CONSOLE']);
+  });
+
+  it('a device row bound to ANOTHER account is refused on the MOBILE arm too (Phase A pass)', async () => {
+    // The pass found the MOBILE arm of the coherence check lacked the
+    // account-binding clause the CONSOLE arm had. A MOBILE verify naming a
+    // body device bound to a stranger's account must be refused -- a session
+    // may never be anchored to another account's device row (D-64 residue).
+    const phone = P('05');
+    const stranger = randomUUID();
+    const strangerDevice = randomUUID();
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status, age_declared_over_18)
+       SELECT $1, $2, id, 'ACTIVE', true FROM core.market WHERE code = 'SEED'`,
+      [stranger, phone.replace('5', '9')],
+    );
+    await admin.query(
+      `INSERT INTO core.device (id, platform, account_id, market_id)
+       SELECT $1, 'ANDROID', $2, id FROM core.market WHERE code = 'SEED'`,
+      [strangerDevice, stranger],
+    );
+    try {
+      await requestOtp(phone, 'MOBILE').expect(202);
+      const code = codeFor(phone);
+      const res = await http()
+        .post('/v1/auth/otp/verify')
+        .set('Idempotency-Key', key())
+        .set('X-Adulis-Device', strangerDevice)
+        .send({ phone, code, device_id: strangerDevice, age_declared_over_18: true })
+        .expect(400);
+      expect(JSON.stringify(res.body)).toContain('device_id');
+      // No session anchored to the stranger's device.
+      const sess = await admin.query<{ n: string }>(
+        `SELECT count(*) n FROM core.session WHERE device_id = $1`, [strangerDevice],
+      );
+      expect(Number(sess.rows[0]?.n)).toBe(0);
+    } finally {
+      await admin.query(`DELETE FROM core.session WHERE device_id = $1`, [strangerDevice]);
+      await admin.query(`DELETE FROM core.device WHERE id = $1`, [strangerDevice]);
+      await admin.query(`DELETE FROM core.otp_challenge WHERE phone_e164 = $1`, [phone]);
+      await admin.query(`DELETE FROM core.account WHERE id = $1`, [stranger]);
+    }
   });
 
   it('the verify endpoint cannot override the audience -- the field itself is refused', async () => {

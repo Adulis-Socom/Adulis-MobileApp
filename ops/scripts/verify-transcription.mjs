@@ -17,10 +17,20 @@
  * nothing the day the document changes shape -- which is the exact defect
  * class this repository is built around (a check that runs and a check that
  * checks are different things). So it ASSERTS THE PARSE FOUND WHAT IT EXPECTED
- * before it compares anything: five enum blocks, six delivery statuses, ten
- * S12.1 fields, the S9.1 column block. A shape it cannot find is a FAIL, never
- * a silent pass. Proven red from BOTH sides -- a document value removed, and a
- * database value removed.
+ * before it compares anything: four fenced enum blocks, the provider set
+ * parsed from S6.1's router config, six delivery statuses, ten S12.1 fields,
+ * the S9.1 column block. A shape it cannot find is a FAIL, never a silent
+ * pass.
+ *
+ * DIRECTIONALITY IS PER CHECK, and the code says which (an earlier header
+ * overclaimed "both ways" for all of them; the Phase A pass corrected it):
+ *   - the four fenced enums AND the provider set: BOTH ways (a value in one
+ *     and not the other fails, either side);
+ *   - core.otp_delivery_attempt vs S12.1: BOTH ways -- the table IS exactly
+ *     S12.1's field set;
+ *   - core.market vs S9.1: DOCUMENT -> DATABASE only, on purpose -- S9.1 names
+ *     "configuration similar to", a SUBSET of the market table, so a market
+ *     column S9.1 does not name is not a drift.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -136,22 +146,29 @@ for (const spec of ENUMS) {
 }
 
 /*
- * The fifth enum, core.sms_provider, is S6.1's provider set -- named in prose
- * ("Initial implementations: AfroMessage... Twilio"), not in a fenced value
- * block, and rendered in code as UPPER_SNAKE. Its values are asserted against
- * the router's four bound providers rather than parsed from mixed-case prose,
- * because inventing a parse of a sentence is how a gate starts lying.
+ * The fifth enum, core.sms_provider, is S6.1's provider set. It is PARSED FROM
+ * THE DOCUMENT, not compared to a constant -- an earlier version asserted a
+ * hardcoded ['AFROMESSAGE'...], which is "the migration is the only witness to
+ * itself" for this enum (the Phase A pass proved it: promoting a "future"
+ * provider to S6.1's router in the document would not have been caught). S6.1's
+ * router config names the UPPER_SNAKE enum values directly, after `Primary =`
+ * and `Fallback = `, so they are parsed, not transformed from mixed-case prose.
  */
-const providers = await dbEnumValues('core.sms_provider');
-const EXPECTED_PROVIDERS = ['AFROMESSAGE', 'SMSETHIOPIA', 'INFOBIP', 'TWILIO'];
-if (providers.length !== 4) {
-  fail(`SELF-CHECK: core.sms_provider has ${providers.length} values, expected 4 (S6.1's initial set)`);
+const routerBlock = fencedAfter('# 6.1 Provider router', 2); // 1st fence is the class name
+const docProviders = routerBlock
+  ? [...routerBlock.join(String.fromCharCode(10)).matchAll(/(?:Primary|Fallback)\s*=\s*([A-Z][A-Z0-9_]+)/g)].map((m) => m[1])
+  : [];
+if (docProviders.length < 4) {
+  fail(`SELF-CHECK: parsed ${docProviders.length} provider(s) from S6.1's router, expected at least 4`);
 } else {
-  const missing = EXPECTED_PROVIDERS.filter((p) => !providers.includes(p));
-  const extra = providers.filter((p) => !EXPECTED_PROVIDERS.includes(p));
-  if (missing.length) fail(`core.sms_provider is missing S6.1 provider(s): ${missing.join(', ')}`);
-  if (extra.length) fail(`core.sms_provider has provider(s) S6.1 does not name: ${extra.join(', ')}`);
-  if (!missing.length && !extra.length) pass('core.sms_provider: S6.1 four initial providers, both ways');
+  const providers = await dbEnumValues('core.sms_provider');
+  const docSet = new Set(docProviders);
+  const dbSet = new Set(providers);
+  const docOnly = [...docSet].filter((p) => !dbSet.has(p)).sort();
+  const dbOnly = [...dbSet].filter((p) => !docSet.has(p)).sort();
+  if (docOnly.length) fail(`core.sms_provider: S6.1 names ${docOnly.join(', ')} and the database does not`);
+  if (dbOnly.length) fail(`core.sms_provider: the database has ${dbOnly.join(', ')} and S6.1 does not name it`);
+  if (!docOnly.length && !dbOnly.length) pass(`core.sms_provider: ${docSet.size} S6.1 providers agree, both ways`);
 }
 
 /* -- S12.1's fields on core.otp_delivery_attempt -------------------------- */
@@ -172,11 +189,16 @@ if (!s121) {
         WHERE table_schema = 'core' AND table_name = 'otp_delivery_attempt'`,
     );
     const dbCols = new Set(cols.rows.map((r) => r.column_name));
+    const docSet = new Set(fields);
     const missing = fields.filter((f) => !dbCols.has(f)).sort();
-    if (missing.length) {
-      fail(`core.otp_delivery_attempt is missing S12.1 field(s): ${missing.join(', ')}`);
-    } else {
-      pass(`core.otp_delivery_attempt carries all ${fields.length} S12.1 fields`);
+    // BOTH WAYS: the table IS exactly S12.1's field set, so a column the
+    // document does not name is a drift too (the Phase A pass found this
+    // direction missing).
+    const extra = [...dbCols].filter((c) => !docSet.has(c)).sort();
+    if (missing.length) fail(`core.otp_delivery_attempt is missing S12.1 field(s): ${missing.join(', ')}`);
+    if (extra.length) fail(`core.otp_delivery_attempt has column(s) S12.1 does not name: ${extra.join(', ')}`);
+    if (!missing.length && !extra.length) {
+      pass(`core.otp_delivery_attempt is exactly S12.1's ${fields.length} fields, both ways`);
     }
   }
 }
@@ -205,7 +227,9 @@ if (!s91) {
     if (missing.length) {
       fail(`core.market is missing S9.1 column(s): ${missing.join(', ')}`);
     } else {
-      pass(`core.market carries all ${cols.length} S9.1 columns (three renamed, mapped by name)`);
+      // DOCUMENT -> DATABASE only: S9.1 is "configuration similar to", a
+      // subset of the market table, so extra market columns are not a drift.
+      pass(`core.market carries all ${cols.length} S9.1 columns, document->schema (three renamed)`);
     }
   }
 }
