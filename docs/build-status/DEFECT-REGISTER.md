@@ -2081,3 +2081,67 @@ Action:    The closing is now the attachment's, word-for-word: taken from the fo
            **The whole document is now diffed against the attachment**, normalising only table-cell padding, emphasis-marker placement and markdown backslash escapes -- all artifacts of the founder's export, all of which the repository's rendering already corrects. Result: 2,027 canonical lines, 48 differences proven to be cell boundaries alone (same words, same order, unsplit header rows), and **exactly one differing word in the entire document: D-190's 114/116.**
            ADU-AUTH-01 v2.6 was checked the same way and is **byte-identical** to its attachment.
 Ruling needed: none. Worth carrying: **when a document is assembled rather than transcribed, the reference for its verification is the source it claims to reproduce, never the material it was built from.** Building it out of X guarantees it matches X.
+### D-192 - the IP rate limiter v2.6 S15 declares DISABLED was live on the OTP request path
+
+Severity:  MAJOR (an availability defect that has never fired only because the topology it breaks in is the one not yet deployed)
+Phase:     T13 - 3
+Source:    apps/api/src/modules/auth/auth.controller.ts, POST /v1/auth/otp/request
+Found by:  T13 Phase 3, transcribing S15
+Effect:    The handler consumed `10/hour/IP_HASH` on `otp-request-ip` -- **the exact control v2.6 S15 names and then declares DISABLED**, in a section that anticipates the excuse: "It is not merely non-authoritative. **IT MUST NOT EXECUTE** in a topology where every request may appear to originate from the same proxy."
+           **That topology is ours.** Nothing in this API sets Express's `trust proxy`, so `req.ip` is the SOCKET address -- behind any CDN, load balancer or reverse proxy that is the PROXY's address, identical for every caller. The limiter was therefore not a weak control, it was a SHARED COUNTER: ten OTP requests per hour for the entire platform, with the eleventh person to sign in that hour refused because ten strangers did first. In a market where carrier NAT is ordinary, that is most of a city behind one number.
+           It has never caused an outage for one reason: the deployment it breaks in does not exist yet. A defect that is invisible until the day you deploy is worse than one that is loud now.
+Response:  REMOVED, not relaxed.
+Action:    The consume call is gone and the reasoning is in its place. The phone-keyed control S14 requires (3/hour/PHONE_KEY) is untouched and is what actually binds.
+           **Proven by a PAIR of assertions, because the obvious single one is vacuous.** "No IP bucket row exists" passes trivially if the requests never reached the limiter -- and the first version of the test did exactly that, sending a body without `purpose`, so all four were refused by Zod at 400 before any limiter ran. The suite now asserts the PHONE bucket holds four rows in the same breath: four there proves the limiter executed on all four requests, and zero in the IP bucket then means the control is gone rather than unreached. Mutation-confirmed: restoring the consume call turns the test red.
+Ruling needed: none for the OTP path. **One is invited for `/v1/bootstrap`**, which keeps an IP-keyed limiter (600/hour, device minting). S15 governs the SMS abuse controls and does not reach it, and its comment shows the NAT hazard was priced deliberately -- but the same `req.ip` problem applies, so in production that is 600 device mints per hour PLATFORM-WIDE. Not changed here: it closes a measured flood defect (~230 rows/second), and removing it without S15.1's trusted-proxy work would trade one availability defect for another.
+
+### D-193 - per-market OTP spend cannot be attributed in the installed schema
+
+Severity:  MINOR (a control that is conservative rather than exact; it fires early, never late)
+Phase:     T13 - 3
+Source:    ADU-AUTH-01 v2.6 S16 vs S12.1; ADU-DB-01 v1.14
+Found by:  T13 Phase 3, implementing the spending circuit breaker
+Effect:    S16 gives every ACTIVE market `otp_daily_soft_limit` and `otp_daily_hard_limit`. **Nothing in the schema says which market an OTP belongs to**: `core.otp_delivery_attempt` carries no market, `core.otp_challenge` carries none, v2.6 S12.1's field list has none and v1.14 adds none.
+           Attributing through the phone's ACCOUNT was considered and rejected -- it counts only phones that already have one, undercounting exactly the abandoned anonymous requests a spend control exists to catch. **An under-count is the unsafe direction.**
+Response:  IMPLEMENTED CONSERVATIVELY. Gap registered; DB amendment named.
+Action:    The counter is platform-wide. While exactly one market is ACTIVE that is EXACT rather than approximate -- only ACTIVE markets issue (S9.2), so every attempt belongs to the one that does. With two it OVER-counts each, and can only over-count, so the breaker fires EARLY and never late. Sound in the direction that matters; unfair in the other, since a busy market can spend a quiet one's allowance. The activation runbook names this as a prerequisite for market number two.
+           **An earlier version refused to issue at all once a second market went ACTIVE**, reasoning that an unattributable number was worse than none. Its own test showed what that means: a fixture market turned OTP on and every market stopped serving. **A safeguard whose failure mode is a platform-wide outage is not a safeguard**, and the conservative count is the honest version of the same intent.
+Ruling needed: **approve a `market_id` on `core.otp_challenge`, written at issue**, as the DB amendment that makes this exact. It is the smallest change that works and it is not in v1.14.
+
+### D-194 - the seed asserted a sender-ID approval that no vendor has given
+
+Severity:  MINOR (a false claim in the row an operator copies)
+Phase:     T13 - 3
+Source:    ops/scripts/seed.mjs, the S9.1 market configuration
+Found by:  T13 Phase 1 adversarial pass, actioned in Phase 3
+Effect:    The seed set `sender_registration_status = 'APPROVED'` and `sms_compliance_status = 'REVIEWED_FOR_SEED'`. The first asserts that a vendor approved the `Adulis` sender ID; **no vendor has, because every provider in v2.6 requires a registered business and Adulis does not have one.** The second invents a value for a column S9.1 deliberately leaves TEXT and unenumerated (D-181).
+           **A seed is a TEMPLATE** -- the row an operator copies when activating a real market -- so a seed that claims an approval is how a production row comes to claim one too. The activation runbook's step 1 now says this in as many words.
+Response:  FIXED.
+Action:    `NOT_REQUIRED` and `NOT_REVIEWED_FAKE_PROVIDER`. The first is TRUE OF WHAT IS BOUND: the provider is a fake and a fake requires no sender registration. The runbook carries the transition to PENDING and then APPROVED when a real vendor is bound.
+Ruling needed: none.
+
+### D-195 - migration 0043 said S10.2 was "enforced in the router", and the router did not enforce it
+
+Severity:  MINOR (a comment asserting an enforcement that did not exist -- D-186's shape, one level up)
+Phase:     T13 - 3
+Source:    db/migrations/0043, COMMENT ON TYPE core.sender_registration_status
+Found by:  T13 Phase 3, writing the router the comment refers to
+Effect:    The comment reads: "status != APPROVED forces otp_enabled = false unless an approved alternative route exists -- **enforced in the router**, not by a CHECK". There was no router when that was written, and the one now written cannot enforce the whole rule: **the schema does not carry WHERE REGISTRATION IS MANDATORY**, which the comment's own last clause admits.
+           This is the register's signature defect in miniature and in my own text: a claim of enforcement is not an enforcement, and a reader who trusts the comment stops looking.
+Response:  PARTIALLY ENFORCED, and the remainder named rather than implied.
+Action:    `SmsProviderRouter` refuses a route whose `sender_registration_status` is `REJECTED` -- the part needing no extra knowledge, since a vendor has refused this sender whether or not registration was mandatory. `PENDING` and `NOT_REQUIRED` are NOT refused and cannot be; whether a pending registration may serve is a per-market compliance decision, which is items 3 and 5 of S9.3's activation checklist, where a human makes it. The runbook carries it.
+Ruling needed: none. Worth carrying: **when a comment says a rule is enforced elsewhere, the elsewhere is what to check.**
+
+### D-196 - the wire cannot say "issued but not transported", and cannot say "this market is unavailable"
+
+Severity:  MINOR (two gaps in a closed taxonomy, both handled by reuse rather than invention)
+Phase:     T13 - 3
+Source:    ADU-API-01 S7.1's closed code taxonomy vs ADU-AUTH-01 v2.6 S9.2, S12
+Found by:  T13 Phase 3
+Effect:    Two refusals v2.6 requires have no code in a taxonomy whose own header says "a code invented in a service is a code with no catalogue entry... **never a decision taken in a pull request**":
+             1. **an inactive market refusing OTP** (S9.2). No `MARKET_UNAVAILABLE` exists.
+             2. **a challenge issued but transported by nobody** -- every provider refused, or the only provider is down with no fallback (S7.4). The endpoint's contract is 202 and the delivery ledger holds the truth, but the caller is told nothing.
+Response:  REUSED, REGISTERED, AMENDMENT OWED. The precedent is OTP_SUPERSEDED and AGE_DECLARATION_REQUIRED.
+Action:    (1) raises `VALIDATION_FAILED` with `path: bootstrap` -- **the IDENTICAL refusal a device with no market already gets**, which is better than a placeholder rather than merely tolerable: an inactive market and an unbootstrapped device now answer the same thing, so the surface distinguishes nothing S17 did not already permit. A new code would have made it MORE informative.
+           (2) is not raised at all. `OtpDeliveryService.deliver` does not throw: the challenge is already committed, so raising would tell a caller no code exists when one does, and would turn a vendor outage into a 500 on an endpoint contracted at 202. Every outcome is written to `core.otp_delivery_attempt`.
+Ruling needed: **whether ADU-API-01 gains `MARKET_UNAVAILABLE` (403) and a delivery-failure code**, or whether both refusals stay as they are. The second matters more than it looks: today a user whose SMS was never sent waits for a message with no way to learn it is not coming.

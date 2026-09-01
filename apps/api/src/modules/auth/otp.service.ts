@@ -6,6 +6,7 @@ import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { resolveKey } from '../../common/crypto/aead';
 import type { SmsMessage } from './sms.adapter';
+import { OtpIssuancePolicy } from './otp-issuance.policy';
 
 /**
  * The one-time code (ADU-AUTH-01 section 4), shared by sign-in, step-up and
@@ -52,7 +53,10 @@ export function codeHash(challengeId: string, code: string): Buffer {
 
 @Injectable()
 export class OtpService {
-  constructor(@Inject(APP_DATABASE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(APP_DATABASE) private readonly db: Kysely<Database>,
+    private readonly policy: OtpIssuancePolicy,
+  ) {}
 
   /**
    * A wrong guess must SURVIVE the request that carried it: the handler
@@ -91,7 +95,7 @@ export class OtpService {
     phone: string,
     deviceId: string | null,
     requireDevice: boolean,
-  ): Promise<TimingRow> {
+  ): Promise<TimingRow & { market_id: string; device_market_id: string | null }> {
     /**
      * THE REFUSAL LOOKS AT THE CALLER'S OWN DEVICE, NEVER AT THE PHONE.
      *
@@ -142,7 +146,7 @@ export class OtpService {
        LIMIT 1`.execute(trx);
     const row = result_first(r.rows);
     if (!row) throw new AdulisException('INTERNAL');
-    return row;
+    return { ...row, market_id: marketId, device_market_id: deviceMarket };
   }
 
   /**
@@ -224,13 +228,45 @@ export class OtpService {
       /** False only for authenticated paths, which resolve via the account. */
       requireDevice?: boolean;
     },
-  ): Promise<{ challengeId: string; expiresAt: Date; sms: SmsMessage }> {
+  ): Promise<{
+    challengeId: string;
+    expiresAt: Date;
+    sms: SmsMessage;
+    /** The market that must transport it (v2.6 S6.1 routes from this). */
+    marketId: string;
+  }> {
+    const anonymous = args.requireDevice ?? true;
     const timing = await this.timingFor(
       trx,
       args.phone,
       args.deviceId ?? null,
-      args.requireDevice ?? true,
+      anonymous,
     );
+
+    /**
+     * THE MARKET THE GATES ASK ABOUT IS THE DEVICE'S ON AN ANONYMOUS PATH
+     * (ADU-AUTH-01 v2.6 S9.2, S17).
+     *
+     * `timing.market_id` coalesces the ACCOUNT's market over the device's,
+     * which is right for timing -- a person's account names their market --
+     * and would be an enumeration oracle here. A phone with an account in an
+     * ACTIVE market would be issued a code; the same phone without one would
+     * be refused; and the difference between the two answers is the sentence
+     * "this number is registered".
+     *
+     * This file has made that exact mistake once already, in `timingFor`,
+     * while removing a different defect. The device is what an anonymous
+     * caller presents, its market is public configuration, and it is the
+     * only thing here that may decide a refusal.
+     */
+    const gateMarket = anonymous ? timing.device_market_id : timing.market_id;
+    if (!gateMarket) throw new AdulisException('INTERNAL');
+
+    // S9.2 before S16: a market that may not issue at all is not a market
+    // whose budget is worth reading.
+    await this.policy.assertMarketIssuesOtp(trx, gateMarket);
+    await this.policy.assertWithinBudget(trx, gateMarket, anonymous);
+
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);
 
     await sql`
@@ -258,6 +294,7 @@ export class OtpService {
     return {
       challengeId: id,
       expiresAt,
+      marketId: gateMarket,
       sms: {
         phone: args.phone,
         templateKey: args.templateKey,

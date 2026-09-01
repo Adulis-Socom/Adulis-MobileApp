@@ -3,7 +3,6 @@ import {
   Delete,
   Get,
   HttpCode,
-  Inject,
   Post,
   Req,
   Res,
@@ -19,7 +18,7 @@ import { resolveKey } from '../../common/crypto/aead';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { requestingDevice } from '../../common/http/cookies';
 import { OtpService } from '../auth/otp.service';
-import { SMS_ADAPTER, type SmsAdapter, type SmsMessage } from '../auth/sms.adapter';
+import { OtpDeliveryService, type IssuedOtp } from '../auth/otp-delivery.service';
 import {
   deletionConfirmBody,
   deletionOtpRequestBody,
@@ -54,7 +53,7 @@ export class DeletionController {
     private readonly rateLimit: RateLimitService,
     private readonly otp: OtpService,
     private readonly svc: DeletionService,
-    @Inject(SMS_ADAPTER) private readonly sms: SmsAdapter,
+    private readonly delivery: OtpDeliveryService,
   ) {}
 
   /** The ticket carrier. Bearer is refused here: this is not a sign-in. */
@@ -77,14 +76,14 @@ export class DeletionController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = deletionOtpRequestBody.parse(req.body);
-    let toSend: SmsMessage | null = null;
+    let issued: IssuedOtp | null = null;
     const result = await this.tx.runIdempotent(req, res, 202, async (trx) => {
       await this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
         bucketKey: 'deletion-otp-request',
         windowSeconds: 3600,
         max: 3,
       });
-      const issued = await this.otp.issueChallenge(trx, {
+      const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
         templateKey: 'sms.otp.account_deletion',
@@ -93,10 +92,12 @@ export class DeletionController {
         // whether the phone is known (ADU-AUTH-01 S22).
         deviceId: requestingDevice(req.headers),
       });
-      toSend = issued.sms;
+      issued = fresh;
       return {};
     });
-    if (toSend) await this.sms.send(toSend);
+    // After commit: a rolled-back issue and an idempotent replay both
+    // transport nothing (v2.6 S12 -- transport is downstream of security).
+    await this.delivery.transport(issued);
     return result;
   }
 
