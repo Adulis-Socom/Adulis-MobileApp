@@ -23,6 +23,18 @@ import { Products } from './features/catalogue/Products';
 import { ProductEditor } from './features/catalogue/ProductEditor';
 import { ProductNew } from './features/catalogue/ProductNew';
 import { StockScreen } from './features/catalogue/StockScreen';
+import { More } from './layout/More';
+import { Profile } from './features/store/Profile';
+import { Fulfilment } from './features/store/Fulfilment';
+import { Availability } from './features/store/Availability';
+import { Identity } from './features/store/Identity';
+import { Couriers } from './features/store/Couriers';
+import { Payout } from './features/admin/Payout';
+import { Team } from './features/admin/Team';
+import { Subscription } from './features/admin/Subscription';
+import { Sessions } from './features/admin/Sessions';
+import { NotificationPrefs } from './features/admin/NotificationPrefs';
+import { Closure } from './features/admin/Closure';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -66,12 +78,26 @@ export const router = createBrowserRouter([
             returns you is worse than no link -- it teaches that the readiness
             list is decorative. Found by the C-3 adversarial pass (D-146).
           */
-          { path: 'eligibility', element: <Placeholder screen="SC-22" /> },
-          { path: 'profile', element: <Placeholder screen="SC-17" /> },
-          { path: 'payouts', element: <Placeholder screen="SC-24" /> },
-          { path: 'fulfilment', element: <Placeholder screen="SC-18" /> },
+          // C-6, groups F and G -- the placeholders these routes carried
+          // since C-3 are discharged by the real screens.
+          { path: 'eligibility', element: <Identity /> },
+          { path: 'profile', element: <Profile /> },
+          { path: 'payouts', element: <Payout /> },
+          { path: 'fulfilment', element: <Fulfilment /> },
+          { path: 'availability', element: <Availability /> },
+          { path: 'couriers', element: <Couriers /> },
+          { path: 'team', element: <Team /> },
+          { path: 'subscription', element: <Subscription /> },
+          { path: 'sessions', element: <Sessions /> },
+          { path: 'notification-preferences', element: <NotificationPrefs /> },
+          { path: 'closure', element: <Closure /> },
+          // C-7's routes hold placeholders so More's entries never fall
+          // through the catch-all (the D-146 class).
+          { path: 'insights', element: <Placeholder screen="SC-12" /> },
+          { path: 'insights/trust', element: <Placeholder screen="SC-13" /> },
+          { path: 'insights/reviews', element: <Placeholder screen="SC-14" /> },
           { path: 'inbox', element: <Placeholder screen="SC-20" /> },
-          { path: 'more', element: <Placeholder screen="More" /> },
+          { path: 'more', element: <More /> },
           // `to="."` resolves to the CURRENT path inside a splat, so this
           // rendered nothing into the shell's main. The seller home is the
           // honest destination for an unknown child route.

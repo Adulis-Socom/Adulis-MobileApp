@@ -69,6 +69,24 @@ function lastCode(): string | null {
 }
 
 /**
+ * The step-up arm's one window into the dev SMS log (T10's rule that no TEST
+ * knows what an OTP is holds: tests call this, and only this file reads the
+ * log). Capture the current code before the action, then wait for a NEW one.
+ */
+export function currentSmsCode(): string | null {
+  return lastCode();
+}
+export async function nextSmsCode(prev: string | null, timeoutMs = 10_000): Promise<string> {
+  const t0 = Date.now();
+  for (;;) {
+    const c = lastCode();
+    if (c && c !== prev) return c;
+    if (Date.now() - t0 > timeoutMs) throw new Error('no new code appeared in the dev SMS log');
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+/**
  * Sign the seeded seller in, on this browser context.
  *
  * Returns the seller id the caller should navigate to, so a test never has to
