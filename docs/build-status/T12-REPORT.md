@@ -158,8 +158,10 @@ ADVERSARIAL PASS ON #44 (26 agents): 12 findings, 10 upheld, 2 refuted.
            Refuted x2: the am.ts English string (the declared, recorded
              C-3+ treatment, D-177).
 
-State of main: 05c7649 + this PR (#44) on merge -- nothing else unmerged.
-         Phases 2-4 remain MISSING_SOURCE until ADU-AUTH-01 v2.6 arrives.
+State of main: 57a4f37 (PRs #43, #44 merged; fast-forward, so the ref IS
+         the Phase 5 branch tip that passed all 24 gates) -- nothing
+         unmerged. Phases 2-4 remain MISSING_SOURCE until ADU-AUTH-01 v2.6
+         arrives.
 ```
 
 ## The sentence worth keeping
