@@ -11,10 +11,11 @@ import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { saveSignedInState } from './helpers/session';
+import { saveSignedInState, saveBuyerState } from './helpers/session';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const STATE_FILE = path.join(here, '.auth', 'state.json');
+export const BUYER_STATE_FILE = path.join(here, '.auth', 'buyer-state.json');
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
   const channel = (config.projects[0]?.use as { channel?: string } | undefined)?.channel ?? 'msedge';
@@ -22,6 +23,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const browser = await chromium.launch({ channel });
   try {
     await saveSignedInState(browser, STATE_FILE);
+    await saveBuyerState(browser, BUYER_STATE_FILE);
   } finally {
     await browser.close();
   }

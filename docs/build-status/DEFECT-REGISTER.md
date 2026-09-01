@@ -2595,3 +2595,60 @@ Effect / Response, each:
   S1 PARKED  API DEFECT, out of this order's scope, recorded so it stays visible: the notifications list's seller-scope predicate names only NEW_DEVICE_SIGNIN, PAYOUT_CHANGE%, and notification.chat.escalated -- but OWNERSHIP_TRANSFER_* (0034, "both parties, unsuppressibly"), STOCK_CONFIDENCE_NUDGE (e3-trust-stock), and TRIAL_ENDING (e6-billing-nlu) are written unlinked to the seller's owner account. NONE can ever reach SC-30, and ALL pass the buyer arm's filter -- a seller's ownership-transfer security notice lands in that person's BUYER feed. The unsuppressible transfer notice being invisible on the seller surface undermines G1.6's own rationale ("a delay nobody is told about is not a control"). SC-30's label map carries the transfer keys ready for the fix; the fix itself is the API's.
   e2e        untested-and-named: the poll's pause/resume has no machine evidence (S9 makes the pause the point) -- owed a harness technique; BOT-message rendering is unreachable until a seed grants a chatbot entitlement -- owed with one; the SC-14/15 READY branches want plantable fixtures. The conversation arm gained: the EMPTY teach before anything exists, an ORDER-ANCHORED buyer message proving the D-73 pin derivation, and the oldest-first ordering assertion.
 Ruling needed: none for the console. Item S1 and D-226's endpoint list belong to the API's next revision; Home's obligation surfacing lands with the daily brief.
+### D-228 - C-8: the courier's screen, its named absences, and the QR encoding now living in exactly one place
+
+Severity:  the D-224/D-226 class - absences NAMED on screen; one deliberate move recorded
+Phase:     T14-C - C-8 (SC-C1)
+Source:    courier/CourierScreen.tsx; lib/qr.tsx; the handoff module's courier arm
+Effect / stance, each:
+  1  THE WIRE CARRIES buyer_phone, NOT A NAME -- and no pickup point and no
+     handoff note ride the courier read (the seller's fulfilment note is not
+     joined). The spec's "pickup, buyer's first name, handoff address from
+     the seller's note" is three absences; the screen names them in one
+     sentence and offers the phone, which is what the server deliberately
+     sends for the doorway call. The joins are the API's, owed.
+  2  R25 IS THE SERVER'S: before custody the QR payload is ABSENT from the
+     detail read, and the screen's pre-custody state says the code does not
+     exist yet -- never a hidden element. The post-custody QR renders with
+     the WHO-SCANS sentence (a courier reading the code as theirs to scan is
+     the misread the composite FK exists to make impossible).
+  3  THE D-156 ENCODING MOVED to lib/qr.tsx: SC-C1 renders the SAME payload
+     as SC-06, and an interim format kept in two files diverges exactly when
+     a scanner is pointed at it. HandoffQr re-exports the encoder so its
+     importers and the register's existing citation stay true. Still ONE
+     function, one line to change when the format is ruled.
+  4  Courier state words are a courier-voiced map (awaiting pickup / handed
+     off / completed); unmapped values render as themselves. The list IS the
+     assignments (RLS on the actor role); the screen has no navigation, no
+     store context, no catalogue -- asserted in e2e.
+  5  HARNESS: the buyer account is signed in ONCE per run by globalSetup and
+     its state shared (the OTP budget is per phone; two specs each minting a
+     code spent it -- D-124's class, rediscovered the day a second two-sided
+     arm arrived). The courier e2e drives the WHOLE chain for real: seller
+     invites the buyer's phone (immediate claim), assigns the seeded
+     confirmed order, the courier works the screen through both R25 halves,
+     and the revoke cleanup leaves the world as found (ending courier row
+     and live assignment in one transaction -- SC-23's warning, lived).
+  6  THE PASS (same rhythm, smaller scale, all FIXED): the order REFERENCE
+     was missing everywhere -- the spec's own two-state listing BEGINS with
+     it, and two orders from one store were indistinguishable at a doorway
+     (a short ref renders on row and detail, e2e-asserted); the screen never
+     refetched (an ended assignment lingered as banner-over-stale -- the
+     list polls, back-from-detail reloads, a detail 404 drops to the
+     refreshed list); expires_at rendered as a bare stale deadline (it is
+     the RESERVATION clock, stopped for every state a courier holds --
+     removed, S7's rule); no path led to /courier (the Chooser links it --
+     ungated, because the session carries no roles for the client to read;
+     the contract's roles[] rendering hint is the owed refinement); the e2e
+     asserts R25's first half AT THE WIRE (qr null in the response, not
+     merely absent from the DOM) and the payload's order_ref after custody.
+  7  PARKED, API-side, recorded: custody-accept's ON CONFLICT DO NOTHING has
+     no unique arbiter on (order_id, courier_account_id) -- a re-tap after a
+     lost response can duplicate the custody row -- and no state gate (Event
+     A accepts on a CREATED order); the courier list is LIMIT 50 with no
+     cursor. The e2e fixture is DEGENERATE -- the courier IS the buyer of
+     the assigned order (the only seeded second account), so the buyer-join
+     and the composite-FK story are under-witnessed; a third seeded account
+     is owed with the next seed change.
+Ruling needed: none for the console. The courier read's buyer-name/pickup/
+note joins belong to ADU-API-01's next revision, beside D-224.4's account_id.

@@ -6,7 +6,7 @@
  *   /s/new              SC-02 become a seller (no id yet -- it makes one)
  *   /s/:sellerId/*      every seller-scoped route -- the seller id lives in
  *                       the URL and ONLY the URL (two tabs, two stores)
- *   /courier            SC-C1 (stage C-8; placeholder route only)
+ *   /courier            SC-C1 (C-8: live -- the courier's own tree)
  */
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
 import { SignIn } from './auth/SignIn';
@@ -14,7 +14,6 @@ import { RequireSession } from './auth/RequireSession';
 import { Shell } from './layout/Shell';
 import { Chooser } from './features/entry/Chooser';
 import { StateDemo } from './features/entry/StateDemo';
-import { Placeholder } from './features/entry/Placeholder';
 import { Home } from './features/entry/Home';
 import { Orders } from './features/trade/Orders';
 import { OrderDetail } from './features/trade/OrderDetail';
@@ -43,6 +42,7 @@ import { ClaimDetail } from './features/trust/ClaimDetail';
 import { Inbox } from './features/conversation/Inbox';
 import { Thread } from './features/conversation/Thread';
 import { NotificationCentre } from './features/notifications/NotificationCentre';
+import { CourierScreen } from './courier/CourierScreen';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -117,7 +117,9 @@ export const router = createBrowserRouter([
           { path: '*', element: <Navigate to=".." relative="path" replace /> },
         ],
       },
-      { path: '/courier', element: <Placeholder screen="SC-C1" /> },
+      // C-8: the one screen for a DIFFERENT user -- no Shell, no seller
+      // navigation, its own route tree (S12).
+      { path: '/courier', element: <CourierScreen /> },
     ],
   },
 ]);

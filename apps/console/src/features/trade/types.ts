@@ -81,12 +81,7 @@ export interface OrderDetail {
 }
 
 /** GET /v1/seller/orders/{id}/qr. */
-export interface QrToken {
-  readonly order_ref: string;
-  readonly nonce: string;
-  readonly signing_key_version: number;
-  readonly signature: string;
-}
+export type { QrToken } from '../../lib/qr';
 
 /**
  * The detail response carries every submission; the CLOCK cares only about an
