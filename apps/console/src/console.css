@@ -470,3 +470,82 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 }
 .qr-explain { text-align: center; margin-top: var(--adu-space-md); }
 .modal.qr .offline { text-align: center; }
+
+/* ==========================================================================
+ * The twelve ScreenState branches, given visual language (T14-C, C-5 first
+ * task). Part B defined semantic state as TRIPLES (text / bg / border); this
+ * is where the console consumes them. Kept out of packages/tokens by the seam
+ * rule -- tokens carry values, the console applies them.
+ *
+ * NO STATE IS CARRIED BY COLOUR ALONE (ADU-CON-03 S15, accessibility S15).
+ * Every branch below already renders explanatory TEXT (ScreenState.tsx); the
+ * colour is reinforcement, never the signal. Read in greyscale, each callout
+ * still says what it is because the words are there.
+ *
+ * The pairing of state to family is deliberate:
+ *   danger  -- something failed or is invalid (TRANSPORT_ERROR, VALIDATION)
+ *   warn    -- action is needed or the object is blocked (CONFLICT,
+ *              BLOCKED_READINESS, UPGRADE_REQUIRED)
+ *   info    -- informational, data still usable (STALE)
+ *   neutral -- not an error, nothing wrong (EMPTY, NO_ENTITLEMENT, TERMINAL)
+ * ========================================================================== */
+
+.callout {
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-md);
+  margin: var(--adu-space-md) 0;
+  background: var(--adu-color-surface);
+  color: var(--adu-color-text);
+}
+
+/* danger family -- a failure or an invalid submission */
+[data-state='TRANSPORT_ERROR'],
+[data-state='VALIDATION'],
+.problem,
+.validation-summary {
+  border-color: var(--adu-color-danger-border);
+  background: var(--adu-color-danger-bg);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-md);
+  margin: var(--adu-space-md) 0;
+}
+[data-state='TRANSPORT_ERROR'] :is(p, .field-error, strong),
+.problem strong,
+.validation-summary strong { color: var(--adu-color-danger); }
+
+/* warn family -- action needed, or the object is blocked */
+[data-state='CONFLICT'],
+[data-state='BLOCKED_READINESS'],
+[data-state='UPGRADE_REQUIRED'],
+.blocked,
+.upgrade {
+  border: 1px solid var(--adu-color-warn-border);
+  background: var(--adu-color-warn-bg);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-md);
+  margin: var(--adu-space-md) 0;
+}
+[data-state='BLOCKED_READINESS'] > p:first-child,
+[data-state='UPGRADE_REQUIRED'] > p:first-child { color: var(--adu-color-warn); font-weight: var(--adu-font-weight-medium); }
+
+/* info family -- data is on screen and still usable while it refreshes */
+.stale-indicator {
+  color: var(--adu-color-info);
+  background: var(--adu-color-info-bg);
+  border: 1px solid var(--adu-color-info-border);
+  border-radius: var(--adu-radius-sm);
+  padding: 0 var(--adu-space-sm);
+  font-size: var(--adu-font-size-sm);
+  display: inline-block;
+}
+
+/* neutral family -- not an error; nothing is wrong */
+[data-state='EMPTY'] .empty,
+[data-state='TERMINAL'] {
+  color: var(--adu-color-text-secondary);
+}
+[data-state='NO_ENTITLEMENT'] .hint { color: var(--adu-color-text-muted); }
+
+/* success -- a satisfied readiness item, already keyed on .done */
+.readiness-item.done .readiness-status { color: var(--adu-color-success); }

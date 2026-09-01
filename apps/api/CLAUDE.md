@@ -3,9 +3,9 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.14** (T13) · ADU-AUTH-01 **v2.6** (T13, and **v2.5
+**Governing documents:** ADU-DB-01 **v1.15** (T13) · ADU-AUTH-01 **v2.6** (T13, and **v2.5
 remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`) ·
-ADU-API-01 **v1.7** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
+ADU-API-01 **v1.8** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
 governs and which amendments are live. A1, A2 and A3 are all absorbed into the installed
 text and no longer apply separately.
 
@@ -68,7 +68,7 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > not** -- check 14's own comment says v1.14 owes those two Appendix B rows -- so the
 > count agrees while the enumeration does not yet. Say seven, not five.
 >
-> **[!] The INSTALLED v1.14 is correct; the founder's source carried one stale number**
+> **[!] The INSTALLED revision (v1.15 since T14-C; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
 > **114** names here" -- v1.13's count, carried forward when the headline was updated. The
 > installed copy reads 116, which is a one-word deviation from the source, made

@@ -33,7 +33,7 @@ const root = path.resolve(here, '..', '..');
 
 /** Enforced. A failure here fails the build. */
 const GOVERNED = [
-  'docs/ADU-DB-01_Database_and_Data_Model_v1_14_ASCII.md',
+  'docs/ADU-DB-01_Database_and_Data_Model_v1_15_ASCII.md',
   // T13: ADU-AUTH-01 governs at v2.6 for authentication, sessions, recovery,
   // operators and abuse control -- and v2.5 REMAINS INSTALLED AND GOVERNED for
   // the permission catalogue, the 42x6 matrix and the SQL seed, which v2.6 S0
@@ -42,7 +42,11 @@ const GOVERNED = [
   // corrupts a gate's source of truth rather than merely its prose.
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_6.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md',
-  'docs/ADU-API-01_API_Contract_v1_7.md',
+  'docs/ADU-API-01_API_Contract_v1_8_ASCII.md',
+  // T14-C: the T13 and contract rulings, ASCII-clean and binding, added to the
+  // enforced set so they cannot drift the way carried documents do.
+  'docs/ADU-RUL-06_Rulings_on_the_T13_Register.md',
+  'docs/ADU-RUL-07_Contract_Rulings.md',
   // T5: ADU-CON-02 becomes GOVERNED at v3.1 -- it was supplied ASCII, so it
   // is enforced rather than merely reported as debt.
   'docs/ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md',

@@ -38,6 +38,7 @@ import { api, ApiError } from '../../api/client';
 import { ScreenState } from '../../components/ScreenState';
 import type { UiState } from '../../lib/states';
 import { fillTemplate } from '../../lib/intl';
+import { ITEM_LABEL } from '../../lib/readiness';
 
 interface ReadinessItem {
   code: string;
@@ -45,25 +46,6 @@ interface ReadinessItem {
   satisfied: boolean;
   resolving_action?: { kind: string };
 }
-
-/**
- * Item code -> the label a person reads. A code the server sends that is not
- * in here still RENDERS -- as its own code -- because a screen that silently
- * drops a row it does not recognise turns a new readiness requirement into an
- * invisible one, and the seller would be blocked by something the screen
- * never showed them.
- */
-const ITEM_LABEL: Readonly<Record<string, string>> = {
-  ACCOUNT_CREATED: en['console.home.item.account_created'],
-  SELLER_TYPE_DECLARED: en['console.home.item.seller_type_declared'],
-  ELIGIBILITY_SATISFIED: en['console.home.item.eligibility_satisfied'],
-  IDENTITY_VERIFIED: en['console.home.item.identity_verified'],
-  COMPANY_DETAILS: en['console.home.item.company_details'],
-  STORE_PROFILE: en['console.home.item.store_profile'],
-  PAYOUT_DETAILS: en['console.home.item.payout_details'],
-  FULFILMENT_CONFIG: en['console.home.item.fulfilment_config'],
-  AT_LEAST_ONE_PRODUCT: en['console.home.item.at_least_one_product'],
-};
 
 /**
  * Resolving action -> where it is resolved. The server names the ACTION; this

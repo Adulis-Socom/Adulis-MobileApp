@@ -19,6 +19,10 @@ import { Home } from './features/entry/Home';
 import { Orders } from './features/trade/Orders';
 import { OrderDetail } from './features/trade/OrderDetail';
 import { BecomeSeller } from './features/entry/BecomeSeller';
+import { Products } from './features/catalogue/Products';
+import { ProductEditor } from './features/catalogue/ProductEditor';
+import { ProductNew } from './features/catalogue/ProductNew';
+import { StockScreen } from './features/catalogue/StockScreen';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -45,7 +49,13 @@ export const router = createBrowserRouter([
           // URL is a screen a seller can land on with no order behind it.
           { path: 'orders', element: <Orders /> },
           { path: 'orders/:orderId', element: <OrderDetail /> },
-          { path: 'products', element: <Placeholder screen="SC-07" /> },
+          // C-5 catalogue (SC-07..SC-11). SC-09 Variants and SC-10 Media are
+          // SECTIONS of SC-08, not routes; SC-11 Stock is inline on SC-09 and
+          // has its own route below.
+          { path: 'products', element: <Products /> },
+          { path: 'products/new', element: <ProductNew /> },
+          { path: 'products/:productId', element: <ProductEditor /> },
+          { path: 'products/:productId/stock', element: <StockScreen /> },
           /*
             THE SCREENS SC-01's RESOLVING LINKS POINT AT (ADU-CON-03 S6's
             table: item 3/4 -> SC-22, 5/6 -> SC-17, 7 -> SC-24, 8 -> SC-18,

@@ -3,9 +3,9 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root.**
 
-**Governing documents:** ADU-CON-03 v1.1 (thirty screens, five destinations, twelve
+**Governing documents:** ADU-CON-03 v1.2 (thirty screens, five destinations, twelve
 states) · ADU-CON-02 **v3.1** (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01
-**v2.5** · ADU-API-01 **v1.7** · **ADU-REPO-01 §9** (cited across this repository and installed
+**v2.5** · ADU-API-01 **v1.8** · ADU-DB-01 **v1.15** · **ADU-REPO-01 §9** (cited across this repository and installed
 nowhere: it is absent from `docs/` and from DOCUMENT_AUTHORITY's supplied baseline,
 and no register entry recorded that until D-94; this file's §9.2/§9.5 transcriptions
 are the working copy). Versions corrected at T7 Phase 4; `docs/amendments/README.md`
@@ -127,7 +127,7 @@ backfill. It earns its place on C-4.
 
 ### C-4's four rules, and where each one lives
 
-Every one of these is transcribed from ADU-CON-03 v1.1 S7, not designed. They
+Every one of these is transcribed from ADU-CON-03 v1.1 S7 (carried unchanged into v1.2 S7), not designed. They
 are the rules most likely to be "improved" by someone who has not read why.
 
 - **The three clock treatments are ONE module** -- `lib/clock.tsx`. SC-03's row
