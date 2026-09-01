@@ -1,24 +1,80 @@
 /*
- * @adulis/tokens -- tokens.css. PLACEHOLDER AWAITING DESIGN (see index.ts).
- * The same values as index.ts, as custom properties, for the web surfaces.
- * One source would be better than two; until a build step derives one from
- * the other, a drift between these files is a defect to fix in BOTH.
+ * @adulis/tokens -- tokens.css. The values of index.ts as custom properties for
+ * the web surfaces (T14 Part B). NO LONGER a placeholder. One source would be
+ * better than two; until a build step derives one from the other, a drift
+ * between these files is a defect to fix in BOTH.
+ *
+ * Designed for sunlight and cheap Android: HIGH CONTRAST, one accent for action
+ * only, semantic state that never stands on colour alone. Superset of the old
+ * file: every property the console consumes is still here, at a real value.
  */
 :root {
-  --adu-color-bg: #ffffff;
-  --adu-color-surface: #f6f6f6;
-  --adu-color-border: #d9d9d9;
-  --adu-color-text-muted: #5c5c5c;
-  --adu-color-text: #1a1a1a;
-  --adu-color-accent: #1d4ed8;
-  --adu-color-accent-text: #ffffff;
-  --adu-color-danger: #b91c1c;
-  --adu-color-success: #15803d;
-  --adu-color-warn: #a16207;
+  /* the neutral ramp -- roles below are named positions on it */
+  --adu-neutral-0: #ffffff;
+  --adu-neutral-50: #f7f6f4;
+  --adu-neutral-100: #eceae6;
+  --adu-neutral-200: #dbd8d2;
+  --adu-neutral-300: #c1bdb4;
+  --adu-neutral-400: #9c968b;
+  --adu-neutral-500: #78726a;
+  --adu-neutral-600: #57524b;
+  --adu-neutral-700: #3d3a34;
+  --adu-neutral-800: #272420;
+  --adu-neutral-900: #17150f;
 
+  /* roles */
+  --adu-color-bg: var(--adu-neutral-0);
+  --adu-color-surface: var(--adu-neutral-50);
+  --adu-color-surface-muted: var(--adu-neutral-100);
+  --adu-color-surface-sunk: var(--adu-neutral-100);
+  --adu-color-border: var(--adu-neutral-200);
+  --adu-color-border-strong: var(--adu-neutral-300);
+  --adu-color-text-muted: var(--adu-neutral-500);
+  --adu-color-text-secondary: var(--adu-neutral-700);
+  --adu-color-text: var(--adu-neutral-900);
+
+  /* the one accent -- action only */
+  --adu-color-accent: #1e40af;
+  --adu-color-accent-hover: #1a3a9c;
+  --adu-color-accent-active: #16327f;
+  --adu-color-accent-text: #ffffff;
+  --adu-color-accent-subtle: #eef2ff;
+
+  /* semantic state -- each a triple, never colour alone */
+  --adu-color-danger: #b42318;
+  --adu-color-danger-bg: #fef3f2;
+  --adu-color-danger-border: #fda29b;
+  --adu-color-success: #05603a;
+  --adu-color-success-bg: #ecfdf3;
+  --adu-color-success-border: #a6e9c6;
+  --adu-color-warn: #b54708;
+  --adu-color-warn-bg: #fffaeb;
+  --adu-color-warn-border: #fedf89;
+  --adu-color-info: #1e40af;
+  --adu-color-info-bg: #eef2ff;
+  --adu-color-info-border: #c7d2fe;
+
+  /* type */
   --adu-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans',
     'Noto Sans Ethiopic', sans-serif;
+  --adu-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
+  --adu-font-size-xs: 0.8125rem;
+  --adu-font-size-sm: 0.875rem;
+  --adu-font-size-base: 1rem;
+  --adu-font-size-lg: 1.125rem;
+  --adu-font-size-xl: 1.375rem;
+  --adu-font-size-xxl: 1.75rem;
+  --adu-font-size-3xl: 2.125rem;
+  --adu-font-weight-regular: 400;
+  --adu-font-weight-medium: 500;
+  --adu-font-weight-semibold: 600;
+  --adu-font-weight-bold: 700;
+  --adu-line-height-tight: 1.25;
+  --adu-line-height-heading: 1.3;
+  --adu-line-height-base: 1.5;
+  --adu-line-height-relaxed: 1.65;
 
+  /* spacing (4px base) -- values unchanged from the placeholder */
   --adu-space-xs: 0.25rem;
   --adu-space-sm: 0.5rem;
   --adu-space-md: 1rem;
@@ -26,9 +82,26 @@
   --adu-space-xl: 2rem;
   --adu-space-xxl: 3rem;
 
+  /* radius */
   --adu-radius-sm: 0.25rem;
   --adu-radius-md: 0.5rem;
   --adu-radius-lg: 0.75rem;
+  --adu-radius-full: 9999px;
 
+  /* target + focus */
   --adu-touch-min: 44px;
+  --adu-focus-ring-width: 2px;
+  --adu-focus-ring-offset: 2px;
+  --adu-focus-ring-color: var(--adu-color-accent);
+}
+
+/*
+ * A VISIBLE focus indicator, applied once, keyboard-only (:focus-visible), so a
+ * mouse click does not ring but a Tab does -- a11y from the first primitive
+ * (T14 S7.2). :where() keeps specificity at zero so a surface can override the
+ * treatment, but the intent is that it never removes the ring.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color);
+  outline-offset: var(--adu-focus-ring-offset);
 }
