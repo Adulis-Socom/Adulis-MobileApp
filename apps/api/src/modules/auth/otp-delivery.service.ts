@@ -7,6 +7,7 @@ import { createLogger } from '../../common/logging';
 import type { SmsMessage } from './sms.adapter';
 import type { SendOutcome, SendResult, SmsProvider } from './sms-provider';
 import { SmsProviderRouter } from './sms-provider.router';
+import { OtpService } from './otp.service';
 
 /**
  * OTP delivery (ADU-AUTH-01 v2.6 S5.5, S5.6, S12, S12.1, S12.2).
@@ -89,6 +90,7 @@ export class OtpDeliveryService {
   constructor(
     @Inject(APP_DATABASE) private readonly db: Kysely<Database>,
     private readonly router: SmsProviderRouter,
+    private readonly otp: OtpService,
   ) {}
 
   /**
@@ -166,6 +168,9 @@ export class OtpDeliveryService {
 
     const first = await this.attempt(challengeId, 1, route.primary, sms);
     if (first.outcome === 'ACCEPTED') {
+      // A provider took it, so this code becomes THE live one and every
+      // sibling is superseded -- now, not at mint (ADU-RUL-06 S5, D-204.1).
+      await this.otp.markTransported(challengeId);
       return { attempts: 1, outcome: 'ACCEPTED', acceptedBy: route.primary.name };
     }
 
@@ -189,6 +194,11 @@ export class OtpDeliveryService {
     }
 
     const second = await this.attempt(challengeId, 2, route.fallback, sms);
+    if (second.outcome === 'ACCEPTED') {
+      // The fallback carried the SAME code (failover is not resend, S5.5), so
+      // acceptance here supersedes exactly as the primary's would have.
+      await this.otp.markTransported(challengeId);
+    }
     return {
       attempts: 2,
       outcome: second.outcome,

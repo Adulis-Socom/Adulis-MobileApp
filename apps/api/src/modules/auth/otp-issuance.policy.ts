@@ -39,7 +39,8 @@ interface BudgetRow {
   market_hard: number | null;
   global_soft: number;
   global_hard: number;
-  spent_today: number;
+  market_spent: number;
+  global_spent: number;
 }
 
 @Injectable()
@@ -157,9 +158,14 @@ export class OtpIssuancePolicy {
              m.otp_daily_hard_limit AS market_hard,
              b.otp_global_daily_soft_limit AS global_soft,
              b.otp_global_daily_hard_limit AS global_hard,
+             (SELECT count(*)::int FROM core.otp_delivery_attempt a
+                JOIN core.otp_challenge c ON c.id = a.otp_challenge_id
+               WHERE c.market_id = ${marketId}
+                 AND a.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+                       AT TIME ZONE 'UTC') AS market_spent,
              (SELECT count(*)::int FROM core.otp_delivery_attempt
                WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
-                       AT TIME ZONE 'UTC') AS spent_today
+                       AT TIME ZONE 'UTC') AS global_spent
         FROM core.market m
         CROSS JOIN core.platform_otp_budget b
        WHERE m.id = ${marketId}`.execute(trx);
@@ -176,61 +182,46 @@ export class OtpIssuancePolicy {
      */
 
     /**
-     * WHAT THIS COUNT ATTRIBUTES, AND WHY OVER-COUNTING IS THE SAFE DIRECTION.
+     * TWO CEILINGS, TWO COUNTS, EACH AGAINST ITS OWN (S16; ADU-RUL-06 S2).
      *
-     * `spent_today` counts delivery attempts PLATFORM-WIDE. It is EXACTLY the
-     * per-market count while exactly one market is ACTIVE, and that is not a
-     * coincidence: only ACTIVE markets issue (S9.2), so every attempt in
-     * existence belongs to the one that is.
+     * `market_spent` is attributed through `otp_challenge.market_id` -- the
+     * stamp migration 0044 added, which is what made D-193 close "for free":
+     * every challenge names the market that governed its creation, so its
+     * attempts belong somewhere by construction. `global_spent` is the
+     * platform-wide count the platform ceiling was always about.
      *
-     * With two ACTIVE markets it OVER-COUNTS any single market -- and it can
-     * only over-count, never under-count, because a market's own attempts are
-     * a subset of all of them. Checked against a per-market ceiling that
-     * means the breaker can fire EARLY, never LATE. A spend control that
-     * trips sooner than intended throttles; one that trips later than
-     * intended does not control spend at all. The approximation is therefore
-     * sound in the direction that matters, and its cost is fairness: a busy
-     * market can spend a quiet one's allowance.
+     * The PREVIOUS version of this file could not attribute -- nothing in the
+     * schema named a market -- so it checked one platform-wide count against
+     * `Math.min(market, global)`: conservative (it could only fire early),
+     * unfair (a busy market spent a quiet one's allowance), and recorded as
+     * such. The stamp removes the approximation rather than tuning it.
      *
-     * IT CANNOT BE MADE EXACT HERE, and that is a documented gap rather than
-     * an oversight to route around. NOTHING IN THE INSTALLED SCHEMA
-     * ATTRIBUTES AN OTP TO A MARKET: `core.otp_delivery_attempt` carries no
-     * market and neither does `core.otp_challenge`; v2.6 S12.1's field list
-     * has none and ADU-DB-01 v1.14 adds none. Attributing through the phone's
-     * ACCOUNT would count only phones that already have one, undercounting
-     * exactly the abandoned anonymous requests a spend control exists to
-     * catch -- an under-count, which is the unsafe direction.
+     * A market with NULL limits has NO per-market ceiling -- that is the row
+     * a newly activated market has until an operator sets one (the runbook's
+     * step 3) -- and the GLOBAL ceiling still binds it, which is the reason
+     * the platform row exists and both of its columns are NOT NULL.
      *
-     * The fix is a `market_id` on the challenge, written at issue. That is a
-     * DB amendment, it is registered, and the activation runbook names exact
-     * per-market accounting as a prerequisite for a second ACTIVE market.
-     *
-     * An EARLIER VERSION OF THIS FILE REFUSED TO ISSUE AT ALL once a second
-     * market went ACTIVE, reasoning that a number it could not attribute was
-     * worse than none. Its own test showed what that means: a fixture market
-     * turned OTP on and every market stopped serving. A safeguard whose
-     * failure mode is a platform-wide outage is not a safeguard, and the
-     * conservative count above is the honest version of the same intent.
+     * Attempts on PRE-0044 challenges carry no market and count against the
+     * global ceiling only; the transitional window is one TTL wide.
      */
-
-    const soft = Math.min(
-      row.market_soft ?? Number.POSITIVE_INFINITY,
-      row.global_soft,
-    );
-    const hard = Math.min(
-      row.market_hard ?? Number.POSITIVE_INFINITY,
-      row.global_hard,
-    );
+    const softCrossed =
+      (row.market_soft !== null && row.market_spent >= row.market_soft) ||
+      row.global_spent >= row.global_soft;
+    const hardCrossed =
+      (row.market_hard !== null && row.market_spent >= row.market_hard) ||
+      row.global_spent >= row.global_hard;
 
     // S16.1 -- crossing the soft limit alerts and keeps serving. It is a
     // signal, not a control, and it must never become one by accident.
-    if (row.spent_today >= soft) {
+    if (softCrossed) {
       log.warn({
-        msg: `otp daily soft limit crossed: ${row.spent_today} attempts today`,
+        msg:
+          `otp daily soft limit crossed: market ${row.market_spent}, ` +
+          `platform ${row.global_spent} attempts today`,
       });
     }
 
-    if (row.spent_today >= hard) {
+    if (hardCrossed) {
       /**
        * S16.2, and the `anonymous` gate is the invariant rather than a
        * refinement of it. Blocking step-up here would stop a signed-in

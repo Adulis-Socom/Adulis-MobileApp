@@ -71,13 +71,13 @@ describe('D-89 -- the courier invite claim, second leg', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', key())
       .set('Cookie', device)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' })
       .expect(202);
     return http()
       .post('/v1/auth/otp/verify')
       .set('Idempotency-Key', key())
       .set('Cookie', device)
-      .send({ phone, code: codeFor(phone), audience: 'CONSOLE', age_declared_over_18: true });
+      .send({ phone, code: codeFor(phone), age_declared_over_18: true });
   };
 
   beforeAll(async () => {
@@ -397,7 +397,7 @@ describe('D-89 -- the courier invite claim, second leg', () => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('Cookie', device)
-        .send({ phone, purpose: 'SIGN_IN' }),
+        .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' }),
     );
 
     /*
@@ -423,7 +423,7 @@ describe('D-89 -- the courier invite claim, second leg', () => {
         .post('/v1/auth/otp/resend')
         .set('Idempotency-Key', key())
         .set('Cookie', device)
-        .send({ phone, purpose: 'SIGN_IN' }),
+        .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' }),
     );
 
     // A WRONG CODE is still unauthenticated. `000000` cannot collide with a
@@ -434,7 +434,7 @@ describe('D-89 -- the courier invite claim, second leg', () => {
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
         .set('Cookie', device)
-        .send({ phone, code: '000000', audience: 'CONSOLE', age_declared_over_18: true }),
+        .send({ phone, code: '000000', age_declared_over_18: true }),
     );
 
     for (const leg of ['request', 'resend', 'failed verify']) {

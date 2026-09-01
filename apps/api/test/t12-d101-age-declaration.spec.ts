@@ -63,7 +63,7 @@ describe('D-101 -- the age declaration is a named refusal, and only for identity
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', key())
       .set('Cookie', device)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' })
       .expect(202);
     return http()
       .post('/v1/auth/otp/verify')
@@ -72,7 +72,7 @@ describe('D-101 -- the age declaration is a named refusal, and only for identity
       .send({
         phone,
         code: codeFor(phone),
-        audience: 'CONSOLE',
+        // Stamped at request; the verify endpoint refuses the field (S5.2).
         ...(declared ? { age_declared_over_18: true } : {}),
       });
   };

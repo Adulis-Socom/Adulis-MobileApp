@@ -185,6 +185,7 @@ pnpm db:determinism                     # two clean databases converge
 pnpm verify:permission-doc              # 252 cells, both directions
 pnpm verify:docs-ascii                  # A3.5, plus the NUL-byte guard
 pnpm verify:appendix                    # Appendix A/B vs the fixtures, both ways
+pnpm verify:transcription               # migration 0043 vs ADU-AUTH-01 v2.6, both ways, self-checked
 pnpm --filter @adulis/api test
 pnpm verify:deps && pnpm verify:deps-fires   # ADU-REPO-01 §4, and that they fire
 pnpm verify:contract                    # /v1 in the path keys — inert until Tier 3

@@ -8,8 +8,7 @@ import type { Database } from '../../common/db/database.types';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { BootstrapResponseDto } from './bootstrap.dto';
-import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
-import { resolveKey } from '../../common/crypto/aead';
+import { RateLimitService } from '../../common/rate-limit/rate-limit.service';
 import {
   BROWSER_DEVICE_COOKIE,
   clientSurface,
@@ -50,8 +49,15 @@ export interface BootstrapResponse {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Same derivation the auth surface uses, so one IP is one subject. */
-const rateLimitKey = (): string =>
-  resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
+/**
+ * The single subject the platform-scoped mint limiter counts against
+ * (ADU-RUL-06 S6, D-192). Not an IP and not a device -- ONE bucket for the
+ * whole platform, on purpose, because behind a proxy every caller shares an
+ * address and a per-IP limit here is a platform counter mislabelled. The
+ * `DEVICE` kind is honest (this counts device minting) and the constant id
+ * says in the row itself that there is exactly one subject.
+ */
+const PLATFORM_MINT_SUBJECT = 'platform';
 
 @Controller('bootstrap')
 export class BootstrapController {
@@ -135,23 +141,37 @@ export class BootstrapController {
       }
 
       if (!deviceId) {
-        // MINTING IS THE ONLY WRITE AN ANONYMOUS CALLER CAN CAUSE HERE, and
-        // before this limit it was unbounded: a bare loop produced hundreds of
-        // core.device rows a second, each surviving until media_retention
-        // (90 days on the seeded config) expired it. Reading is never limited
-        // -- a returning browser, which is the common case, presents a cookie
-        // and takes the branch above without consuming any budget.
-        await this.rateLimit.consume('IP_HASH', subjectHash(req.ip ?? '', rateLimitKey()), {
+        /**
+         * MINTING IS THE ONLY WRITE AN ANONYMOUS CALLER CAN CAUSE HERE, and
+         * before this limit it was unbounded: a bare loop produced hundreds
+         * of core.device rows a second. Reading is never limited -- a
+         * returning browser presents a cookie and takes the branch above,
+         * consuming no budget.
+         *
+         * PLATFORM-SCOPED BY DESIGN (ADU-RUL-06 S6, D-192). It used to key on
+         * `req.ip`, and nothing in this API sets Express's `trust proxy`, so
+         * behind any CDN or load balancer `req.ip` is the PROXY's address --
+         * one subject for everyone. That is not a per-IP limit that happens to
+         * collapse; it is a platform-wide counter WEARING a per-IP label, and
+         * the label was the lie. S15 removed the OTP path's IP limiter for the
+         * same reason (D-192).
+         *
+         * So it collapses ON PURPOSE, to a fixed subject, and bounds the total
+         * mint rate honestly. The ceiling is sized for the PLATFORM in a beta
+         * hour -- a flood is orders of magnitude above legitimate first-time
+         * visits (the measured attack was ~230 rows/second), so a ceiling far
+         * above any plausible hour still cuts it by orders of magnitude while
+         * never being a number a real hour reaches.
+         *
+         * This is THE SECOND PLATFORM-SCOPED CONTROL, beside
+         * core.platform_otp_budget; the shape now has two members. When
+         * S15.1's trusted-proxy work lands it becomes per-IP at this ceiling,
+         * which is one configuration change rather than a redesign.
+         */
+        await this.rateLimit.consume('DEVICE', PLATFORM_MINT_SUBJECT, {
           bucketKey: 'bootstrap-device-mint',
           windowSeconds: 3600,
-          // GENEROUS ON PURPOSE. A browser mints once and then presents a
-          // cookie forever, so the honest population behind one address is
-          // first-time visitors -- and in this market that address is often a
-          // carrier NAT with a great many people behind it. A tight limit
-          // would lock out a whole ISP to stop a flood that this one stops
-          // anyway: the measured attack was ~230 rows/second from a single
-          // connection, which this cuts by three orders of magnitude.
-          max: 600,
+          max: 50000,
         });
 
         // First load, or a cookie whose row is gone. The row and the

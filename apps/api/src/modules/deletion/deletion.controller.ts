@@ -86,6 +86,10 @@ export class DeletionController {
       const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
+        // A deletion challenge mints no session, so there is no surface to
+        // bind: the stamp is NULL and nothing ever reads it (v2.6 S5.2
+        // governs sign-in; the ticket is its own object).
+        audience: null,
         templateKey: 'sms.otp.account_deletion',
         // Anonymous and phone-taking, exactly like sign-in: the caller's own
         // device is the only thing that can be checked without revealing
@@ -111,11 +115,14 @@ export class DeletionController {
   async otpVerify(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = deletionOtpVerifyBody.parse(req.body);
     return this.tx.run(req, async (trx) => {
+      // The bootstrapped-device demand that used to hide inside verify's
+      // timing lookup, now standing in the open -- same refusal, same
+      // phone-independence, before the challenge is touched.
+      await this.otp.assertBootstrappedDevice(trx, requestingDevice(req.headers));
       const challenge = await this.otp.verifyCode(trx, {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
         code: body.code,
-        deviceId: requestingDevice(req.headers),
       });
       return {
         ticket: challenge.id,

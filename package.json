@@ -43,7 +43,8 @@
     "verify:console-e2e": "node --env-file-if-exists=.env ops/scripts/verify-console-e2e.mjs",
     "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
     "worker:install": "node ops/scripts/install-worker-schema.mjs",
-    "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs"
+    "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs",
+    "verify:transcription": "node --env-file-if-exists=.env ops/scripts/verify-transcription.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

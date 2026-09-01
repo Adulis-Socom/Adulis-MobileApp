@@ -330,17 +330,25 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       const olderId = randomUUID();
       const liveId = randomUUID();
       await admin.query(
+        // STAMPED like the service stamps (migration 0044): a hand-written
+        // challenge without audience/market/max_attempts is a pre-0044 relic
+        // the verify path answers as EXPIRED, which is not what this test
+        // is about.
         `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash,
-           expires_at, created_at)
+           expires_at, created_at, audience, market_id, max_attempts,
+           transported_at)
          VALUES ($1,'SIGN_IN',$2,$3, now() + interval '5 minutes',
+                 now() - interval '5 minutes', 'MOBILE', $4, 5,
                  now() - interval '5 minutes')`,
-        [olderId, P_FRESH, codeHash(olderId, firstCode)],
+        [olderId, P_FRESH, codeHash(olderId, firstCode), M],
       );
       await admin.query(
         `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash,
-           expires_at, created_at)
-         VALUES ($1,'SIGN_IN',$2,$3, now() + interval '5 minutes', now())`,
-        [liveId, P_FRESH, codeHash(liveId, secondCode)],
+           expires_at, created_at, audience, market_id, max_attempts,
+           transported_at)
+         VALUES ($1,'SIGN_IN',$2,$3, now() + interval '5 minutes', now(),
+                 'MOBILE', $4, 5, now())`,
+        [liveId, P_FRESH, codeHash(liveId, secondCode), M],
       );
 
       const stale = await http()
@@ -350,7 +358,6 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
         .send({
           phone: P_FRESH,
           code: firstCode,
-          audience: 'MOBILE',
           device_id: FRESH_DEVICE,
           age_declared_over_18: true,
         });
@@ -379,7 +386,6 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
         .send({
           phone: P_FRESH,
           code: secondCode,
-          audience: 'MOBILE',
           device_id: FRESH_DEVICE,
           age_declared_over_18: true,
         })

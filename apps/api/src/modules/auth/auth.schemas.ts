@@ -10,6 +10,13 @@ const code = z.string().regex(/^[0-9]{6}$/);
 export const otpRequestBody = z.object({
   phone,
   purpose: z.literal('SIGN_IN'),
+  /**
+   * v2.6 S5.2 -- the audience arrives at REQUEST and is stamped on the
+   * challenge; the verify endpoint refuses the field outright. It used to
+   * arrive at verify, where it decided which surface a session was minted
+   * for -- a client-controlled surface conversion (D-180).
+   */
+  audience: z.enum(['MOBILE', 'CONSOLE']),
 });
 
 export const otpResendBody = otpRequestBody;
@@ -17,7 +24,10 @@ export const otpResendBody = otpRequestBody;
 export const otpVerifyBody = z.object({
   phone,
   code,
-  audience: z.enum(['MOBILE', 'CONSOLE']),
+  // NO audience. S5.2: "The verification request does not accept
+  // `audience`." The controller REJECTS the field by name rather than
+  // letting this schema strip it silently -- a field silently discarded is
+  // a field a client keeps sending.
   /**
    * MOBILE only. A native client generates its device id, persists it in the
    * platform keystore and presents it here. A CONSOLE request carries no
@@ -34,14 +44,10 @@ export const otpVerifyBody = z.object({
   age_declared_over_18: z.boolean().optional(),
   /** R17 — console only; asserts "this is not the borrowed laptop". */
   remember_device: z.boolean().optional(),
-})
-  .refine((b) => b.audience !== 'MOBILE' || typeof b.device_id === 'string', {
-    // Optional in the shape, REQUIRED on the surface that has one. Without
-    // this, relaxing device_id for the console would have let a mobile client
-    // omit it and reach a lookup with nothing to look up.
-    path: ['device_id'],
-    message: 'device_id is required for MOBILE',
-  });
+});
+// The device_id-required-for-MOBILE refinement moved into the service: the
+// schema no longer knows the audience (the challenge does), and the service
+// refuses a MOBILE-stamped challenge presented without a body device anyway.
 
 export const stepUpRequestBody = z.object({
   action: z.enum([

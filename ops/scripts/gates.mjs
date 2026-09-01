@@ -370,7 +370,27 @@ const GATES = [
    * red everywhere it matters and green on the one machine that already knows
    * the answer.
    */
-  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'], env: { NODE_ENV: 'test' } },];
+  { id: 'console-e2e', title: 'The console works against the real API on a reset database', cmd: ['pnpm', 'verify:console-e2e'], env: { NODE_ENV: 'test' } },
+
+  /**
+   * APPENDED, by the rule ADU-CON-02 v3.2 S16 now states: this list is
+   * append-only and gates are cited by NAME.
+   *
+   * Migration 0043 transcribes ADU-AUTH-01 v2.6's delivery layer -- five
+   * enums, a table, market columns -- and until this gate NOTHING COMPARED
+   * THE MIGRATION TO THE DOCUMENT. "The migration is the only witness to
+   * itself" (T13): a dropped value or a renamed status would have shipped
+   * green. This reads the live schema and the installed document and compares
+   * them both ways.
+   *
+   * It ASSERTS ITS OWN PARSE FIRST (T14 S6): a gate that finds nothing
+   * compares an empty set to an empty set and goes green on the day the
+   * document changes shape, which is the defect class this repository is
+   * built around. Proven red from both sides -- a value removed from the
+   * document, a value removed from the database -- and its own self-check
+   * caught a fence-index bug in this file before it ever compared anything.
+   */
+  { id: 'transcription', title: 'Migration 0043 agrees with ADU-AUTH-01 v2.6 (both ways, self-checked)', cmd: ['pnpm', 'verify:transcription'] },];
 
 if (process.argv.includes('--list')) {
   for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);

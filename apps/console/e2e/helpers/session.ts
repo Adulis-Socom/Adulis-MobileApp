@@ -92,7 +92,7 @@ export async function signInAs(
 
   const asked = await req.post(`${API}/v1/auth/otp/request`, {
     headers: { ...headers, 'Idempotency-Key': key() },
-    data: { phone: who.phone, purpose: 'SIGN_IN' },
+    data: { phone: who.phone, purpose: 'SIGN_IN', audience: 'CONSOLE' },
   });
   if (asked.status() !== 202) throw new Error(`otp/request ${asked.status()}`);
 
@@ -114,7 +114,8 @@ export async function signInAs(
 
   const verified = await req.post(`${API}/v1/auth/otp/verify`, {
     headers: { ...headers, 'Idempotency-Key': key() },
-    data: { phone: who.phone, code, audience: 'CONSOLE', remember_device: true },
+    // No audience at verify: stamped at request, refused here (S5.2).
+    data: { phone: who.phone, code, remember_device: true },
   });
   if (!verified.ok()) throw new Error(`otp/verify ${verified.status()}`);
 

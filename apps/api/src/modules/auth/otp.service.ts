@@ -37,6 +37,16 @@ export interface OtpChallengeRow {
   expires_at: Date;
   consumed_at: Date | null;
   step_up_action: string | null;
+  /**
+   * THE STAMPS (ADU-RUL-06 S2, migration 0044). Present on every challenge
+   * issued since 0044. A row where max_attempts is NULL predates stamping and
+   * is answered as EXPIRED -- "check for a newer message" -- because a
+   * challenge lives five minutes and a resend heals it.
+   */
+  audience: 'MOBILE' | 'CONSOLE' | null;
+  market_id: string | null;
+  max_attempts: number | null;
+  transported_at: Date | null;
 }
 
 interface TimingRow {
@@ -194,7 +204,7 @@ export class OtpService {
     const r = await sql<{ n: number }>`
       SELECT count(*)::int AS n FROM core.otp_challenge
        WHERE phone_e164 = ${phone}
-         AND attempt_count >= ${maxAttempts}
+         AND attempt_count >= coalesce(max_attempts, ${maxAttempts})
          AND created_at > now() - interval '1 hour'`.execute(trx);
     if ((result_first(r.rows)?.n ?? 0) >= 3) {
       throw new AdulisException('RATE_LIMITED', {
@@ -247,6 +257,14 @@ export class OtpService {
     args: {
       phone: string;
       purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION';
+      /**
+       * STAMPED AT CREATION (v2.6 S5.2, ADU-RUL-06 S2) and read at verify --
+       * never accepted there. SIGN_IN carries the surface the caller is
+       * signing in on; STEP_UP is server-derived from the session's own
+       * audience, never from a body; ACCOUNT_DELETION mints no session, so
+       * its challenges carry NULL and nothing ever reads it.
+       */
+      audience: 'MOBILE' | 'CONSOLE' | null;
       stepUpAction?: string;
       templateKey: string;
       extraSlots?: Record<string, string>;
@@ -316,25 +334,51 @@ export class OtpService {
 
     await this.assertNotLockedOut(trx, args.phone, timing.otp_max_attempts);
 
-    await sql`
-      UPDATE core.otp_challenge
-         SET expires_at = now()
-       WHERE phone_e164 = ${args.phone}
-         AND purpose = ${args.purpose}::core.otp_purpose
-         AND consumed_at IS NULL
-         AND expires_at > now()`.execute(trx);
-
+    /**
+     * NO SUPERSEDE-AT-MINT (ADU-RUL-06 S5, D-204.1). This used to expire every
+     * live challenge for (phone, purpose) right here, the instant the new one
+     * was inserted and before it was sent -- so a resend whose delivery then
+     * failed left TWO DEAD CODES: the old destroyed, the new never delivered.
+     *
+     * The new challenge is now minted with transported_at NULL: not verifiable,
+     * superseding nothing. The delivery service supersedes the old code only
+     * when a provider ACCEPTS this one (marking transported_at and expiring the
+     * siblings in one statement). A failed send leaves the PREVIOUS code live.
+     */
     const id = randomUUID();
     // CSPRNG, uniform over the full 10^6 space; zero-padded for the keypad.
     const code = randomInt(0, 1000000).toString().padStart(6, '0');
     const hash = codeHash(id, code);
 
+    /**
+     * THE STAMPS (ADU-RUL-06 S2): every parameter this challenge will be
+     * governed by is written on it here, and verification reads the row and
+     * re-resolves nothing.
+     *
+     *   audience      which surface may mint a session from it (S5.2)
+     *   market_id     the market that governed creation -- the DEVICE's on
+     *                 every anonymous path -- which is also what makes
+     *                 per-market spend attributable (D-193)
+     *   max_attempts  the attempt budget, frozen at creation. Re-reading
+     *                 timing at verify was D-203's oracle: the count of
+     *                 wrong-guess refusals before the 429 IS the resolved
+     *                 market's setting, and the resolution differed for a
+     *                 registered phone.
+     *
+     * The TTL needs no column: expires_at has always been its stamped form.
+     * And the ruling's closing reason belongs here too -- without stamping, a
+     * challenge created under one market's parameters could be VERIFIED under
+     * another's. Reading the row makes that impossible rather than unlikely.
+     */
     const inserted = await sql<{ expires_at: Date }>`
       INSERT INTO core.otp_challenge
-        (id, purpose, phone_e164, code_hash, expires_at, step_up_action)
+        (id, purpose, phone_e164, code_hash, expires_at, step_up_action,
+         audience, market_id, max_attempts)
       VALUES (${id}, ${args.purpose}::core.otp_purpose, ${args.phone}, ${hash},
               now() + ${timing.otp_ttl}::interval,
-              ${args.stepUpAction ?? null}::core.step_up_action)
+              ${args.stepUpAction ?? null}::core.step_up_action,
+              ${args.audience}::core.session_audience,
+              ${gateMarket}, ${timing.otp_max_attempts})
       RETURNING expires_at`.execute(trx);
 
     const expiresAt = result_first(inserted.rows)?.expires_at as Date;
@@ -351,9 +395,74 @@ export class OtpService {
   }
 
   /**
+   * SUPERSESSION AT TRANSPORT ACCEPTANCE (ADU-RUL-06 S5, D-204.1).
+   *
+   * Called by the delivery service the moment a provider ACCEPTS a code. In
+   * ONE statement it marks this challenge transported (making it the live
+   * code) and expires every OTHER live challenge for the same (phone,
+   * purpose) -- so there is exactly one verifiable challenge at every instant,
+   * and the switch from the old code to the new one happens when the new one
+   * is genuinely on its way, never before.
+   *
+   * Idempotent: a second acceptance (a callback, a retry) finds transported_at
+   * already set and changes nothing. NULL-guarded on transported_at so a
+   * re-run cannot re-expire a sibling that has legitimately become live since.
+   */
+  async markTransported(challengeId: string): Promise<void> {
+    // Two statements, not a data-modifying CTE: an UPDATE ... FROM (SELECT of
+    // a sibling UPDATE) against the SAME table reads the pre-statement
+    // snapshot and, in practice, left the siblings un-expired. Two awaited
+    // statements are unambiguous, and the tiny window between them is safe --
+    // a verify landing in it sees the OLD code still live, which is the
+    // conservative direction.
+    const accepted = await sql<{ phone_e164: string; purpose: string }>`
+      UPDATE core.otp_challenge
+         SET transported_at = now()
+       WHERE id = ${challengeId} AND transported_at IS NULL
+       RETURNING phone_e164, purpose::text AS purpose`.execute(this.db);
+    const row = result_first(accepted.rows);
+    if (!row) return; // already transported (a callback, a retry) -- idempotent
+    await sql`
+      UPDATE core.otp_challenge
+         SET expires_at = now()
+       WHERE phone_e164 = ${row.phone_e164}
+         AND purpose = ${row.purpose}::core.otp_purpose
+         AND id <> ${challengeId}
+         AND consumed_at IS NULL
+         AND expires_at > now()`.execute(this.db);
+  }
+
+  /**
+   * A phone-taking path that has not authenticated anyone must still demand a
+   * bootstrapped device, and the refusal must depend on THE DEVICE ALONE --
+   * identical for a registered and an unregistered phone (S17, S22). This
+   * used to live inside the verify path's timing lookup; verification no
+   * longer looks anything up, so the check stands on its own and every
+   * anonymous verify caller runs it BEFORE touching the challenge.
+   */
+  async assertBootstrappedDevice(
+    trx: Transaction<Database>,
+    deviceId: string | null,
+  ): Promise<void> {
+    if (deviceId) {
+      const d = await sql<{ market_id: string | null }>`
+        SELECT market_id FROM core.device WHERE id = ${deviceId}`.execute(trx);
+      if (result_first(d.rows)?.market_id) return;
+    }
+    throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
+  }
+
+  /**
    * Verify a code against the live challenge for (phone, purpose) and
    * consume it. Every failure is one of the section 7.1 auth codes; every
    * comparison is constant-time.
+   *
+   * READS THE CHALLENGE AND RESOLVES NOTHING (ADU-RUL-06 S2). This used to
+   * call `timingFor`, which coalesced the ACCOUNT's market over the device's
+   * -- so the attempt budget, an unauthenticated observable, was per-market
+   * configuration selected by whether the phone had an account (D-203). The
+   * budget now comes off the row it governs, stamped at creation, and there
+   * is no market lookup on any verify path.
    */
   async verifyCode(
     trx: Transaction<Database>,
@@ -361,17 +470,8 @@ export class OtpService {
       phone: string;
       purpose: 'SIGN_IN' | 'STEP_UP' | 'ACCOUNT_DELETION';
       code: string;
-      deviceId?: string | null;
-      requireDevice?: boolean;
     },
   ): Promise<OtpChallengeRow> {
-    const timing = await this.timingFor(
-      trx,
-      args.phone,
-      args.deviceId ?? null,
-      args.requireDevice ?? true,
-    );
-
     // No FOR UPDATE here: the attempt counter writes on a second
     // connection (burnAttempt), and a row lock held by this transaction
     // would deadlock against it. Single consumption is serialised by the
@@ -379,12 +479,18 @@ export class OtpService {
     const live = await sql<OtpChallengeRow>`
       SELECT id, phone_e164, purpose::text AS purpose, attempt_count,
              expires_at, consumed_at, step_up_action::text AS step_up_action,
+             audience::text AS audience, market_id, max_attempts,
              code_hash
         FROM core.otp_challenge
        WHERE phone_e164 = ${args.phone}
          AND purpose = ${args.purpose}::core.otp_purpose
          AND consumed_at IS NULL
          AND expires_at > now()
+         -- TRANSPORTED ONLY (S5): a minted-but-unsent challenge is not the
+         -- live code. The most recent TRANSPORTED one is, so a resend that
+         -- has not yet reached a provider does not supplant the code the user
+         -- is holding.
+         AND transported_at IS NOT NULL
        ORDER BY created_at DESC
        LIMIT 1`.execute(trx);
 
@@ -410,7 +516,14 @@ export class OtpService {
       throw new AdulisException('OTP_INVALID');
     }
 
-    if (row.attempt_count >= timing.otp_max_attempts) {
+    if (row.max_attempts === null) {
+      // Issued before 0044, so its governing budget was never stamped.
+      // EXPIRED rather than a lookup: "check for a newer message" is true --
+      // a resend stamps -- and the transitional window is one TTL wide.
+      throw new AdulisException('OTP_EXPIRED');
+    }
+
+    if (row.attempt_count >= row.max_attempts) {
       // Dead means dead — no reset by requesting a new one (4.1).
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }
@@ -430,7 +543,7 @@ export class OtpService {
           throw new AdulisException('OTP_EXPIRED');
         }
       }
-      return this.burnAttempt(row.id, timing.otp_max_attempts);
+      return this.burnAttempt(row.id, row.max_attempts);
     }
 
     // Conditional consume: of two concurrent correct verifies, exactly one
@@ -460,27 +573,32 @@ export class OtpService {
       attempt_count: number;
       expires_at: Date;
       consumed_at: Date | null;
+      max_attempts: number | null;
+      transported_at: Date | null;
       code_hash: Buffer;
     }>`
-      SELECT id, phone_e164, attempt_count, expires_at, consumed_at, code_hash
+      SELECT id, phone_e164, attempt_count, expires_at, consumed_at,
+             max_attempts, transported_at, code_hash
         FROM core.otp_challenge
        WHERE id = ${challengeId}`.execute(trx);
     const row = result_first(r.rows);
     if (!row || row.consumed_at) throw new AdulisException('OTP_INVALID');
     if (new Date() > row.expires_at) throw new AdulisException('OTP_EXPIRED');
+    // A step-up code not yet transported is not verifiable either (S5). Its
+    // sole caller is authenticated, so this cannot leak; it keeps every verify
+    // path reading the same rule rather than one path forgetting it.
+    if (!row.transported_at) throw new AdulisException('OTP_EXPIRED');
 
-    // No device, and none required: this path verifies a challenge by ID and
-    // its ONLY caller is step-up (auth.service), which is authenticated --
-    // the account exists, so the account arm always resolves and there is no
-    // anonymous caller to leak anything to. Deletion does NOT come through
-    // here; it uses verifyCode, and it threads a device like every other
-    // anonymous phone-taking path.
-    const timing = await this.timingFor(trx, row.phone_e164, null, false);
-    if (row.attempt_count >= timing.otp_max_attempts) {
+    // The stamped budget, like every verify path (ADU-RUL-06 S2). This used
+    // to be the one remaining timing lookup at verification; its caller is
+    // authenticated step-up, so it never leaked -- but one path reading live
+    // configuration while the others read the row is how the two drift.
+    if (row.max_attempts === null) throw new AdulisException('OTP_EXPIRED');
+    if (row.attempt_count >= row.max_attempts) {
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }
     if (!constantTimeMatches(row.code_hash, codeHash(row.id, code))) {
-      return this.burnAttempt(row.id, timing.otp_max_attempts);
+      return this.burnAttempt(row.id, row.max_attempts);
     }
     const consumed = await sql<{ id: string }>`
       UPDATE core.otp_challenge SET consumed_at = now()

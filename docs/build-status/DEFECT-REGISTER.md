@@ -2290,3 +2290,63 @@ Response:  RECOVERED, and audited.
 Action:    Every fix from the pass was checked individually against the tree rather than assumed present; one of twelve was missing and was reapplied. This is T11's mirror rule arriving from a new direction: **a restore that is not proven in force un-tests the fix**, and here the restore was someone else's.
            The method changes: review agents may READ the working tree, and anything that MUTATES it must either run on its own copy or run when nothing else is writing. The mutation passes I run myself already assert their own restores; that is not enough when a second writer exists.
 Ruling needed: none.
+### D-207 - RESOLVED (ADU-RUL-06 S2): the challenge is stamped, not resolved -- D-180, D-193, D-203 are one column
+
+Severity:  (implements a founder ruling; the underlying defects were MAJOR)
+Phase:     T14 - A3
+Source:    ADU-RUL-06 v1.0 S2; WORK ORDER T14 S3; migration 0044
+Found by:  three lenses across T13, unified by the ruling
+Effect:    Three defects found separately were one: a value the challenge should have carried was re-resolved later, from a source that could differ. Audience from the verify body (D-180); the attempt budget from a live market lookup, and the market from the ACCOUNT (D-203); per-market spend unattributable because nothing named a market (D-193).
+Response:  BUILT. migration 0044 adds core.otp_challenge.market_id and max_attempts; audience (0043) is now written at request and read at verify.
+Action:    issueChallenge STAMPS audience, market and max_attempts at creation. verifyCode and verifyChallengeById READ the row and resolve nothing -- no timingFor, no market lookup on any verify path. The attempt budget is the stamped one; the lockout counts each row against its own stamped budget. Spend is attributed through otp_challenge.market_id, so D-193's per-market counting is exact rather than the conservative platform-wide over-count T13 shipped, and a NULL-limit market is bound by the global ceiling alone. A pre-0044 row (max_attempts NULL) is answered EXPIRED -- true, since a resend stamps, and the window is one TTL wide.
+           The controller REJECTS an audience field at verify by name (S31.1's third test), rather than letting zod strip it: a field silently discarded is a field a client keeps sending, and this one decided which surface a session was minted for. Device coherence now rests on the CHANNEL the id arrived through (cookie vs body), which a caller cannot fake, and the challenge's stamp -- not on a body audience the caller fills in. t14-a3-stamped-audience.spec.ts pins S31.1's three arms; the sweep updated 8 suites (audience moves from verify to request).
+Ruling needed: none. Built to the ruling.
+
+### D-208 - S5.3's live-challenge tuple is (phone, purpose, AUDIENCE), and supersession does not yet honour the third term
+
+Severity:  MINOR (a behaviour narrower than the spec permits, not a leak; PARKED per T14 S0.1)
+Phase:     T14 - A3
+Source:    ADU-AUTH-01 v2.6 S5.3; WORK ORDER T14 S3's "[!] Check S5.3's tuple" -- flagged as a SECOND finding
+Found by:  the order, while ruling the stamp
+Effect:    S5.3: "Exactly one live challenge exists for the applicable (phone, purpose, audience) tuple." Before 0044 the audience was not stored, so supersession and the live-challenge lookup keyed on (phone, purpose) ALONE -- expiring across audiences. That is NARROWER than the spec, not weaker: a person requesting a CONSOLE code killed their live MOBILE code, when the tuple says the two may coexist.
+           Now that audience IS stamped, per-audience supersession is POSSIBLE for the first time. This tier did not take it: issueChallenge's supersede and verifyCode's live lookup still key on (phone, purpose), which is the pre-existing, conservative behaviour and changes nothing I built.
+Response:  PARKED. The stamp is the prerequisite; whether to use it here is a behaviour change and a ruling.
+Action:    none this tier.
+Ruling needed: SHOULD supersession and the live-challenge lookup scope to (phone, purpose, audience)? It would let a person hold a live MOBILE and a live CONSOLE code at once -- useful for someone signing in on both, and exactly what the tuple describes. The cost is that a stale code on the other surface stays live for its TTL. Founder call.
+
+### D-209 - the platform-scoped mint limiter (ADU-RUL-06 S6, D-192)
+
+Severity:  (implements a founder ruling)
+Phase:     T14 - A6
+Source:    ADU-RUL-06 v1.0 S6; WORK ORDER T14 S6
+Found by:  the T13 Phase 3 pass (D-192), ruled by the founder
+Effect:    /v1/bootstrap's device-mint limiter keyed on req.ip, and nothing sets Express trust-proxy, so behind a proxy it was a platform-wide counter WEARING a per-IP label. The ruling: make it platform-scoped on purpose, at a ceiling sized for the platform.
+Response:  BUILT.
+Action:    The consume call keys on a FIXED subject ('platform', DEVICE kind) rather than req.ip, ceiling 50000/hour -- far above any plausible beta hour, orders of magnitude below the measured ~230 rows/second flood. Recorded as the SECOND platform-scoped control beside core.platform_otp_budget, in the code and here. When S15.1's trusted-proxy work lands it becomes per-IP at this ceiling, a config change not a redesign.
+           NOT a new subject_kind enum value: PLATFORM would be a schema + Appendix A + check-16 change out of this phase's scope. The DEVICE kind is honest (this counts device minting) and the constant id says in the row that there is one subject. `subjectHash` and `rateLimitKey` fell out of bootstrap.controller unused and were removed.
+Ruling needed: none. Worth carrying: a limiter that collapses to one subject behind a proxy should collapse there BY DESIGN, so it bounds what it counts honestly instead of lying about the label.
+
+### D-210 - the transcription gate, and it caught its own parser before it ever compared anything
+
+Severity:  (a gate, closing "the migration is the only witness to itself")
+Phase:     T14 - A6
+Source:    WORK ORDER T14 S6; ops/scripts/verify-transcription.mjs
+Found by:  the order asked whether a transcription gate landed in T13 -- it did NOT (I said I would add one and the register/gate list show none)
+Effect:    Migration 0043 transcribes ADU-AUTH-01 v2.6's delivery layer and nothing compared the migration to the document, so a dropped value or renamed status would ship green.
+Response:  BUILT and widened per S6: five enums (four fenced-value blocks plus S6.1's provider set), the six delivery statuses exactly, S12.1's ten fields on core.otp_delivery_attempt, and S9.1's fifteen columns on core.market (three renamed, mapped by name). Compared LIVE SCHEMA against INSTALLED DOCUMENT, both ways.
+Action:    IT ASSERTS ITS OWN PARSE FIRST, which is the anti-vacuity requirement S6 states: a gate that finds nothing compares empty to empty and goes green the day the document changes shape. Each section's fenced block must yield at least (or exactly) the expected count before any comparison runs.
+           The self-check earned its place immediately: S12.1's field list is the SECOND fenced block under the heading (the first is the table name), and the parser took the first -- zero fields. Rather than compare nothing and pass, the gate FAILED its own self-check and named the shape mismatch, which is how I found the bug. Fixed (fencedAfter takes an occurrence index).
+           Proven red from BOTH sides: a value removed from the document (FAIL: document names X, database does not), a value removed from the live enum (FAIL: database has X, document does not). Green against a clean db:reset. Appended to gates.mjs by name; 25 gates now.
+Ruling needed: none.
+### D-211 - RESOLVED (ADU-RUL-06 S5): transport before supersession -- a failed resend no longer strands two dead codes
+
+Severity:  (implements a founder ruling; the underlying defect was the two-dead-codes hole D-204.1 named)
+Phase:     T14 - A4
+Source:    ADU-RUL-06 v1.0 S5; WORK ORDER T14 S4; migration 0045
+Found by:  D-204.1, ruled by the founder
+Effect:    issueChallenge superseded the prior code AT MINT -- expired it the instant the new one was inserted, before the new one was transported. A resend whose delivery then failed (Ethiopia's configured no-fallback state, a vendor outage) left TWO DEAD CODES: the old destroyed, the new undelivered, a late-arriving first SMS worthless.
+Response:  BUILT. migration 0045 adds core.otp_challenge.transported_at; supersession moves to transport ACCEPTANCE.
+Action:    issueChallenge no longer supersedes at mint; the new challenge is minted with transported_at NULL -- not verifiable, superseding nothing. The delivery service calls OtpService.markTransported the moment a provider ACCEPTS (attempt 1 OR the failover attempt 2), which in one place marks the accepted challenge transported and expires every sibling live challenge for (phone, purpose). verifyCode and verifyChallengeById require transported_at IS NOT NULL to treat a row as the live code.
+           SO A FAILED RESEND LEAVES THE PREVIOUS CODE LIVE: the new challenge never becomes verifiable, the old is never expired. Exactly one verifiable challenge at every instant, which is what S5.3 protects -- and validity is gated on the CHALLENGE's own transported_at, NOT on otp_delivery_status, because S12.2 forbids deriving validity from transport status. markTransported is two statements rather than a data-modifying CTE against the same table (the CTE left siblings un-expired in practice; the two-statement form is unambiguous and the window between them is safe -- a verify landing in it sees the old code still live).
+           t14-a4-transport-supersession.spec.ts pins four arms: un-transported not verifiable, acceptance makes it verifiable, a FAILED resend leaves the previous code live, a SUCCESSFUL resend supersedes at acceptance. Rides with D-198's transport catch, as the ruling said it would.
+Ruling needed: none. Built to the ruling. (D-208 -- whether supersession should also scope to audience -- remains parked; this tier scopes it to (phone, purpose), unchanged.)

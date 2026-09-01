@@ -98,14 +98,18 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
     [marketId],
   ];
 
-  /** A committed challenge to transport. Delivery never issues one. */
+  /** A committed challenge to transport, STAMPED like the service stamps
+   *  (migration 0044) -- the budget counter attributes attempts through the
+   *  challenge's market, so an unstamped fixture attributes to nothing. */
   async function seedChallenge(phone: string): Promise<string> {
     const id = randomUUID();
     await admin.query(
       `INSERT INTO core.otp_challenge
-         (id, purpose, phone_e164, code_hash, expires_at)
-       VALUES ($1,'SIGN_IN',$2,'\\x00'::bytea, now() + interval '5 minutes')`,
-      [id, phone],
+         (id, purpose, phone_e164, code_hash, expires_at,
+          audience, market_id, max_attempts)
+       VALUES ($1,'SIGN_IN',$2,'\\x00'::bytea, now() + interval '5 minutes',
+               'MOBILE', $3, 5)`,
+      [id, phone, MK],
     );
     return id;
   }
@@ -631,7 +635,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
         .set('Idempotency-Key', randomUUID())
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Device', DEVICE_S)
-        .send({ phone: `${PHONE_PREFIX}31`, purpose: 'SIGN_IN' });
+        .send({ phone: `${PHONE_PREFIX}31`, purpose: 'SIGN_IN', audience: 'MOBILE' });
 
       expect(res.status).toBe(400);
       // No challenge was issued, so the refusal is a refusal rather than a
@@ -675,6 +679,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
           otp.issueChallenge(trx, {
             phone: `${PHONE_PREFIX}50`,
             purpose: 'STEP_UP',
+            audience: 'CONSOLE',
             stepUpAction: 'PAYOUT_CHANGE',
             templateKey: 'sms.otp.step_up.payout_change',
             requireDevice: false,
@@ -719,6 +724,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
           otp.issueChallenge(trx, {
             phone: `${PHONE_PREFIX}51`,
             purpose: 'SIGN_IN',
+            audience: 'CONSOLE',
             templateKey: 'sms.otp.sign_in',
             deviceId: DEVICE,
           }),
@@ -727,6 +733,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
           otp.issueChallenge(trx, {
             phone: `${PHONE_PREFIX}52`,
             purpose: 'SIGN_IN',
+            audience: 'CONSOLE',
             templateKey: 'sms.otp.sign_in',
             deviceId: DEVICE,
           }),
@@ -776,7 +783,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
         .set('Idempotency-Key', randomUUID())
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Device', DEVICE)
-        .send({ phone: `${PHONE_PREFIX}33`, purpose: 'SIGN_IN' });
+        .send({ phone: `${PHONE_PREFIX}33`, purpose: 'SIGN_IN', audience: 'MOBILE' });
 
       expect(res.status).toBe(429);
       const n = await admin.query<{ n: string }>(
@@ -960,7 +967,7 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
             .set('Idempotency-Key', randomUUID())
             .set('Origin', CONSOLE_ORIGIN)
             .set('X-Adulis-Device', DEVICE)
-            .send({ phone: `${PHONE_PREFIX}1${i}`, purpose: 'SIGN_IN' });
+            .send({ phone: `${PHONE_PREFIX}1${i}`, purpose: 'SIGN_IN', audience: 'MOBILE' });
           // Reaching the handler is the control: a request refused earlier
           // would consult no limiter and prove nothing about S15.
           expect(res.status).toBe(202);

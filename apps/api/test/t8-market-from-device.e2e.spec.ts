@@ -188,7 +188,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone: PHONE, purpose: 'SIGN_IN' })
+      .send({ phone: PHONE, purpose: 'SIGN_IN', audience: 'MOBILE' })
       .expect(202);
 
     const code = sms.lastTo(PHONE)?.slots['code'] as string;
@@ -201,7 +201,6 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .send({
         phone: PHONE,
         code,
-        audience: 'MOBILE',
         device_id: device,
         age_declared_over_18: true,
       })
@@ -233,7 +232,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', orphan)
-      .send({ phone: '+251911998002', purpose: 'SIGN_IN' })
+      .send({ phone: '+251911998002', purpose: 'SIGN_IN', audience: 'MOBILE' })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('bootstrap');
   });
@@ -254,8 +253,16 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       [device, MA],
     );
 
-    const known = '+251911998010';
-    const unknown = '+251911998011';
+    // UNIQUE PER RUN, and inside this suite's teardown prefix (+2519119980).
+    // The deletion path is rate-limited 3/hour/phone, and this test's fixed
+    // phones accumulated that bucket across the file's tests under parallel
+    // load -- so d1 (known) could pass while d2 (unknown) 429'd, an asymmetry
+    // that has nothing to do with the enumeration invariant under test. Random
+    // suffixes start both callers from an empty bucket, which is what the
+    // assertion assumes, while staying under the LIKE the teardown sweeps.
+    const suf = () => Math.floor(100 + Math.random() * 899).toString();
+    const known = `+25191199800${suf()}`;
+    const unknown = `+25191199801${suf()}`;
     const acct = randomUUID();
     accounts.push(acct);
     await admin.query(
@@ -271,12 +278,12 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone: known, purpose: 'SIGN_IN' });
+      .send({ phone: known, purpose: 'SIGN_IN', audience: 'MOBILE' });
     const a2 = await request(app.getHttpServer())
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone: unknown, purpose: 'SIGN_IN' });
+      .send({ phone: unknown, purpose: 'SIGN_IN', audience: 'MOBILE' });
     expect(shape(a2)).toBe(shape(a1));
 
     // Deletion request -- @Public and phone-taking, the door the first
@@ -307,12 +314,12 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', orphan2)
-      .send({ phone: '+251911998010', purpose: 'SIGN_IN' });
+      .send({ phone: '+251911998010', purpose: 'SIGN_IN', audience: 'MOBILE' });
     const r2 = await request(app.getHttpServer())
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', orphan2)
-      .send({ phone: '+251911998012', purpose: 'SIGN_IN' });
+      .send({ phone: '+251911998012', purpose: 'SIGN_IN', audience: 'MOBILE' });
     expect(r1.status).toBe(400);
     expect(shape(r2)).toBe(shape(r1));
   });
@@ -339,7 +346,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'MOBILE' })
       .expect(202);
     const code = sms.lastTo(phone)?.slots['code'] as string;
 
@@ -347,7 +354,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/verify')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, code, audience: 'MOBILE', device_id: device })
+      .send({ phone, code, device_id: device })
       .expect(400);
     expect((refused.body as { slots?: { path?: string } }).slots?.path).toBe(
       'age_declared_over_18',
@@ -379,7 +386,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'MOBILE' })
       .expect(202);
     const code = sms.lastTo(phone)?.slots['code'] as string;
 
@@ -388,7 +395,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/verify')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, code, audience: 'MOBILE', device_id: device })
+      .send({ phone, code, device_id: device })
       .expect(400);
 
     const still = await admin.query(
@@ -402,7 +409,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/verify')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, code, audience: 'MOBILE', device_id: device, age_declared_over_18: true })
+      .send({ phone, code, device_id: device, age_declared_over_18: true })
       .expect(200);
 
     const acct = await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [phone]);
@@ -423,7 +430,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .post('/v1/auth/otp/request')
       .set('Idempotency-Key', randomUUID())
       .set('X-Adulis-Device', device)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'MOBILE' })
       .expect(202);
     const code = sms.lastTo(phone)?.slots['code'] as string;
 
@@ -434,7 +441,6 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .send({
         phone,
         code,
-        audience: 'MOBILE',
         device_id: device,
         age_declared_over_18: true,
       })
@@ -476,7 +482,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .set('X-Adulis-Client', 'web/9.9.9')
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' })
       .expect(202);
     const code = sms.lastTo(phone)?.slots['code'] as string;
 
@@ -487,7 +493,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .set('X-Adulis-Client', 'web/9.9.9')
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone, code, audience: 'CONSOLE' })
+      .send({ phone, code })
       .expect(400);
     expect((await admin.query(`SELECT id FROM core.account WHERE phone_e164 = $1`, [phone])).rowCount).toBe(0);
 
@@ -498,7 +504,7 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       .set('X-Adulis-Client', 'web/9.9.9')
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone, code, audience: 'CONSOLE', age_declared_over_18: true })
+      .send({ phone, code, age_declared_over_18: true })
       .expect(200);
     expect((ok.body as { token?: string }).token).toBeUndefined();
 

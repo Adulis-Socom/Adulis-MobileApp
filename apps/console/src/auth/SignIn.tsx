@@ -69,7 +69,9 @@ export function SignIn() {
       await api('/auth/otp/request', {
         method: 'POST',
         idempotencyKey: requestKey.current(),
-        body: { phone, purpose: 'SIGN_IN' },
+        // The surface is named at REQUEST and stamped on the challenge
+        // (v2.6 S5.2); the verify endpoint refuses the field outright.
+        body: { phone, purpose: 'SIGN_IN', audience: 'CONSOLE' },
       });
       setStep('code');
       setResendAt(Date.now() + 30_000);
@@ -103,7 +105,10 @@ export function SignIn() {
     setProblem(null);
     setBusy(true);
     try {
-      await api('/auth/otp/resend', { method: 'POST', body: { phone, purpose: 'SIGN_IN' } });
+      await api('/auth/otp/resend', {
+        method: 'POST',
+        body: { phone, purpose: 'SIGN_IN', audience: 'CONSOLE' },
+      });
       setResendAt(Date.now() + 30_000);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -134,7 +139,10 @@ export function SignIn() {
         body: {
           phone,
           code,
-          audience: 'CONSOLE',
+          // No audience: it was stamped at request, the server reads it off
+          // the challenge, and the verify endpoint REFUSES the field
+          // (v2.6 S5.2 -- "the verification request does not accept
+          // audience"). Sending it is a 400, not a no-op.
           // No device_id: the browser's identity is the httpOnly cookie
           // /v1/bootstrap minted, which this code cannot read and the server
           // reads for itself. Sending one would be ignored anyway.

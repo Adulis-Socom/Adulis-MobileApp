@@ -401,7 +401,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', deviceId)
-        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN' })
+        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const r = await http()
         .post('/v1/auth/otp/verify')
@@ -410,7 +410,6 @@ const browserCookie = async (): Promise<string> => {
         .send({
           phone: P_SIGNUP,
           code: codeFor(P_SIGNUP),
-          audience: 'MOBILE',
           device_id: deviceId,
           age_declared_over_18: true,
         })
@@ -447,14 +446,14 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', k)
         .set('X-Adulis-Device', deviceId)
-        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN' })
+        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       expect(sms.sent.length).toBe(before + 1);
       const replay = await http()
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', k)
         .set('X-Adulis-Device', deviceId)
-        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN' })
+        .send({ phone: P_SIGNUP, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       expect(replay.headers['x-adulis-idempotent-replay']).toBe('true');
       expect(sms.sent.length).toBe(before + 1);
@@ -473,7 +472,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_RESEND, purpose: 'SIGN_IN' })
+        .send({ phone: P_RESEND, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const r = await http()
         .post('/v1/auth/otp/verify')
@@ -482,7 +481,6 @@ const browserCookie = async (): Promise<string> => {
         .send({
           phone: P_RESEND,
           code: codeFor(P_RESEND),
-          audience: 'MOBILE',
           device_id: d,
         })
         .expect(400);
@@ -511,7 +509,7 @@ const browserCookie = async (): Promise<string> => {
         // before an account exists (T8 Phase 3). An app has one; this call
         // simply never sent it, and used to be carried by "some live market".
         .set('X-Adulis-Device', d)
-        .send({ phone: P_RESEND, purpose: 'SIGN_IN' })
+        .send({ phone: P_RESEND, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const newCode = codeFor(P_RESEND);
       expect(newCode).not.toBe(oldCode);
@@ -519,7 +517,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_RESEND, code: oldCode, audience: 'MOBILE', device_id: d, age_declared_over_18: true })
+        .send({ phone: P_RESEND, code: oldCode, device_id: d, age_declared_over_18: true })
         .expect(401);
       expect(stale.body.code).toBe('OTP_EXPIRED');
       expect(stale.body.title_key).toBe('error.auth.otp_expired');
@@ -527,7 +525,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_RESEND, code: newCode, audience: 'MOBILE', device_id: d, age_declared_over_18: true })
+        .send({ phone: P_RESEND, code: newCode, device_id: d, age_declared_over_18: true })
         .expect(200);
     });
 
@@ -544,7 +542,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_ATTEMPTS, purpose: 'SIGN_IN' })
+        .send({ phone: P_ATTEMPTS, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const right = codeFor(P_ATTEMPTS);
       const wrong = right === '000000' ? '000001' : '000000';
@@ -553,7 +551,7 @@ const browserCookie = async (): Promise<string> => {
           .post('/v1/auth/otp/verify')
           .set('Idempotency-Key', key())
           .set('X-Adulis-Device', d)
-          .send({ phone: P_ATTEMPTS, code, audience: 'MOBILE', device_id: d, age_declared_over_18: true });
+          .send({ phone: P_ATTEMPTS, code, device_id: d, age_declared_over_18: true });
       for (let i = 0; i < 4; i += 1) {
         const r = await verify(wrong).expect(401);
         expect(r.body.code).toBe('OTP_INVALID');
@@ -577,7 +575,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_OWNER, purpose: 'SIGN_IN' })
+        .send({ phone: P_OWNER, purpose: 'SIGN_IN', audience: 'CONSOLE' })
         .expect(202);
       const r = await http()
         .post('/v1/auth/otp/verify')
@@ -588,7 +586,6 @@ const browserCookie = async (): Promise<string> => {
         .send({
           phone: P_OWNER,
           code: codeFor(P_OWNER),
-          audience: 'CONSOLE',
           remember_device: true,
         })
         .expect(200);
@@ -1062,13 +1059,13 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN' })
+        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const signin = await http()
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL), audience: 'MOBILE', device_id: d, age_declared_over_18: true })
+        .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL), device_id: d, age_declared_over_18: true })
         .expect(200);
       const bearer = signin.body.token as string;
       const accountId = signin.body.account_id as string;
@@ -1083,7 +1080,7 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN' })
+        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN', audience: 'CONSOLE' })
         .expect(202);
       const consoleSignin = await http()
         .post('/v1/auth/otp/verify')
@@ -1094,7 +1091,6 @@ const browserCookie = async (): Promise<string> => {
         .send({
           phone: P_WEBDEL,
           code: codeFor(P_WEBDEL),
-          audience: 'CONSOLE',
           remember_device: true,
         })
         .expect(200);
@@ -1230,13 +1226,13 @@ const browserCookie = async (): Promise<string> => {
         .post('/v1/auth/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN' })
+        .send({ phone: P_WEBDEL, purpose: 'SIGN_IN', audience: 'MOBILE' })
         .expect(202);
       const again = await http()
         .post('/v1/auth/otp/verify')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
-        .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL), audience: 'MOBILE', device_id: d, age_declared_over_18: true })
+        .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL), device_id: d, age_declared_over_18: true })
         .expect(200);
       expect(again.body.account_id).not.toBe(accountId);
     });

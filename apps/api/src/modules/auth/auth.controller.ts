@@ -109,6 +109,8 @@ export class AuthController {
       const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'SIGN_IN',
+        // Stamped at creation (S5.2); the verify endpoint refuses the field.
+        audience: body.audience,
         templateKey: 'sms.otp.sign_in',
         // Before an account exists, the device is what says which market's
         // timing governs this code (ADU-RUL-03 S3).
@@ -146,6 +148,7 @@ export class AuthController {
       const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'SIGN_IN',
+        audience: body.audience,
         templateKey: 'sms.otp.sign_in',
         deviceId: requestingDevice(req.headers),
       });
@@ -170,39 +173,48 @@ export class AuthController {
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
+    /**
+     * S5.2: "The verification request does not accept `audience`." REJECTED
+     * BY NAME, not stripped (S31.1's third test -- "verify endpoint cannot
+     * override audience"). A field silently discarded is a field a client
+     * keeps sending, and this one used to decide which surface a session was
+     * minted for. The audience now lives on the challenge, stamped at
+     * request (ADU-RUL-06 S2).
+     */
+    if (req.body && typeof req.body === 'object' && 'audience' in req.body) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'audience' } });
+    }
     const body = otpVerifyBody.parse(req.body);
     const key = req.headers['idempotency-key'];
     if (typeof key !== 'string' || key === '') {
       throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
     }
-    // WHICH DEVICE THIS REQUEST SPEAKS FOR, by surface (ADU-RUL-03 S2).
-    // On CONSOLE the answer is the browser cookie bootstrap minted, and a
-    // client-supplied X-Adulis-Device or body.device_id is IGNORED -- reading
-    // either as a fallback would re-open the arm the ruling closes.
-    // Validated here, because zod no longer covers it: device_id became
-    // optional for the console, so a malformed cookie would otherwise reach a
-    // uuid column and answer 500 to an unauthenticated caller. Bootstrap has
-    // tested the same shape since it was written; this is the other door.
+    /**
+     * WHICH DEVICE THIS REQUEST SPEAKS FOR -- by WHAT IS PRESENTED, never by
+     * a claimed audience (the body no longer carries one to claim).
+     *
+     * Cookie first, and that precedence is factual rather than preferential:
+     * the only clients holding the httpOnly cookie are browsers, a browser's
+     * identity is never a body field (ADU-RUL-03 S2), and a native client
+     * has no cookie jar for this origin. The service then refuses any
+     * mismatch between the door the device came through and the audience the
+     * CHALLENGE was stamped with -- which is what actually stops a surface
+     * conversion, and it no longer depends on the caller's honesty.
+     *
+     * The cookie shape is validated here because zod cannot see it: a
+     * malformed cookie would otherwise reach a uuid column and answer 500 to
+     * an unauthenticated caller.
+     */
     const browserCookieRaw = readCookie(req.headers.cookie, BROWSER_DEVICE_COOKIE);
     const browserDeviceId =
       browserCookieRaw && UUID_RE.test(browserCookieRaw) ? browserCookieRaw : null;
-    const isConsole = body.audience === 'CONSOLE';
-    const effectiveDeviceId = isConsole ? browserDeviceId : (body.device_id ?? null);
-    if (isConsole && !effectiveDeviceId) {
-      // The browser has not called /v1/bootstrap, so it has no device row and
-      // no cookie. That is a client sequencing error, and naming the header
-      // it is missing would be a lie -- there is no header to send.
+    const deviceChannel: 'cookie' | 'body' = browserDeviceId ? 'cookie' : 'body';
+    const effectiveDeviceId = browserDeviceId ?? body.device_id ?? null;
+    if (!effectiveDeviceId) {
+      // No cookie and no body device: nothing bootstrapped is speaking.
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bootstrap' } });
     }
-    const device = req.headers['x-adulis-device'];
-    const actor = {
-      kind: 'DEVICE' as const,
-      id: isConsole
-        ? (effectiveDeviceId as string)
-        : typeof device === 'string' && device !== ''
-          ? device
-          : (body.device_id ?? ''),
-    };
+    const actor = { kind: 'DEVICE' as const, id: effectiveDeviceId };
     const endpoint = `${req.method} ${req.path}`;
     const requestHash = hashRequest(req.method, req.path, req.body);
 
@@ -216,7 +228,7 @@ export class AuthController {
     const stored = await this.tx.run(req, async (trx) => {
       const minted = await this.auth.verifySignIn(
         trx,
-        { ...body, device_id: effectiveDeviceId as string },
+        { ...body, device_id: effectiveDeviceId, deviceChannel },
         deviceCookie,
       );
       const record: Record<string, unknown> = {

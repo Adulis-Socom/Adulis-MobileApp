@@ -90,7 +90,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .set('X-Adulis-Client', WEB)
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone, purpose: 'SIGN_IN' })
+      .send({ phone, purpose: 'SIGN_IN', audience: 'CONSOLE' })
       .expect(202);
     const m = sms.lastTo(phone);
     if (!m) throw new Error(`no SMS captured for ${phone}`);
@@ -356,7 +356,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .set('X-Adulis-Client', WEB)
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', `__Host-adulis_browser=${id}`)
-      .send({ phone: '+251911999002', purpose: 'SIGN_IN' });
+      .send({ phone: '+251911999002', purpose: 'SIGN_IN', audience: 'CONSOLE' });
     expect(res2.status).toBe(202);
   });
 
@@ -368,7 +368,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
         .set('X-Adulis-Client', WEB)
         .set('Idempotency-Key', randomUUID())
         .set('Cookie', `__Host-adulis_browser=${junk}`)
-        .send({ phone: '+251911999003', code: '000000', audience: 'CONSOLE' });
+        .send({ phone: '+251911999003', code: '000000' });
       expect(res.status).toBe(400);
     }
   });
@@ -393,7 +393,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .set('X-Adulis-Client', WEB)
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone: '+251911999004', code, audience: 'CONSOLE' })
+      .send({ phone: '+251911999004', code })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('bootstrap');
 
@@ -413,7 +413,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
         .set('X-Adulis-Client', WEB)
         .set('Idempotency-Key', randomUUID())
         .set('Cookie', `__Host-adulis_browser=${junk}`)
-        .send({ phone: '+251911999007', purpose: 'SIGN_IN' });
+        .send({ phone: '+251911999007', purpose: 'SIGN_IN', audience: 'CONSOLE' });
       expect(req1.status).toBeLessThan(500);
 
       const req2 = await request(app.getHttpServer())
@@ -426,12 +426,16 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     }
   });
 
-  it('a WEB device row cannot be named in a request body under ANY audience', async () => {
-    // The ownership guard was scoped to audience === 'CONSOLE', and the
-    // audience is a field the caller fills in: `audience: 'MOBILE'` with
+  it('a WEB device row cannot be named in a request body, full stop', async () => {
+    // The ownership guard was once scoped to audience === 'CONSOLE' while the
+    // audience was a field the caller filled in -- `audience: 'MOBILE'` with
     // someone else's WEB device_id walked past it and minted a session on a
-    // stranger's browser row. A server-minted identity is not nameable by a
-    // client, which is the whole reason for minting it.
+    // stranger's browser row. The audience has since moved onto the CHALLENGE
+    // (stamped at request, refused at verify -- T14 S3), so the attack body
+    // here carries none: the rule under test is now purely about the CHANNEL.
+    // A WEB row is cookie-addressed, a body-supplied id naming one is refused
+    // whatever the challenge says, and a server-minted identity stays
+    // unnameable by a client -- the whole reason for minting it.
     const res = await boot().expect(200);
     const victim = cookieFrom(res, '__Host-adulis_browser') as string;
     minted.push(victim);
@@ -448,8 +452,8 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .send({
         phone: '+251911999008',
         code,
-        audience: 'MOBILE',
         device_id: victim,
+        age_declared_over_18: true,
       });
     expect(attack.status).toBe(400);
 
@@ -481,7 +485,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .set('X-Adulis-Client', WEB)
       .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ phone: '+251911999006', code, audience: 'CONSOLE' })
+      .send({ phone: '+251911999006', code })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('bootstrap');
 
@@ -498,7 +502,7 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
       .set('Origin', CONSOLE_ORIGIN)
       .set('X-Adulis-Client', WEB)
       .set('Idempotency-Key', randomUUID())
-      .send({ phone: '+251911999001', code: '000000', audience: 'CONSOLE' })
+      .send({ phone: '+251911999001', code: '000000' })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('bootstrap');
   });

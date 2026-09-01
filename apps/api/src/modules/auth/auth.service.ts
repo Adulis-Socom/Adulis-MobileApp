@@ -45,27 +45,25 @@ export class AuthService {
     body: {
       phone: string;
       code: string;
-      audience: 'MOBILE' | 'CONSOLE';
       device_id: string;
+      /**
+       * Which door the device id came through: the httpOnly cookie the
+       * server minted, or the body a native client filled. A WEB row is
+       * only ever cookie-addressed, whatever any challenge says.
+       */
+      deviceChannel: 'cookie' | 'body';
       age_declared_over_18?: boolean | undefined;
       remember_device?: boolean | undefined;
     },
     presentedDeviceToken: string | null,
   ): Promise<MintedSession> {
-    const challenge = await this.otp.verifyCode(trx, {
-      phone: body.phone,
-      purpose: 'SIGN_IN',
-      code: body.code,
-      // Same reason as the issue path: before an account exists, the device
-      // carries the market whose timing governs this code.
-      deviceId: body.device_id ?? null,
-    });
-
     /**
-     * THE DEVICE IS READ FIRST, because it carries the market (ADU-RUL-03
-     * S3). It used to be read after the account was created, which was fine
-     * while a new identity took "the live market" from a lookup; now the
-     * market comes from this row, so it has to exist before the INSERT.
+     * THE DEVICE IS READ FIRST AND REFUSED FIRST. An anonymous phone-taking
+     * path demands a bootstrapped device before it touches the challenge, and
+     * the refusal depends on the device alone -- identical for a registered
+     * and an unregistered phone (S17). Verification itself resolves nothing
+     * any more (ADU-RUL-06 S2), so the check that used to hide inside its
+     * timing lookup stands here in the open.
      */
     const device = await sql<{
       id: string;
@@ -76,6 +74,28 @@ export class AuthService {
       SELECT id, platform::text AS platform, account_id, market_id
         FROM core.device WHERE id = ${body.device_id}`.execute(trx);
     const deviceRow = first(device.rows);
+    if (!deviceRow?.market_id) {
+      throw new AdulisException('VALIDATION_FAILED', {
+        slots: { path: body.deviceChannel === 'cookie' ? 'bootstrap' : 'device_id' },
+      });
+    }
+
+    const challenge = await this.otp.verifyCode(trx, {
+      phone: body.phone,
+      purpose: 'SIGN_IN',
+      code: body.code,
+    });
+
+    /**
+     * THE AUDIENCE IS THE CHALLENGE'S, STAMPED AT REQUEST (v2.6 S5.2,
+     * ADU-RUL-06 S2). The body cannot carry one -- the controller refuses the
+     * field by name -- so a MOBILE challenge can no longer mint a CONSOLE
+     * session by saying so at verify. A SIGN_IN challenge with no stamp
+     * cannot exist past 0044's transitional TTL; refusing it as INTERNAL is
+     * ours to notice, not the caller's to cause.
+     */
+    const audience = challenge.audience;
+    if (!audience) throw new AdulisException('INTERNAL');
 
     const existing = await sql<{ id: string; status: string; market_id: string }>`
       SELECT id, status, market_id FROM core.account
@@ -118,12 +138,9 @@ export class AuthService {
        * A device with no market has not bootstrapped, and the honest answer
        * is to refuse rather than to guess on that person's behalf.
        */
-      if (!deviceRow?.market_id) {
-        throw new AdulisException('VALIDATION_FAILED', {
-          slots: { path: body.audience === 'CONSOLE' ? 'bootstrap' : 'device_id' },
-        });
-      }
       accountId = randomUUID();
+      // Guaranteed above: the device was refused before the challenge if it
+      // had no market.
       marketId = deviceRow.market_id;
       await sql`
         INSERT INTO core.account
@@ -218,23 +235,28 @@ export class AuthService {
      * about which device ids exist or whom they belong to.
      */
     const deviceUnusable =
-      !deviceRow ||
-      // A WEB ROW IS ADDRESSED BY ITS COOKIE AND NEVER BY A BODY FIELD,
-      // whatever audience the caller claims. The first version scoped this
-      // whole check to audience === 'CONSOLE', and the audience is a field
-      // the caller fills in: sending `audience: 'MOBILE'` with another
-      // account's WEB device_id walked straight past it and minted a session
-      // on a stranger's browser row. Server-minted identities are not
-      // nameable by clients, which is the entire point of minting them.
-      (deviceRow.platform === 'WEB' && body.audience !== 'CONSOLE') ||
-      (body.audience === 'CONSOLE' &&
-        (deviceRow.platform !== 'WEB' ||
-          (deviceRow.account_id !== null && deviceRow.account_id !== accountId)));
+      // A WEB ROW IS ADDRESSED BY ITS COOKIE AND NEVER BY A BODY FIELD. The
+      // audience used to gate this and the audience was a field the caller
+      // filled in; the CHANNEL is not fillable -- it is which door the id
+      // physically came through -- so the rule finally rests on something the
+      // caller cannot claim.
+      (deviceRow.platform === 'WEB' && body.deviceChannel !== 'cookie') ||
+      // The real cookie path can only name a WEB row; anything else arriving
+      // by cookie is a forged header, refused rather than reasoned about.
+      (body.deviceChannel === 'cookie' && deviceRow.platform !== 'WEB') ||
+      // A CONSOLE-stamped challenge mints only through the browser's own
+      // cookie-addressed WEB row, unbound or already this account's.
+      (audience === 'CONSOLE' &&
+        (body.deviceChannel !== 'cookie' ||
+          (deviceRow.account_id !== null && deviceRow.account_id !== accountId))) ||
+      // A MOBILE-stamped challenge minting through a browser cookie is the
+      // surface conversion S5.2's invariants exist to stop (D-180).
+      (audience === 'MOBILE' && body.deviceChannel !== 'body');
     if (deviceUnusable) {
       throw new AdulisException('VALIDATION_FAILED', {
         // A console client has no device_id field to correct; what it can do
         // is call /v1/bootstrap again and get an identity that works.
-        slots: { path: body.audience === 'CONSOLE' ? 'bootstrap' : 'device_id' },
+        slots: { path: body.deviceChannel === 'cookie' ? 'bootstrap' : 'device_id' },
       });
     }
     // Binds at identity creation, never before (S11.1) — and never rebinds.
@@ -246,7 +268,7 @@ export class AuthService {
     // selects the remembered lifetime; remember_device mints a new one.
     let accountDeviceId: string | null = null;
     let deviceCookieToken: string | null = null;
-    if (body.audience === 'CONSOLE') {
+    if (audience === 'CONSOLE') {
       if (presentedDeviceToken) {
         const hash = createHash('sha256').update(presentedDeviceToken).digest();
         const known = await sql<{ id: string }>`
@@ -280,10 +302,10 @@ export class AuthService {
         (id, account_id, audience, device_id, account_device_id,
          expires_at, created_from_otp_id)
       SELECT ${sessionId}, ${accountId},
-             ${body.audience}::core.session_audience, ${body.device_id},
+             ${audience}::core.session_audience, ${body.device_id},
              ${accountDeviceId},
              now() + CASE
-               WHEN ${body.audience} = 'MOBILE' THEN tc.mobile_session_lifetime
+               WHEN ${audience} = 'MOBILE' THEN tc.mobile_session_lifetime
                WHEN ${accountDeviceId}::uuid IS NOT NULL THEN tc.console_remembered_lifetime
                ELSE tc.console_session_lifetime
              END,
@@ -299,7 +321,7 @@ export class AuthService {
     return {
       token: sessionId,
       accountId,
-      audience: body.audience,
+      audience,
       roles: await this.rolesOf(trx, accountId),
       expiresAt: row.expires_at,
       deviceCookieToken,
@@ -411,6 +433,9 @@ export class AuthService {
       // Demanding a device here would refuse a signed-in seller a step-up
       // code for no security gain.
       requireDevice: false,
+      // SERVER-DERIVED, never from a body: the guard above has already
+      // required this session to be CONSOLE, and the stamp is that fact.
+      audience: 'CONSOLE',
       phone,
       purpose: 'STEP_UP',
       stepUpAction: body.action,
