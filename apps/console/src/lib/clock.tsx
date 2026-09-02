@@ -234,3 +234,56 @@ export function Deadline({ clock, onElapsed }: DeadlineProps) {
     </span>
   );
 }
+
+/**
+ * T16 Phase 3 -- the OBLIGATION deadline. Same module as the order clocks
+ * deliberately (C-4's rule: the treatments live in ONE module so they cannot
+ * drift): it displays a server deadline against server time, ticks once a
+ * minute, REFETCHES at zero via onElapsed, and decides nothing.
+ *
+ * One difference from an order clock, and it is a truth about the domain: an
+ * order clock's zero always precedes a state change (a sweep moves the
+ * order), so "checking with the server" is transitional. An OVERDUE
+ * obligation legitimately PERSISTS -- the elapsed refetch fires once (the
+ * server may have resolved it; a confirmed payment removes the entry), and
+ * when the server answers that it is still owed, OVERDUE is the standing
+ * truth this renders.
+ */
+export function ObligationDeadline({
+  deadline,
+  onElapsed,
+}: {
+  readonly deadline: string;
+  readonly onElapsed?: (() => void) | undefined;
+}) {
+  const skew = useServerSkew();
+  const [now, setNow] = useState(() => Date.now() + skew);
+
+  useEffect(() => {
+    setNow(Date.now() + skew);
+    const id = setInterval(() => setNow(Date.now() + skew), 60_000);
+    return () => clearInterval(id);
+  }, [deadline, skew]);
+
+  useEffect(() => {
+    if (elapsedFired.has(deadline)) return;
+    if (remaining(deadline, now) === null) {
+      elapsedFired.add(deadline);
+      onElapsed?.();
+    }
+  }, [deadline, now, onElapsed]);
+
+  const left = remaining(deadline, now);
+  return (
+    <span className="deadline" data-clock="OBLIGATION">
+      <span className="deadline-value">
+        {left === null
+          ? en['console.home.overdue']
+          : fillTemplate(en['console.trade.clock.remaining'], {
+              hours: String(left.h),
+              minutes: String(left.m),
+            })}
+      </span>
+    </span>
+  );
+}
