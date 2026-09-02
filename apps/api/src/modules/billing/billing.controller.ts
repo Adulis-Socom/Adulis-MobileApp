@@ -92,7 +92,8 @@ export class BillingController {
            AND pi.reconciled_at IS NULL AND pi.cancelled_at IS NULL
            AND pi.expires_at > now()`.execute(trx);
 
-      // A7 (ADU-API-01 v1.9 S1 item 12 / D-225): the POST minted a transfer
+      // A7 (ADU-API-01 v1.9 S1 item 11, SC-26; A7 was named in the C-6 pass,
+      // register D-225): the POST minted a transfer
       // `reference` and the GET dropped it, so a seller who closed the tab had
       // the collection id but not the string to write on the bank transfer --
       // the exact person this read exists for. Derived here identically to the

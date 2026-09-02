@@ -85,8 +85,15 @@ export class AnalyticsController {
       const r = await sql<Record<string, unknown>>`
         WITH win AS (
           SELECT
-            CASE WHEN ${win.from}::text IS NULL THEN now() - interval '30 days'
-                 ELSE ${win.from}::date::timestamptz END AS lo,
+            CASE
+              WHEN ${win.from}::text IS NOT NULL THEN ${win.from}::date::timestamptz
+              -- A lone upper bound means a trailing 30-day window ENDING at to,
+              -- not one ending today: defaulting lo to now()-30d there would
+              -- leave lo > hi for any past to -- a silent empty window with an
+              -- incoherent echo (window_from after window_to). Pass fix m1.
+              WHEN ${win.to}::text IS NOT NULL THEN (${win.to}::date - interval '30 days')::timestamptz
+              ELSE now() - interval '30 days'
+            END AS lo,
             CASE WHEN ${win.to}::text IS NULL THEN now()
                  ELSE (${win.to}::date + interval '1 day')::timestamptz END AS hi
         )
@@ -129,8 +136,15 @@ export class AnalyticsController {
       const r = await sql<Record<string, unknown>>`
         WITH win AS (
           SELECT
-            CASE WHEN ${win.from}::text IS NULL THEN now() - interval '30 days'
-                 ELSE ${win.from}::date::timestamptz END AS lo,
+            CASE
+              WHEN ${win.from}::text IS NOT NULL THEN ${win.from}::date::timestamptz
+              -- A lone upper bound means a trailing 30-day window ENDING at to,
+              -- not one ending today: defaulting lo to now()-30d there would
+              -- leave lo > hi for any past to -- a silent empty window with an
+              -- incoherent echo (window_from after window_to). Pass fix m1.
+              WHEN ${win.to}::text IS NOT NULL THEN (${win.to}::date - interval '30 days')::timestamptz
+              ELSE now() - interval '30 days'
+            END AS lo,
             CASE WHEN ${win.to}::text IS NULL THEN now()
                  ELSE (${win.to}::date + interval '1 day')::timestamptz END AS hi
         )

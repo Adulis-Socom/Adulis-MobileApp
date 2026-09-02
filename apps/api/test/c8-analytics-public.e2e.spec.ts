@@ -360,6 +360,20 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .expect(400);
       expect(inverted.body.code).toBe('VALIDATION_FAILED');
     });
+
+    it('a lone `to` is a trailing 30-day window ending at `to`, not an incoherent empty one', async () => {
+      // The pass edge: defaulting lo to now()-30d for a lone past `to` would put
+      // window_from AFTER window_to. lo defaults to to-30d instead.
+      const r = await http()
+        .get('/v1/seller/analytics/overview?to=2020-01-31')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      expect(r.body.window_from).toBe('2020-01-01'); // 30 days before `to`
+      expect(r.body.window_to).toBe('2020-01-31');
+      // coherent: from is on or before to
+      expect(r.body.window_from <= r.body.window_to).toBe(true);
+    });
   });
 
   describe('client events (12.16)', () => {
