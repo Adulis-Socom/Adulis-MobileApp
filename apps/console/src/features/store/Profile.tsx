@@ -18,7 +18,7 @@
  * attestation sentence (R26): identity verification for a company is about
  * the REPRESENTATIVE AS A NATURAL PERSON.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -58,17 +58,33 @@ export function Profile() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  /**
+   * The post-save read-back replaces a field ONLY if the seller has not typed
+   * in it since the save left (Phase 5 pass M3: a refetch that overwrites
+   * mid-edit keystrokes is the D-221 class). Null means an initial load,
+   * which populates unconditionally -- the form does not render before it.
+   */
+  const sentRef = useRef<{ store_name: string; description: string; category_id: string } | null>(
+    null,
+  );
+
   const load = useCallback(async () => {
     if (!sellerId) return;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
     try {
       const p = await api<SellerProfile>(`/seller/profile`, { sellerId });
       setProfile(p);
-      // Populate the editable fields with what is saved -- the form now edits
-      // the real profile instead of starting blank.
-      setStoreName(p.store_name ?? '');
-      setDescription(p.description ?? '');
-      setCategoryId(p.category_id ?? '');
+      // Populate the editable fields with what is saved -- the form edits the
+      // real profile instead of starting blank. Guarded per-field on refetch.
+      const sent = sentRef.current;
+      setStoreName((cur) => (sent === null || cur === sent.store_name ? (p.store_name ?? '') : cur));
+      setDescription((cur) =>
+        sent === null || cur === sent.description ? (p.description ?? '') : cur,
+      );
+      setCategoryId((cur) =>
+        sent === null || cur === sent.category_id ? (p.category_id ?? '') : cur,
+      );
+      sentRef.current = null;
       setState('READY');
     } catch (e) {
       setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
@@ -99,6 +115,17 @@ export function Profile() {
       setFieldError(en['console.store.profile.nothing_to_save']);
       return;
     }
+    // The wire CANNOT clear a field: the PATCH coalesces server-side and this
+    // client omits empties -- so a cleared field would silently revert on the
+    // read-back, telling the seller "Saved." about a change that did not
+    // happen (Phase 5 pass). Refuse in words instead.
+    if (
+      profile &&
+      ((profile.store_name && !storeName.trim()) || (profile.description && !description.trim()))
+    ) {
+      setFieldError(en['console.store.profile.clear_unsupported']);
+      return;
+    }
     setBusy(true);
     setProblem(null);
     try {
@@ -113,7 +140,13 @@ export function Profile() {
       });
       setSaved(true);
       // Read the saved profile back -- the proof the write landed, now that a
-      // GET exists (what the write-only form could never do).
+      // GET exists. sentRef makes the read-back skip any field the seller has
+      // retyped while the round-trip was in flight (pass M3).
+      sentRef.current = {
+        store_name: storeName,
+        description,
+        category_id: categoryId,
+      };
       void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
@@ -227,8 +260,8 @@ export function Profile() {
 
       <section aria-labelledby="preview-heading" className="storefront-preview">
         <h2 id="preview-heading">{en['console.store.profile.preview_heading']}</h2>
-        {/* Only what is TYPED can be previewed -- the saved values cannot be
-            read back, and this caption says which of the two this is. */}
+        {/* The preview shows the LOADED profile plus edits -- the saved
+            values read back now, and the caption says so. */}
         <p className="hint">{en['console.store.profile.preview_caption']}</p>
         <div className="preview-card">
           <h3>{storeName.trim() || en['console.store.profile.preview_name_placeholder']}</h3>

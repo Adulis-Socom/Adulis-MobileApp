@@ -274,7 +274,11 @@ export function Payout() {
         ) : null}
       </div>
 
-      {formOpen ? (
+      {/* The form is lock-gated like its toggle (pass M1): a lock landing
+          mid-session via a refetch must not leave an armed form behind a
+          disabled toggle -- the seller would spend a step-up SMS on the 409
+          the panel above already explains. */}
+      {formOpen && payout.reason === null ? (
         <div className="form-block payout-form">
           <label htmlFor="po-bank">{en['console.admin.payout.bank_code']}</label>
           <input id="po-bank" value={bankCode} onChange={(e) => setBankCode(e.target.value)} />

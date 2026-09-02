@@ -1,8 +1,9 @@
 /**
  * features/trust/Analytics.tsx -- SC-12 Analytics (ADU-CON-03 v1.2 S10).
  *
- * GET /v1/seller/analytics/overview -- EVERY tier, five counts, 30-day
- * windows FIXED SERVER-SIDE. GET .../full -- entitlement-gated: the server
+ * GET /v1/seller/analytics/overview -- EVERY tier, five counts, over the
+ * chosen [from, to] window (default: the trailing 30 days). GET .../full --
+ * entitlement-gated: the server
  * answers 409 TIER_LIMIT_REACHED when the tier's analytics_scope is null (or
  * no tier definition exists -- fail closed), and that answer IS the
  * NO_ENTITLEMENT rendering: the section stays visible, disabled, with the
@@ -66,21 +67,27 @@ export function Analytics() {
         setFull(f);
         setFullLocked(false);
       } catch (e) {
+        // Guarded like the success path (pass M5): a STALE generation's
+        // failure must not banner over, or erase the failure of, the load
+        // that owns the screen.
+        if (gen !== loadGen.current) return;
+        // Whatever the failure, the PREVIOUS window's full tiles must not
+        // keep rendering under this window's caption (pass M6).
+        setFull(null);
         // 409 TIER_LIMIT_REACHED is the entitlement answer, not an error:
         // the locked section renders. Anything else is a real failure.
         if (e instanceof ApiError && e.problem.code === 'TIER_LIMIT_REACHED') {
-          setFull(null);
           setFullLocked(true);
         } else if (e instanceof ApiError && e.problem.status === 403) {
           // SALES_SUPPORT and INVENTORY hold basic:read and not full:read --
           // an absent permission renders NOTHING for the section (S3.4),
           // never a permission-denied banner on every visit.
-          setFull(null);
           setFullLocked(false);
         } else if (e instanceof ApiError) {
           setProblem(e);
         }
       }
+      if (gen !== loadGen.current) return;
       setLoadProblem(null);
       setState('READY');
     } catch (e) {
@@ -107,6 +114,9 @@ export function Analytics() {
     );
   }
 
+  // The account-empty teach fires only on the DEFAULT window (the Phase 3
+  // empty-bucket lesson): a 7-day view zeroing the one windowed tile must not
+  // tell a seller with history "No analytics yet".
   const noData =
     overview.products_published === 0 &&
     overview.orders_30d === 0 &&
@@ -125,7 +135,7 @@ export function Analytics() {
         </p>
       ) : null}
 
-      {noData ? (
+      {noData && period === 30 ? (
         <div className="empty" data-state="EMPTY">
           <h3>{en['console.insights.analytics.empty_heading']}</h3>
           <p>{en['console.insights.analytics.empty_body']}</p>

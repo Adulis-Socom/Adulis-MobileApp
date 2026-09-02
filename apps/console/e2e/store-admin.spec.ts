@@ -420,6 +420,55 @@ test.describe('SC-26 Subscription -- honest about having none', () => {
     await expect(table.getByText('Included, with roles')).toHaveCount(1);
     await expect(table.locator('tr', { hasText: 'Business' }).getByText('Included, with roles')).toBeVisible();
   });
+
+  test('an open intent renders ITS REFERENCE from the GET (planted; A7, T15 Phase 4)', async ({
+    page,
+    context,
+  }) => {
+    /*
+     * The reference-owed sentence's removal, proven on SCREEN (pass M7). A
+     * real open intent needs the billing seed T14-C registered as owed, so
+     * the GET is planted -- the R21 pattern, and the plant derives from the
+     * server's real shape: t6-purchase-intent proves the wire carries this
+     * exact object, reference included, identical to the POST's.
+     */
+    await context.route('**/v1/billing/subscription', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          subscription: {
+            state: 'PENDING_PAYMENT',
+            tier: 'LISTED',
+            term: 'ANNUAL',
+            trial_ends_at: null,
+            current_period_start: null,
+            current_period_end: null,
+            locked_rate_minor: 1200000,
+            locked_rate_currency: 'ETB',
+          },
+          intent: {
+            intent_id: '33333333-3333-4333-8333-333333333333',
+            collection_record_id: 'ab12cd34-5678-4000-8000-000000000001',
+            tier: 'LISTED',
+            term: 'ANNUAL',
+            amount_minor: 1200000,
+            currency: 'ETB',
+            expires_at: '2026-09-03T10:00:00Z',
+            reference: 'ADU-SUB-AB12CD34',
+            marked_transferred_at: null,
+          },
+        },
+      });
+    });
+    await page.goto(`${base}/subscription`);
+    // The seller who closed the tab reads back what to write on the transfer.
+    await expect(page.locator('[data-reference="ADU-SUB-AB12CD34"]')).toBeVisible();
+    await expect(page.getByText('Write ADU-SUB-AB12CD34 on the bank transfer.')).toBeVisible();
+    // And the owed sentence is gone.
+    await expect(page.getByText(/cannot be shown again yet/)).toHaveCount(0);
+  });
 });
 
 test.describe('SC-27 Sessions -- never empty, current marked, forget is NOT sign-out', () => {
@@ -507,12 +556,35 @@ test.describe('SC-29 Closure -- two things, not blurred, driven for real', () =>
     // G1.3: closing SURVIVES the deletion block.
     await expect(page.getByRole('button', { name: 'Close store', exact: true })).toBeVisible();
 
-    // Close, for real -- reversible, badge renders -- then reopen, for real.
+    // Close, for real -- reversible, badge renders -- then PROVE the status is
+    // the SERVER's (T15 Phase 5 pass B1): a fresh load must still know the
+    // store is CLOSING. Before, `closed` was this tab's memory of its own
+    // POST, and the screen told sellers the server could not report a status
+    // SC-17 was rendering two taps away.
     await page.getByRole('button', { name: 'Close store', exact: true }).click();
     await expect(page.getByText(/stop taking new orders/)).toBeVisible();
+    const closedPost = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/closure') && r.request().method() === 'POST',
+    );
     await page.getByRole('button', { name: 'Close the store' }).click();
+    await closedPost;
     await expect(page.getByText('Store closed')).toBeVisible();
+
+    await page.reload();
+    // The badge renders from GET /v1/seller/profile's status, not session
+    // memory -- and the old cannot-be-shown sentence is GONE.
+    await expect(page.getByText('Store closed')).toBeVisible();
+    await expect(page.getByText(/cannot be shown here yet/)).toHaveCount(0);
+
+    // Reopen, for real, and prove THAT reads back too (leaving the seed's
+    // ACTIVE state for later runs, as this test always has).
+    const reopened = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/closure') && r.request().method() === 'DELETE',
+    );
     await page.getByRole('button', { name: 'Reopen store' }).click();
+    await reopened;
+    await page.reload();
     await expect(page.getByRole('button', { name: 'Close store', exact: true })).toBeVisible();
+    await expect(page.getByText('Store closed')).toHaveCount(0);
   });
 });

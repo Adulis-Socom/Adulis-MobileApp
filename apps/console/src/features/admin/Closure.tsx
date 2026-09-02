@@ -51,13 +51,21 @@ export function Closure() {
     if (!sellerId) return;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
     try {
+      // The store's status is READ now (T15 Phase 4, via GET /v1/seller/
+      // profile): `closed` is the server's CLOSING, not this tab's memory of
+      // its own POST. The Phase 5 pass's B1: this screen said the server
+      // could not report a status SC-17 was rendering two taps away.
+      const p = await api<{ status: string }>(`/seller/profile`, { sellerId });
+      setClosed(p.status === 'CLOSING');
       const r = await api<{ items: DeletionBlocker[] }>(`/seller/deletion/blockers`, { sellerId });
       setBlockers(r.items);
       setState('READY');
     } catch (e) {
       // A non-owner cannot read deletion blockers (owner-only) -- the
       // deletion region renders nothing for them, but CLOSING must survive:
-      // G1.3's separation is exactly for the seller who cannot delete.
+      // G1.3's separation is exactly for the seller who cannot delete. (The
+      // profile read is seller.store:read, held by every seller role, so a
+      // 403 landing here is the blockers GET.)
       if (e instanceof ApiError && e.problem.status === 403) {
         setBlockers(null);
         setState('READY');
@@ -163,9 +171,6 @@ export function Closure() {
 
       <section aria-labelledby="close-heading" className="close-store">
         <h2 id="close-heading">{en['console.admin.closure.close_heading']}</h2>
-        {closed === null ? (
-          <p className="hint">{en['console.admin.closure.status_owed']}</p>
-        ) : null}
         {closed ? (
           <>
             <span className="badge badge-closed">{en['console.admin.closure.closed_badge']}</span>

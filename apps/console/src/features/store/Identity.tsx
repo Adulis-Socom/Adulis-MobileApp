@@ -27,7 +27,7 @@
  * (the verify short-circuits a VERIFIED account before the platform fetch), so
  * that gap alone stays named; the list gap is closed.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -43,23 +43,31 @@ export function Identity() {
   const [platform, setPlatform] = useState<'TIKTOK' | 'INSTAGRAM'>('TIKTOK');
   const [handle, setHandle] = useState('');
   const [created, setCreated] = useState<SocialAccountCreated | null>(null);
-  const [accounts, setAccounts] = useState<readonly SellerSocialAccount[]>([]);
+  const [accounts, setAccounts] = useState<readonly SellerSocialAccount[] | null>(null);
+  const [listFailed, setListFailed] = useState(false);
   const [justVerified, setJustVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const createKey = useIdempotencyKey();
   const verifyKey = useIdempotencyKey();
+  // Only the latest list load may commit (the D-227 class; pass minor).
+  const listGen = useRef(0);
 
   const load = useCallback(async () => {
     if (!sellerId) return;
+    const gen = ++listGen.current;
     try {
       const r = await api<{ accounts: SellerSocialAccount[] }>(`/seller/social-accounts`, { sellerId });
+      if (gen !== listGen.current) return;
       setAccounts(r.accounts);
+      setListFailed(false);
     } catch {
-      // The list is a supplement to the linking flow, not its gate; a failed
-      // list must not blank the create/verify controls. Left empty on failure.
-      setAccounts([]);
+      // A FAILED list is not an EMPTY list (the C-5 success-empty class the
+      // pass flagged, M4): accounts stays as it was, a failure line renders in
+      // the list region, and the create/verify controls stay live.
+      if (gen !== listGen.current) return;
+      setListFailed(true);
     }
   }, [sellerId]);
 
@@ -193,11 +201,18 @@ export function Identity() {
             no session-stamped guess, no background refresh. */}
         <div className="linked-accounts" data-linked-accounts>
           <h3>{en['console.store.identity.linked_heading']}</h3>
-          {accounts.length === 0 ? (
+          {listFailed ? (
+            // Failure is not emptiness (pass M4): a seller with verified
+            // accounts on a flaky connection must not read "none yet".
+            <p className="problem" role="alert">
+              {en['console.common.refetch_failed']}
+            </p>
+          ) : null}
+          {accounts === null ? null : accounts.length === 0 && !listFailed ? (
             <p className="empty" data-state="EMPTY">
               {en['console.store.identity.linked_empty']}
             </p>
-          ) : (
+          ) : accounts.length === 0 ? null : (
             <ul>
               {accounts.map((a) => (
                 <li key={a.id} data-account={a.id} data-status={a.status}>

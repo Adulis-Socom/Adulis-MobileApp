@@ -380,6 +380,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.store.profile.save`
 - `console.store.profile.saved`
 - `console.store.profile.nothing_to_save`
+- `console.store.profile.clear_unsupported`
 - `console.store.profile.handle_label`
 - `console.store.profile.status_label`
 - `console.store.profile.status_draft`
@@ -619,7 +620,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.admin.closure.close_instead`
 - `console.common.refetch_failed`
 - `console.admin.closure.deleted_terminal`
-- `console.admin.closure.status_owed`
 - `console.admin.payout.outcome_requested`
 - `console.admin.payout.outcome_activated`
 - `console.admin.payout.outcome_cancelled`
