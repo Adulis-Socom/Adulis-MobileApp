@@ -1,25 +1,26 @@
 /**
  * features/trust/Analytics.tsx -- SC-12 Analytics (ADU-CON-03 v1.2 S10).
  *
- * GET /v1/seller/analytics/overview -- EVERY tier, five counts, 30-day
- * windows FIXED SERVER-SIDE. GET .../full -- entitlement-gated: the server
+ * GET /v1/seller/analytics/overview -- EVERY tier, five counts, over the
+ * chosen [from, to] window (default: the trailing 30 days). GET .../full --
+ * entitlement-gated: the server
  * answers 409 TIER_LIMIT_REACHED when the tier's analytics_scope is null (or
  * no tier definition exists -- fail closed), and that answer IS the
  * NO_ENTITLEMENT rendering: the section stays visible, disabled, with the
  * unlock named (S3.5 -- "locked sections remain visible so sellers can
  * distinguish missing data from a plan entitlement").
  *
- * NO PERIOD PICKER (D-226): the wireframe drew 7/30/90-day options and the
- * work order names a 90-day window, but the wire accepts NO date parameters
- * -- every window is a hard-coded 30 days. A picker that changes nothing
- * teaches that controls are decorative; the fixed window is said in words
- * and the picker arrives with the wire.
+ * THE PERIOD PICKER IS REAL NOW (T15 Phase 4): the wire takes an inclusive
+ * [from, to] of ISO dates on both reads, so the 7/30/90-day options the
+ * wireframe drew actually change the answer. The resolved window comes back
+ * (window_from/window_to) and renders as the caption -- the server's own
+ * statement of what the numbers cover, never a client assumption.
  *
  * NO EXPORT CONTROL: POST .../export was deliberately not built (no worker,
  * no job table -- the API's own comment). Business's export is named as
- * owed, not wired to a 404.
+ * owed, not wired to a 404. That keep is deliberate.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -27,7 +28,11 @@ import { ProblemBanner } from '../../components/Feedback';
 import { ScreenState } from '../../components/ScreenState';
 import type { UiState, AdulisProblem } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
+import { fillTemplate } from '../../lib/intl';
 import type { AnalyticsOverview, AnalyticsFull } from './types';
+
+const PERIODS = [7, 30, 90] as const;
+type Period = (typeof PERIODS)[number];
 
 export function Analytics() {
   const { sellerId } = useParams<{ sellerId: string }>();
@@ -37,37 +42,56 @@ export function Analytics() {
   const [state, setState] = useState<UiState>('LOADING');
   const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
   const [problem, setProblem] = useState<ApiError | null>(null);
+  const [period, setPeriod] = useState<Period>(30);
+  // Two quick period clicks race; only the latest load may commit (the C-7
+  // generation-counter lesson, D-227).
+  const loadGen = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (days: Period) => {
     if (!sellerId) return;
+    const gen = ++loadGen.current;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
     setProblem(null);
+    // A trailing window of N days: `from` rides the wire, `to` defaults to
+    // now server-side. A date for a FILTER is a query parameter, not business
+    // state -- the numbers themselves stay the server's.
+    const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const q = `?from=${from}`;
     try {
-      const o = await api<AnalyticsOverview>(`/seller/analytics/overview`, { sellerId });
+      const o = await api<AnalyticsOverview>(`/seller/analytics/overview${q}`, { sellerId });
+      if (gen !== loadGen.current) return;
       setOverview(o);
       try {
-        const f = await api<AnalyticsFull>(`/seller/analytics/full`, { sellerId });
+        const f = await api<AnalyticsFull>(`/seller/analytics/full${q}`, { sellerId });
+        if (gen !== loadGen.current) return;
         setFull(f);
         setFullLocked(false);
       } catch (e) {
+        // Guarded like the success path (pass M5): a STALE generation's
+        // failure must not banner over, or erase the failure of, the load
+        // that owns the screen.
+        if (gen !== loadGen.current) return;
+        // Whatever the failure, the PREVIOUS window's full tiles must not
+        // keep rendering under this window's caption (pass M6).
+        setFull(null);
         // 409 TIER_LIMIT_REACHED is the entitlement answer, not an error:
         // the locked section renders. Anything else is a real failure.
         if (e instanceof ApiError && e.problem.code === 'TIER_LIMIT_REACHED') {
-          setFull(null);
           setFullLocked(true);
         } else if (e instanceof ApiError && e.problem.status === 403) {
           // SALES_SUPPORT and INVENTORY hold basic:read and not full:read --
           // an absent permission renders NOTHING for the section (S3.4),
           // never a permission-denied banner on every visit.
-          setFull(null);
           setFullLocked(false);
         } else if (e instanceof ApiError) {
           setProblem(e);
         }
       }
+      if (gen !== loadGen.current) return;
       setLoadProblem(null);
       setState('READY');
     } catch (e) {
+      if (gen !== loadGen.current) return;
       if (e instanceof ApiError) {
         setLoadProblem(e.problem);
         setState(stateFromProblem(e.problem));
@@ -76,20 +100,23 @@ export function Analytics() {
   }, [sellerId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(period);
+  }, [load, period]);
 
   if (state === 'NO_PERMISSION') return null;
   if (overview === null) {
     return (
       <ScreenState
         state={state}
-        onRetry={() => void load()}
+        onRetry={() => void load(period)}
         {...(loadProblem ? { problem: loadProblem } : {})}
       />
     );
   }
 
+  // The account-empty teach fires only on the DEFAULT window (the Phase 3
+  // empty-bucket lesson): a 7-day view zeroing the one windowed tile must not
+  // tell a seller with history "No analytics yet".
   const noData =
     overview.products_published === 0 &&
     overview.orders_30d === 0 &&
@@ -108,16 +135,40 @@ export function Analytics() {
         </p>
       ) : null}
 
-      {noData ? (
+      {noData && period === 30 ? (
         <div className="empty" data-state="EMPTY">
           <h3>{en['console.insights.analytics.empty_heading']}</h3>
           <p>{en['console.insights.analytics.empty_body']}</p>
         </div>
       ) : null}
 
-      {/* The window is the SERVER's and fixed; a picker that changed nothing
-          would be decorative (D-226). */}
-      <p className="hint">{en['console.insights.analytics.window_note']}</p>
+      {/* THE PERIOD PICKER (T15 Phase 4): each option re-fetches with a real
+          date window, and the caption below is the SERVER's echo of the
+          window it resolved -- never a client's assumption about coverage. */}
+      <div className="filter-row" role="group" aria-label={en['console.insights.analytics.period_label']}>
+        {PERIODS.map((d) => (
+          <button
+            key={d}
+            type="button"
+            className={period === d ? 'filter active' : 'filter'}
+            data-period={d}
+            aria-pressed={period === d}
+            onClick={() => setPeriod(d)}
+          >
+            {d === 7
+              ? en['console.insights.analytics.period_7']
+              : d === 30
+                ? en['console.insights.analytics.period_30']
+                : en['console.insights.analytics.period_90']}
+          </button>
+        ))}
+      </div>
+      <p className="hint" data-window>
+        {fillTemplate(en['console.insights.analytics.window_showing'], {
+          from: overview.window_from,
+          to: overview.window_to,
+        })}
+      </p>
 
       <div className="kpi-tiles">
         <div className="kpi-tile">

@@ -33,19 +33,37 @@ const BUYER_STATE = path.join(path.dirname(fileURLToPath(import.meta.url)), '.au
 const base = `/s/${SEEDED.sellerId}`;
 
 test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
-  test('overview renders real counts; full renders the locked entitlement; the fixed window is said', async ({ page }) => {
+  test('overview renders real counts; the period picker DRIVES the wire; full renders the locked entitlement', async ({ page }) => {
     await page.goto(`${base}/insights`);
     await expect(page.locator('[data-screen="SC-12"]')).toBeVisible();
 
     // The seed's exact numbers -- a wrong join breaks these.
     const tile = (label: string) => page.locator('.kpi-tile', { hasText: label });
     await expect(tile('Published products').locator('.kpi-value')).toHaveText('1');
-    await expect(tile('Orders (last 30 days)').locator('.kpi-value')).toHaveText('5');
+    await expect(tile('Orders in this period').locator('.kpi-value')).toHaveText('5');
     await expect(tile('Active reservations').locator('.kpi-value')).toHaveText('4');
     await expect(tile('Completed handoffs').locator('.kpi-value')).toHaveText('0');
 
-    // The 30-day window is the server's and FIXED; the absent picker is said.
-    await expect(page.getByText(/A period picker arrives when the server accepts one/)).toBeVisible();
+    // The picker is REAL now (T15 Phase 4): the old fixed-window sentence is
+    // gone, the caption is the SERVER's echo of the window it resolved...
+    await expect(page.getByText(/A period picker arrives when the server accepts one/)).toHaveCount(0);
+    await expect(page.locator('[data-window]')).toContainText(/Showing \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/);
+
+    // ...and choosing a period RE-FETCHES with a real date bound, asserted at
+    // the wire -- a picker that changed nothing would be decorative (D-226's
+    // objection, answered rather than repeated).
+    const refetch = page.waitForResponse(
+      (r) => r.url().includes('/v1/seller/analytics/overview?from=') && r.request().method() === 'GET',
+    );
+    await page.locator('[data-period="7"]').click();
+    const resp = await refetch;
+    const url = new URL(resp.url());
+    const from = url.searchParams.get('from') as string;
+    // The 7-day bound really is ~7 days back, and the server echoes it.
+    const daysBack = (Date.now() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000;
+    expect(daysBack).toBeGreaterThan(6);
+    expect(daysBack).toBeLessThan(9);
+    await expect(page.locator('[data-window]')).toContainText(`Showing ${from}`);
 
     // S3.5: the entitlement-locked section is VISIBLE, disabled, unlock named
     // -- and it is the REAL server's 409 that put it there.
@@ -55,6 +73,7 @@ test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
     await expect(page.getByText(/does not include this section/)).toBeVisible();
 
     // Export exists on no wire; the absence is words, not a dead button.
+    // DELIBERATE KEEP: the worker and job table still do not exist (D-232).
     await expect(page.getByText(/Exporting your data/)).toBeVisible();
     await expect(page.getByRole('button', { name: /export/i })).toHaveCount(0);
   });

@@ -1,37 +1,47 @@
 /**
- * features/store/Profile.tsx -- SC-17 Store profile (ADU-CON-03 v1.2 S11).
+ * features/store/Profile.tsx -- SC-17 Store profile (ADU-CON-03 v1.3 S11).
  *
- * PATCH /v1/seller/profile { store_name?, description?, category_id? } and
- * PATCH /v1/seller/company-details. Both coalesce updates: a field can be set
- * and never cleared.
- *
- * THE READ-BACK ABSENCE DOMINATES THIS SCREEN (register D-224). There is no
- * GET for a seller's own profile anywhere in the API: readiness returns
- * satisfied-flags, bootstrap returns market facts, and the public storefront
- * GET is 404 for a DRAFT seller and carries no category. So this form CANNOT
- * show current values -- it says so on screen, in words, instead of
- * pretending blank fields mean an empty profile. The live preview renders
- * WHAT IS TYPED, which is all this client can truthfully preview.
+ * GET /v1/seller/profile (T15 Phase 4) -- the read this screen was missing:
+ * the editable fields, PLUS the store's status and handle. So the form now
+ * LOADS the saved profile, the preview shows the real header, and a save is
+ * proven by reading it back. PATCH /v1/seller/profile { store_name?,
+ * description?, category_id? } and PATCH /v1/seller/company-details coalesce.
  *
  * No handle field: the PATCH does not carry one (G1.9 -- the handle is fixed
- * at creation), and the screen says so where a rename control would sit.
- * No logo field: no endpoint and no column exist; named on screen, D-224.
+ * at creation); the handle is SHOWN, read-only, where a rename control would
+ * sit. No logo field: no endpoint and no column exist; named on screen (still
+ * a deliberate keep -- the profile read carries no logo).
  *
- * The company block sits behind a disclosure because the seller's own TYPE
- * cannot be read back either; a sole trader who opens it and submits gets
+ * The company DETAILS remain write-only (no GET carries registration/licence/
+ * tin), but the seller's TYPE is now readable: a non-company that submits gets
  * the server's 409 SELLER_NOT_COMPANY, rendered, not swallowed. The
  * attestation sentence (R26): identity verification for a company is about
  * the REPRESENTATIVE AS A NATURAL PERSON.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
 import { ProblemBanner } from '../../components/Feedback';
-import type { CategoryRow } from './types';
+import { ScreenState } from '../../components/ScreenState';
+import type { UiState } from '../../lib/states';
+import { stateFromProblem } from '../../lib/states';
+import type { CategoryRow, SellerProfile } from './types';
+
+/** Store status is a state the console renders as a word, never the enum. */
+const STATUS_LABEL: Readonly<Record<string, string>> = {
+  DRAFT: en['console.store.profile.status_draft'],
+  ACTIVE: en['console.store.profile.status_active'],
+  CLOSING: en['console.store.profile.status_closing'],
+  BILLING_SUSPENDED: en['console.store.profile.status_billing_suspended'],
+  SAFETY_SUSPENDED: en['console.store.profile.status_safety_suspended'],
+  DELETED: en['console.store.profile.status_deleted'],
+};
 
 export function Profile() {
   const { sellerId } = useParams<{ sellerId: string }>();
+  const [profile, setProfile] = useState<SellerProfile | null>(null);
+  const [state, setState] = useState<UiState>('LOADING');
   const [categories, setCategories] = useState<readonly CategoryRow[]>([]);
   const [categoriesFailed, setCategoriesFailed] = useState(false);
   const [storeName, setStoreName] = useState('');
@@ -47,6 +57,43 @@ export function Profile() {
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  /**
+   * The post-save read-back replaces a field ONLY if the seller has not typed
+   * in it since the save left (Phase 5 pass M3: a refetch that overwrites
+   * mid-edit keystrokes is the D-221 class). Null means an initial load,
+   * which populates unconditionally -- the form does not render before it.
+   */
+  const sentRef = useRef<{ store_name: string; description: string; category_id: string } | null>(
+    null,
+  );
+
+  const load = useCallback(async () => {
+    if (!sellerId) return;
+    setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
+    try {
+      const p = await api<SellerProfile>(`/seller/profile`, { sellerId });
+      setProfile(p);
+      // Populate the editable fields with what is saved -- the form edits the
+      // real profile instead of starting blank. Guarded per-field on refetch.
+      const sent = sentRef.current;
+      setStoreName((cur) => (sent === null || cur === sent.store_name ? (p.store_name ?? '') : cur));
+      setDescription((cur) =>
+        sent === null || cur === sent.description ? (p.description ?? '') : cur,
+      );
+      setCategoryId((cur) =>
+        sent === null || cur === sent.category_id ? (p.category_id ?? '') : cur,
+      );
+      sentRef.current = null;
+      setState('READY');
+    } catch (e) {
+      setState(e instanceof ApiError ? stateFromProblem(e.problem) : 'TRANSPORT_ERROR');
+    }
+  }, [sellerId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
     // Public endpoint; categories are market-shared vocabulary.
@@ -68,6 +115,17 @@ export function Profile() {
       setFieldError(en['console.store.profile.nothing_to_save']);
       return;
     }
+    // The wire CANNOT clear a field: the PATCH coalesces server-side and this
+    // client omits empties -- so a cleared field would silently revert on the
+    // read-back, telling the seller "Saved." about a change that did not
+    // happen (Phase 5 pass). Refuse in words instead.
+    if (
+      profile &&
+      ((profile.store_name && !storeName.trim()) || (profile.description && !description.trim()))
+    ) {
+      setFieldError(en['console.store.profile.clear_unsupported']);
+      return;
+    }
     setBusy(true);
     setProblem(null);
     try {
@@ -81,6 +139,15 @@ export function Profile() {
         },
       });
       setSaved(true);
+      // Read the saved profile back -- the proof the write landed, now that a
+      // GET exists. sentRef makes the read-back skip any field the seller has
+      // retyped while the round-trip was in flight (pass M3).
+      sentRef.current = {
+        store_name: storeName,
+        description,
+        category_id: categoryId,
+      };
+      void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -124,11 +191,19 @@ export function Profile() {
     }
   };
 
+  if (state === 'NO_PERMISSION') return null;
+  if (!profile) return <ScreenState state={state} onRetry={() => void load()} />;
+
   return (
     <section aria-labelledby="profile-heading" data-screen="SC-17" className="store-profile">
       <h1 id="profile-heading">{en['console.store.profile.heading']}</h1>
 
       {problem ? <ProblemBanner problem={problem.problem} /> : null}
+      {state === 'TRANSPORT_ERROR' ? (
+        <p className="problem" role="alert">
+          {en['console.common.refetch_failed']}
+        </p>
+      ) : null}
       {fieldError ? (
         <p className="field-error" role="alert">
           {fieldError}
@@ -136,8 +211,14 @@ export function Profile() {
       ) : null}
       {saved ? <p className="callout">{en['console.store.profile.saved']}</p> : null}
 
-      {/* The read-back absence, named where the seller will wonder (D-224). */}
-      <p className="hint">{en['console.store.profile.readback_owed']}</p>
+      {/* Status and handle, read back from the server (T15 Phase 4). The
+          handle sits read-only where a rename control would lie (G1.9). */}
+      <dl className="profile-facts">
+        <dt>{en['console.store.profile.status_label']}</dt>
+        <dd data-status={profile.status}>{STATUS_LABEL[profile.status] ?? profile.status}</dd>
+        <dt>{en['console.store.profile.handle_label']}</dt>
+        <dd data-handle>{profile.handle}</dd>
+      </dl>
 
       <div className="form-block">
         <label htmlFor="sp-name">{en['console.store.profile.store_name']}</label>
@@ -179,8 +260,8 @@ export function Profile() {
 
       <section aria-labelledby="preview-heading" className="storefront-preview">
         <h2 id="preview-heading">{en['console.store.profile.preview_heading']}</h2>
-        {/* Only what is TYPED can be previewed -- the saved values cannot be
-            read back, and this caption says which of the two this is. */}
+        {/* The preview shows the LOADED profile plus edits -- the saved
+            values read back now, and the caption says so. */}
         <p className="hint">{en['console.store.profile.preview_caption']}</p>
         <div className="preview-card">
           <h3>{storeName.trim() || en['console.store.profile.preview_name_placeholder']}</h3>

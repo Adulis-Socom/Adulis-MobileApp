@@ -18,6 +18,14 @@ export interface PayoutRow {
 export interface PayoutState {
   readonly active: PayoutRow | null;
   readonly pending: PayoutRow | null;
+  /**
+   * T15 Phase 4 (S15.0c): the lock state, read PROACTIVELY so SC-24 draws a
+   * panel rather than discovering it on a 409. `reason` is the write path's own
+   * vocabulary (RECOVERY_COOLING | NEW_DEVICE | NO_TIMING_CONFIG); null when
+   * unlocked. `payout_locked_until` is the lift, null for NO_TIMING_CONFIG.
+   */
+  readonly payout_locked_until: string | null;
+  readonly reason: string | null;
   /** D-155: the server's answer to what this seller may do to payout. */
   readonly allowed_actions: readonly string[];
 }
@@ -74,6 +82,12 @@ export interface PurchaseIntent {
   readonly amount_minor: number;
   readonly currency: string;
   readonly expires_at: string;
+  /**
+   * T15 Phase 4 (A7): the transfer reference the POST minted, now on the GET
+   * too -- a seller who closed the tab reads back what to write on the bank
+   * transfer instead of waiting for the quote to expire.
+   */
+  readonly reference: string;
   readonly marked_transferred_at: string | null;
 }
 export interface SubscriptionState {
@@ -106,6 +120,12 @@ export interface SessionRow {
   readonly device_platform: string | null;
   readonly remembered_label: string | null;
   readonly remembered: boolean;
+  /**
+   * T15 Phase 4: the account_device to forget when removing the remembered
+   * flag ALONE (DELETE /v1/auth/remembered-devices/{id}). Null unless this
+   * session is bound to a live remembered device.
+   */
+  readonly remembered_device_id: string | null;
   readonly current: boolean;
 }
 

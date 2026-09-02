@@ -9,12 +9,11 @@
  * expect a reply and GATES NOTHING -- a seller who believes it is a gate will
  * over-report and then miss it. Zero windows is valid.
  *
- * THE WEEKLY PATTERN CANNOT BE READ BACK (register D-224): the API has
- * PUT /v1/seller/availability and no GET -- core.seller_availability is only
- * ever written, and the one read is the public storefront's resolved
- * open/closed state. So the editor edits a LOCAL draft and says on screen
- * that the saved pattern cannot be shown. Pretending the blank grid means "no
- * hours set" would be a lie about a value this client cannot know.
+ * THE WEEKLY PATTERN READS BACK (T15 Phase 4 closed D-224's absence here):
+ * GET /v1/seller/availability returns the saved set in the PUT's own shape,
+ * so the editor loads the real hours and a save is proven by reading them
+ * back. The weekly read and the overrides read are SPLIT (Phase 5 pass M2):
+ * an override write's refetch must never clobber a weekly draft mid-edit.
  *
  * OVERRIDES ARE CLOSURES ONLY, deliberately (S11): a date on which the store
  * is closed, with an optional note shown on the storefront and in the
@@ -61,6 +60,7 @@ export function Availability() {
   const [pastOpen, setPastOpen] = useState(false);
   const [state, setState] = useState<UiState>('LOADING');
   const [loaded, setLoaded] = useState(false);
+  const [weeklyFailed, setWeeklyFailed] = useState(false);
   const [loadProblem, setLoadProblem] = useState<AdulisProblem | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -69,6 +69,37 @@ export function Availability() {
   const [saved, setSaved] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newNote, setNewNote] = useState('');
+
+  /**
+   * TWO READS, SPLIT DELIBERATELY (Phase 5 pass M2): the overrides load runs
+   * after every override write, and if it also replaced `windows` it would
+   * clobber a weekly draft the seller is mid-edit on -- the D-221 class. So
+   * the weekly pattern loads on mount and after ITS OWN save only.
+   */
+  const loadWindows = useCallback(
+    async (onlyIfStill?: readonly WindowDraft[]) => {
+      if (!sellerId) return;
+      try {
+        // The weekly pattern loads (T15 Phase 4): the editor edits the SAVED
+        // hours, not a blank draft. Zero windows is a valid closed pattern.
+        const wk = await api<{ windows: WindowDraft[] }>(`/seller/availability`, { sellerId });
+        setWindows((cur) =>
+          // The post-save read-back replaces the draft ONLY if the seller has
+          // not typed since the save left (the dirty guard the pass asked for).
+          onlyIfStill === undefined || JSON.stringify(cur) === JSON.stringify(onlyIfStill)
+            ? wk.windows
+            : cur,
+        );
+        setWeeklyFailed(false);
+      } catch {
+        // A failed weekly read must NOT render as an empty pattern (the
+        // success-empty-for-failure class): the section says it could not
+        // load, and the draft stands.
+        setWeeklyFailed(true);
+      }
+    },
+    [sellerId],
+  );
 
   const load = useCallback(async () => {
     if (!sellerId) return;
@@ -89,8 +120,9 @@ export function Availability() {
   }, [sellerId]);
 
   useEffect(() => {
+    void loadWindows();
     void load();
-  }, [load]);
+  }, [load, loadWindows]);
 
   const loadPast = async () => {
     if (!sellerId) return;
@@ -136,8 +168,13 @@ export function Availability() {
     setProblem(null);
     try {
       // Whole-set replace; an empty set is a valid closed pattern.
-      await api(`/seller/availability`, { method: 'PUT', sellerId, body: { windows } });
+      const sent = windows;
+      await api(`/seller/availability`, { method: 'PUT', sellerId, body: { windows: sent } });
       setSaved(true);
+      // Read the saved pattern back -- the proof the write landed, now that a
+      // GET exists. Guarded: it replaces the draft only if the seller has not
+      // edited since the save left (pass M2/M3 class).
+      void loadWindows(sent);
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -234,9 +271,13 @@ export function Availability() {
 
       <section aria-labelledby="weekly-heading" className="weekly-pattern">
         <h2 id="weekly-heading">{en['console.store.availability.weekly_heading']}</h2>
-        {/* D-224: PUT-only. The saved pattern cannot be shown, and saying so
-            beats a blank grid that claims to be the current state. */}
-        <p className="hint">{en['console.store.availability.readback_owed']}</p>
+        {weeklyFailed ? (
+          // A failed weekly read is a FAILURE, never a blank pattern (the
+          // success-empty class). The grid below still edits and saves.
+          <p className="problem" role="alert">
+            {en['console.common.refetch_failed']}
+          </p>
+        ) : null}
         {WEEKDAYS.map((d) => {
           const dayWindows = windows
             .map((w, i) => ({ ...w, i }))

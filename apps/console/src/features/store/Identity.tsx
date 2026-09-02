@@ -20,13 +20,14 @@
  * person.
  *
  * R24 -- the follower count is CAPTURED at verification, never refreshed in
- * the background. The wire returns follower_count_at_verification once, in
- * the verify response, and nothing else ever returns it (no GET lists social
- * accounts -- named on screen, D-224). It renders with "as of" the moment
- * this session witnessed, with a Re-check action, and one line saying it
- * does not update on its own.
+ * the background. GET /v1/seller/social-accounts (T15 Phase 4) now LISTS the
+ * linked accounts with follower_count and the DATE it was captured, so "as of
+ * <date>" names the real capture instant rather than the moment one session
+ * witnessed the verify response. The Re-check action is still owed to the wire
+ * (the verify short-circuits a VERIFIED account before the platform fetch), so
+ * that gap alone stays named; the list gap is closed.
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -34,7 +35,7 @@ import { ProblemBanner } from '../../components/Feedback';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { fillTemplate, timeFormatter } from '../../lib/intl';
 import { useMarketContext } from '../../lib/market';
-import type { SocialAccountCreated, SocialVerified } from './types';
+import type { SocialAccountCreated, SocialVerified, SellerSocialAccount } from './types';
 
 export function Identity() {
   const { sellerId } = useParams<{ sellerId: string }>();
@@ -42,12 +43,37 @@ export function Identity() {
   const [platform, setPlatform] = useState<'TIKTOK' | 'INSTAGRAM'>('TIKTOK');
   const [handle, setHandle] = useState('');
   const [created, setCreated] = useState<SocialAccountCreated | null>(null);
-  const [verified, setVerified] = useState<{ count: number | null; at: Date } | null>(null);
+  const [accounts, setAccounts] = useState<readonly SellerSocialAccount[] | null>(null);
+  const [listFailed, setListFailed] = useState(false);
+  const [justVerified, setJustVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const createKey = useIdempotencyKey();
   const verifyKey = useIdempotencyKey();
+  // Only the latest list load may commit (the D-227 class; pass minor).
+  const listGen = useRef(0);
+
+  const load = useCallback(async () => {
+    if (!sellerId) return;
+    const gen = ++listGen.current;
+    try {
+      const r = await api<{ accounts: SellerSocialAccount[] }>(`/seller/social-accounts`, { sellerId });
+      if (gen !== listGen.current) return;
+      setAccounts(r.accounts);
+      setListFailed(false);
+    } catch {
+      // A FAILED list is not an EMPTY list (the C-5 success-empty class the
+      // pass flagged, M4): accounts stays as it was, a failure line renders in
+      // the list region, and the create/verify controls stay live.
+      if (gen !== listGen.current) return;
+      setListFailed(true);
+    }
+  }, [sellerId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const start = async () => {
     if (!sellerId) return;
@@ -67,7 +93,9 @@ export function Identity() {
       });
       createKey.remint();
       setCreated(r);
-      setVerified(null);
+      setJustVerified(false);
+      // The new (PENDING) account now appears in the list read below.
+      void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -80,23 +108,17 @@ export function Identity() {
     setBusy(true);
     setProblem(null);
     try {
-      const r = await api<SocialVerified>(`/seller/social-accounts/${created.social_account_id}/verify`, {
+      await api<SocialVerified>(`/seller/social-accounts/${created.social_account_id}/verify`, {
         method: 'POST',
         sellerId,
         idempotencyKey: verifyKey.current(),
       });
       verifyKey.remint();
-      // "As of" is the moment THIS SESSION witnessed the capture -- the wire
-      // carries no captured_at, and stamping the witnessed moment is the only
-      // date this client can truthfully attach (R24; absence registered).
-      // An already-VERIFIED answer carries NO count (the server short-circuits
-      // before the platform fetch) -- keep what the session holds rather than
-      // replacing a number the seller is reading with nothing (pass B2).
-      if (r.already) {
-        setVerified((v) => v ?? { count: null, at: new Date() });
-      } else {
-        setVerified({ count: r.follower_count_at_verification ?? null, at: new Date() });
-      }
+      setJustVerified(true);
+      // The list carries the real follower_count and captured_at now, so the
+      // proof of the verify is the account appearing VERIFIED below with its
+      // real "as of" date -- not a session-stamped moment.
+      void load();
     } catch (e) {
       if (e instanceof ApiError) {
         const reason = e.problem.slots?.['reason'];
@@ -171,31 +193,56 @@ export function Identity() {
           </div>
         ) : null}
 
-        {verified ? (
-          <div className="follower-card">
-            <p className="callout">{en['console.store.identity.verified']}</p>
-            {verified.count !== null ? (
-              <p>
-                {fillTemplate(en['console.store.identity.follower_count'], {
-                  n: String(verified.count),
-                  date: fmt ? fmt.format(verified.at) : '',
-                })}
-              </p>
-            ) : null}
-            {/* R24, on screen: no background refresh, ever. R24 ALSO asks
-                for a Re-check control -- but the server short-circuits a
-                verified account before the platform fetch (already:true, no
-                count), so a Re-check button here would be a control the
-                server refuses (the G1.1 class). The gap is said in words and
-                registered (D-225); the control arrives with the wire. */}
-            <p className="hint">{en['console.store.identity.no_auto_refresh']}</p>
-            <p className="hint">{en['console.store.identity.recheck_owed']}</p>
-          </div>
-        ) : null}
+        {justVerified ? <p className="callout">{en['console.store.identity.verified']}</p> : null}
 
-        {/* D-224: linked accounts and their counts cannot be re-read after
-            this session -- the absence is named where it will be felt. */}
-        <p className="hint">{en['console.store.identity.list_owed']}</p>
+        {/* THE LINKED ACCOUNTS, read back from the server (T15 Phase 4). A
+            verified account shows its follower count with the real "as of"
+            date it was captured (verified_at), which is R24 done properly --
+            no session-stamped guess, no background refresh. */}
+        <div className="linked-accounts" data-linked-accounts>
+          <h3>{en['console.store.identity.linked_heading']}</h3>
+          {listFailed ? (
+            // Failure is not emptiness (pass M4): a seller with verified
+            // accounts on a flaky connection must not read "none yet".
+            <p className="problem" role="alert">
+              {en['console.common.refetch_failed']}
+            </p>
+          ) : null}
+          {accounts === null ? null : accounts.length === 0 && !listFailed ? (
+            <p className="empty" data-state="EMPTY">
+              {en['console.store.identity.linked_empty']}
+            </p>
+          ) : accounts.length === 0 ? null : (
+            <ul>
+              {accounts.map((a) => (
+                <li key={a.id} data-account={a.id} data-status={a.status}>
+                  <span className="account-handle">
+                    {a.platform} {a.handle}
+                  </span>
+                  {a.status === 'VERIFIED' && a.follower_count !== null && a.captured_at ? (
+                    <span className="account-followers">
+                      {fillTemplate(en['console.store.identity.follower_count'], {
+                        n: String(a.follower_count),
+                        date: fmt ? fmt.format(new Date(a.captured_at)) : a.captured_at,
+                      })}
+                    </span>
+                  ) : (
+                    <span className="account-status">
+                      {a.status === 'VERIFIED'
+                        ? en['console.store.identity.status_verified']
+                        : en['console.store.identity.status_pending']}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* R24, on screen: the count never refreshes on its own. The Re-check
+              action is still owed to the wire (the verify short-circuits a
+              VERIFIED account before the platform fetch -- register D-225). */}
+          <p className="hint">{en['console.store.identity.no_auto_refresh']}</p>
+          <p className="hint">{en['console.store.identity.recheck_owed']}</p>
+        </div>
       </section>
 
       <section aria-labelledby="identity-check-heading" className="identity-check">

@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-730 keys:
+744 keys:
 
 - `app.title`
 - `health.ok`
@@ -380,7 +380,15 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.store.profile.save`
 - `console.store.profile.saved`
 - `console.store.profile.nothing_to_save`
-- `console.store.profile.readback_owed`
+- `console.store.profile.clear_unsupported`
+- `console.store.profile.handle_label`
+- `console.store.profile.status_label`
+- `console.store.profile.status_draft`
+- `console.store.profile.status_active`
+- `console.store.profile.status_closing`
+- `console.store.profile.status_billing_suspended`
+- `console.store.profile.status_safety_suspended`
+- `console.store.profile.status_deleted`
 - `console.store.profile.handle_immutable`
 - `console.store.profile.logo_owed`
 - `console.store.profile.preview_heading`
@@ -410,7 +418,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.store.availability.heading`
 - `console.store.availability.gates_nothing`
 - `console.store.availability.weekly_heading`
-- `console.store.availability.readback_owed`
 - `console.store.availability.monday`
 - `console.store.availability.tuesday`
 - `console.store.availability.wednesday`
@@ -455,7 +462,10 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.store.identity.follower_count`
 - `console.store.identity.no_auto_refresh`
 - `console.store.identity.recheck`
-- `console.store.identity.list_owed`
+- `console.store.identity.linked_heading`
+- `console.store.identity.linked_empty`
+- `console.store.identity.status_verified`
+- `console.store.identity.status_pending`
 - `console.store.identity.identity_heading`
 - `console.store.identity.operator_performed`
 - `console.store.couriers.heading`
@@ -487,6 +497,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.admin.payout.fact_orders_unaffected`
 - `console.admin.payout.fact_cancellable`
 - `console.admin.payout.change`
+- `console.admin.payout.locked_until`
 - `console.admin.payout.cancel_pending`
 - `console.admin.payout.bank_code`
 - `console.admin.payout.account_number`
@@ -569,8 +580,8 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.admin.sessions.sign_out_others`
 - `console.admin.sessions.remembered_heading`
 - `console.admin.sessions.remembered_consequence`
+- `console.admin.sessions.forget_device`
 - `console.admin.sessions.remembered_none_visible`
-- `console.admin.sessions.remembered_owed`
 - `console.admin.notifprefs.heading`
 - `console.admin.notifprefs.legend`
 - `console.admin.notifprefs.cat_orders`
@@ -609,13 +620,12 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.admin.closure.close_instead`
 - `console.common.refetch_failed`
 - `console.admin.closure.deleted_terminal`
-- `console.admin.closure.status_owed`
 - `console.admin.payout.outcome_requested`
 - `console.admin.payout.outcome_activated`
 - `console.admin.payout.outcome_cancelled`
 - `console.admin.team.residual_role`
 - `console.admin.team.residual_keep_admin`
-- `console.admin.subscription.reference_owed`
+- `console.admin.subscription.reference_line`
 - `console.store.availability.window_too_short`
 - `console.store.availability.overrides_more`
 - `console.store.identity.code_not_in_bio`
@@ -628,7 +638,11 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.insights.analytics.heading`
 - `console.insights.analytics.empty_heading`
 - `console.insights.analytics.empty_body`
-- `console.insights.analytics.window_note`
+- `console.insights.analytics.period_label`
+- `console.insights.analytics.period_7`
+- `console.insights.analytics.period_30`
+- `console.insights.analytics.period_90`
+- `console.insights.analytics.window_showing`
 - `console.insights.analytics.products_published`
 - `console.insights.analytics.orders_30d`
 - `console.insights.analytics.active_reservations`
