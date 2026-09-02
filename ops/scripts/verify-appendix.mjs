@@ -41,7 +41,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DOC = path.join(root, 'docs', 'ADU-DB-01_Database_and_Data_Model_v1_15_ASCII.md');
+const DOC = path.join(root, 'docs', 'ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md');
 const FIXTURE = path.join(root, 'db', 'checks', 'fixtures', 'appendix-a.json');
 
 /** The nine schemas that hold tables. The tenth, `jobs`, is graphile-worker's. */
@@ -57,7 +57,7 @@ const fail = (m) => {
   console.error(`  FAIL  ${m}`);
 };
 
-console.log('\nADU-DB-01 v1.15 -- the appendices agree with what generated them\n');
+console.log('\nADU-DB-01 v1.16 -- the appendices agree with what generated them\n');
 
 if (!existsSync(DOC)) {
   console.error(`FAIL  ${path.relative(root, DOC)} is missing. This gate reads the installed document.`);
