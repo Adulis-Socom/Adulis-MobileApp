@@ -19,10 +19,14 @@
  * cancellability lives in the disclosure, the CONTROL beside the thing it
  * cancels. The two controls are peers -- .decision has no variant.
  *
- * The recovery/new-device lock (409 PAYOUT_LOCKED_RECOVERY) is discovered on
- * the ATTEMPT: the GET carries no lock state, so a proactive locked banner
- * cannot be drawn from the server's answer -- the 409's own message renders
- * instead, and the proactive read is registered as owed (D-224).
+ * The recovery/new-device lock is drawn PROACTIVELY (T15 Phase 4, S15.0c):
+ * GET /v1/seller/payout now carries `reason` and `payout_locked_until`, so the
+ * seller reads WHY the store is locked and WHEN it lifts before they touch the
+ * change control -- not on a 409 after spending a step-up. The change control
+ * renders disabled while locked (R20: the reason stated, the control kept),
+ * and the 409's message remains the backstop if a lock lands mid-session. One
+ * cause-neutral code with a reason slot (PAYOUT_LOCKED); only the sentence
+ * differs, and that is the locale's job.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
@@ -37,6 +41,17 @@ import { stateFromProblem } from '../../lib/states';
 import { useMarketContext } from '../../lib/market';
 import { timeFormatter, fillTemplate } from '../../lib/intl';
 import type { PayoutState, PayoutHistoryRow } from '../admin/types';
+
+/**
+ * The lock sentence per reason -- the same locale keys the 409 renders through,
+ * so the proactive panel and the error speak one language (S15.0c). The reason
+ * vocabulary is the server's DETAIL, verbatim.
+ */
+const LOCK_SENTENCE: Readonly<Record<string, string>> = {
+  RECOVERY_COOLING: en['error.payout.payout_locked_recovery_cooling'],
+  NEW_DEVICE: en['error.payout.payout_locked_new_device'],
+  NO_TIMING_CONFIG: en['error.payout.payout_locked_no_timing_config'],
+};
 
 /**
  * The history outcome is a server enum; a seller reads a WORD, not a token
@@ -201,6 +216,23 @@ export function Payout() {
         </section>
       ) : null}
 
+      {/* THE PROACTIVE LOCK PANEL (T15 Phase 4): drawn from the GET's reason
+          and lift, before the seller reaches for the control -- not on a 409. */}
+      {payout.reason ? (
+        <section className="payout-lock blocked" data-payout-lock={payout.reason}>
+          <p>{LOCK_SENTENCE[payout.reason] ?? en['error.payout.payout_locked']}</p>
+          {payout.payout_locked_until ? (
+            <p>
+              <strong>
+                {fillTemplate(en['console.admin.payout.locked_until'], {
+                  time: when(payout.payout_locked_until),
+                })}
+              </strong>
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* THE FIVE FACTS -- before the control, never inside a disclosure. */}
       <section aria-labelledby="facts-heading" className="payout-facts">
         <h2 id="facts-heading">{en['console.admin.payout.before_heading']}</h2>
@@ -221,7 +253,11 @@ export function Payout() {
           <button
             type="button"
             className="button decision"
-            disabled={busy}
+            data-action="change-payout"
+            // R20: rendered while locked, but DISABLED -- the write would 409,
+            // and the lock panel above states why. The grant is present; the
+            // state forbids it. (Cancelling a pending change is never locked.)
+            disabled={busy || payout.reason !== null}
             aria-expanded={formOpen}
             onClick={() => setFormOpen((o) => !o)}
           >

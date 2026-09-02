@@ -46,25 +46,28 @@ test.describe('More menu and shell navigation', () => {
   });
 });
 
-test.describe('SC-17 Store profile -- write-only, and honest about it', () => {
-  test('names the read-back absence, refuses an empty save, and PATCHes for real', async ({ page }) => {
+test.describe('SC-17 Store profile -- loads, edits, and reads back (T15 Phase 4)', () => {
+  test('shows status and handle, and a saved edit reads back from the server', async ({ page }) => {
     await page.goto(`${base}/profile`);
     await expect(page.locator('[data-screen="SC-17"]')).toBeVisible();
 
-    // The absence IS the screen's first fact.
-    await expect(page.getByText(/cannot be shown here yet/).first()).toBeVisible();
-    // G1.9 and the logo, said in words where the controls would sit.
-    await expect(page.getByText(/handle is fixed when the store is created/)).toBeVisible();
+    // The read-back-owed sentence is GONE: the form loads the real profile.
+    // (The gap sentence's removal is the claim; this is the proof.)
+    await expect(page.getByText(/cannot be shown here yet/)).toHaveCount(0);
+
+    // Status and handle are read back from the server, not inferred.
+    await expect(page.locator('[data-screen="SC-17"] dd[data-status]')).not.toBeEmpty();
+    const handle = page.locator('[data-screen="SC-17"] dd[data-handle]');
+    await expect(handle).not.toBeEmpty();
+    // The name field is POPULATED from the saved profile, not blank.
+    await expect(page.locator('#sp-name')).not.toHaveValue('');
+
+    // Deliberate keeps STAY -- the profile read carries no logo, and the
+    // handle is fixed at creation (G1.9). These endpoints still do not exist.
     await expect(page.getByText('A store logo is not supported yet.')).toBeVisible();
+    await expect(page.getByText(/handle is fixed when the store is created/)).toBeVisible();
 
-    // An empty save REFUSES before the wire (the server would 400 an empty
-    // patch); the sentence says why.
-    await page.getByRole('button', { name: 'Save profile' }).click();
-    await expect(page.getByText('Enter a change before saving.')).toBeVisible();
-
-    // A real PATCH lands: the preview reflects what is typed, the save
-    // confirms. (Read-back is the named absence, so the proof of landing is
-    // the 200 -> Saved, not a reload.)
+    // Edit the name and save for real...
     await page.locator('#sp-name').fill('Seed Coffee Works');
     await expect(page.locator('.preview-card').getByText('Seed Coffee Works')).toBeVisible();
     const patched = page.waitForResponse(
@@ -73,6 +76,13 @@ test.describe('SC-17 Store profile -- write-only, and honest about it', () => {
     await page.getByRole('button', { name: 'Save profile' }).click();
     await patched;
     await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
+
+    // ...and READ IT BACK end to end: a fresh load from the server shows the
+    // edit. The write-only form could never prove this.
+    await page.reload();
+    await expect(page.locator('#sp-name')).toHaveValue('Seed Coffee Works');
+    // The handle is stable across the reload (it is fixed, and now visible).
+    await expect(page.locator('[data-screen="SC-17"] dd[data-handle]')).not.toBeEmpty();
   });
 });
 
@@ -114,8 +124,8 @@ test.describe('SC-19 Availability -- gates nothing; closures are dates', () => {
     await expect(
       page.getByText('It does not restrict reservations, orders or messages.'),
     ).toBeVisible();
-    // The weekly pattern's read-back absence is NAMED, not papered over.
-    await expect(page.getByText(/Saved hours cannot be shown here yet/)).toBeVisible();
+    // The read-back-owed sentence is GONE: the weekly pattern now loads.
+    await expect(page.getByText(/Saved hours cannot be shown here yet/)).toHaveCount(0);
 
     // A closure date is written for real...
     await page.locator('#ov-date').fill('2027-01-07');
@@ -157,6 +167,13 @@ test.describe('SC-19 Availability -- gates nothing; closures are dates', () => {
     await page.getByRole('button', { name: 'Save weekly hours' }).click();
     await put;
     await expect(page.getByText('Saved.')).toBeVisible();
+
+    // READ-BACK end to end (T15 Phase 4): a fresh load shows the saved window,
+    // in the editor -- the pattern the screen could never reopen before.
+    await page.reload();
+    await expect(page.locator('[data-screen="SC-19"]')).toBeVisible();
+    await expect(page.locator('#opens-0')).toHaveValue('09:00');
+    await expect(page.locator('#closes-0')).toHaveValue('17:00');
   });
 });
 
@@ -177,20 +194,39 @@ test.describe('SC-22 Identity -- the sentences that are the screen', () => {
     await expect(page.locator('.identity-check')).toBeVisible();
     await expect(page.locator('.identity-check').getByRole('button')).toHaveCount(0);
 
+    // The linked-accounts list loads (T15 Phase 4) -- the seed links none, so
+    // it teaches empty. Before, this list could not be read back at all.
+    await expect(page.locator('[data-linked-accounts]')).toBeVisible();
+    await expect(page.locator('[data-linked-accounts] [data-account]')).toHaveCount(0);
+
     // Account control mints a REAL code against the real API.
     await page.locator('#id-handle').fill('senabeauty');
     await page.getByRole('button', { name: 'Get a code' }).click();
     await expect(page.getByText('Post this code:')).toBeVisible();
     await expect(page.getByText(/ADU-[0-9A-F]{8}/)).toBeVisible();
 
-    // And the CHECK is driven into the one deterministic answer this harness
+    // The new PENDING account now appears in the list, read from the server.
+    const account = page.locator('[data-linked-accounts] [data-account]');
+    await expect(account).toHaveCount(1);
+    await expect(account).toHaveAttribute('data-status', 'PENDING');
+
+    // The CHECK is driven into the one deterministic answer this harness
     // holds: the fake platform adapter knows no such handle, the service
     // degrades to a retryable 503, and the failure renders as a banner WITH
-    // the request id (S4.6) -- never silence (the pass's M11).
+    // the request id (S4.6) -- never silence (the pass's M11). (A VERIFIED "as
+    // of <date>" needs the fake social register, an in-process API-test helper
+    // the browser cannot reach; c1-onboarding asserts that path at the wire.)
+    // Driven BEFORE the reload below: the minted code is session state, gone
+    // on a fresh load -- which is correct, and why the reload goes last.
     await page.getByRole('button', { name: 'Check account control' }).click();
     const banner = page.locator('.problem');
     await expect(banner).toBeVisible();
     await expect(banner.locator('code')).toBeVisible();
+
+    // And the list READS BACK across a fresh load: the account survives the
+    // session that created it, which is the closed gap, end to end.
+    await page.reload();
+    await expect(page.locator('[data-linked-accounts] [data-account][data-status="PENDING"]')).toHaveCount(1);
   });
 });
 
@@ -249,30 +285,30 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
     await expect(page.getByRole('button', { name: /Cancel pending change/ })).toHaveCount(0);
   });
 
-  test('the change drives the real step-up modal into the real new-device lock, which renders', async ({ page }) => {
+  test('the new-device lock renders PROACTIVELY from the real GET; the control is disabled (T15 Phase 4)', async ({
+    page,
+  }) => {
+    /*
+     * The harness device signed in minutes ago, so the REAL server computes
+     * the 24h new-device lock. The OLD shape of this test spent a real
+     * step-up SMS to discover that on a doomed POST's 409 -- which was the
+     * gap: "the payout lock is discovered on the attempt" (D-224). The GET
+     * now carries reason + payout_locked_until, so the panel names the cause
+     * and the lift BEFORE the seller reaches for the control, and the change
+     * control renders DISABLED (R20: present, explained, unavailable). The
+     * step-up pipeline itself remains fully driven by SC-25's team invite.
+     */
     await page.goto(`${base}/payouts`);
-    await page.getByRole('button', { name: /Change payout account/ }).click();
-    await page.locator('#po-bank').fill('CBE');
-    await page.locator('#po-number').fill('100200300400');
-    await page.locator('#po-name').fill('Seed Seller');
-
-    const before = currentSmsCode();
-    await page.getByRole('button', { name: 'Request the change' }).click();
-
-    // The REAL modal, naming the action -- never a bare "confirm identity".
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByText('Enter the code to change your payout account.')).toBeVisible();
-
-    // A REAL code left the (fake) SMS adapter; enter it and confirm.
-    const code = await nextSmsCode(before);
-    await page.locator('#stepup-code').fill(code);
-    await page.getByRole('button', { name: 'Confirm' }).click();
-
-    // The verified action RETRIES ONCE and meets the seed's deterministic
-    // answer: this device is younger than the 24h new-device lock. The 409
-    // must render AS A MESSAGE -- a silent refusal here would be a seller
-    // wondering whether their bank details changed.
-    await expect(page.getByText(/Payout changes are locked/)).toBeVisible();
+    const lock = page.locator('[data-payout-lock]');
+    await expect(lock).toBeVisible();
+    await expect(lock).toHaveAttribute('data-payout-lock', 'NEW_DEVICE');
+    // The reason-specific sentence -- the same locale line the 409 renders.
+    await expect(lock.getByText(/device we have not seen/)).toBeVisible();
+    // The lift horizon, from the server's payout_locked_until.
+    await expect(lock.getByText(/Locked until/)).toBeVisible();
+    // R20: the control is PRESENT and DISABLED -- not hidden, not armed to
+    // waste a step-up code on a refusal the panel already explained.
+    await expect(page.locator('[data-action="change-payout"]')).toBeDisabled();
   });
 
   test('R21 presence half (planted): a pending row summons the cancel control', async ({ page, context }) => {
@@ -303,8 +339,11 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
             activates_at: '2026-08-31T10:00:00Z',
             activated_at: null,
           },
-          // The server returns allowed_actions on this read (D-155); the
-          // controls gate on it now, so the plant must carry it.
+          // A plant derives from the server (D-227): the read carries
+          // allowed_actions (D-155) and, since T15 Phase 4, the lock state.
+          // This plant is the UNLOCKED shape, so the change control is live.
+          payout_locked_until: null,
+          reason: null,
           allowed_actions: ['seller.payout:update'],
         },
       });
@@ -312,8 +351,12 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
     await page.goto(`${base}/payouts`);
     await expect(page.getByRole('heading', { name: 'Pending change' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Cancel pending change/ })).toBeVisible();
-    // The two decisions are PEERS: both render, neither is buried.
-    await expect(page.getByRole('button', { name: /Change payout account/ })).toBeVisible();
+    // The two decisions are PEERS: both render, neither is buried -- and with
+    // no lock in the plant, the change control is ENABLED (the disabled state
+    // belongs to the lock, which the real-GET test above proves).
+    const change = page.getByRole('button', { name: /Change payout account/ });
+    await expect(change).toBeVisible();
+    await expect(change).toBeEnabled();
   });
 });
 
@@ -379,16 +422,41 @@ test.describe('SC-26 Subscription -- honest about having none', () => {
   });
 });
 
-test.describe('SC-27 Sessions -- never empty, current marked', () => {
-  test('lists the current session with its badge and no sign-out on its own row', async ({ page }) => {
+test.describe('SC-27 Sessions -- never empty, current marked, forget is NOT sign-out', () => {
+  test('forgets the remembered device ALONE: the flag goes, the session stays (T15 Phase 4)', async ({
+    page,
+  }) => {
     await page.goto(`${base}/sessions`);
     await expect(page.locator('[data-screen="SC-27"]')).toBeVisible();
-    const current = page.locator('.session-row', { hasText: 'This session' });
+    const current = page.locator('.session-list .session-row', { hasText: 'This session' });
     await expect(current).toBeVisible();
     await expect(current.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
-    // The consequence sentence the spec requires stated.
+
+    // The harness signs in with remember_device (R17), so the remembered
+    // region lists a REAL device with the forget control, and the consequence
+    // says what forgetting is: NOT a sign-out.
     await expect(
-      page.getByText('Removing a remembered device also signs out everything that device signed in.'),
+      page.getByText(/Forgetting a device keeps you signed in on it/),
+    ).toBeVisible();
+    const rememberedRow = page.locator('.remembered-devices [data-action="forget-device"]');
+    await expect(rememberedRow).toHaveCount(1);
+    // The old cannot-remove-the-flag sentence is GONE: the endpoint exists.
+    await expect(page.getByText(/cannot be listed or removed here yet/)).toHaveCount(0);
+
+    // DRIVE the forget against the real API...
+    const forgot = page.waitForResponse(
+      (r) => r.url().includes('/v1/auth/remembered-devices/') && r.request().method() === 'DELETE',
+    );
+    await rememberedRow.click();
+    await forgot;
+
+    // ...the device leaves the remembered region...
+    await expect(page.getByText('No remembered device has a live session right now.')).toBeVisible();
+    // ...and THE SESSION STAYS: the current session is still listed, still
+    // signed in -- forgetting was not a sign-out. That distinction is the
+    // whole of item 8's second half.
+    await expect(
+      page.locator('.session-list .session-row', { hasText: 'This session' }),
     ).toBeVisible();
   });
 });

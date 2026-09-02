@@ -4,13 +4,20 @@
  * carries schemas).
  */
 
-/** GET /v1/seller/analytics/overview -- every tier, 30-day windows fixed. */
+/**
+ * GET /v1/seller/analytics/overview -- every tier. T15 Phase 4: takes an
+ * inclusive [from, to] date window (default: the trailing 30 days) and echoes
+ * the resolved window. The `_30d` field names are the wire's stable ids; the
+ * counts cover whatever window was asked (window_from/window_to say which).
+ */
 export interface AnalyticsOverview {
   readonly products_published: number;
   readonly orders_30d: number;
   readonly active_reservations: number;
   readonly completed_handoffs: number;
   readonly followers: number;
+  readonly window_from: string;
+  readonly window_to: string;
 }
 
 /** GET /v1/seller/analytics/full -- entitlement-gated (409 TIER_LIMIT). */
@@ -19,6 +26,8 @@ export interface AnalyticsFull {
   readonly product_views_30d: number;
   readonly reservations_30d: number;
   readonly completed_30d: number;
+  readonly window_from: string;
+  readonly window_to: string;
   // numeric columns with no pg type parser: STRINGS on the wire (D-225's
   // bigint lesson); coerce with Number() at any render site.
   readonly confirmation_rate: number | string | null;

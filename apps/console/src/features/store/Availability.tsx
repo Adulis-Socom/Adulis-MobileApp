@@ -74,6 +74,10 @@ export function Availability() {
     if (!sellerId) return;
     setState((s) => (s === 'READY' ? 'STALE' : 'LOADING'));
     try {
+      // The weekly pattern now loads (T15 Phase 4): the editor edits the SAVED
+      // hours, not a blank draft. Zero windows is a valid closed pattern.
+      const wk = await api<{ windows: WindowDraft[] }>(`/seller/availability`, { sellerId });
+      setWindows(wk.windows);
       const r = await api<OverridePage>(`/seller/availability-overrides?limit=50`, { sellerId });
       setOverrides(r.data);
       setHasMore(r.has_more);
@@ -138,6 +142,9 @@ export function Availability() {
       // Whole-set replace; an empty set is a valid closed pattern.
       await api(`/seller/availability`, { method: 'PUT', sellerId, body: { windows } });
       setSaved(true);
+      // Read the saved pattern back -- the proof the write landed, now that a
+      // GET exists (the editor no longer edits an unreadable draft).
+      void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -234,9 +241,6 @@ export function Availability() {
 
       <section aria-labelledby="weekly-heading" className="weekly-pattern">
         <h2 id="weekly-heading">{en['console.store.availability.weekly_heading']}</h2>
-        {/* D-224: PUT-only. The saved pattern cannot be shown, and saying so
-            beats a blank grid that claims to be the current state. */}
-        <p className="hint">{en['console.store.availability.readback_owed']}</p>
         {WEEKDAYS.map((d) => {
           const dayWindows = windows
             .map((w, i) => ({ ...w, i }))

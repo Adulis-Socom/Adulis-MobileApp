@@ -226,7 +226,15 @@ export function Subscription() {
                 time: when(openIntent.expires_at),
               })}
             </p>
-            <p className="hint">{en['console.admin.subscription.reference_owed']}</p>
+            {/* A7 CLOSED (T15 Phase 4): the GET carries the reference the POST
+                minted, so a seller who closed the tab reads it back here. */}
+            <p data-reference={openIntent.reference}>
+              <strong>
+                {fillTemplate(en['console.admin.subscription.reference_line'], {
+                  reference: openIntent.reference,
+                })}
+              </strong>
+            </p>
             {!openIntent.marked_transferred_at ? (
               <button
                 type="button"

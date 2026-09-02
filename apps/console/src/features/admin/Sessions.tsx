@@ -2,16 +2,16 @@
  * features/admin/Sessions.tsx -- SC-27 Sessions and devices (v1.2 S12).
  *
  * GET /v1/auth/sessions -- ONE list; a remembered device (R17) is a session
- * row with `remembered` true and its label, NOT a separate collection. The
- * screen still renders the two REGIONS the spec asks for, both derived from
- * the one list, and says that a remembered device with no live session
- * cannot be shown (no endpoint lists them independently, and no endpoint
- * removes a remembered-device flag on its own -- both named, D-224).
+ * row with `remembered` true, its label, and (T15 Phase 4) the id of the
+ * account_device to forget. The screen renders the two REGIONS the spec asks
+ * for, both derived from the one list.
  *
- * DELETE /v1/auth/sessions/{id} -- one session, NO step-up. POST
- * .../revoke-others -- step-up REVOKE_ALL_SESSIONS, challengeRequired (the
- * body declares step_up_challenge_id). Revoking a remembered device's
- * session and the remembered flag part ways here: only the session ends.
+ * THREE ACTIONS, AND THEY ARE DISTINCT: DELETE /v1/auth/sessions/{id} ends one
+ * session (NO step-up); POST .../revoke-others ends all others (step-up
+ * REVOKE_ALL_SESSIONS, challengeRequired); and DELETE
+ * /v1/auth/remembered-devices/{id} (T15 Phase 4) FORGETS a device ALONE --
+ * the session stays live, it just loses R17's extended lifetime. Removing the
+ * remembered flag and signing out are no longer the same act.
  *
  * NEVER EMPTY: the current session is always listed (S14), so there is no
  * empty state to design and rendering one would be a bug.
@@ -56,6 +56,25 @@ export function Sessions() {
     setProblem(null);
     try {
       await api(`/auth/sessions/${id}`, { method: 'DELETE' });
+      void load();
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Forget a remembered device ALONE (T15 Phase 4): the session stays live and
+   * signed in; it simply stops being remembered, so its next renewal gets the
+   * ordinary lifetime instead of R17's seven days. No step-up -- like a single
+   * sign-out, this reduces standing access rather than extending it.
+   */
+  const forgetDevice = async (accountDeviceId: string) => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(`/auth/remembered-devices/${accountDeviceId}`, { method: 'DELETE' });
       void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
@@ -136,24 +155,32 @@ export function Sessions() {
 
       <section aria-labelledby="remembered-heading" className="remembered-devices">
         <h2 id="remembered-heading">{en['console.admin.sessions.remembered_heading']}</h2>
-        {/* The consequence the spec requires stated: the two LOOK separate
-            and are not -- ending a remembered device ends its sessions. */}
+        {/* The consequence, stated where the control sits (T15 Phase 4):
+            forgetting keeps the session signed in -- it is NOT a sign-out. */}
         <p className="callout">{en['console.admin.sessions.remembered_consequence']}</p>
         {remembered.length === 0 ? (
           <p className="hint">{en['console.admin.sessions.remembered_none_visible']}</p>
         ) : (
           <ul>
             {remembered.map((r) => (
-              <li key={r.id} className="session-row">
+              <li key={r.id} className="session-row" data-remembered-device={r.remembered_device_id}>
                 <span className="session-device">{r.remembered_label ?? r.device_platform ?? ''}</span>
                 <span className="session-last-used">{when(r.last_activity_at)}</span>
+                {r.remembered_device_id ? (
+                  <button
+                    type="button"
+                    className="button"
+                    data-action="forget-device"
+                    disabled={busy}
+                    onClick={() => void forgetDevice(r.remembered_device_id as string)}
+                  >
+                    {en['console.admin.sessions.forget_device']}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
         )}
-        {/* D-224: no endpoint lists remembered devices independently of live
-            sessions, and none removes the remembered flag alone. Named. */}
-        <p className="hint">{en['console.admin.sessions.remembered_owed']}</p>
       </section>
 
       {modal}
