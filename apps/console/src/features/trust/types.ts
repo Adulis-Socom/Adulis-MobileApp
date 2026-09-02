@@ -4,30 +4,35 @@
  * carries schemas).
  */
 
+/** The resolved window, echoed once per response (v1.10 S12.13). */
+export interface AnalyticsWindow {
+  readonly from: string;
+  readonly to: string;
+}
+
 /**
- * GET /v1/seller/analytics/overview -- every tier. T15 Phase 4: takes an
- * inclusive [from, to] date window (default: the trailing 30 days) and echoes
- * the resolved window. The `_30d` field names are the wire's stable ids; the
- * counts cover whatever window was asked (window_from/window_to say which).
+ * GET /v1/seller/analytics/overview -- every tier. Takes an inclusive
+ * [from, to] date window (default: the trailing 30 days). v1.10: the window
+ * is a property of the RESPONSE (`window: {from, to}`), and the fields carry
+ * no suffix -- a field named `orders_30d` returning ninety days is a name
+ * that lies (D-232).
  */
 export interface AnalyticsOverview {
   readonly products_published: number;
-  readonly orders_30d: number;
+  readonly orders: number;
   readonly active_reservations: number;
   readonly completed_handoffs: number;
   readonly followers: number;
-  readonly window_from: string;
-  readonly window_to: string;
+  readonly window: AnalyticsWindow;
 }
 
 /** GET /v1/seller/analytics/full -- entitlement-gated (409 TIER_LIMIT). */
 export interface AnalyticsFull {
-  readonly storefront_views_30d: number;
-  readonly product_views_30d: number;
-  readonly reservations_30d: number;
-  readonly completed_30d: number;
-  readonly window_from: string;
-  readonly window_to: string;
+  readonly storefront_views: number;
+  readonly product_views: number;
+  readonly reservations: number;
+  readonly completed: number;
+  readonly window: AnalyticsWindow;
   // numeric columns with no pg type parser: STRINGS on the wire (D-225's
   // bigint lesson); coerce with Number() at any render site.
   readonly confirmation_rate: number | string | null;

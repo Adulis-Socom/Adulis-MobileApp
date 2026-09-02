@@ -126,9 +126,11 @@ export const ERROR_CATALOGUE = {
   // in a `reason` slot (RECOVERY_COOLING | NEW_DEVICE | NO_TIMING_CONFIG). The
   // former name PAYOUT_LOCKED_RECOVERY baked in one of two causes and rendered
   // "after account recovery" on a new-device lock. Only the sentence differs,
-  // so it is the locale catalogue's job, not a second taxonomy code. (S7.1's
-  // table in v1.9 still prints PAYOUT_LOCKED_RECOVERY -- a stale entry against
-  // S15.0c, the authoritative new-behaviour section; reported.)
+  // so it is the locale catalogue's job, not a second taxonomy code. (v1.10
+  // correction 1 withdrew the stale PAYOUT_LOCKED_RECOVERY row from S7.1; the
+  // document and this catalogue now agree. The reason VOCABULARY still differs
+  // -- the doc prints RECOVERY, the shipped DETAIL says RECOVERY_COOLING --
+  // reported as D-234 R4, the D-44 class.)
   PAYOUT_LOCKED: { group: 'payout', status: 409, retryable: false },
   PAYOUT_CHANGE_PENDING: { group: 'payout', status: 409, retryable: false },
   PAYOUT_PERMISSION_DENIED: { group: 'payout', status: 403, retryable: false },

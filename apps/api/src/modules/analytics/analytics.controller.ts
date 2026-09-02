@@ -12,12 +12,13 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * ADU-API-01 v1.9 S1 item 10: the analytics reads take a date window. Both
- * default to the 30-day rolling window they always had -- so the field names
- * that carry `_30d` stay true when no range is asked -- and accept an inclusive
- * `[from, to]` of ISO calendar dates otherwise. Validated at the edge, then
- * passed as two nullable bounds the SQL resolves in one CTE (`win`), so a
- * caller cannot smuggle anything but a date and the default is expressed once.
+ * ADU-API-01 v1.10 S12.13: the analytics reads take an inclusive `[from, to]`
+ * of ISO calendar dates, defaulting to the trailing 30 days. The window is a
+ * property of the RESPONSE -- `window: {from, to}` once, suffix-free fields --
+ * because a field named `orders_30d` returning ninety days is a name that
+ * lies. Validated at the edge, then passed as two nullable bounds the SQL
+ * resolves in one CTE (`win`), so a caller cannot smuggle anything but a date
+ * and the default is expressed once.
  */
 interface Window {
   readonly from: string | null;
@@ -103,7 +104,7 @@ export class AnalyticsController {
             AS products_published,
           (SELECT count(*)::int FROM core."order" o, win
             WHERE o.seller_id = ${sellerId}
-              AND o.created_at >= win.lo AND o.created_at < win.hi) AS orders_30d,
+              AND o.created_at >= win.lo AND o.created_at < win.hi) AS orders,
           (SELECT count(*)::int FROM core.reservation r2
             WHERE r2.seller_id = ${sellerId} AND r2.state = 'ACTIVE')
             AS active_reservations,
@@ -114,7 +115,12 @@ export class AnalyticsController {
           (SELECT to_char(hi - interval '1 second', 'YYYY-MM-DD') FROM win) AS window_to
           FROM (SELECT 1) x
           LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
-      return first(r.rows);
+      // v1.10 S12.13: the window is a property of the RESPONSE, not of each
+      // field -- `window: {from, to}` once, and the fields carry no suffix. A
+      // field named `orders_30d` returning ninety days is a name that lies.
+      const row = first(r.rows) as Record<string, unknown>;
+      const { window_from, window_to, ...counts } = row;
+      return { ...counts, window: { from: window_from, to: window_to } };
     });
   }
 
@@ -151,16 +157,16 @@ export class AnalyticsController {
         SELECT
           (SELECT count(*)::int FROM analytics.event e, win
             WHERE e.seller_id = ${sellerId} AND e.name = 'storefront_viewed'
-              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS storefront_views_30d,
+              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS storefront_views,
           (SELECT count(*)::int FROM analytics.event e, win
             WHERE e.seller_id = ${sellerId} AND e.name = 'product_viewed'
-              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS product_views_30d,
+              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS product_views,
           (SELECT count(*)::int FROM core.reservation r2, win
             WHERE r2.seller_id = ${sellerId}
-              AND r2.created_at >= win.lo AND r2.created_at < win.hi) AS reservations_30d,
+              AND r2.created_at >= win.lo AND r2.created_at < win.hi) AS reservations,
           (SELECT count(*)::int FROM core."order" o, win
             WHERE o.seller_id = ${sellerId} AND o.state = 'COMPLETED'
-              AND o.created_at >= win.lo AND o.created_at < win.hi) AS completed_30d,
+              AND o.created_at >= win.lo AND o.created_at < win.hi) AS completed,
           ps.confirmation_rate, ps.cancellation_rate, ps.scan_completion_rate,
           ps.unresolved_claim_count,
           (SELECT to_char(lo, 'YYYY-MM-DD') FROM win) AS window_from,
@@ -168,10 +174,13 @@ export class AnalyticsController {
           FROM (SELECT 1) x
           LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
       const row = first(r.rows) as Record<string, unknown>;
-      const views = Number(row['product_views_30d'] ?? 0);
-      const reservations = Number(row['reservations_30d'] ?? 0);
+      const views = Number(row['product_views'] ?? 0);
+      const reservations = Number(row['reservations'] ?? 0);
+      // v1.10 S12.13: one `window: {from, to}` on the response; no suffixes.
+      const { window_from, window_to, ...fields } = row;
       return {
-        ...row,
+        ...fields,
+        window: { from: window_from, to: window_to },
         scope: limit.scope,
         // Resolved here, not by the client: two clients would differ.
         view_to_reservation_rate: views > 0 ? reservations / views : null,
