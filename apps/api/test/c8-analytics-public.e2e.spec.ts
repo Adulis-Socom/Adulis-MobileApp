@@ -366,6 +366,68 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(seller.body.data.map((n: { id: string }) => n.id)).toContain(NOTIF_DEVICE);
     });
 
+    it('D-227 S1: transfer, stock and trial notices reach SC-30 AND never the buyer feed', async () => {
+      /*
+       * BOTH DIRECTIONS, deliberately -- one arm alone would pass with the
+       * predicate inverted (the work order's own warning). The three classes
+       * are the ones the T14-C pass found written unlinked to the seller's
+       * owner account and reachable from NEITHER list's inclusion -- so they
+       * leaked into the buyer feed, where a seller's own ownership-transfer
+       * security notice read as shopping news.
+       */
+      const ids = {
+        transfer: 'eeee8888-3333-4000-8000-000000000021',
+        stock: 'eeee8888-3333-4000-8000-000000000022',
+        trial: 'eeee8888-3333-4000-8000-000000000023',
+        ownerBuyerClass: 'eeee8888-3333-4000-8000-000000000024',
+      };
+      await admin.query(`SET session_replication_role = replica`);
+      await admin.query(
+        `INSERT INTO core.notification (id, recipient_account_id, channel,
+           template_key, locale, slots, suppressible) VALUES
+          ($1,$4,'SMS','OWNERSHIP_TRANSFER_REQUESTED','en','{}'::jsonb, false),
+          ($2,$4,'IN_APP','STOCK_CONFIDENCE_NUDGE','en','{}'::jsonb, true),
+          ($3,$4,'IN_APP','TRIAL_ENDING','en','{}'::jsonb, true),
+          ($5,$4,'IN_APP','ORDER_EXPIRY_WARNING','en','{}'::jsonb, true)`,
+        [ids.transfer, ids.stock, ids.trial, OWNER, ids.ownerBuyerClass],
+      );
+      await admin.query(`SET session_replication_role = DEFAULT`);
+
+      const seller = await http()
+        .get(`/v1/notifications?as=seller&seller_id=${SELLER}`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      const sellerIds = seller.body.data.map((n: { id: string }) => n.id);
+      expect(sellerIds).toContain(ids.transfer);
+      expect(sellerIds).toContain(ids.stock);
+      expect(sellerIds).toContain(ids.trial);
+
+      // The OWNER's own buyer feed must NOT carry them...
+      const ownerBuyer = await http()
+        .get('/v1/notifications?as=buyer')
+        .set('Cookie', cookie(OWNER_S))
+        .expect(200);
+      const buyerIds = ownerBuyer.body.data.map((n: { id: string }) => n.id);
+      expect(buyerIds).not.toContain(ids.transfer);
+      expect(buyerIds).not.toContain(ids.stock);
+      expect(buyerIds).not.toContain(ids.trial);
+
+      // ...and the CONTROL, on the SAME account (the pass's point: a row
+      // whose recipient differs proves nothing about the predicate): OWNER's
+      // own unlinked buyer-class row stays OUT of OWNER's seller feed and IN
+      // OWNER's buyer feed -- the arm a bare `OR order_id IS NULL`
+      // regression would fail.
+      expect(sellerIds).not.toContain(ids.ownerBuyerClass);
+      expect(buyerIds).toContain(ids.ownerBuyerClass);
+      expect(sellerIds).not.toContain(NOTIF_BUYER);
+      const buyer = await http()
+        .get('/v1/notifications?as=buyer')
+        .set('Authorization', `Bearer ${BUYER_S}`)
+        .expect(200);
+      expect(buyer.body.data.map((n: { id: string }) => n.id)).toContain(NOTIF_BUYER);
+    });
+
     it("read state is one list, two clients; another account's row is 404", async () => {
       await http()
         .post(`/v1/notifications/${NOTIF_BUYER}/read`)
@@ -397,7 +459,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Origin', CONSOLE_ORIGIN)
         .send({ preferences: [{ template_key: 'ORDER_EXPIRY_WARNING', enabled: false }] })
         .expect(200);
-      for (const blocked of ['NEW_DEVICE_SIGNIN', 'PAYOUT_CHANGE_REQUESTED']) {
+      for (const blocked of ['NEW_DEVICE_SIGNIN', 'PAYOUT_CHANGE_REQUESTED', 'OWNERSHIP_TRANSFER_REQUESTED']) {
         const r = await http()
           .patch('/v1/seller/notification-preferences')
           .set('Cookie', cookie(OWNER_S))

@@ -23,11 +23,18 @@ import { AdulisException } from '../../common/errors/adulis-exception';
  * or a seller believes they turned off something that keeps arriving.
  */
 
-/** The classes the DATABASE enqueues unsuppressibly (migrations 16, 22).
- *  The same predicate, spelled in SQL, splits the seller-side unlinked
- *  rows in the list queries below. */
+/** The classes the DATABASE enqueues unsuppressibly (migrations 16, 22 --
+ *  and 0034, whose ownership-transfer notices are written suppressible=false
+ *  "to both parties, unsuppressibly" and were missing here: the PATCH
+ *  accepted a toggle-off with a silent 200, the exact failure the invariant
+ *  above forbids (T15 Phase 2 pass). NOTE this is DELIBERATELY a smaller set
+ *  than sellerClassTemplate below: unsuppressible is a strict subset of
+ *  seller-class -- STOCK_CONFIDENCE_NUDGE and TRIAL_ENDING route to the
+ *  seller feed and remain togglable. */
 const UNSUPPRESSIBLE = (key: string): boolean =>
-  key === 'NEW_DEVICE_SIGNIN' || key.startsWith('PAYOUT_CHANGE');
+  key === 'NEW_DEVICE_SIGNIN' ||
+  key.startsWith('PAYOUT_CHANGE') ||
+  key.startsWith('OWNERSHIP_TRANSFER');
 
 const preferencesBody = z.object({
   preferences: z
@@ -43,6 +50,26 @@ const first = <T>(rows: readonly T[]): T | undefined => rows[0];
 @Controller()
 export class NotificationsController {
   constructor(private readonly tx: HandlerTransaction) {}
+
+  /**
+   * D-227 S1 -- THE SELLER-CLASS TEMPLATES, IN ONE PLACE. The two scope arms
+   * each carried their own copy of this predicate and the copies drifted:
+   * OWNERSHIP_TRANSFER_* (0034 -- "both parties, unsuppressibly"),
+   * STOCK_CONFIDENCE_NUDGE (e3-trust-stock) and TRIAL_ENDING (e6-billing-nlu)
+   * are written UNLINKED to the seller's owner account, appeared in neither
+   * list's inclusion, and therefore fell into the BUYER feed -- a seller's
+   * own ownership-transfer security notice reached that person's shopping
+   * list and never SC-30. One fragment, interpolated into both arms:
+   * inclusion in the seller arm IS exclusion in the buyer arm, by
+   * construction rather than by parallel maintenance.
+   */
+  private readonly sellerClassTemplate = sql<boolean>`(
+       n.template_key = 'NEW_DEVICE_SIGNIN'
+    OR n.template_key LIKE 'PAYOUT_CHANGE%'
+    OR n.template_key LIKE 'OWNERSHIP_TRANSFER%'
+    OR n.template_key = 'STOCK_CONFIDENCE_NUDGE'
+    OR n.template_key = 'TRIAL_ENDING'
+    OR n.template_key = 'notification.chat.escalated')`;
 
   @Get('notifications')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.' })
@@ -63,10 +90,7 @@ export class NotificationsController {
             LEFT JOIN core."order" o ON o.id = n.order_id
            WHERE n.recipient_account_id = ${accountId}
              AND (n.order_id IS NULL OR o.buyer_account_id = ${accountId})
-             AND NOT (n.order_id IS NULL AND
-                      (n.template_key = 'NEW_DEVICE_SIGNIN'
-                       OR n.template_key LIKE 'PAYOUT_CHANGE%'
-                       OR n.template_key = 'notification.chat.escalated'))
+             AND NOT (n.order_id IS NULL AND ${this.sellerClassTemplate})
              AND (${cursor ?? null}::timestamptz IS NULL
                   OR n.scheduled_for < ${cursor ?? null}::timestamptz)
            ORDER BY n.scheduled_for DESC
@@ -89,10 +113,7 @@ export class NotificationsController {
             LEFT JOIN core."order" o ON o.id = n.order_id
            WHERE n.recipient_account_id = ${accountId}
              AND ((n.order_id IS NOT NULL AND o.seller_id = ${sellerId})
-                  OR (n.order_id IS NULL AND
-                      (n.template_key = 'NEW_DEVICE_SIGNIN'
-                       OR n.template_key LIKE 'PAYOUT_CHANGE%'
-                       OR n.template_key = 'notification.chat.escalated')))
+                  OR (n.order_id IS NULL AND ${this.sellerClassTemplate}))
              AND (${cursor ?? null}::timestamptz IS NULL
                   OR n.scheduled_for < ${cursor ?? null}::timestamptz)
            ORDER BY n.scheduled_for DESC

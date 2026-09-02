@@ -2652,3 +2652,12 @@ Effect / stance, each:
      is owed with the next seed change.
 Ruling needed: none for the console. The courier read's buyer-name/pickup/
 note joins belong to ADU-API-01's next revision, beside D-224.4's account_id.
+### D-229 - T15 Phase 2: D-227 S1 fixed -- the seller-class predicate is ONE fragment, and the three leaked classes come home
+
+Severity:  MAJOR (seller-visible wrong behaviour), FIXED
+Phase:     T15 Phase 2
+Source:    apps/api/src/modules/notifications/notifications.controller.ts
+Effect:    OWNERSHIP_TRANSFER_* (0034: "both parties, unsuppressibly"), STOCK_CONFIDENCE_NUDGE and TRIAL_ENDING are written UNLINKED to the seller's owner account and appeared in NEITHER arm's inclusion list -- so they fell into the BUYER feed and could never reach SC-30. A seller's own ownership-transfer security notice read as shopping news, which undermined G1.6's rationale: a delay nobody is told about is not a control.
+Response:  the seller-class template predicate is defined ONCE and interpolated into both arms -- inclusion in the seller arm IS exclusion in the buyer arm by construction, so the drift that caused this cannot recur by parallel maintenance. The three classes are added. TESTED BOTH DIRECTIONS plus the inverse control (a buyer-classed row stays in the buyer feed and out of the seller feed) -- one arm alone would pass with the predicate inverted, the work order's own warning.
+THE PASS (amended in on this unmerged branch, the D-134 precedent): one MAJOR beside the diff -- UNSUPPRESSIBLE covered only NEW_DEVICE_SIGNIN and PAYOUT_CHANGE% while 0034 writes OWNERSHIP_TRANSFER_* suppressible=false, so the preferences PATCH accepted a toggle-off of an unsuppressible security notice with a silent 200 (the file's own invariant names that exact failure). FIXED, with the 422 test extended, and the comment corrected: unsuppressible is a deliberate STRICT SUBSET of seller-class (stock and trial nudges stay togglable). The both-directions test gained a same-account control row -- a control whose recipient differs proves nothing about the predicate.
+Ruling needed: none. TWO NOTES recorded, not fixed: NEW_DEVICE_SIGNIN is account-scoped but classed seller-side, so an account with no seller sees its new-device notice in NEITHER feed; and unlinked seller-class rows appear in EVERY seller feed the account can read, unattributed (an admin of two stores sees store A's trial notice in store B's SC-30) -- the durable fix is a nullable seller_id on core.notification. Both belong to the next ADU-API-01/DB revision.
