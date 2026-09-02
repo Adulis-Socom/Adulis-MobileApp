@@ -217,6 +217,14 @@ describe('C4 — the financial boundary', () => {
   });
 
   describe('the payout write path — every S10.4 control', () => {
+    it('GET shows no lock for an aged device with no recovery (proactive panel, v1.9 S15.0c)', async () => {
+      // Runs before any recovery case is planted below: the aged-device OWNER
+      // is unlocked, so the panel draws nothing and a write would succeed.
+      const r = await sellerReq('get', '/v1/seller/payout').expect(200);
+      expect(r.body.reason).toBeNull();
+      expect(r.body.payout_locked_until).toBeNull();
+    });
+
     it('a session on a NEW device cannot change payout details (S7.2)', async () => {
       const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
         .send({
@@ -226,8 +234,17 @@ describe('C4 — the financial boundary', () => {
           step_up_challenge_id: SU_PAYOUT,
         })
         .expect(409);
-      expect(r.body.code).toBe('PAYOUT_LOCKED_RECOVERY');
+      // ONE cause-neutral code (v1.9 S15.0c / D-224.6); the cause is the slot.
+      // The former PAYOUT_LOCKED_RECOVERY would have said "recovery" here.
+      expect(r.body.code).toBe('PAYOUT_LOCKED');
       expect(r.body.slots.reason).toBe('NEW_DEVICE');
+
+      // v1.9 S15.0c: the SAME lock the write path discovers on a 409, the GET
+      // now draws PROACTIVELY -- same reason vocabulary, plus the lift horizon.
+      const g = await sellerReq('get', '/v1/seller/payout', OWNER_NEWDEV_S).expect(200);
+      expect(g.body.reason).toBe('NEW_DEVICE');
+      expect(g.body.payout_locked_until).toBeTruthy();
+      expect(new Date(g.body.payout_locked_until).getTime()).toBeGreaterThan(Date.now());
     });
 
 
@@ -321,7 +338,16 @@ describe('C4 — the financial boundary', () => {
           step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
         })
         .expect(409);
+      expect(r.body.code).toBe('PAYOUT_LOCKED');
       expect(r.body.slots.reason).toBe('RECOVERY_COOLING');
+
+      // Proactive panel again: recovery cooling reads its horizon straight off
+      // the recovery case (payout_locked_until), so the GET names the same day
+      // the 409 refuses, seven days out, without a write attempt.
+      const g = await sellerReq('get', '/v1/seller/payout').expect(200);
+      expect(g.body.reason).toBe('RECOVERY_COOLING');
+      expect(g.body.payout_locked_until).toBeTruthy();
+      expect(new Date(g.body.payout_locked_until).getTime()).toBeGreaterThan(Date.now());
     });
   });
 

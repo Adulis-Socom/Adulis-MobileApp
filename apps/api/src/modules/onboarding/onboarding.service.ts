@@ -183,6 +183,41 @@ export class OnboardingService {
   }
 
   /**
+   * GET /v1/seller/profile (ADU-API-01 v1.9 S1 item 4 + item 7, S15.0b).
+   * SC-17 was a write-only form: it PATCHed fields it could never read back,
+   * so it could not show what it had saved, and no screen could read the
+   * seller's own `status` or `handle`. This returns the editable fields the
+   * PATCH writes, PLUS `status` and `handle` -- the two the console needs to
+   * know whether the store is DRAFT/ACTIVE/CLOSING and what its public
+   * address is. Read-only; `seller.store:read`, the same gate every other
+   * seller read here uses.
+   */
+  async getProfile(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
+    await assertPermission(trx, req, 'seller.store:read');
+    const r = await sql<{
+      handle: string;
+      store_name: string;
+      description: string | null;
+      category_id: string | null;
+      entity_type: string;
+      status: string;
+    }>`
+      SELECT handle, store_name, description, category_id, entity_type, status
+        FROM core.seller
+       WHERE id = ${req.ctx?.sellerId}`.execute(trx);
+    const row = r.rows[0];
+    if (!row) throw new AdulisException('NOT_FOUND');
+    return {
+      handle: row.handle,
+      store_name: row.store_name,
+      description: row.description,
+      category_id: row.category_id,
+      entity_type: row.entity_type,
+      status: row.status,
+    };
+  }
+
+  /**
    * POST /v1/seller/social-accounts — issues the account-control code
    * (S7.2). The code goes into the account's public bio; nothing else
    * proves control. 24h to place it (the TTL is unruled; generous and
@@ -388,6 +423,76 @@ export class OnboardingService {
                 ${w.opens_at}::time, ${w.closes_at}::time)`.execute(trx);
     }
     return { windows: body.windows.length };
+  }
+
+  /**
+   * GET /v1/seller/availability (ADU-API-01 v1.9 S1 item 5, S15.0b). The PUT
+   * replaced the whole set and returned only a count; the weekly editor had
+   * nothing to load, so it edited a local draft that could not be reopened.
+   * This returns the same shape the PUT accepts -- one row per (weekday,
+   * window), several per weekday permitted, ZERO windows a valid state
+   * meaning closed (S13.1). Ordered so the editor renders Monday-first
+   * without sorting client-side. Read-only; `seller.store:read`, the gate the
+   * overrides read beside it already uses.
+   */
+  async getAvailability(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
+    await assertPermission(trx, req, 'seller.store:read');
+    const r = await sql<{ weekday: number; opens_at: string; closes_at: string }>`
+      SELECT weekday, opens_at::text AS opens_at, closes_at::text AS closes_at
+        FROM core.seller_availability
+       WHERE seller_id = ${req.ctx?.sellerId}
+       ORDER BY weekday, opens_at`.execute(trx);
+    return {
+      windows: r.rows.map((row) => ({
+        weekday: row.weekday,
+        // time renders as HH:MM:SS; the PUT accepts and the editor shows HH:MM.
+        opens_at: row.opens_at.slice(0, 5),
+        closes_at: row.closes_at.slice(0, 5),
+      })),
+    };
+  }
+
+  /**
+   * GET /v1/seller/social-accounts (ADU-API-01 v1.9 S1 item 6, S15.0b). SC-22
+   * could show a follower count only for the session that witnessed the
+   * verify response. The count and the moment it was taken ALREADY persist:
+   * `follower_count_at_verification` and `verified_at` on
+   * core.seller_social_account, write-once (0005 S7.2 trigger), superseded by
+   * a fresh row on re-verification. So R24's "as of <date>" renders from
+   * `captured_at` here, and the v1.9 note that these columns are owed to
+   * ADU-DB-01 v1.17 is stale against the installed v1.16 -- reported, no
+   * migration. Wire names follow S15.0b (`follower_count`, `captured_at`);
+   * the columns keep their at-verification names. Read-only; `seller.store:read`.
+   */
+  async getSocialAccounts(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
+    await assertPermission(trx, req, 'seller.store:read');
+    const r = await sql<{
+      id: string;
+      platform: string;
+      handle: string;
+      status: string;
+      follower_count: number | null;
+      captured_at: Date | null;
+      follower_count_source: string | null;
+    }>`
+      SELECT id, platform, handle, status,
+             follower_count_at_verification AS follower_count,
+             verified_at                    AS captured_at,
+             follower_count_source
+        FROM core.seller_social_account
+       WHERE seller_id = ${req.ctx?.sellerId}
+       ORDER BY created_at`.execute(trx);
+    return {
+      accounts: r.rows.map((row) => ({
+        id: row.id,
+        platform: row.platform,
+        handle: row.handle,
+        status: row.status,
+        follower_count: row.follower_count,
+        captured_at: row.captured_at?.toISOString() ?? null,
+        follower_count_source: row.follower_count_source,
+      })),
+    };
   }
 
   /** GET /v1/seller/availability-overrides — ascending, from today. */

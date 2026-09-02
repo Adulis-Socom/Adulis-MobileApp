@@ -293,6 +293,18 @@ export class AuthController {
     );
   }
 
+  @Delete('auth/remembered-devices/:id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Forget a remembered device (v1.9 S15.0b); the session stays live.' })
+  async forgetRememberedDevice(@Req() req: AuthedRequest, @Param('id') id: string): Promise<void> {
+    if (!UUID_RE.test(id)) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'id' } });
+    }
+    await this.tx.run(req as LocalizedRequest, (trx) =>
+      this.auth.forgetRememberedDevice(trx, req, id),
+    );
+  }
+
   @Post('auth/sessions/revoke-others')
   @HttpCode(200)
   @ApiOperation({ summary: 'Step-up REVOKE_ALL_SESSIONS; revocation is immediate.' })

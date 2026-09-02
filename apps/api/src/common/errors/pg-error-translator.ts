@@ -182,7 +182,7 @@ export function translatePgError(e: PgError): AdulisException | null {
       } catch {
         slots = undefined;
       }
-      return new AdulisException('PAYOUT_LOCKED_RECOVERY', { slots });
+      return new AdulisException('PAYOUT_LOCKED', { slots });
     }
 
     // The buyer-cancellation cooldown (register D-26): the until-timestamp

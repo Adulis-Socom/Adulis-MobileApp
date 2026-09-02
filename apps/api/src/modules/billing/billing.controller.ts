@@ -92,7 +92,24 @@ export class BillingController {
            AND pi.reconciled_at IS NULL AND pi.cancelled_at IS NULL
            AND pi.expires_at > now()`.execute(trx);
 
-      return { subscription: first(r.rows) ?? null, intent: first(i.rows) ?? null };
+      // A7 (ADU-API-01 v1.9 S1 item 12 / D-225): the POST minted a transfer
+      // `reference` and the GET dropped it, so a seller who closed the tab had
+      // the collection id but not the string to write on the bank transfer --
+      // the exact person this read exists for. Derived here identically to the
+      // POST (billing/purchase-intent below), so the console renders it rather
+      // than recomputing a business fact it must not own.
+      const intentRow = first(i.rows);
+      return {
+        subscription: first(r.rows) ?? null,
+        intent: intentRow
+          ? {
+              ...intentRow,
+              reference: `ADU-SUB-${String(intentRow['collection_record_id'])
+                .slice(0, 8)
+                .toUpperCase()}`,
+            }
+          : null,
+      };
     });
   }
 

@@ -653,6 +653,60 @@ const browserCookie = async (): Promise<string> => {
         .expect(401);
     });
 
+    it('forgets a remembered device ALONE: the flag goes, the session stays (v1.9 item 8, SC-27)', async () => {
+      const AD = 'cccc6666-3333-4000-8000-0000000000d1';
+      const REM = 'cccc6666-3333-4000-8000-0000000000d2';
+      await admin.query(
+        `INSERT INTO core.account_device (id, account_id, device_id, token_hash, label, expires_at)
+         VALUES ($1, $2, $3, decode(md5(gen_random_uuid()::text), 'hex'),
+                 'Naod laptop', now() + interval '7 days')`,
+        [AD, OWNER, DEVICE],
+      );
+      await admin.query(
+        `INSERT INTO core.session
+           (id, account_id, audience, device_id, account_device_id, expires_at)
+         VALUES ($1, $2, 'CONSOLE', $3, $4, now() + interval '7 days')`,
+        [REM, OWNER, DEVICE, AD],
+      );
+
+      // DISTINGUISHABLE from a live session: the row reports remembered, its
+      // label, and the id of the device to forget.
+      const before = await http().get('/v1/auth/sessions').set('Cookie', cookie(OWNER_S)).expect(200);
+      const rem = before.body.data.find((s: { id: string }) => s.id === REM);
+      expect(rem.remembered).toBe(true);
+      expect(rem.remembered_label).toBe('Naod laptop');
+      expect(rem.remembered_device_id).toBe(AD);
+
+      // Forget the device ALONE -- 204, and it is NOT a sign-out.
+      await http()
+        .delete(`/v1/auth/remembered-devices/${AD}`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(204);
+
+      const after = await http().get('/v1/auth/sessions').set('Cookie', cookie(OWNER_S)).expect(200);
+      const still = after.body.data.find((s: { id: string }) => s.id === REM);
+      expect(still).toBeTruthy(); // the session is STILL LIVE
+      expect(still.remembered).toBe(false); // it is simply no longer remembered
+      expect(still.remembered_device_id).toBeNull();
+
+      // Already forgotten -> 404; an unknown id -> 404 (own-account scoped,
+      // the revokeSession pattern: a scope miss is never a confirmation).
+      await http()
+        .delete(`/v1/auth/remembered-devices/${AD}`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(404);
+      await http()
+        .delete(`/v1/auth/remembered-devices/cccc6666-3333-4000-8000-0000000000ff`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(404);
+
+      await admin.query(`DELETE FROM core.session WHERE id=$1`, [REM]);
+      await admin.query(`DELETE FROM core.account_device WHERE id=$1`, [AD]);
+    });
+
     it('step-up request 403s on MOBILE (9.1); on console the SMS names the action (4.4)', async () => {
       await http()
         .post('/v1/auth/step-up/request')

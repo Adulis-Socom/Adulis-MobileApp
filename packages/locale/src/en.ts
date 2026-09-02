@@ -90,8 +90,19 @@ export const en = {
   'error.seller.fulfilment_method_required': 'Add at least one way buyers receive their goods.',
   'error.seller.product_has_active_orders': 'This product has live orders and cannot be deleted.',
   'error.seller.variant_has_active_orders': 'This option has live orders and cannot be deleted.',
-  // payout
-  'error.payout.payout_locked_recovery': 'Payout changes are locked until {until} after account recovery.',
+  // payout -- ONE cause-neutral code (ADU-API-01 v1.9 S15.0c / D-224.6); the
+  // cause is a `reason` slot (RECOVERY_COOLING | NEW_DEVICE | NO_TIMING_CONFIG)
+  // and only the sentence differs, so it is the locale's job, not a second
+  // code. The generic key is the taxonomy fallback; the console renders the
+  // reason-specific line -- the same line SC-24's proactive panel draws from
+  // GET /v1/seller/payout's reason. The former PAYOUT_LOCKED_RECOVERY said
+  // "after account recovery" even on a new-device lock.
+  'error.payout.payout_locked': 'Payout changes are locked right now.',
+  'error.payout.payout_locked_recovery_cooling':
+    'Payout changes are locked for seven days after an account recovery.',
+  'error.payout.payout_locked_new_device':
+    'Payout changes are locked for twenty-four hours after a sign-in from a device we have not seen. If that was not you, review your active sessions.',
+  'error.payout.payout_locked_no_timing_config': 'Payout changes are temporarily unavailable.',
   'error.payout.payout_change_pending': 'A payout change is already pending.',
   'error.payout.payout_permission_denied': 'You do not have permission to change payout details.',
   // deletion

@@ -61,6 +61,30 @@
         ]
       }
     },
+    "/v1/auth/remembered-devices/{id}": {
+      "delete": {
+        "operationId": "AuthController_forgetRememberedDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Forget a remembered device (v1.9 S15.0b); the session stays live.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/v1/auth/sessions": {
       "get": {
         "operationId": "AuthController_sessions",
@@ -1116,13 +1140,30 @@
     "/v1/seller/analytics/full": {
       "get": {
         "operationId": "AnalyticsController_full",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "summary": "Views, reservations, conversion, funnel — entitlement-gated at read time.",
+        "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated.",
         "tags": [
           "Analytics"
         ]
@@ -1131,19 +1172,49 @@
     "/v1/seller/analytics/overview": {
       "get": {
         "operationId": "AnalyticsController_overview",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "summary": "Essential counts. Every tier, including Free and Beta.",
+        "summary": "Essential counts over a date window. Every tier, including Free and Beta.",
         "tags": [
           "Analytics"
         ]
       }
     },
     "/v1/seller/availability": {
+      "get": {
+        "operationId": "OnboardingController_getAvailability",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The saved weekly pattern the editor loads (v1.9 S15.0b).",
+        "tags": [
+          "Onboarding"
+        ]
+      },
       "put": {
         "operationId": "OnboardingController_putAvailability",
         "parameters": [],
@@ -2211,6 +2282,19 @@
       }
     },
     "/v1/seller/profile": {
+      "get": {
+        "operationId": "OnboardingController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The saved profile, with status and handle (v1.9 S15.0b).",
+        "tags": [
+          "Onboarding"
+        ]
+      },
       "patch": {
         "operationId": "OnboardingController_patchProfile",
         "parameters": [],
@@ -2264,6 +2348,19 @@
       }
     },
     "/v1/seller/social-accounts": {
+      "get": {
+        "operationId": "OnboardingController_getSocialAccounts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Linked accounts, with the follower count and when it was captured.",
+        "tags": [
+          "Onboarding"
+        ]
+      },
       "post": {
         "operationId": "OnboardingController_createSocialAccount",
         "parameters": [],

@@ -374,7 +374,12 @@ export class AuthService {
              s.approx_location, s.expires_at,
              s.device_id, d.platform AS device_platform,
              ad.label AS remembered_label,
-             (s.account_device_id IS NOT NULL) AS remembered
+             -- The remembered device the console un-remembers (item 8). NULL
+             -- unless this session is bound to a LIVE (unrevoked) one; a
+             -- forgotten device leaves the session live but no longer remembered.
+             (CASE WHEN ad.revoked_at IS NULL THEN s.account_device_id ELSE NULL END)
+               AS remembered_device_id,
+             (s.account_device_id IS NOT NULL AND ad.revoked_at IS NULL) AS remembered
         FROM core.session s
         LEFT JOIN core.device d ON d.id = s.device_id
         LEFT JOIN core.account_device ad ON ad.id = s.account_device_id
@@ -384,6 +389,32 @@ export class AuthService {
     return {
       data: r.rows.map((s) => ({ ...s, current: s['id'] === current })),
     };
+  }
+
+  /**
+   * DELETE /v1/auth/remembered-devices/{id} (ADU-API-01 v1.9 S1 item 8, SC-27)
+   * -- REMOVE THE REMEMBERED FLAG ALONE. Distinct from revoking a session: the
+   * session stays live, it simply stops being remembered, so its next renewal
+   * gets the ordinary lifetime rather than R17's seven days. Revoking the
+   * `core.account_device` row is the whole of it -- the `__Host-adulis_device`
+   * cookie it hashes can no longer extend anything, and listSessions above now
+   * reports `remembered=false` for every session that was bound to it. Own
+   * account only; anything else is 404 (S19: never confirm another's device).
+   */
+  async forgetRememberedDevice(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+    accountDeviceId: string,
+  ): Promise<void> {
+    const accountId = req.ctx?.accountId as string;
+    const r = await sql`
+      UPDATE core.account_device
+         SET revoked_at = now(), revoked_by_session_id = ${req.auth?.sessionId ?? null}
+       WHERE id = ${accountDeviceId} AND account_id = ${accountId}
+         AND revoked_at IS NULL`.execute(trx);
+    if (Number(r.numAffectedRows ?? 0) === 0) {
+      throw new AdulisException('NOT_FOUND');
+    }
   }
 
   /** DELETE /v1/auth/sessions/{id} — own sessions only; others are 404. */

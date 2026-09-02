@@ -87,8 +87,13 @@ export const am: Catalogue = {
   'error.seller.fulfilment_method_required': 'ገዢዎች ዕቃቸውን የሚያገኙበትን ቢያንስ አንድ መንገድ ያክሉ።',
   'error.seller.product_has_active_orders': 'ይህ ምርት ንቁ ትዕዛዞች ስላሉት ሊሰረዝ አይችልም።',
   'error.seller.variant_has_active_orders': 'ይህ አማራጭ ንቁ ትዕዛዞች ስላሉት ሊሰረዝ አይችልም።',
-  // payout
-  'error.payout.payout_locked_recovery': 'ከመለያ መልሶ ማግኘት በኋላ የክፍያ ለውጦች እስከ {until} ድረስ ተቆልፈዋል።',
+  // payout -- one cause-neutral code (v1.9 S15.0c); the cause is a reason slot.
+  'error.payout.payout_locked': 'የክፍያ ለውጦች አሁን ተቆልፈዋል።',
+  'error.payout.payout_locked_recovery_cooling':
+    'ከመለያ መልሶ ማግኘት በኋላ የክፍያ ለውጦች ለሰባት ቀናት ተቆልፈዋል።',
+  'error.payout.payout_locked_new_device':
+    'ካላየነው መሣሪያ በመግባት ምክንያት የክፍያ ለውጦች ለሃያ አራት ሰዓታት ተቆልፈዋል። እርስዎ ካልሆኑ፣ ንቁ ክፍለ ጊዜዎችዎን ይገምግሙ።',
+  'error.payout.payout_locked_no_timing_config': 'የክፍያ ለውጦች ለጊዜው አይገኙም።',
   'error.payout.payout_change_pending': 'የክፍያ ለውጥ አስቀድሞ በመጠባበቅ ላይ ነው።',
   'error.payout.payout_permission_denied': 'የክፍያ ዝርዝሮችን ለመቀየር ፈቃድ የለዎትም።',
   // deletion

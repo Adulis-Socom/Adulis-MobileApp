@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { sql, type Transaction } from 'kysely';
@@ -8,6 +8,35 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * ADU-API-01 v1.9 S1 item 10: the analytics reads take a date window. Both
+ * default to the 30-day rolling window they always had -- so the field names
+ * that carry `_30d` stay true when no range is asked -- and accept an inclusive
+ * `[from, to]` of ISO calendar dates otherwise. Validated at the edge, then
+ * passed as two nullable bounds the SQL resolves in one CTE (`win`), so a
+ * caller cannot smuggle anything but a date and the default is expressed once.
+ */
+interface Window {
+  readonly from: string | null;
+  readonly to: string | null;
+}
+function parseWindow(from?: string, to?: string): Window {
+  for (const [v, path] of [
+    [from, 'from'],
+    [to, 'to'],
+  ] as const) {
+    if (v !== undefined && !ISO_DATE.test(v)) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path } });
+    }
+  }
+  if (from !== undefined && to !== undefined && from > to) {
+    throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'from', reason: 'AFTER_TO' } });
+  }
+  return { from: from ?? null, to: to ?? null };
+}
 
 /**
  * C8 — seller analytics (12.13) and client events (12.16).
@@ -44,24 +73,38 @@ export class AnalyticsController {
   constructor(private readonly tx: HandlerTransaction) {}
 
   @Get('seller/analytics/overview')
-  @ApiOperation({ summary: 'Essential counts. Every tier, including Free and Beta.' })
-  async overview(@Req() req: AuthedRequest): Promise<unknown> {
+  @ApiOperation({ summary: 'Essential counts over a date window. Every tier, including Free and Beta.' })
+  async overview(
+    @Req() req: AuthedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<unknown> {
+    const win = parseWindow(from, to);
     return this.tx.run(req as LocalizedRequest, async (trx) => {
       const sellerId = await this.assertRead(trx, req, 'seller.analytics.basic:read');
       const r = await sql<Record<string, unknown>>`
+        WITH win AS (
+          SELECT
+            CASE WHEN ${win.from}::text IS NULL THEN now() - interval '30 days'
+                 ELSE ${win.from}::date::timestamptz END AS lo,
+            CASE WHEN ${win.to}::text IS NULL THEN now()
+                 ELSE (${win.to}::date + interval '1 day')::timestamptz END AS hi
+        )
         SELECT
           (SELECT count(*)::int FROM core.product p
             WHERE p.seller_id = ${sellerId} AND p.published_at IS NOT NULL)
             AS products_published,
-          (SELECT count(*)::int FROM core."order" o
+          (SELECT count(*)::int FROM core."order" o, win
             WHERE o.seller_id = ${sellerId}
-              AND o.created_at > now() - interval '30 days') AS orders_30d,
+              AND o.created_at >= win.lo AND o.created_at < win.hi) AS orders_30d,
           (SELECT count(*)::int FROM core.reservation r2
             WHERE r2.seller_id = ${sellerId} AND r2.state = 'ACTIVE')
             AS active_reservations,
           coalesce(ps.completed_handoff_count, 0) AS completed_handoffs,
           (SELECT count(*)::int FROM core.follow f
-            WHERE f.seller_id = ${sellerId} AND f.state = 'FOLLOWING') AS followers
+            WHERE f.seller_id = ${sellerId} AND f.state = 'FOLLOWING') AS followers,
+          (SELECT to_char(lo, 'YYYY-MM-DD') FROM win) AS window_from,
+          (SELECT to_char(hi - interval '1 second', 'YYYY-MM-DD') FROM win) AS window_to
           FROM (SELECT 1) x
           LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
       return first(r.rows);
@@ -69,8 +112,13 @@ export class AnalyticsController {
   }
 
   @Get('seller/analytics/full')
-  @ApiOperation({ summary: 'Views, reservations, conversion, funnel — entitlement-gated at read time.' })
-  async full(@Req() req: AuthedRequest): Promise<unknown> {
+  @ApiOperation({ summary: 'Views, reservations, conversion, funnel over a window — entitlement-gated.' })
+  async full(
+    @Req() req: AuthedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<unknown> {
+    const win = parseWindow(from, to);
     return this.tx.run(req as LocalizedRequest, async (trx) => {
       const sellerId = await this.assertRead(trx, req, 'seller.analytics.full:read');
       const scope = await sql<{ limit: { allowed: boolean; scope: string | null } }>`
@@ -79,21 +127,30 @@ export class AnalyticsController {
       if (!limit?.allowed) throw new AdulisException('TIER_LIMIT_REACHED');
 
       const r = await sql<Record<string, unknown>>`
+        WITH win AS (
+          SELECT
+            CASE WHEN ${win.from}::text IS NULL THEN now() - interval '30 days'
+                 ELSE ${win.from}::date::timestamptz END AS lo,
+            CASE WHEN ${win.to}::text IS NULL THEN now()
+                 ELSE (${win.to}::date + interval '1 day')::timestamptz END AS hi
+        )
         SELECT
-          (SELECT count(*)::int FROM analytics.event e
+          (SELECT count(*)::int FROM analytics.event e, win
             WHERE e.seller_id = ${sellerId} AND e.name = 'storefront_viewed'
-              AND e.occurred_at > now() - interval '30 days') AS storefront_views_30d,
-          (SELECT count(*)::int FROM analytics.event e
+              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS storefront_views_30d,
+          (SELECT count(*)::int FROM analytics.event e, win
             WHERE e.seller_id = ${sellerId} AND e.name = 'product_viewed'
-              AND e.occurred_at > now() - interval '30 days') AS product_views_30d,
-          (SELECT count(*)::int FROM core.reservation r2
+              AND e.occurred_at >= win.lo AND e.occurred_at < win.hi) AS product_views_30d,
+          (SELECT count(*)::int FROM core.reservation r2, win
             WHERE r2.seller_id = ${sellerId}
-              AND r2.created_at > now() - interval '30 days') AS reservations_30d,
-          (SELECT count(*)::int FROM core."order" o
+              AND r2.created_at >= win.lo AND r2.created_at < win.hi) AS reservations_30d,
+          (SELECT count(*)::int FROM core."order" o, win
             WHERE o.seller_id = ${sellerId} AND o.state = 'COMPLETED'
-              AND o.created_at > now() - interval '30 days') AS completed_30d,
+              AND o.created_at >= win.lo AND o.created_at < win.hi) AS completed_30d,
           ps.confirmation_rate, ps.cancellation_rate, ps.scan_completion_rate,
-          ps.unresolved_claim_count
+          ps.unresolved_claim_count,
+          (SELECT to_char(lo, 'YYYY-MM-DD') FROM win) AS window_from,
+          (SELECT to_char(hi - interval '1 second', 'YYYY-MM-DD') FROM win) AS window_to
           FROM (SELECT 1) x
           LEFT JOIN core.seller_public_stats ps ON ps.seller_id = ${sellerId}`.execute(trx);
       const row = first(r.rows) as Record<string, unknown>;
