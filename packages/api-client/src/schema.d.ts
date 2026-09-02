@@ -1152,6 +1152,23 @@ export interface paths {
         patch: operations["NotificationsController_patchPreferences"];
         trace?: never;
     };
+    "/v1/seller/obligations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the seller owes, with deadlines. The server owns the set (S12.12b). */
+        get: operations["ObligationsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller/orders": {
         parameters: {
             query?: never;
@@ -3332,6 +3349,23 @@ export interface operations {
         };
     };
     NotificationsController_patchPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ObligationsController_list: {
         parameters: {
             query?: never;
             header?: never;

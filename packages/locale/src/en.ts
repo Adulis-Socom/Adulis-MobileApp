@@ -122,6 +122,28 @@ export const en = {
   'error.request.internal': 'Something went wrong on our side. Try again.',
 
   // ---------------------------------------------------------------------
+  // Obligations (ADU-API-01 v1.10 S12.12b). The server sends the KIND and a
+  // consequence_key derived from it (S7.2-style); the console renders these
+  // sentences and composes nothing. The consequence is what makes Home teach
+  // rather than nag -- and every sentence below states what the DATABASE
+  // actually does, not what a spec table hoped (D-235): the payment lapse is
+  // fn_confirmation_window_lapse verbatim; the claim deadline is the
+  // operator's review horizon; nothing expires an unready confirmed order,
+  // so that sentence names the claim exposure instead.
+  // ---------------------------------------------------------------------
+  'obligation.payment_awaiting_confirmation.title': 'A payment is waiting for your confirmation',
+  'obligation.payment_awaiting_confirmation.consequence':
+    'Confirm or reject before the deadline, or a claim opens against you automatically and the missed window is shown on your public store page.',
+  'obligation.payment_awaiting_confirmation.consequence_lapsed':
+    'The window was missed: a claim has opened and the miss is shown on your public store page. The payment still needs your decision.',
+  'obligation.claim_awaiting_seller.title': 'A claim is waiting for your response',
+  'obligation.claim_awaiting_seller.consequence':
+    'After the deadline the claim can be decided without your side of it.',
+  'obligation.order_not_ready.title': 'A paid order is not marked ready',
+  'obligation.order_not_ready.consequence':
+    'The buyer has already paid and is waiting. An order left unready invites a goods-not-received claim.',
+
+  // ---------------------------------------------------------------------
   // SMS templates (ADU-AUTH-01 section 4.4). A sign-in code names no
   // action; a step-up code names the action - the second half is the
   // security control: a seller who receives a payout-change code they did

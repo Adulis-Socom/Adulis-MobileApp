@@ -112,6 +112,19 @@ export const am: Catalogue = {
   'error.request.gone': 'ይህ ገጽ ከእንግዲህ የለም።',
   'error.request.internal': 'በእኛ በኩል የሆነ ችግር ተፈጥሯል። እንደገና ይሞክሩ።',
 
+  // Obligations (v1.10 S12.12b) -- consequence sentences, machine placeholders.
+  'obligation.payment_awaiting_confirmation.title': 'ክፍያ የእርስዎን ማረጋገጫ በመጠበቅ ላይ ነው',
+  'obligation.payment_awaiting_confirmation.consequence':
+    'ከቀነ ገደቡ በፊት ያረጋግጡ ወይም አይቀበሉ፤ አለበለዚያ ቅሬታ በራስ-ሰር ይከፈትና ያመለጠው መስኮት በይፋዊ የመደብር ገጽዎ ላይ ይታያል።',
+  'obligation.payment_awaiting_confirmation.consequence_lapsed':
+    'መስኮቱ አምልጧል፦ ቅሬታ ተከፍቷል እናም ያመለጠው በይፋዊ የመደብር ገጽዎ ላይ ይታያል። ክፍያው አሁንም ውሳኔዎን ይፈልጋል።',
+  'obligation.claim_awaiting_seller.title': 'ቅሬታ የእርስዎን ምላሽ በመጠበቅ ላይ ነው',
+  'obligation.claim_awaiting_seller.consequence':
+    'ከቀነ ገደቡ በኋላ ቅሬታው ያለ እርስዎ ወገን ሊወሰን ይችላል።',
+  'obligation.order_not_ready.title': 'የተከፈለበት ትዕዛዝ ዝግጁ አልተደረገም',
+  'obligation.order_not_ready.consequence':
+    'ገዢው አስቀድሞ ከፍሏል እየጠበቀም ነው። ዝግጁ ያልተደረገ ትዕዛዝ እቃው-አልደረሰም ቅሬታን ይጋብዛል።',
+
   'sms.otp.sign_in': '{code} የአዱሊስ ኮድዎ ነው።',
   'sms.otp.account_deletion': '{code} - የአዱሊስ መለያዎን መሰረዝ ያረጋግጡ።',
   'sms.otp.step_up.payout_change': '{code} - የክፍያ ሁሴታዎን መቀየር ያረጋግጡ።',

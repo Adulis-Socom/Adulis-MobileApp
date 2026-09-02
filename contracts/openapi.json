@@ -1546,6 +1546,21 @@
         ]
       }
     },
+    "/v1/seller/obligations": {
+      "get": {
+        "operationId": "ObligationsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "What the seller owes, with deadlines. The server owns the set (S12.12b).",
+        "tags": [
+          "Obligations"
+        ]
+      }
+    },
     "/v1/seller/orders": {
       "get": {
         "operationId": "OrdersController_listSellerOrders",
