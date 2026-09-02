@@ -233,6 +233,42 @@ test.describe('SC-04 -- R20, the handoff region', () => {
     await expect(page.locator('.modal.qr')).toHaveCount(0);
   });
 
+  test('the grant gate is DISTINCT from the state gate: allowed_actions absent -> disabled (planted)', async ({
+    page,
+    context,
+  }) => {
+    /*
+     * The pass's sharpest finding: OWNER holds every grant, so on the seeded
+     * orders grant-presence and state coincide and a state-only console would
+     * pass every other test. This PLANTS the order-detail GET (the
+     * upgrade-required pattern) with allowed_actions EMPTY while the state
+     * stays PAYMENT_CONFIRMED -- the ANALYST case, without a second session.
+     * A console that gated on state would ENABLE the controls; one reading
+     * allowed_actions disables them. This is the test that falsifies the
+     * union the work order forbids.
+     */
+    await context.route(`**/v1/seller/orders/${ORDER.confirmed}`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const real = await route.fetch();
+      const body = (await real.json()) as { allowed_actions: string[] };
+      await route.fulfill({ response: real, json: { ...body, allowed_actions: [] } });
+    });
+    await openDetail(page, ORDER.confirmed);
+
+    // The region still RENDERS (R20), the state is still confirmed...
+    await expect(page.locator('.handoff-region')).toBeVisible();
+    await expect(page.locator('.handoff-region')).toHaveAttribute('data-gated', 'false');
+    // ...but every control is DISABLED, because the grant set is empty. A
+    // state-only console would have these enabled here.
+    for (const action of ['mark-ready', 'assign-courier', 'custody-transfer', 'show-qr']) {
+      await expect(
+        page.locator(`[data-action="${action}"]`),
+        `${action} disabled with empty allowed_actions`,
+      ).toBeDisabled();
+    }
+    await expect(page.locator('.handoff-region #courier-select')).toBeDisabled();
+  });
+
   test('opens at PAYMENT_CONFIRMED, and the QR is available only then', async ({ page }) => {
     await openDetail(page, ORDER.confirmed);
 

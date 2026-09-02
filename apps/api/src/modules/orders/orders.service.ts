@@ -444,7 +444,12 @@ export class OrdersService {
       'seller.couriers:manage': ['PAYMENT_CONFIRMED', 'HANDED_OFF'].includes(st),
       'seller.handoff:custody_transfer': st === 'PAYMENT_CONFIRMED',
       'seller.handoff:read': st === 'PAYMENT_CONFIRMED' || st === 'HANDED_OFF',
-      'seller.orders:reissue_instructions': ['PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED'].includes(st),
+      // fn_reissue_instructions (0022) accepts CREATED/NOTIFIED/PAYMENT_SUBMITTED
+      // and 409s otherwise -- transcribed verbatim. The pass caught this wrong
+      // at BOTH ends: offered in PAYMENT_CONFIRMED (a control that errors on
+      // tap) and hidden in CREATED/NOTIFIED (where a seller who changed banks
+      // must be able to push a fresh payout snapshot before the buyer pays).
+      'seller.orders:reissue_instructions': ['CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED'].includes(st),
     });
     // SC-04 region 6, the append-only transition list, written by
     // trg_log_order_transition and protected by trg_append_only -- the

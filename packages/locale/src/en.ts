@@ -286,12 +286,11 @@ export const en = {
 
   'console.trade.orders.title': 'Orders',
   'console.trade.orders.empty': 'You have no orders yet. Buyers reserve from your storefront.',
-  'console.trade.orders.none_in_filter': 'None of the orders loaded so far are in this group.',
+  'console.trade.orders.none_in_bucket': 'You have no orders in this group.',
   'console.trade.orders.line_count': '{count} items',
   'console.trade.orders.review_payment': 'Review payment',
   'console.trade.orders.load_more': 'Load more orders',
   'console.trade.orders.no_buyer_name': 'Buyer names are not shown here. Adulis does not store a name for a buyer account, so there is none to display, and showing a phone number instead is not permitted where a conversation exists.',
-  'console.trade.orders.filter_is_local': 'These groups filter the orders loaded on this page. Orders you have not loaded yet are not counted in any of them.',
   'console.trade.filter.legend': 'Filter orders',
   'console.trade.filter.all': 'All',
   'console.trade.filter.needs_action': 'Needs action',

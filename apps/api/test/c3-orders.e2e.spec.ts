@@ -30,6 +30,7 @@ const OWNER_S = '88888888-7777-4000-8000-000000000009';
 const BUYER_S = '88888888-7777-4000-8000-00000000000a';
 const STRANGER_S = '88888888-7777-4000-8000-00000000000b';
 const ANALYST_S = '88888888-7777-4000-8000-00000000000c';
+const OWNER_MOBILE_S = '88888888-7777-4000-8000-00000000001b';
 const PRODUCT = '88888888-7777-4000-8000-00000000000d';
 const VARIANT = '88888888-7777-4000-8000-00000000000e';
 const VARIANT2 = '88888888-7777-4000-8000-00000000000f';
@@ -45,6 +46,9 @@ const VARIANT_BUCKET_A = '88888888-7777-4000-8000-000000000017';
 const VARIANT_BUCKET_B = '88888888-7777-4000-8000-000000000018';
 const VARIANT_AA = '88888888-7777-4000-8000-000000000019';
 const VARIANT_AB = '88888888-7777-4000-8000-00000000001a';
+const VARIANT_RN = '88888888-7777-4000-8000-00000000001c';
+const VARIANT_RC = '88888888-7777-4000-8000-00000000001d';
+const VARIANT_MO = '88888888-7777-4000-8000-00000000001e';
 
 @Module({ imports: [AppModule] })
 class C3AppModule {}
@@ -190,17 +194,21 @@ describe('C3 — cart, orders and payment', () => {
         ($10,$4,$5,250000,'ETB','vd'), ($11,$4,$5,250000,'ETB','ve'),
         ($12,$4,$5,250000,'ETB','vf'),
         ($13,$4,$5,250000,'ETB','vba'), ($14,$4,$5,250000,'ETB','vbb'),
-        ($15,$4,$5,250000,'ETB','vaa'), ($16,$4,$5,250000,'ETB','vab')`,
+        ($15,$4,$5,250000,'ETB','vaa'), ($16,$4,$5,250000,'ETB','vab'),
+        ($17,$4,$5,250000,'ETB','vrn'), ($18,$4,$5,250000,'ETB','vrc'),
+        ($19,$4,$5,250000,'ETB','vmo')`,
       [VARIANT, VARIANT2, V2SELLER2, PRODUCT, SELLER, PRODUCT2, SELLER2,
        VB, VC, VD, VE, VF,
-       VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB],
+       VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
+       VARIANT_RN, VARIANT_RC, VARIANT_MO],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
        SELECT gen_random_uuid(), v, $1::uuid, 20, 'SELLER_SET'
          FROM unnest($2::uuid[]) v`,
       [SELLER, [VARIANT, VARIANT2, VB, VC, VD, VE, VF,
-               VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB]],
+               VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
+               VARIANT_RN, VARIANT_RC, VARIANT_MO]],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -212,8 +220,10 @@ describe('C3 — cart, orders and payment', () => {
         ($1,$5,'CONSOLE',$9, now()+interval '12 hours'),
         ($2,$6,'MOBILE',$9, now()+interval '30 days'),
         ($3,$7,'MOBILE',$9, now()+interval '30 days'),
-        ($4,$8,'CONSOLE',$9, now()+interval '12 hours')`,
-      [OWNER_S, BUYER_S, STRANGER_S, ANALYST_S, OWNER, BUYER, STRANGER, ANALYST, DEVICE],
+        ($4,$8,'CONSOLE',$9, now()+interval '12 hours'),
+        ($10,$5,'MOBILE',$9, now()+interval '30 days')`,
+      [OWNER_S, BUYER_S, STRANGER_S, ANALYST_S, OWNER, BUYER, STRANGER, ANALYST, DEVICE,
+       OWNER_MOBILE_S],
     );
 
     const moduleRef = await Test.createTestingModule({ imports: [C3AppModule] }).compile();
@@ -575,6 +585,42 @@ describe('C3 — cart, orders and payment', () => {
       // state-only client would show the confirm button here.
       expect(analyst.body.allowed_actions).not.toContain('seller.payment:confirm');
       expect(analyst.body.allowed_actions).toEqual([]);
+    });
+
+    it('reissue_instructions matches the FUNCTION state gate, not a guessed one', async () => {
+      // fn_reissue_instructions accepts CREATED/NOTIFIED/PAYMENT_SUBMITTED and
+      // 409s otherwise. The pass caught the first predicate wrong at BOTH ends.
+      const notified = await mkOrder(VARIANT_RN, 'NOTIFIED');
+      const rN = await sellerGet(`/v1/seller/orders/${notified}`).expect(200);
+      // PRESENT in NOTIFIED -- a seller who changed banks must reissue before
+      // the buyer pays. A state-only guess that keyed on "submitted" hid it.
+      expect(rN.body.allowed_actions).toContain('seller.orders:reissue_instructions');
+
+      const confirmed = await mkOrder(VARIANT_RC, 'PAYMENT_CONFIRMED');
+      const rC = await sellerGet(`/v1/seller/orders/${confirmed}`).expect(200);
+      // ABSENT in PAYMENT_CONFIRMED -- the function 409s there, so offering it
+      // is a control that errors on tap.
+      expect(rC.body.allowed_actions).not.toContain('seller.orders:reissue_instructions');
+    });
+
+    it('the surface filter excludes console-only actions on a MOBILE seller session', async () => {
+      // OWNER holds every grant; on MOBILE the console-only codes must drop
+      // out, because the write path would 403 them there -- the one place a
+      // Seller Companion could over-render a control it cannot exercise.
+      const o = await mkOrder(VARIANT_MO, 'PAYMENT_CONFIRMED');
+      const mobile = await request(app.getHttpServer())
+        .get(`/v1/seller/orders/${o}`)
+        .set('Authorization', `Bearer ${OWNER_MOBILE_S}`)
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      // MOBILE-reachable stays; CONSOLE-only goes.
+      expect(mobile.body.allowed_actions).not.toContain('seller.couriers:manage');
+      expect(mobile.body.allowed_actions).not.toContain('seller.handoff:custody_transfer');
+      expect(mobile.body.allowed_actions).not.toContain('seller.orders:reissue_instructions');
+      // And a CONSOLE session on the same order DOES carry couriers:manage,
+      // proving the difference is the surface, not the state.
+      const console = await sellerGet(`/v1/seller/orders/${o}`).expect(200);
+      expect(console.body.allowed_actions).toContain('seller.couriers:manage');
     });
 
     it('allowed_actions is STATE-gated too: confirm is absent once the order is terminal', async () => {

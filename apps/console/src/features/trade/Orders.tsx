@@ -38,7 +38,7 @@
  * computes a page number, and there is no page size in this file that the
  * server does not also know.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -80,6 +80,10 @@ export function Orders() {
   const [hasMore, setHasMore] = useState(false);
   const [problem, setProblem] = useState<ApiError | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  // Only the LATEST load may commit: two quick tab clicks race, and whichever
+  // RESPONSE lands last would otherwise win setRows (the C-7 pass class).
+  const loadGen = useRef(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   /**
    * `append` is the pagination flag. A reload (or a countdown reaching zero)
@@ -90,6 +94,8 @@ export function Orders() {
   const load = useCallback(
     async (append: boolean, from: string | null, bucket: Filter) => {
       if (!sellerId) return;
+      const gen = ++loadGen.current;
+      if (append) setLoadingMore(true);
       setState((s) => (s === 'READY' && !append ? 'STALE' : append ? 'STALE' : 'LOADING'));
       try {
         const params = new URLSearchParams();
@@ -97,6 +103,7 @@ export function Orders() {
         if (from) params.set('cursor', from);
         const q = params.toString() ? `?${params.toString()}` : '';
         const r = await api<OrderPage>(`/seller/orders${q}`, { sellerId });
+        if (gen !== loadGen.current) return; // a newer load owns the screen
         setRows((prev) => (append ? [...prev, ...r.data] : r.data));
         setCursor(r.next_cursor);
         setHasMore(r.has_more);
@@ -110,6 +117,8 @@ export function Orders() {
           setProblem(null);
           setState('TRANSPORT_ERROR');
         }
+      } finally {
+        if (append) setLoadingMore(false);
       }
     },
     [sellerId],
@@ -125,10 +134,12 @@ export function Orders() {
   const shown = rows;
 
   // EMPTY is mandatory on every list (S3.2), and it is about the REQUEST,
-  // not about the filter: zero orders and zero orders matching a tab are
-  // different facts and a seller told "no orders" while holding twelve
-  // cancelled ones has been told something false.
-  const listState: UiState = state === 'READY' && rows.length === 0 ? 'EMPTY' : state;
+  // not about the tab: an empty BUCKET is not "no orders". The account-empty
+  // EMPTY state (which hides the tabs) fires ONLY on the 'all' bucket -- a
+  // seller told "no orders" while holding twelve cancelled ones has been
+  // told something false, and hiding the tabs would trap them there. An
+  // empty narrow bucket keeps the tabs and shows the in-bucket empty note.
+  const listState: UiState = state === 'READY' && rows.length === 0 && filter === 'all' ? 'EMPTY' : state;
 
   return (
     <main className="screen orders">
@@ -160,9 +171,9 @@ export function Orders() {
             </button>
           ))}
         </div>
-        {shown.length === 0 && state === 'READY' ? (
+        {shown.length === 0 && state === 'READY' && filter !== 'all' ? (
           <p className="empty" data-empty="bucket">
-            {en['console.trade.orders.none_in_filter']}
+            {en['console.trade.orders.none_in_bucket']}
           </p>
         ) : (
           <ul className="order-list">
@@ -204,7 +215,12 @@ export function Orders() {
         )}
 
         {hasMore ? (
-          <button type="button" className="load-more" onClick={() => void load(true, cursor, filter)}>
+          <button
+            type="button"
+            className="load-more"
+            disabled={loadingMore}
+            onClick={() => void load(true, cursor, filter)}
+          >
             {en['console.trade.orders.load_more']}
           </button>
         ) : null}

@@ -179,7 +179,7 @@ export class OrdersController {
     @Query('bucket') bucket?: string,
   ): Promise<unknown> {
     const limit = Math.min(Math.max(Number(limitRaw ?? 20) || 20, 1), 50);
-    if (bucket !== undefined && !(bucket in ORDER_BUCKETS)) {
+    if (bucket !== undefined && !Object.hasOwn(ORDER_BUCKETS, bucket)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bucket' } });
     }
     return this.tx.run(req, (trx) =>
