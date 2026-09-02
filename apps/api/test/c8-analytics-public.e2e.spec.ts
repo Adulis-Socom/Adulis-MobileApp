@@ -379,6 +379,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         transfer: 'eeee8888-3333-4000-8000-000000000021',
         stock: 'eeee8888-3333-4000-8000-000000000022',
         trial: 'eeee8888-3333-4000-8000-000000000023',
+        ownerBuyerClass: 'eeee8888-3333-4000-8000-000000000024',
       };
       await admin.query(`SET session_replication_role = replica`);
       await admin.query(
@@ -386,8 +387,9 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
            template_key, locale, slots, suppressible) VALUES
           ($1,$4,'SMS','OWNERSHIP_TRANSFER_REQUESTED','en','{}'::jsonb, false),
           ($2,$4,'IN_APP','STOCK_CONFIDENCE_NUDGE','en','{}'::jsonb, true),
-          ($3,$4,'IN_APP','TRIAL_ENDING','en','{}'::jsonb, true)`,
-        [ids.transfer, ids.stock, ids.trial, OWNER],
+          ($3,$4,'IN_APP','TRIAL_ENDING','en','{}'::jsonb, true),
+          ($5,$4,'IN_APP','ORDER_EXPIRY_WARNING','en','{}'::jsonb, true)`,
+        [ids.transfer, ids.stock, ids.trial, OWNER, ids.ownerBuyerClass],
       );
       await admin.query(`SET session_replication_role = DEFAULT`);
 
@@ -411,9 +413,13 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(buyerIds).not.toContain(ids.stock);
       expect(buyerIds).not.toContain(ids.trial);
 
-      // ...and the CONTROL: a genuinely buyer-classed row stays in the buyer
-      // feed and OUT of the seller feed -- the arm the inverted predicate
-      // would fail.
+      // ...and the CONTROL, on the SAME account (the pass's point: a row
+      // whose recipient differs proves nothing about the predicate): OWNER's
+      // own unlinked buyer-class row stays OUT of OWNER's seller feed and IN
+      // OWNER's buyer feed -- the arm a bare `OR order_id IS NULL`
+      // regression would fail.
+      expect(sellerIds).not.toContain(ids.ownerBuyerClass);
+      expect(buyerIds).toContain(ids.ownerBuyerClass);
       expect(sellerIds).not.toContain(NOTIF_BUYER);
       const buyer = await http()
         .get('/v1/notifications?as=buyer')
@@ -453,7 +459,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Origin', CONSOLE_ORIGIN)
         .send({ preferences: [{ template_key: 'ORDER_EXPIRY_WARNING', enabled: false }] })
         .expect(200);
-      for (const blocked of ['NEW_DEVICE_SIGNIN', 'PAYOUT_CHANGE_REQUESTED']) {
+      for (const blocked of ['NEW_DEVICE_SIGNIN', 'PAYOUT_CHANGE_REQUESTED', 'OWNERSHIP_TRANSFER_REQUESTED']) {
         const r = await http()
           .patch('/v1/seller/notification-preferences')
           .set('Cookie', cookie(OWNER_S))

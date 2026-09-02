@@ -23,11 +23,18 @@ import { AdulisException } from '../../common/errors/adulis-exception';
  * or a seller believes they turned off something that keeps arriving.
  */
 
-/** The classes the DATABASE enqueues unsuppressibly (migrations 16, 22).
- *  The same predicate, spelled in SQL, splits the seller-side unlinked
- *  rows in the list queries below. */
+/** The classes the DATABASE enqueues unsuppressibly (migrations 16, 22 --
+ *  and 0034, whose ownership-transfer notices are written suppressible=false
+ *  "to both parties, unsuppressibly" and were missing here: the PATCH
+ *  accepted a toggle-off with a silent 200, the exact failure the invariant
+ *  above forbids (T15 Phase 2 pass). NOTE this is DELIBERATELY a smaller set
+ *  than sellerClassTemplate below: unsuppressible is a strict subset of
+ *  seller-class -- STOCK_CONFIDENCE_NUDGE and TRIAL_ENDING route to the
+ *  seller feed and remain togglable. */
 const UNSUPPRESSIBLE = (key: string): boolean =>
-  key === 'NEW_DEVICE_SIGNIN' || key.startsWith('PAYOUT_CHANGE');
+  key === 'NEW_DEVICE_SIGNIN' ||
+  key.startsWith('PAYOUT_CHANGE') ||
+  key.startsWith('OWNERSHIP_TRANSFER');
 
 const preferencesBody = z.object({
   preferences: z
