@@ -49,6 +49,19 @@ const VARIANT_AB = '88888888-7777-4000-8000-00000000001a';
 const VARIANT_RN = '88888888-7777-4000-8000-00000000001c';
 const VARIANT_RC = '88888888-7777-4000-8000-00000000001d';
 const VARIANT_MO = '88888888-7777-4000-8000-00000000001e';
+// T16 Phase 2: dedicated variants for the obligations fixture.
+const VARIANT_OB1 = '88888888-7777-4000-8000-000000000021';
+const VARIANT_OB2 = '88888888-7777-4000-8000-000000000022';
+const VARIANT_OB3 = '88888888-7777-4000-8000-000000000023';
+// T16 Phase 2: INVENTORY is the role that discriminates the grant filter --
+// it holds seller.orders:read and seller.store:read but NOT seller.claims:read
+// (the v2.4 seed; ANALYST holds claims:read, which the first draft of the
+// filter test learned the hard way). And a CONSOLE stranger, because the
+// MOBILE stranger meets the SURFACE gate first (U0001 -> 403, identical for
+// everyone) before the relationship gate could 404.
+const INV = '88888888-7777-4000-8000-000000000024';
+const INV_S = '88888888-7777-4000-8000-000000000025';
+const STRANGER_CON_S = '88888888-7777-4000-8000-000000000026';
 
 @Module({ imports: [AppModule] })
 class C3AppModule {}
@@ -148,8 +161,9 @@ describe('C3 — cart, orders and payment', () => {
     await admin.query(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
         ($1,'+251911881001',$5,'ACTIVE'), ($2,'+251911881002',$5,'ACTIVE'),
-        ($3,'+251911881003',$5,'ACTIVE'), ($4,'+251911881004',$5,'ACTIVE')`,
-      [OWNER, BUYER, STRANGER, ANALYST, M],
+        ($3,'+251911881003',$5,'ACTIVE'), ($4,'+251911881004',$5,'ACTIVE'),
+        ($6,'+251911881005',$5,'ACTIVE')`,
+      [OWNER, BUYER, STRANGER, ANALYST, M, INV],
     );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     await admin.query(
@@ -161,8 +175,9 @@ describe('C3 — cart, orders and payment', () => {
     );
     await admin.query(
       `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
-       VALUES (gen_random_uuid(), $1, $2, 'ANALYST')`,
-      [SELLER, ANALYST],
+       VALUES (gen_random_uuid(), $1, $2, 'ANALYST'),
+              (gen_random_uuid(), $1, $3, 'INVENTORY')`,
+      [SELLER, ANALYST, INV],
     );
     await admin.query(
       `INSERT INTO core.payout_details (id, seller_id, bank_code, account_last4,
@@ -196,11 +211,13 @@ describe('C3 — cart, orders and payment', () => {
         ($13,$4,$5,250000,'ETB','vba'), ($14,$4,$5,250000,'ETB','vbb'),
         ($15,$4,$5,250000,'ETB','vaa'), ($16,$4,$5,250000,'ETB','vab'),
         ($17,$4,$5,250000,'ETB','vrn'), ($18,$4,$5,250000,'ETB','vrc'),
-        ($19,$4,$5,250000,'ETB','vmo')`,
+        ($19,$4,$5,250000,'ETB','vmo'),
+        ($20,$4,$5,250000,'ETB','vo1'), ($21,$4,$5,250000,'ETB','vo2'),
+        ($22,$4,$5,250000,'ETB','vo3')`,
       [VARIANT, VARIANT2, V2SELLER2, PRODUCT, SELLER, PRODUCT2, SELLER2,
        VB, VC, VD, VE, VF,
        VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
-       VARIANT_RN, VARIANT_RC, VARIANT_MO],
+       VARIANT_RN, VARIANT_RC, VARIANT_MO, VARIANT_OB1, VARIANT_OB2, VARIANT_OB3],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -208,7 +225,8 @@ describe('C3 — cart, orders and payment', () => {
          FROM unnest($2::uuid[]) v`,
       [SELLER, [VARIANT, VARIANT2, VB, VC, VD, VE, VF,
                VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
-               VARIANT_RN, VARIANT_RC, VARIANT_MO]],
+               VARIANT_RN, VARIANT_RC, VARIANT_MO, VARIANT_OB1, VARIANT_OB2,
+               VARIANT_OB3]],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -221,9 +239,11 @@ describe('C3 — cart, orders and payment', () => {
         ($2,$6,'MOBILE',$9, now()+interval '30 days'),
         ($3,$7,'MOBILE',$9, now()+interval '30 days'),
         ($4,$8,'CONSOLE',$9, now()+interval '12 hours'),
-        ($10,$5,'MOBILE',$9, now()+interval '30 days')`,
+        ($10,$5,'MOBILE',$9, now()+interval '30 days'),
+        ($11,$12,'CONSOLE',$9, now()+interval '12 hours'),
+        ($13,$7,'CONSOLE',$9, now()+interval '12 hours')`,
       [OWNER_S, BUYER_S, STRANGER_S, ANALYST_S, OWNER, BUYER, STRANGER, ANALYST, DEVICE,
-       OWNER_MOBILE_S],
+       OWNER_MOBILE_S, INV_S, INV, STRANGER_CON_S],
     );
 
     const moduleRef = await Test.createTestingModule({ imports: [C3AppModule] }).compile();
@@ -236,7 +256,7 @@ describe('C3 — cart, orders and payment', () => {
     await app?.close();
     await admin.query(`SET session_replication_role = replica`);
     for (const q of [
-      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}','${DEVICE}')`,
+      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}','${INV}','${DEVICE}')`,
       `DELETE FROM analytics.event WHERE market_id='${M}'`,
       `DELETE FROM core.refund WHERE reservation_id IN (SELECT id FROM core.reservation WHERE seller_id IN ('${SELLER}','${SELLER2}'))`,
       `DELETE FROM core.order_confirmation WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
@@ -257,8 +277,8 @@ describe('C3 — cart, orders and payment', () => {
       `DELETE FROM core.seller_team_member WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER}','${SELLER2}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
-      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}')`,
-      `DELETE FROM core.session WHERE account_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}')`,
+      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}','${INV}')`,
+      `DELETE FROM core.session WHERE account_id IN ('${OWNER}','${BUYER}','${STRANGER}','${ANALYST}','${INV}')`,
       `DELETE FROM core.device WHERE id='${DEVICE}'`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.ladder_config WHERE market_id='${M}'`,
@@ -629,6 +649,191 @@ describe('C3 — cart, orders and payment', () => {
       // OWNER still holds the grant; the terminal state admits neither action.
       expect(r.body.allowed_actions).not.toContain('seller.payment:confirm');
       expect(r.body.allowed_actions).not.toContain('seller.orders:respond');
+    });
+  });
+
+
+  describe('T16 Phase 2 -- GET /v1/seller/obligations (S12.12b)', () => {
+    /*
+     * THE STRONGEST ASSERTION IS THE ORDERING: three obligations of three
+     * DIFFERENT kinds, deadlines interleaved so that no per-kind grouping,
+     * insertion order or client-side sort could reproduce it by accident --
+     * ORDER_NOT_READY at +2h (a DERIVED deadline), the payment at +4h (a
+     * STORED one), the claim at +12h. Orders are inserted directly (the
+     * T15 pattern -- this fixture tests the READ, not order creation).
+     */
+    let NR = ''; // PAYMENT_CONFIRMED, unready -- deadline now()+2h (derived)
+    let PA = ''; // PAYMENT_SUBMITTED             -- deadline now()+4h (stored)
+    let CLAIM_ORDER = '';
+    let CLAIM = '';
+
+    const insertOrder = async (variant: string, state: string): Promise<string> => {
+      const id = (await admin.query(`SELECT gen_random_uuid() AS id`)).rows[0].id as string;
+      const stopped = ['PAYMENT_CONFIRMED', 'HANDED_OFF', 'COMPLETED'].includes(state);
+      await admin.query(
+        `INSERT INTO core."order"
+           (id, market_id, seller_id, buyer_account_id, state, created_at,
+            expires_at, clock_stopped_at, total_minor, total_currency,
+            display_currency, seller_level_at_order)
+         VALUES ($1,$2,$3,$4,$5::core.order_state, now(), now()+interval '48 hours',
+                 CASE WHEN $6 THEN now() ELSE NULL END,
+                 250000, 'ETB', 'ETB', 'NEW')`,
+        [id, M, SELLER, BUYER, state, stopped],
+      );
+      await admin.query(
+        `INSERT INTO core.reservation
+           (id, order_id, variant_id, seller_id, buyer_account_id, quantity,
+            unit_price_minor, unit_price_currency, state, active_window)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, 1, 250000, 'ETB',
+                 'ACTIVE', tstzrange(now(), now()+interval '48 hours', '[)'))`,
+        [id, variant, SELLER, BUYER],
+      );
+      return id;
+    };
+
+    const get = (token = OWNER_S, seller = SELLER) =>
+      request(app.getHttpServer())
+        .get('/v1/seller/obligations')
+        .set('Cookie', cookie(token))
+        .set('X-Adulis-Seller', seller);
+
+    beforeAll(async () => {
+      // ORDER_NOT_READY: confirmed 70h ago against a 72h fulfilment window
+      // -> the DERIVED deadline lands ~now()+2h, NEAREST of the three.
+      NR = await insertOrder(VARIANT_OB1, 'PAYMENT_CONFIRMED');
+      await admin.query(
+        `UPDATE core."order" SET clock_stopped_at = now() - interval '70 hours' WHERE id=$1`,
+        [NR],
+      );
+      // PAYMENT_AWAITING_CONFIRMATION: an open submission with its STORED
+      // sla_deadline at now()+4h -- the same column the SC-03 clock renders.
+      PA = await insertOrder(VARIANT_OB2, 'PAYMENT_SUBMITTED');
+      await admin.query(
+        `INSERT INTO core.payment_submission
+           (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
+         VALUES (gen_random_uuid(), $1, now(), gen_random_uuid(), 'SUBMITTED',
+                 now() + interval '4 hours')`,
+        [PA],
+      );
+      // CLAIM_AWAITING_SELLER on a third order, review_deadline now()+12h.
+      CLAIM_ORDER = await insertOrder(VARIANT_OB3, 'COMPLETED');
+      const c = await admin.query(
+        `INSERT INTO core.claim
+           (order_id, opened_by_kind, opened_by_account_id, trigger, state,
+            severity, review_deadline)
+         VALUES ($1, 'BUYER', $2, 'GOODS_NOT_RECEIVED',
+                 'AWAITING_SELLER_EVIDENCE', 'ORDINARY', now() + interval '12 hours')
+         RETURNING id`,
+        [CLAIM_ORDER, BUYER],
+      );
+      CLAIM = c.rows[0].id as string;
+    });
+
+    afterAll(async () => {
+      // c3's global teardown deletes orders by seller; a surviving claim row
+      // would block that on its FK, so the claim leaves first -- under
+      // replica mode, the same trigger bypass the global teardown uses,
+      // because claim_evidence_item is append-only by trigger.
+      await admin.query(`SET session_replication_role = replica`);
+      await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id=$1`, [CLAIM]);
+      await admin.query(`DELETE FROM core.claim WHERE id=$1`, [CLAIM]);
+      await admin.query(`SET session_replication_role = DEFAULT`);
+    });
+
+    it('three kinds, NEAREST DEADLINE FIRST, each entry complete', async () => {
+      const r = await get().expect(200);
+      const mine = r.body.data.filter((e: { object_id: string }) =>
+        [NR, PA, CLAIM].includes(e.object_id),
+      );
+      // The interleaved ordering no grouping or client sort reproduces:
+      // derived(+2h), stored(+4h), claim(+12h).
+      expect(mine.map((e: { kind: string }) => e.kind)).toEqual([
+        'ORDER_NOT_READY',
+        'PAYMENT_AWAITING_CONFIRMATION',
+        'CLAIM_AWAITING_SELLER',
+      ]);
+      expect(mine.map((e: { object_id: string }) => e.object_id)).toEqual([NR, PA, CLAIM]);
+      // Strictly ascending deadlines across the WHOLE response, not just ours.
+      const all = r.body.data.map((e: { deadline: string }) => Date.parse(e.deadline));
+      expect([...all].sort((a: number, b: number) => a - b)).toEqual(all);
+      for (const e of mine) {
+        expect(e.object_kind).toBe(e.kind === 'CLAIM_AWAITING_SELLER' ? 'CLAIM' : 'ORDER');
+        expect(Number.isNaN(Date.parse(e.deadline))).toBe(false);
+        // consequence_key is DERIVED from the kind, S7.2-style -- the console
+        // renders the server's sentence and composes nothing.
+        expect(e.consequence_key).toBe(`obligation.${e.kind.toLowerCase()}.consequence`);
+      }
+    });
+
+    it('the deadlines are the SOURCE values, never recomputed elsewhere', async () => {
+      const r = await get().expect(200);
+      const byId = new Map(
+        r.body.data.map((e: { object_id: string; deadline: string }) => [e.object_id, e.deadline]),
+      );
+      // The payment entry's deadline IS payment_submission.sla_deadline.
+      const sla = await admin.query(
+        `SELECT sla_deadline FROM core.payment_submission
+          WHERE order_id=$1 AND state='SUBMITTED'`,
+        [PA],
+      );
+      expect(byId.get(PA)).toBe(new Date(sla.rows[0].sla_deadline).toISOString());
+      // The not-ready deadline IS clock_stopped_at + fulfilment_window,
+      // computed by Postgres against the market's timing_config.
+      const derived = await admin.query(
+        `SELECT o.clock_stopped_at + tc.fulfilment_window AS dl
+           FROM core."order" o
+           JOIN core.seller s ON s.id = o.seller_id
+           JOIN core.timing_config tc ON tc.market_id = s.market_id AND tc.effective @> now()
+          WHERE o.id=$1`,
+        [NR],
+      );
+      expect(byId.get(NR)).toBe(new Date(derived.rows[0].dl).toISOString());
+    });
+
+    it('entries are FILTERED by the grant set: INVENTORY sees orders, never the claim', async () => {
+      // INVENTORY holds seller.orders:read and NOT seller.claims:read (the
+      // v2.4 matrix) -- a role that cannot read claims must not learn one
+      // exists from this list. (ANALYST was the first draft's pick and DOES
+      // hold claims:read; the failing run corrected the fixture, not the rule.)
+      const r = await get(INV_S).expect(200);
+      const kinds = r.body.data.map((e: { kind: string }) => e.kind);
+      expect(kinds).toContain('ORDER_NOT_READY');
+      expect(kinds).toContain('PAYMENT_AWAITING_CONFIRMATION');
+      expect(kinds).not.toContain('CLAIM_AWAITING_SELLER');
+    });
+
+    it('MOBILE is 403 (store:read is CONSOLE-only); a CONSOLE stranger is 404', async () => {
+      await request(app.getHttpServer())
+        .get('/v1/seller/obligations')
+        .set('Authorization', `Bearer ${OWNER_MOBILE_S}`)
+        .set('X-Adulis-Seller', SELLER)
+        .expect(403);
+      // A CONSOLE stranger passes the surface gate and fails the relationship
+      // gate: U0002 -> 404, never confirming the seller exists (S19). (A
+      // MOBILE stranger meets the surface gate FIRST -- U0001 -> 403,
+      // identical for members and strangers alike, so no oracle.)
+      await get(STRANGER_CON_S).expect(404);
+    });
+
+    it('an empty list is a 200 with an empty array, not a 404', async () => {
+      const r = await get(OWNER_S, SELLER2).expect(200);
+      expect(r.body).toEqual({ data: [] });
+    });
+
+    it('acting on an obligation REMOVES it: marking the order ready', async () => {
+      await request(app.getHttpServer())
+        .post(`/v1/seller/orders/${NR}/ready`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .set('Origin', CONSOLE_ORIGIN)
+        .set('Idempotency-Key', key())
+        .send({})
+        .expect(200);
+      const r = await get().expect(200);
+      const ids = r.body.data.map((e: { object_id: string }) => e.object_id);
+      expect(ids).not.toContain(NR);
+      expect(ids).toContain(PA); // the others stand
+      expect(ids).toContain(CLAIM);
     });
   });
 
