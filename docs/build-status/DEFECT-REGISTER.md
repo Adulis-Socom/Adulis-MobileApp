@@ -2652,3 +2652,11 @@ Effect / stance, each:
      is owed with the next seed change.
 Ruling needed: none for the console. The courier read's buyer-name/pickup/
 note joins belong to ADU-API-01's next revision, beside D-224.4's account_id.
+### D-229 - T15 Phase 2: D-227 S1 fixed -- the seller-class predicate is ONE fragment, and the three leaked classes come home
+
+Severity:  MAJOR (seller-visible wrong behaviour), FIXED
+Phase:     T15 Phase 2
+Source:    apps/api/src/modules/notifications/notifications.controller.ts
+Effect:    OWNERSHIP_TRANSFER_* (0034: "both parties, unsuppressibly"), STOCK_CONFIDENCE_NUDGE and TRIAL_ENDING are written UNLINKED to the seller's owner account and appeared in NEITHER arm's inclusion list -- so they fell into the BUYER feed and could never reach SC-30. A seller's own ownership-transfer security notice read as shopping news, which undermined G1.6's rationale: a delay nobody is told about is not a control.
+Response:  the seller-class template predicate is defined ONCE and interpolated into both arms -- inclusion in the seller arm IS exclusion in the buyer arm by construction, so the drift that caused this cannot recur by parallel maintenance. The three classes are added. TESTED BOTH DIRECTIONS plus the inverse control (a buyer-classed row stays in the buyer feed and out of the seller feed) -- one arm alone would pass with the predicate inverted, the work order's own warning.
+Ruling needed: none. NOTE, recorded not fixed: NEW_DEVICE_SIGNIN is account-scoped but classed seller-side, so an account with no seller sees its new-device notice in NEITHER feed. Pre-existing, outside S1's scope; the correct home for a purely account-scoped security notice is a question for the next ADU-API-01 revision.
