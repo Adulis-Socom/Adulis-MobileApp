@@ -22,7 +22,15 @@ export function Chooser() {
   return (
     <main className="chooser">
       <h1>{en['console.chooser.title']}</h1>
-      <p className="hint">{en['console.chooser.gap']}</p>
+      {/* The gap stays labelled (T9 S4.2's ruling), but the register number
+          rides the DOM rather than the sentence: a seller in Addis should not
+          have to read "D-97" to learn that we cannot list their stores. The
+          attribute keeps it greppable, and chooser.spec.ts asserts BOTH -- the
+          plain sentence and this attribute -- so the hole still cannot be
+          quietly closed over. */}
+      <p className="hint" data-gap="D-97">
+        {en['console.chooser.gap']}
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -38,6 +46,16 @@ export function Chooser() {
         />
         <button type="submit">{en['console.chooser.open_button']}</button>
       </form>
+      {/* T17: a brand-new seller landed here with no store and no way to make
+          one -- /s/new had to be TYPED, which is the point at which a real
+          seller stops and messages us. The route already existed; nothing
+          pointed at it. This does not need an endpoint, so it is fixed here;
+          ENUMERATING the stores this account holds still does, and D-97's own
+          ruling is that the endpoint's shape is contract design. */}
+      <p className="create-store">
+        {en['console.chooser.create_prompt']}{' '}
+        <Link to="/s/new">{en['console.chooser.create_link']}</Link>
+      </p>
       {/* The courier's way in (C-8): the session carries no roles for the
           client to gate on (the contract's roles[] rendering hint is the
           owed refinement, D-228) -- so the link is plain, and a non-courier

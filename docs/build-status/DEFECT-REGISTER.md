@@ -2872,3 +2872,59 @@ Pass: adversarial, per S6 (this touches identity). Three things checked and one 
 Ruling needed: the beta answer for identity_required belongs in ADU-VAL-01 or the
   reissued document, not only in a seed and this entry; and an operator path for writing
   market configuration, which today exists for no configuration table at all.
+
+### D-238 - T17: the chooser can create a store; the register number stops being read to sellers; the e2e harness stops leaving a seller behind
+
+Severity:  a new seller could not reach store creation without typing a URL; fixed
+Phase:     T17 (S6, the second fix off the CANNOT list)
+Source:    apps/console (Chooser.tsx, chooser.spec.ts); packages/locale; ops/scripts/verify-console-e2e.mjs
+Effect / Response, each:
+  LINK  T17's walk signed up a brand-new account, landed on "/", and found a box
+    demanding a store id it had never been given -- with NOTHING on screen offering to
+    make one. /s/new had to be typed into the address bar. The route already existed;
+    nothing pointed at it. The chooser now carries the prompt and the link. This is the
+    point at which a real seller stops and messages the founder, so it is the point
+    chooser.spec.ts now defends with its own test (click the link, land on /s/new, see
+    the create button).
+  SENTENCE  the gap sentence no longer reads a defect number to a seller in Addis. T9
+    S4.2's ruling was that the hole must be LABELLED ON SCREEN, and it still is -- what
+    changed is WHO the label is for. The register citation now rides the DOM as
+    data-gap="D-97" and the sentence is plain English. chooser.spec.ts asserts BOTH the
+    attribute and the plain sentence, AND that the seller-facing text does NOT contain
+    "D-97" -- so the hole still cannot be quietly closed over, which is what that test
+    was written to prevent, while the seller stops paying for our bookkeeping.
+  NOT FIXED, DELIBERATELY  enumerating the stores an account holds still has no
+    endpoint. D-97's own Action line rules why: "the endpoint's shape (owner stores
+    only? team memberships? role per store?) is contract design, not console
+    transcription." /v1/bootstrap does not carry memberships; every /v1/seller/* path
+    is scoped to one store by X-Adulis-Seller, and a GET under /v1/seller would trip
+    requiresSellerContext -- so serving it would mean either widening a security guard's
+    exemption list or inventing a new top-level namespace. Both are contract design.
+    The prime rule holds: report the gap, do not fill it. T17's walk therefore still
+    reports step 14 (a returning seller is asked to paste a store id) as CANNOT, and
+    that is correct rather than an oversight.
+  AMHARIC  two new keys carry Amharic that has NOT been reviewed by a speaker. T17 S4
+    put Amharic quality out of scope and a missing key is a compile error, so something
+    had to be written; MT-KEYS.md now lists both as machine-translated. Flagged here
+    and in the PR rather than passed off as done.
+  HARNESS  verify:console-e2e now resets the database AFTER a green run as well as
+    before. It always reset before driving, which made its own run honest and said
+    nothing about the next one -- but the suite now signs a seller UP for real
+    (zz-beta-walk), so every green run left an account, a seller, a product and a
+    variant behind. In ci:local the API `test` gate runs BEFORE console-e2e, so it
+    inherits whatever the PREVIOUS run left. Fifteen walk runs grew that into 73 failing
+    API tests with no code change behind them -- a regression introduced by this order's
+    own diagnostic, found by watching the failure count climb run over run rather than
+    by reading any one failure. Reset on SUCCESS only: a failed run dies with the
+    database intact, because the state a failure happened in is the evidence.
+Verification: pnpm ci:local -- all 25 gates, 531/531 API tests. pnpm verify:console-e2e
+  -- 58 passed, and the walk draws the fix in a browser: step 2 turns from "no link from
+  the chooser to creating a store -- /s/new must be typed" into "the chooser offers a
+  link to create a store", and goes on to use it. The teardown was verified by counting
+  rows afterwards: sellers=1, accounts=2, exactly what the seed defines.
+Flakes: two D-217-class OTP-budget failures were met and cleared on the way (429 vs 202
+  on a request leg, and one in t6-ownership-transfer). Different test each run, both
+  green in isolation, neither related to console or locale. Recorded, not chased.
+Ruling needed: the sellers-list endpoint's shape, which is D-97's standing question and
+  the only thing between a returning seller and their own store; and a speaker's review
+  of the two new Amharic strings.
