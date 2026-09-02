@@ -140,7 +140,7 @@ export class FinancialService {
 
     await sql`UPDATE core."order" SET state = 'PAYMENT_SUBMITTED'
                WHERE id = ${orderId}`.execute(trx);
-    await sql`
+    const submission = await sql`
       INSERT INTO core.payment_submission
         (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
       SELECT ${randomUUID()}, ${orderId}, now(), ${evidence.rows[0]?.id}, 'SUBMITTED',
@@ -149,6 +149,16 @@ export class FinancialService {
         JOIN core.timing_config tc
           ON tc.market_id = o.market_id AND tc.effective @> now()
        WHERE o.id = ${orderId}`.execute(trx);
+    if (Number(submission.numAffectedRows ?? 0) === 0) {
+      // T16 pass F2: with no timing_config in force, this INSERT..SELECT used
+      // to write ZERO rows AFTER the state flip -- a PAYMENT_SUBMITTED order
+      // with no submission, invisible to the confirmation clock and the
+      // obligations list while the lapse job (which derives its own deadline
+      // from the transition time) would still open the SLA claim: the purest
+      // false negative. A missing config is OUR defect; fail loudly, roll the
+      // whole commit back (500, the 42501 doctrine's spirit).
+      throw new AdulisException('INTERNAL');
+    }
 
     return { evidence_id: evidence.rows[0]?.id, state: 'PAYMENT_SUBMITTED' };
   }

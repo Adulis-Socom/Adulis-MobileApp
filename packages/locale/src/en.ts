@@ -134,6 +134,8 @@ export const en = {
   'obligation.payment_awaiting_confirmation.title': 'A payment is waiting for your confirmation',
   'obligation.payment_awaiting_confirmation.consequence':
     'Confirm or reject before the deadline, or a claim opens against you automatically and the missed window is shown on your public store page.',
+  'obligation.payment_awaiting_confirmation.consequence_lapsed':
+    'The window was missed: a claim has opened and the miss is shown on your public store page. The payment still needs your decision.',
   'obligation.claim_awaiting_seller.title': 'A claim is waiting for your response',
   'obligation.claim_awaiting_seller.consequence':
     'After the deadline the claim can be decided without your side of it.',

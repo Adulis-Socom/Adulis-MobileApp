@@ -89,6 +89,7 @@ export class ObligationsController {
         object_kind: 'ORDER' | 'CLAIM';
         object_id: string;
         deadline: Date;
+        lapsed: boolean;
       }>`
         WITH cfg AS (
           SELECT tc.fulfilment_window
@@ -100,11 +101,29 @@ export class ObligationsController {
           -- A submitted payment the seller has not decided. The deadline is
           -- the submission's own stored sla_deadline -- the field the
           -- confirmation clock already renders, so the list and the clock
-          -- cannot disagree. (A NULL sla_deadline -- possible only where no
-          -- timing_config governed the commit -- cannot hold a place in a
-          -- deadline-ordered list and is filtered; registered.)
+          -- cannot disagree. (The IS NOT NULL filter guards test fixtures
+          -- only: the prod path cannot write NULL -- the window is NOT NULL
+          -- -- and commitEvidence now fails loudly rather than inserting
+          -- zero rows when no config is in force; Phase 2 pass F2.)
+          --
+          -- THE POST-LAPSE SHAPE (pass F1, the work order's exact warned
+          -- failure): fn_confirmation_window_lapse leaves the order in
+          -- PAYMENT_SUBMITTED, so after a miss this entry STAYS -- overdue,
+          -- sorted first, and the payment decision genuinely still owed --
+          -- while the SYSTEM claim lists separately. But the pre-lapse
+          -- sentence ("a claim opens automatically...") would then promise,
+          -- in the future tense and forever, exactly what already happened
+          -- and cannot happen again (the one-open-claim guard). The lapsed
+          -- flag switches the entry to its own consequence key -- which is
+          -- the reason consequence_key rides the wire explicitly.
           SELECT 'PAYMENT_AWAITING_CONFIRMATION' AS kind, 'ORDER' AS object_kind,
-                 o.id AS object_id, ps.sla_deadline AS deadline
+                 o.id AS object_id, ps.sla_deadline AS deadline,
+                 EXISTS (
+                   SELECT 1 FROM core.claim lc
+                    WHERE lc.order_id = o.id
+                      AND lc.trigger = 'SLA_BREACH'
+                      AND lc.outcome IS NULL
+                 ) AS lapsed
             FROM core."order" o
             JOIN LATERAL (
               SELECT p.sla_deadline
@@ -119,7 +138,7 @@ export class ObligationsController {
           UNION ALL
           -- A claim waiting on the seller's side. outcome IS NULL is the
           -- open-claim predicate the lapse function itself uses.
-          SELECT 'CLAIM_AWAITING_SELLER', 'CLAIM', c.id, c.review_deadline
+          SELECT 'CLAIM_AWAITING_SELLER', 'CLAIM', c.id, c.review_deadline, false AS lapsed
             FROM core.claim c
             JOIN core."order" o ON o.id = c.order_id
            WHERE o.seller_id = ${sellerId}
@@ -132,7 +151,7 @@ export class ObligationsController {
           -- HINT list, not a write guard, so unlike the payout lock it does
           -- not fail closed (registered choice, D-235).
           SELECT 'ORDER_NOT_READY', 'ORDER', o.id,
-                 o.clock_stopped_at + (SELECT fulfilment_window FROM cfg)
+                 o.clock_stopped_at + (SELECT fulfilment_window FROM cfg), false AS lapsed
             FROM core."order" o
            WHERE o.seller_id = ${sellerId}
              AND o.state = 'PAYMENT_CONFIRMED'
@@ -150,7 +169,11 @@ export class ObligationsController {
           object_kind: row.object_kind,
           object_id: row.object_id,
           deadline: row.deadline.toISOString(),
-          consequence_key: `obligation.${row.kind.toLowerCase()}.consequence`,
+          // Post-lapse, the pre-lapse promise would be a standing lie; the
+          // lapsed variant says what is true now (pass F1).
+          consequence_key: row.lapsed
+            ? `obligation.${row.kind.toLowerCase()}.consequence_lapsed`
+            : `obligation.${row.kind.toLowerCase()}.consequence`,
         }));
       return { data };
     });

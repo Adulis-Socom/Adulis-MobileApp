@@ -116,6 +116,8 @@ export const am: Catalogue = {
   'obligation.payment_awaiting_confirmation.title': 'ክፍያ የእርስዎን ማረጋገጫ በመጠበቅ ላይ ነው',
   'obligation.payment_awaiting_confirmation.consequence':
     'ከቀነ ገደቡ በፊት ያረጋግጡ ወይም አይቀበሉ፤ አለበለዚያ ቅሬታ በራስ-ሰር ይከፈትና ያመለጠው መስኮት በይፋዊ የመደብር ገጽዎ ላይ ይታያል።',
+  'obligation.payment_awaiting_confirmation.consequence_lapsed':
+    'መስኮቱ አምልጧል፦ ቅሬታ ተከፍቷል እናም ያመለጠው በይፋዊ የመደብር ገጽዎ ላይ ይታያል። ክፍያው አሁንም ውሳኔዎን ይፈልጋል።',
   'obligation.claim_awaiting_seller.title': 'ቅሬታ የእርስዎን ምላሽ በመጠበቅ ላይ ነው',
   'obligation.claim_awaiting_seller.consequence':
     'ከቀነ ገደቡ በኋላ ቅሬታው ያለ እርስዎ ወገን ሊወሰን ይችላል።',

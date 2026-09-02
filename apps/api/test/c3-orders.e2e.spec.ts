@@ -53,6 +53,7 @@ const VARIANT_MO = '88888888-7777-4000-8000-00000000001e';
 const VARIANT_OB1 = '88888888-7777-4000-8000-000000000021';
 const VARIANT_OB2 = '88888888-7777-4000-8000-000000000022';
 const VARIANT_OB3 = '88888888-7777-4000-8000-000000000023';
+const VARIANT_OB4 = '88888888-7777-4000-8000-000000000027';
 // T16 Phase 2: INVENTORY is the role that discriminates the grant filter --
 // it holds seller.orders:read and seller.store:read but NOT seller.claims:read
 // (the v2.4 seed; ANALYST holds claims:read, which the first draft of the
@@ -213,11 +214,12 @@ describe('C3 — cart, orders and payment', () => {
         ($17,$4,$5,250000,'ETB','vrn'), ($18,$4,$5,250000,'ETB','vrc'),
         ($19,$4,$5,250000,'ETB','vmo'),
         ($20,$4,$5,250000,'ETB','vo1'), ($21,$4,$5,250000,'ETB','vo2'),
-        ($22,$4,$5,250000,'ETB','vo3')`,
+        ($22,$4,$5,250000,'ETB','vo3'), ($23,$4,$5,250000,'ETB','vo4')`,
       [VARIANT, VARIANT2, V2SELLER2, PRODUCT, SELLER, PRODUCT2, SELLER2,
        VB, VC, VD, VE, VF,
        VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
-       VARIANT_RN, VARIANT_RC, VARIANT_MO, VARIANT_OB1, VARIANT_OB2, VARIANT_OB3],
+       VARIANT_RN, VARIANT_RC, VARIANT_MO, VARIANT_OB1, VARIANT_OB2, VARIANT_OB3,
+       VARIANT_OB4],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -226,7 +228,7 @@ describe('C3 — cart, orders and payment', () => {
       [SELLER, [VARIANT, VARIANT2, VB, VC, VD, VE, VF,
                VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB,
                VARIANT_RN, VARIANT_RC, VARIANT_MO, VARIANT_OB1, VARIANT_OB2,
-               VARIANT_OB3]],
+               VARIANT_OB3, VARIANT_OB4]],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -834,6 +836,63 @@ describe('C3 — cart, orders and payment', () => {
       expect(ids).not.toContain(NR);
       expect(ids).toContain(PA); // the others stand
       expect(ids).toContain(CLAIM);
+    });
+
+    it('POST-LAPSE (pass F1): the stale entry switches its sentence instead of lying forever', async () => {
+      /*
+       * fn_confirmation_window_lapse leaves the order in PAYMENT_SUBMITTED,
+       * so a missed window keeps its payment entry -- overdue, first, and the
+       * decision still owed -- beside the new SYSTEM claim. The pre-lapse
+       * sentence ("a claim opens automatically...") would then promise, in
+       * the future tense and forever, what already happened and cannot happen
+       * again. The entry must carry the LAPSED consequence key.
+       */
+      const LP = await insertOrder(VARIANT_OB4, 'PAYMENT_SUBMITTED');
+      await admin.query(
+        `INSERT INTO core.payment_submission
+           (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
+         VALUES (gen_random_uuid(), $1, now() - interval '25 hours',
+                 gen_random_uuid(), 'SUBMITTED', now() - interval '1 hour')`,
+        [LP],
+      );
+      const lc = await admin.query(
+        `INSERT INTO core.claim
+           (order_id, opened_by_kind, trigger, state, severity, review_deadline)
+         VALUES ($1, 'SYSTEM', 'SLA_BREACH', 'AWAITING_SELLER_EVIDENCE',
+                 'ORDINARY', now() + interval '2 days')
+         RETURNING id`,
+        [LP],
+      );
+      const lapseClaim = lc.rows[0].id as string;
+
+      const r = await get().expect(200);
+      const entries = r.body.data.filter(
+        (e: { object_id: string }) => e.object_id === LP || e.object_id === lapseClaim,
+      );
+      // BOTH situations list: the payment decision still owed, and the claim.
+      expect(entries.map((e: { kind: string }) => e.kind).sort()).toEqual([
+        'CLAIM_AWAITING_SELLER',
+        'PAYMENT_AWAITING_CONFIRMATION',
+      ]);
+      const payment = entries.find((e: { object_id: string }) => e.object_id === LP);
+      // Overdue -> the payment entry sorts FIRST in the whole list.
+      expect(r.body.data[0].object_id).toBe(LP);
+      // The sentence switched: no future-tense promise of a claim that
+      // already opened.
+      expect(payment.consequence_key).toBe(
+        'obligation.payment_awaiting_confirmation.consequence_lapsed',
+      );
+      // And a NON-lapsed payment entry still carries the pre-lapse key.
+      const fresh = r.body.data.find((e: { object_id: string }) => e.object_id === PA);
+      expect(fresh.consequence_key).toBe(
+        'obligation.payment_awaiting_confirmation.consequence',
+      );
+
+      // Leave the world as found (the claim would block the global teardown).
+      await admin.query(`SET session_replication_role = replica`);
+      await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id=$1`, [lapseClaim]);
+      await admin.query(`DELETE FROM core.claim WHERE id=$1`, [lapseClaim]);
+      await admin.query(`SET session_replication_role = DEFAULT`);
     });
   });
 
