@@ -24,5 +24,6 @@ apps/api/dist/
 # phone numbers for whoever ran the dev loop.
 .dev-sms.log
 apps/console/e2e/.auth/
+apps/console/e2e/.walk/
 apps/console/test-results/
 apps/console/playwright-report/
