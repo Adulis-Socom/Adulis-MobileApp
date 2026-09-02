@@ -122,7 +122,7 @@ test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
    * (clock_stopped_at + the 7-day window). The third KIND arrives through the
    * BUYER WIRE: the seeded buyer files a real claim (review deadline +2 days),
    * which must interleave STRICTLY BETWEEN the fresh payment (+~1 day) and
-   * the unready order (+~6 days) -- an ordering neither a per-kind grouping
+   * the unready order (+90h, ~3.8 days) -- an ordering neither a per-kind grouping
    * nor a client-side sort of anything else would reproduce.
    *
    * Residue: the claim stays open (no delete path). Later specs tolerate it
@@ -169,7 +169,7 @@ test.describe('SC-01 -- what needs you (T16 Phase 3)', () => {
       'PAYMENT_AWAITING_CONFIRMATION', // the lapsed order -- OVERDUE, first
       'PAYMENT_AWAITING_CONFIRMATION', // the fresh submission
       'CLAIM_AWAITING_SELLER', // the buyer's claim, +2 days
-      'ORDER_NOT_READY', // the paid unready order, +~6 days
+      'ORDER_NOT_READY', // the paid unready order, +90h
     ]);
 
     // The overdue entry renders the standing truth, not a countdown.

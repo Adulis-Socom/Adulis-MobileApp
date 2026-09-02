@@ -195,10 +195,11 @@ export function Home() {
                     <span className="obligation-title unrouted">{o.kind}</span>
                   )}
                   <ObligationDeadline deadline={o.deadline} onElapsed={() => void loadObligations()} />
-                  {/* The server's sentence, verbatim -- an unknown key logs
-                      as its path would render; degrade to nothing rather
-                      than compose a guess (S7.2's spirit). */}
-                  {consequence ? <p className="obligation-consequence">{consequence}</p> : null}
+                  {/* The server's sentence, verbatim. An unknown key renders
+                      AS the key -- visible and greppable, the Feedback.tsx
+                      precedent for message_key -- because a row whose stakes
+                      silently vanish is the list learning to lie (pass). */}
+                  <p className="obligation-consequence">{consequence ?? o.consequence_key}</p>
                 </li>
               );
             })}
@@ -310,12 +311,18 @@ function DailyBrief({ nothingNeeded }: { readonly nothingNeeded: boolean }) {
     const now = Date.now();
     (async () => {
       try {
+        // The endpoint's window is INCLUSIVE calendar dates (hi = to + 1 day),
+        // so seven DISJOINT days each: this week = the 6 previous calendar
+        // days plus today; previous = the 7 before that, ending the day
+        // before this week starts. The pass's major: from=now-7d/to=now-7d
+        // made the previous window 8 days and counted the boundary day in
+        // BOTH numbers -- two honest figures answering a dishonest question.
         const cur = await api<BriefWindow>(
-          `/seller/analytics/overview?from=${iso(now - 7 * day)}`,
+          `/seller/analytics/overview?from=${iso(now - 6 * day)}`,
           { sellerId },
         );
         const prev = await api<BriefWindow>(
-          `/seller/analytics/overview?from=${iso(now - 14 * day)}&to=${iso(now - 7 * day)}`,
+          `/seller/analytics/overview?from=${iso(now - 13 * day)}&to=${iso(now - 7 * day)}`,
           { sellerId },
         );
         if (cancelled) return;
