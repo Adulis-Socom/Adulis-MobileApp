@@ -818,6 +818,8 @@ export const en = {
   'console.courier.order_ref': 'Order',
   'console.courier.state.not_ready': 'Not ready for pickup',
   'console.courier.chooser_link': 'Deliveries assigned to you',
+  'console.trade.detail.courier_choose': 'Choose a courier',
+  'console.trade.detail.courier_pending': '{phone} (invited, has not joined yet)',
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */

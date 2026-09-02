@@ -13,7 +13,7 @@
  * stops producing one.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { SEEDED } from './helpers/session';
+import { SEEDED, BUYER, API } from './helpers/session';
 
 const ORDER = {
   created: '5eed0000-0000-4000-8000-000000000011',
@@ -79,23 +79,36 @@ test.describe('SC-03 -- the orders list', () => {
     }
   });
 
-  test('the filter groups the loaded rows, and says that is what it does', async ({ page }) => {
+  test('the bucket is the server-owned set: each tab re-fetches, not a page-local filter (D-154 answered)', async ({
+    page,
+  }) => {
     await page.goto(`/s/${SEEDED.sellerId}/orders`);
     await expect(page.locator('[data-order]')).toHaveCount(5);
 
+    // needs_action is a SET the server owns: PAYMENT_SUBMITTED (submitted,
+    // lapsed) AND PAYMENT_CONFIRMED (confirmed) -- three of the five seeds.
+    // A re-fetch, asserted at the wire, is what a page-local filter is not.
+    const needs = page.waitForResponse(
+      (r) => r.url().includes('bucket=needs_action') && r.request().method() === 'GET',
+    );
     await page.locator('[data-filter="needs_action"]').click();
-    await expect(page.locator('[data-order]')).toHaveCount(2);
+    await needs;
+    await expect(page.locator('[data-order]')).toHaveCount(3);
     await expect(page.locator(`[data-order="${ORDER.submitted}"]`)).toHaveCount(1);
     await expect(page.locator(`[data-order="${ORDER.lapsed}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-order="${ORDER.confirmed}"]`)).toHaveCount(1);
+    // CREATED is not needs_action -- the server's map, not the client's.
+    await expect(page.locator(`[data-order="${ORDER.created}"]`)).toHaveCount(0);
 
     await page.locator('[data-filter="completed"]').click();
     await expect(page.locator(`[data-order="${ORDER.completed}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-order="${ORDER.submitted}"]`)).toHaveCount(0);
 
-    // D-153 and D-154 are STATED ON SCREEN, and this test exists to stop a
-    // later agent deleting two awkward sentences. A screen that hides a
-    // known gap reads as finished -- the same argument the chooser makes.
+    // D-153 stays STATED (no buyer name still owed); D-154's sentence is
+    // GONE -- the bucket is the server's, and the page-local disclaimer with
+    // it. A sentence outliving its gap reads as an unfinished screen.
     await expect(page.locator('[data-gap="D-153"]')).toBeVisible();
-    await expect(page.locator('[data-gap="D-154"]')).toBeVisible();
+    await expect(page.locator('[data-gap="D-154"]')).toHaveCount(0);
   });
 });
 
@@ -423,7 +436,64 @@ test.describe('SC-04 -- terminal orders', () => {
      */
     await openDetail(page, ORDER.submitted);
     await expect(page.locator('.buyer-region [data-gap="D-153"]')).toBeVisible();
-    await expect(page.locator('.handoff-region [data-gap="D-157"]')).toBeVisible();
+    // D-157 is ANSWERED (T15 Phase 3): the courier endpoint returns
+    // account_id, the assignment control is live, and its gap sentence is
+    // gone. The marker must be absent -- a sentence outliving its gap is a
+    // screen apologising for something that works.
+    await expect(page.locator('[data-gap="D-157"]')).toHaveCount(0);
+  });
+
+  test('D-157 answered: the courier assignment control is LIVE, gated by allowed_actions', async ({
+    page,
+    baseURL,
+  }) => {
+    /*
+     * A CLAIMED courier via the real seller API: inviting the seeded buyer's
+     * phone claims immediately (the account is ACTIVE, G1.8), so the couriers
+     * endpoint returns a row with account_id -- the D-224.4 shape that makes
+     * the assignment control possible at all. Cleaned up by revoke at the end.
+     */
+    const sellerHeaders = {
+      'X-Adulis-Client': 'web/0.0.0',
+      'X-Adulis-Seller': SEEDED.sellerId,
+      Origin: baseURL ?? '',
+    };
+    const invited = await page.request.post(`${API}/v1/seller/couriers`, {
+      headers: { ...sellerHeaders, 'Idempotency-Key': crypto.randomUUID() },
+      data: { phone: BUYER.phone },
+    });
+    expect(invited.status()).toBe(201);
+    const inviteId = ((await invited.json()) as { id: string }).id;
+    try {
+      await openDetail(page, ORDER.confirmed);
+      const region = page.locator('.handoff-region');
+      // The select is ENABLED (grant present, state PAYMENT_CONFIRMED).
+      const select = region.locator('#courier-select');
+      await expect(select).toBeEnabled();
+      // The claimed courier is an assignable option (its phone is the label).
+      await expect(select.locator(`option`, { hasText: BUYER.phone })).toHaveCount(1);
+      // Choosing it enables Assign, and the POST reaches the real server --
+      // the control that was disabled-forever is live.
+      await select.selectOption({ label: BUYER.phone });
+      await expect(region.locator('[data-action="assign-courier"]')).toBeEnabled();
+      const assigned = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/orders/${ORDER.confirmed}/courier-assignment`) &&
+          r.request().method() === 'POST',
+      );
+      await region.locator('[data-action="assign-courier"]').click();
+      const resp = await assigned;
+      expect(resp.status()).toBe(201);
+
+      // On an UNPAID order the same control renders DISABLED, not hidden
+      // (R20), because allowed_actions omits the code for that state.
+      await openDetail(page, ORDER.submitted);
+      await expect(page.locator('.handoff-region #courier-select')).toBeDisabled();
+    } finally {
+      await page.request.delete(`${API}/v1/seller/couriers/${inviteId}`, {
+        headers: sellerHeaders,
+      });
+    }
   });
 });
 

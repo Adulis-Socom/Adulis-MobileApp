@@ -25,11 +25,11 @@
  *    Registered as D-153. NOT invented, and not silently dropped either --
  *    a row that just omits it reads as a screen nobody finished.
  *
- * 2. SERVER-SIDE FILTERING. `GET /v1/seller/orders` takes `limit` and
- *    `cursor` and nothing else. The filter row S7 lists therefore filters
- *    WHAT HAS BEEN LOADED, and says so, because a "cancelled" tab that reads
- *    empty while a cancelled order sits on page three is worse than no tab.
- *    Registered as D-154.
+ * 2. SERVER-SIDE BUCKETS (T15, D-154 answered). `GET /v1/seller/orders`
+ *    now takes a `bucket` parameter and the server owns its membership --
+ *    "needs action" is a SET of states and which states belong is a product
+ *    decision, not the console's. The tab sends a bucket NAME and renders
+ *    what returns; the page-local grouping and its sentence are gone.
  *
  * ==========================================================================
  * PAGINATION IS A CURSOR, NEVER AN OFFSET (S7)
@@ -38,7 +38,7 @@
  * computes a page number, and there is no page size in this file that the
  * server does not also know.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../../api/client';
@@ -47,24 +47,19 @@ import type { UiState } from '../../lib/states';
 import { stateFromProblem } from '../../lib/states';
 import { formatMinor, fillTemplate } from '../../lib/intl';
 import { useMarketContext } from '../../lib/market';
-import { Deadline, clockFor, type OrderState } from '../../lib/clock';
+import { Deadline, clockFor } from '../../lib/clock';
 import type { OrderPage, OrderRow } from './types';
 import { StateBadge } from './StateBadge';
 
 /**
- * The four buckets S7 names, over the nine order states. A GROUPING OF
- * SERVER-RESOLVED STATES, which is presentation; it decides nothing and
- * unlocks nothing. Every state appears in exactly one bucket, and the
- * exhaustiveness is checked below rather than assumed.
+ * The tab NAMES. The server owns which states each contains (D-154); the
+ * console sends a name and renders the page it gets back. `all` sends no
+ * bucket. The tabs deliberately overlap (needs_action is a subset of
+ * active) -- they are tabs, not a partition, which is exactly why the
+ * membership could not live on the client.
  */
-const BUCKET = {
-  needs_action: ['PAYMENT_SUBMITTED'],
-  active: ['CREATED', 'NOTIFIED', 'PAYMENT_CONFIRMED', 'HANDED_OFF'],
-  completed: ['COMPLETED'],
-  cancelled: ['CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'EXPIRED_UNCLAIMED'],
-} as const satisfies Record<string, readonly OrderState[]>;
-
-type Filter = keyof typeof BUCKET | 'all';
+type Bucket = 'needs_action' | 'active' | 'completed' | 'cancelled';
+type Filter = Bucket | 'all';
 
 const FILTERS: readonly Filter[] = ['all', 'needs_action', 'active', 'completed', 'cancelled'];
 
@@ -75,11 +70,6 @@ const FILTER_LABEL: Readonly<Record<Filter, string>> = {
   completed: en['console.trade.filter.completed'],
   cancelled: en['console.trade.filter.cancelled'],
 };
-
-function inBucket(state: OrderState, f: Filter): boolean {
-  if (f === 'all') return true;
-  return (BUCKET[f] as readonly string[]).includes(state);
-}
 
 export function Orders() {
   const { sellerId } = useParams<{ sellerId: string }>();
@@ -98,11 +88,14 @@ export function Orders() {
    * screen the moment a deadline passed.
    */
   const load = useCallback(
-    async (append: boolean, from: string | null) => {
+    async (append: boolean, from: string | null, bucket: Filter) => {
       if (!sellerId) return;
       setState((s) => (s === 'READY' && !append ? 'STALE' : append ? 'STALE' : 'LOADING'));
       try {
-        const q = from ? `?cursor=${encodeURIComponent(from)}` : '';
+        const params = new URLSearchParams();
+        if (bucket !== 'all') params.set('bucket', bucket);
+        if (from) params.set('cursor', from);
+        const q = params.toString() ? `?${params.toString()}` : '';
         const r = await api<OrderPage>(`/seller/orders${q}`, { sellerId });
         setRows((prev) => (append ? [...prev, ...r.data] : r.data));
         setCursor(r.next_cursor);
@@ -123,12 +116,13 @@ export function Orders() {
   );
 
   useEffect(() => {
-    void load(false, null);
-  }, [load]);
+    void load(false, null, filter);
+  }, [load, filter]);
 
-  const reload = useCallback(() => void load(false, null), [load]);
+  const reload = useCallback(() => void load(false, null, filter), [load, filter]);
 
-  const shown = useMemo(() => rows.filter((r) => inBucket(r.state, filter)), [rows, filter]);
+  // No page-local filter: the server returns exactly the bucket asked for.
+  const shown = rows;
 
   // EMPTY is mandatory on every list (S3.2), and it is about the REQUEST,
   // not about the filter: zero orders and zero orders matching a tab are
@@ -166,15 +160,8 @@ export function Orders() {
             </button>
           ))}
         </div>
-        {/* D-154 -- and it is deliberately NOT hidden behind the "all" tab.
-            The limitation is true of every tab; it is only VISIBLE on the
-            narrow ones. */}
-        <p className="hint" data-gap="D-154">
-          {en['console.trade.orders.filter_is_local']}
-        </p>
-
-        {shown.length === 0 && rows.length > 0 ? (
-          <p className="empty" data-empty="filter">
+        {shown.length === 0 && state === 'READY' ? (
+          <p className="empty" data-empty="bucket">
             {en['console.trade.orders.none_in_filter']}
           </p>
         ) : (
@@ -217,7 +204,7 @@ export function Orders() {
         )}
 
         {hasMore ? (
-          <button type="button" className="load-more" onClick={() => void load(true, cursor)}>
+          <button type="button" className="load-more" onClick={() => void load(true, cursor, filter)}>
             {en['console.trade.orders.load_more']}
           </button>
         ) : null}

@@ -4,6 +4,7 @@ import { sql, type Transaction } from 'kysely';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { grantSet, allowedActions } from '../../common/auth/grant-set';
 
 /**
  * C6 — team (12.12). Business tier; Owner/Admin only, which is exactly
@@ -41,7 +42,18 @@ export class TeamService {
        ORDER BY tm.created_at`.execute(trx);
     const seats = await sql<{ limit: { allowed: boolean; cap: number | null } }>`
       SELECT billing.fn_effective_limit(${sellerId}, 'TEAM_SEATS') AS "limit"`.execute(trx);
-    return { data: r.rows, seats: first(seats.rows)?.limit ?? null };
+    // D-155: add-member and remove-member are seller.staff:admin;
+    // ownership transfer is its own permission. The NO_ENTITLEMENT gate
+    // (seats.allowed false) stays the console's read of seats, orthogonal
+    // to these grants.
+    return {
+      data: r.rows,
+      seats: first(seats.rows)?.limit ?? null,
+      allowed_actions: allowedActions(await grantSet(trx, req), {
+        'seller.staff:admin': true,
+        'seller.ownership:transfer': true,
+      }),
+    };
   }
 
   async invite(

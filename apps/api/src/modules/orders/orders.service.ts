@@ -4,6 +4,8 @@ import { sql, type Transaction } from 'kysely';
 import type { Database } from '../../common/db/database.types';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import { assertPermission } from '../../common/auth/permission';
+import { grantSet, allowedActions } from '../../common/auth/grant-set';
+import { ORDER_BUCKETS, type OrderBucket } from './order-buckets';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import type {
   AddCartLineBody,
@@ -349,8 +351,13 @@ export class OrdersService {
     req: AuthedRequest,
     limit: number,
     cursor: string | undefined,
+    bucket?: OrderBucket,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.orders:read');
+    // D-154: the bucket resolves to states HERE. The wire carries a bucket
+    // name; the membership is the server's product decision (see
+    // ORDER_BUCKETS), so a client can render tabs without owning the map.
+    const bucketStates = bucket ? [...ORDER_BUCKETS[bucket]] : null;
     // SC-03 needs the line count and THE CLOCK THAT MATTERS IN THE CURRENT
     // STATE, and this query used to return neither -- only `expires_at`, the
     // reservation window, which is the WRONG clock for a PAYMENT_SUBMITTED
@@ -369,6 +376,8 @@ export class OrdersService {
                ORDER BY ps.submitted_at DESC LIMIT 1) AS payment_sla_deadline
         FROM core."order" o
        WHERE o.seller_id = ${req.ctx?.sellerId}
+         AND (${bucketStates}::text[] IS NULL
+              OR o.state::text = ANY(${bucketStates}::text[]))
          AND (${cursor ?? null}::timestamptz IS NULL
               OR o.created_at < ${cursor ?? null}::timestamptz)
        ORDER BY o.created_at DESC
@@ -415,6 +424,28 @@ export class OrdersService {
         FROM core.payment_submission
        WHERE order_id = ${orderId}
        ORDER BY submitted_at DESC`.execute(trx);
+    /*
+     * D-155 -- allowed_actions, per object, named by permission code. The
+     * caller's grant set (role x surface, the E5 rendering-hint read)
+     * INTERSECTED with what this order's CURRENT STATE admits. The state
+     * predicates live here because this is the one place that already holds
+     * the object; the console renders a control iff its code is present and
+     * NEVER unions this with anything it worked out itself.
+     */
+    const st = String(order['state']);
+    const hasOpenSubmission = submissions.rows.some((sub) => sub['state'] === 'SUBMITTED');
+    const grants = await grantSet(trx, req);
+    const actions = allowedActions(grants, {
+      'seller.payment:confirm': st === 'PAYMENT_SUBMITTED' && hasOpenSubmission,
+      'seller.payment_evidence:read': submissions.rows.length > 0,
+      'seller.orders:respond': ['CREATED', 'NOTIFIED', 'PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED'].includes(st),
+      'seller.order_ready:update':
+        ['PAYMENT_CONFIRMED', 'HANDED_OFF'].includes(st) && order['ready_at'] == null,
+      'seller.couriers:manage': ['PAYMENT_CONFIRMED', 'HANDED_OFF'].includes(st),
+      'seller.handoff:custody_transfer': st === 'PAYMENT_CONFIRMED',
+      'seller.handoff:read': st === 'PAYMENT_CONFIRMED' || st === 'HANDED_OFF',
+      'seller.orders:reissue_instructions': ['PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED'].includes(st),
+    });
     // SC-04 region 6, the append-only transition list, written by
     // trg_log_order_transition and protected by trg_append_only -- the
     // order's own history rather than a reconstruction.
@@ -434,6 +465,7 @@ export class OrdersService {
        WHERE order_id = ${orderId}
        ORDER BY occurred_at ASC`.execute(trx);
     return {
+      allowed_actions: actions,
       ...order,
       total: { amount_minor: Number(order['total_minor']), currency: order['total_currency'] },
       lines: lines.rows,

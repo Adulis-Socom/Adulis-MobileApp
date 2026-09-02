@@ -18,6 +18,8 @@ export interface PayoutRow {
 export interface PayoutState {
   readonly active: PayoutRow | null;
   readonly pending: PayoutRow | null;
+  /** D-155: the server's answer to what this seller may do to payout. */
+  readonly allowed_actions: readonly string[];
 }
 
 /** GET /v1/seller/payout/history -- fixed LIMIT 100, newest first. */
@@ -40,6 +42,8 @@ export interface TeamMember {
 export interface TeamPage {
   readonly data: readonly TeamMember[];
   readonly seats: { readonly allowed: boolean; readonly cap: number | null } | null;
+  /** D-155: staff admin and ownership transfer, named by permission code. */
+  readonly allowed_actions: readonly string[];
 }
 
 /** GET /v1/seller/ownership-transfer -- ownership.controller.ts. */

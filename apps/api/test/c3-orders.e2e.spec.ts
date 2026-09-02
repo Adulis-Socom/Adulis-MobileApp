@@ -40,6 +40,11 @@ const VC = '88888888-7777-4000-8000-000000000013';
 const VD = '88888888-7777-4000-8000-000000000014';
 const VE = '88888888-7777-4000-8000-000000000015';
 const VF = '88888888-7777-4000-8000-000000000016';
+// T15 Phase 3: four orders across states for bucket + allowed_actions.
+const VARIANT_BUCKET_A = '88888888-7777-4000-8000-000000000017';
+const VARIANT_BUCKET_B = '88888888-7777-4000-8000-000000000018';
+const VARIANT_AA = '88888888-7777-4000-8000-000000000019';
+const VARIANT_AB = '88888888-7777-4000-8000-00000000001a';
 
 @Module({ imports: [AppModule] })
 class C3AppModule {}
@@ -57,6 +62,11 @@ describe('C3 — cart, orders and payment', () => {
       .set('Authorization', `Bearer ${BUYER_S}`)
       .set('X-Adulis-Device', DEVICE)
       .set('Idempotency-Key', key());
+  const sellerGet = (path: string, token = OWNER_S) =>
+    request(app.getHttpServer())
+      .get(path)
+      .set('Cookie', cookie(token))
+      .set('X-Adulis-Seller', SELLER);
   const sellerPost = (path: string, token = OWNER_S) =>
     request(app.getHttpServer())
       .post(path)
@@ -178,15 +188,19 @@ describe('C3 — cart, orders and payment', () => {
         ($3,$6,$7,1000,'ETB','one'),
         ($8,$4,$5,250000,'ETB','vb'), ($9,$4,$5,250000,'ETB','vc'),
         ($10,$4,$5,250000,'ETB','vd'), ($11,$4,$5,250000,'ETB','ve'),
-        ($12,$4,$5,250000,'ETB','vf')`,
+        ($12,$4,$5,250000,'ETB','vf'),
+        ($13,$4,$5,250000,'ETB','vba'), ($14,$4,$5,250000,'ETB','vbb'),
+        ($15,$4,$5,250000,'ETB','vaa'), ($16,$4,$5,250000,'ETB','vab')`,
       [VARIANT, VARIANT2, V2SELLER2, PRODUCT, SELLER, PRODUCT2, SELLER2,
-       VB, VC, VD, VE, VF],
+       VB, VC, VD, VE, VF,
+       VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
        SELECT gen_random_uuid(), v, $1::uuid, 20, 'SELLER_SET'
          FROM unnest($2::uuid[]) v`,
-      [SELLER, [VARIANT, VARIANT2, VB, VC, VD, VE, VF]],
+      [SELLER, [VARIANT, VARIANT2, VB, VC, VD, VE, VF,
+               VARIANT_BUCKET_A, VARIANT_BUCKET_B, VARIANT_AA, VARIANT_AB]],
     );
     await admin.query(
       `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
@@ -487,4 +501,89 @@ describe('C3 — cart, orders and payment', () => {
       expect(r.body.slots.until).toBeTruthy();
     });
   });
+
+  describe('T15 Phase 3 -- bucket and allowed_actions (D-154, D-155)', () => {
+    // Orders inserted directly: these tests exercise the SELLER READ shape,
+    // not order creation, and the prior describes leave the buyer in an
+    // S9.5 cancellation cooldown that would 409 a fresh createOrder.
+    const mkOrder = async (variant: string, state: string): Promise<string> => {
+      const id = (await admin.query(`SELECT gen_random_uuid() AS id`)).rows[0].id as string;
+      const stopped = ['PAYMENT_CONFIRMED', 'HANDED_OFF', 'COMPLETED'].includes(state);
+      await admin.query(
+        `INSERT INTO core."order"
+           (id, market_id, seller_id, buyer_account_id, state, created_at,
+            expires_at, clock_stopped_at, total_minor, total_currency,
+            display_currency, seller_level_at_order)
+         VALUES ($1,$2,$3,$4,$5::core.order_state, now(), now()+interval '48 hours',
+                 CASE WHEN $6 THEN now() ELSE NULL END,
+                 250000, 'ETB', 'ETB', 'NEW')`,
+        [id, M, SELLER, BUYER, state, stopped],
+      );
+      await admin.query(
+        `INSERT INTO core.reservation
+           (id, order_id, variant_id, seller_id, buyer_account_id, quantity,
+            unit_price_minor, unit_price_currency, state, active_window)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, 1, 250000, 'ETB',
+                 'ACTIVE', tstzrange(now(), now()+interval '48 hours', '[)'))`,
+        [id, variant, SELLER, BUYER],
+      );
+      return id;
+    };
+    const withSubmission = async (id: string): Promise<void> => {
+      await admin.query(
+        `INSERT INTO core.payment_submission (id, order_id, submitted_at, evidence_ref, state)
+         VALUES (gen_random_uuid(), $1, now(), gen_random_uuid(), 'SUBMITTED')`,
+        [id],
+      );
+    };
+
+    it('the bucket is resolved SERVER-SIDE by state, not client-filtered', async () => {
+      const paid = await mkOrder(VARIANT_BUCKET_A, 'PAYMENT_CONFIRMED');
+      const created = await mkOrder(VARIANT_BUCKET_B, 'CREATED');
+
+      const needs = await sellerGet('/v1/seller/orders?bucket=needs_action').expect(200);
+      const needsIds = needs.body.data.map((o: { id: string }) => o.id);
+      expect(needsIds).toContain(paid); // PAYMENT_CONFIRMED is needs_action
+      expect(needsIds).not.toContain(created); // CREATED is not
+
+      const active = await sellerGet('/v1/seller/orders?bucket=active').expect(200);
+      const activeIds = active.body.data.map((o: { id: string }) => o.id);
+      expect(activeIds).toContain(paid);
+      expect(activeIds).toContain(created); // both non-terminal
+
+      // A bucket the SERVER does not define is refused at the edge -- the
+      // client cannot smuggle a state filter through the parameter.
+      const bad = await sellerGet('/v1/seller/orders?bucket=PAYMENT_CONFIRMED').expect(400);
+      expect(bad.body.code).toBe('VALIDATION_FAILED');
+      expect(bad.body.slots.path).toBe('bucket');
+    });
+
+    it('allowed_actions is the grant set INTERSECTED with state, never a client union', async () => {
+      // OWNER holds every order permission; ANALYST holds seller.orders:read
+      // and nothing else. The SAME order in the SAME state yields DIFFERENT
+      // allowed_actions -- which a client ORing its own guess could not.
+      const o = await mkOrder(VARIANT_AA, 'PAYMENT_SUBMITTED');
+      await withSubmission(o);
+
+      const owner = await sellerGet(`/v1/seller/orders/${o}`).expect(200);
+      expect(owner.body.allowed_actions).toContain('seller.payment:confirm');
+      expect(owner.body.allowed_actions).toContain('seller.payment_evidence:read');
+
+      const analyst = await sellerGet(`/v1/seller/orders/${o}`, ANALYST_S).expect(200);
+      // ANALYST READS the order (200) and holds none of the acting grants:
+      // the intersection is empty, so the console renders no control. A
+      // state-only client would show the confirm button here.
+      expect(analyst.body.allowed_actions).not.toContain('seller.payment:confirm');
+      expect(analyst.body.allowed_actions).toEqual([]);
+    });
+
+    it('allowed_actions is STATE-gated too: confirm is absent once the order is terminal', async () => {
+      const o = await mkOrder(VARIANT_AB, 'COMPLETED');
+      const r = await sellerGet(`/v1/seller/orders/${o}`).expect(200);
+      // OWNER still holds the grant; the terminal state admits neither action.
+      expect(r.body.allowed_actions).not.toContain('seller.payment:confirm');
+      expect(r.body.allowed_actions).not.toContain('seller.orders:respond');
+    });
+  });
+
 });

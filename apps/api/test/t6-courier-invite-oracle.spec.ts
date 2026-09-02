@@ -256,6 +256,21 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
     // A pending invite must be visible or the seller cannot tell an
     // invitation that is waiting from a number they mistyped.
     expect(phones).toEqual(expect.arrayContaining([P_KNOWN, P_UNKNOWN, P_ALSO_UNKNOWN]));
+
+    // T15 D-224.4 -- a CLAIMED row carries account_id (the courier assignment
+    // control's body needs it), a PENDING invite carries null. The wire that
+    // returned invitations now returns the relationship.
+    const rows = r.body.data as Array<{
+      phone: string;
+      claimed_at: string | null;
+      account_id: string | null;
+    }>;
+    const claimed = rows.find((x) => x.phone === P_KNOWN)!;
+    expect(claimed.claimed_at).not.toBeNull();
+    expect(claimed.account_id).toBe(KNOWN);
+    const pending = rows.find((x) => x.phone === P_UNKNOWN)!;
+    expect(pending.claimed_at).toBeNull();
+    expect(pending.account_id).toBeNull();
   });
 
   it('7 - an invite to a number with NO ACCOUNT sends nothing at all', async () => {

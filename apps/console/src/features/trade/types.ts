@@ -78,6 +78,20 @@ export interface OrderDetail {
   readonly lines: readonly OrderLine[];
   readonly payment_submissions: readonly PaymentSubmission[];
   readonly history: readonly Transition[];
+  /** D-155: the server's answer to what this seller may do to THIS order,
+   *  named by permission code. The console renders a control iff its code
+   *  is present, and never unions this with a guess of its own. */
+  readonly allowed_actions: readonly string[];
+}
+
+/** GET /v1/seller/couriers row (D-224.4): a claimed row carries account_id;
+ *  a pending invite carries null and is not assignable. */
+export interface SellerCourierRow {
+  readonly id: string;
+  readonly phone: string;
+  readonly invited_at: string;
+  readonly claimed_at: string | null;
+  readonly account_id: string | null;
 }
 
 /** GET /v1/seller/orders/{id}/qr. */

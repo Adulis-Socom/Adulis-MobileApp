@@ -303,6 +303,9 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
             activates_at: '2026-08-31T10:00:00Z',
             activated_at: null,
           },
+          // The server returns allowed_actions on this read (D-155); the
+          // controls gate on it now, so the plant must carry it.
+          allowed_actions: ['seller.payout:update'],
         },
       });
     });
@@ -339,7 +342,14 @@ test.describe('SC-25 Team -- the entitlement is the server\'s answer', () => {
     await context.route('**/v1/seller/team', async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       const real = await route.fetch();
-      const body = (await real.json()) as { data: unknown[]; seats: unknown };
+      const body = (await real.json()) as {
+        data: unknown[];
+        seats: unknown;
+        allowed_actions: string[];
+      };
+      // The seed OWNER holds seller.staff:admin, so the real body already
+      // carries the code the form gates on; the plant only flips seats.
+      expect(body.allowed_actions).toContain('seller.staff:admin');
       await route.fulfill({ response: real, json: { ...body, seats: { allowed: true, cap: 5 } } });
     });
     await page.goto(`${base}/team`);
