@@ -9,7 +9,7 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — binding product behaviour.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — binding seller-surface architecture.
 - `ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md` - binding database enforcement baseline. Installed at T15; v1.16 removes S0's stale table count rather than correcting it (D-222.5 -- a number with no checker and no reader schedules its own next finding). Its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and `pg_class`, and compared to the document by the `appendix` gate, so the document, the fixture and the database agree by construction. 116 tables, 71 enum types.
-- `ADU-API-01_API_Contract_v1_9_ASCII.md` - binding wire contract baseline (T15: answers the eleven gap sentences the console renders)
+- `ADU-API-01_API_Contract_v1_10_ASCII.md` - binding wire contract baseline (T16: four corrections v1.9 owed itself, the eight reads catalogued, GET /v1/seller/obligations)
 - `ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md` - binding console content architecture (T15: three stale passages corrected -- G1.1 on SC-22, G1.6 on SC-25, S2.3's numbering)
 - `ADU-RUL-06_Rulings_on_the_T13_Register.md` and `ADU-RUL-07_Contract_Rulings.md` - founder rulings, binding as scoped in each. Installed at T5.
 - `ADU-AUTH-01_Authentication_and_Authorization_v2_6.md` - binding identity/access baseline for AUTHENTICATION, SESSIONS, RECOVERY, OPERATOR AUTHENTICATION and ABUSE CONTROL. Installed at T13.
@@ -29,7 +29,7 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
 2. **Database enforcement:** `ADU-DB-01 v1.16` governs.
-3. **API/wire behaviour:** `ADU-API-01 v1.9` governs.
+3. **API/wire behaviour:** `ADU-API-01 v1.10` governs.
 4. **Authentication/authorization:** `ADU-AUTH-01 v2.5` governs.
 5. **Seller surface placement:** `ADU-ARCH-01 v2.0` governs.
 6. **Browser security:** `ADU-SEC-01 v1.0` governs.

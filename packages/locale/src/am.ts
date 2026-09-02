@@ -708,7 +708,7 @@ export const am: Catalogue = {
   'console.insights.analytics.period_90': 'Last 90 days',
   'console.insights.analytics.window_showing': 'Showing {from} to {to}. Published products, active reservations, completed handoffs and followers are current or lifetime totals.',
   'console.insights.analytics.products_published': 'Published products',
-  'console.insights.analytics.orders_30d': 'Orders in this period',
+  'console.insights.analytics.orders': 'Orders in this period',
   'console.insights.analytics.active_reservations': 'Active reservations',
   'console.insights.analytics.completed_handoffs': 'Completed handoffs',
   'console.insights.analytics.followers': 'Followers',

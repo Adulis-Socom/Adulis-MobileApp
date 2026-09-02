@@ -299,8 +299,8 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
-      expect(Number(r.body.storefront_views_30d)).toBeGreaterThan(0);
-      expect(Number(r.body.product_views_30d)).toBeGreaterThan(0);
+      expect(Number(r.body.storefront_views)).toBeGreaterThan(0);
+      expect(Number(r.body.product_views)).toBeGreaterThan(0);
       expect(r.body.scope).toBe('VIEWS_RESERVATIONS_CONVERSION');
 
       const bare = await http()
@@ -329,10 +329,10 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
-      expect(Number(past.body.storefront_views_30d)).toBe(0);
-      expect(Number(past.body.product_views_30d)).toBe(0);
-      expect(past.body.window_from).toBe('2019-01-01');
-      expect(past.body.window_to).toBe('2019-12-31');
+      expect(Number(past.body.storefront_views)).toBe(0);
+      expect(Number(past.body.product_views)).toBe(0);
+      expect(past.body.window.from).toBe('2019-01-01');
+      expect(past.body.window.to).toBe('2019-12-31');
     });
 
     it('overview echoes the resolved window and validates its dates', async () => {
@@ -342,8 +342,8 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
       expect(r.body.products_published).toBe(1); // point-in-time, window-independent
-      expect(r.body.window_from).toBe('2020-01-01');
-      expect(r.body.window_to).toBe('2020-01-31');
+      expect(r.body.window.from).toBe('2020-01-01');
+      expect(r.body.window.to).toBe('2020-01-31');
 
       const bad = await http()
         .get('/v1/seller/analytics/overview?from=not-a-date')
@@ -363,16 +363,21 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
 
     it('a lone `to` is a trailing 30-day window ending at `to`, not an incoherent empty one', async () => {
       // The pass edge: defaulting lo to now()-30d for a lone past `to` would put
-      // window_from AFTER window_to. lo defaults to to-30d instead.
+      // window.from AFTER window.to. lo defaults to to-30d instead.
       const r = await http()
         .get('/v1/seller/analytics/overview?to=2020-01-31')
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
-      expect(r.body.window_from).toBe('2020-01-01'); // 30 days before `to`
-      expect(r.body.window_to).toBe('2020-01-31');
+      expect(r.body.window.from).toBe('2020-01-01'); // 30 days before `to`
+      expect(r.body.window.to).toBe('2020-01-31');
       // coherent: from is on or before to
-      expect(r.body.window_from <= r.body.window_to).toBe(true);
+      expect(r.body.window.from <= r.body.window.to).toBe(true);
+      // v1.10: NO suffixed field and NO flat window field survives -- a field
+      // named for a window it need not cover is a name that lies (D-232).
+      expect(r.body).not.toHaveProperty('orders_30d');
+      expect(r.body).not.toHaveProperty('window_from');
+      expect(r.body).toHaveProperty('orders');
     });
   });
 

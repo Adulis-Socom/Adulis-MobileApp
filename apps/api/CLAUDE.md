@@ -5,7 +5,7 @@ repository root** — from the root, none of the rules below are in context.
 
 **Governing documents:** ADU-DB-01 **v1.16** (T15) · ADU-AUTH-01 **v2.6** (T13, and **v2.5
 remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`) ·
-ADU-API-01 **v1.9** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
+ADU-API-01 **v1.10** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
 governs and which amendments are live. A1, A2 and A3 are all absorbed into the installed
 text and no longer apply separately.
 

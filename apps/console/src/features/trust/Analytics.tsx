@@ -13,7 +13,7 @@
  * THE PERIOD PICKER IS REAL NOW (T15 Phase 4): the wire takes an inclusive
  * [from, to] of ISO dates on both reads, so the 7/30/90-day options the
  * wireframe drew actually change the answer. The resolved window comes back
- * (window_from/window_to) and renders as the caption -- the server's own
+ * once (`window: {from, to}`, v1.10 S12.13) and renders as the caption -- the server's own
  * statement of what the numbers cover, never a client assumption.
  *
  * NO EXPORT CONTROL: POST .../export was deliberately not built (no worker,
@@ -119,7 +119,7 @@ export function Analytics() {
   // tell a seller with history "No analytics yet".
   const noData =
     overview.products_published === 0 &&
-    overview.orders_30d === 0 &&
+    overview.orders === 0 &&
     overview.active_reservations === 0 &&
     overview.completed_handoffs === 0 &&
     overview.followers === 0;
@@ -165,8 +165,8 @@ export function Analytics() {
       </div>
       <p className="hint" data-window>
         {fillTemplate(en['console.insights.analytics.window_showing'], {
-          from: overview.window_from,
-          to: overview.window_to,
+          from: overview.window.from,
+          to: overview.window.to,
         })}
       </p>
 
@@ -176,8 +176,8 @@ export function Analytics() {
           <span className="kpi-value">{overview.products_published}</span>
         </div>
         <div className="kpi-tile">
-          <span className="kpi-label">{en['console.insights.analytics.orders_30d']}</span>
-          <span className="kpi-value">{overview.orders_30d}</span>
+          <span className="kpi-label">{en['console.insights.analytics.orders']}</span>
+          <span className="kpi-value">{overview.orders}</span>
         </div>
         <div className="kpi-tile">
           <span className="kpi-label">{en['console.insights.analytics.active_reservations']}</span>
@@ -199,15 +199,15 @@ export function Analytics() {
           <div className="kpi-tiles">
             <div className="kpi-tile">
               <span className="kpi-label">{en['console.insights.analytics.storefront_views']}</span>
-              <span className="kpi-value">{full.storefront_views_30d}</span>
+              <span className="kpi-value">{full.storefront_views}</span>
             </div>
             <div className="kpi-tile">
               <span className="kpi-label">{en['console.insights.analytics.product_views']}</span>
-              <span className="kpi-value">{full.product_views_30d}</span>
+              <span className="kpi-value">{full.product_views}</span>
             </div>
             <div className="kpi-tile">
               <span className="kpi-label">{en['console.insights.analytics.reservations']}</span>
-              <span className="kpi-value">{full.reservations_30d}</span>
+              <span className="kpi-value">{full.reservations}</span>
             </div>
             <div className="kpi-tile">
               <span className="kpi-label">{en['console.insights.analytics.conversion']}</span>

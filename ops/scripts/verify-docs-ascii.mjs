@@ -42,7 +42,7 @@ const GOVERNED = [
   // corrupts a gate's source of truth rather than merely its prose.
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_6.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md',
-  'docs/ADU-API-01_API_Contract_v1_9_ASCII.md',
+  'docs/ADU-API-01_API_Contract_v1_10_ASCII.md',
   // T15: ADU-CON-03 arrives ASCII for the first time at v1.3 (v1.2 was a
   // pre-A3.5 supply); governed from this installation.
   'docs/ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md',

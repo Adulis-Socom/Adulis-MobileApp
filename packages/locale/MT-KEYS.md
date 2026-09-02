@@ -644,7 +644,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.insights.analytics.period_90`
 - `console.insights.analytics.window_showing`
 - `console.insights.analytics.products_published`
-- `console.insights.analytics.orders_30d`
+- `console.insights.analytics.orders`
 - `console.insights.analytics.active_reservations`
 - `console.insights.analytics.completed_handoffs`
 - `console.insights.analytics.followers`
