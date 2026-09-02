@@ -214,18 +214,24 @@ export function Payout() {
       </section>
 
       <div className="payout-actions">
-        <button
-          type="button"
-          className="button decision"
-          disabled={busy}
-          aria-expanded={formOpen}
-          onClick={() => setFormOpen((o) => !o)}
-        >
-          {en['console.admin.payout.change']}
-        </button>
-        {/* R21: rendered ONLY beside a real pending row. Absent, not
-            disabled, when there is nothing to cancel. */}
-        {payout.pending ? (
+        {/* D-155: the change control renders iff the server says this seller
+            may change payout -- read, never inferred from having reached the
+            screen (a role can read payout and not update it). */}
+        {payout.allowed_actions.includes('seller.payout:update') ? (
+          <button
+            type="button"
+            className="button decision"
+            disabled={busy}
+            aria-expanded={formOpen}
+            onClick={() => setFormOpen((o) => !o)}
+          >
+            {en['console.admin.payout.change']}
+          </button>
+        ) : null}
+        {/* R21: rendered ONLY beside a real pending row (server STATE), and
+            only where the grant is present. Absent -- not disabled -- when
+            there is nothing to cancel. */}
+        {payout.pending && payout.allowed_actions.includes('seller.payout:update') ? (
           <button type="button" className="button decision" disabled={busy} onClick={() => void cancelPending()}>
             {en['console.admin.payout.cancel_pending']}
           </button>

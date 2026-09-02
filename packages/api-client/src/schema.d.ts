@@ -1141,6 +1141,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** bucket membership is the SERVER's (D-154). */
         get: operations["OrdersController_listSellerOrders"];
         put?: never;
         post?: never;
@@ -3288,6 +3289,7 @@ export interface operations {
     OrdersController_listSellerOrders: {
         parameters: {
             query: {
+                bucket: string;
                 cursor: string;
                 limit: string;
             };

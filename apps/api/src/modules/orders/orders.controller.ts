@@ -16,6 +16,7 @@ import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { Public } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { ORDER_BUCKETS, type OrderBucket } from './order-buckets';
 import { OrdersService } from './orders.service';
 import {
   addCartLineBody,
@@ -37,6 +38,8 @@ const assertUuid = (v: string, path: string): void => {
     throw new AdulisException('VALIDATION_FAILED', { slots: { path } });
   }
 };
+
+
 
 @Controller()
 export class OrdersController {
@@ -168,13 +171,20 @@ export class OrdersController {
   // ---------------------------------------------------------- seller orders
 
   @Get('seller/orders')
+  @ApiOperation({ summary: 'bucket membership is the SERVER\'s (D-154).' })
   async listSellerOrders(
     @Req() req: LocalizedRequest,
     @Query('limit') limitRaw?: string,
     @Query('cursor') cursor?: string,
+    @Query('bucket') bucket?: string,
   ): Promise<unknown> {
     const limit = Math.min(Math.max(Number(limitRaw ?? 20) || 20, 1), 50);
-    return this.tx.run(req, (trx) => this.svc.listSellerOrders(trx, req, limit, cursor));
+    if (bucket !== undefined && !Object.hasOwn(ORDER_BUCKETS, bucket)) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'bucket' } });
+    }
+    return this.tx.run(req, (trx) =>
+      this.svc.listSellerOrders(trx, req, limit, cursor, bucket as OrderBucket | undefined),
+    );
   }
 
   @Get('seller/orders/:id')

@@ -62,7 +62,12 @@ import { StateBadge, ORDER_STATE_LABEL } from './StateBadge';
 import { PaymentDecisions } from './PaymentDecisions';
 import { PaymentEvidence } from './PaymentEvidence';
 import { HandoffQr } from './HandoffQr';
-import { isTerminal, openSubmission, type OrderDetail as Detail } from './types';
+import {
+  isTerminal,
+  openSubmission,
+  type OrderDetail as Detail,
+  type SellerCourierRow,
+} from './types';
 
 /** core.reservation_state -> what a seller reads. Unknown values render as code. */
 const LINE_STATE_LABEL: Readonly<Record<string, string>> = {
@@ -84,7 +89,25 @@ export function OrderDetail() {
   const [readyKey] = useState(mintKey);
   const [actionProblem, setActionProblem] = useState<ApiError | null>(null);
   const [reissueKey] = useState(mintKey);
+  // D-224.4/D-157: the courier assignment control is live now. Load the
+  // seller's couriers; only CLAIMED rows carry an account_id the assignment
+  // and custody endpoints can take, and pending invites render disabled with
+  // their real status (not a faked selectable row).
+  const [couriers, setCouriers] = useState<readonly SellerCourierRow[]>([]);
+  const [chosenCourier, setChosenCourier] = useState('');
+  const [assignKey] = useState(mintKey);
+  const [custodyKey] = useState(mintKey);
   const stepUp = useStepUp();
+
+  const loadCouriers = useCallback(async () => {
+    if (!sellerId) return;
+    try {
+      const r = await api<{ data: SellerCourierRow[] }>(`/seller/couriers`, { sellerId });
+      setCouriers(r.data);
+    } catch {
+      setCouriers([]);
+    }
+  }, [sellerId]);
 
   const load = useCallback(async () => {
     if (!sellerId || !orderId) return;
@@ -110,6 +133,9 @@ export function OrderDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    void loadCouriers();
+  }, [loadCouriers]);
 
   if (!sellerId || !orderId) return null;
 
@@ -352,51 +378,93 @@ export function OrderDetail() {
                 </p>
               ) : null}
 
+              {/*
+                D-155 + R20 held together. The handoff REGION and its controls
+                RENDER whenever the order exists (R20: a region that
+                disappears makes a seller wonder what they broke) -- but each
+                control is ENABLED iff the server's allowed_actions carries
+                its permission code. allowed_actions already encodes BOTH the
+                state gate and the grant gate, so the console reads ONE array
+                and never unions its own guess: an ANALYST on a confirmed
+                order sees the controls disabled, a pre-payment OWNER sees
+                them disabled, and only a confirmed OWNER acts.
+              */}
               <div className="handoff-controls">
                 <button
                   type="button"
                   data-action="mark-ready"
-                  disabled={!paid || ended || order.ready_at !== null}
+                  disabled={!order.allowed_actions.includes('seller.order_ready:update')}
                   onClick={() => void act('/ready', readyKey)}
                 >
                   {en['console.trade.detail.mark_ready']}
                 </button>
                 {/*
-                  D-157. Courier assignment and custody transfer both take a
-                  `courier_account_id`, and NO ENDPOINT RETURNS ONE.
-                  GET /v1/seller/couriers returns INVITES -- id, phone,
-                  invited_at, claimed_at -- while the assignment validates
-                  against core.seller_courier by ACCOUNT id. The console
-                  cannot bridge those without inventing a lookup, so these
-                  two render disabled with the reason stated, on the same
-                  "render, do not hide" doctrine R20 uses two lines above.
+                  D-157/D-224.4: courier assignment is LIVE. The couriers
+                  endpoint returns claimed rows with account_id now; the
+                  select offers only claimed couriers, and a pending invite
+                  shows disabled with its real status rather than a faked
+                  selectable row.
                 */}
-                <button type="button" data-action="assign-courier" disabled>
-                  {en['console.trade.detail.assign_courier']}
-                </button>
-                <button type="button" data-action="custody-transfer" disabled>
+                <div className="courier-assign">
+                  <label htmlFor="courier-select" className="visually-hidden">
+                    {en['console.trade.detail.assign_courier']}
+                  </label>
+                  <select
+                    id="courier-select"
+                    value={chosenCourier}
+                    disabled={!order.allowed_actions.includes('seller.couriers:manage')}
+                    onChange={(e) => setChosenCourier(e.target.value)}
+                  >
+                    <option value="">{en['console.trade.detail.courier_choose']}</option>
+                    {couriers.map((c) => (
+                      <option key={c.id} value={c.account_id ?? ''} disabled={c.account_id === null}>
+                        {c.account_id
+                          ? c.phone
+                          : fillTemplate(en['console.trade.detail.courier_pending'], {
+                              phone: c.phone,
+                            })}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    data-action="assign-courier"
+                    disabled={
+                      !order.allowed_actions.includes('seller.couriers:manage') || !chosenCourier
+                    }
+                    onClick={() =>
+                      void act('/courier-assignment', assignKey, {
+                        courier_account_id: chosenCourier,
+                      })
+                    }
+                  >
+                    {en['console.trade.detail.assign_courier']}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  data-action="custody-transfer"
+                  disabled={
+                    !order.allowed_actions.includes('seller.handoff:custody_transfer') ||
+                    !chosenCourier
+                  }
+                  onClick={() =>
+                    void act('/custody-transfer', custodyKey, {
+                      courier_account_id: chosenCourier,
+                    })
+                  }
+                >
                   {en['console.trade.detail.custody_transfer']}
                 </button>
-                {/*
-                  AND NOT ON AN ENDED ORDER (T11 Phase 5, D-169). `paid`
-                  includes COMPLETED, so this used to stay operable on a
-                  terminal screen -- a "history, no actions" state minting a
-                  live signed handoff token for an order that is over. R20
-                  opens the QR at PAYMENT_CONFIRMED; nothing says it survives
-                  completion, and TERMINAL says it must not.
-                */}
                 <button
                   type="button"
                   data-action="show-qr"
-                  disabled={!paid || ended}
+                  disabled={!order.allowed_actions.includes('seller.handoff:read')}
                   onClick={() => setModal('qr')}
                 >
                   {en['console.trade.detail.show_qr']}
                 </button>
               </div>
-              <p className="hint" data-gap="D-157">
-                {en['console.trade.detail.no_courier_ids']}
-              </p>
             </section>
 
             {/* -------------------------------------------------- 6. history */}

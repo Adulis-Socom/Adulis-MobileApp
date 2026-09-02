@@ -241,6 +241,11 @@ export function Team() {
   }
 
   const admins = team.data.filter((m) => m.role === 'ADMIN' && !m.suspended_at);
+  // D-155: staff-admin and ownership-transfer controls render iff the
+  // server's allowed_actions carries their codes -- read, not inferred
+  // from having reached the screen.
+  const canAdminStaff = team.allowed_actions.includes('seller.staff:admin');
+  const canTransfer = team.allowed_actions.includes('seller.ownership:transfer');
 
   return (
     <section aria-labelledby="team-heading" data-screen="SC-25" className="team">
@@ -276,9 +281,11 @@ export function Team() {
                   ? en['console.admin.team.suspended']
                   : en['console.admin.team.active']}
               </span>
-              <button type="button" className="button" disabled={busy} onClick={() => void remove(m.id)}>
-                {en['console.admin.team.remove']}
-              </button>
+              {canAdminStaff ? (
+                <button type="button" className="button" disabled={busy} onClick={() => void remove(m.id)}>
+                  {en['console.admin.team.remove']}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -287,6 +294,7 @@ export function Team() {
           immediate (an ACTIVE account) or refused (404). Named, not faked. */}
       <p className="hint">{en['console.admin.team.no_pending_note']}</p>
 
+      {canAdminStaff ? (
       <section aria-labelledby="invite-heading" className="team-invite">
         <h2 id="invite-heading">{en['console.admin.team.invite_heading']}</h2>
         <label htmlFor="tm-phone">{en['console.admin.team.phone']}</label>
@@ -303,7 +311,9 @@ export function Team() {
           {en['console.admin.team.invite']}
         </button>
       </section>
+      ) : null}
 
+      {canTransfer ? (
       <section aria-labelledby="transfer-heading" className="ownership-transfer">
         <h2 id="transfer-heading">{en['console.admin.team.transfer_heading']}</h2>
         {transfer ? (
@@ -353,6 +363,8 @@ export function Team() {
           </>
         )}
       </section>
+      ) : null}
+
 
       {modal}
     </section>

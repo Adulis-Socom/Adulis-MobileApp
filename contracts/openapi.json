@@ -1494,6 +1494,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "bucket",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1501,6 +1509,7 @@
             "description": ""
           }
         },
+        "summary": "bucket membership is the SERVER's (D-154).",
         "tags": [
           "Orders"
         ]

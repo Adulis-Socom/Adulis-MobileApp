@@ -5,6 +5,7 @@ import { APP_DATABASE, FINANCIAL_DATABASE } from '../../common/db/database.modul
 import type { Database } from '../../common/db/database.types';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import { assertPermission } from '../../common/auth/permission';
+import { grantSet, allowedActions } from '../../common/auth/grant-set';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import {
   decryptFramed,
@@ -206,9 +207,14 @@ export class FinancialService {
         FROM core.payout_details
        WHERE seller_id = ${req.ctx?.sellerId} AND state IN ('ACTIVE', 'PENDING')
        ORDER BY state`.execute(trx);
+    const grants = await grantSet(trx, req);
     return {
       active: r.rows.find((row) => row['state'] === 'ACTIVE') ?? null,
       pending: r.rows.find((row) => row['state'] === 'PENDING') ?? null,
+      // D-155: change and cancel share seller.payout:update; R21's render
+      // condition (cancel only beside a real pending row) stays the row's,
+      // so the code is present whenever the caller may change payout at all.
+      allowed_actions: allowedActions(grants, { 'seller.payout:update': true }),
     };
   }
 

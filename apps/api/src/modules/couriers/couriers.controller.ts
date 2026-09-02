@@ -113,7 +113,8 @@ export class CouriersController {
       // invite has to be visible, or the seller cannot tell an invitation
       // that is waiting from a number they mistyped.
       const r = await sql<Record<string, unknown>>`
-        SELECT i.id, i.phone, i.invited_at, i.claimed_at
+        SELECT i.id, i.phone, i.invited_at, i.claimed_at,
+             i.claimed_by_account_id AS account_id
           FROM core.seller_courier_invite i
          WHERE i.seller_id = ${sellerId} AND i.revoked_at IS NULL
          ORDER BY i.invited_at`.execute(trx);
