@@ -245,6 +245,29 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
     await clearOpen();
   });
 
+  it('the GET carries the transfer REFERENCE the POST minted (A7 / v1.9 item 12)', async () => {
+    // A7: the POST returned a `reference` to write on the bank transfer, and
+    // the GET dropped it -- so a seller who closed the tab had the amount but
+    // not the string. The GET now derives it identically, so a re-open reads
+    // back what to transfer instead of the console recomputing a business fact.
+    const opened = await openIntent(SELLER, OWNER_S, OWNER);
+    expect(opened.body.reference).toMatch(/^ADU-SUB-/);
+
+    const sub = await request(app.getHttpServer())
+      .get('/v1/billing/subscription')
+      .set('Cookie', cookie(OWNER_S))
+      .set('X-Adulis-Seller', SELLER)
+      .set('Origin', CONSOLE_ORIGIN)
+      .expect(200);
+    expect(sub.body.intent).not.toBeNull();
+    // Same reference, same derivation, off the same collection record.
+    expect(sub.body.intent.reference).toBe(opened.body.reference);
+    expect(sub.body.intent.reference).toBe(
+      `ADU-SUB-${String(sub.body.intent.collection_record_id).slice(0, 8).toUpperCase()}`,
+    );
+    await clearOpen();
+  });
+
   it('the rate is locked at creation: the schedule may move, the quote does not', async () => {
     const a = await openIntent(SELLER, OWNER_S, OWNER);
     expect(Number(a.body.amount_minor)).toBe(1200000);

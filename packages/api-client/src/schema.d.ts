@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/remembered-devices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget a remembered device (v1.9 S15.0b); the session stays live. */
+        delete: operations["AuthController_forgetRememberedDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/sessions": {
         parameters: {
             query?: never;
@@ -869,7 +886,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Views, reservations, conversion, funnel — entitlement-gated at read time. */
+        /** Views, reservations, conversion, funnel over a window — entitlement-gated. */
         get: operations["AnalyticsController_full"];
         put?: never;
         post?: never;
@@ -886,7 +903,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Essential counts. Every tier, including Free and Beta. */
+        /** Essential counts over a date window. Every tier, including Free and Beta. */
         get: operations["AnalyticsController_overview"];
         put?: never;
         post?: never;
@@ -903,7 +920,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The saved weekly pattern the editor loads (v1.9 S15.0b). */
+        get: operations["OnboardingController_getAvailability"];
         /** The whole weekly pattern. Zero windows is valid and means closed. */
         put: operations["OnboardingController_putAvailability"];
         post?: never;
@@ -1579,7 +1597,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The saved profile, with status and handle (v1.9 S15.0b). */
+        get: operations["OnboardingController_getProfile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1629,7 +1648,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Linked accounts, with the follower count and when it was captured. */
+        get: operations["OnboardingController_getSocialAccounts"];
         put?: never;
         /** Link a social account; issues the account-control code. */
         post: operations["OnboardingController_createSocialAccount"];
@@ -1964,6 +1984,25 @@ export interface operations {
         requestBody?: never;
         responses: {
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_forgetRememberedDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2918,7 +2957,10 @@ export interface operations {
     };
     AnalyticsController_full: {
         parameters: {
-            query?: never;
+            query: {
+                from: string;
+                to: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2934,6 +2976,26 @@ export interface operations {
         };
     };
     AnalyticsController_overview: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnboardingController_getAvailability: {
         parameters: {
             query?: never;
             header?: never;
@@ -3902,6 +3964,23 @@ export interface operations {
             };
         };
     };
+    OnboardingController_getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     OnboardingController_patchProfile: {
         parameters: {
             query?: never;
@@ -3941,6 +4020,23 @@ export interface operations {
             query: {
                 cursor: string;
             };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnboardingController_getSocialAccounts: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

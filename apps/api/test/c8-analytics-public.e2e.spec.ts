@@ -319,6 +319,61 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
     });
+
+    it('the date window actually filters (v1.9 item 10): a far-past range zeroes the counts', async () => {
+      // The default window includes the seeded views (asserted above); a range
+      // years in the past cannot, so a param that filters and a param that is
+      // ignored give different answers here. It also echoes the resolved window.
+      const past = await http()
+        .get('/v1/seller/analytics/full?from=2019-01-01&to=2019-12-31')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      expect(Number(past.body.storefront_views_30d)).toBe(0);
+      expect(Number(past.body.product_views_30d)).toBe(0);
+      expect(past.body.window_from).toBe('2019-01-01');
+      expect(past.body.window_to).toBe('2019-12-31');
+    });
+
+    it('overview echoes the resolved window and validates its dates', async () => {
+      const r = await http()
+        .get('/v1/seller/analytics/overview?from=2020-01-01&to=2020-01-31')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      expect(r.body.products_published).toBe(1); // point-in-time, window-independent
+      expect(r.body.window_from).toBe('2020-01-01');
+      expect(r.body.window_to).toBe('2020-01-31');
+
+      const bad = await http()
+        .get('/v1/seller/analytics/overview?from=not-a-date')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(400);
+      expect(bad.body.code).toBe('VALIDATION_FAILED');
+      expect(bad.body.slots.path).toBe('from');
+
+      const inverted = await http()
+        .get('/v1/seller/analytics/overview?from=2026-02-01&to=2026-01-01')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(400);
+      expect(inverted.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('a lone `to` is a trailing 30-day window ending at `to`, not an incoherent empty one', async () => {
+      // The pass edge: defaulting lo to now()-30d for a lone past `to` would put
+      // window_from AFTER window_to. lo defaults to to-30d instead.
+      const r = await http()
+        .get('/v1/seller/analytics/overview?to=2020-01-31')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', SELLER)
+        .expect(200);
+      expect(r.body.window_from).toBe('2020-01-01'); // 30 days before `to`
+      expect(r.body.window_to).toBe('2020-01-31');
+      // coherent: from is on or before to
+      expect(r.body.window_from <= r.body.window_to).toBe(true);
+    });
   });
 
   describe('client events (12.16)', () => {

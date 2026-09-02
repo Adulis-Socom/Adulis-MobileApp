@@ -208,14 +208,83 @@ export class FinancialService {
        WHERE seller_id = ${req.ctx?.sellerId} AND state IN ('ACTIVE', 'PENDING')
        ORDER BY state`.execute(trx);
     const grants = await grantSet(trx, req);
+    const lock = await this.payoutLockState(trx, req);
     return {
       active: r.rows.find((row) => row['state'] === 'ACTIVE') ?? null,
       pending: r.rows.find((row) => row['state'] === 'PENDING') ?? null,
+      // ADU-API-01 v1.9 S15.0c: the lock was discovered on a 409 today, so
+      // SC-24 could not draw a proactive panel. These two fields let it.
+      payout_locked_until: lock.until,
+      reason: lock.reason,
       // D-155: change and cancel share seller.payout:update; R21's render
       // condition (cancel only beside a real pending row) stays the row's,
       // so the code is present whenever the caller may change payout at all.
       allowed_actions: allowedActions(grants, { 'seller.payout:update': true }),
     };
+  }
+
+  /**
+   * The payout lock state, READ-ONLY, for SC-24's proactive panel (v1.9
+   * S15.0c). It is the render-side twin of the three checks
+   * `core.fn_request_payout_change` (0022) makes before it writes, IN THE SAME
+   * ORDER and reading THE SAME rows -- fail-closed when no timing config, then
+   * recovery cooling (the horizon lives on the recovery case), then the
+   * new-device lock (a device first seen within the window). It NEVER
+   * authorizes: the write function remains the authority that raises U0008;
+   * this returns a hint and raises nothing (the grant-set precedent, D-230).
+   * The `reason` vocabulary is the write function's own DETAIL, verbatim, so
+   * the panel and the 409 speak one language.
+   */
+  private async payoutLockState(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+  ): Promise<{ until: string | null; reason: string | null }> {
+    const r = await sql<{
+      no_config: boolean;
+      recovery_until: Date | null;
+      new_device_until: Date | null;
+    }>`
+      WITH cfg AS (
+        SELECT tc.new_device_payout_lock
+          FROM core.timing_config tc
+          JOIN core.seller s ON s.market_id = tc.market_id
+         WHERE s.id = ${req.ctx?.sellerId} AND tc.effective @> now()
+      ),
+      rec AS (
+        SELECT max(rc.payout_locked_until) AS until
+          FROM core.account_recovery_case rc
+         WHERE rc.account_id = ${req.ctx?.accountId} AND rc.payout_locked_until > now()
+      ),
+      dev AS (
+        SELECT min(sn.created_at) AS first_seen
+          FROM core.session sn
+         WHERE sn.account_id = ${req.ctx?.accountId}
+           AND sn.device_id = ${req.auth?.deviceId ?? null}
+      )
+      SELECT
+        (SELECT count(*) FROM cfg) = 0 AS no_config,
+        (SELECT until FROM rec) AS recovery_until,
+        CASE
+          WHEN (SELECT new_device_payout_lock FROM cfg) IS NOT NULL
+           AND (SELECT first_seen FROM dev) IS NOT NULL
+           AND (SELECT first_seen FROM dev)
+               > now() - (SELECT new_device_payout_lock FROM cfg)
+          THEN (SELECT first_seen FROM dev) + (SELECT new_device_payout_lock FROM cfg)
+          ELSE NULL
+        END AS new_device_until`.execute(trx);
+    const row = r.rows[0];
+    if (!row) return { until: null, reason: null };
+    // Same order the write path fails in: NO_TIMING_CONFIG, then RECOVERY,
+    // then NEW_DEVICE. NO_TIMING_CONFIG has no lift horizon (it is a config
+    // gap, not a timed lock), so `until` stays null there.
+    if (row.no_config) return { until: null, reason: 'NO_TIMING_CONFIG' };
+    if (row.recovery_until) {
+      return { until: row.recovery_until.toISOString(), reason: 'RECOVERY_COOLING' };
+    }
+    if (row.new_device_until) {
+      return { until: row.new_device_until.toISOString(), reason: 'NEW_DEVICE' };
+    }
+    return { until: null, reason: null };
   }
 
   /** POST /v1/seller/payout — every S10.4 control, then the ciphertext. */

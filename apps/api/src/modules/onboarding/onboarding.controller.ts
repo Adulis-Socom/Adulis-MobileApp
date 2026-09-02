@@ -68,10 +68,22 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.readiness(trx, req));
   }
 
+  @Get('seller/profile')
+  @ApiOperation({ summary: 'The saved profile, with status and handle (v1.9 S15.0b).' })
+  async getProfile(@Req() req: LocalizedRequest): Promise<unknown> {
+    return this.tx.run(req, (trx) => this.svc.getProfile(trx, req));
+  }
+
   @Patch('seller/profile')
   async patchProfile(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = patchProfileBody.parse(req.body);
     return this.tx.run(req, (trx) => this.svc.patchProfile(trx, req, body));
+  }
+
+  @Get('seller/social-accounts')
+  @ApiOperation({ summary: 'Linked accounts, with the follower count and when it was captured.' })
+  async getSocialAccounts(@Req() req: LocalizedRequest): Promise<unknown> {
+    return this.tx.run(req, (trx) => this.svc.getSocialAccounts(trx, req));
   }
 
   @Post('seller/social-accounts')
@@ -122,6 +134,12 @@ export class OnboardingController {
     return this.tx.runIdempotent(req, res, 201, (trx) =>
       this.svc.identityVerification(trx, req, body),
     );
+  }
+
+  @Get('seller/availability')
+  @ApiOperation({ summary: 'The saved weekly pattern the editor loads (v1.9 S15.0b).' })
+  async getAvailability(@Req() req: LocalizedRequest): Promise<unknown> {
+    return this.tx.run(req, (trx) => this.svc.getAvailability(trx, req));
   }
 
   @Put('seller/availability')

@@ -271,6 +271,29 @@ describe('C1 — onboarding and verification', () => {
         .expect(200);
     });
 
+    it('GET reads back the saved fields, with status and handle (v1.9 S15.0b)', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/profile')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', sellerId)
+        .expect(200);
+      // The write-only form can now read what it saved...
+      expect(r.body.description).toBe('Handmade leather goods from Addis.');
+      expect(r.body.store_name).toBeTruthy();
+      // ...plus the two the console had no way to know: status and handle.
+      expect(r.body.handle).toBeTruthy();
+      expect(r.body.status).toBe('DRAFT'); // created DRAFT, nothing published it
+      expect(r.body.entity_type).toBe('INDIVIDUAL');
+    });
+
+    it('GET profile is CONSOLE-only: a MOBILE session is 403 (store:read surface gate)', async () => {
+      await request(app.getHttpServer())
+        .get('/v1/seller/profile')
+        .set('Cookie', cookie(OWNER_MOBILE_S))
+        .set('X-Adulis-Seller', sellerId)
+        .expect(403);
+    });
+
     it('403 for the ANALYST — a role failure, identical body to a surface failure', async () => {
       const r = await request(app.getHttpServer())
         .patch('/v1/seller/profile')
@@ -329,6 +352,24 @@ describe('C1 — onboarding and verification', () => {
         [sellerId],
       );
       expect(ladder.rows[0]?.level).toBe('NEW');
+    });
+
+    it('GET social-accounts carries the follower count AND when it was captured (v1.9 S15.0b)', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/social-accounts')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', sellerId)
+        .expect(200);
+      const acc = r.body.accounts.find((a: { id: string }) => a.id === socialId);
+      expect(acc).toBeTruthy();
+      expect(acc.status).toBe('VERIFIED');
+      expect(acc.handle).toBe('@habesha');
+      // The count persisted, not just witnessed in the verify response...
+      expect(acc.follower_count).toBe(5000);
+      // ...AND R24's "as of <date>" has a date to name: captured_at is the
+      // write-once verified_at, so it exists on the wire past this session.
+      expect(acc.captured_at).toBeTruthy();
+      expect(Number.isNaN(Date.parse(acc.captured_at))).toBe(false);
     });
 
     it('404 for a stranger probing the verify path', async () => {
@@ -417,6 +458,51 @@ describe('C1 — onboarding and verification', () => {
         .set('X-Adulis-Seller', sellerId)
         .send({ windows: [] })
         .expect(200);
+    });
+
+    it('GET reads back the weekly pattern the editor loads (v1.9 S15.0b)', async () => {
+      // Two windows, one weekday carrying two -- the shape the PUT accepts,
+      // so the editor round-trips instead of editing a draft it cannot reopen.
+      await request(app.getHttpServer())
+        .put('/v1/seller/availability')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .set('X-Adulis-Seller', sellerId)
+        .send({
+          windows: [
+            { weekday: 1, opens_at: '09:00', closes_at: '12:00' },
+            { weekday: 1, opens_at: '14:00', closes_at: '17:00' },
+            { weekday: 3, opens_at: '10:00', closes_at: '18:00' },
+          ],
+        })
+        .expect(200);
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/availability')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', sellerId)
+        .expect(200);
+      // Ordered weekday-then-open, and HH:MM (not HH:MM:SS) as the PUT sends.
+      expect(r.body.windows).toEqual([
+        { weekday: 1, opens_at: '09:00', closes_at: '12:00' },
+        { weekday: 1, opens_at: '14:00', closes_at: '17:00' },
+        { weekday: 3, opens_at: '10:00', closes_at: '18:00' },
+      ]);
+    });
+
+    it('GET availability is empty (not an error) when zero windows -- a valid closed state', async () => {
+      await request(app.getHttpServer())
+        .put('/v1/seller/availability')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .set('X-Adulis-Seller', sellerId)
+        .send({ windows: [] })
+        .expect(200);
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/availability')
+        .set('Cookie', cookie(OWNER_S))
+        .set('X-Adulis-Seller', sellerId)
+        .expect(200);
+      expect(r.body.windows).toEqual([]);
     });
 
     it('PUT an override — idempotent by path, NO idempotency key demanded', async () => {

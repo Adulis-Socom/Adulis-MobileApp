@@ -122,7 +122,14 @@ export const ERROR_CATALOGUE = {
   VARIANT_HAS_ACTIVE_ORDERS: { group: 'seller', status: 409, retryable: false },
 
   // Payout
-  PAYOUT_LOCKED_RECOVERY: { group: 'payout', status: 409, retryable: false },
+  // ADU-API-01 v1.9 S15.0c / D-224.6: ONE code, cause-neutral, with the cause
+  // in a `reason` slot (RECOVERY_COOLING | NEW_DEVICE | NO_TIMING_CONFIG). The
+  // former name PAYOUT_LOCKED_RECOVERY baked in one of two causes and rendered
+  // "after account recovery" on a new-device lock. Only the sentence differs,
+  // so it is the locale catalogue's job, not a second taxonomy code. (S7.1's
+  // table in v1.9 still prints PAYOUT_LOCKED_RECOVERY -- a stale entry against
+  // S15.0c, the authoritative new-behaviour section; reported.)
+  PAYOUT_LOCKED: { group: 'payout', status: 409, retryable: false },
   PAYOUT_CHANGE_PENDING: { group: 'payout', status: 409, retryable: false },
   PAYOUT_PERMISSION_DENIED: { group: 'payout', status: 403, retryable: false },
 

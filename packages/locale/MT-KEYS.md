@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-727 keys:
+730 keys:
 
 - `app.title`
 - `health.ok`
@@ -80,7 +80,10 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `error.seller.fulfilment_method_required`
 - `error.seller.product_has_active_orders`
 - `error.seller.variant_has_active_orders`
-- `error.payout.payout_locked_recovery`
+- `error.payout.payout_locked`
+- `error.payout.payout_locked_recovery_cooling`
+- `error.payout.payout_locked_new_device`
+- `error.payout.payout_locked_no_timing_config`
 - `error.payout.payout_change_pending`
 - `error.payout.payout_permission_denied`
 - `error.deletion.deletion_blocked`
