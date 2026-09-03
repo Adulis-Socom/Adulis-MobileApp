@@ -1,5 +1,12 @@
 # Adulis Platform
 
+[![CI on main](https://github.com/Adulis-Socom/Adulis-MobileApp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Adulis-Socom/Adulis-MobileApp/actions/workflows/ci.yml?query=branch%3Amain)
+
+> **If that badge is red, main is broken and fixing it precedes every other task.**
+> CI has always run on push to main; what it cannot do is make anyone look.
+> The merges of #80 and #81 each sat red for two hours before the next order
+> tripped over them (T20 S2.1, register).
+
 Adulis gives sellers on TikTok and Instagram a structured, trust-backed
 storefront: buyers reserve stock and pay the seller directly by bank transfer,
 and Adulis never touches buyer money.

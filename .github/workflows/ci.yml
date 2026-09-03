@@ -10,6 +10,20 @@
 
 name: CI
 
+# T20 S2.1 -- THE TRIGGER WAS NEVER THE GAP, AND THE RULING'S PREMISE IS
+# CORRECTED HERE RATHER THAN SILENTLY DISCHARGED. push: '**' has always
+# included main, and the Actions history proves it fired: the merges of #80
+# and #81 each produced a RED run on main (2026-09-03 07:10 and 07:12), two
+# hours before anyone noticed main was broken -- by hitting it at the start
+# of the next order. The gate saw the merged tree; nobody looked at the gate.
+#
+# So the fix the ruling asked for ("CI runs on push to main") already exists,
+# and what it bought is exactly what happened: a red main RECORDED within a
+# minute and IGNORED. The stronger fix -- branches current before merge --
+# needs branch protection, recorded unenforceable on this plan (ADU-CON-02
+# S21). What remains is a human habit with a mechanical aid: the badge in
+# README.md points at this workflow's main-branch status, so a red main is
+# one glance away rather than one navigation nobody makes.
 on:
   push:
     branches: ['**']
