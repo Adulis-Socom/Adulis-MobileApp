@@ -270,12 +270,25 @@ export class FinancialService {
           FROM core.session sn
          WHERE sn.account_id = ${req.ctx?.accountId}
            AND sn.device_id = ${req.auth?.deviceId ?? null}
+      ),
+      -- T18 Phase 4: the new-device lock has a SUBJECT. The render-side twin
+      -- of 0047's predicate, and it must stay identical -- ANY payout row in
+      -- ANY state, not just ACTIVE. A CANCELLED row still counts, because
+      -- cancelling is free (fn_cancel_payout_change needs no step-up and
+      -- checks no lock) and an ACTIVE-only test would let an attacker cancel
+      -- a seller's pending first set and walk through the carve-out.
+      ever AS (
+        SELECT 1 AS present
+          FROM core.payout_details pd
+         WHERE pd.seller_id = ${req.ctx?.sellerId}
+         LIMIT 1
       )
       SELECT
         (SELECT count(*) FROM cfg) = 0 AS no_config,
         (SELECT until FROM rec) AS recovery_until,
         CASE
           WHEN (SELECT new_device_payout_lock FROM cfg) IS NOT NULL
+           AND EXISTS (SELECT 1 FROM ever)
            AND (SELECT first_seen FROM dev) IS NOT NULL
            AND (SELECT first_seen FROM dev)
                > now() - (SELECT new_device_payout_lock FROM cfg)

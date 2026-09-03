@@ -3142,3 +3142,241 @@ Ruling needed: whether seller_registration_enabled should ever ENFORCE rather th
   declare -- i.e. whether POST /v1/seller should refuse when the market's seller signup is
   closed. Not built here: it would turn a declarative flag into an access control on the
   one path a hand-picked beta seller must still walk, and that is a product decision.
+### D-243 - T18 Phase 3: GET /v1/seller/list closes D-97; the chooser redirects; and a case-sensitivity hole in the seller-context guard
+
+Severity:  D-97 closed; one pre-existing auth-boundary defect found and fixed in passing
+Phase:     T18 Phase 3
+Source:    apps/api (auth.guard.ts, onboarding controller + service, c1-onboarding);
+           apps/console (Chooser.tsx, Shell.tsx, chooser.spec.ts, zz-beta-walk.spec.ts);
+           packages/locale; contracts/openapi.json
+Supersedes: D-97 ("The contract has no endpoint listing the caller's own sellers"), whose
+  Action line ruled that "the endpoint's shape (owner stores only? team memberships? role
+  per store?) is contract design, not console transcription". T18 S3 answered all three:
+  owned AND team-membered, role per row. D-97 is not rewritten -- the register is
+  append-only and records are not restated when the world moves -- so this entry is where
+  it is closed.
+Effect / Response, each:
+  THE THIRD EXEMPTION  GET /v1/seller/list is exempt from requiresSellerContext, and the
+    reason sits beside the other two rather than in a comment of its own: all three are
+    paths under /v1/seller that no seller header can describe. Creation has nothing to
+    name yet; identity verification is held by an operator who holds no seller; and this
+    one asks WHICH sellers the caller holds, so requiring the answer as input is
+    circular. Inventing a /v1/accounts namespace for one endpoint would have been the
+    larger change.
+  SCOPED TO GET AND HEAD, after the pass. The two existing exemptions are method-gated
+    for free by sitting BELOW the POST check; this one sits above it and would otherwise
+    have exempted every verb, so a later @Post('seller/list') would have inherited it
+    silently. HEAD is included deliberately: Express routes HEAD to the GET handler, and
+    a HEAD demanding a header the endpoint cannot accept would be a 400 nobody could fix.
+  A CASE-SENSITIVITY HOLE, PRE-EXISTING, FOUND AND FIXED. Express routes
+    case-INSENSITIVELY (nothing sets 'case sensitive routing'), so GET /v1/SELLER/payout
+    reaches the payout handler -- but every predicate in requiresSellerContext was
+    case-SENSITIVE, so that request skipped BOTH effects of section 4.2: no
+    SELLER_CONTEXT_REQUIRED, and adulis.actor_role silently BUYER instead of SELLER. It
+    fails closed one layer down today (assertPermission throws on a null sellerId rather
+    than querying), so nothing leaked -- but the guard's own docstring promises "absent
+    on a seller-scoped path -> 400" and that promise was false for any capitalisation.
+    The path is now lowercased once, at the top. Raised against THIS phase rather than
+    left as inherited debt for a specific reason: until now, requiresSellerContext
+    returning false on a /v1/seller path was ALWAYS a bug. This change makes it a
+    legitimate documented outcome for the first time, which is exactly the condition
+    under which a case-variant request stops looking anomalous. Asserted both ways.
+  THE QUERY  a UNION ALL of the two arms fn_has_permission itself uses. Three things the
+    pass corrected before merge, each a real defect:
+      DELETED  core.seller_status carries DELETED and both arms now exclude it. With the
+        console's exactly-one redirect, listing a deleted store would forward a seller
+        into it on every visit and leave them unable to reach the screen that offers to
+        create a new one.
+      DUPLICATES  team_member_is_never_owner constrains the ROLE VALUE (role <> 'OWNER'),
+        NOT the account -- nothing stops an owner also holding an ADMIN row on their own
+        store, and under UNION ALL it would be listed twice. Two rows also defeat the
+        exactly-one redirect, stranding that seller on a chooser showing one store twice.
+        The member arm now excludes the owner.
+      TOTAL ORDER  ORDER BY created_at gained an id tie-breaker; two stores created in
+        one transaction share a timestamp and the list would reshuffle between requests.
+  NO fn_has_permission, deliberately. Every other seller-scoped read begins with it, but
+    it asks "may this account act on THIS seller" and the answer here IS the set of
+    sellers. There is no id to check against and no oracle: rows are selected BY account
+    id. THE WHERE CLAUSE IS THE AUTHORIZATION -- there is no RLS on core.seller or
+    core.seller_team_member, so any future edit to it is a security edit.
+  THE CHOOSER  S2.1's rule is honoured rather than described: REDIRECT WHEN EXACTLY ONE,
+    replacing the history entry so Back leaves the app instead of bouncing. The pasted-id
+    box and D-97's on-screen sentence are gone because the gap is gone, which is the only
+    acceptable way for them to go. The load no longer navigates or sets state after
+    unmount.
+Verification: pnpm ci:local -- 25 gates. c1-onboarding 37/37: the exemption proved by
+  CONTRAST (the same session gets 400 SELLER_CONTEXT_REQUIRED one endpoint along), owner
+  sees OWNER, a team member sees THEIR role, a stranger gets an empty 200 rather than a
+  403 or 404, suspension both logs out and filters, revocation filters, a case-variant
+  path still demands the header, an owner with a team row on their own store is listed
+  ONCE, and a DELETED store is not listed at all. Browser-drawn: the walk's step 14 turns
+  from "a returning seller is asked to paste a store id" into "a returning seller is
+  taken straight back into their store", and step 2 from an EMBARRASSES naming a register
+  number into "You do not have a store yet." T17's BETA-READINESS CANNOT #6 and #7 are
+  both answered.
+Pass: four adversarial lenses (exemption safety, the query, the console, contract and
+  blast radius). The case-sensitivity hole, the DELETED omission, the duplicate-owner
+  path, the missing tie-breaker, the unmount race and a tautological e2e assertion (four
+  toHaveCount(0) checks that pass on a blank page -- D-152's exact class, now preceded by
+  a positive assertion) were all found and fixed before merge.
+Ruling needed:
+  1. REACHABILITY, and it is the one thing this phase makes WORSE. A single-store seller
+     is now redirected away from "/" and can no longer reach the two links that lived
+     there: the courier entry point and "Create a store". Both remain reachable by typing
+     a URL -- which is precisely the failure T17 recorded as the point where a real seller
+     stops and messages the founder. SellerSwitcher is the ruled home for store switching
+     and its blocker (D-97) is now gone, so building it is the obvious next step; whether
+     the courier link belongs there, in the account menu, or somewhere else is a design
+     decision and is not made here.
+  2. The exemption rests on T18 S3's founder ruling, not on a reissued ADU-API-01 or
+     ADU-AUTH-01. D-97's own Ruling line asked for governed authority. Recorded as
+     document debt, like T18 Phase 4's.
+### D-242 - T18 Phase 2: the image reorder had never once succeeded, and the fix for the last finding about it was never exercised either
+
+Severity:  BLOCKER - a shipped endpoint that could not work in any environment
+Phase:     T18 Phase 2 (the half that needs no storage vendor)
+Source:    db/migrations/0048_product_image_position_deferrable.sql;
+           apps/api/src/modules/catalogue/catalogue.service.ts; c2-catalogue.e2e.spec.ts
+Finding:   PUT /v1/seller/products/{id}/images/order could not succeed against the real
+  database, ever, since 0007 created the table. The service parked positions at 100,
+  101, ... to clear the UNIQUE range before placing them 1..n, but 0007:242 declares
+  `position int NOT NULL CHECK (position BETWEEN 1 AND 5)`, so the FIRST parking UPDATE
+  raises 23514. Proven against the live schema rather than argued -- a row inserted, the
+  parking UPDATE run, and the constraint quoted back:
+      BLOCKED by 23514: new row for relation "product_image"
+      violates check constraint "product_image_position_check"
+  Both constraints are right; the technique was wrong. The parking trick exists only to
+  dodge a non-deferrable UNIQUE and is defeated by the CHECK that bounds the range.
+THIS IS THE SECOND TIME, AND THAT IS THE FINDING WORTH KEEPING. T14-C's C-5 pass already
+  found the CLIENT half (the console sent [{id, position}] where the server takes
+  `order: string[]`) and wrote, in its own words: "A green tsc, lint and e2e certified a
+  reorder that had never once succeeded against the real API." The fix for that finding
+  was ITSELF never exercised against the real API, because nothing called the endpoint:
+  grep over apps/api/test and apps/console/e2e returns no caller of images/order. The
+  same sentence, one layer down, in the same feature, twice. A fix without a test that
+  drives it is a claim.
+Effect / Response, each:
+  0048  UNIQUE (product_id, position) becomes DEFERRABLE. The CHECK stays
+    non-deferrable: a position outside 1..5 is never valid, not even transiently, and it
+    is the constraint that caught this.
+  INITIALLY IMMEDIATE, NOT INITIALLY DEFERRED -- a deliberate narrowing of the ruling's
+    letter to serve its purpose, recorded rather than quietly kept. T18 S2 asked for
+    "DEFERRABLE INITIALLY DEFERRED". That was written first and it broke something real:
+    committing an image to a position already taken used to raise 23505 AT THE INSERT,
+    which the translator turns into a 409 carrying reason = POSITION_TAKEN; under
+    INITIALLY DEFERRED the violation moves to COMMIT, outside the statement that caused
+    it, and the seller stops being told which position was taken. An existing test caught
+    it; a seller would have met it as an unexplained failure. So: DEFERRABLE (the
+    capability the reorder needs), INITIALLY IMMEDIATE (the behaviour every other writer
+    already had), and the reorder opts in for its own transaction with
+    `SET CONSTRAINTS core.product_image_position DEFERRED`. Narrowest possible scope --
+    one code path, one transaction.
+  ONE PASS  reorderImages assigns final positions 1..n directly. No parking, so every
+    value written is inside the range at every step.
+  VALIDATE BEFORE WRITING, and not for tidiness: inside the deferred transaction a
+    violation surfaces at COMMIT with no statement context, so anything checkable is
+    checked first. Duplicate ids -> DUPLICATE_IMAGE. An id that is not this product's ->
+    UNKNOWN_IMAGE. A PARTIAL order -> PARTIAL_ORDER, because reordering three of five
+    images leaves the other two holding positions the new order also claims, and "the
+    whole ordering in one transaction, or it is a defect" is this endpoint's own rule.
+    All three are VALIDATION_FAILED / 400, the codebase's existing convention; a new
+    status for this one path would be an invention.
+  THE CAP IS UNTOUCHED  five positions and one row per position is still what makes five
+    images a structural fact rather than a counting rule. A deferred constraint still
+    refuses a sixth at COMMIT.
+Verification: pnpm ci:local -- 25 gates. c2-catalogue 15/15, including the first test in
+  this repository's history that actually calls images/order against the real API:
+    * a full REVERSAL of three images -- the case the parking trick existed for, where
+      every row's new position is currently held by another row, so a naive one-pass
+      update collides on its first statement unless uniqueness is deferred;
+    * an adjacent SWAP -- the minimal collision, and the one a "just add one to each"
+      implementation also gets wrong;
+    * the three refusals, each asserted to move NOTHING.
+  The constraint's state is checked in the database, not inferred:
+    product_image_position   condeferrable=t condeferred=f   (DEFERRABLE IMMEDIATE)
+    product_image_position_check condeferrable=f             (immediate, as ruled)
+Owed, not built: a CONSOLE e2e that clicks reorder. Media.tsx already calls the endpoint
+  correctly (T14-C fixed the body shape), but the seed carries no core.product_image
+  rows and there is no way to view an image at all -- no signGet, no public URL -- so
+  there is nothing for a browser to drag. It belongs with the storage adapter, and the
+  lesson above says plainly why it should not be skipped again once that lands.
+Ruling needed: none. The deviation from S2's letter is recorded above rather than
+  invited, because the ruling's purpose is served and its letter cost a seller-facing
+  error message.
+### D-241 - T18 Phase 4: the new-device payout lock gains a subject; the cancel-then-set attack the first draft was open to; and one unreissued specification
+
+Severity:  BLOCKER in the pass (a takeover path the first draft opened), fixed before merge
+Phase:     T18 Phase 4
+Source:    db/migrations/0047_payout_lock_first_set.sql; apps/api (financial.service.ts,
+           c4-financial.e2e.spec.ts); apps/console (Payout.tsx, store-admin.spec.ts);
+           packages/locale
+Ruling discharged: T18 S4 -- "The lock exists to stop an attacker redirecting payments
+  after a takeover. On a brand-new account there is nothing to redirect."
+Effect / Response, each:
+  THE PREDICATE IS "HAS NEVER HAD A PAYOUT ROW", NOT "HAS NO ACTIVE ROW". The first
+    draft read the ruling literally and used state = 'ACTIVE'. The adversarial pass broke
+    it in one move, and the move is free:
+      CANCEL-THEN-SET. core.fn_cancel_payout_change (0022) requires NO step-up, checks NO
+      lock and is deliberately easy -- "reverting must always be easier than changing".
+      An attacker who has taken over an account, on a device we have never seen, cancels
+      the seller's legitimate PENDING first set. That leaves no ACTIVE and no PENDING row,
+      an ACTIVE-only carve-out then applies, and the attacker sets their own bank account
+      UNLOCKED. Before this migration they were held for the full window.
+      Aggravating: activation is lazy and reader-driven. core.fn_activate_due_payout is
+      invoked from exactly ONE place in the product (the GET on /v1/seller/payout) and no
+      job calls it, so a due PENDING stays PENDING -- and stays cancellable -- until
+      somebody opens the payout screen. The window is not 24 hours; it is "until the
+      seller next looks".
+    A CANCELLED row is still a row, so "has this seller EVER had payout details" is the
+    question an attacker-controlled move cannot walk back. Asserted by an arm that
+    performs the whole attack and requires NEW_DEVICE at the end of it.
+  GUARD ORDER CHANGED, DELIBERATELY  one-pending-per-seller now runs BEFORE the
+    new-device lock. Without the move, a seller with a change already in flight would be
+    refused with a message about a device; the true and more useful answer is that they
+    have a change pending. Both are refusals and neither writes, so nothing is weakened.
+    Asserted by its own arm.
+  THE TWIN  payoutLockState (SC-24's proactive panel) carries the identical predicate in
+    an `ever` CTE. A panel that disagrees with the write path is worse than no panel, and
+    the first draft had them agreeing on the WRONG predicate, which would have hidden the
+    attack from the screen as well as from the server.
+  WHAT IS NOT RELAXED  a seller with ANY prior payout row changing from an unseen device
+    is still locked for the full window; the activation delay still stacks downstream;
+    RECOVERY_COOLING runs before this guard and knows nothing about payout rows, so a
+    first set cannot step around account recovery (asserted); step-up is still required
+    on every set, first or not.
+  T17'S SENTENCE IS RETIRED, WHICH IS THE BETTER OUTCOME  D-239 added a first-set variant
+    of the NEW_DEVICE message because the change-wording accused a day-old seller of a
+    break-in. Phase 4 removed the STATE instead of wording it more kindly, so the branch
+    became unreachable and the string is deleted rather than improved. D-239's "THE LOCK
+    ITSELF IS UNTOUCHED. Only the sentence changes" is superseded by this entry.
+  R20 KEPT ITS ASSERTION  the real-GET e2e now proves the opposite case (no lock at all),
+    so "locked implies the control is DISABLED" moved to the planted CHANGE arm rather
+    than being lost with the test that used to carry it. The pass caught that it would
+    otherwise have had no assertion anywhere in the suite.
+  A TEST THAT COULD NO LONGER FAIL  the unsuppressible-notification assertion counted
+    PAYOUT_CHANGE_REQUESTED rows globally with toBeGreaterThan(0). The new first-set arm
+    creates one, so the later assertion was satisfied in advance. It is now a delta,
+    scoped to the row its own arm creates.
+Verification: pnpm ci:local -- 25 gates. c4-financial 17/17, including: the panel silent
+  BEFORE a first set and reporting NEW_DEVICE one request AFTER it (the lock arms itself
+  the moment there is something to protect -- the carve-out is a property of the seller's
+  history, not of the device); a CHANGE from an unseen device still 409/NEW_DEVICE with
+  no row written; the full cancel-then-set attack ending in NEW_DEVICE; a PENDING change
+  refused as PAYOUT_CHANGE_PENDING; and recovery cooling still firing with no payout row.
+  Browser-drawn: zz-beta-walk step 4 turns from "on day one the payout control is
+  DISABLED and the screen says ..." into "payout details can be set on the day of
+  sign-up". T17's BETA-READINESS CANNOT #5 is answered.
+Pass: four adversarial lenses (takeover, twin consistency, migration fidelity, blast
+  radius). ONE BLOCKER-class finding -- the cancel-then-set path above -- plus a lost R20
+  assertion, a pre-satisfied notification assertion, and stale comments, all fixed before
+  merge. The findings were against my own first draft in every case.
+Ruling needed / DOCUMENT DEBT, recorded rather than assumed:
+  1. ADU-AUTH-01 v2.6 S20 states the new-device payout lock UNCONDITIONALLY, and v2.5's
+     invariant quantifies the guarantee as "an attacker needs 48 hours under a push
+     notification the real seller has already received". For a seller who has NEVER had
+     payout details it is now 24 (the activation delay alone). The narrowing is a founder
+     ruling (T18 S4) carried as an interim ruling; the specification is unreissued and
+     the amendment is owed. Neither document is edited here -- transcribe, do not design.
+  2. core.fn_cancel_payout_change accepting a row whose activates_at has already passed,
+     given that activation happens only when someone reads. Not touched by this phase.
+  3. Whether activation should have a job rather than depending on a reader.

@@ -152,6 +152,73 @@ export class OnboardingService {
   }
 
   /** GET /v1/seller/readiness — 200 with items[]; a state, not a failure. */
+  /**
+   * GET /v1/seller/list -- the stores this account holds (T18 Phase 3, D-97).
+   *
+   * TWO RELATIONSHIPS, NOT ONE. S2.1 allows an account to be Owner of A and
+   * staff of B, so the query is a UNION of the two arms fn_has_permission
+   * itself uses: core.seller.owner_account_id, and a live row in
+   * core.seller_team_member. They are kept separate rather than collapsed
+   * because the ROLE differs -- the Owner is core.seller.owner_account_id and
+   * only that (a CHECK forbids role = 'OWNER' on a team row), so the owner arm
+   * supplies the string 'OWNER' and the member arm supplies its own column.
+   *
+   * SUSPENDED AND REVOKED MEMBERSHIPS ARE EXCLUDED. R28: a suspended member
+   * loses every permission on the next request, so listing their store would
+   * offer a door that every subsequent call refuses. The owner arm has no such
+   * filter because ownership has no suspended state.
+   *
+   * THE OWNER IS EXCLUDED FROM THE MEMBER ARM, and the reason is not symmetry.
+   * `team_member_is_never_owner` constrains the ROLE VALUE (role <> 'OWNER'),
+   * not the ACCOUNT -- so nothing stops an owner also holding, say, an ADMIN
+   * team row on their own store. Under UNION ALL that store would be listed
+   * TWICE, which is not merely untidy: the console redirects when the list has
+   * exactly one entry, so a duplicate would strand that seller on a chooser
+   * showing their one store two ways.
+   *
+   * DELETED IS EXCLUDED FROM BOTH ARMS. core.seller_status carries DELETED, and
+   * a deleted store is not somewhere a seller can be sent. With the redirect,
+   * listing it would be worse than untidy -- a seller whose only store was
+   * deleted would be forwarded into it on every visit and could never reach the
+   * screen that offers to create a new one.
+   *
+   * ORDER BY created_at, id -- the id is a tie-breaker, not decoration. Two
+   * stores created in the same transaction share a timestamp, and an unstable
+   * order would reshuffle the list between requests.
+   *
+   * NO PERMISSION CHECK, deliberately, and it is not an omission. Every other
+   * seller-scoped read begins with fn_has_permission(account, seller, ...) --
+   * but that asks "may this account act on THIS seller", and the answer here
+   * IS the set of sellers. There is no id to check against, and no oracle
+   * either: the rows are selected BY account_id, so a caller sees their own
+   * relationships and nothing else.
+   *
+   * The store may be in any status, including one the public cannot see. A
+   * seller whose store is SUSPENDED still needs to reach it -- that is where
+   * the reason and the remedy are -- so status travels in the row rather than
+   * filtering it out.
+   */
+  async listSellers(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
+    const r = await sql<Record<string, unknown>>`
+      SELECT s.id, s.handle, s.store_name, s.status::text AS status,
+             'OWNER' AS role, s.created_at
+        FROM core.seller s
+       WHERE s.owner_account_id = ${req.ctx?.accountId}
+         AND s.status <> 'DELETED'
+      UNION ALL
+      SELECT s.id, s.handle, s.store_name, s.status::text AS status,
+             tm.role::text AS role, s.created_at
+        FROM core.seller_team_member tm
+        JOIN core.seller s ON s.id = tm.seller_id
+       WHERE tm.account_id = ${req.ctx?.accountId}
+         AND tm.suspended_at IS NULL
+         AND tm.revoked_at IS NULL
+         AND s.status <> 'DELETED'
+         AND s.owner_account_id <> tm.account_id
+       ORDER BY created_at, id`.execute(trx);
+    return { data: r.rows };
+  }
+
   async readiness(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
     await assertPermission(trx, req, 'seller.store:read');
     const r = await sql<{ item: string; satisfied: boolean; resolving_action: string | null }>`

@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-755 keys:
+754 keys:
 
 - `app.title`
 - `health.ok`
@@ -83,7 +83,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `error.payout.payout_locked`
 - `error.payout.payout_locked_recovery_cooling`
 - `error.payout.payout_locked_new_device`
-- `error.payout.payout_locked_new_device_first_set`
 - `error.payout.payout_locked_no_timing_config`
 - `error.payout.payout_change_pending`
 - `error.payout.payout_permission_denied`
@@ -184,11 +183,15 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.states.upgrade`
 - `console.states.upgrade_reload`
 - `console.chooser.title`
-- `console.chooser.gap`
 - `console.chooser.create_prompt`
 - `console.chooser.create_link`
-- `console.chooser.id_label`
-- `console.chooser.open_button`
+- `console.chooser.none`
+- `console.chooser.role.owner`
+- `console.chooser.role.admin`
+- `console.chooser.role.sales_support`
+- `console.chooser.role.inventory`
+- `console.chooser.role.analyst`
+- `console.chooser.role.campaign_manager`
 - `console.demo.title`
 - `console.demo.hint`
 - `console.demo.ready_content`

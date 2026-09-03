@@ -102,12 +102,6 @@ export const en = {
     'Payout changes are locked for seven days after an account recovery.',
   'error.payout.payout_locked_new_device':
     'Payout changes are locked for twenty-four hours after a sign-in from a device we have not seen. If that was not you, review your active sessions.',
-  // T17: the same lock, said to someone who has nothing to change FROM.
-  // A seller minutes old is on the only device they have ever used, so the
-  // change-wording reported a break-in on their first day. Same lock, same
-  // lift, no accusation.
-  'error.payout.payout_locked_new_device_first_set':
-    'You can add payout details once this device has been signed in for twenty-four hours. Nothing has gone wrong: this wait applies to any device we have not seen before, including the one you signed up on.',
   'error.payout.payout_locked_no_timing_config': 'Payout changes are temporarily unavailable.',
   'error.payout.payout_change_pending': 'A payout change is already pending.',
   'error.payout.payout_permission_denied': 'You do not have permission to change payout details.',
@@ -258,15 +252,15 @@ export const en = {
   'console.states.upgrade': 'A new version of the console is required.',
   'console.states.upgrade_reload': 'Reload',
   'console.chooser.title': 'Choose a store',
-  // The hole stays labelled (the T9 S4.2 ruling, D-97) -- what changed is
-  // WHO it is labelled for. A seller should not read a defect number; the
-  // register citation now rides the DOM as data-gap="D-97", so it stays
-  // greppable for the next engineer without being narrated to Addis.
-  'console.chooser.gap': 'Your stores cannot be listed here yet, so open one by pasting the store id you were given.',
   'console.chooser.create_prompt': 'Do not have a store yet?',
   'console.chooser.create_link': 'Create a store',
-  'console.chooser.id_label': 'Store id',
-  'console.chooser.open_button': 'Open store',
+  'console.chooser.none': 'You do not have a store yet.',
+  'console.chooser.role.owner': 'Owner',
+  'console.chooser.role.admin': 'Admin',
+  'console.chooser.role.sales_support': 'Sales and support',
+  'console.chooser.role.inventory': 'Inventory',
+  'console.chooser.role.analyst': 'Analyst',
+  'console.chooser.role.campaign_manager': 'Campaign manager',
   'console.demo.title': 'The twelve screen states',
   'console.demo.hint': 'Every screen in this console renders through one of these states, and only these. Pick one to see it.',
   'console.demo.ready_content': 'This is READY: the screen itself.',

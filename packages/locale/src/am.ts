@@ -93,8 +93,6 @@ export const am: Catalogue = {
     'ከመለያ መልሶ ማግኘት በኋላ የክፍያ ለውጦች ለሰባት ቀናት ተቆልፈዋል።',
   'error.payout.payout_locked_new_device':
     'ካላየነው መሣሪያ በመግባት ምክንያት የክፍያ ለውጦች ለሃያ አራት ሰዓታት ተቆልፈዋል። እርስዎ ካልሆኑ፣ ንቁ ክፍለ ጊዜዎችዎን ይገምግሙ።',
-  'error.payout.payout_locked_new_device_first_set':
-    'የክፍያ መረጃ መከመር የሚቻሉት ይህ መሳሪያ ከገባ በኋላ 24 ሰዓት ባለፉ ባላቶ ነው። ምንም ስህተት አልተፈጠረም፡ ይህ እቀባ በት ላይ ላልሰነው ማንኛውም መሳሪያ፡ እርድዎ የተመዝገቡበትን ይጨምራል።',
   'error.payout.payout_locked_no_timing_config': 'የክፍያ ለውጦች ለጊዜው አይገኙም።',
   'error.payout.payout_change_pending': 'የክፍያ ለውጥ አስቀድሞ በመጠባበቅ ላይ ነው።',
   'error.payout.payout_permission_denied': 'የክፍያ ዝርዝሮችን ለመቀየር ፈቃድ የለዎትም።',
@@ -231,12 +229,15 @@ export const am: Catalogue = {
   'console.states.upgrade': 'አዲስ የመተግበሪያ ስሪት ያስፈልጋል።',
   'console.states.upgrade_reload': 'እንደገና ጫን',
   'console.chooser.title': 'መደብር ይምረጡ',
-  'console.chooser.gap':
-    'የመደብሮችዎ እዘህ መዘርዘር አሁን አይቻልም። የተሰጠዎትን የመደብር መለያ በመለጠፍ አንዱን ይክፈቱ።',
   'console.chooser.create_prompt': 'ገና መደብር የለዎትም?',
   'console.chooser.create_link': 'መደብር ይፈጥሩ',
-  'console.chooser.id_label': 'የመደብር መለያ',
-  'console.chooser.open_button': 'መደብር ክፈት',
+  'console.chooser.none': 'አሁን መደብር የለዎትም።',
+  'console.chooser.role.owner': 'ባለቤት',
+  'console.chooser.role.admin': 'አስተዳዳሪ',
+  'console.chooser.role.sales_support': 'ሙያባትና ድጋፍ',
+  'console.chooser.role.inventory': 'ክምቻት',
+  'console.chooser.role.analyst': 'ትንታኝ',
+  'console.chooser.role.campaign_manager': 'የዘመቻ አስተዳዳሪ',
   'console.demo.title': 'አሥራ ሁለቱ የማያ ገጽ ሁኔታዎች',
   'console.demo.hint': 'በዚህ መተግበሪያ ያለ እያንዳንዱ ማያ ገጽ ከእነዚህ ሁኔታዎች በአንዱ በኩል ይታያል፤ በእነዚህ ብቻ። ለማየት አንዱን ይምረጡ።',
   'console.demo.ready_content': 'ይህ READY ነው፦ ማያ ገጹ ራሱ።',

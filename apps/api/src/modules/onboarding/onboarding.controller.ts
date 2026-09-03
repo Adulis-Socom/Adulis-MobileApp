@@ -62,6 +62,26 @@ export class OnboardingController {
     );
   }
 
+  /**
+   * T18 Phase 3 (register D-97) -- the store list the chooser could not draw.
+   *
+   * EXEMPT from the seller header, and the exemption is recorded beside the
+   * other two in auth.guard.ts rather than here: this is a path under
+   * /v1/seller that no seller header can describe, because it is asking WHICH
+   * sellers the caller holds.
+   *
+   * No @ActorRole and no fn_has_permission: the rows are selected BY the
+   * caller's account id, so the filter IS the authorization and there is no
+   * id to probe with.
+   */
+  @Get('seller/list')
+  @ApiOperation({
+    summary: 'The stores this account owns or is a live team member of (D-97).',
+  })
+  async listSellers(@Req() req: LocalizedRequest): Promise<unknown> {
+    return this.tx.run(req, (trx) => this.svc.listSellers(trx, req));
+  }
+
   @Get('seller/readiness')
   @ApiOperation({ summary: 'The nine readiness items — a state, not a failure.' })
   async readiness(@Req() req: LocalizedRequest): Promise<unknown> {
