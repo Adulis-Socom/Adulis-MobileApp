@@ -179,6 +179,57 @@ try {
     [M],
   );
   /*
+   * THE IDENTITY CONFIGURATION -- the row this seed has always been missing.
+   *
+   * Every other market-scoped configuration row is seeded above. This one was
+   * not, and the effect was not a missing feature: 0018's readiness rule reads
+   * identity_config.identity_required and FAILS CLOSED when the row is absent
+   * (`coalesce(v_idreq, true)`), so IDENTITY_VERIFIED -- one of the nine
+   * publication-readiness items -- was UNSATISFIABLE. The only endpoint that
+   * writes an attestation is operator-only (G1.1; a seller session gets 403),
+   * so no seller could publish without an operator acting for them, ever.
+   * T17's walk found this by asking the server what a brand-new seller still
+   * owed and getting IDENTITY_VERIFIED back on a market that does not want it.
+   *
+   * identity_required = false follows the market this seed already describes.
+   * The two settings are orthogonal knobs, not one field written twice
+   * (0018 says so directly), but their COMBINED effect was contradictory:
+   * eligibility_config above carries id_verification_requirement = 'OPTIONAL',
+   * so the market admits a seller without identity -- and readiness then
+   * blocked that same seller from ever publishing, for want of the identity
+   * the market had just said it did not want. One row admits them, the other
+   * held them forever.
+   *
+   * WHAT THIS DOES NOT RELAX, and the reason it is safe: the second arm of the
+   * rule still carries `v_eval.path <> 'IDENTITY'`. A seller who took the
+   * IDENTITY route to eligibility STILL needs a real attestation before
+   * publishing -- no grace period and no bypass. Only sellers admitted by the
+   * AUDIENCE arm skip it, which is what OPTIONAL means.
+   *
+   * BE CLEAR ABOUT THE CONSEQUENCE: this market also carries
+   * audience_required = false and follower_threshold = NULL, so every seller
+   * takes the AUDIENCE arm and passes it trivially. After this row, nothing in
+   * this market verifies a seller's identity OR their audience. That is the
+   * beta that was asked for; it is not an oversight, and it is the line to
+   * revisit first when the beta ends.
+   *
+   * verifier_kind VIDEO_CALL, not KYC_VENDOR: no KYC vendor is selected (the
+   * fake-adapter guard lists it as such), and G1.1's flow is an operator
+   * attesting about a named person with no image ever reaching Adulis.
+   * accepted_id_types is empty, which the table's own CHECK permits only
+   * BECAUSE identity is not required -- if that flips to true, the constraint
+   * forces whoever flips it to say what is accepted.
+   */
+  await client.query(
+    `INSERT INTO core.identity_config (id, market_id, identity_required,
+       verifier_kind, accepted_id_types)
+     SELECT '5eed0000-0000-4000-8000-000000000036', $1, false,
+            'VIDEO_CALL'::verification.verifier_kind,
+            ARRAY[]::text[]
+     WHERE NOT EXISTS (SELECT 1 FROM core.identity_config WHERE market_id = $1)`,
+    [M],
+  );
+  /*
    * THE SMS/ACTIVATION CONFIGURATION (ADU-AUTH-01 v2.6 S9.1, S9.2, S7.1).
    *
    * ETHIOPIA IS THE ONLY ACTIVE MARKET and everything else stays off -- S9
