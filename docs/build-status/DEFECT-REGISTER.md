@@ -2928,3 +2928,58 @@ Flakes: two D-217-class OTP-budget failures were met and cleared on the way (429
 Ruling needed: the sellers-list endpoint's shape, which is D-97's standing question and
   the only thing between a returning seller and their own store; and a speaker's review
   of the two new Amharic strings.
+
+### D-239 - T17: the payout lock stops accusing a new seller; two gap sentences deleted, two DELIBERATE KEEPS left standing
+
+Severity:  a first-day seller was told their account may be compromised; fixed
+Phase:     T17 (S6, the sentence triage applied)
+Source:    apps/console (Payout.tsx, store-admin.spec.ts, ProductEditor.tsx, Stock.tsx);
+           packages/locale
+Effect / Response, each:
+  FIRST SET  the NEW_DEVICE lock sentence is correct for a CHANGE and wrong for a FIRST
+    SET. A seller who signed up minutes ago has no payout details at all, and the lock
+    still fires -- their only device is by definition one we have not seen. Telling that
+    person "a sign-in from a device we have not seen ... if that was not you" reports a
+    security event that did not happen, on the day they joined, on the screen where they
+    are trying to get paid. The panel now renders a first-set sentence when reason is
+    NEW_DEVICE and BOTH active and pending are null: "You can add payout details once
+    this device has been signed in for twenty-four hours. Nothing has gone wrong: this
+    wait applies to any device we have not seen before, including the one you signed up
+    on." Same lock, same reason, same lift, no accusation.
+    THE LOCK ITSELF IS UNTOUCHED. Only the sentence changes, and only when there is
+    nothing to change FROM. This is presentation chosen from server state, the same
+    shape as the existing reason->sentence map -- the console still computes nothing.
+  THE WARNING SURVIVES  a seller who HAS payout details and meets a new-device lock is
+    exactly the person the original sentence was written for: someone whose account may
+    be being taken over. A new planted arm proves that branch keeps the security wording
+    verbatim, and that the first-set sentence does NOT appear there. Both halves are
+    asserted, so a later simplification cannot collapse them into one.
+  DELETED, TWO  console.catalogue.editor.attributes_owed named a screen that does not
+    exist ("the category attribute list"), describing an intended design to a person who
+    cannot use it; console.catalogue.stock.confidence_owed taught a seller what stock
+    confidence is for the sole purpose of saying it is missing. Neither had a test and
+    neither guarded anything. Gone, with their keys, from both locales.
+  NOT DELETED, TWO -- AND THIS IS THE ENTRY'S POINT  T17's report triaged
+    console.catalogue.products.cap_unreported and console.insights.analytics.export_owed
+    as DELETE. Both were wrong, and the repository said so before I did:
+    insights-inbox.spec.ts marks the export sentence "DELIBERATE KEEP: the worker and job
+    table still do not exist (D-232)", and catalogue.spec.ts exists to assert that the
+    console "names the cap it cannot yet report ... no invented N of 10". Two recorded
+    decisions, each with a test standing over it. The triage was one line of judgement
+    written while reading a locale file; the keeps were made while reading the wire.
+    They were deleted, then RESTORED before merge. The report's SENTENCES list is left
+    as written -- it is a point-in-time record and this entry is where it is corrected,
+    not by editing the finding after the fact. Whether they should go remains the
+    founder's call, now with the counter-evidence attached.
+    The general lesson, which is the same one the chooser test encodes: a sentence that
+    reads as awkward to someone skimming is often load-bearing to someone who was there.
+    Check for the guard before removing the guarded thing.
+Verification: pnpm ci:local -- all 25 gates, 531/531 API tests. pnpm verify:console-e2e
+  -- 59 passed. The walk draws the first-set sentence in a browser on the day the seller
+  signs up, and the control remains DISABLED beside it (the lock is a separate CANNOT on
+  T17's list and is not touched here). store-admin.spec.ts asserts the real-server
+  first-set branch (the seeded seller has no payout details) and the planted change
+  branch, each denying the other's sentence.
+Ruling needed: whether cap_unreported and export_owed should go after all, against the
+  two deliberate keeps recorded above; and a speaker's review of the first-set sentence's
+  Amharic, which is machine-written like the rest of this order's new strings.

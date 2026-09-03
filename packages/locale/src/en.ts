@@ -102,6 +102,12 @@ export const en = {
     'Payout changes are locked for seven days after an account recovery.',
   'error.payout.payout_locked_new_device':
     'Payout changes are locked for twenty-four hours after a sign-in from a device we have not seen. If that was not you, review your active sessions.',
+  // T17: the same lock, said to someone who has nothing to change FROM.
+  // A seller minutes old is on the only device they have ever used, so the
+  // change-wording reported a break-in on their first day. Same lock, same
+  // lift, no accusation.
+  'error.payout.payout_locked_new_device_first_set':
+    'You can add payout details once this device has been signed in for twenty-four hours. Nothing has gone wrong: this wait applies to any device we have not seen before, including the one you signed up on.',
   'error.payout.payout_locked_no_timing_config': 'Payout changes are temporarily unavailable.',
   'error.payout.payout_change_pending': 'A payout change is already pending.',
   'error.payout.payout_permission_denied': 'You do not have permission to change payout details.',
@@ -397,11 +403,11 @@ export const en = {
   'console.catalogue.filter.published': 'Published',
   'console.catalogue.filter.draft': 'Draft',
   'console.catalogue.filter.unpublished': 'Unpublished',
+  'console.catalogue.products.cap_unreported': 'Your product limit is set by the server from your tier and level together, and this list does not report it yet. You can still add a product; the server will say if a limit is reached.',
   'console.catalogue.products.heading': 'Products',
   'console.catalogue.products.new': 'New product',
   'console.catalogue.products.load_more': 'Load more products',
   'console.catalogue.products.empty': 'No products yet. Products you create appear here, ready to add variants, stock and images before you publish.',
-  'console.catalogue.products.cap_unreported': 'Your product limit is set by the server from your tier and level together, and this list does not report it yet. You can still add a product; the server will say if a limit is reached.',
   'console.catalogue.products.filter_note': 'These tabs filter the products already loaded. A product on a later page may not appear until you load more.',
   'console.catalogue.new.heading': 'New product',
   'console.catalogue.new.base_price': 'Starting price',
@@ -410,7 +416,6 @@ export const en = {
   'console.catalogue.editor.name': 'Name',
   'console.catalogue.editor.description': 'Description',
   'console.catalogue.editor.save': 'Save details',
-  'console.catalogue.editor.attributes_owed': 'Structured attributes (material, care, size guides) are edited from the category attribute list, which this screen does not carry yet.',
   'console.catalogue.editor.publish_heading': 'Publication',
   'console.catalogue.editor.publish': 'Publish',
   'console.catalogue.editor.unpublish': 'Unpublish',
@@ -451,7 +456,6 @@ export const en = {
   'console.catalogue.variants.edit_price': 'New price',
   'console.catalogue.variants.save_price': 'Save price',
   'console.catalogue.stock.count_required': 'Enter a stock count before setting it. A blank count is not zero.',
-  'console.catalogue.stock.confidence_owed': 'How fresh this stock looks to buyers is worked out by the server and is not shown here yet.',
   'console.catalogue.stock.screen_heading': 'Stock for',
   'console.catalogue.stock.back_to_product': 'Back to the product',
   'console.catalogue.new.name_price_required': 'Enter a name and a starting price. A blank price is not zero.',
@@ -758,10 +762,10 @@ export const en = {
   'console.insights.analytics.rate_unavailable': 'Not enough data yet',
   'console.insights.analytics.full_locked': 'Your current plan does not include this section. Assisted and above include views, reservations and conversion.',
   'console.insights.analytics.breakdown_view': 'View breakdown',
-  'console.insights.analytics.export_owed': 'Exporting your data (Business) is not available yet; it arrives with the export service.',
   'console.insights.trust.heading': 'Trust and level',
   'console.insights.trust.independent': 'Trust level and subscription plan are independent. Paying for a plan does not change this level.',
   'console.insights.trust.computed': 'Your level is computed from recorded outcomes - completed handoffs, scan completion, upheld claims. Nothing on this page is a control, because trust cannot be bought or negotiated.',
+  'console.insights.analytics.export_owed': 'Exporting your data (Business) is not available yet; it arrives with the export service.',
   'console.insights.trust.wire_owed': 'Your current level, the requirements for the next one and your level history cannot be shown yet: the server does not offer a way for this console to read them. They appear the day it does.',
   'console.insights.reviews.heading': 'Reviews',
   'console.insights.reviews.empty_heading': 'No reviews yet',

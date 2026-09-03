@@ -302,13 +302,63 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
     const lock = page.locator('[data-payout-lock]');
     await expect(lock).toBeVisible();
     await expect(lock).toHaveAttribute('data-payout-lock', 'NEW_DEVICE');
-    // The reason-specific sentence -- the same locale line the 409 renders.
-    await expect(lock.getByText(/device we have not seen/)).toBeVisible();
+    // The reason-specific sentence. The seeded seller has NO payout details --
+    // active and pending are both null -- so there is nothing to change FROM,
+    // and this is a FIRST SET. T17: the change-wording ("a sign-in from a
+    // device we have not seen ... if that was not you") reports a security
+    // event that did not happen to someone in that position, so the first-set
+    // sentence renders instead. Same lock, same reason, same lift.
+    await expect(lock.getByText(/once this device has been signed in/)).toBeVisible();
+    await expect(lock.getByText(/if that was not you/i)).toHaveCount(0);
     // The lift horizon, from the server's payout_locked_until.
     await expect(lock.getByText(/Locked until/)).toBeVisible();
     // R20: the control is PRESENT and DISABLED -- not hidden, not armed to
     // waste a step-up code on a refusal the panel already explained.
     await expect(page.locator('[data-action="change-payout"]')).toBeDisabled();
+  });
+
+  test('the new-device lock keeps its security wording for an actual CHANGE (planted)', async ({
+    page,
+    context,
+  }) => {
+    /*
+     * The other half of T17's first-set split, and the half that matters for
+     * safety: a seller who HAS payout details and meets a new-device lock is
+     * exactly the person the original sentence was written for -- someone whose
+     * account may be being taken over. That warning must survive.
+     *
+     * Planted because the real harness cannot hold active details under this
+     * lock (the real-GET test above is the locked, detail-less case).
+     */
+    await context.route('**/v1/seller/payout', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          active: {
+            id: '33333333-3333-4333-8333-333333333333',
+            bank_code: 'CBE',
+            account_last4: '4821',
+            state: 'ACTIVE',
+            requested_at: '2026-08-01T10:00:00Z',
+            activates_at: null,
+            activated_at: '2026-08-02T10:00:00Z',
+          },
+          pending: null,
+          payout_locked_until: '2026-09-04T10:00:00Z',
+          reason: 'NEW_DEVICE',
+          allowed_actions: [],
+        },
+      });
+    });
+    await page.goto(`${base}/payouts`);
+    const lock = page.locator('[data-payout-lock]');
+    await expect(lock).toHaveAttribute('data-payout-lock', 'NEW_DEVICE');
+    // The warning stands, verbatim, for the person it was written for.
+    await expect(lock.getByText(/device we have not seen/)).toBeVisible();
+    await expect(lock.getByText(/If that was not you/)).toBeVisible();
+    await expect(lock.getByText(/once this device has been signed in/)).toHaveCount(0);
   });
 
   test('R21 presence half (planted): a pending row summons the cancel control', async ({ page, context }) => {

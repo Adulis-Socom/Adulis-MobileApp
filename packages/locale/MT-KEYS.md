@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-756 keys:
+755 keys:
 
 - `app.title`
 - `health.ok`
@@ -83,6 +83,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `error.payout.payout_locked`
 - `error.payout.payout_locked_recovery_cooling`
 - `error.payout.payout_locked_new_device`
+- `error.payout.payout_locked_new_device_first_set`
 - `error.payout.payout_locked_no_timing_config`
 - `error.payout.payout_change_pending`
 - `error.payout.payout_permission_denied`
@@ -307,11 +308,11 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.catalogue.filter.published`
 - `console.catalogue.filter.draft`
 - `console.catalogue.filter.unpublished`
+- `console.catalogue.products.cap_unreported`
 - `console.catalogue.products.heading`
 - `console.catalogue.products.new`
 - `console.catalogue.products.load_more`
 - `console.catalogue.products.empty`
-- `console.catalogue.products.cap_unreported`
 - `console.catalogue.products.filter_note`
 - `console.catalogue.new.heading`
 - `console.catalogue.new.base_price`
@@ -320,7 +321,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.catalogue.editor.name`
 - `console.catalogue.editor.description`
 - `console.catalogue.editor.save`
-- `console.catalogue.editor.attributes_owed`
 - `console.catalogue.editor.publish_heading`
 - `console.catalogue.editor.publish`
 - `console.catalogue.editor.unpublish`
@@ -361,7 +361,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.catalogue.variants.edit_price`
 - `console.catalogue.variants.save_price`
 - `console.catalogue.stock.count_required`
-- `console.catalogue.stock.confidence_owed`
 - `console.catalogue.stock.screen_heading`
 - `console.catalogue.stock.back_to_product`
 - `console.catalogue.new.name_price_required`
@@ -668,10 +667,10 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.insights.analytics.rate_unavailable`
 - `console.insights.analytics.full_locked`
 - `console.insights.analytics.breakdown_view`
-- `console.insights.analytics.export_owed`
 - `console.insights.trust.heading`
 - `console.insights.trust.independent`
 - `console.insights.trust.computed`
+- `console.insights.analytics.export_owed`
 - `console.insights.trust.wire_owed`
 - `console.insights.reviews.heading`
 - `console.insights.reviews.empty_heading`

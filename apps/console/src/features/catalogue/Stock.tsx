@@ -171,7 +171,6 @@ export function Stock({ sellerId, variantId, stockCount, stockConfirmedAt, onCha
         <button type="button" className="button" disabled={busy} onClick={() => void confirmStock()}>
           {en['console.catalogue.stock.confirm']}
         </button>
-        <p className="hint">{en['console.catalogue.stock.confidence_owed']}</p>
       </div>
 
       <section aria-labelledby={`hist-${variantId}`} className="stock-history">
