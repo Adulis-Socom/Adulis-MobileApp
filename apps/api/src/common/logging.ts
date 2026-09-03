@@ -56,6 +56,25 @@ export const LOG_FIELD_ALLOWLIST: readonly string[] = [
   'actorRole',
   'sellerId',
   'accountId',
+  // The worker's own result fields (T18 Phase 1). Without these, runtime.ts's
+  // `log.info({ msg: 'job ok', job, ms, ...result })` emitted the literal line
+  // {"msg":"job ok"} and nothing else — every count stripped — so a delivery
+  // channel failing 100% of its rows reported success. That is precisely the
+  // sentence the fake guard was written around ("the logs would look
+  // healthy"), reappearing one layer down in the process that is supposed to
+  // make it visible.
+  //
+  // All of these are operational scalars: a job NAME (a compile-time
+  // constant), a duration, and counts of rows. None is derived from user
+  // data, none can carry a phone number, an account id or evidence bytes, and
+  // NEVER_LOG below still excludes every sensitive value by construction.
+  'job',
+  'ms',
+  'claimed',
+  'sent',
+  'suppressed',
+  'failed',
+  'dead_tokens',
 ];
 
 /**

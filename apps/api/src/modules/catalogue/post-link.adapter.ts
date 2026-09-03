@@ -1,4 +1,7 @@
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
+import { createLogger } from '../../common/logging';
+
+const log = createLogger();
 /**
  * Post-link resolution (ADU-DB-01 S9.6): matching is on canonical_post_id,
  * NEVER the URL string — TikTok share links are usually shortened, and
@@ -35,5 +38,38 @@ export class FakePostLinkAdapter implements PostLinkAdapter {
 
   async resolve(url: string): Promise<CanonicalPost | null> {
     return this.map.get(url) ?? null;
+  }
+}
+
+/**
+ * NO POST-LINK RESOLVER IS CONFIGURED (T18 Phase 1).
+ *
+ * NOT a fake, and so NOT guarded against production. This is the easiest of
+ * the three to answer honestly, because the interface was already written to
+ * carry the answer: `resolve` is documented as returning "null when the URL
+ * resolves to nothing recognisable", and with no resolver bound, nothing is
+ * recognisable. The null adapter is not approximating the contract; it is
+ * the contract's own degenerate case.
+ *
+ * Both call sites already handle null, and neither changes:
+ *
+ *   catalogue.service.ts    422 with reason POST_LINK_UNRESOLVED -- the
+ *                           seller is told their link could not be read.
+ *   storefront.controller.ts returns an empty data array -- an anonymous
+ *                           lookup that matches nothing, which is exactly
+ *                           what an unresolvable link matches.
+ *
+ * A seller can sell without linking a TikTok post, so this blocks no beta.
+ */
+export class NullPostLinkAdapter implements PostLinkAdapter {
+  constructor() {
+    log.warn({
+      msg: '[NO POST-LINK RESOLVER] no redirect-following client is bound; every social link resolves to nothing and the seller is told so.',
+    });
+  }
+
+  async resolve(url: string): Promise<CanonicalPost | null> {
+    void url;
+    return null;
   }
 }

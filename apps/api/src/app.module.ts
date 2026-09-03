@@ -13,7 +13,7 @@ import { BootstrapController } from './modules/bootstrap/bootstrap.controller';
 import { OnboardingController } from './modules/onboarding/onboarding.controller';
 import { OnboardingService } from './modules/onboarding/onboarding.service';
 import {
-  FakeSocialPlatformAdapter,
+  NullSocialPlatformAdapter,
   SOCIAL_PLATFORM_ADAPTER,
 } from './modules/onboarding/social-platform.adapter';
 import { CatalogueController } from './modules/catalogue/catalogue.controller';
@@ -33,7 +33,7 @@ import {
   MEDIA_STORAGE_ADAPTER,
 } from './modules/catalogue/media-storage.adapter';
 import {
-  FakePostLinkAdapter,
+  NullPostLinkAdapter,
   POST_LINK_ADAPTER,
 } from './modules/catalogue/post-link.adapter';
 import { AuthController } from './modules/auth/auth.controller';
@@ -92,7 +92,7 @@ export const LOGGER = Symbol('LOGGER');
     // The platform adapters are deployment integrations (like SMS); locally
     // and under test the fake binds, and the specs configure it per case.
     // Production binds real adapters here by environment when they exist.
-    { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new FakeSocialPlatformAdapter() },
+    { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new NullSocialPlatformAdapter() },
     CatalogueService,
     OrdersService,
     FinancialService,
@@ -132,7 +132,7 @@ export const LOGGER = Symbol('LOGGER');
     { provide: INFERENCE_ADAPTER, useValue: new NullInferenceAdapter() },
     { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
     { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
-    { provide: POST_LINK_ADAPTER, useValue: new FakePostLinkAdapter() },
+    { provide: POST_LINK_ADAPTER, useValue: new NullPostLinkAdapter() },
     RateLimitService,
     HandlerTransaction,
     { provide: APP_GUARD, useClass: AuthGuard },

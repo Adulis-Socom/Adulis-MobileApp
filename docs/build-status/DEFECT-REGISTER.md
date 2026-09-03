@@ -2983,3 +2983,109 @@ Verification: pnpm ci:local -- all 25 gates, 531/531 API tests. pnpm verify:cons
 Ruling needed: whether cap_unreported and export_owed should go after all, against the
   two deliberate keeps recorded above; and a speaker's review of the first-set sentence's
   Amharic, which is machine-written like the rest of this order's new strings.
+
+### D-240 - T18 Phase 1: three fakes become null adapters; the boot blockers fall from six to four; and the push fallback that does not exist
+
+Severity:  BLOCKER found during the pass (four notification templates have no delivery
+           channel at all) - reported here, not introduced here
+Phase:     T18 Phase 1
+Source:    apps/api (app.module.ts, jobs/runtime.ts, push/social-platform/post-link
+           adapters, fake-guard.ts, common/logging.ts); apps/api/test
+The count, before anything else, because the order asked to be corrected from the tree:
+  NINE fake/null classes exist, not eight. EIGHT call assertFakeIsPermitted. The API
+  process constructs SIX of them; the ninth (NullInferenceAdapter) is deliberately
+  outside the guard and always was. Two things the order's list and T17's own
+  BETA-READINESS list both got wrong: PUSH_ADAPTER is not bound in AppModule at all
+  (only jobs/runtime.ts, so the API never trips over it), and INFERENCE_ADAPTER binds
+  the NULL, which does not throw. And THERE IS NO KYC ADAPTER - no class, no token, no
+  file; it existed only as a line in the guard's docstring while a test asserted its
+  absence (D-53). An adapter named in a comment and nowhere else is the cheapest
+  possible fake.
+  API-process guarded bindings:  6 before  ->  4 after.
+  Integrations that still refuse production:  SMS and storage. Storage is TWO tokens
+  (media, evidence) by deliberate design - grep the importers of the financial one and
+  you hold the complete list of code that can touch payment-evidence bytes - and the
+  ruling is explicit that one S3 implementation must not collapse them.
+Effect / Response, each:
+  RULING TRANSLATED  "no adapter, not a throwing one" cannot mean an ABSENT provider.
+    There is no @Optional() anywhere in apps/api, so a missing provider is an
+    UnknownDependenciesException at NestFactory.create - a boot crash, which is the
+    opposite of the intended outcome. The ruling is discharged by the Null Object
+    pattern NullInferenceAdapter already establishes: stay bound, satisfy the
+    interface, answer truthfully. A fake pretends to be a vendor; a null adapter says
+    there is no vendor.
+  SOCIAL  NullSocialPlatformAdapter REJECTS both calls. Fabricating a profile was the
+    one unacceptable option: the adapter's own INVARIANT is that the follower count
+    comes from the adapter and never from the seller. Both call sites already land on
+    the SPECIFIED degradation and neither changed - onboarding.service.ts catches and
+    returns 503-retryable (S13.1's "degrades to manual verification"), and
+    e3-trust-stock.ts records UNKNOWN, never UNAVAILABLE ("A PLATFORM OUTAGE IS NOT A
+    DELETED POST").
+  POST-LINK  NullPostLinkAdapter returns null - the contract's own degenerate case, not
+    an approximation of it: resolve is documented as returning null "when the URL
+    resolves to nothing recognisable", and with no resolver bound nothing is. Callers
+    unchanged: 422 POST_LINK_UNRESOLVED to the seller, an empty array to an anonymous
+    storefront lookup.
+  GUARD UNTOUCHED  assertFakeIsPermitted's body is byte-identical. All eight callers
+    still call it. What changed is the BINDING SITE. The fakes remain, reached by tests.
+  PUSH, AND THE FINDING THE PASS FOUND IN MY OWN JUSTIFICATION  the first draft of
+    NullPushAdapter's docstring said "SMS and the in-app list carry every notification".
+    THAT IS FALSE, and the adversarial pass caught it before merge:
+      * NOTHING produces channel = 'IN_APP'. The only two mentions in the whole tree are
+        the enum (0001:240) and the CLAIM side of the job (e2-notification.ts:122).
+        There is no INSERT. S9.3's fallback exists on the read side with no writer.
+      * The four PUSH producers have NO SMS TWIN. ORDER_AWAITING_PAYMENT_MORNING,
+        STOCK_CONFIDENCE_NUDGE, TRIAL_ENDING and notification.chat.escalated are
+        PUSH-only; the SMS set (NEW_DEVICE_SIGNIN, PAYOUT_CHANGE_*,
+        OWNERSHIP_TRANSFER_*) is disjoint.
+    So those four have NO ACTIVE DELIVERY CHANNEL. That is a real defect and it PREDATES
+    this order - the fake was hiding it by answering DELIVERED, which marked the row SENT
+    while nothing left the process. Binding the null does not create the loss; it stops
+    the lie about it. Registered here for a ruling: either a producer writes an IN_APP
+    twin, or those templates gain SMS, or the beta accepts that four notifications are
+    delivered only if the recipient happens to open their list.
+  WHY RETRYABLE  the enum is DELIVERED | RETRYABLE | TOKEN_DEAD and none of the three
+    means "there is no provider". DELIVERED is the precise lie the guard exists to stop.
+    TOKEN_DEAD is a fact about the DEVICE and e2-notification acts on it by clearing
+    core.device.push_token - saying it here would un-register the very devices that
+    should receive the first push the day a provider is bound. RETRYABLE is the only
+    true one, and it does not loop: markFailed writes state='FAILED', which is terminal.
+  THE ACCIDENTAL MITIGATION, NAMED AS ONE  notifications.controller.ts does not filter on
+    state, so a FAILED row is still listed if the person opens their notifications. That
+    is a property of one query, not a delivery channel, and it is recorded so nobody
+    mistakes it for the fallback.
+  LOGGING  runtime.ts logs `{ msg: 'job ok', job, ms, ...result }`, but
+    LOG_FIELD_ALLOWLIST contained none of those keys, so the emitted line was literally
+    {"msg":"job ok"} with every count stripped - a delivery channel failing 100% of its
+    rows reported success. That is the fake guard's own sentence ("the logs would look
+    healthy") reappearing one layer down, in the process meant to make it visible. The
+    seven operational scalars (job, ms, claimed, sent, suppressed, failed, dead_tokens)
+    are now allowed: a compile-time job name, a duration and counts of rows. None is
+    derived from user data and NEVER_LOG still excludes every sensitive value.
+Verification: pnpm --filter @adulis/api test -- 544/544, including twelve new assertions.
+  The nulls construct under NODE_ENV=production; the social null REJECTS rather than
+  inventing a follower count; the post-link null resolves to null; the push null returns
+  RETRYABLE and is asserted NOT to be DELIVERED and NOT to be TOKEN_DEAD; the four
+  remaining API-boot blockers still refuse production, and their count is asserted so
+  that nulling a fifth or re-binding a fake changes a test rather than only a paragraph.
+  A behavioural arm in e2-e6.jobs.spec.ts runs the real job with a null push adapter and
+  proves the row ends FAILED, sent = 0, dead_tokens = 0, and the device token SURVIVES.
+  Measured end to end: `NODE_ENV=production node dist/main.js` now stops at
+  FakeSmsAdapter, where it previously stopped at FakeSocialPlatformAdapter.
+Pass: four adversarial lenses (guard integrity, consumer truth, data integrity,
+  completeness). TWO MAJOR findings, both against my own work, both fixed before merge:
+  (1) the false push justification above; (2) the rewritten fake-guard docstring was
+  wrong AGAIN - it listed four of eight callers, said three still-guarded fakes were "no
+  longer here" when only their binding site had changed, and claimed the Classifier "has
+  never called this guard", conflating NullInferenceAdapter (which does not) with
+  FakeInferenceAdapter (which does, at inference.adapter.ts:63). The header is now a
+  mechanical list of all eight callers with the binding question separated from the
+  guarding question, because the narrative form is what went wrong twice.
+Flake: t12-d89-invite-claim failed once under gates (429 vs 202, then a different test in
+  the same spec on the next run) - the D-217 OTP-budget class, 3/hour per phone against a
+  platform-scoped row under parallel workers. Green 3/3 in isolation and 543/543 in a
+  standalone full-suite run; it also flaked during T17, before any of this. Recorded, not
+  chased, and unrelated: Phase 1 touches social, post-link and push, not SMS or sign-in.
+Ruling needed: the four PUSH-only templates with no delivery channel (above) - an IN_APP
+  producer, an SMS twin, or an accepted beta residual; and whether the worker should
+  refuse to start when a channel it is scheduled to deliver has no provider at all.

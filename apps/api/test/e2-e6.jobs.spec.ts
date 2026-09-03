@@ -1,3 +1,4 @@
+import { NullPushAdapter } from '../src/jobs/push.adapter';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createJobHarness, type Harness } from './jobs-harness';
@@ -301,6 +302,33 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       // Restore for later tests.
       await admin.query(`UPDATE core.device SET push_token='tok-owner' WHERE id=$1`, [DEVICE]);
       h.push.outcomes.clear();
+    });
+
+    it('with NO push provider the row FAILS rather than claiming delivery (T18 Phase 1)', async () => {
+      /*
+       * The property that makes NullPushAdapter safe to bind in production.
+       * FakePushAdapter answered DELIVERED, so the row was marked SENT while
+       * nothing left the process -- "the logs would look healthy", the exact
+       * sentence the fake guard was written around. The null adapter reports
+       * RETRYABLE, so the row is marked FAILED and the token is left alone.
+       *
+       * TOKEN_DEAD would have been the tempting answer and it is the dangerous
+       * one: e2-notification acts on it by clearing core.device.push_token, so
+       * saying it here would un-register the very devices that should receive
+       * the first push the day a provider is bound. Asserted, not assumed.
+       */
+      const id = await queue({ channel: 'PUSH', template: 'E2_PUSH_NO_PROVIDER' });
+      const r = await notificationPushSeller.run({ ...h.ctx, push: new NullPushAdapter() });
+
+      expect(r['sent']).toBe(0);
+      expect(r['failed']).toBe(1);
+      expect(r['dead_tokens']).toBe(0);
+      expect(await stateOf(id)).toBe('FAILED');
+
+      // The device survives untouched -- this is the half that would corrupt
+      // real data if the outcome were TOKEN_DEAD.
+      const tok = await admin.query(`SELECT push_token FROM core.device WHERE id=$1`, [DEVICE]);
+      expect(tok.rows[0].push_token).toBe('tok-owner');
     });
 
     it('the morning reminder fires at 08:00 EAT and NOT at 08:00 UTC (trap 3)', async () => {
