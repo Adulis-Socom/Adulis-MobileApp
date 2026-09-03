@@ -192,6 +192,20 @@ try {
    * denies by default, and the column defaults say so (UNREVIEWED, every
    * flag false), so this UPDATE is the ONLY place a market is switched on.
    *
+   * IT DOES NOT CLAIM AN APPROVAL NOBODY OBTAINED. This said
+   * `sender_registration_status = 'APPROVED'` and
+   * `sms_compliance_status = 'REVIEWED_FOR_SEED'`; the first asserts that a
+   * vendor approved the `Adulis` sender ID, which no vendor has, and the
+   * second invents a value for a column S9.1 deliberately leaves TEXT and
+   * unenumerated (D-181). A seed is a TEMPLATE -- the row an operator copies
+   * when activating a real market -- so a seed that claims approval is how a
+   * production market ends up claiming one too.
+   *
+   * `NOT_REQUIRED` is true OF WHAT IS BOUND HERE: the provider is a fake and
+   * a fake requires no sender registration. When a real vendor is bound this
+   * becomes PENDING and then APPROVED by the activation runbook, which is
+   * where that decision belongs.
+   *
    * FALLBACK IS NULL, DELIBERATELY. S7.1 makes SMSEthiopia a CANDIDATE, not
    * a route, until S7.2's fourteen-point acceptance checklist passes -- and
    * that needs a registered business, which is blocked. So +251 is
@@ -210,8 +224,8 @@ try {
             sms_fallback_provider = NULL,
             sender_mode = 'ALPHANUMERIC_SENDER',
             sender_id = 'Adulis',
-            sender_registration_status = 'APPROVED',
-            sms_compliance_status = 'REVIEWED_FOR_SEED',
+            sender_registration_status = 'NOT_REQUIRED',
+            sms_compliance_status = 'NOT_REVIEWED_FAKE_PROVIDER',
             otp_daily_soft_limit = 500,
             otp_daily_hard_limit = 1000
       WHERE id = $1`,

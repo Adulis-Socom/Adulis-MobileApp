@@ -3,8 +3,9 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.12** · ADU-AUTH-01 **v2.5** · ADU-API-01 **v1.7** ·
-ADU-CON-02 **v3.1**, installed at T5. Read `docs/amendments/README.md` first: it says what
+**Governing documents:** ADU-DB-01 **v1.14** (T13) · ADU-AUTH-01 **v2.6** (T13, and **v2.5
+remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`) ·
+ADU-API-01 **v1.7** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
 governs and which amendments are live. A1, A2 and A3 are all absorbed into the installed
 text and no longer apply separately.
 
@@ -41,23 +42,35 @@ a NestJS service is an invariant a second endpoint can bypass.
 
 | | | Asserted by |
 |---|---|---|
-| Tables | **114** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
-| Enum types | **66** types | Appendix C **check 16**, against `pg_type` both directions |
+| Tables | **116** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
+| Enum types | **71** types | Appendix C **check 16**, against `pg_type` both directions |
 | Append-only tables | **22**, each with both the trigger and the `REVOKE` | Appendix C **check 5** |
 | Permissions / grants | **42 / 139**, 8 step-up, 12 mobile-reachable | `pnpm verify:permission-doc`, 252 cells both directions |
 
 A different count is wrong somewhere — **stop and report it** rather than reconciling.
 
-> **[!] The counts above are the BUILD's, asserted by the fixtures, and v1.12's printed
-> ones do not match them.** T6 Phase B adds two more the appendix does not list --
-> `billing.purchase_intent` (D-68) and `core.seller_ownership_transfer` (D-70) -- both
-> pinned by name in check 14's `BODY_OVER_MANIFEST`, both for D-40's reason: ADU-API-01
-> gave a capability a ruling and no document gave it a table.
+> **The document's printed counts and the build's now AGREE, and that is new.** Three
+> revisions running, ADU-DB-01 announced an appendix correction it did not perform, and
+> every one stayed green because nothing compared them. **v1.13 stopped writing its own
+> appendices**: Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and
+> `pg_class` (`pnpm generate:appendix`), and `pnpm verify:appendix` compares document to
+> fixture in both directions. So the document, the fixture and the database agree by
+> construction rather than by review.
 >
-> The older gap stands too: Appendix B heads its core list "84" and lists 85, and omits
-> `category_market_availability`, `notification_preference` and `seller_courier_invite`
-> — all three of which exist, and the last two are the tables §30 says the appendix was
-> *reconciled* for (D-58, D-59). **The fixtures govern, because something executes them.**
+> **Five of check 14's rows are still body-over-manifest and still pinned by name** --
+> `core.category_market_availability` (D-18), `core.notification_preference` (D-40),
+> `core.seller_courier_invite` (D-59), `billing.purchase_intent` (D-68),
+> `core.seller_ownership_transfer` (D-70). All five exist; each is a table a ruling
+> required and no document's manifest listed. They are folded into v1.14's Appendix B and
+> flagged there, which is what "generated" bought.
+>
+> **[!] One number in v1.14 is still wrong and is registered rather than reconciled**
+> (D-190): Appendix B opens "116 tables" and its closing sentence says "Reproducing 114
+> names here" -- v1.13's count, carried forward when the headline was updated. The
+> installed copy reads 116; the deviation from the founder's text is recorded and a
+> ruling is invited. **Do not fix a count by editing the document to match the fixture, or
+> the fixture to match the document** -- find which one the database agrees with.
+
 There is deliberately no asserted enum count in the document any more: v1.9 replaced the
 number with a check, because a number in prose drifts and a number from a query cannot.
 `db/checks/fixtures/appendix-a.json` is the transcription both the check and the tests
@@ -164,6 +177,7 @@ pnpm db:migrate && pnpm db:check        # Appendix C, sixteen checks
 pnpm db:determinism                     # two clean databases converge
 pnpm verify:permission-doc              # 252 cells, both directions
 pnpm verify:docs-ascii                  # A3.5, plus the NUL-byte guard
+pnpm verify:appendix                    # Appendix A/B vs the fixtures, both ways
 pnpm --filter @adulis/api test
 pnpm verify:deps && pnpm verify:deps-fires   # ADU-REPO-01 §4, and that they fire
 pnpm verify:contract                    # /v1 in the path keys — inert until Tier 3

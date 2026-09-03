@@ -3,7 +3,6 @@ import {
   Delete,
   Get,
   HttpCode,
-  Inject,
   Param,
   Patch,
   Post,
@@ -21,7 +20,7 @@ import { resolveKey } from '../../common/crypto/aead';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
-import { SMS_ADAPTER, type SmsAdapter, type SmsMessage } from './sms.adapter';
+import { OtpDeliveryService, type IssuedOtp } from './otp-delivery.service';
 import {
   BROWSER_DEVICE_COOKIE,
   REMEMBERED_DEVICE_COOKIE,
@@ -50,8 +49,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
 
-
-
 @Controller()
 export class AuthController {
   constructor(
@@ -60,7 +57,7 @@ export class AuthController {
     private readonly rateLimit: RateLimitService,
     private readonly auth: AuthService,
     private readonly otp: OtpService,
-    @Inject(SMS_ADAPTER) private readonly sms: SmsAdapter,
+    private readonly delivery: OtpDeliveryService,
   ) {}
 
   /**
@@ -76,7 +73,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = otpRequestBody.parse(req.body);
-    let toSend: SmsMessage | null = null;
+    let issued: IssuedOtp | null = null;
     const result = await this.tx.runIdempotent(req, res, 202, async (trx) => {
       // Inside the closure so an idempotent replay burns no budget.
       await this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
@@ -84,12 +81,32 @@ export class AuthController {
         windowSeconds: 3600,
         max: 3,
       });
-      await this.rateLimit.consume('IP_HASH', subjectHash(req.ip ?? '', hashKey()), {
-        bucketKey: 'otp-request-ip',
-        windowSeconds: 3600,
-        max: 10,
-      });
-      const issued = await this.otp.issueChallenge(trx, {
+      /**
+       * THE IP LIMITER IS REMOVED, NOT RELAXED (ADU-AUTH-01 v2.6 S15).
+       *
+       * What stood here was `10/hour/IP_KEY` -- the exact control v2.6 names
+       * and then declares DISABLED. The document is explicit that this is not
+       * a matter of degree: "It is not merely non-authoritative. IT MUST NOT
+       * EXECUTE in a topology where every request may appear to originate
+       * from the same proxy."
+       *
+       * That topology is ours. Nothing in this API sets Express's `trust
+       * proxy`, so `req.ip` is the SOCKET address -- which behind any CDN,
+       * load balancer or reverse proxy is the PROXY's address, identical for
+       * every user. The limiter was therefore not weak, it was a shared
+       * counter: ten OTP requests per hour for the entire platform, and the
+       * eleventh person to sign in that hour gets 429 because ten strangers
+       * did first. It has never run in that topology, which is the only
+       * reason it has not already caused an outage.
+       *
+       * The phone-keyed limit above (S14, 3/hour/PHONE_KEY) is untouched and
+       * is the control that actually binds. S15.1 lists what must be
+       * documented and tested before an IP limit may exist at all -- trusted
+       * hops, forwarding header, spoofed-header behaviour -- and none of it
+       * is done, so the honest state is no IP limiter rather than one that
+       * cannot be trusted either way.
+       */
+      const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'SIGN_IN',
         templateKey: 'sms.otp.sign_in',
@@ -97,12 +114,12 @@ export class AuthController {
         // timing governs this code (ADU-RUL-03 S3).
         deviceId: requestingDevice(req.headers),
       });
-      toSend = issued.sms;
+      issued = fresh;
       return {};
     });
     // After commit, and only on a fresh execution — a rolled-back issue or
-    // a replay dispatches nothing.
-    if (toSend) await this.sms.send(toSend);
+    // a replay transports nothing.
+    await this.delivery.transport(issued);
     return result;
   }
 
@@ -113,18 +130,28 @@ export class AuthController {
   @ApiOperation({ summary: 'Not idempotency-keyed; backoff 30s-60s-120s (4.3).' })
   async otpResend(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = otpResendBody.parse(req.body);
-    let toSend: SmsMessage | null = null;
+    let issued: IssuedOtp | null = null;
     await this.tx.run(req, async (trx) => {
       await this.otp.assertResendAllowed(trx, body.phone, 'SIGN_IN');
-      const issued = await this.otp.issueChallenge(trx, {
+      /**
+       * A RESEND IS NOT A FAILOVER (v2.6 S5.5). This path issues a NEW
+       * challenge, which supersedes the live one: the old code dies, a new
+       * code is generated, and the expiry and attempt budget start again.
+       * Delivery failover -- which transports the SAME code over a second
+       * vendor -- happens inside OtpDeliveryService and never comes through
+       * here. The two operations must never be conflated, and the structure
+       * is what keeps them apart: nothing in the delivery service can reach
+       * `issueChallenge`.
+       */
+      const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'SIGN_IN',
         templateKey: 'sms.otp.sign_in',
         deviceId: requestingDevice(req.headers),
       });
-      toSend = issued.sms;
+      issued = fresh;
     });
-    if (toSend) await this.sms.send(toSend);
+    await this.delivery.transport(issued);
     return {};
   }
 
@@ -269,7 +296,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = stepUpRequestBody.parse(req.body);
-    let toSend: SmsMessage | null = null;
+    let issued: IssuedOtp | null = null;
     const result = await this.tx.runIdempotent(
       req as LocalizedRequest,
       res,
@@ -280,12 +307,12 @@ export class AuthController {
           windowSeconds: 3600,
           max: 5,
         });
-        const issued = await this.auth.stepUpRequest(trx, req, body);
-        toSend = issued.sms;
-        return issued.body;
+        const fresh = await this.auth.stepUpRequest(trx, req, body);
+        issued = fresh;
+        return fresh.body;
       },
     );
-    if (toSend) await this.sms.send(toSend);
+    await this.delivery.transport(issued);
     return result;
   }
 
