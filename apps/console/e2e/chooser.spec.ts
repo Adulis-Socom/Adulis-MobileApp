@@ -35,6 +35,147 @@ test.describe('the store chooser -- D-97 closed', () => {
     await expect(page.locator('[data-item]').first()).toBeVisible();
   });
 
+  test('a single-store seller reaches "Create a store" without typing a URL (T19 P1)', async ({
+    page,
+  }) => {
+    /*
+     * HALF OF THE REGRESSION #80 SHIPPED, and the state it broke in.
+     *
+     * The redirect is right -- a returning seller belongs in their store, not
+     * on a chooser. But the chooser carried two links, and forwarding past it
+     * left both reachable only by typing a URL. That is exactly the failure
+     * T17 recorded as the point where a real seller stops and messages the
+     * founder, reintroduced by the fix for it.
+     *
+     * This starts where the seller starts: at "/" with exactly one store.
+     */
+    await page.goto('/');
+    await expect(page).toHaveURL(new RegExp(`/s/${SEEDED.sellerId}$`));
+
+    // With a single store there is nothing to switch to, so the menu is not a
+    // switcher -- it is the store list plus the way to add one, which is the
+    // control that must not be lost. A component that drew nothing below two
+    // stores would satisfy S9.2 and leave the regression in place.
+    await page.locator('[data-switcher-toggle]').click();
+    await page
+      .locator('[data-switcher-menu]')
+      .getByRole('link', { name: /create a store/i })
+      .click();
+    await expect(page).toHaveURL(/\/s\/new$/);
+    await expect(page.getByRole('button', { name: /create my store/i })).toBeVisible();
+  });
+
+  test('the SWITCHER proper: more than one store, and switching works (T19 P1)', async ({
+    page,
+  }) => {
+    /*
+     * The behaviour ADU-REPO-01 S9.2 actually rules, and it had no coverage at
+     * all -- the single-store rendering is what this phase needed, so it was
+     * the only thing tested. Planted, because the seeded account owns one
+     * store and a second would change every other spec's world.
+     */
+    await page.route('**/v1/seller/list', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          data: [
+            { id: SEEDED.sellerId, handle: 'seed-store', store_name: 'Seed Store', status: 'ACTIVE', role: 'OWNER' },
+            {
+              id: '5eed0000-0000-4000-8000-0000000000ff',
+              handle: 'second-store',
+              store_name: 'Second Store',
+              status: 'ACTIVE',
+              role: 'ADMIN',
+            },
+          ],
+        },
+      });
+    });
+    await page.goto(`/s/${SEEDED.sellerId}`);
+
+    // The topbar names THIS store, not the generic label.
+    await expect(page.locator('[data-switcher] .store-name')).toHaveText('Seed Store');
+    // With somewhere to go, it offers to switch.
+    await expect(page.locator('[data-switcher-toggle]')).toHaveText(/switch store/i);
+
+    await page.locator('[data-switcher-toggle]').click();
+    const menu = page.locator('[data-switcher-menu]');
+    await expect(menu.locator('[data-switcher-seller]')).toHaveCount(1);
+
+    // Escape closes it -- a menu with no way out is a trap on a phone.
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+
+    await page.locator('[data-switcher-toggle]').click();
+    await menu.getByRole('link', { name: 'Second Store' }).click();
+    await expect(page).toHaveURL(/\/s\/5eed0000-0000-4000-8000-0000000000ff$/);
+  });
+
+  test('a FAILED store list is never mistaken for "you have one store" (T19 P1)', async ({
+    page,
+  }) => {
+    /*
+     * The first draft caught every failure into rows = [], which renders
+     * byte-identically to an account with exactly one store: the generic
+     * "Your store", a menu with no stores in it, and no sign anything went
+     * wrong -- for the rest of the session, because the fetch runs once per
+     * Shell mount and Shell does not remount on navigation. A seller with
+     * three stores would have concluded they had lost access to two of them.
+     */
+    await page.route('**/v1/seller/list', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', json: {} });
+    });
+    await page.goto(`/s/${SEEDED.sellerId}`);
+
+    // The store name alone -- exactly what the topbar showed before the
+    // switcher existed -- plus a way to try again.
+    await expect(page.locator('[data-switcher-retry]')).toBeVisible();
+    // ...and NOT a menu that would claim this account has no other stores.
+    await expect(page.locator('[data-switcher-toggle]')).toHaveCount(0);
+    await expect(page.locator('[data-switcher-menu]')).toHaveCount(0);
+
+    // The rest of the console is unaffected: a failed topbar list must not
+    // take a working screen down with it.
+    await expect(page.locator('[data-item]').first()).toBeVisible();
+  });
+
+  test('the courier entry point is on SIGN-IN, ahead of any seller routing (T19 P1)', async ({
+    browser,
+  }) => {
+    /*
+     * THE OTHER HALF, and it moved rather than being restored where it was.
+     * A courier is not seller staff: they hold their own account, they see
+     * only assigned orders, and they have no store to be redirected into.
+     * Routing them through a store chooser was wrong before #80 made it
+     * visible.
+     *
+     * ANONYMOUS CONTEXT, deliberately. This suite shares one signed-in
+     * storageState, and signing out REVOKES that session row server-side --
+     * it would 401 every spec that runs afterwards. A courier arriving at
+     * sign-in is unauthenticated anyway, so this is also the truer starting
+     * state. The signed-in path (sign out, then click through) is proved by
+     * zz-beta-walk, whose account is its own and which runs last.
+     */
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    try {
+      const page = await ctx.newPage();
+      await page.goto('/sign-in');
+
+      // /courier is behind RequireSession, so following this while signed out
+      // bounces back here -- correctly, and with `from` armed, so the courier
+      // lands on their deliveries after verifying. The round trip is
+      // invisible, which reads as a dead link on the screen a courier meets
+      // first, so the screen says what will happen.
+      await page.getByRole('link', { name: /deliveries assigned to you/i }).click();
+      await expect(page).toHaveURL(/\/sign-in/);
+      await expect(page.locator('[data-courier-resume]')).toBeVisible();
+      await expect(page.getByText(/straight to your deliveries/i)).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+  });
+
   test('the redirect REPLACES history -- Back does not bounce', async ({ page }) => {
     // A seller who lands in their store and presses Back should leave the app,
     // not be forwarded again by a screen they never chose to visit. Asserted

@@ -202,6 +202,13 @@ export const en = {
   'console.nav.inbox': 'Inbox',
   'console.nav.more': 'More',
   'console.shell.store': 'Your store',
+  // T19 Phase 1 -- the switcher's two labels. With other stores it offers
+  // a switch; with one store there is nothing to switch to, so it names
+  // what the menu actually holds: the store list and the way to add one.
+  'console.courier.after_signin':
+    'Sign in below and you will be taken straight to your deliveries.',
+  'console.switcher.switch': 'Switch store',
+  'console.switcher.stores': 'Stores',
   'console.shell.notifications': 'Notifications',
   'console.shell.account': 'Account',
   'console.shell.signed_in': 'Signed in',

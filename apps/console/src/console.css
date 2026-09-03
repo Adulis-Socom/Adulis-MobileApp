@@ -84,7 +84,27 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   padding: var(--adu-space-sm) var(--adu-space-md);
   border-bottom: 1px solid var(--adu-color-border);
 }
-.topbar .store-name { font-weight: 700; margin-right: auto; }
+/* T19 Phase 1 -- the switcher.
+   `margin-right: auto` moves from the store name to the switcher itself: the
+   name is now nested inside it, and an auto margin on a non-replaced INLINE
+   box computes to zero, so leaving the rule where it was silently un-pushed
+   the bell and Sign out from the right edge of every seller route. */
+.topbar .store-name { font-weight: 700; }
+.seller-switcher { position: relative; display: flex; align-items: center;
+  gap: var(--adu-space-xs); margin-right: auto; }
+.switcher-toggle, .switcher-retry { background: none; border: 0;
+  color: var(--adu-color-text-muted); text-decoration: underline;
+  min-height: 44px; padding: 0 var(--adu-space-xs); cursor: pointer; }
+/* ABSOLUTE, not in flow. A block child of the topbar grows the header and
+   pushes the whole page down when the menu opens. */
+.switcher-menu { position: absolute; top: 100%; left: 0; z-index: 20;
+  min-width: 14rem; padding: var(--adu-space-xs);
+  background: var(--adu-color-surface);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); }
+.switcher-menu ul { list-style: none; margin: 0; padding: 0; }
+.switcher-menu a { display: flex; align-items: center; min-height: 44px;
+  padding: 0 var(--adu-space-xs); }
 .shell > main { grid-area: main; padding: var(--adu-space-md); max-width: 64rem; width: 100%; margin: 0 auto; }
 .sidenav { display: none; }
 .bottombar {

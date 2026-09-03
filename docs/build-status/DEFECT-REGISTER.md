@@ -3380,3 +3380,76 @@ Ruling needed / DOCUMENT DEBT, recorded rather than assumed:
   2. core.fn_cancel_payout_change accepting a row whose activates_at has already passed,
      given that activation happens only when someone reads. Not touched by this phase.
   3. Whether activation should have a job rather than depending on a reader.
+
+### D-245 - T19 Phase 1: the switcher #80 owed, the courier entry point moved, and a deviation from S9.2 recorded rather than argued in one file
+
+Severity:  a regression PR #80 shipped -- two routes reachable only by typing a URL
+Phase:     T19 Phase 1
+Source:    apps/console (SellerSwitcher.tsx new, Shell.tsx, SignIn.tsx, Chooser.tsx,
+           console.css, chooser.spec.ts, zz-beta-walk.spec.ts); packages/locale
+The regression, stated plainly: #80's redirect is RIGHT -- a returning seller belongs in
+  their store, not on a chooser -- and it shipped without its replacement. The chooser
+  carried two links, and forwarding a single-store seller past it left both reachable
+  only by typing a URL: "Create a store" and the courier entry point. That is exactly the
+  failure T17 recorded as the point where a real seller stops and messages the founder,
+  reintroduced by the fix for it. T18 S3 said to build the switcher in the same PR as the
+  redirect; that did not happen, and this entry is the debt.
+Effect / Response, each:
+  THE SWITCHER  built at last -- its blocker was D-97 and D-97 closed at T18 Phase 3.
+    Store name, other stores as links, and "Create a store" ALWAYS.
+  THE S9.2 DEVIATION, RECORDED HERE BECAUSE D-243 RESERVED IT FOR A RULING and arguing
+    it only inside the file that deviates is how a rule gets quietly talked around.
+    ADU-REPO-01 S9.2 says the switcher renders "ONLY when the account holds more than one
+    seller". This renders something at one store. The reading: S9.2 protects against a
+    menu that lies about having a choice, and at one store this is NOT a switcher -- it
+    is the store's name plus the one control that must not be lost. Drawing nothing would
+    satisfy the letter and leave the regression in place. Recorded as an interim reading
+    against an unreissued document; the alternative is to put "Create a store" somewhere
+    else entirely, which is a design decision and not made here.
+  THE COURIER ENTRY POINT moved to SIGN-IN, per T19 S2's ruling: a courier is not seller
+    staff, holds their own account, sees only assigned orders, and has no store to be
+    redirected into. Routing them through a store chooser was wrong before the redirect
+    made it visible.
+  AND THE CLICK HAD TO SHOW SOMETHING. /courier sits behind RequireSession, so following
+    that link while signed out bounces straight back to sign-in -- correctly, and with
+    `from` armed, so the courier DOES land on their deliveries after verifying. But the
+    round trip is invisible: the address bar ends where it started. On the one screen a
+    courier meets first that reads as a dead link, so the screen now says what will
+    happen.
+  IT ALSO STAYS ON THE CHOOSER, in EMPTY *and* READY. The first draft gated it on EMPTY
+    alone and the pass found the case that breaks: a courier who ALSO holds stores. With
+    two stores they land on the chooser and would have found nothing.
+Pass: three adversarial lenses. TWO BLOCKER-class findings, both against my own draft:
+  FAIL-QUIET CONFLATED FAILURE WITH EMPTINESS. The catch set rows = [], which renders
+    byte-identically to an account with exactly one store: the generic "Your store", a
+    menu with no stores in it, and no sign anything had failed -- for the whole session,
+    because the fetch runs once per Shell mount and Shell does not remount on navigation.
+    A seller with three stores who hit one dropped request would have concluded they had
+    lost access to two of them. The failure is now its own state, with a retry, and an
+    arm asserts the difference. (A 401 never reaches that catch: api() fires the global
+    unauthorized handler first and RequireSession redirects -- checked, not assumed.)
+  THE COURIER LINK GATED ON EMPTY (above).
+  Four more fixed: no CSS existed for ANY switcher class, so the menu rendered as an
+    unstyled in-flow block that pushed the whole page down, with default disc bullets;
+    the topbar's `margin-right: auto` was orphaned by the new nesting -- an auto margin on
+    a non-replaced INLINE box computes to zero, so the bell and Sign out silently
+    un-pushed from the right edge of every seller route; the menu had no dismissal path
+    (Escape and click-outside added, and it now closes on navigation, which otherwise
+    left a panel describing where you no longer are); and Shell.tsx's own header still
+    told the next engineer the switcher could not be built.
+Verification: pnpm ci:local -- 26 gates, 558/558, 65 e2e. New arms: the multi-store
+  switcher (the behaviour S9.2 actually rules, which had NO coverage -- names this store,
+  offers a switch, lists the other, Escape closes, switching navigates); the failed list
+  proving it is never mistaken for one store and that the rest of the console still
+  renders; and the single-store seller reaching "Create a store" from "/" without typing.
+  Browser-drawn, from the state that broke, in zz-beta-walk step 14:
+    "a returning seller is taken straight back into their store"
+    "a redirected seller still reaches Create a store, from the switcher"
+    "signing out reaches the courier entry point, which says it will resume there"
+  The walk owns its account and runs last, which is why it is the one place the SIGNED-IN
+  path can be driven: the shared suite session cannot sign out without revoking the row
+  every later spec authenticates with.
+Ruling needed: a courier who ALSO holds exactly ONE store is still redirected into it and
+  must sign out to reach /courier. Rare, and not fixable on the chooser -- that account
+  never sees the chooser. If it matters, the entry point belongs in the topbar beside the
+  switcher, which is the design decision this phase did not make.
