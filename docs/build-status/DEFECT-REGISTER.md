@@ -3089,3 +3089,56 @@ Flake: t12-d89-invite-claim failed once under gates (429 vs 202, then a differen
 Ruling needed: the four PUSH-only templates with no delivery channel (above) - an IN_APP
   producer, an SMS twin, or an accepted beta residual; and whether the worker should
   refuse to start when a channel it is scheduled to deliver has no provider at all.
+
+### D-244 - T18 Phase 5: the trust flags become a launch gate; and the flag that enforces nothing says so
+
+Severity:  a deliberate beta setting given a tripwire, so it cannot survive by inertia
+Phase:     T18 Phase 5
+Source:    ops/scripts/verify-trust-before-open-signup.mjs; ops/scripts/gates.mjs;
+           ops/scripts/seed.mjs; package.json
+Ruling discharged: T18 S5 -- "A hand-picked beta of twenty sellers is verified by the
+  founder, not the system. That is correct for the cohort. What is not correct is `false`
+  surviving by inertia. audience_required or identity_required must be TRUE before open
+  signup."
+Effect / Response, each:
+  THE GATE  a market may not be open to public SELLER registration while measuring
+    nothing about the sellers it admits. It fails when, for one market:
+    seller_registration_enabled AND registration_enabled are true, AND
+    eligibility_config.audience_required is false, AND identity_config.identity_required
+    is false. Buyer registration is deliberately not consulted (a buyer is not a seller
+    and neither flag measures one), and neither is activation_state (a market can be
+    ACTIVE for OTP delivery while seller signup stays shut, and conflating them would
+    fail markets doing the right thing).
+  A GATE, NOT A SEVENTEENTH CHECK, and the repository had already ruled it. db-check.mjs
+    exits 2 on any count but sixteen; "sixteen checks" is written into TWO governed ASCII
+    specifications (ADU-DB-01 v1.16 Appendix C, ADU-REPO-01 v1.3); and gates.mjs's own
+    comment reads "NOT a seventeenth db/checks file ... a governed set". Appendix C is
+    closed. The gate list is not, and carries no frozen count. This is gate 26.
+  FAIL-CLOSED ON AN ABSENT CONFIG ROW, matching 0018's own reading: a missing
+    identity_config means identity IS required (coalesce(..., true)), which is the safe
+    side, so an absent row does not fire this gate.
+  GREEN TODAY, BY CHANGING THE SEED RATHER THAN THE GATE. seller_registration_enabled is
+    now seeded FALSE, because the beta genuinely is invite-only. D-93 is why this
+    mattered: console build-output gates that went red on every backend-only PR produced
+    the finding "a red that teaches people the gate lies", and a gate people learn to
+    skip is worse than no gate.
+  AND THE CAVEAT IS WRITTEN DOWN IN BOTH PLACES. NOTHING IN THE CODEBASE READS
+    seller_registration_enabled -- this gate is its FIRST reader. Setting it false makes
+    the flag HONEST ABOUT INTENT and ENFORCES NOTHING. The beta is invite-only because
+    the founder controls who gets a link, not because any code refuses anyone. That is
+    fine for a beta and it is recorded here, in the seed and in the gate script, because
+    the day someone assumes the flag is enforcing is the day it isn't.
+Verification: pnpm ci:local -- ALL 26 GATES (the new one runs at position 17). The gate
+  was driven through all three states against the live database rather than reasoned
+  about:
+    closed signup, nothing measured   -> PASS   "SEED  seller signup closed  measures: NOTHING"
+    OPEN signup, nothing measured     -> FAIL   "1 market(s) open to public SELLER
+                                                 registration with neither audience nor
+                                                 identity required: SEED"
+    OPEN signup, identity required    -> PASS   "SEED  seller signup OPEN  measures: identity"
+  Reproduced by: update core.market set seller_registration_enabled = true;
+                 pnpm verify:trust-before-open-signup   -> exit 1
+Ruling needed: whether seller_registration_enabled should ever ENFORCE rather than
+  declare -- i.e. whether POST /v1/seller should refuse when the market's seller signup is
+  closed. Not built here: it would turn a declarative flag into an access control on the
+  one path a hand-picked beta seller must still walk, and that is a product decision.

@@ -41,6 +41,7 @@
     "verify:appendix": "node --env-file-if-exists=.env ops/scripts/verify-appendix.mjs",
     "verify:orphan-sweep": "node --env-file-if-exists=.env ops/scripts/verify-orphan-sweep.mjs",
     "verify:console-e2e": "node --env-file-if-exists=.env ops/scripts/verify-console-e2e.mjs",
+    "verify:trust-before-open-signup": "node --env-file-if-exists=.env ops/scripts/verify-trust-before-open-signup.mjs",
     "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
     "worker:install": "node ops/scripts/install-worker-schema.mjs",
     "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs",
