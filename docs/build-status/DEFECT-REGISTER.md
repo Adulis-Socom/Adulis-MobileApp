@@ -3162,3 +3162,80 @@ Owed, not built: a CONSOLE e2e that clicks reorder. Media.tsx already calls the 
 Ruling needed: none. The deviation from S2's letter is recorded above rather than
   invited, because the ruling's purpose is served and its letter cost a seller-facing
   error message.
+### D-241 - T18 Phase 4: the new-device payout lock gains a subject; the cancel-then-set attack the first draft was open to; and one unreissued specification
+
+Severity:  BLOCKER in the pass (a takeover path the first draft opened), fixed before merge
+Phase:     T18 Phase 4
+Source:    db/migrations/0047_payout_lock_first_set.sql; apps/api (financial.service.ts,
+           c4-financial.e2e.spec.ts); apps/console (Payout.tsx, store-admin.spec.ts);
+           packages/locale
+Ruling discharged: T18 S4 -- "The lock exists to stop an attacker redirecting payments
+  after a takeover. On a brand-new account there is nothing to redirect."
+Effect / Response, each:
+  THE PREDICATE IS "HAS NEVER HAD A PAYOUT ROW", NOT "HAS NO ACTIVE ROW". The first
+    draft read the ruling literally and used state = 'ACTIVE'. The adversarial pass broke
+    it in one move, and the move is free:
+      CANCEL-THEN-SET. core.fn_cancel_payout_change (0022) requires NO step-up, checks NO
+      lock and is deliberately easy -- "reverting must always be easier than changing".
+      An attacker who has taken over an account, on a device we have never seen, cancels
+      the seller's legitimate PENDING first set. That leaves no ACTIVE and no PENDING row,
+      an ACTIVE-only carve-out then applies, and the attacker sets their own bank account
+      UNLOCKED. Before this migration they were held for the full window.
+      Aggravating: activation is lazy and reader-driven. core.fn_activate_due_payout is
+      invoked from exactly ONE place in the product (the GET on /v1/seller/payout) and no
+      job calls it, so a due PENDING stays PENDING -- and stays cancellable -- until
+      somebody opens the payout screen. The window is not 24 hours; it is "until the
+      seller next looks".
+    A CANCELLED row is still a row, so "has this seller EVER had payout details" is the
+    question an attacker-controlled move cannot walk back. Asserted by an arm that
+    performs the whole attack and requires NEW_DEVICE at the end of it.
+  GUARD ORDER CHANGED, DELIBERATELY  one-pending-per-seller now runs BEFORE the
+    new-device lock. Without the move, a seller with a change already in flight would be
+    refused with a message about a device; the true and more useful answer is that they
+    have a change pending. Both are refusals and neither writes, so nothing is weakened.
+    Asserted by its own arm.
+  THE TWIN  payoutLockState (SC-24's proactive panel) carries the identical predicate in
+    an `ever` CTE. A panel that disagrees with the write path is worse than no panel, and
+    the first draft had them agreeing on the WRONG predicate, which would have hidden the
+    attack from the screen as well as from the server.
+  WHAT IS NOT RELAXED  a seller with ANY prior payout row changing from an unseen device
+    is still locked for the full window; the activation delay still stacks downstream;
+    RECOVERY_COOLING runs before this guard and knows nothing about payout rows, so a
+    first set cannot step around account recovery (asserted); step-up is still required
+    on every set, first or not.
+  T17'S SENTENCE IS RETIRED, WHICH IS THE BETTER OUTCOME  D-239 added a first-set variant
+    of the NEW_DEVICE message because the change-wording accused a day-old seller of a
+    break-in. Phase 4 removed the STATE instead of wording it more kindly, so the branch
+    became unreachable and the string is deleted rather than improved. D-239's "THE LOCK
+    ITSELF IS UNTOUCHED. Only the sentence changes" is superseded by this entry.
+  R20 KEPT ITS ASSERTION  the real-GET e2e now proves the opposite case (no lock at all),
+    so "locked implies the control is DISABLED" moved to the planted CHANGE arm rather
+    than being lost with the test that used to carry it. The pass caught that it would
+    otherwise have had no assertion anywhere in the suite.
+  A TEST THAT COULD NO LONGER FAIL  the unsuppressible-notification assertion counted
+    PAYOUT_CHANGE_REQUESTED rows globally with toBeGreaterThan(0). The new first-set arm
+    creates one, so the later assertion was satisfied in advance. It is now a delta,
+    scoped to the row its own arm creates.
+Verification: pnpm ci:local -- 25 gates. c4-financial 17/17, including: the panel silent
+  BEFORE a first set and reporting NEW_DEVICE one request AFTER it (the lock arms itself
+  the moment there is something to protect -- the carve-out is a property of the seller's
+  history, not of the device); a CHANGE from an unseen device still 409/NEW_DEVICE with
+  no row written; the full cancel-then-set attack ending in NEW_DEVICE; a PENDING change
+  refused as PAYOUT_CHANGE_PENDING; and recovery cooling still firing with no payout row.
+  Browser-drawn: zz-beta-walk step 4 turns from "on day one the payout control is
+  DISABLED and the screen says ..." into "payout details can be set on the day of
+  sign-up". T17's BETA-READINESS CANNOT #5 is answered.
+Pass: four adversarial lenses (takeover, twin consistency, migration fidelity, blast
+  radius). ONE BLOCKER-class finding -- the cancel-then-set path above -- plus a lost R20
+  assertion, a pre-satisfied notification assertion, and stale comments, all fixed before
+  merge. The findings were against my own first draft in every case.
+Ruling needed / DOCUMENT DEBT, recorded rather than assumed:
+  1. ADU-AUTH-01 v2.6 S20 states the new-device payout lock UNCONDITIONALLY, and v2.5's
+     invariant quantifies the guarantee as "an attacker needs 48 hours under a push
+     notification the real seller has already received". For a seller who has NEVER had
+     payout details it is now 24 (the activation delay alone). The narrowing is a founder
+     ruling (T18 S4) carried as an interim ruling; the specification is unreissued and
+     the amendment is owed. Neither document is edited here -- transcribe, do not design.
+  2. core.fn_cancel_payout_change accepting a row whose activates_at has already passed,
+     given that activation happens only when someone reads. Not touched by this phase.
+  3. Whether activation should have a job rather than depending on a reader.

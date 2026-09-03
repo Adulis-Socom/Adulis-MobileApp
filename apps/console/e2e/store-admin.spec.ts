@@ -285,36 +285,43 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
     await expect(page.getByRole('button', { name: /Cancel pending change/ })).toHaveCount(0);
   });
 
-  test('the new-device lock renders PROACTIVELY from the real GET; the control is disabled (T15 Phase 4)', async ({
+  test('a seller with no payout details meets NO lock, from the real GET (T18 Phase 4)', async ({
     page,
   }) => {
     /*
-     * The harness device signed in minutes ago, so the REAL server computes
-     * the 24h new-device lock. The OLD shape of this test spent a real
-     * step-up SMS to discover that on a doomed POST's 409 -- which was the
-     * gap: "the payout lock is discovered on the attempt" (D-224). The GET
-     * now carries reason + payout_locked_until, so the panel names the cause
-     * and the lift BEFORE the seller reaches for the control, and the change
-     * control renders DISABLED (R20: present, explained, unavailable). The
-     * step-up pipeline itself remains fully driven by SC-25's team invite.
+     * THIS TEST USED TO ASSERT THE OPPOSITE, and the change is the point of
+     * T18 Phase 4. The harness device signed in minutes ago, so the 24h
+     * new-device window is open -- but the seeded seller has NO ACTIVE payout
+     * row, so there is no destination to redirect and the lock has no subject.
+     * 0047 stopped it firing; this asserts the seller is no longer held.
+     *
+     * The history is worth keeping. T15 P4 made the lock render PROACTIVELY
+     * from the GET instead of being discovered on a doomed POST's 409 (D-224).
+     * T17 then reworded it, because telling a brand-new seller "a sign-in from
+     * a device we have not seen ... if that was not you" reports a security
+     * event that did not happen. T18 removed the state instead of wording it
+     * better, which is why that string is gone rather than improved.
+     *
+     * The proactive panel and the write path read the SAME row by the SAME
+     * predicate (0047 and payoutLockState's `act` CTE). A panel that disagrees
+     * with the write path is worse than no panel, so this asserts the panel's
+     * silence and c4-financial asserts the write path's 201 on the same state.
      */
     await page.goto(`${base}/payouts`);
-    const lock = page.locator('[data-payout-lock]');
-    await expect(lock).toBeVisible();
-    await expect(lock).toHaveAttribute('data-payout-lock', 'NEW_DEVICE');
-    // The reason-specific sentence. The seeded seller has NO payout details --
-    // active and pending are both null -- so there is nothing to change FROM,
-    // and this is a FIRST SET. T17: the change-wording ("a sign-in from a
-    // device we have not seen ... if that was not you") reports a security
-    // event that did not happen to someone in that position, so the first-set
-    // sentence renders instead. Same lock, same reason, same lift.
-    await expect(lock.getByText(/once this device has been signed in/)).toBeVisible();
-    await expect(lock.getByText(/if that was not you/i)).toHaveCount(0);
-    // The lift horizon, from the server's payout_locked_until.
-    await expect(lock.getByText(/Locked until/)).toBeVisible();
-    // R20: the control is PRESENT and DISABLED -- not hidden, not armed to
-    // waste a step-up code on a refusal the panel already explained.
-    await expect(page.locator('[data-action="change-payout"]')).toBeDisabled();
+    await expect(page.locator('[data-screen="SC-24"]')).toBeVisible();
+
+    // No lock panel at all -- not a disabled one, not an empty one.
+    await expect(page.locator('[data-payout-lock]')).toHaveCount(0);
+    await expect(page.getByText(/Locked until/)).toHaveCount(0);
+    await expect(page.getByText(/device we have not seen/)).toHaveCount(0);
+
+    // R20's disabled-not-hidden rule still governs the CHANGE case; here there
+    // is nothing to explain, so the control is simply available.
+    await expect(page.locator('[data-action="change-payout"]')).toBeEnabled();
+
+    // The five facts stay where they are -- before the control, never behind a
+    // disclosure. Removing a lock must not remove the standing explanation.
+    await expect(page.locator('.payout-facts')).toBeVisible();
   });
 
   test('the new-device lock keeps its security wording for an actual CHANGE (planted)', async ({
@@ -348,7 +355,12 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
           pending: null,
           payout_locked_until: '2026-09-04T10:00:00Z',
           reason: 'NEW_DEVICE',
-          allowed_actions: [],
+          // The grant is PRESENT -- R20 is about a control that is rendered and
+          // unavailable, not one that is absent. With an empty allowed_actions
+          // the button is not drawn at all (D-155 gates rendering on the grant),
+          // and "disabled" could not be asserted because there is nothing to
+          // disable. The state forbids the action; the grant does not.
+          allowed_actions: ['seller.payout:update'],
         },
       });
     });
@@ -358,7 +370,12 @@ test.describe('SC-24 Payout -- R21, the five facts, and the step-up pipeline', (
     // The warning stands, verbatim, for the person it was written for.
     await expect(lock.getByText(/device we have not seen/)).toBeVisible();
     await expect(lock.getByText(/If that was not you/)).toBeVisible();
-    await expect(lock.getByText(/once this device has been signed in/)).toHaveCount(0);
+    // R20: PRESENT and DISABLED -- not hidden, and not armed to waste a real
+    // step-up code on a refusal the panel has already explained. T18 Phase 4
+    // moved this assertion here from the real-GET test, because that test now
+    // proves the opposite case (no lock at all); without the move, R20's
+    // disabled rule would have lost its only assertion in the suite.
+    await expect(page.locator('[data-action="change-payout"]')).toBeDisabled();
   });
 
   test('R21 presence half (planted): a pending row summons the cancel control', async ({ page, context }) => {
