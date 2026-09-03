@@ -153,10 +153,20 @@ export function SellerSwitcher() {
                   ))}
                 </ul>
               ) : null}
-              {/* THE CONTROL THIS PHASE EXISTS FOR. Present whether or not
+              {/* THE CONTROL T19 P1 EXISTED FOR. Present whether or not
                   there is anything to switch to. */}
               <Link className="switcher-create" to="/s/new" onClick={() => setOpen(false)}>
                 {en['console.chooser.create_link']}
+              </Link>
+              {/* T20 S3's ruling. A LINK, not a mode: ADU-MOB-01 makes
+                  buyer/seller a real mode with its own session semantics, and
+                  this is one person with two unrelated relationships to
+                  Adulis. It routes where the sign-in screen routes, and it
+                  closes the case T19 parked -- a courier who also owns
+                  exactly one store was redirected into it and had to sign
+                  out to see their deliveries. */}
+              <Link className="switcher-courier" to="/courier" onClick={() => setOpen(false)}>
+                {en['console.switcher.courier']}
               </Link>
             </div>
           ) : null}

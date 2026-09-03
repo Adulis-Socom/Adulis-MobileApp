@@ -174,6 +174,7 @@ export const am: Catalogue = {
   'console.courier.after_signin': 'ከታች ሆነው ይግባ፡ ወዲያውኑ ወደ እነሱ አቀርባቦች ይወሰዳሉ።',
   'console.switcher.switch': 'መደብር ቀይር',
   'console.switcher.stores': 'መደብሮች',
+  'console.switcher.courier': 'የመላኪያ ስራዎች',
   'console.shell.notifications': 'ማሳወቂያዎች',
   'console.shell.account': 'መለያ',
   'console.shell.signed_in': 'ገብተዋል',

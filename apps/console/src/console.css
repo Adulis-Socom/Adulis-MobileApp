@@ -105,6 +105,8 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .switcher-menu ul { list-style: none; margin: 0; padding: 0; }
 .switcher-menu a { display: flex; align-items: center; min-height: 44px;
   padding: 0 var(--adu-space-xs); }
+.switcher-courier { border-top: 1px solid var(--adu-color-border);
+  margin-top: var(--adu-space-xs); }
 .shell > main { grid-area: main; padding: var(--adu-space-md); max-width: 64rem; width: 100%; margin: 0 auto; }
 .sidenav { display: none; }
 .bottombar {

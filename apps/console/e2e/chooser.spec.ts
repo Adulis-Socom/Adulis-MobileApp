@@ -112,6 +112,34 @@ test.describe('the store chooser -- D-97 closed', () => {
     await expect(page).toHaveURL(/\/s\/5eed0000-0000-4000-8000-0000000000ff$/);
   });
 
+  test('a seller reaches COURIER WORK from inside their store (T20 S3)', async ({ page }) => {
+    /*
+     * T19 parked this: a courier who also owns exactly one store was
+     * redirected into it and had to SIGN OUT to see their deliveries. The
+     * ruling makes the entry point a LINE IN THE SWITCHER MENU -- a link, not
+     * a mode. ADU-MOB-01 makes buyer/seller a real mode with its own session
+     * semantics; this is one person with two unrelated relationships to
+     * Adulis, and a link is the honest shape.
+     */
+    // Start where D-245's parked case starts: at "/", REDIRECTED -- the
+    // account that could never see the chooser is the one this ruling is for.
+    await page.goto('/');
+    await expect(page).toHaveURL(new RegExp(`/s/${SEEDED.sellerId}$`));
+    await page.locator('[data-switcher-toggle]').click();
+    await page
+      .locator('[data-switcher-menu]')
+      .getByRole('link', { name: /courier deliveries/i })
+      .click();
+    await expect(page).toHaveURL(/\/courier$/);
+    // Not a blank page: SC-C1 itself renders -- for a non-courier that is the
+    // empty state that explains itself. Its root is a data-screen div, not a
+    // <main>: the courier tree deliberately carries none of the seller shell.
+    await expect(page.locator('[data-screen="SC-C1"]')).toBeVisible();
+    // ...and the empty state EXPLAINS ITSELF -- the half a bare visibility
+    // check would not prove (both pass lenses converged on this line).
+    await expect(page.getByText('No assigned orders')).toBeVisible();
+  });
+
   test('a FAILED store list is never mistaken for "you have one store" (T19 P1)', async ({
     page,
   }) => {

@@ -209,6 +209,12 @@ export const en = {
     'Sign in below and you will be taken straight to your deliveries.',
   'console.switcher.switch': 'Switch store',
   'console.switcher.stores': 'Stores',
+  // T20 S3's ruling: reachable from inside a store as a LINK, not a mode.
+  // ADU-MOB-01 makes buyer/seller a real mode with session semantics; this is
+  // one person with two unrelated relationships to Adulis, and a link is the
+  // honest shape. It closes D-245's parked case: a courier who also owns
+  // exactly one store was redirected into it and had to sign out.
+  'console.switcher.courier': 'Courier deliveries',
   'console.shell.notifications': 'Notifications',
   'console.shell.account': 'Account',
   'console.shell.signed_in': 'Signed in',

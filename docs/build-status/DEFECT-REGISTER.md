@@ -3489,3 +3489,30 @@ Verification: the multiset proof above; the Actions API listing (runs on main fo
   merge sha, conclusions success/failure as stated); pnpm ci:local on the MERGED main.
 Ruling needed: none. The parked item stays parked: branch protection when the plan
   allows it.
+
+### D-247 - T20 S3: the courier entry point becomes a line in the switcher menu, discharging D-245's parked ruling
+
+Severity:  D-245's parked case closed -- a courier who also owns exactly one store
+Phase:     T20 S3
+Source:    apps/console (SellerSwitcher.tsx, console.css, chooser.spec.ts); packages/locale
+Ruling discharged: T20 S3 -- "the courier entry point is reachable from inside a store,
+  as a LINK, not a mode. One line in the switcher menu -- Courier deliveries -- routing
+  where the sign-in screen routes."
+Effect / Response:
+  A LINK, NOT A MODE, and the distinction is the ruling's own reasoning: ADU-MOB-01
+  makes buyer/seller a real mode with its own session semantics; this is one person with
+  two unrelated relationships to Adulis, and a link is the honest shape. Nothing
+  session-like changes on the click -- the same cookie rides, and SC-C1 renders inside
+  its own route tree with none of the seller shell (the C-8 rule, untouched).
+  The line renders for EVERY seller, courier or not. The console cannot know which the
+  account is (the roles[] rendering hint is the owed refinement, D-228), and a
+  non-courier who follows it meets SC-C1's empty state, which explains itself.
+  D-245's parked sentence -- "if it matters, the entry point belongs in the topbar
+  beside the switcher" -- is answered by the founder's ruling with exactly that.
+Verification: pnpm ci:local -- 26 gates. The e2e arm starts where the parked case
+  starts: at "/", REDIRECTED into the single store, then reaches /courier through the
+  switcher menu and asserts SC-C1's own root renders. The adversarial pass caught the
+  first draft asserting a <main> that does not exist at /courier (SC-C1's root is a
+  data-screen div, deliberately outside the seller shell) and starting the arm one step
+  past the state that broke.
+Ruling needed: none.
