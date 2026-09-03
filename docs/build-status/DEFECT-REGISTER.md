@@ -3742,3 +3742,43 @@ Action:    What actually holds at commit is the SCHEMA, and it is stronger than 
            transactions still fails, just at commit rather than at insert. The CHECK is
            not deferrable and is immediate either way.
 Ruling needed: none.
+
+### D-264 - D-260 discharged: the token comparator exists
+
+Severity:  RESOLVED (D-260 was PARKED in the same order)
+Phase:     T20 - S6.3
+Source:    D-260 parked the comparator because the window's remaining work was S7
+Found by:  S7 turning out to be blocked (D-262), which returned the time
+Effect:    n/a -- this closes a parked risk rather than reporting a new one.
+Response:  BUILT - gate `tokens`
+Action:    `pnpm verify:tokens` checks four things, and the last two are what dark mode added: every export has its custom property and every custom property its export (both directions, per group); the VALUES agree; MODE PARITY -- colorDark has exactly the keys color has, which is the shape T20 S7.3's Light/Dark collection needs; and the TWO dark blocks in tokens.css are identical to each other, which is the copy most likely to drift because CSS cannot express one body under two selectors here.
+Verification: it found two defects IN ITSELF before it found none in the tokens, and both are recorded in its header rather than quietly fixed. It was line-based, so it mis-read every single-line nested object and then reported the source as missing keys -- a comparator accusing the source of its own parsing bug, which trains a reader to disbelieve it. And it compared the CSS role indirection (`var(--adu-neutral-0)`) against the TS literal, reporting thirty-eight disagreements where there were none. Both are now resolved on both sides before comparison.
+Ruling needed: none.
+
+### D-265 - The gate list meant two different things on two machines, and only a CI run could tell
+
+Severity:  MAJOR (a green local gate list that does not mean what it says)
+Phase:     T20 - S4/S9, found when PR #85's CI went red
+Source:    `pnpm ci:local` green on 27 gates; the identical list red in CI on t14-a3-stamped-audience.spec.ts, five tests, all "expected 202, got 400" against the OTP endpoint
+Found by:  Looking at the gate rather than trusting the local run -- which is the exact discipline T20 S2 added the README badge for
+Effect:    AMBIENT STATE. That suite reads `core.market WHERE code = 'SEED'`, which only `ops/scripts/seed.mjs` creates, and NOTHING between `db:migrate` and the `test` gate created it. A developer's database has been seeded at some point; a CI database has not. The suite therefore passed for everyone who ran it locally and could never pass in CI.
+  IT WAS INVISIBLE BECAUSE THE TEST GATE IS SCOPED to packages changed against origin/main. The api suite had not actually run in CI for several merges -- the recent red mains failed at `mt-keys`, before `test` -- so the first branch to touch apps/api again inherited a failure that had been waiting since the suite was written. It was not caused by this order's changes.
+  AND IT FAILED SILENTLY, WHICH IS WHY IT POINTED AT THE WRONG PLACE. The setup is `INSERT INTO core.device ... SELECT ... WHERE code = 'SEED'`, and an INSERT ... SELECT over an empty SELECT inserts nothing and raises nothing. The device did not exist, so every OTP request 400'd, and five failures named the auth endpoint -- which was blameless.
+Response:  BOTH HALVES FIXED
+Action:    (1) The `migrate` gate runs `db:seed` as a second STEP -- a step and not a new gate, because ADU-RUL-03 S5.2 cites gates by position. The seed is idempotent, so it costs a local developer nothing and gives CI the state the suites were written against. A gate list that means something different on two machines is not a gate list.
+           (2) The suite checks `rowCount === 1` and throws naming the seed. One clear error instead of five that accuse the wrong subsystem.
+Verification: PROVEN BY CONTROLLED EXPERIMENT, twice -- the first attempt was invalid and is worth recording. Hiding the market with the suite run in a subprocess that had no `.env` produced five failures for an unrelated reason (a missing database password), which looked like confirmation and was not. Re-run with the environment loaded: market present -> 5 passed; market hidden -> 5 failed, carrying the new message, with no bare 400 anywhere; market restored -> 5 passed.
+Ruling needed: none.
+
+### D-266 - Correction to D-261: the right conclusion from a measurement that could not support it
+
+Severity:  MINOR (evidence quality in the register)
+Phase:     T20 - S9
+Source:    D-261 states clock skew was "Ruled out ... measured at +0.1s with Postgres AHEAD"
+Found by:  Re-reading my own method while the flake recurred
+Effect:    THE MEASUREMENT WAS WORTHLESS AND THE CONCLUSION HAPPENED TO BE RIGHT, which is the combination worth recording. Each sample spawned `docker exec ... psql`, so the ~100ms it reported was process startup latency with the clock offset buried somewhere inside it. It could not have detected a skew smaller than its own noise floor, and it would have reported "+0.1s, Postgres ahead" for a Postgres running a tenth of a second BEHIND. Anyone re-deriving the flake from that entry would have been reasoning from a number that measured the wrong thing.
+Response:  RE-MEASURED PROPERLY, and skew is genuinely ruled out
+Action:    A warm `pg` connection, five samples, bracketing each `clock_timestamp()` between a Node timestamp taken before the query and one taken after: round trip 1ms, and the database clock falls INSIDE the bracket every time. The clocks agree to within a millisecond. `core.notification.scheduled_for` defaults to `now()`, so the arm's `scheduled_for >= startedAt` filter is sound and is not the cause.
+           MECHANISM NARROWED, NOT ESTABLISHED. `core.fn_notify_payout_change` is an AFTER INSERT OR UPDATE OF state trigger that returns without writing anything unless the row is NEW or its state actually changed. The arm's other assertions -- the change log and the ciphertext -- pass whether the write was an insert or an update, so ONLY the notification count can see the difference. Any path that turns that POST into an update, or into an idempotent replay, produces exactly the observed failure: 201, a good log row, good ciphertext, and no notification. Which path, and what makes it intermittent, is still not established.
+           NOT FIXED, AND NOT PAPERED OVER. Changing the assertion to make it pass would remove the only thing in the suite that can tell an insert from an update.
+Ruling needed: none.

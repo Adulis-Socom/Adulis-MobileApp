@@ -2,7 +2,7 @@
 
 **Order:** T20 - "Finish the Build, Then Draw It"
 **Documents installed this order:** ADU-AUTH-01 **v2.7**, ADU-API-01 **v1.11**
-**Gates:** `pnpm ci:local` -- **all 27**, green, including one added here.
+**Gates:** `pnpm ci:local` -- **all 28**, green, including two added here.
 
 ---
 
@@ -259,15 +259,53 @@ a second *value* for a name, never a second name.
 
 ---
 
+## The local gate list was green and CI was red, and CI was right
+
+**This is the most useful thing the order's own S2 work produced, and it produced
+it immediately.** S2 added a main-branch CI badge with one sentence -- *if that
+badge is red, main is broken and fixing it precedes every other task*. PR #85 went
+red while `pnpm ci:local` was green on the same list.
+
+**The cause was ambient state** (D-265). `t14-a3-stamped-audience.spec.ts` reads
+`core.market WHERE code = 'SEED'`, which only the seed script creates, and nothing
+between `db:migrate` and the `test` gate created it. A developer's database has
+been seeded at some point; a CI database has not. **So that suite passed for
+everyone who ran it locally and could never pass in CI.**
+
+It stayed invisible because the `test` gate is **scoped** to packages changed
+against `origin/main` -- the api suite had not actually run in CI for several
+merges, and the recent red mains failed at `mt-keys`, before `test` was reached.
+The first branch to touch `apps/api` again inherited it. **It is not a defect this
+order introduced.**
+
+**And it failed silently, which is why it accused the wrong subsystem.**
+`INSERT INTO core.device ... SELECT ... WHERE code = 'SEED'` over an empty SELECT
+inserts nothing and raises nothing, so the device did not exist and five tests
+reported `expected 202, got 400` against the OTP endpoint, which was blameless.
+
+Both halves are fixed: the `migrate` gate now runs the idempotent `db:seed` as a
+second **step** (a step, not a new gate -- ADU-RUL-03 S5.2 cites gates by
+position), and the suite throws one clear error naming the seed.
+
+**A gate list that means something different on two machines is not a gate list.**
+
+*Recorded because the first attempt to prove this was wrong:* hiding the market and
+running the suite in a subprocess with no `.env` produced five failures for an
+unrelated reason -- a missing database password -- which looked like confirmation
+and was not. The controlled version: market present -> 5 passed; hidden -> 5 failed
+with the new message and no bare 400; restored -> 5 passed.
+
 ## Parked, with reasons
 
 - **D-255** - `fn_activate_due_payout` on the read path. **A ruling is requested:**
   keep the lazy activation on its own connection, or remove it and let the job own
   activation entirely?
-- **D-260** - `packages/tokens` is still two files and dark mode doubled the surface.
-  Nothing compares `index.ts` to `tokens.css`. This repository has a name for that
-  shape and a gate for it in two other places. The comparator is small and was not
-  built because the window's remaining work was S7. **It is the obvious next gate.**
+- ~~**D-260** - `packages/tokens` is still two files~~ **-- built after all (D-264).**
+  S7 turning out to be blocked returned the time, so the comparator exists: gate
+  `tokens`, checking both directions, both modes, mode parity, and that the two
+  hand-maintained dark blocks in `tokens.css` have not drifted from each other.
+  It found two defects **in itself** before finding none in the tokens, and both
+  are recorded in its own header rather than quietly fixed.
 - **D-261** - a `c4-financial` arm fails under parallel load and passes alone.
   **Not diagnosed, and this says so.** Ruled out: clock skew (measured at +0.1s with
   Postgres *ahead*, the wrong direction to cause it) and cross-suite teardown

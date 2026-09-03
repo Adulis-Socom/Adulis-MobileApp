@@ -96,11 +96,23 @@ describe('T14 A3 - the audience is the challenge stamp (S31.1)', () => {
     await cleanup();
     // The seeded market is ACTIVE with OTP enabled; the ANDROID device joins
     // it so the issue gate passes on the MOBILE door.
-    await admin.query(
+    // INSERT ... SELECT INSERTS NOTHING WHEN THE SELECT IS EMPTY, AND RAISES
+    // NOTHING. Without the check below, an unseeded database produced a device
+    // row that did not exist, and then five failures reading
+    // `expected 202 "Accepted", got 400 "Bad Request"` against the OTP
+    // endpoint -- pointing every reader at auth, which was blameless. The
+    // whole suite depends on the seed and now says so in one line.
+    const bound = await admin.query(
       `INSERT INTO core.device (id, platform, market_id)
        SELECT $1, 'ANDROID', id FROM core.market WHERE code = 'SEED'`,
       [DEVICE],
     );
+    if (bound.rowCount !== 1) {
+      throw new Error(
+        "no market with code 'SEED': this suite reads the seeded market, so the " +
+          'database needs `pnpm db:seed` (the `migrate` gate runs it).',
+      );
+    }
   });
 
   afterAll(async () => {
