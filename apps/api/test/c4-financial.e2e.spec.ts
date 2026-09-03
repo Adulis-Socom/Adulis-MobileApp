@@ -225,30 +225,231 @@ describe('C4 — the financial boundary', () => {
       expect(r.body.payout_locked_until).toBeNull();
     });
 
-    it('a session on a NEW device cannot change payout details (S7.2)', async () => {
+    /*
+     * T18 PHASE 4 -- THE NEW-DEVICE LOCK HAS A SUBJECT.
+     *
+     * "The lock exists to stop an attacker redirecting payments after a
+     * takeover. On a brand-new account there is nothing to redirect."
+     *
+     * BOTH ARMS ARE TESTED AND THE SECOND IS THE ONE THAT MATTERS: a fix that
+     * removed the lock outright would pass the first arm alone, so the second
+     * plants an ACTIVE destination and requires the refusal to stand. They run
+     * in this order deliberately -- the first arm proves the seller can get a
+     * destination at all, which is the precondition the second one needs.
+     */
+    it('a FIRST SET from a new device is NOT locked -- the lock has no subject (T18 P4)', async () => {
+      const pre = await admin.query(
+        `SELECT count(*)::int AS n FROM core.payout_details
+          WHERE seller_id=$1 AND state='ACTIVE'`,
+        [SELLER],
+      );
+      expect(pre.rows[0].n).toBe(0);
+
+      // The panel must agree with the write path BEFORE the write, or SC-24
+      // draws a lock the server would not raise. Same rows, same predicate.
+      const before = await sellerReq('get', '/v1/seller/payout', OWNER_NEWDEV_S).expect(200);
+      expect(before.body.reason).toBeNull();
+      expect(before.body.payout_locked_until).toBeNull();
+
       const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
         .send({
           bank_code: 'CBE',
           account_number: ACCOUNT_NUMBER,
           account_name: 'Naod Solomon',
-          step_up_challenge_id: SU_PAYOUT,
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+        })
+        .expect(201);
+      expect(r.body.state).toBe('PENDING');
+
+      // AND THE LOCK ARMS ITSELF THE MOMENT THERE IS SOMETHING TO PROTECT.
+      // One request later the same seller on the same new device is locked,
+      // because they now have payout details. The carve-out is a property of
+      // the seller's history, not a property of the device or the session.
+      const after = await sellerReq('get', '/v1/seller/payout', OWNER_NEWDEV_S).expect(200);
+      expect(after.body.reason).toBe('NEW_DEVICE');
+
+      // The activation delay STILL applies -- the lock's subject narrowed, the
+      // delay did not move. Even an accepted first set cannot be paid today.
+      expect(new Date(r.body.activates_at).getTime()).toBeGreaterThan(Date.now());
+
+      await admin.query(
+        `DELETE FROM financial.payout_credential WHERE payout_details_id=$1`,
+        [r.body.payout_details_id],
+      );
+      await admin.query(`DELETE FROM core.payout_details WHERE id=$1`, [r.body.payout_details_id]);
+    });
+
+    it('a CHANGE from a new device is STILL LOCKED -- the arm that matters (T18 P4)', async () => {
+      // Plant an ACTIVE destination: now there IS something to redirect, which
+      // is the entire situation S7.2 was written for.
+      const activeId = randomUUID();
+      await admin.query(
+        `INSERT INTO core.payout_details
+           (id, seller_id, bank_code, account_last4, state,
+            requested_by_account_id, activated_at)
+         VALUES ($1,$2,'CBE','4821','ACTIVE',$3, now())`,
+        [activeId, SELLER, OWNER],
+      );
+
+      const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
+        .send({
+          bank_code: 'AWASH',
+          account_number: '2000999888777',
+          account_name: 'Naod Solomon',
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
         })
         .expect(409);
       // ONE cause-neutral code (v1.9 S15.0c / D-224.6); the cause is the slot.
-      // The former PAYOUT_LOCKED_RECOVERY would have said "recovery" here.
       expect(r.body.code).toBe('PAYOUT_LOCKED');
       expect(r.body.slots.reason).toBe('NEW_DEVICE');
 
       // v1.9 S15.0c: the SAME lock the write path discovers on a 409, the GET
-      // now draws PROACTIVELY -- same reason vocabulary, plus the lift horizon.
+      // draws PROACTIVELY -- same reason vocabulary, plus the lift horizon.
       const g = await sellerReq('get', '/v1/seller/payout', OWNER_NEWDEV_S).expect(200);
       expect(g.body.reason).toBe('NEW_DEVICE');
       expect(g.body.payout_locked_until).toBeTruthy();
       expect(new Date(g.body.payout_locked_until).getTime()).toBeGreaterThan(Date.now());
+
+      // And no row was written by the refused attempt.
+      const rows = await admin.query(
+        `SELECT count(*)::int AS n FROM core.payout_details
+          WHERE seller_id=$1 AND state='PENDING'`,
+        [SELLER],
+      );
+      expect(rows.rows[0].n).toBe(0);
+
+      await admin.query(`DELETE FROM core.payout_details WHERE id=$1`, [activeId]);
+    });
+
+    it('CANCEL-THEN-SET does not walk through the carve-out (T18 P4, adversarial)', async () => {
+      /*
+       * THE ATTACK THE FIRST DRAFT OF 0047 WAS OPEN TO, and the reason its
+       * predicate is "has never had a payout row" rather than "has no ACTIVE
+       * row".
+       *
+       * core.fn_cancel_payout_change requires NO step-up and checks NO lock --
+       * deliberately, because "reverting must always be easier than changing".
+       * So an attacker on a device we have never seen can cancel a seller's
+       * legitimate PENDING first set for free, leaving no ACTIVE and no PENDING
+       * row. Under an ACTIVE-only carve-out the state then looks exactly like a
+       * brand-new seller's, and the attacker sets their own bank account
+       * unlocked -- 24 hours earlier than the design's stated floor.
+       *
+       * A CANCELLED row is still a row. This proves the lock returns.
+       */
+      // The seller sets payout legitimately (aged device), then it is cancelled.
+      const first = await sellerReq('post', '/v1/seller/payout')
+        .send({
+          bank_code: 'CBE',
+          account_number: ACCOUNT_NUMBER,
+          account_name: 'Naod Solomon',
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+        })
+        .expect(201);
+      await sellerReq('delete', '/v1/seller/payout/pending').expect(204);
+
+      const state = await admin.query(
+        `SELECT count(*) FILTER (WHERE state='ACTIVE')::int AS act,
+                count(*) FILTER (WHERE state='PENDING')::int AS pend,
+                count(*)::int AS ever
+           FROM core.payout_details WHERE seller_id=$1`,
+        [SELLER],
+      );
+      // The state an ACTIVE-only carve-out would have mistaken for a new seller.
+      expect(state.rows[0].act).toBe(0);
+      expect(state.rows[0].pend).toBe(0);
+      expect(state.rows[0].ever).toBeGreaterThan(0);
+
+      const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
+        .send({
+          bank_code: 'AWASH',
+          account_number: '2000999888777',
+          account_name: 'Not The Seller',
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+        })
+        .expect(409);
+      expect(r.body.code).toBe('PAYOUT_LOCKED');
+      expect(r.body.slots.reason).toBe('NEW_DEVICE');
+
+      // And the panel says the same thing, from the same rows.
+      const g = await sellerReq('get', '/v1/seller/payout', OWNER_NEWDEV_S).expect(200);
+      expect(g.body.reason).toBe('NEW_DEVICE');
+
+      await admin.query(
+        `DELETE FROM financial.payout_credential WHERE payout_details_id=$1`,
+        [first.body.payout_details_id],
+      );
+      await admin.query(`DELETE FROM core.payout_details WHERE seller_id=$1`, [SELLER]);
+    });
+
+    it('a PENDING change is refused as PENDING, not as a device (T18 P4 guard order)', async () => {
+      // One-pending-per-seller moved ABOVE the new-device lock, so a seller with
+      // a change in flight is told THAT, which is the true and more useful
+      // answer. Both are refusals and neither writes, so nothing is weakened.
+      const first = await sellerReq('post', '/v1/seller/payout')
+        .send({
+          bank_code: 'CBE',
+          account_number: ACCOUNT_NUMBER,
+          account_name: 'Naod Solomon',
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+        })
+        .expect(201);
+
+      const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
+        .send({
+          bank_code: 'AWASH',
+          account_number: '2000999888777',
+          account_name: 'Naod Solomon',
+          step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+        })
+        .expect(409);
+      expect(r.body.code).toBe('PAYOUT_CHANGE_PENDING');
+
+      await admin.query(
+        `DELETE FROM financial.payout_credential WHERE payout_details_id=$1`,
+        [first.body.payout_details_id],
+      );
+      await admin.query(`DELETE FROM core.payout_details WHERE seller_id=$1`, [SELLER]);
+    });
+
+    it('the OTHER locks are unaltered: recovery cooling fires with no ACTIVE row (T18 P4)', async () => {
+      // The first-set carve-out is narrow ON PURPOSE. RECOVERY_COOLING is
+      // checked BEFORE the new-device guard and knows nothing about ACTIVE
+      // rows, so a first set cannot be used as a way around an account that is
+      // under recovery. Asserted, because "everything else stands unaltered"
+      // is the kind of claim that decays quietly.
+      await admin.query(
+        `INSERT INTO core.account_recovery_case
+           (id, account_id, payout_locked_until)
+         VALUES ($1,$2, now() + interval '7 days')`,
+        [randomUUID(), OWNER],
+      );
+      try {
+        const r = await sellerReq('post', '/v1/seller/payout', OWNER_NEWDEV_S)
+          .send({
+            bank_code: 'CBE',
+            account_number: ACCOUNT_NUMBER,
+            account_name: 'Naod Solomon',
+            step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE'),
+          })
+          .expect(409);
+        expect(r.body.slots.reason).toBe('RECOVERY_COOLING');
+      } finally {
+        // core.account_recovery_case is APPEND-ONLY (a trigger refuses DELETE),
+        // which is correct for a record of who recovered whose account -- so the
+        // teardown suspends triggers for the one statement rather than pretending
+        // the table is ordinary. Same technique the claim-evidence teardown uses.
+        // Without this the case survives, and every later payout test in this
+        // file fails with RECOVERY_COOLING instead of what it asserts.
+        await admin.query(`SET session_replication_role = replica`);
+        await admin.query(`DELETE FROM core.account_recovery_case WHERE account_id=$1`, [OWNER]);
+        await admin.query(`SET session_replication_role = DEFAULT`);
+      }
     });
 
 
     it('with step-up, an aged device and no locks: PENDING + delay + log + ciphertext', async () => {
+      const startedAt = new Date();
       const r = await sellerReq('post', '/v1/seller/payout')
         .send({
           bank_code: 'CBE',
@@ -270,9 +471,15 @@ describe('C4 — the financial boundary', () => {
         [r.body.payout_details_id],
       );
       expect(cred.rows[0].n).toBeGreaterThan(ACCOUNT_NUMBER.length);
+      // A DELTA, not a running total. This used to be a global count with
+      // toBeGreaterThan(0), which any earlier arm that sets payout satisfies
+      // in advance -- so the assertion could no longer fail. Scope it to the
+      // row this arm created.
       const notices = await admin.query(
         `SELECT count(*)::int AS n FROM core.notification
-          WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible`,
+          WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible
+            AND scheduled_for >= $1`,
+        [startedAt],
       );
       expect(notices.rows[0].n).toBeGreaterThan(0);
     });

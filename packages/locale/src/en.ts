@@ -102,12 +102,6 @@ export const en = {
     'Payout changes are locked for seven days after an account recovery.',
   'error.payout.payout_locked_new_device':
     'Payout changes are locked for twenty-four hours after a sign-in from a device we have not seen. If that was not you, review your active sessions.',
-  // T17: the same lock, said to someone who has nothing to change FROM.
-  // A seller minutes old is on the only device they have ever used, so the
-  // change-wording reported a break-in on their first day. Same lock, same
-  // lift, no accusation.
-  'error.payout.payout_locked_new_device_first_set':
-    'You can add payout details once this device has been signed in for twenty-four hours. Nothing has gone wrong: this wait applies to any device we have not seen before, including the one you signed up on.',
   'error.payout.payout_locked_no_timing_config': 'Payout changes are temporarily unavailable.',
   'error.payout.payout_change_pending': 'A payout change is already pending.',
   'error.payout.payout_permission_denied': 'You do not have permission to change payout details.',
