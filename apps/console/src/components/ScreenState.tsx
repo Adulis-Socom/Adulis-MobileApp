@@ -49,13 +49,26 @@ export function ScreenState(p: Props) {
           {p.emptyText ?? en['console.states.empty_default']}
         </p>
       );
+    /*
+     * READY and STALE ARE ONE ELEMENT SHAPE, and that is a fix, not a style
+     * (T11 Phase 4, D-167). They used to be two branches -- READY's children
+     * at position 0, STALE's at position 1 behind the indicator -- so every
+     * READY<->STALE flip made React UNMOUNT AND REMOUNT the entire subtree.
+     * A refetch therefore destroyed every child's state: focus, scroll, a
+     * half-typed rejection reason -- and <Deadline>'s once-only ref, which is
+     * how a past deadline became an unbounded refetch loop (measured at
+     * 1067 requests in ~4s by the harness's own D-167 test). One shape,
+     * children at a stable position (a null slot is a position too), and the
+     * subtree survives the flip.
+     */
     case 'READY':
-      return <div data-state="READY">{p.children}</div>;
     case 'STALE':
-      // Existing data stays visible AND interactive; a quiet indicator only.
       return (
-        <div data-state="STALE">
-          <span className="stale-indicator">{en['console.states.stale']}</span>
+        <div data-state={p.state}>
+          {p.state === 'STALE' ? (
+            // Existing data stays visible AND interactive; a quiet indicator only.
+            <span className="stale-indicator">{en['console.states.stale']}</span>
+          ) : null}
           {p.children}
         </div>
       );

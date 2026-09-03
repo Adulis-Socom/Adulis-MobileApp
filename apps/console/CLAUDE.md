@@ -125,6 +125,39 @@ backfill. It earns its place on C-4.
   never in a notification preview.
 - **Screens whose endpoints do not exist are not built.** ADU-CON-03 §17 lists the four.
 
+### C-4's four rules, and where each one lives
+
+Every one of these is transcribed from ADU-CON-03 v1.1 S7, not designed. They
+are the rules most likely to be "improved" by someone who has not read why.
+
+- **The three clock treatments are ONE module** -- `lib/clock.tsx`. SC-03's row
+  and SC-04's clock region ask it the same question, so they cannot drift.
+  `CREATED`/`NOTIFIED` shows the reservation window; `PAYMENT_SUBMITTED` shows
+  the CONFIRMATION window and **not** the reservation one ("irrelevant", S7);
+  `PAYMENT_CONFIRMED` and after show **no countdown at all** -- not a stopped
+  one, not "0:00". `<Deadline>` renders null, so a paid order has no clock
+  region to mistake for a stopped one.
+  **`if (Date.now() > order.expiresAt)` is the defining violation of "the
+  console computes no business state."** At zero the countdown REFETCHES and
+  the server says what the order is. It also measures against `serverTime`
+  from `/v1/bootstrap`, not the device clock.
+- **The payment decisions are equally weighted, and `.decision` has no
+  variant.** No `.primary`, no `.danger`. The only difference between the two
+  buttons is the words. **"Confirm Payment Received", verbatim, never "Accept
+  Payment."** The verify-in-your-own-bank sentence renders before both, always,
+  never inside a disclosure. Confirming WITHOUT opening the evidence is a
+  normal path (ADU-ARCH-01 S3.3) -- nothing nags, blocks, or badges the
+  evidence as unread. Rejection is two steps and step two states the
+  consequence in full.
+- **R20: the handoff region is DISABLED, not hidden**, and that is all four
+  controls. `disabled` is the only thing state changes; the region and its
+  explaining line stay in the document. "A region that disappears makes a
+  seller wonder what they broke."
+- **Evidence renders from a blob URL revoked on unmount**, with no download,
+  print, share, save or "looks valid" affordance of any kind. The revoke is
+  asserted by FETCHING the URL after close and requiring it to fail --
+  checking the `<img>` is gone would pass with the blob still alive.
+
 ## Structure (§9.2)
 
 `features/` mirrors ADU-CON-03's groups and **folder names carry screen IDs**, so the
@@ -160,7 +193,7 @@ the shell, the states and the client first.
 | **C-1** | A placeholder route renders inside the shell at both breakpoints, with the twelve states demonstrable |
 | **C-2** | A seeded seller signs in against the real API and is warned before idle expiry (T7 §7.1; was "the mock" before Tier 3 existed) |
 | **C-3** | Nine readiness items render from `readiness[]`, in any order, resumable -- **landed T9 Phase 4**: SC-01 Life 1 and SC-02, with the market-context provider (D-103). Life 2, the daily brief, waits for C-4's clock rules (D-148) |
-| **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted |
+| **C-4** | Three clock treatments visible; handoff gated on `PAYMENT_CONFIRMED`; payment decisions equally weighted -- **landed T10 Phase 5**: SC-03, SC-04, SC-05, SC-06, each rule asserted by `console-e2e` and proved by planting its violation. Six gaps found and stated rather than filled (D-153 buyer name, D-154 no filter parameter, D-155 no `allowed_actions`, D-156 QR serialisation, D-157 courier ids, D-158 evidence bytes) |
 | **C-5** | Set-count and confirm-stock are visibly **two** actions |
 | **C-6** | Payout's five disclosures; cancel present **only** with a pending change |
 | **C-7** | Reviews read-only; the empty claims list reads as good news |

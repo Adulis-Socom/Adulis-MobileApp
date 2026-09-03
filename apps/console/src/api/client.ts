@@ -159,3 +159,84 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   if (!res.ok) throw new ApiError(parsed as AdulisProblem);
   return parsed as T;
 }
+
+/**
+ * apiBlob -- the ONE endpoint that returns bytes rather than JSON:
+ * GET /v1/seller/orders/{id}/payment-evidence (SC-05).
+ *
+ * It lives here rather than as a bare `fetch` in the screen so that the base
+ * URL, the credentials mode, X-Adulis-Client, X-Adulis-Seller, the 401
+ * handler and the idle clock all behave identically for it. A screen that
+ * reaches past this wrapper gets none of those, and the one that would have
+ * done it is the screen showing payment evidence.
+ *
+ * THE CALLER OWNS THE BLOB AND MUST REVOKE IT. This returns a Blob, not an
+ * object URL, precisely so the revoke is visible at the call site where the
+ * unmount is (ADU-SEC-01 S7): a helper that minted the URL would put the
+ * createObjectURL and the revokeObjectURL in different files, and the leak
+ * that follows keeps decrypted payment evidence alive in the tab for as long
+ * as the tab lives.
+ */
+export async function apiBlob(path: string, opts: RequestOptions = {}): Promise<Blob> {
+  const headers: Record<string, string> = { 'X-Adulis-Client': CLIENT_ID };
+  if (opts.sellerId) headers['X-Adulis-Seller'] = opts.sellerId;
+  if (opts.locale) headers['Accept-Language'] = opts.locale;
+
+  let root: string;
+  try {
+    root = apiBase();
+  } catch {
+    throw new ApiError({
+      type: 'about:blank',
+      title_key: 'error.request.internal',
+      status: 0,
+      code: 'CONFIG',
+      request_id: '',
+      retryable: false,
+    });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${root}/v1${path}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers,
+      signal: opts.signal ?? null,
+    });
+  } catch {
+    throw new ApiError({
+      type: 'about:blank',
+      title_key: 'error.request.internal',
+      status: 0,
+      code: 'NETWORK',
+      request_id: '',
+      retryable: true,
+    });
+  }
+  requestClock.last = Date.now();
+  if (res.status === 401 && onUnauthorized) onUnauthorized();
+
+  if (!res.ok) {
+    // The error path IS json -- the problem envelope (ADU-API-01 S7) -- even
+    // though the success path is bytes. Parsed defensively: a proxy's HTML
+    // error page must not reach a screen as an unhandled SyntaxError.
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(await res.text());
+    } catch {
+      parsed = null;
+    }
+    throw new ApiError(
+      (parsed as AdulisProblem | null) ?? {
+        type: 'about:blank',
+        title_key: 'error.request.internal',
+        status: res.status,
+        code: 'MALFORMED_RESPONSE',
+        request_id: res.headers.get('X-Request-Id') ?? '',
+        retryable: res.status >= 500,
+      },
+    );
+  }
+  return await res.blob();
+}

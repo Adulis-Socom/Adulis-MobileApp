@@ -257,6 +257,99 @@ export const en = {
   'console.become.handle_hint': 'Lowercase letters, numbers and hyphens, 3 to 40 characters. Buyers will see it in your store web address.',
   'console.become.submit': 'Create my store',
   'console.placeholder': 'Screen {screen} is not built yet. It arrives with its build stage.',
+  // -------------------------------------------------------------------
+  // C-4, group B -- Trade (SC-03..SC-06). ADU-CON-03 v1.1 S7.
+  //
+  // Three of these are load-bearing and are transcribed rather than
+  // written: `payment.confirm` is "Confirm Payment Received" VERBATIM and
+  // is never "Accept Payment"; `payment.verify_first` is the sentence that
+  // must sit adjacent to both decisions, always visible, never behind a
+  // disclosure; and `payment.reject_consequence` states in full what the
+  // seller is agreeing to, because rejection is a two-step confirmation
+  // and step two is where the consequence belongs.
+  // -------------------------------------------------------------------
+  'console.trade.clock.reservation': 'Reservation window',
+  'console.trade.clock.confirmation': 'Time left to confirm this payment',
+  'console.trade.clock.remaining': '{hours}h {minutes}m left',
+  'console.trade.clock.elapsed': 'This time has passed. Checking with the server.',
+
+  'console.trade.state.created': 'New',
+  'console.trade.state.notified': 'Buyer notified',
+  'console.trade.state.payment_submitted': 'Payment submitted',
+  'console.trade.state.payment_confirmed': 'Payment confirmed',
+  'console.trade.state.handed_off': 'Handed off',
+  'console.trade.state.completed': 'Completed',
+  'console.trade.state.cancelled_by_buyer': 'Cancelled by the buyer',
+  'console.trade.state.cancelled_by_seller': 'Cancelled by you',
+  'console.trade.state.expired_unclaimed': 'Expired unclaimed',
+
+  'console.trade.orders.title': 'Orders',
+  'console.trade.orders.empty': 'You have no orders yet. Buyers reserve from your storefront.',
+  'console.trade.orders.none_in_filter': 'None of the orders loaded so far are in this group.',
+  'console.trade.orders.line_count': '{count} items',
+  'console.trade.orders.review_payment': 'Review payment',
+  'console.trade.orders.load_more': 'Load more orders',
+  'console.trade.orders.no_buyer_name': 'Buyer names are not shown here. Adulis does not store a name for a buyer account, so there is none to display, and showing a phone number instead is not permitted where a conversation exists.',
+  'console.trade.orders.filter_is_local': 'These groups filter the orders loaded on this page. Orders you have not loaded yet are not counted in any of them.',
+  'console.trade.filter.legend': 'Filter orders',
+  'console.trade.filter.all': 'All',
+  'console.trade.filter.needs_action': 'Needs action',
+  'console.trade.filter.active': 'Active',
+  'console.trade.filter.completed': 'Completed',
+  'console.trade.filter.cancelled': 'Cancelled',
+
+  'console.trade.line.active': 'Reserved',
+  'console.trade.line.fulfilled': 'Fulfilled',
+  'console.trade.line.cancelled_by_buyer': 'Cancelled by the buyer',
+  'console.trade.line.cancelled_by_seller': 'Cancelled by you',
+  'console.trade.line.refunded': 'Refunded',
+  'console.trade.line.expired': 'Expired',
+  'console.trade.payment.verify_first': 'Verify the payment in your own bank or payment account before confirming.',
+  'console.trade.payment.confirm': 'Confirm Payment Received',
+  'console.trade.payment.reject': 'Payment Not Received',
+  'console.trade.payment.reject_heading': 'Say that this payment was not received',
+  'console.trade.payment.reject_consequence': 'The order goes back to awaiting payment and the clock keeps running. The buyer may send new evidence once. If you say the payment was not received a second time, the order ends.',
+  'console.trade.payment.reject_reason_label': 'What did you check, and what was missing?',
+  'console.trade.payment.reject_final': 'Payment Not Received',
+  'console.trade.payment.reject_back': 'Go back',
+
+  'console.trade.evidence.title': 'Payment evidence',
+  'console.trade.evidence.alt': 'The payment evidence the buyer submitted.',
+  'console.trade.evidence.none': 'There is no payment evidence to show for this order.',
+  'console.trade.evidence.no_time': 'The submission time is not available.',
+  'console.trade.evidence.close': 'Close',
+
+  'console.trade.qr.title': 'Handoff code',
+  'console.trade.qr.alt': 'A QR code for the buyer to scan.',
+  'console.trade.qr.explain': 'The buyer scans this code. Scanning it completes the order and lets them leave a review.',
+  'console.trade.qr.offline': 'This code needs a connection. The Adulis app can show a handoff code offline; this console cannot.',
+  'console.trade.qr.close': 'Close',
+
+  'console.trade.detail.title': 'Order',
+  'console.trade.detail.back': 'Back to orders',
+  'console.trade.detail.state_heading': 'State',
+  'console.trade.detail.buyer_heading': 'Buyer',
+  'console.trade.detail.no_buyer_name': 'Adulis does not store a name for a buyer account, so there is no name to show here.',
+  'console.trade.detail.contact_buyer': 'Message the buyer',
+  'console.trade.detail.lines_heading': 'Items',
+  'console.trade.detail.quantity': 'Quantity {count}',
+  'console.trade.detail.cant_fulfil': "Can't Fulfil",
+  'console.trade.detail.payment_heading': 'Payment',
+  'console.trade.detail.no_submission': 'The buyer has not submitted a payment for this order.',
+  'console.trade.detail.view_evidence': 'View evidence',
+  'console.trade.detail.handoff_heading': 'Handoff',
+  'console.trade.detail.handoff_locked': 'Handoff opens once the payment is confirmed.',
+  'console.trade.detail.marked_ready': 'Marked ready at {time}',
+  'console.trade.detail.mark_ready': 'Mark Ready',
+  'console.trade.detail.assign_courier': 'Assign a courier',
+  'console.trade.detail.custody_transfer': 'Hand to the courier',
+  'console.trade.detail.show_qr': 'Show QR',
+  'console.trade.detail.no_courier_ids': 'Assigning a courier is not available yet. Adulis can list the couriers you have invited, but not in a form this screen can assign from.',
+  'console.trade.detail.reissue': 'Reissue payment instructions',
+  'console.trade.detail.reissue_hint': 'Sends the buyer the payment instructions again, with your current payout details. You will be asked for a code.',
+  'console.trade.detail.history_heading': 'History',
+  'console.trade.detail.no_history': 'Nothing has happened to this order yet.',
+  'console.trade.detail.history_entry': 'Became: {state}',
 } as const;
 
 /** The key union. Every other locale must satisfy exactly this set. */

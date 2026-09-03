@@ -1605,6 +1605,116 @@ Effect:    MEASURED. With the route removed the router's catch-all -- `<Navigate
 Response:  FIXED
 Action:    The assertion is now `expect(page).toHaveURL(...)` -- where the browser ENDED UP, which is stable under a redirect because Playwright retries it -- with the readiness-list check kept as a second, weaker statement. Proven both ways: with the `payouts` route deleted the suite reports `1 failed, 7 passed` and the message names the item and the href; with it restored, `8 passed`.
 Ruling needed: none. The general form is worth carrying: **an assertion about a page's contents cannot catch a navigation defect, because contents are what the wrong page also lacks for an instant.** Assert the URL.
+### D-153 - SC-03 and SC-04 specify a buyer name the data model has no column for
+
+Severity:  MAJOR (a specified region of the most important screen in the console cannot be built)
+Phase:     T10 - 5
+Source:    ADU-CON-03 v1.1 S7 -- SC-03 "Each row carries, in this priority: buyer's first name ..."; SC-04 region 2 "Buyer -- name, contact affordance routing to SC-21"
+Found by:  T10 Phase 5, building C-4 against the schema rather than against the wireframe
+Effect:    THERE IS NO NAME ANYWHERE. `core.person` holds `id`, `id_hash`, `id_hash_key_version`, `created_at` -- a keyed hash and nothing else, and migration 3 says why in its own words: a date of birth "would be data collected for no purpose, and data minimisation is a live obligation rather than a preference." `core.account` holds a phone number. `core.buyer_profile` is "the account-scoped anchor the model requires and nothing else" -- its own comment.
+           So the row cannot name the buyer, and S7 forbids the obvious substitute in the same breath as asking for the name: **"Never a raw phone number where a conversation exists."**
+           This is a document-against-document conflict, not an omission in the build. The content architecture assumes an attribute the data model deliberately does not carry, and the data model is the one that gives its reasoning.
+Response:  STATED ON SCREEN, per the D-97 precedent. SC-03 says it once above the list (not per row -- a row is not the place to explain a data-model absence); SC-04's buyer region says it and offers the conversation, which is the affordance S7 actually routes to. Both carry `data-gap="D-153"` and an e2e test asserts they are still there, because a screen that hides a known gap reads as finished.
+Action:    None taken beyond stating it. Inventing a name column is exactly what "never invent an answer to an open product question" forbids, and it would be a personal-data column added by an agent.
+Ruling needed: YES, and it is a product decision with a privacy dimension. Either the buyer supplies a display name at some point in the flow (a new column, a new prompt, a retention question), or ADU-CON-03 S7 is reissued without the name and SC-03's row priority is restated. **Until one of those, this sentence stays on both screens.**
+
+### D-154 - The SC-03 filter row cannot filter, because the endpoint takes no filter
+
+Severity:  MINOR (the region exists and is honest about what it does)
+Phase:     T10 - 5
+Source:    ADU-CON-03 v1.1 S7 -- SC-03 "Regions: filter row (needs action - active - completed - cancelled)"
+Found by:  T10 Phase 5
+Effect:    `GET /v1/seller/orders` accepts `limit` and `cursor`. There is no `state`, no `bucket`, no `filter`. So the four tabs can only group the rows the client has already loaded -- and a "Cancelled" tab reading empty while a cancelled order sits on page three is worse than no tab at all, because it answers a question it did not actually ask the server.
+Response:  BUILT, AND LABELLED. The tabs group the loaded rows and one line says so, on every tab rather than only on the narrow ones -- the limitation is true of all four and merely invisible on "All".
+Action:    A sentence under the filter row, `data-gap="D-154"`, asserted by the harness.
+Ruling needed: A contract decision, small: a `state` query parameter on `GET /v1/seller/orders`, or a documented statement that the console loads the page and groups locally. **Not invented here** -- a parameter name shipped by a client is a contract the server then has to honour.
+
+### D-155 - No endpoint anywhere returns `allowed_actions`
+
+Severity:  MAJOR (a stated client contract with no server side)
+Phase:     T10 - 5
+Source:    apps/console/CLAUDE.md -- "The console computes no business state. It renders `state`, `allowed_actions` and `readiness[]` as the server resolved them." ADU-CON-03 S7 asks SC-03's row for "a single primary action if one is available".
+Found by:  T10 Phase 5 -- `grep -rn "allowed_actions" apps/api/src` returns NOTHING
+Effect:    Two of the three things the console is documented to render exist. The third has never been implemented anywhere in the API. Every screen that needs to know which actions are offered must therefore derive it from `state`, which is the derivation the rule exists to prevent -- and each screen derives it separately.
+           C-4 keeps the blast radius small: the only per-row "action" SC-03 offers is NAVIGATION to the screen where the decision is made, which is not outcome-bearing and does not claim to be. SC-04's action gating is R20's, which is a RULED client behaviour ("render, do not hide", stated in the specification) with the server enforcing it independently -- `fn_mark_order_ready` refuses, and the QR token does not exist before PAYMENT_CONFIRMED. That is defence in depth, not client-side business logic.
+Response:  RECORDED. Nothing built to fill it.
+Action:    None. This is a contract-shaped hole and belongs to whoever reissues ADU-API-01.
+Ruling needed: YES. Either `allowed_actions` lands on the resolved-state responses, or apps/console/CLAUDE.md stops promising it. **The current state -- a documented contract with no implementation -- is the one that produces a different guess on every screen.**
+
+### D-156 - The QR payload serialisation is unspecified, and the Companion has to parse it
+
+Severity:  MAJOR (a cross-client format decided by whichever client is built first)
+Phase:     T10 - 5
+Source:    ADU-CON-03 v1.1 S7 SC-06; ADU-PRD-01 S648 "The QR encodes a signed offline token"; ADU-API-01 S12.6
+Found by:  T10 Phase 5, building SC-06
+Effect:    `GET /v1/seller/orders/{id}/qr` returns `{order_ref, nonce, signing_key_version, signature}`. NO DOCUMENT SAYS HOW THOSE BECOME THE STRING IN THE QR. The PRD names the contents; nothing names the format. The buyer's Companion must parse whatever the seller's console renders, so the encoding IS a contract -- and it would have been set, silently and permanently, by whichever surface shipped first.
+           `signed_at` is deliberately NOT in it: handoff.schemas.ts has the SCANNER stamp epoch milliseconds at scan time, so a `signed_at` baked into a printed code would be the moment the seller opened the modal.
+Response:  INTERIM, AND ISOLATED. `encodeHandoffToken` in HandoffQr.tsx is one exported function producing compact JSON of the three fields a scanner cannot derive. One line changes when this is ruled.
+Action:    The function, its header, and this entry.
+Ruling needed: YES, before the Companion's scanner is built. Field names, ordering and whether the payload is JSON at all (a URL would let a non-Adulis scanner do something useful with it; compact binary would keep the code smaller and easier to scan in poor light).
+
+### D-157 - Courier assignment cannot be populated: the list returns invites, the action wants account ids
+
+Severity:  MAJOR (two of SC-04's four handoff controls cannot be built)
+Phase:     T10 - 5
+Source:    ADU-CON-03 v1.1 S7 SC-04 region 5; couriers.controller.ts `GET seller/couriers`; handoff.service.ts `assignCourier`
+Found by:  T10 Phase 5
+Effect:    `POST /v1/seller/orders/{id}/courier-assignment` and `.../custody-transfer` both take `courier_account_id`, and `assignCourier` validates it against `core.seller_courier` BY ACCOUNT ID. The only endpoint that lists couriers returns `core.seller_courier_invite` rows -- `id, phone, invited_at, claimed_at`. **An invite id is not an account id and a phone number is not either.** There is no endpoint that maps one to the other, and the console must not invent a lookup from a phone number to an account.
+Response:  RENDERED AND DISABLED, with the reason stated -- the same "render, do not hide" doctrine R20 uses eight lines above it in the same region, and for the same reason: a control that vanishes teaches nothing.
+Action:    Two disabled buttons, one sentence, `data-gap="D-157"`.
+Ruling needed: YES. Either `GET /v1/seller/couriers` returns the claimed courier's `account_id` alongside the invite (it is the seller's own courier, and the seller supplied the phone, so it discloses nothing new), or the assignment endpoints take an invite id. **One line of SQL either way, and it is a contract change, so it is not made here.**
+
+### D-158 - No SQL fixture can supply payment-evidence bytes: development storage is in-memory
+
+Severity:  MINOR (a fixture limit, correctly worked around and stated)
+Phase:     T10 - 5
+Source:    FakeFinancialStorageAdapter -- `private readonly objects = new Map<string, Buffer>()`
+Found by:  T10 Phase 5, seeding an order in PAYMENT_SUBMITTED for SC-05
+Effect:    The seeded `core.payment_submission` carries a real `evidence_ref` with no object behind it, because the object store in development lives inside the API process. `streamEvidence` finds the row, asks the adapter, gets null, and raises INTERNAL. So SC-05's happy path is unreachable from `db:reset` alone.
+Response:  THE BYTES ARE INTERCEPTED IN THE TEST, at the network, exactly as D-147's UPGRADE_REQUIRED is -- and for the same reason: it is the only honest way to exercise a path whose producer is out of reach, and it runs on every push rather than once by hand.
+           What is asserted is the SECURITY SHAPE, which is what S7 actually specifies and which is identical whether the bytes are real or planted: a blob URL, no anchor, no `download`, no canvas, no download/print/share/save/valid/verified text anywhere in the modal, the decisions repeated, and the URL REVOKED on unmount -- proved by fetching it after closing and requiring the fetch to fail.
+Action:    The route intercept, and a header on the spec saying why it is there.
+Ruling needed: None. If a filesystem-backed development adapter ever lands, the intercept comes out and the test gets stronger for free.
+
+### D-159 - The seller order endpoints returned neither the confirmation deadline, the line count, nor the history
+
+Severity:  MAJOR (SC-03 and SC-04 could not be built to specification)
+Phase:     T10 - 5
+Source:    orders.service.ts `listSellerOrders` / `getSellerOrder` as they stood at T10 Phase 4
+Found by:  T10 Phase 5
+Effect:    Three of SC-03's five row elements and two of SC-04's six regions had no data.
+           `listSellerOrders` returned `expires_at` and no line count and no confirmation deadline -- so the row could show only THE RESERVATION CLOCK, which is the wrong clock for a PAYMENT_SUBMITTED order and the exact display S7 singles out as forbidden. The 24h deadline lives on the open submission's `sla_deadline`, written by financial.service on submit and selected by nothing.
+           `getSellerOrder` returned the submissions WITHOUT `sla_deadline` and no history at all. `core.order_state_transition` has existed since migration 11, is written by `trg_log_order_transition` and protected by `trg_append_only`, and NOTHING HAD EVER READ IT.
+Response:  FIXED -- owed build, not a decision (the T9 D-103 precedent: "that one is owed build, not a decision -- do it").
+Action:    `line_count` and `payment_sla_deadline` on the list; `sla_deadline` on each submission and a `history` array on the detail. `count(*)` is narrowed to a number at the boundary because node-pg hands bigint back as a string, which prints correctly and compares wrong.
+Ruling needed: None.
+
+### D-160 - The console-e2e gate ran a stale API, and a zombie process answering /healthz read as a healthy start
+
+Severity:  BLOCKER for the gate's meaning (a PASS that says less than its message claims)
+Phase:     T10 - 5
+Source:    ops/scripts/verify-console-e2e.mjs, as it landed at T10 Phase 4
+Found by:  T10 Phase 5, on C-4's first run -- seven tests failed and every symptom pointed at the wrong file
+Effect:    TWO FAULTS, EACH SUFFICIENT ALONE.
+           1. The gate CHECKED that `apps/api/dist/main.js` existed and ran whatever was in it, while rebuilding the console two steps below. Inside `ci:local` the `build` gate runs first, so dist is fresh; run directly -- which is how anyone works on a console change -- it drives a NEW console against an OLD API.
+           2. It then waited for `/healthz` to answer. **`/healthz` answering proves that AN api is up, not that THIS one is.** With a stale process holding port 3000 (a dev server, a previous run interrupted between spawn and kill), the child dies instantly on EADDRINUSE, the health check succeeds against the ZOMBIE, and the suite runs against that process's binary.
+           MEASURED, both: the console showed "undefined items" and no confirmation clock, and both were TRUE READINGS of an API compiled before those fields existed. The failure was indistinguishable from a product defect. After the rebuild was added, seven failures became seven again -- because the zombie was still answering. After the port guard, seven became one, and the one was a real test bug (D-161).
+Response:  FIXED, both halves.
+Action:    The gate now builds the API rather than assuming it; REFUSES TO START if anything already answers on the port, naming what to do; and watches the child for an early exit so a dead API is reported with its exit code instead of as a 30-second timeout.
+Ruling needed: None. The general form is D-132's, one layer out: **a check that runs and a check that checks are different things, and "is it up?" is not the same question as "is MY one up?"**
+
+### D-161 - `locator.count()` does not retry, and the QR test failed on a QR that was fine
+
+Severity:  MINOR (a false red, which is the cheap direction -- but it is D-152's class again)
+Phase:     T10 - 5
+Source:    apps/console/e2e/trade.spec.ts, first version
+Found by:  T10 Phase 5, on the same run that found D-160
+Effect:    The test opened the handoff modal, asserted `.modal.qr` was visible, and then did `expect(await modules.count()).toBeGreaterThan(50)`. The modal becomes visible the instant it MOUNTS, while `GET /qr` is still in flight, so the count ran against an empty region and reported an empty QR. A probe showed 1396 rects and no page errors: the QR was correct the whole time.
+           `expect(locator)` RETRIES. `await locator.count()` is a plain read that asks once. Mixing them is how a suite acquires a flake that a later agent learns to re-run rather than read.
+Response:  FIXED.
+Action:    A retrying `expect(...).toBeVisible()` on the element itself before any plain count, in both places the suite took one.
+Ruling needed: None, but it is worth carrying beside D-152: **that entry was an assertion that ran too early and passed; this is one that ran too early and failed. The same cause, and only the direction of the wrong answer differs.**
+
 ### D-162 - Gate `console-e2e` could not run in CI at all: gates.mjs strips NODE_ENV and the entry carried no env
 
 Severity:  BLOCKER (a gate red on every CI run from the moment it merges)
@@ -1662,4 +1772,97 @@ Found by:  T11, because the planted run came back GREEN and green was investigat
 Effect:    The planted serve.mjs lost the port to the previous, healthy server (`pkill` does not reliably kill detached node processes on this platform; the plant died on EADDRINUSE in a background log nobody was reading) and the identity spec correctly PASSED -- against the unplanted configuration. Had that green been misread, the record would say the self-test fails to catch a wrong CSP, when in fact the wrong CSP was never served. This is the T10 lesson in miniature, applied to the proving procedure itself: T8 established that a plant must leave the checked thing reachable; this adds that A PLANT MUST BE PROVEN IN FORCE before its result is read.
 Response:  FIXED in procedure
 Action:    The plant was re-run after killing the holder BY PID and curling the served policy first -- the planted directive was confirmed on the wire (`connect-src 'self' https://api.adulis.example`) before the spec ran, and only then was the red recorded. Register entry so the next plant procedure starts from this rule.
+Ruling needed: none.
+### D-167 - A past deadline produced an unbounded refetch loop: the once-only guard died with its component
+
+Severity:  BLOCKER (a sustained self-inflicted request flood on the console's most important screen)
+Phase:     T11 - 4 (found by T10's adversarial pass; measured there at ~68 req/s)
+Source:    apps/console/src/lib/clock.tsx (the `fired` ref) with apps/console/src/components/ScreenState.tsx (READY/STALE as two element shapes)
+Found by:  T10 adversarial pass, reproduced with a minimal harness; re-measured at T11 by the new request-count test: 1067 requests in ~4 seconds
+Effect:    `onElapsed` refetches; the refetch flips READY<->STALE; ScreenState's two branches put the children at different positions, so React UNMOUNTS AND REMOUNTS the subtree on every flip; the remount resets the `fired` ref and the "once-only" callback fires again. Forever, on any order whose displayed deadline has already passed -- which is the state every real order reaches by simply existing. The fixture never triggered it because both its live deadlines were deliberately in the future, so every RENDERING assertion passed while the defect sat one seeded row away.
+           **If the thing a guard prevents can cause the guard's own remount, it is not a guard.**
+           The remount was also destroying focus, scroll and any half-typed rejection reason on every background refresh -- a defect in its own right that nothing had noticed.
+Response:  FIXED, twice over -- two independent controls, neither trusted alone.
+Action:    1. ScreenState renders READY and STALE as ONE element shape (children at a stable position; a null slot is a position), so the flip no longer remounts the subtree.
+           2. The guard moved above the remount boundary: a module-level set of deadline strings -- a deadline fires onElapsed at most once per page life, whatever mounts around it. (Correct as well as safe: a deadline that passed before a later mount needs no elapsed refetch; the mount's own load already fetched post-deadline truth.)
+           The fixture gained a fifth order -- PAYMENT_SUBMITTED, confirmation deadline hours past -- and the harness a REQUEST-COUNT test (<= 4 requests in ~4s), because every rendering assertion had passed throughout the flood. Proven: both controls out -> 1067 requests, red; the guard alone with the remount re-planted -> 20 passed; restored -> 20 passed.
+Ruling needed: none.
+
+### D-168 - The blob-revoke assertion could not fail: the CSP refused the probe whether or not the URL was revoked
+
+Severity:  BLOCKER for the claim it protected (the phase's proudest test, asserting nothing)
+Phase:     T11 - 4 (found by T10's adversarial pass)
+Source:    apps/console/e2e/trade.spec.ts -- `fetch(blobUrl)` after closing the modal, required to fail
+Found by:  T10 adversarial pass, two lenses independently
+Effect:    `connect-src` does not list `blob:`, so the fetch was refused by POLICY before the blob's liveness was ever consulted. The assertion passed for a reason unrelated to what it claimed -- D-132/D-152's class. Delete the `URL.revokeObjectURL` call and the suite stayed green while decrypted payment evidence lived in the tab for as long as the tab did.
+Response:  FIXED
+Action:    The instrument is an IMAGE LOAD -- `img-src` explicitly allows `blob:` (it is how evidence renders at all), and an Image on a live blob fires `load` while a revoked one fires `error`. Run BOTH SIDES: while the modal is open the probe must report ALIVE, proving the instrument discriminates, so the later "revoked" is a measurement and not a default. Proven: revoke call deleted -> exactly one failure, "the blob URL must be revoked when the modal unmounts"; restored -> 20 passed.
+Ruling needed: none. Carried beside D-152 and D-161: an assertion whose failure path is pre-empted by an unrelated mechanism is green about nothing.
+
+### D-169 - Show QR stayed operable on a COMPLETED order: a terminal screen minting a live signed handoff token
+
+Severity:  MAJOR
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived, so it survived the instrument failure)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- `disabled={!paid}`, and `paid` includes COMPLETED
+Found by:  T10 adversarial pass, two lenses independently
+Effect:    TERMINAL is "history, no actions" (ADU-CON-03 S3), and the QR token is not a picture -- scanning it is a state-transition instrument. A completed order kept an enabled control that fetched and displayed a live signed token for an order that is over.
+Response:  FIXED
+Action:    `disabled={!paid || ended}` -- present and inert, per the region's render-don't-hide doctrine. The terminal e2e test now asserts it: present, disabled, and a forced click opens nothing.
+Ruling needed: none for C-4. Whether the QR should also close at HANDED_OFF (the scan has already happened) is a smaller question left with C-8's courier work, where R25 lives.
+
+### D-170 - Reissue was offered where the database always refuses -- after charging the seller a step-up to find out
+
+Severity:  MAJOR
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- reissue gated on `!ended` only
+Found by:  T10 adversarial pass; confirmed against db/migrations/0022: fn_reissue_instructions accepts CREATED, NOTIFIED, PAYMENT_SUBMITTED and raises "order is not payable" otherwise
+Effect:    On PAYMENT_CONFIRMED and HANDED_OFF the console rendered an enabled control for an action the server will always refuse -- and because reissue is challengeRequired, the refusal arrived only AFTER an OTP was sent and six digits typed. One of three hourly OTPs spent on an impossibility; a second try walks into D-124's 429-about-nothing.
+Response:  FIXED
+Action:    The control renders only in the three states the function accepts, cited to the migration. ABSENT rather than disabled, deliberately: unlike R20's handoff region this is not "opens later in the sequence" -- once payment is confirmed there are never instructions to reissue, and a disabled control would teach a seller to wait for something that never comes. Asserted both ways: absent on the confirmed fixture, present on the submitted one.
+Ruling needed: none.
+
+### D-171 - Order lines rendered the raw core.reservation_state enum as seller-visible text
+
+Severity:  MAJOR (untranslated seller-visible strings that bypassed the catalogue's compile-error guarantee)
+Phase:     T11 - 5 (found by T10's adversarial pass; read-derived)
+Source:    apps/console/src/features/trade/OrderDetail.tsx -- `{l.state}` in the lines region
+Found by:  T10 adversarial pass
+Effect:    ACTIVE, FULFILLED, CANCELLED_BY_BUYER rendered verbatim. "A missing Amharic key is a compile error" held vacuously for these strings BECAUSE THEY NEVER ENTERED THE CATALOGUE -- the guarantee only covers what goes through it.
+Response:  FIXED
+Action:    Six keys in both catalogues (declared in MT-KEYS.md as awaiting the human pass, like every console key), a label map with the render-unknown-as-code fallback Home and StateBadge already use, and a terminal-order assertion that the seller reads "Fulfilled", not FULFILLED.
+Ruling needed: none.
+
+### D-172 - The readiness link test skipped exactly the rows whose links were broken -- and two live server kinds already had no route
+
+Severity:  MAJOR (a vacuous guard over D-146's exact regression, plus the regression itself, live for COMPANY sellers)
+Phase:     T11 - 5 (found by T10's adversarial pass)
+Source:    apps/console/e2e/readiness.spec.ts (`if (!t.href) continue;`) and apps/console/src/features/entry/Home.tsx (ACTION_ROUTE)
+Found by:  T10 adversarial pass, 3/3 upheld; kinds confirmed against fn_publication_readiness in migration 0018
+Effect:    Two halves.
+           THE TEST: Home renders an UNROUTED SPAN -- not an anchor -- for any resolving-action kind missing from its table, and the test's loop skipped rows without hrefs. So deleting a route key turned rows into spans and the test quietly stopped checking them: it could not fail for the one regression it was written against.
+           THE TABLE: the server emits DECLARE_SELLER_TYPE and PROVIDE_COMPANY_DETAILS; the console's table had neither -- it had COMPLETE_COMPANY_DETAILS, a key the server never sends. A COMPANY seller with company details outstanding got a dead span for a BLOCKING requirement: D-146's shape, invisible in the fixture because the seeded seller is INDIVIDUAL and both rows are satisfied for it.
+Response:  FIXED, both halves
+Action:    The table's keys are now the server's verbatim (routes per ADU-CON-03 S6: item 2 -> SC-02, item 5 -> SC-17), and the test asserts ZERO unrouted rows before navigating every link -- a new server kind without a route now fails the suite by name at the moment it is introduced. Recorded fixture limit: the two corrected rows are satisfied for the seeded INDIVIDUAL seller, so their routes are exercised by table review, not by the navigation loop; a COMPANY fixture seller is future work.
+Ruling needed: none.
+
+### D-173 - Nothing prevents a reservation existing without its ORDER_CREATED stock event -- and a release then invents stock
+
+Severity:  MAJOR, on the money path; found by the fixture, true of production
+Phase:     T11 - 6 (read-derived from migrations 0008, 0011, 0012, 0021, 0028; needs no running database)
+Source:    the pairing of core.reservation and core.stock_event exists only PROCEDURALLY, inside fn_create_order
+Found by:  T10's adversarial pass flagged the fixture (reservations seeded with no events; Can't Fulfil took a variant from 40 to 42). T11 Phase 6 asked the question underneath.
+Effect:    There is NO trigger on core.reservation, no constraint, and no check anywhere that a reservation has a reserving event. fn_create_order writes both in one transaction -- and is the only place that does. Any other writer (a fixture, a manual repair, a future code path, a partial restore) can create a reservation that holds stock nothing ever deducted. The release side then makes it worse: fn_cancel_line and the expiry sweep insert +quantity keyed on (reservation_id, reason) -- idempotent per A3.2 -- WITHOUT checking that the reserving event exists. **If the reserving event can be absent, the release invents stock**: fn_apply_stock_event applies +2 to a count that never went down, and the storefront offers goods that do not exist.
+Response:  THE FIXTURE IS FIXED; THE SCHEMA QUESTION IS REGISTERED, NOT ANSWERED.
+Action:    The seed now creates variants at stock_count 0 and writes the real ledger -- SELLER_SET +42, ORDER_CREATED -2 per reservation -- so fn_apply_stock_event, the only writer of the column, produces the 40 (and a release correctly returns held stock instead of minting it). Written with WHERE NOT EXISTS rather than ON CONFLICT, because BEFORE INSERT triggers fire even when ON CONFLICT DO NOTHING discards the row, and a re-seed would have re-applied every delta. db:reset now pins `stock_drift: 0` -- variants whose stock_count disagrees with their ledger sum -- so the class is caught structurally on every reset.
+Ruling needed: YES -- whether the pairing should be database-enforced (a constraint trigger on core.reservation asserting its ORDER_CREATED event in-transaction, or a release that refuses when no reserving event exists, or a documented statement that fn_create_order's monopoly is the enforcement). Each has costs; none is a fixture's decision. NOT fixed in this order, per its S7.
+
+### D-174 - D-159's claim "nothing had ever read core.order_state_transition" was false, and it was load-bearing in a source header
+
+Severity:  MAJOR (an inaccurate register entry, repeated as fact where later agents read it)
+Phase:     T11 - 7
+Source:    register D-159; docs/build-status/T10-REPORT.md; the header comment above the history query in apps/api/src/modules/orders/orders.service.ts
+Found by:  T10 adversarial pass, 3/3 upheld: claims.service.ts builds claim evidence bundles from the table with nearly the identical SELECT, and jobs/e1-clock.ts reads it to decide which PAYMENT_SUBMITTED orders lapsed their confirmation window
+Effect:    An agent trusting the header would treat the seller history query as the table's sole consumer and change its columns, ordering, grants or filters accordingly -- breaking claim evidence and confirmation-window expiry, the second of which is the money path. A wrong report gets fact-checked; a wrong comment gets believed.
+Response:  CORRECTED where each copy sits (the register itself is append-only, so the correction is this entry).
+Action:    The source header now names all three consumers and warns that the expiry decision is one of them; the T10 report carries the correction inline, marked as a T11 edit; D-159's OWED-BUILD substance -- no SELLER-FACING endpoint returned the history -- stands.
 Ruling needed: none.

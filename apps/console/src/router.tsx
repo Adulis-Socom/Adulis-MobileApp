@@ -16,6 +16,8 @@ import { Chooser } from './features/entry/Chooser';
 import { StateDemo } from './features/entry/StateDemo';
 import { Placeholder } from './features/entry/Placeholder';
 import { Home } from './features/entry/Home';
+import { Orders } from './features/trade/Orders';
+import { OrderDetail } from './features/trade/OrderDetail';
 import { BecomeSeller } from './features/entry/BecomeSeller';
 
 export const router = createBrowserRouter([
@@ -38,7 +40,11 @@ export const router = createBrowserRouter([
           // the screen that replaced it.
           { index: true, element: <Home /> },
           { path: 'states', element: <StateDemo /> },
-          { path: 'orders', element: <Placeholder screen="SC-03" /> },
+          // C-4, group B. SC-05 and SC-06 are MODALS OVER SC-04 rather than
+          // routes -- ADU-CON-03 S7 says so for both, and a modal with its own
+          // URL is a screen a seller can land on with no order behind it.
+          { path: 'orders', element: <Orders /> },
+          { path: 'orders/:orderId', element: <OrderDetail /> },
           { path: 'products', element: <Placeholder screen="SC-07" /> },
           /*
             THE SCREENS SC-01's RESOLVING LINKS POINT AT (ADU-CON-03 S6's
