@@ -445,26 +445,63 @@ export class CatalogueService {
       SELECT p.id FROM core.product p
        WHERE p.id = ${productId} AND p.seller_id = ${req.ctx?.sellerId}`.execute(trx);
     if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
-    // Two passes inside one transaction: park clear of the UNIQUE range,
-    // then place — the constraint stays immediate and the API stays honest.
-    let pos = 100;
-    for (const imageId of body.order) {
-      await sql`
-        UPDATE core.product_image SET position = ${pos}
-         WHERE id = ${imageId} AND product_id = ${productId}`.execute(trx);
-      pos += 1;
+
+    /*
+     * ONE PASS, FINAL POSITIONS, no parking. The previous shape parked rows at
+     * 100, 101, ... to clear the UNIQUE range and could never work: position
+     * carries CHECK (position BETWEEN 1 AND 5), so the first parking UPDATE
+     * raised 23514. Migration 0048 makes the UNIQUE deferrable instead, so
+     * every value written here is inside 1..5 at every step and uniqueness is
+     * checked where it is actually required -- at COMMIT.
+     *
+     * VALIDATE BEFORE WRITING, and not only out of tidiness. A deferred unique
+     * violation surfaces at COMMIT with no statement context, so a caller who
+     * sends a duplicate id would otherwise receive an opaque 23505 from the end
+     * of the transaction. Everything checkable is therefore checked first: the
+     * ids must be distinct, and they must be exactly the images this product
+     * has. A partial order is refused too -- reordering three of five images
+     * would leave the other two holding positions the new order also claims,
+     * and "the whole ordering in one transaction, or it is a defect" is this
+     * endpoint's own rule.
+     */
+    const seen = new Set(body.order);
+    if (seen.size !== body.order.length) {
+      throw new AdulisException('VALIDATION_FAILED', {
+        slots: { reason: 'DUPLICATE_IMAGE', path: 'order' },
+      });
     }
-    pos = 1;
+
+    const existing = await sql<{ id: string }>`
+      SELECT id FROM core.product_image
+       WHERE product_id = ${productId}
+       ORDER BY position`.execute(trx);
+    const known = new Set(existing.rows.map((r) => r.id));
+
     for (const imageId of body.order) {
-      const r = await sql<{ id: string }>`
-        UPDATE core.product_image SET position = ${pos}
-         WHERE id = ${imageId} AND product_id = ${productId}
-         RETURNING id`.execute(trx);
-      if (!r.rows[0]) {
+      if (!known.has(imageId)) {
         throw new AdulisException('VALIDATION_FAILED', {
           slots: { reason: 'UNKNOWN_IMAGE', image_id: imageId },
         });
       }
+    }
+    if (body.order.length !== known.size) {
+      throw new AdulisException('VALIDATION_FAILED', {
+        slots: { reason: 'PARTIAL_ORDER', expected: known.size, received: body.order.length },
+      });
+    }
+
+    // Opt THIS transaction into deferred uniqueness. The constraint is
+    // DEFERRABLE INITIALLY IMMEDIATE (0048), so every other writer keeps the
+    // immediate, attributable 23505 that tells a seller POSITION_TAKEN; only
+    // the reorder needs to pass through a state where two rows share a
+    // position, and only until this transaction commits.
+    await sql`SET CONSTRAINTS core.product_image_position DEFERRED`.execute(trx);
+
+    let pos = 1;
+    for (const imageId of body.order) {
+      await sql`
+        UPDATE core.product_image SET position = ${pos}
+         WHERE id = ${imageId} AND product_id = ${productId}`.execute(trx);
       pos += 1;
     }
     return { order: body.order };

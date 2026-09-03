@@ -3089,3 +3089,76 @@ Flake: t12-d89-invite-claim failed once under gates (429 vs 202, then a differen
 Ruling needed: the four PUSH-only templates with no delivery channel (above) - an IN_APP
   producer, an SMS twin, or an accepted beta residual; and whether the worker should
   refuse to start when a channel it is scheduled to deliver has no provider at all.
+
+### D-242 - T18 Phase 2: the image reorder had never once succeeded, and the fix for the last finding about it was never exercised either
+
+Severity:  BLOCKER - a shipped endpoint that could not work in any environment
+Phase:     T18 Phase 2 (the half that needs no storage vendor)
+Source:    db/migrations/0048_product_image_position_deferrable.sql;
+           apps/api/src/modules/catalogue/catalogue.service.ts; c2-catalogue.e2e.spec.ts
+Finding:   PUT /v1/seller/products/{id}/images/order could not succeed against the real
+  database, ever, since 0007 created the table. The service parked positions at 100,
+  101, ... to clear the UNIQUE range before placing them 1..n, but 0007:242 declares
+  `position int NOT NULL CHECK (position BETWEEN 1 AND 5)`, so the FIRST parking UPDATE
+  raises 23514. Proven against the live schema rather than argued -- a row inserted, the
+  parking UPDATE run, and the constraint quoted back:
+      BLOCKED by 23514: new row for relation "product_image"
+      violates check constraint "product_image_position_check"
+  Both constraints are right; the technique was wrong. The parking trick exists only to
+  dodge a non-deferrable UNIQUE and is defeated by the CHECK that bounds the range.
+THIS IS THE SECOND TIME, AND THAT IS THE FINDING WORTH KEEPING. T14-C's C-5 pass already
+  found the CLIENT half (the console sent [{id, position}] where the server takes
+  `order: string[]`) and wrote, in its own words: "A green tsc, lint and e2e certified a
+  reorder that had never once succeeded against the real API." The fix for that finding
+  was ITSELF never exercised against the real API, because nothing called the endpoint:
+  grep over apps/api/test and apps/console/e2e returns no caller of images/order. The
+  same sentence, one layer down, in the same feature, twice. A fix without a test that
+  drives it is a claim.
+Effect / Response, each:
+  0048  UNIQUE (product_id, position) becomes DEFERRABLE. The CHECK stays
+    non-deferrable: a position outside 1..5 is never valid, not even transiently, and it
+    is the constraint that caught this.
+  INITIALLY IMMEDIATE, NOT INITIALLY DEFERRED -- a deliberate narrowing of the ruling's
+    letter to serve its purpose, recorded rather than quietly kept. T18 S2 asked for
+    "DEFERRABLE INITIALLY DEFERRED". That was written first and it broke something real:
+    committing an image to a position already taken used to raise 23505 AT THE INSERT,
+    which the translator turns into a 409 carrying reason = POSITION_TAKEN; under
+    INITIALLY DEFERRED the violation moves to COMMIT, outside the statement that caused
+    it, and the seller stops being told which position was taken. An existing test caught
+    it; a seller would have met it as an unexplained failure. So: DEFERRABLE (the
+    capability the reorder needs), INITIALLY IMMEDIATE (the behaviour every other writer
+    already had), and the reorder opts in for its own transaction with
+    `SET CONSTRAINTS core.product_image_position DEFERRED`. Narrowest possible scope --
+    one code path, one transaction.
+  ONE PASS  reorderImages assigns final positions 1..n directly. No parking, so every
+    value written is inside the range at every step.
+  VALIDATE BEFORE WRITING, and not for tidiness: inside the deferred transaction a
+    violation surfaces at COMMIT with no statement context, so anything checkable is
+    checked first. Duplicate ids -> DUPLICATE_IMAGE. An id that is not this product's ->
+    UNKNOWN_IMAGE. A PARTIAL order -> PARTIAL_ORDER, because reordering three of five
+    images leaves the other two holding positions the new order also claims, and "the
+    whole ordering in one transaction, or it is a defect" is this endpoint's own rule.
+    All three are VALIDATION_FAILED / 400, the codebase's existing convention; a new
+    status for this one path would be an invention.
+  THE CAP IS UNTOUCHED  five positions and one row per position is still what makes five
+    images a structural fact rather than a counting rule. A deferred constraint still
+    refuses a sixth at COMMIT.
+Verification: pnpm ci:local -- 25 gates. c2-catalogue 15/15, including the first test in
+  this repository's history that actually calls images/order against the real API:
+    * a full REVERSAL of three images -- the case the parking trick existed for, where
+      every row's new position is currently held by another row, so a naive one-pass
+      update collides on its first statement unless uniqueness is deferred;
+    * an adjacent SWAP -- the minimal collision, and the one a "just add one to each"
+      implementation also gets wrong;
+    * the three refusals, each asserted to move NOTHING.
+  The constraint's state is checked in the database, not inferred:
+    product_image_position   condeferrable=t condeferred=f   (DEFERRABLE IMMEDIATE)
+    product_image_position_check condeferrable=f             (immediate, as ruled)
+Owed, not built: a CONSOLE e2e that clicks reorder. Media.tsx already calls the endpoint
+  correctly (T14-C fixed the body shape), but the seed carries no core.product_image
+  rows and there is no way to view an image at all -- no signGet, no public URL -- so
+  there is nothing for a browser to drag. It belongs with the storage adapter, and the
+  lesson above says plainly why it should not be skipped again once that lands.
+Ruling needed: none. The deviation from S2's letter is recorded above rather than
+  invited, because the ruling's purpose is served and its letter cost a seller-facing
+  error message.

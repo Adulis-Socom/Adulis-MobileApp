@@ -371,6 +371,125 @@ describe('C2 — catalogue, media and stock', () => {
       expect(lc.rows[0].purge_after).not.toBeNull();
     });
 
+    it('REORDER assigns final positions directly, and it has never worked until now', async () => {
+      /*
+       * THE ENDPOINT THIS EXERCISES HAD NEVER ONCE SUCCEEDED. Nothing in the
+       * repository called PUT .../images/order -- not this suite, not the
+       * console e2e -- and the service parked positions at 100, 101, ... to
+       * clear the UNIQUE range while core.product_image declares
+       * CHECK (position BETWEEN 1 AND 5). The first parking UPDATE raised
+       * 23514 every time.
+       *
+       * T14-C already found the CLIENT half of this (the console sent
+       * [{id, position}] where the server takes order: string[]) and its own
+       * pass wrote: "A green tsc, lint and e2e certified a reorder that had
+       * never once succeeded against the real API." The fix for that finding
+       * was itself never exercised against the real API, because no test
+       * called the endpoint. This is that test.
+       *
+       * Migration 0048 makes the UNIQUE deferrable, so positions are assigned
+       * 1..n directly and every intermediate value stays inside the range the
+       * CHECK still enforces immediately.
+       */
+      const commitAt = async (position: number): Promise<string> => {
+        const req = await write('post', `/v1/seller/products/${productId}/images`)
+          .send({ action: 'REQUEST_UPLOAD', position })
+          .expect(200);
+        const k = {
+          thumb: req.body.uploads.thumb.key,
+          card: req.body.uploads.card.key,
+          full: req.body.uploads.full.key,
+        };
+        storage.put(k.thumb, { bytes: 40_000, contentType: 'image/webp' });
+        storage.put(k.card, { bytes: 200_000, contentType: 'image/webp' });
+        storage.put(k.full, { bytes: 900_000, contentType: 'image/webp' });
+        await write('post', `/v1/seller/products/${productId}/images`)
+          .send({ action: 'COMMIT', position, thumb_key: k.thumb, card_key: k.card, full_key: k.full })
+          .expect(201);
+        const row = await admin.query(
+          `SELECT id FROM core.product_image WHERE product_id=$1 AND position=$2`,
+          [productId, position],
+        );
+        return row.rows[0].id as string;
+      };
+
+      // This arm runs AFTER the DELETE arm, which frees position 1. Ordering
+      // matters here and is not incidental: committing to a taken position is
+      // a 409 by design, so the three fresh images need the range clear.
+      const a = await commitAt(1);
+      const b = await commitAt(2);
+      const c = await commitAt(3);
+
+      // A REVERSAL is the case the parking trick existed for: every row's new
+      // position is currently held by another row, so a naive one-pass update
+      // collides on the first statement unless uniqueness is deferred.
+      await write('put', `/v1/seller/products/${productId}/images/order`)
+        .send({ order: [c, b, a] })
+        .expect(200);
+
+      const after = await admin.query(
+        `SELECT id, position FROM core.product_image WHERE product_id=$1 ORDER BY position`,
+        [productId],
+      );
+      expect(after.rows.map((r: { id: string }) => r.id)).toEqual([c, b, a]);
+      expect(after.rows.map((r: { position: number }) => r.position)).toEqual([1, 2, 3]);
+
+      // A SWAP of two adjacent rows -- the minimal collision, and the one a
+      // "just add one to each" implementation also gets wrong.
+      await write('put', `/v1/seller/products/${productId}/images/order`)
+        .send({ order: [b, c, a] })
+        .expect(200);
+      const swapped = await admin.query(
+        `SELECT id FROM core.product_image WHERE product_id=$1 ORDER BY position`,
+        [productId],
+      );
+      expect(swapped.rows.map((r: { id: string }) => r.id)).toEqual([b, c, a]);
+    });
+
+    it('reorder refuses what it cannot do cleanly, BEFORE it writes', async () => {
+      /*
+       * A deferred unique violation surfaces at COMMIT with no statement
+       * context, so anything checkable is checked first -- otherwise a caller
+       * who sends a duplicate gets an opaque 23505 from the end of the
+       * transaction instead of being told which id was wrong.
+       *
+       * 400, not 422: VALIDATION_FAILED is the codebase's own code for a
+       * request the server will not act on, and it maps to 400 everywhere
+       * else in this service. A new status for this one path would be an
+       * invention, not a convention.
+       */
+      const ids = await admin.query(
+        `SELECT id FROM core.product_image WHERE product_id=$1 ORDER BY position`,
+        [productId],
+      );
+      const [x, y, z] = ids.rows.map((r: { id: string }) => r.id);
+
+      const dup = await write('put', `/v1/seller/products/${productId}/images/order`)
+        .send({ order: [x, x, y] })
+        .expect(400);
+      expect(dup.body.slots.reason).toBe('DUPLICATE_IMAGE');
+
+      const foreign = await write('put', `/v1/seller/products/${productId}/images/order`)
+        .send({ order: [x, y, '11111111-1111-4111-8111-111111111111'] })
+        .expect(400);
+      expect(foreign.body.slots.reason).toBe('UNKNOWN_IMAGE');
+
+      // A PARTIAL order would leave the untouched rows holding positions the
+      // new order also claims -- "the whole ordering in one transaction, or it
+      // is a defect" is this endpoint's own rule.
+      const partial = await write('put', `/v1/seller/products/${productId}/images/order`)
+        .send({ order: [x, y] })
+        .expect(400);
+      expect(partial.body.slots.reason).toBe('PARTIAL_ORDER');
+
+      // None of the refusals moved anything.
+      const unchanged = await admin.query(
+        `SELECT id FROM core.product_image WHERE product_id=$1 ORDER BY position`,
+        [productId],
+      );
+      expect(unchanged.rows.map((r: { id: string }) => r.id)).toEqual([x, y, z]);
+    });
+
     it('an oversize video commit is 413', async () => {
       const r = await write('post', `/v1/seller/products/${productId}/video`)
         .send({ action: 'REQUEST_UPLOAD' })
