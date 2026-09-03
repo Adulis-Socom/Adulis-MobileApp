@@ -267,6 +267,24 @@ const GATES = [
   // sixteen (a governed set), and its loader would count a check-*.mjs
   // dropped there whether or not anything referenced it.
   { id: 'deferred-values', title: 'ADU-VAL-01 S1.1 - three forms agree, deferred values are nullable', cmd: ['pnpm', 'verify:deferred-values'] },
+  /**
+   * T18 Phase 5 -- the trust flags become a launch gate rather than a memory.
+   *
+   * A market may not be open to public SELLER registration while measuring
+   * nothing about the sellers it admits. Green today (the beta is invite-only,
+   * so the seed keeps seller signup closed) and red the day someone opens it
+   * without raising audience_required or identity_required.
+   *
+   * A GATE, NOT A SEVENTEENTH db/checks FILE -- see the appendix-c note above:
+   * db-check.mjs exits 2 on any count but sixteen and "sixteen checks" is
+   * written into two governed specifications. Appendix C is a closed set; this
+   * list is not.
+   */
+  {
+    id: 'trust-before-open-signup',
+    title: 'No open seller signup while nothing about a seller is measured',
+    cmd: ['pnpm', 'verify:trust-before-open-signup'],
+  },
   { id: 'no-unsafe-eval', title: "'unsafe-eval' absent from the console build", fn: assertNoUnsafeEval },
   { id: 'production-react', title: 'The console shipped React production', fn: assertProductionReact },
   {

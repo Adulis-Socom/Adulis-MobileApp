@@ -262,7 +262,19 @@ try {
         SET activation_state = 'ACTIVE',
             registration_enabled = true,
             buyer_registration_enabled = true,
-            seller_registration_enabled = true,
+            -- T18 Phase 5: SELLER signup is CLOSED, because the beta is
+            -- invite-only -- a hand-picked cohort the founder verifies
+            -- personally. Buyers are unaffected: a buyer is not a seller and
+            -- nothing about a buyer is measured by the trust flags.
+            --
+            -- SAY PLAINLY WHAT THIS DOES AND DOES NOT DO. NOTHING IN THE
+            -- CODEBASE READS seller_registration_enabled; the new gate
+            -- (verify:trust-before-open-signup) is its FIRST reader. This makes
+            -- the flag HONEST ABOUT INTENT and ENFORCES NOTHING -- the beta is
+            -- invite-only because the founder controls who gets a link, not
+            -- because any code refuses anyone. The day someone assumes this
+            -- flag is enforcing is the day it isn't.
+            seller_registration_enabled = false,
             otp_enabled = true,
             sms_primary_provider = 'AFROMESSAGE',
             sms_fallback_provider = NULL,
