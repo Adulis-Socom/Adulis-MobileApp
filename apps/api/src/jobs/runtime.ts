@@ -13,7 +13,7 @@ import type { Logger } from 'pino';
 import type { Database } from '../common/db/database.types';
 import type { Job, JobContext } from './context';
 import { systemClock } from './clock';
-import { S24_JOBS } from './registry';
+import { SCHEDULED_JOBS } from './registry';
 import { makeHeartbeatJob } from './heartbeat';
 import { FakeFinancialStorageAdapter } from '../modules/financial/financial-storage.adapter';
 import { FakeMediaStorageAdapter } from '../modules/catalogue/media-storage.adapter';
@@ -122,8 +122,13 @@ function toCronItems(jobs: readonly Job[]): CronItem[] {
 export async function startWorker(log: Logger): Promise<WorkerHandle> {
   const { ctx, close } = createJobContext(log);
   const workerId = `${hostname()}:${process.pid}`;
-  const heartbeat = makeHeartbeatJob(workerId, S24_JOBS.length);
-  const jobs = [...S24_JOBS, heartbeat];
+  // The count the heartbeat publishes is what this worker SCHEDULES, not the
+  // size of the S24 transcription. They were the same number until T20 added a
+  // job from another document, and a heartbeat that reports twenty while
+  // twenty-one are scheduled answers "is this worker running the full set?"
+  // with a number that cannot detect the one failure it is watched for.
+  const heartbeat = makeHeartbeatJob(workerId, SCHEDULED_JOBS.length);
+  const jobs = [...SCHEDULED_JOBS, heartbeat];
 
   const runner = await run({
     connectionString: process.env['DATABASE_URL_JOBS'] as string,
@@ -155,7 +160,13 @@ export async function startWorker(log: Logger): Promise<WorkerHandle> {
   };
 }
 
-/** Exported for the runtime test: the cron schedule the runner is given. */
+/**
+ * Exported for the runtime test: the cron items for the SCHEDULED jobs.
+ *
+ * Not quite "the schedule the runner is given" as this comment used to claim
+ * -- the heartbeat's cron is built inside startWorker, because it needs the
+ * worker's identity and cannot be constructed without a live process.
+ */
 export function cronItemsForTest(): CronItem[] {
-  return toCronItems(S24_JOBS);
+  return toCronItems(SCHEDULED_JOBS);
 }

@@ -408,7 +408,23 @@ const GATES = [
    * document, a value removed from the database -- and its own self-check
    * caught a fence-index bug in this file before it ever compared anything.
    */
-  { id: 'transcription', title: 'Migration 0043 agrees with ADU-AUTH-01 v2.6 (both ways, self-checked)', cmd: ['pnpm', 'verify:transcription'] },];
+  { id: 'transcription', title: 'Migration 0043 agrees with ADU-AUTH-01 v2.6 (both ways, self-checked)', cmd: ['pnpm', 'verify:transcription'] },
+
+  /**
+   * APPENDED, like the two above it and for the same reason: ADU-RUL-03 S5.2
+   * cites gates by POSITION in a governed document this repository does not
+   * edit, so this list is append-only in practice whatever its shape suggests.
+   * Cite this one by name.
+   *
+   * ADU-AUTH-01 v2.7 S26.4 -- `core.permission.surfaces` is the authority for
+   * a surface, "and a gate now compares every catalogue marker to it". It
+   * found three disagreements on the very revision that asked for it, and all
+   * three were in the direction that document did NOT anticipate: grants wider
+   * than the catalogue, rather than markers wider than the grants. The one
+   * v1.11 named was real and was one of three.
+   */
+  { id: 'surface-markers', title: 'S12 surface markers agree with core.permission.surfaces, both ways', cmd: ['pnpm', 'verify:surface-markers'] },
+];
 
 if (process.argv.includes('--list')) {
   for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);

@@ -28,7 +28,7 @@ import {
   subscriptionCollectReminder,
   nluHarvestUnmatched,
 } from '../src/jobs/e6-billing-nlu';
-import { S24_JOBS, S24_JOB_NAMES } from '../src/jobs/registry';
+import { S24_JOBS, S24_JOB_NAMES, RULED_JOBS, SCHEDULED_JOBS } from '../src/jobs/registry';
 
 /**
  * E2-E6, plus the registry's agreement with S24 itself.
@@ -203,6 +203,35 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
         expect(job.cadenceNote).toContain('S24');
       }
     });
+
+    /**
+     * THE LIST THAT KEEPS THE LIST ABOVE HONEST (T20 S6.1).
+     *
+     * A job required by a document other than S24 has to be registered
+     * somewhere, and the tempting place is E5_JOBS -- which is where payout
+     * activation first went, turning the twenty into twenty-one and turning a
+     * transcription assertion into a number somebody edits. It is filed under
+     * its own document instead, and these assertions are what stop the two
+     * lists from merging again: an S24 name may never appear in RULED_JOBS,
+     * and a RULED job may never cite S24.
+     */
+    it('jobs from other documents are registered separately and cite those documents', () => {
+      expect(RULED_JOBS.length).toBeGreaterThan(0);
+      for (const job of RULED_JOBS) {
+        expect(job.cron).toBeTruthy();
+        expect(job.cadenceNote).not.toContain('S24');
+        expect(S24_JOB_NAMES).not.toContain(job.name);
+      }
+      expect(RULED_JOBS.map((j) => j.name)).toContain('payout.activate_due');
+    });
+
+    it('the worker schedules both lists and nothing else', () => {
+      const names = SCHEDULED_JOBS.map((j) => j.name).sort();
+      expect(names).toEqual([...S24_JOB_NAMES, ...RULED_JOBS.map((j) => j.name)].sort());
+      // No name is scheduled twice -- two cron items with one identifier is a
+      // job that runs, and is recorded, under a name it shares.
+      expect(new Set(names).size).toBe(names.length);
+    });
   });
 
   describe('E2 — notification', () => {
@@ -304,7 +333,51 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       h.push.outcomes.clear();
     });
 
-    it('with NO push provider the row FAILS rather than claiming delivery (T18 Phase 1)', async () => {
+    it('with NO push provider the row FALLS BACK to IN_APP and is delivered (T20 S5)', async () => {
+      /*
+       * THIS ARM ASSERTED FAILED UNTIL T20 S5, and the change is the point.
+       * T18 P1 made the null adapter honest -- the row failed instead of
+       * claiming delivery -- but honest-and-lost is still lost: four templates
+       * are PUSH-only with no SMS twin, so every one of them died FAILED and
+       * reached nobody. notification.chat.escalated is the one that costs
+       * money: a buyer asks what the assistant cannot answer, it escalates,
+       * and the seller never learns.
+       *
+       * S9.3 always named IN_APP as the fallback and notification.send always
+       * CLAIMED that channel -- nothing ever WROTE a row on it. Now the push
+       * job moves the row (never copies it: a twin appears twice in the
+       * seller's list, because the list does not filter by channel) and
+       * notification.send delivers it on its next minute. The row IS the
+       * delivery; there is no provider to call.
+       */
+      const id = await queue({ channel: 'PUSH', template: 'E2_PUSH_NO_PROVIDER' });
+      const r = await notificationPushSeller.run({ ...h.ctx, push: new NullPushAdapter() });
+
+      expect(r['sent']).toBe(0);
+      expect(r['failed']).toBe(0);
+      expect(r['dead_tokens']).toBe(0);
+      expect(r['in_app_fallback']).toBe(1);
+
+      // MOVED, not failed, and still QUEUED so the sender can take it.
+      const moved = await admin.query(
+        `SELECT channel::text AS channel, state::text AS state FROM core.notification WHERE id=$1`,
+        [id],
+      );
+      expect(moved.rows[0]).toMatchObject({ channel: 'IN_APP', state: 'QUEUED' });
+
+      // The device token SURVIVES -- the half that would corrupt real data if
+      // the outcome had been TOKEN_DEAD.
+      const tok = await admin.query(`SELECT push_token FROM core.device WHERE id=$1`, [DEVICE]);
+      expect(tok.rows[0].push_token).toBe('tok-owner');
+
+      // AND IT ACTUALLY REACHES THE SELLER: the sender claims IN_APP and
+      // marks it SENT, which is what puts it in the list SC-30 renders.
+      const send = await notificationSend.run(h.ctx);
+      expect(send['sent']).toBeGreaterThanOrEqual(1);
+      expect(await stateOf(id)).toBe('SENT');
+    });
+
+    it('LEGACY SHAPE: a real provider that cannot deliver still FAILS (T20 S5)', async () => {
       /*
        * The property that makes NullPushAdapter safe to bind in production.
        * FakePushAdapter answered DELIVERED, so the row was marked SENT while
@@ -317,12 +390,17 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
        * saying it here would un-register the very devices that should receive
        * the first push the day a provider is bound. Asserted, not assumed.
        */
-      const id = await queue({ channel: 'PUSH', template: 'E2_PUSH_NO_PROVIDER' });
-      const r = await notificationPushSeller.run({ ...h.ctx, push: new NullPushAdapter() });
+      // A BOUND provider answering RETRYABLE is a different fact from no
+      // provider at all, and it must still fail rather than silently
+      // downgrading a channel the seller chose to have.
+      const id = await queue({ channel: 'PUSH', template: 'E2_PUSH_RETRYABLE' });
+      h.push.outcomes.set('tok-owner', 'RETRYABLE');
+      const r = await notificationPushSeller.run(h.ctx);
+      h.push.outcomes.clear();
 
       expect(r['sent']).toBe(0);
       expect(r['failed']).toBe(1);
-      expect(r['dead_tokens']).toBe(0);
+      expect(r['in_app_fallback']).toBe(0);
       expect(await stateOf(id)).toBe('FAILED');
 
       // The device survives untouched -- this is the half that would corrupt

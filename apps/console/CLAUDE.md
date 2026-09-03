@@ -5,7 +5,7 @@ repository root.**
 
 **Governing documents:** ADU-CON-03 v1.3 (thirty screens, five destinations, twelve
 states) · ADU-CON-02 **v3.1** (system design, CSP) · ADU-ARCH-01 v2.0 · ADU-AUTH-01
-**v2.5** · ADU-API-01 **v1.10** · ADU-DB-01 **v1.16** · **ADU-REPO-01 §9** (cited across this repository and installed
+**v2.7** (**v2.5** still canonical for the permission catalogue) · ADU-API-01 **v1.11** · ADU-DB-01 **v1.16** · **ADU-REPO-01 §9** (cited across this repository and installed
 nowhere: it is absent from `docs/` and from DOCUMENT_AUTHORITY's supplied baseline,
 and no register entry recorded that until D-94; this file's §9.2/§9.5 transcriptions
 are the working copy). Versions corrected at T7 Phase 4; `docs/amendments/README.md`

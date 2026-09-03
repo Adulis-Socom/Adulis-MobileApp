@@ -69,6 +69,67 @@ export const ledgerAssertZero: Job = {
   },
 };
 
+export const payoutActivateDue: Job = {
+  name: 'payout.activate_due',
+  cron: '*/5 * * * *',
+  cadenceNote: 'ADU-AUTH-01 v2.7 S20.1: the delay must mean twenty-four hours',
+  /**
+   * THE JOB THAT MAKES THE INTERVAL MEAN WHAT IT SAYS (v2.7 S20.1).
+   *
+   * core.fn_activate_due_payout was invoked from exactly ONE place in the
+   * product -- the GET on /v1/seller/payout -- and no job called it. A due
+   * PENDING therefore stayed PENDING, and stayed CANCELLABLE, until somebody
+   * opened the payout screen: the exposure was never twenty-four hours, it was
+   * "until the seller next looks". The lazy path stays (it costs nothing and
+   * makes the screen correct at the moment it is read); this is what gives the
+   * number its meaning.
+   *
+   * PER-PAYOUT CONTAINMENT, and it is the requirement rather than a nicety.
+   * The ownership-transfer activation had none: one raise would have fronted
+   * its ORDER BY and stopped the sweep platform-wide, so one seller's bad row
+   * halts every other seller's activation. Each seller is claimed and run
+   * ALONE here, and a raise is logged and stepped over.
+   *
+   * ITS OWN TRANSACTION, NEVER LAZILY INSIDE A HANDLER'S -- D-74's lesson,
+   * paid twice. The ownership activation ran at the top of a seller-scoped
+   * handler transaction, the handler then failed, and the rollback took the
+   * activation with it. `fn_activate_due_payout` HAS THE SAME SHAPE ON THE GET
+   * PATH TODAY (financial.service.ts getPayout runs it inside the handler's
+   * trx, so a later failure in that read rolls back an activation it just
+   * performed) -- that is D-74's twin, it has been in 0022 since Tier 3, and it
+   * is registered rather than fixed here because the fix is a decision about
+   * the read path. THIS job is immune by construction: one statement, one
+   * transaction, per seller, with nothing after it to fail.
+   */
+  async run(ctx: JobContext): Promise<JobResult> {
+    const due = await sql<{ seller_id: string }>`
+      SELECT DISTINCT seller_id
+        FROM core.payout_details
+       WHERE state = 'PENDING' AND activates_at IS NOT NULL AND activates_at <= now()`
+      .execute(ctx.db);
+
+    let activated = 0;
+    let raised = 0;
+    for (const row of due.rows) {
+      try {
+        // One seller, one statement, its own implicit transaction.
+        const r = await sql<{ fn_activate_due_payout: boolean }>`
+          SELECT core.fn_activate_due_payout(${row.seller_id})`.execute(ctx.db);
+        if (r.rows[0]?.fn_activate_due_payout) activated += 1;
+      } catch (e) {
+        // CONTAINED. A raise on one seller must not halt the sweep.
+        raised += 1;
+        ctx.log.error({
+          msg: 'payout.activate_due failed for one seller',
+          sellerId: row.seller_id,
+          err: String(e),
+        });
+      }
+    }
+    return { due: due.rows.length, activated, raised };
+  },
+};
+
 export const analyticsCreatePartition: Job = {
   name: 'analytics.create_partition',
   cron: '0 6 1 * *',
@@ -97,6 +158,13 @@ export const analyticsCreatePartition: Job = {
   },
 };
 
+/**
+ * E5's contribution to the S24 transcription -- FOUR, and payoutActivateDue is
+ * deliberately NOT among them. S24 does not name it: it comes from ADU-AUTH-01
+ * v2.7 S20.1, so it is registered through registry.ts's RULED_JOBS instead.
+ * Adding it here would have made the "exactly the twenty S24 names, and no
+ * others" assertion a test that no longer transcribes anything.
+ */
 export const E5_JOBS: readonly Job[] = [
   idempotencyPurgeExpired,
   rateLimitPurgeStale,

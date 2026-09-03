@@ -5,6 +5,7 @@ import { E3_JOBS } from './e3-trust-stock';
 import { E4_JOBS } from './e4-retention';
 import { E5_JOBS } from './e5-transport-ledger';
 import { E6_JOBS } from './e6-billing-nlu';
+import { payoutActivateDue } from './e5-transport-ledger';
 
 /**
  * The twenty jobs of ADU-DB-01 S24, in one list.
@@ -30,6 +31,33 @@ export const S24_JOBS: readonly Job[] = [
   ...E5_JOBS,
   ...E6_JOBS,
 ];
+
+/**
+ * JOBS A DOCUMENT OTHER THAN ADU-DB-01 S24 REQUIRES.
+ *
+ * S24_JOBS above is a TRANSCRIPTION and its test asserts it both ways, so a
+ * job from another document cannot live in it without making that assertion
+ * meaningless -- which is exactly what happened when payout activation was
+ * first added to E5_JOBS: the twenty became twenty-one and the failure read
+ * as a broken test rather than as a job filed under the wrong document.
+ *
+ * The precedent is the heartbeat (ADU-CON-02 S20.2), which has always been
+ * registered outside this list. The difference is only that the heartbeat
+ * needs the worker's identity and these do not, so these can be named here.
+ *
+ * Each entry cites the document and section that requires it, and the test
+ * beside this file asserts that citation is NOT S24.
+ */
+export const RULED_JOBS: readonly Job[] = [
+  // ADU-AUTH-01 v2.7 S20.1 -- without it the twenty-four hour payout delay
+  // means "until the seller next opens the payout screen".
+  payoutActivateDue,
+];
+
+/**
+ * What the worker actually schedules, minus the heartbeat it builds itself.
+ */
+export const SCHEDULED_JOBS: readonly Job[] = [...S24_JOBS, ...RULED_JOBS];
 
 /** S24's twenty names, transcribed from the document's table, in its order. */
 export const S24_JOB_NAMES: readonly string[] = [

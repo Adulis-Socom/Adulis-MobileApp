@@ -27,7 +27,19 @@ export interface PushMessage {
   readonly slots: Readonly<Record<string, unknown>>;
 }
 
-export type PushOutcome = 'DELIVERED' | 'RETRYABLE' | 'TOKEN_DEAD';
+/**
+ * T20 S5 -- NO_PROVIDER is the fourth, and D-240 is why it exists. That entry
+ * recorded that none of the three could say 'there is no vendor': DELIVERED is
+ * the lie the fake guard exists to stop, TOKEN_DEAD is a fact about the DEVICE
+ * that makes e2-notification clear a real push token, and RETRYABLE is true but
+ * indistinguishable from a transient failure -- so the job could only mark the
+ * row FAILED and four templates reached nobody.
+ *
+ * With it, the absence of a vendor becomes something the caller can ACT on:
+ * the sender falls the row back to IN_APP, which is S9.3's own fallback and
+ * needs no vendor and no credentials.
+ */
+export type PushOutcome = 'DELIVERED' | 'RETRYABLE' | 'TOKEN_DEAD' | 'NO_PROVIDER';
 
 export interface PushAdapter {
   send(message: PushMessage): Promise<PushOutcome>;
@@ -120,6 +132,11 @@ export class NullPushAdapter implements PushAdapter {
 
   async send(message: PushMessage): Promise<PushOutcome> {
     void message;
-    return 'RETRYABLE';
+    // NO_PROVIDER, not RETRYABLE (T20 S5). RETRYABLE was the truest of the
+    // three that existed, and it still left the sender unable to tell "try
+    // again later" from "there is no vendor and never will be until one is
+    // bound" -- so every push row died FAILED. This says the second, and the
+    // sender falls back to the in-app list rather than dropping it.
+    return 'NO_PROVIDER';
   }
 }

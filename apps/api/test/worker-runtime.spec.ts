@@ -6,7 +6,7 @@ import { Pool } from 'pg';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { startWorker, WORKER_CONCURRENCY, cronItemsForTest } from '../src/jobs/runtime';
-import { S24_JOBS } from '../src/jobs/registry';
+import { S24_JOBS, SCHEDULED_JOBS } from '../src/jobs/registry';
 import { makeHeartbeatJob, HEARTBEAT_STALE_AFTER_SECONDS } from '../src/jobs/heartbeat';
 import { createJobHarness, type Harness } from './jobs-harness';
 
@@ -60,7 +60,12 @@ describe('the worker runtime', () => {
 
   it('schedules every job on a cron, with backfill disabled', () => {
     const items = cronItemsForTest();
-    expect(items).toHaveLength(S24_JOBS.length);
+    // EVERY scheduled job, not just S24's twenty. A job registered as a task
+    // but absent from the cron list is a job that exists, typechecks, is
+    // covered by a unit test, and never once runs.
+    expect(items).toHaveLength(SCHEDULED_JOBS.length);
+    expect(SCHEDULED_JOBS.length).toBeGreaterThan(S24_JOBS.length);
+    expect(items.map((i) => i.task)).toContain('payout.activate_due');
     for (const item of items) {
       expect(item.match).toBeTruthy();
       // A worker down for an hour must not wake and run sixty expiry
@@ -71,7 +76,7 @@ describe('the worker runtime', () => {
   });
 
   it('the heartbeat writes ONE row however many times it beats', async () => {
-    const beat = makeHeartbeatJob('test-worker', S24_JOBS.length);
+    const beat = makeHeartbeatJob('test-worker', SCHEDULED_JOBS.length);
     await beat.run(h.ctx);
     await beat.run(h.ctx);
     await beat.run(h.ctx);
@@ -79,7 +84,9 @@ describe('the worker runtime', () => {
     // A heartbeat table that can hold two rows is a heartbeat that reads
     // green because SOME worker beat recently.
     expect(rows.rows).toHaveLength(1);
-    expect(rows.rows[0]).toMatchObject({ worker_id: 'test-worker', jobs_registered: 20 });
+    // Twenty-one SCHEDULED (S24's twenty plus payout activation from
+    // ADU-AUTH-01 v2.7 S20.1), not counting the heartbeat itself.
+    expect(rows.rows[0]).toMatchObject({ worker_id: 'test-worker', jobs_registered: 21 });
   });
 
   describe('/healthz reflects the worker, and never 503s because of it', () => {
@@ -137,13 +144,17 @@ describe('the worker runtime', () => {
     });
   });
 
-  it('boots, registers 21 tasks, ACTUALLY RUNS one through the queue, and stops cleanly', async () => {
+  it('boots, registers 22 tasks, ACTUALLY RUNS one through the queue, and stops cleanly', async () => {
     const log = pino({ level: 'silent' });
     await admin.query(`DELETE FROM jobs.worker_heartbeat`);
     const handle = await startWorker(log);
     try {
-      // Twenty from S24 plus the heartbeat (ADU-CON-02 S20.2).
-      expect(handle.jobNames).toHaveLength(21);
+      // Twenty from S24, the heartbeat (ADU-CON-02 S20.2), and payout
+      // activation (T20 S6.1 / ADU-AUTH-01 v2.7 S20.1 -- the job that makes
+      // the twenty-four hour delay mean twenty-four hours rather than "until
+      // the seller next opens the payout screen").
+      expect(handle.jobNames).toHaveLength(22);
+      expect(handle.jobNames).toContain('payout.activate_due');
       expect(handle.jobNames).toContain('order.expire_sweep');
       expect(handle.jobNames).toContain('worker.heartbeat');
 
