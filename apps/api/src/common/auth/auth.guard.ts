@@ -64,11 +64,70 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *    verification.write_attestation's own derivation from
  *    core.operator_grant, which is the only place that can decide it.
  *
+ *  - GET /v1/seller/list is the caller's OWN store list (T18 Phase 3,
+ *    register D-97). The other two are POSTs; this one is a GET, and it is
+ *    the third member of the same category rather than a special case: a
+ *    path under /v1/seller that no seller header can describe. Creation has
+ *    nothing to name yet, identity verification is held by an operator who
+ *    holds no seller, and this one is asking WHICH sellers exist for the
+ *    caller -- so requiring the answer as input is circular.
+ *
+ *    Inventing a /v1/accounts namespace for one endpoint would have been the
+ *    larger change; the exemption list is where the category already lives.
+ *
  * The path keeps its /v1/seller prefix because ADU-API-01 v1.7 keeps it:
  * removing the path would be the shape change doctrine 6 forbids, and the
  * capability did not disappear -- it moved to whoever holds the grant.
+ *
+ * A SECOND-ORDER EFFECT WORTH KNOWING: this function is called TWICE per
+ * request -- once for the header requirement and once to derive actorRole
+ * (declaredRole ?? (requiresSellerContext(...) ? 'SELLER' : 'BUYER')). An
+ * exemption therefore also sets adulis.actor_role to BUYER for that request.
+ * That is safe for all three: none of them reads a seller-scoped RLS policy,
+ * and the only policy that reads actor_role tests it against 'COURIER'. The
+ * list endpoint additionally does its own filtering by account, so the role
+ * decides nothing there.
  */
-function requiresSellerContext(path: string, method: string): boolean {
+function requiresSellerContext(rawPath: string, method: string): boolean {
+  // LOWERCASED ONCE, and this is a fix rather than a nicety (T18 Phase 3 pass).
+  // Express routes case-INSENSITIVELY -- neither configure-app.ts nor main.ts
+  // sets 'case sensitive routing', so GET /v1/SELLER/payout reaches the payout
+  // handler. Every predicate below was case-SENSITIVE, so that request skipped
+  // BOTH effects of section 4.2: no SELLER_CONTEXT_REQUIRED, and actorRole
+  // silently BUYER instead of SELLER. It fails closed one layer down today
+  // (assertPermission throws on a null sellerId rather than querying), so
+  // nothing leaks -- but the docstring above promises "absent on a
+  // seller-scoped path -> 400", and that promise was false for any
+  // capitalisation. Normalising here makes the guard agree with the router.
+  const path = rawPath.toLowerCase();
+
+  // The THIRD exemption (T18 Phase 3, register D-97). It is tested BEFORE the
+  // method gate below, because that gate returns unconditionally for every
+  // non-POST under /v1/seller and has no exemption slot of its own.
+  //
+  // GET /v1/seller/list is the same category as the two POSTs: a path under
+  // /v1/seller that NO seller header can describe. Creation has nothing to name
+  // yet; identity verification is held by an operator who holds no seller; and
+  // this one asks WHICH sellers the caller holds, so demanding the answer as
+  // input is circular.
+  //
+  // It discloses nothing: it returns the caller's OWN relationships, which they
+  // could already reach by holding the id. There is no relationship oracle here
+  // because there is no id to probe with.
+  //
+  // GET AND HEAD ONLY. The two exemptions it joins are method-gated for free by
+  // sitting below the POST check; this one is above it and would otherwise
+  // exempt every verb, so a later @Post('seller/list') would inherit the
+  // exemption silently. HEAD is included because Express routes HEAD to the GET
+  // handler, and a HEAD that demanded a header the endpoint cannot accept would
+  // be a 400 nobody could fix.
+  if (
+    (method === 'GET' || method === 'HEAD') &&
+    (path === '/v1/seller/list' || path === '/v1/seller/list/')
+  ) {
+    return false;
+  }
+
   if (method !== 'POST') {
     return path.startsWith('/v1/seller') || path.startsWith('/v1/billing');
   }

@@ -1,61 +1,129 @@
 /**
- * features/entry/Chooser.tsx -- "/", the seller chooser (redirect when
- * exactly one -- S2.1).
+ * features/entry/Chooser.tsx -- "/", the seller chooser.
  *
- * THE CONTRACT HAS NO SELLERS-LIST ENDPOINT (register D-97): nothing
- * returns "the sellers this account holds", so the chooser cannot
- * enumerate. Until the contract grows one, this screen states the gap and
- * accepts a store id -- which also keeps the C-2 flow honest: the seed
- * prints the seller id it created, and /s/<id> is the URL shape every
- * seller-scoped screen keys on anyway.
+ * T18 Phase 3 CLOSED D-97. There is now an endpoint that lists the stores an
+ * account holds (GET /v1/seller/list), so this screen enumerates them instead
+ * of asking a seller to paste an id they were never given. The pasted-id box
+ * and the sentence that explained its absence are gone.
+ *
+ * S2.1's rule is honoured at last rather than described: REDIRECT WHEN EXACTLY
+ * ONE. A seller with a single store never sees this screen -- they land in
+ * their store, both on the day they create it and every morning after. That
+ * one behaviour is what T17's walk recorded as "a returning seller is asked to
+ * paste a store id", and it was the second thing that would have made a real
+ * seller give up.
+ *
+ * The redirect REPLACES the history entry. A seller who lands in their store
+ * and presses Back should leave the app, not bounce off a screen that
+ * immediately forwards them again.
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { en } from '@adulis/locale';
+import { api, ApiError } from '../../api/client';
+import { ScreenState } from '../../components/ScreenState';
+import type { AdulisProblem, UiState } from '../../lib/states';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+interface SellerRow {
+  readonly id: string;
+  readonly handle: string;
+  readonly store_name: string;
+  readonly status: string;
+  readonly role: string;
+}
+
+/** The role a seller reads, never the enum. Unknown values render as
+ *  themselves -- visible and greppable, the ITEM_LABEL rule. */
+const ROLE_LABEL: Readonly<Record<string, string>> = {
+  OWNER: en['console.chooser.role.owner'],
+  ADMIN: en['console.chooser.role.admin'],
+  SALES_SUPPORT: en['console.chooser.role.sales_support'],
+  INVENTORY: en['console.chooser.role.inventory'],
+  ANALYST: en['console.chooser.role.analyst'],
+  CAMPAIGN_MANAGER: en['console.chooser.role.campaign_manager'],
+};
 
 export function Chooser() {
   const nav = useNavigate();
-  const [id, setId] = useState('');
-  const valid = UUID_RE.test(id);
+  const [state, setState] = useState<UiState>('LOADING');
+  const [rows, setRows] = useState<readonly SellerRow[]>([]);
+  const [problem, setProblem] = useState<AdulisProblem | null>(null);
+  const alive = useRef(true);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api<{ data: SellerRow[] }>('/seller/list');
+      if (!alive.current) return;
+      setRows(r.data);
+      setProblem(null);
+      // EXACTLY ONE -> go there, replacing this entry in history.
+      if (r.data.length === 1 && r.data[0]) {
+        nav(`/s/${r.data[0].id}`, { replace: true });
+        return;
+      }
+      setState(r.data.length === 0 ? 'EMPTY' : 'READY');
+    } catch (e) {
+      if (!alive.current) return;
+      if (e instanceof ApiError) {
+        setProblem(e.problem);
+        setState('TRANSPORT_ERROR');
+      } else {
+        setProblem(null);
+        setState('TRANSPORT_ERROR');
+      }
+    }
+  }, [nav]);
+
+  useEffect(() => {
+    // The load can resolve after this screen has gone -- the redirect below
+    // unmounts it, and a slow response on a session that then expires would
+    // otherwise navigate or setState against a component that no longer
+    // exists. The flag is checked inside load through the ref.
+    alive.current = true;
+    void load();
+    return () => {
+      alive.current = false;
+    };
+  }, [load]);
+
   return (
     <main className="chooser">
       <h1>{en['console.chooser.title']}</h1>
-      {/* The gap stays labelled (T9 S4.2's ruling), but the register number
-          rides the DOM rather than the sentence: a seller in Addis should not
-          have to read "D-97" to learn that we cannot list their stores. The
-          attribute keeps it greppable, and chooser.spec.ts asserts BOTH -- the
-          plain sentence and this attribute -- so the hole still cannot be
-          quietly closed over. */}
-      <p className="hint" data-gap="D-97">
-        {en['console.chooser.gap']}
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (valid) nav(`/s/${id}`);
-        }}
-      >
-        <label htmlFor="chooser-id">{en['console.chooser.id_label']}</label>
-        <input
-          id="chooser-id"
-          value={id}
-          onChange={(e) => setId(e.target.value.trim())}
-          aria-invalid={id.length > 0 && !valid ? true : undefined}
+
+      {state === 'LOADING' || state === 'TRANSPORT_ERROR' ? (
+        <ScreenState
+          state={state}
+          {...(problem ? { problem } : {})}
+          onRetry={() => void load()}
         />
-        <button type="submit">{en['console.chooser.open_button']}</button>
-      </form>
-      {/* T17: a brand-new seller landed here with no store and no way to make
-          one -- /s/new had to be TYPED, which is the point at which a real
-          seller stops and messages us. The route already existed; nothing
-          pointed at it. This does not need an endpoint, so it is fixed here;
-          ENUMERATING the stores this account holds still does, and D-97's own
-          ruling is that the endpoint's shape is contract design. */}
-      <p className="create-store">
-        {en['console.chooser.create_prompt']}{' '}
-        <Link to="/s/new">{en['console.chooser.create_link']}</Link>
-      </p>
+      ) : null}
+
+      {/* EMPTY is a good state here, not a failure: an account with no store
+          is every seller on the day they arrive, and the only thing they need
+          is the way to make one. */}
+      {state === 'EMPTY' ? <p className="hint">{en['console.chooser.none']}</p> : null}
+
+      {state === 'READY' ? (
+        <ul className="seller-list">
+          {rows.map((s) => (
+            <li key={s.id} data-seller={s.id}>
+              <Link to={`/s/${s.id}`}>{s.store_name}</Link>
+              <span className="seller-handle">{s.handle}</span>
+              <span className="seller-role">{ROLE_LABEL[s.role] ?? s.role}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* Always available, and not only in the empty state: an account that
+          already holds one store may open a second. */}
+      {state === 'EMPTY' || state === 'READY' ? (
+        <p className="create-store">
+          {en['console.chooser.create_prompt']}{' '}
+          <Link to="/s/new">{en['console.chooser.create_link']}</Link>
+        </p>
+      ) : null}
+
       {/* The courier's way in (C-8): the session carries no roles for the
           client to gate on (the contract's roles[] rendering hint is the
           owed refinement, D-228) -- so the link is plain, and a non-courier

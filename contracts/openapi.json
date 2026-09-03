@@ -1519,6 +1519,21 @@
         ]
       }
     },
+    "/v1/seller/list": {
+      "get": {
+        "operationId": "OnboardingController_listSellers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The stores this account owns or is a live team member of (D-97).",
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
     "/v1/seller/notification-preferences": {
       "get": {
         "operationId": "NotificationsController_getPreferences",

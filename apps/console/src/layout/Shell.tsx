@@ -6,9 +6,12 @@
  * drawer that traps focus.
  *
  * Top bar, every route: store name + seller switcher (rendered ONLY when
- * the account holds more than one seller -- with no sellers-list endpoint
- * in the contract yet, that is exactly zero renders today; register
- * D-97), notification bell placeholder, account menu placeholder.
+ * the account holds more than one seller), notification bell placeholder,
+ * account menu placeholder.
+ *
+ * D-97 IS CLOSED (T18 Phase 3): GET /v1/seller/list exists, so the switcher
+ * is no longer blocked by a missing endpoint -- it is simply not built yet.
+ * The chooser at "/" enumerates and redirects when there is exactly one.
  *
  * The seller id lives in the URL and ONLY the URL (S2.1): two stores in
  * two tabs are two URLs; nothing here stores it.
@@ -39,8 +42,9 @@ export function Shell() {
       </a>
       <header className="topbar">
         <span className="store-name">{en['console.shell.store']}</span>
-        {/* SellerSwitcher: only with >1 seller; the sellers-list contract
-            gap (D-97) means it cannot render yet. */}
+        {/* SellerSwitcher: only with >1 seller. The contract gap that made
+            this impossible (D-97) closed at T18 Phase 3; building it is the
+            remaining work, not the endpoint. */}
         {/* SC-30 exists now (C-7): the bell is a LINK, not a dead control.
             Its unread COUNT stays owed -- drawing one would need a
             shell-level poll on every route, and the list itself carries the

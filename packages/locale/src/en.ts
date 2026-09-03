@@ -252,15 +252,15 @@ export const en = {
   'console.states.upgrade': 'A new version of the console is required.',
   'console.states.upgrade_reload': 'Reload',
   'console.chooser.title': 'Choose a store',
-  // The hole stays labelled (the T9 S4.2 ruling, D-97) -- what changed is
-  // WHO it is labelled for. A seller should not read a defect number; the
-  // register citation now rides the DOM as data-gap="D-97", so it stays
-  // greppable for the next engineer without being narrated to Addis.
-  'console.chooser.gap': 'Your stores cannot be listed here yet, so open one by pasting the store id you were given.',
   'console.chooser.create_prompt': 'Do not have a store yet?',
   'console.chooser.create_link': 'Create a store',
-  'console.chooser.id_label': 'Store id',
-  'console.chooser.open_button': 'Open store',
+  'console.chooser.none': 'You do not have a store yet.',
+  'console.chooser.role.owner': 'Owner',
+  'console.chooser.role.admin': 'Admin',
+  'console.chooser.role.sales_support': 'Sales and support',
+  'console.chooser.role.inventory': 'Inventory',
+  'console.chooser.role.analyst': 'Analyst',
+  'console.chooser.role.campaign_manager': 'Campaign manager',
   'console.demo.title': 'The twelve screen states',
   'console.demo.hint': 'Every screen in this console renders through one of these states, and only these. Pick one to see it.',
   'console.demo.ready_content': 'This is READY: the screen itself.',

@@ -97,11 +97,11 @@ test.describe('T17 -- what a beta seller can actually do', () => {
     const landedPath = new URL(page.url()).pathname;
     const chooserHint = await page.locator('.hint').first().textContent({ timeout: 2000 }).catch(() => null);
     if (landedPath === '/') {
-      note(
-        '2',
-        'EMBARRASSES',
-        `a seller with no store lands on the chooser, which says: "${(chooserHint ?? '').trim()}"`,
-      );
+      // T18 Phase 3: this used to be an EMBARRASSES -- the chooser named a
+      // register number and asked for a store id the seller had never been
+      // given. It now lists the account's stores, so a seller with none meets
+      // a good empty state and the way to make one.
+      note('2', 'OK', `a seller with no store is told: "${(chooserHint ?? '').trim()}"`);
     }
     // Is there any route to creating a store from here, or must it be typed?
     const createLink = page.getByRole('link', { name: /create|new store|become/i });
@@ -312,17 +312,18 @@ test.describe('T17 -- what a beta seller can actually do', () => {
       await fresh.goto('/', { timeout: 20_000, waitUntil: 'domcontentloaded' });
       await fresh.waitForTimeout(1500);
       await fresh.screenshot({ path: path.join(SHOTS, '12-return-next-day.png'), fullPage: true });
+      // T18 Phase 3 closed D-97, so "/" now redirects a single-store seller
+      // straight into their store (S2.1). The old CANNOT read: "a returning
+      // seller is asked to paste a store id".
       const backIn = fresh.locator('#chooser-id');
+      const landed = new URL(fresh.url()).pathname;
       if (await backIn.count()) {
         const hint = await fresh.locator('.hint').first().textContent({ timeout: 2000 }).catch(() => null);
-        const anyLink = await fresh.getByRole('link').count();
-        note(
-          '14',
-          'CANNOT',
-          `a returning seller is asked to paste a store id. Screen says: "${(hint ?? '').trim()}" (${anyLink} link(s) on the page)`,
-        );
+        note('14', 'CANNOT', `a returning seller is asked to paste a store id: "${(hint ?? '').trim()}"`);
+      } else if (/^\/s\/[0-9a-f-]{36}/.test(landed)) {
+        note('14', 'OK', `a returning seller is taken straight back into their store (${landed})`);
       } else {
-        note('14', 'OK', `a returning seller lands on ${new URL(fresh.url()).pathname}`);
+        note('14', 'CANNOT', `a returning seller landed on ${landed}, not in a store`);
       }
     } catch (e) {
       note('14', 'CANNOT', `the app root did not load within 20s: ${String(e).slice(0, 80)}`);
