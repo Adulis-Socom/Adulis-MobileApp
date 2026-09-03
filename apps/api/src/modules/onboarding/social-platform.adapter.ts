@@ -1,4 +1,7 @@
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
+import { createLogger } from '../../common/logging';
+
+const log = createLogger();
 /**
  * The platform adapter (ADU-DB-01 S13.1 by way of S7.2): each social
  * platform sits behind this interface, and a platform failure degrades to
@@ -85,5 +88,52 @@ export class FakeSocialPlatformAdapter implements SocialPlatformAdapter {
       followerCount: p.followerCount,
       bioContains: (code: string) => p.bio.includes(code),
     };
+  }
+}
+
+/**
+ * NO SOCIAL PLATFORM INTEGRATION IS CONFIGURED (T18 Phase 1).
+ *
+ * NOT a fake, and so NOT guarded against production -- the same argument
+ * NullInferenceAdapter carries, one integration along. A fake pretends to be
+ * a vendor and must refuse to run in production; this one says there is no
+ * vendor, which is true in every environment we currently have.
+ *
+ * It THROWS on both calls, and that is the honest answer rather than a
+ * convenient one: the interface's own contract is that `postExists` must
+ * throw on an outage rather than return false, because the caller has to be
+ * able to tell "deleted" from "cannot reach TikTok" -- and "we have no client
+ * for TikTok at all" is the strongest possible case of cannot-reach. Both
+ * call sites already land on the SPECIFIED degradation and neither of them
+ * has to change:
+ *
+ *   onboarding.service.ts  catches and returns 503-retryable, which is
+ *                          S13.1's "a platform failure degrades to manual
+ *                          verification without affecting the others".
+ *   e3-trust-stock.ts      catches and records UNKNOWN, never UNAVAILABLE,
+ *                          because "A PLATFORM OUTAGE IS NOT A DELETED POST".
+ *
+ * Returning a fabricated profile would be the one unacceptable option: this
+ * adapter's own INVARIANT is that the follower count comes from the adapter
+ * and never from the seller, so an adapter that invents one is worse than an
+ * adapter that refuses.
+ */
+export class NullSocialPlatformAdapter implements SocialPlatformAdapter {
+  constructor() {
+    log.warn({
+      msg: '[NO SOCIAL PLATFORM] no TikTok/Instagram client is bound; verification degrades to the manual path and post checks record UNKNOWN.',
+    });
+  }
+
+  postExists(platform: string, canonicalPostId: string): Promise<boolean> {
+    return Promise.reject(
+      new Error(`no social platform integration is configured (${platform}:${canonicalPostId})`),
+    );
+  }
+
+  fetchProfile(platform: 'TIKTOK' | 'INSTAGRAM', handle: string): Promise<SocialProfile> {
+    return Promise.reject(
+      new Error(`no social platform integration is configured (${platform}:${handle})`),
+    );
   }
 }

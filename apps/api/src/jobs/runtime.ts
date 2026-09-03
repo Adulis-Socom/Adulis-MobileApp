@@ -17,8 +17,8 @@ import { makeHeartbeatJob } from './heartbeat';
 import { FakeFinancialStorageAdapter } from '../modules/financial/financial-storage.adapter';
 import { FakeMediaStorageAdapter } from '../modules/catalogue/media-storage.adapter';
 import { FakeSmsAdapter } from '../modules/auth/sms.adapter';
-import { FakeSocialPlatformAdapter } from '../modules/onboarding/social-platform.adapter';
-import { FakePushAdapter } from './push.adapter';
+import { NullSocialPlatformAdapter } from '../modules/onboarding/social-platform.adapter';
+import { NullPushAdapter } from './push.adapter';
 
 /**
  * The worker runtime (ADU-CON-02 v3.0 S1): "the same codebase started
@@ -64,8 +64,8 @@ export function createJobContext(log: Logger): { ctx: JobContext; close: () => P
     evidenceStorage: new FakeFinancialStorageAdapter(),
     mediaStorage: new FakeMediaStorageAdapter(),
     sms: new FakeSmsAdapter(),
-    push: new FakePushAdapter(),
-    social: new FakeSocialPlatformAdapter(),
+    push: new NullPushAdapter(),
+    social: new NullSocialPlatformAdapter(),
   };
   return { ctx, close: () => db.destroy() };
 }

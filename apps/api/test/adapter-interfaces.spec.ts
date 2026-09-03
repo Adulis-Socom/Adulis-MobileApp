@@ -1,9 +1,13 @@
 import { FakeSmsAdapter } from '../src/modules/auth/sms.adapter';
+import { FakeSmsProvider } from '../src/modules/auth/sms-provider';
 import { FakePushAdapter } from '../src/jobs/push.adapter';
 import { FakeMediaStorageAdapter } from '../src/modules/catalogue/media-storage.adapter';
 import { FakeFinancialStorageAdapter } from '../src/modules/financial/financial-storage.adapter';
 import { FakeSocialPlatformAdapter } from '../src/modules/onboarding/social-platform.adapter';
 import { FakePostLinkAdapter } from '../src/modules/catalogue/post-link.adapter';
+import { NullPushAdapter } from '../src/jobs/push.adapter';
+import { NullSocialPlatformAdapter } from '../src/modules/onboarding/social-platform.adapter';
+import { NullPostLinkAdapter } from '../src/modules/catalogue/post-link.adapter';
 import { NullInferenceAdapter } from '../src/modules/chat/inference.adapter';
 import { resetNodeEnvForTests } from '../src/common/env';
 
@@ -22,6 +26,42 @@ const FAKES: ReadonlyArray<[string, () => unknown]> = [
   ['Evidence storage (same R2 decision)', () => new FakeFinancialStorageAdapter()],
   ['Social platform (TikTok/Instagram adapters)', () => new FakeSocialPlatformAdapter()],
   ['Post-link resolution', () => new FakePostLinkAdapter()],
+];
+
+/*
+ * T18 Phase 1 -- the null adapters, and the count they change.
+ *
+ * A fake pretends to be a vendor and must refuse production. A NULL adapter
+ * says there is no vendor, which is true in every environment we have, so it
+ * runs anywhere. The difference is what it ANSWERS, not whether it exists --
+ * and it cannot be expressed by leaving the provider out, because there is no
+ * `@Optional()` anywhere in apps/api and a missing provider is an
+ * UnknownDependenciesException at NestFactory.create: a boot crash, not a
+ * degradation.
+ */
+const NULLS: ReadonlyArray<[string, () => unknown]> = [
+  ['Classifier (layer 4 of the S15.1 cascade)', () => new NullInferenceAdapter()],
+  ['Push (SMS and the in-app list carry beta)', () => new NullPushAdapter()],
+  ['Social platform (audience_required = false)', () => new NullSocialPlatformAdapter()],
+  ['Post-link resolution (a seller can sell without a linked post)', () => new NullPostLinkAdapter()],
+];
+
+/*
+ * WHAT THE API PROCESS ACTUALLY TRIPS OVER, as a maintained fact rather than
+ * a number in a report. These are the guarded classes AppModule constructs;
+ * every other fake either is not bound there (FakePushAdapter lives only in
+ * jobs/runtime.ts) or has been replaced by a null above.
+ *
+ * Two integrations, four bindings: SMS is one vendor decision behind two
+ * classes, and storage is one implementation behind two deliberately separate
+ * tokens (grep the importers of the financial one and you hold the complete
+ * list of code that can touch payment-evidence bytes -- do not collapse them).
+ */
+const API_BOOT_BLOCKERS: ReadonlyArray<[string, () => unknown]> = [
+  ['SMS adapter', () => new FakeSmsAdapter()],
+  ['SMS provider', () => new FakeSmsProvider('AFROMESSAGE')],
+  ['Media storage', () => new FakeMediaStorageAdapter()],
+  ['Evidence storage', () => new FakeFinancialStorageAdapter()],
 ];
 
 describe('deployment adapters', () => {
@@ -53,6 +93,67 @@ describe('deployment adapters', () => {
     it.each(FAKES)('%s constructs outside production', (_name, construct) => {
       process.env['NODE_ENV'] = 'test';
       expect(construct).not.toThrow();
+    });
+  });
+
+  describe('a null adapter says there is no vendor, and runs anywhere (T18 Phase 1)', () => {
+    it.each(NULLS)('%s constructs under production', (_name, construct) => {
+      process.env['NODE_ENV'] = 'production';
+      expect(construct).not.toThrow();
+    });
+
+    it('the null social adapter REFUSES rather than inventing a follower count', async () => {
+      process.env['NODE_ENV'] = 'production';
+      const social = new NullSocialPlatformAdapter();
+      // The adapter's own INVARIANT is that the count comes from the adapter
+      // and never from the seller. An adapter that fabricates one is worse
+      // than an adapter that refuses, so both calls reject -- and both call
+      // sites already land on the SPECIFIED degradation (503-retryable to the
+      // manual path; UNKNOWN rather than UNAVAILABLE).
+      await expect(social.fetchProfile('TIKTOK', 'anyone')).rejects.toThrow(
+        /no social platform integration/i,
+      );
+      await expect(social.postExists('TIKTOK', 'anything')).rejects.toThrow(
+        /no social platform integration/i,
+      );
+    });
+
+    it('the null post-link resolver returns the contract\'s own degenerate case', async () => {
+      process.env['NODE_ENV'] = 'production';
+      // `resolve` is documented as returning null "when the URL resolves to
+      // nothing recognisable". With no resolver bound, nothing is.
+      await expect(new NullPostLinkAdapter().resolve('https://vm.tiktok.com/x')).resolves.toBeNull();
+    });
+
+    it('the null push adapter never claims delivery and never kills a token', async () => {
+      process.env['NODE_ENV'] = 'production';
+      const outcome = await new NullPushAdapter().send({
+        token: 'a-real-device-token',
+        templateKey: 'k',
+        locale: 'en',
+        slots: {},
+      });
+      // DELIVERED would be the exact lie the guard exists to stop. TOKEN_DEAD
+      // is a fact about the DEVICE, and e2-notification acts on it by clearing
+      // core.device.push_token -- so saying it here would un-register the very
+      // devices that should receive the first push the day a provider lands.
+      expect(outcome).toBe('RETRYABLE');
+      expect(outcome).not.toBe('DELIVERED');
+      expect(outcome).not.toBe('TOKEN_DEAD');
+    });
+  });
+
+  describe('what the API process still refuses production over', () => {
+    it.each(API_BOOT_BLOCKERS)('%s still refuses', (_name, construct) => {
+      process.env['NODE_ENV'] = 'production';
+      expect(construct).toThrow(/cannot run in production/i);
+    });
+
+    it('is exactly four bindings, and two integrations', () => {
+      // The number is asserted so that nulling a fifth, or quietly re-binding
+      // a fake, changes a test rather than only a paragraph.
+      expect(API_BOOT_BLOCKERS).toHaveLength(4);
+      expect(new Set(['SMS', 'SMS', 'storage', 'storage']).size).toBe(2);
     });
   });
 
