@@ -219,6 +219,225 @@ describe('C1 — onboarding and verification', () => {
     });
   });
 
+  describe('GET /v1/seller/list — the store list (T18 Phase 3, D-97)', () => {
+    it('needs NO seller header — the header is the question, not the input', async () => {
+      // The third exemption. Every other GET under /v1/seller is 400
+      // SELLER_CONTEXT_REQUIRED without X-Adulis-Seller; this one cannot be,
+      // because the caller is asking which sellers they hold.
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/list')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(200);
+      expect(Array.isArray(r.body.data)).toBe(true);
+
+      // The contrast, on the same session, one endpoint along.
+      const other = await request(app.getHttpServer())
+        .get('/v1/seller/readiness')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(400);
+      expect(other.body.code).toBe('SELLER_CONTEXT_REQUIRED');
+    });
+
+    it('the owner sees their store as OWNER', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/list')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(200);
+      const mine = r.body.data.find((x: { id: string }) => x.id === sellerId);
+      expect(mine).toBeDefined();
+      // The Owner is core.seller.owner_account_id and ONLY that -- a CHECK
+      // forbids role = 'OWNER' on a team row -- so this string comes from the
+      // owner arm of the union, never from a membership.
+      expect(mine.role).toBe('OWNER');
+      expect(mine.handle).toBe('habesha-finds');
+      expect(mine.store_name).toBe('Habesha Finds');
+      expect(mine.status).toBe('DRAFT');
+    });
+
+    it('a team member sees the same store under THEIR role, not the owner\'s', async () => {
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/list')
+        .set('Cookie', cookie(ANALYST_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(200);
+      const seen = r.body.data.find((x: { id: string }) => x.id === sellerId);
+      expect(seen).toBeDefined();
+      expect(seen.role).toBe('ANALYST');
+      // S2.1's case: one account, two relationships, and the role is the one
+      // that account actually holds on that store.
+      expect(seen.handle).toBe('habesha-finds');
+    });
+
+    it('a stranger sees an empty list, not a 403 and not a 404', async () => {
+      // The rows are selected BY account id, so there is no relationship to
+      // deny and no id to probe with. An empty list is the honest answer and
+      // it is a 200 -- the same shape a seller with no stores yet receives.
+      const r = await request(app.getHttpServer())
+        .get('/v1/seller/list')
+        .set('Cookie', cookie(STRANGER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(200);
+      expect(r.body.data).toEqual([]);
+    });
+
+    it('a case-variant path still demands the seller header (pass finding)', async () => {
+      /*
+       * Express routes case-INSENSITIVELY, and every predicate in
+       * requiresSellerContext was case-SENSITIVE -- so GET /v1/SELLER/readiness
+       * reached the handler with section 4.2's 400 skipped and actorRole
+       * silently BUYER. It failed closed one layer down, but the guard's own
+       * docstring promises "absent on a seller-scoped path -> 400", and that
+       * promise was false for any capitalisation. The guard now lowercases once.
+       *
+       * This arm exists because the exemption added in this phase makes
+       * "exempt on a /v1/seller path" a legitimate outcome for the first time,
+       * which is exactly when a case-variant request stops looking anomalous.
+       */
+      const r = await request(app.getHttpServer())
+        .get('/v1/SELLER/readiness')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(400);
+      expect(r.body.code).toBe('SELLER_CONTEXT_REQUIRED');
+
+      // ...and the exemption itself is not case-sensitive either way.
+      await request(app.getHttpServer())
+        .get('/v1/SELLER/LIST')
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(200);
+    });
+
+    it('an owner who also holds a team row on their own store is listed ONCE', async () => {
+      /*
+       * team_member_is_never_owner constrains the ROLE VALUE (role <> 'OWNER'),
+       * not the ACCOUNT -- nothing stops an owner holding an ADMIN row on their
+       * own store. Under a naive UNION ALL that store appears twice, and the
+       * console redirects only when the list has exactly ONE entry, so the
+       * duplicate would strand that seller on a chooser showing one store twice.
+       */
+      await admin.query(
+        `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+         VALUES (gen_random_uuid(), $1, $2, 'ADMIN')`,
+        [sellerId, OWNER],
+      );
+      try {
+        const r = await request(app.getHttpServer())
+          .get('/v1/seller/list')
+          .set('Cookie', cookie(OWNER_S))
+          .set('Origin', CONSOLE_ORIGIN)
+          .expect(200);
+        const mine = r.body.data.filter((x: { id: string }) => x.id === sellerId);
+        expect(mine).toHaveLength(1);
+        // And it is the OWNER relationship that survives, not the ADMIN one.
+        expect(mine[0].role).toBe('OWNER');
+      } finally {
+        await admin.query(
+          `DELETE FROM core.seller_team_member WHERE seller_id=$1 AND account_id=$2`,
+          [sellerId, OWNER],
+        );
+      }
+    });
+
+    it('a DELETED store is not listed, so the redirect cannot strand a seller in it', async () => {
+      // core.seller_status carries DELETED. A deleted store is not somewhere a
+      // seller can be sent, and with the console's exactly-one redirect,
+      // listing it would forward a seller into it on every visit and leave them
+      // unable to reach the screen offering to create a new one.
+      await admin.query(`UPDATE core.seller SET status='DELETED' WHERE id=$1`, [sellerId]);
+      try {
+        const r = await request(app.getHttpServer())
+          .get('/v1/seller/list')
+          .set('Cookie', cookie(OWNER_S))
+          .set('Origin', CONSOLE_ORIGIN)
+          .expect(200);
+        expect(r.body.data.some((x: { id: string }) => x.id === sellerId)).toBe(false);
+      } finally {
+        await admin.query(`UPDATE core.seller SET status='DRAFT' WHERE id=$1`, [sellerId]);
+      }
+    });
+
+    it('a SUSPENDED membership is logged out AND filtered out (R28)', async () => {
+      /*
+       * TWO GUARANTEES, and the first is stronger than the one this arm was
+       * written for. core.seller_team_member carries
+       * trg_revoke_suspended_member_sessions, so suspending a member REVOKES
+       * their sessions -- they do not get a filtered list, they get 401 and
+       * have to sign in again. R28's "loses every permission on the next
+       * request" is enforced by ending the request-making, not by trimming a
+       * response.
+       *
+       * The list filter is therefore defence in depth, and it is asserted on a
+       * FRESH session minted after the suspension -- which is exactly what a
+       * suspended member holding a phone would obtain by signing in again.
+       * Reusing the fixture's session here would prove nothing and would also
+       * poison every later ANALYST test in this file, because a revoked session
+       * cannot be un-revoked by clearing suspended_at.
+       */
+      await admin.query(
+        `UPDATE core.seller_team_member SET suspended_at = now()
+          WHERE seller_id=$1 AND account_id=$2`,
+        [sellerId, ANALYST],
+      );
+      const freshSession = '66666666-5555-4000-8000-0000000000a1';
+      try {
+        // The existing session is gone -- that is the first guarantee.
+        await request(app.getHttpServer())
+          .get('/v1/seller/list')
+          .set('Cookie', cookie(ANALYST_S))
+          .set('Origin', CONSOLE_ORIGIN)
+          .expect(401);
+
+        // Signing in again gets them in, and the list is empty -- the second.
+        await admin.query(
+          `INSERT INTO core.session (id, account_id, audience, device_id, expires_at)
+           VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')`,
+          [freshSession, ANALYST, DEVICE],
+        );
+        const r = await request(app.getHttpServer())
+          .get('/v1/seller/list')
+          .set('Cookie', cookie(freshSession))
+          .set('Origin', CONSOLE_ORIGIN)
+          .expect(200);
+        expect(r.body.data).toEqual([]);
+
+        // The OWNER's view is untouched: suspension is a fact about one
+        // membership, not about the store.
+        const o = await request(app.getHttpServer())
+          .get('/v1/seller/list')
+          .set('Cookie', cookie(OWNER_S))
+          .set('Origin', CONSOLE_ORIGIN)
+          .expect(200);
+        expect(o.body.data.some((x: { id: string }) => x.id === sellerId)).toBe(true);
+      } finally {
+        await admin.query(`DELETE FROM core.session WHERE id=$1`, [freshSession]);
+        await admin.query(
+          `DELETE FROM core.seller_team_member WHERE seller_id=$1 AND account_id=$2`,
+          [sellerId, ANALYST],
+        );
+        // Re-join cleanly so the role-403 arms further down this file still
+        // have their ANALYST membership. The session they use was revoked by
+        // the suspension, so those arms are given a new one.
+        await admin.query(
+          `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+           VALUES (gen_random_uuid(), $1, $2, 'ANALYST')`,
+          [sellerId, ANALYST],
+        );
+        await admin.query(
+          `INSERT INTO core.session (id, account_id, audience, device_id, expires_at)
+           VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')
+           ON CONFLICT (id) DO UPDATE SET revoked_at = NULL,
+                                          expires_at = now()+interval '12 hours'`,
+          [ANALYST_S, ANALYST, DEVICE],
+        );
+      }
+    });
+
+  });
+
   describe('GET /v1/seller/readiness', () => {
     it('200 with the nine items in order', async () => {
       const r = await request(app.getHttpServer())

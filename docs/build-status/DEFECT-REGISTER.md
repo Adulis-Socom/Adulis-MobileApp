@@ -3089,3 +3089,93 @@ Flake: t12-d89-invite-claim failed once under gates (429 vs 202, then a differen
 Ruling needed: the four PUSH-only templates with no delivery channel (above) - an IN_APP
   producer, an SMS twin, or an accepted beta residual; and whether the worker should
   refuse to start when a channel it is scheduled to deliver has no provider at all.
+
+### D-243 - T18 Phase 3: GET /v1/seller/list closes D-97; the chooser redirects; and a case-sensitivity hole in the seller-context guard
+
+Severity:  D-97 closed; one pre-existing auth-boundary defect found and fixed in passing
+Phase:     T18 Phase 3
+Source:    apps/api (auth.guard.ts, onboarding controller + service, c1-onboarding);
+           apps/console (Chooser.tsx, Shell.tsx, chooser.spec.ts, zz-beta-walk.spec.ts);
+           packages/locale; contracts/openapi.json
+Supersedes: D-97 ("The contract has no endpoint listing the caller's own sellers"), whose
+  Action line ruled that "the endpoint's shape (owner stores only? team memberships? role
+  per store?) is contract design, not console transcription". T18 S3 answered all three:
+  owned AND team-membered, role per row. D-97 is not rewritten -- the register is
+  append-only and records are not restated when the world moves -- so this entry is where
+  it is closed.
+Effect / Response, each:
+  THE THIRD EXEMPTION  GET /v1/seller/list is exempt from requiresSellerContext, and the
+    reason sits beside the other two rather than in a comment of its own: all three are
+    paths under /v1/seller that no seller header can describe. Creation has nothing to
+    name yet; identity verification is held by an operator who holds no seller; and this
+    one asks WHICH sellers the caller holds, so requiring the answer as input is
+    circular. Inventing a /v1/accounts namespace for one endpoint would have been the
+    larger change.
+  SCOPED TO GET AND HEAD, after the pass. The two existing exemptions are method-gated
+    for free by sitting BELOW the POST check; this one sits above it and would otherwise
+    have exempted every verb, so a later @Post('seller/list') would have inherited it
+    silently. HEAD is included deliberately: Express routes HEAD to the GET handler, and
+    a HEAD demanding a header the endpoint cannot accept would be a 400 nobody could fix.
+  A CASE-SENSITIVITY HOLE, PRE-EXISTING, FOUND AND FIXED. Express routes
+    case-INSENSITIVELY (nothing sets 'case sensitive routing'), so GET /v1/SELLER/payout
+    reaches the payout handler -- but every predicate in requiresSellerContext was
+    case-SENSITIVE, so that request skipped BOTH effects of section 4.2: no
+    SELLER_CONTEXT_REQUIRED, and adulis.actor_role silently BUYER instead of SELLER. It
+    fails closed one layer down today (assertPermission throws on a null sellerId rather
+    than querying), so nothing leaked -- but the guard's own docstring promises "absent
+    on a seller-scoped path -> 400" and that promise was false for any capitalisation.
+    The path is now lowercased once, at the top. Raised against THIS phase rather than
+    left as inherited debt for a specific reason: until now, requiresSellerContext
+    returning false on a /v1/seller path was ALWAYS a bug. This change makes it a
+    legitimate documented outcome for the first time, which is exactly the condition
+    under which a case-variant request stops looking anomalous. Asserted both ways.
+  THE QUERY  a UNION ALL of the two arms fn_has_permission itself uses. Three things the
+    pass corrected before merge, each a real defect:
+      DELETED  core.seller_status carries DELETED and both arms now exclude it. With the
+        console's exactly-one redirect, listing a deleted store would forward a seller
+        into it on every visit and leave them unable to reach the screen that offers to
+        create a new one.
+      DUPLICATES  team_member_is_never_owner constrains the ROLE VALUE (role <> 'OWNER'),
+        NOT the account -- nothing stops an owner also holding an ADMIN row on their own
+        store, and under UNION ALL it would be listed twice. Two rows also defeat the
+        exactly-one redirect, stranding that seller on a chooser showing one store twice.
+        The member arm now excludes the owner.
+      TOTAL ORDER  ORDER BY created_at gained an id tie-breaker; two stores created in
+        one transaction share a timestamp and the list would reshuffle between requests.
+  NO fn_has_permission, deliberately. Every other seller-scoped read begins with it, but
+    it asks "may this account act on THIS seller" and the answer here IS the set of
+    sellers. There is no id to check against and no oracle: rows are selected BY account
+    id. THE WHERE CLAUSE IS THE AUTHORIZATION -- there is no RLS on core.seller or
+    core.seller_team_member, so any future edit to it is a security edit.
+  THE CHOOSER  S2.1's rule is honoured rather than described: REDIRECT WHEN EXACTLY ONE,
+    replacing the history entry so Back leaves the app instead of bouncing. The pasted-id
+    box and D-97's on-screen sentence are gone because the gap is gone, which is the only
+    acceptable way for them to go. The load no longer navigates or sets state after
+    unmount.
+Verification: pnpm ci:local -- 25 gates. c1-onboarding 37/37: the exemption proved by
+  CONTRAST (the same session gets 400 SELLER_CONTEXT_REQUIRED one endpoint along), owner
+  sees OWNER, a team member sees THEIR role, a stranger gets an empty 200 rather than a
+  403 or 404, suspension both logs out and filters, revocation filters, a case-variant
+  path still demands the header, an owner with a team row on their own store is listed
+  ONCE, and a DELETED store is not listed at all. Browser-drawn: the walk's step 14 turns
+  from "a returning seller is asked to paste a store id" into "a returning seller is
+  taken straight back into their store", and step 2 from an EMBARRASSES naming a register
+  number into "You do not have a store yet." T17's BETA-READINESS CANNOT #6 and #7 are
+  both answered.
+Pass: four adversarial lenses (exemption safety, the query, the console, contract and
+  blast radius). The case-sensitivity hole, the DELETED omission, the duplicate-owner
+  path, the missing tie-breaker, the unmount race and a tautological e2e assertion (four
+  toHaveCount(0) checks that pass on a blank page -- D-152's exact class, now preceded by
+  a positive assertion) were all found and fixed before merge.
+Ruling needed:
+  1. REACHABILITY, and it is the one thing this phase makes WORSE. A single-store seller
+     is now redirected away from "/" and can no longer reach the two links that lived
+     there: the courier entry point and "Create a store". Both remain reachable by typing
+     a URL -- which is precisely the failure T17 recorded as the point where a real seller
+     stops and messages the founder. SellerSwitcher is the ruled home for store switching
+     and its blocker (D-97) is now gone, so building it is the obvious next step; whether
+     the courier link belongs there, in the account menu, or somewhere else is a design
+     decision and is not made here.
+  2. The exemption rests on T18 S3's founder ruling, not on a reissued ADU-API-01 or
+     ADU-AUTH-01. D-97's own Ruling line asked for governed authority. Recorded as
+     document debt, like T18 Phase 4's.
