@@ -38,6 +38,7 @@ interface BootstrapResponse {
   market: { code: string; display_currency: string; timezone: string };
   locales: string[];
   feature_flags: Record<string, boolean>;
+  media_public_origin: string;
 }
 
 interface MarketContextValue {
@@ -46,6 +47,8 @@ interface MarketContextValue {
   readonly marketCode: string | null;
   readonly clientStatus: ClientStatus | null;
   readonly featureFlags: Readonly<Record<string, boolean>>;
+  /** T20 S4: public origin for product image keys; '' when storage is unconfigured. */
+  readonly mediaPublicOrigin: string;
   /**
    * The A5 clock reference, as the server stated it, with the moment this
    * client received it. A screen that must show "time remaining" measures
@@ -100,6 +103,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       marketCode: data?.market.code ?? null,
       clientStatus: data?.client_status ?? null,
       featureFlags: data?.feature_flags ?? {},
+      mediaPublicOrigin: data?.media_public_origin ?? '',
       serverTime: data && receivedAt ? { at: data.server_time, receivedAt } : null,
       booting,
       problem,

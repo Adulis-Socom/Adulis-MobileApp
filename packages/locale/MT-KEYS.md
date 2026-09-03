@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-762 keys:
+764 keys:
 
 - `app.title`
 - `health.ok`
@@ -349,7 +349,9 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.catalogue.media.up`
 - `console.catalogue.media.down`
 - `console.catalogue.media.remove`
-- `console.catalogue.media.upload_owed`
+- `console.catalogue.media.add`
+- `console.catalogue.media.add_help`
+- `console.catalogue.media.at_cap`
 - `console.catalogue.media.video_present`
 - `console.catalogue.media.remove_video`
 - `console.catalogue.media.no_video`

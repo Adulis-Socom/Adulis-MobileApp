@@ -23,13 +23,11 @@ const at = (): string => `${((Date.now() - T0) / 1000).toFixed(1)}s`;
 
 function note(step: string, verdict: string, detail: string): void {
   FINDINGS.push(`[${verdict}] step ${step}: ${detail}`);
-  // eslint-disable-next-line no-console
   console.log(`WALK [${verdict}] step ${step} (@${at()}): ${detail}`);
 }
 
 /** Where the budget actually goes -- printed even when nothing is found. */
 function mark(what: string): void {
-  // eslint-disable-next-line no-console
   console.log(`WALK ..... ${what} @${at()}`);
 }
 
@@ -223,16 +221,35 @@ test.describe('T17 -- what a beta seller can actually do', () => {
       await page.goto(`/s/${sellerId}/products/${productId}`);
       await page.waitForTimeout(1200);
       await shot('09-product-editor');
-      const fileInputs = await page.locator('input[type="file"]').count();
-      const mediaOwed = await page.locator('.media-upload-owed').first().textContent({ timeout: 2000 }).catch(() => null);
+      // T20 S4: the walk now PUTS A PHOTOGRAPH ON THE PRODUCT. This step is
+      // where BETA-READINESS's fatal CANNOT was drawn ("no file input exists
+      // on the product screen"), so it is where the answer belongs -- a real
+      // file, resized in the browser, uploaded to real object storage, and
+      // rendered back. Nothing counts as verified that a browser has not drawn.
+      const fileInputs = await page.locator('#media-file').count();
       if (fileInputs === 0) {
+        note('5', 'CANNOT', 'no file input exists on the product screen');
+      } else {
+        await page.locator('#media-file').setInputFiles({
+          name: 'photo.png',
+          mimeType: 'image/png',
+          buffer: Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4oaGBFTEMLQkAgl1GAWqNFmsAAAAASUVORK5CYII=',
+            'base64',
+          ),
+        });
+        const shown = page.locator('.media-thumb').first();
+        const drew = await shown
+          .evaluate((el: HTMLImageElement) => el.naturalWidth > 0, { timeout: 15_000 })
+          .catch(() => false);
+        await shot('09b-photo-on-product');
         note(
           '5',
-          'CANNOT',
-          `no file input exists on the product screen. The screen says: "${(mediaOwed ?? '').trim()}"`,
+          drew ? 'OK' : 'CANNOT',
+          drew
+            ? 'a photograph uploads from the browser and renders on the product'
+            : 'the upload control exists but no photograph rendered',
         );
-      } else {
-        note('5', 'OK', `${fileInputs} file input(s) present`);
       }
 
       // VARIANTS -- the S1.2 question, drawn.
@@ -372,7 +389,6 @@ test.describe('T17 -- what a beta seller can actually do', () => {
       await back.close();
     }
     fs.writeFileSync(path.join(SHOTS, 'findings.txt'), FINDINGS.join('\n'), 'utf8');
-    // eslint-disable-next-line no-console
     console.log('\n===== WALK FINDINGS =====\n' + FINDINGS.join('\n') + '\n=========================\n');
   });
 });

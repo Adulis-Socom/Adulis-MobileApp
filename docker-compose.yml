@@ -39,6 +39,65 @@ services:
       retries: 10
       start_period: 10s
 
+
+  # T20 S4 -- the object store the media pipeline was waiting for. MinIO here,
+  # Cloudflare R2 in production; the adapter is one class and switching is six
+  # environment values (S4.1's test of adapter honesty). Same convention set
+  # as postgres above: named container, overridable host port, named volume,
+  # healthcheck, restart policy.
+  #
+  # THE CREDENTIALS ARE LOCAL-DEV FAKES of the local-dev-password class -- a
+  # container on a developer's loopback, not a secret. Production credentials
+  # exist only in the deployment environment (SR-8's class: never in the
+  # repository, never in an order, never in a report).
+  minio:
+    image: minio/minio:latest
+    container_name: adulis-minio
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: adulis-local
+      MINIO_ROOT_PASSWORD: adulis-local-secret
+      # Bucket CORS for the browser's direct PUT (S4.2: CSP and bucket CORS
+      # are two different failures with one symptom; this is the CORS half).
+      # 5173 is dev; 4173 is the e2e harness's preview port.
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
+    ports:
+      - '${MINIO_HOST_PORT:-9000}:9000'
+    volumes:
+      - adulis-miniodata:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # One-shot: creates the two buckets and sets their policies, then exits.
+  # TWO BUCKETS, NOT TWO PREFIXES (T19 S3.1 ruling): evidence/raw/ holds a
+  # PLAINTEXT bank screenshot for the window between upload and the commit
+  # that encrypts-and-deletes it, so the public-read policy attaches to the
+  # media bucket ONLY and the evidence bucket has no public policy to
+  # misconfigure. The 1-day expiry on evidence/raw/ is the BACKSTOP for a
+  # commit that died between fetch and delete -- the commit path deletes on
+  # success and S3 lifecycle cannot express hours.
+  minio-init:
+    image: minio/mc:latest
+    container_name: adulis-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 adulis-local adulis-local-secret &&
+      (mc mb --ignore-existing local/adulis-media) &&
+      (mc mb --ignore-existing local/adulis-evidence) &&
+      mc anonymous set download local/adulis-media &&
+      mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 ||
+      mc ilm rule ls local/adulis-evidence
+      "
+
 volumes:
   adulis-pgdata:
+  adulis-miniodata:
     name: adulis-pgdata

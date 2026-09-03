@@ -52,6 +52,12 @@ const TYPES = {
  * apps/console/CLAUDE.md so a by-hand run behaves like the dev loop.
  */
 const API_ORIGIN = new URL(process.env['E2E_API_BASE_URL'] ?? 'http://localhost:3000').origin;
+// T20 S4: the media origin the browser PUTs to and renders from. Same
+// derive-not-replay discipline as the API origin -- one variable, injected
+// into BOTH connect-src (the PUT) and img-src (the render), so the harness
+// serves a policy the real upload can pass. serve.mjs rewriting one origin
+// on a single-origin assumption was the drift T18's recon named.
+const MEDIA_ORIGIN = new URL(process.env['E2E_MEDIA_ORIGIN'] ?? 'http://localhost:9100').origin;
 
 /** The `/*` block of dist/_headers -- the policy the seller's browser gets. */
 const headers = (() => {
@@ -69,10 +75,9 @@ const headers = (() => {
   if (csp) {
     // Derive, do not replay -- see the header. Everything but connect-src is
     // the production policy byte for byte.
-    out['Content-Security-Policy'] = csp.replace(
-      /connect-src [^;]+/,
-      "connect-src 'self' " + API_ORIGIN,
-    );
+    out['Content-Security-Policy'] = csp
+      .replace(/connect-src [^;]+/, "connect-src 'self' " + API_ORIGIN + ' ' + MEDIA_ORIGIN)
+      .replace(/img-src [^;]+/, "img-src 'self' " + MEDIA_ORIGIN + ' blob:');
   }
   return out;
 })();

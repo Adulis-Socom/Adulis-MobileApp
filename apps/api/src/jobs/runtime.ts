@@ -1,4 +1,5 @@
 import { hostname } from 'node:os';
+import { S3ObjectStorage, resolveObjectStorageEnv } from '../common/adapters/s3-object-storage';
 import { Pool } from 'pg';
 import { Kysely, PostgresDialect } from 'kysely';
 import {
@@ -57,12 +58,20 @@ export function createJobContext(log: Logger): { ctx: JobContext; close: () => P
   const pool = new Pool({ connectionString, max: WORKER_POOL_MAX });
   const db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
 
+  const storageEnv = resolveObjectStorageEnv();
   const ctx: JobContext = {
     db,
     clock: systemClock,
     log,
-    evidenceStorage: new FakeFinancialStorageAdapter(),
-    mediaStorage: new FakeMediaStorageAdapter(),
+    // Real storage when the six R2_* values are present (T20 S4) -- the
+    // worker purges media.lifecycle keys, so it needs the same store the API
+    // wrote to, or purges delete nothing while reporting success.
+    evidenceStorage: storageEnv
+      ? new S3ObjectStorage(storageEnv.evidence, 'worker FINANCIAL storage')
+      : new FakeFinancialStorageAdapter(),
+    mediaStorage: storageEnv
+      ? new S3ObjectStorage(storageEnv.media, 'worker MEDIA storage')
+      : new FakeMediaStorageAdapter(),
     sms: new FakeSmsAdapter(),
     push: new NullPushAdapter(),
     social: new NullSocialPlatformAdapter(),

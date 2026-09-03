@@ -722,3 +722,8 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   min-height: 44px;
 }
 .courier-qr { max-width: 20rem; margin-block: var(--space-3, 0.75rem); }
+
+/* T20 S4 -- media upload row */
+.media-item { display: flex; align-items: center; gap: var(--adu-space-xs); }
+.media-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: var(--adu-radius-sm); border: 1px solid var(--adu-color-border); }
+.media-upload { margin-top: var(--adu-space-sm); display: flex; flex-direction: column; gap: var(--adu-space-2xs); }

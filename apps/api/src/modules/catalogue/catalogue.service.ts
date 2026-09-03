@@ -353,8 +353,31 @@ export class CatalogueService {
     if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
 
     if (body.action === 'REQUEST_UPLOAD') {
+      // THE PRE-MINT CAP CHECK (T20 S4). The structural cap -- UNIQUE
+      // (product_id, position), positions 1..5 -- stops a sixth ROW at COMMIT.
+      // It does NOT stop a sixth URL being minted, and a signed URL that can
+      // never be committed is one that should never have existed: it invites a
+      // client to resize, upload and then fail, and it is a presigned write
+      // credential handed out for nothing. A presigned upload has two places to
+      // check a cap and this is the one that is right -- before any bytes move.
+      const count = await sql<{ n: number }>`
+        SELECT count(*)::int AS n FROM core.product_image
+         WHERE product_id = ${productId}`.execute(trx);
+      if ((count.rows[0]?.n ?? 0) >= 5) {
+        throw new AdulisException('VALIDATION_FAILED', {
+          status: 409,
+          slots: { reason: 'IMAGE_CAP_REACHED', max: 5 },
+        });
+      }
       // Server-minted keys: a commit can only name keys this API chose.
-      const base = `products/${productId}/img/${body.position}/${randomUUID()}`;
+      // POSITION IS NOT IN THE KEY (T20 S4.4). It used to be --
+      // products/{id}/img/{position}/{uuid}/ -- but reorder assigns final
+      // positions directly (0048), so after the first reorder the path said
+      // img/1/ for an image at position 3: a lying segment. Keys are opaque
+      // (a randomUUID() segment is the only thing that must be unguessable),
+      // nothing derives position from a key, and there are no production
+      // objects, so dropping it is free and removes the lie.
+      const base = `products/${productId}/img/${randomUUID()}`;
       const [thumb, card, full] = await Promise.all([
         this.storage.signPut(`${base}/thumb.webp`, 'image/webp', IMAGE_CAPS.thumb),
         this.storage.signPut(`${base}/card.webp`, 'image/webp', IMAGE_CAPS.card),

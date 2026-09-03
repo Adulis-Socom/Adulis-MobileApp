@@ -25,12 +25,15 @@ import { FinancialService } from './modules/financial/financial.service';
 import {
   FakeFinancialStorageAdapter,
   FINANCIAL_STORAGE_ADAPTER,
+  type FinancialStorageAdapter,
 } from './modules/financial/financial-storage.adapter';
 import { OrdersService } from './modules/orders/orders.service';
 import { CatalogueService } from './modules/catalogue/catalogue.service';
+import { S3ObjectStorage, resolveObjectStorageEnv } from './common/adapters/s3-object-storage';
 import {
   FakeMediaStorageAdapter,
   MEDIA_STORAGE_ADAPTER,
+  type MediaStorageAdapter,
 } from './modules/catalogue/media-storage.adapter';
 import {
   NullPostLinkAdapter,
@@ -130,8 +133,41 @@ export const LOGGER = Symbol('LOGGER');
     // Layers 3-4 of the cascade are a deployment integration; Null answers
     // nothing and everything above layer 2 escalates (S15.1's degradation).
     { provide: INFERENCE_ADAPTER, useValue: new NullInferenceAdapter() },
-    { provide: FINANCIAL_STORAGE_ADAPTER, useValue: new FakeFinancialStorageAdapter() },
-    { provide: MEDIA_STORAGE_ADAPTER, useValue: new FakeMediaStorageAdapter() },
+    /**
+     * OBJECT STORAGE (T20 S4). Real when the six R2_* values are present --
+     * MinIO on a developer machine, Cloudflare R2 in production, ONE class --
+     * and the fake when they are not. useFactory, NOT useValue: `useValue:
+     * new FakeX()` constructs at module LOAD, so a production boot WITH
+     * credentials would still have built the fake on import and died on its
+     * guard before the factory could choose. Deferred construction is what
+     * lets the guard keep its job: production without credentials still
+     * refuses loudly, because the factory then builds the fake and the fake
+     * throws.
+     *
+     * TWO TOKENS, TWO INSTANCES, TWO BUCKETS -- never collapsed. Grep the
+     * importers of FINANCIAL_STORAGE_ADAPTER and you hold the complete list
+     * of code that can touch payment-evidence bytes; the media bucket is
+     * public-read and the evidence bucket has no public policy to
+     * misconfigure (T20 S4.3; evidence/raw/ is plaintext for a window).
+     */
+    {
+      provide: FINANCIAL_STORAGE_ADAPTER,
+      useFactory: (): FinancialStorageAdapter => {
+        const env = resolveObjectStorageEnv();
+        return env
+          ? new S3ObjectStorage(env.evidence, 'FINANCIAL_STORAGE_ADAPTER')
+          : new FakeFinancialStorageAdapter();
+      },
+    },
+    {
+      provide: MEDIA_STORAGE_ADAPTER,
+      useFactory: (): MediaStorageAdapter => {
+        const env = resolveObjectStorageEnv();
+        return env
+          ? new S3ObjectStorage(env.media, 'MEDIA_STORAGE_ADAPTER')
+          : new FakeMediaStorageAdapter();
+      },
+    },
     { provide: POST_LINK_ADAPTER, useValue: new NullPostLinkAdapter() },
     RateLimitService,
     HandlerTransaction,

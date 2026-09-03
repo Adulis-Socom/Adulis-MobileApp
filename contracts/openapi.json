@@ -2102,13 +2102,160 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "description": "REQUEST_UPLOAD signs the three derivative PUTs; COMMIT registers what landed. The keys are server-minted at signing, so a commit can only name keys this API chose.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "position"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "REQUEST_UPLOAD"
+                        ]
+                      },
+                      "position": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "position",
+                      "thumb_key",
+                      "card_key",
+                      "full_key"
+                    ],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "COMMIT"
+                        ]
+                      },
+                      "position": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5
+                      },
+                      "thumb_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      },
+                      "card_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      },
+                      "full_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
+          "200": {
+            "description": "REQUEST_UPLOAD: three presigned PUTs, each with the key the commit must name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "uploads"
+                  ],
+                  "properties": {
+                    "uploads": {
+                      "type": "object",
+                      "required": [
+                        "thumb",
+                        "card",
+                        "full"
+                      ],
+                      "properties": {
+                        "thumb": {
+                          "type": "object",
+                          "required": [
+                            "url",
+                            "key"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "key": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "card": {
+                          "type": "object",
+                          "required": [
+                            "url",
+                            "key"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "key": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "full": {
+                          "type": "object",
+                          "required": [
+                            "url",
+                            "key"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "key": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
-            "description": ""
+            "description": "COMMIT: the image row is registered."
+          },
+          "409": {
+            "description": "slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN."
           }
         },
         "summary": "Signed upload then commit — one catalogued path, two actions.",
@@ -2126,16 +2273,42 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "description": "Every image id, in the order they should appear. Partial orderings are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "order"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "summary": "The WHOLE ordering in one request — one transaction or a defect.",
+        "summary": "The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect.",
         "tags": [
           "Catalogue"
         ]
@@ -2150,6 +2323,7 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           },
@@ -2158,15 +2332,18 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
             }
           }
         ],
         "responses": {
           "204": {
-            "description": ""
+            "description": "Removed."
           }
         },
+        "summary": "Removes one image and schedules the objects for purge.",
         "tags": [
           "Catalogue"
         ]
@@ -2859,6 +3036,11 @@
             "additionalProperties": {
               "type": "boolean"
             }
+          },
+          "media_public_origin": {
+            "type": "string",
+            "example": "https://media.adulis.example",
+            "description": "Public origin for product image keys (T20 S4)."
           }
         },
         "required": [
@@ -2867,7 +3049,8 @@
           "client_status",
           "market",
           "locales",
-          "feature_flags"
+          "feature_flags",
+          "media_public_origin"
         ]
       }
     }
