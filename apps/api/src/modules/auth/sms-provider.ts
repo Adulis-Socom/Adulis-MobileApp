@@ -158,11 +158,19 @@ export class FakeSmsProvider implements SmsProvider {
   ): Promise<SendResult> {
     this.sent.push({ phoneE164, body, deliveryAttemptId });
     const queued = this.queued.shift();
-    // A provider that REFUSED transported nothing, so nothing reaches the
-    // sink -- which is what makes "the phone received it" and "a vendor
-    // accepted it" distinguishable rather than the same assertion twice.
-    if (queued) return queued;
+    /*
+     * A provider that REFUSED transported nothing, so nothing reaches the
+     * sink -- which is what makes "the phone received it" and "a vendor
+     * accepted it" distinguishable rather than the same assertion twice.
+     *
+     * But a queued ACCEPTED DID transport, and `if (queued) return` skipped
+     * the sink for that too -- so a test queueing ACCEPTED and then reading
+     * the adapter would see nothing, for a reason unrelated to what it was
+     * testing.
+     */
+    if (queued && queued.outcome !== 'ACCEPTED') return queued;
     if (this.sink) await this.sink.send(body);
+    if (queued) return queued;
     return Promise.resolve({
       outcome: 'ACCEPTED',
       // THE STAMP. Lowercased provider name, then the attempt id: a test

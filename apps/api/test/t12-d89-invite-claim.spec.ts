@@ -353,4 +353,123 @@ describe('D-89 -- the courier invite claim, second leg', () => {
     expect((plain.body as { roles: string[] }).roles).toEqual([]);
     expect((invited.body as { roles: string[] }).roles).toEqual(['COURIER']);
   });
+
+  /**
+   * T13 PHASE 4 -- D-178 TIGHTENED. The ruling above stands; this is the
+   * assertion that bounds it.
+   *
+   * ADU-AUTH-01 v2.6 S17 admits no difference at all before authentication,
+   * and says so without a "where practical" clause, naming OTP REQUEST,
+   * RESEND and VERIFY together. The disclosure the ruling permits is
+   * permitted BECAUSE the observer has proved control of the number -- so
+   * the same value one step earlier is not a smaller version of the same
+   * decision, it is the opposite one.
+   *
+   *     BEFORE authentication   nothing distinguishes a known phone
+   *     AFTER  authentication   the account's own facts are the account's
+   *
+   * A failed verify is BEFORE that boundary, not after -- which is why the
+   * wrong-code arm is here and not in the test above.
+   */
+  test('the roles difference appears ONLY after a successful verify -- never in request, resend or a failed verify', async () => {
+    const bodies: Record<string, unknown[]> = {};
+    const statuses: Record<string, number[]> = {};
+
+    const record = async (
+      leg: string,
+      run: (phone: string) => Promise<{ status: number; body: unknown }>,
+    ): Promise<void> => {
+      const out = [];
+      const codes = [];
+      for (const phone of [P_PLAIN, P_INVITED]) {
+        const res = await run(phone);
+        out.push(res.body);
+        codes.push(res.status);
+      }
+      bodies[leg] = out;
+      statuses[leg] = codes;
+    };
+
+    const device = await browserCookie();
+
+    await record('request', (phone) =>
+      http()
+        .post('/v1/auth/otp/request')
+        .set('Idempotency-Key', key())
+        .set('Cookie', device)
+        .send({ phone, purpose: 'SIGN_IN' }),
+    );
+
+    /*
+     * The resend ladder counts issued challenges (3 per 15 minutes, then a
+     * 30s-60s-120s backoff), so a resend straight after a request answers
+     * 429 on its backoff. Clearing this suite's own two phones' challenges
+     * lets the resend leg exercise the SUCCESS shape, which is the one that
+     * could carry a role. The 429 shape is worth having too -- S17 names
+     * rate-limit behaviour explicitly -- and it is covered by the identity
+     * assertion below either way, since both phones travel the same path.
+     */
+    await admin.query(
+      // AGED, not deleted: earlier tests in this file signed in, and
+      // core.session references the challenge it was created from. Moving
+      // them outside the 15-minute window is what the ladder actually reads.
+      `UPDATE core.otp_challenge SET created_at = now() - interval '20 minutes'
+        WHERE phone_e164 = ANY($1::core.e164[])`,
+      [[P_PLAIN, P_INVITED]],
+    );
+
+    await record('resend', (phone) =>
+      http()
+        .post('/v1/auth/otp/resend')
+        .set('Idempotency-Key', key())
+        .set('Cookie', device)
+        .send({ phone, purpose: 'SIGN_IN' }),
+    );
+
+    // A WRONG CODE is still unauthenticated. `000000` cannot collide with a
+    // live code often enough to matter, and if it ever did the assertion is
+    // still an equality between the two phones rather than a fixed shape.
+    await record('failed verify', (phone) =>
+      http()
+        .post('/v1/auth/otp/verify')
+        .set('Idempotency-Key', key())
+        .set('Cookie', device)
+        .send({ phone, code: '000000', audience: 'CONSOLE', age_declared_over_18: true }),
+    );
+
+    for (const leg of ['request', 'resend', 'failed verify']) {
+      const [plain, invited] = bodies[leg] as [unknown, unknown];
+      const [sp, si] = statuses[leg] as [number, number];
+
+      /*
+       * Identical status and identical body: no field, no value, no absence.
+       *
+       * `request_id` is dropped and is the ONLY thing dropped -- it is a
+       * fresh uuid on every envelope by design, and it carries nothing about
+       * the phone. Everything else is compared BY VALUE, including the error
+       * code, the status and the title key, because the whole finding this
+       * ruling came from was a difference that a shape-only comparison could
+       * not see.
+       */
+      const stripId = (b: unknown): unknown => {
+        if (!b || typeof b !== 'object') return b;
+        const { request_id: _r, requestId: _r2, ...rest } = b as Record<string, unknown>;
+        return rest;
+      };
+      expect([leg, si]).toEqual([leg, sp]);
+      expect([leg, stripId(invited)]).toEqual([leg, stripId(plain)]);
+
+      /*
+       * And the disclosure named, so a NEW carrier of it fails here too.
+       * The equality above already forbids any difference; this second
+       * assertion is what makes the failure legible -- a body that gained a
+       * role for BOTH phones would pass the equality and is still a leak of
+       * the same class, because it tells an unauthenticated caller what the
+       * platform knows about a number.
+       */
+      const text = JSON.stringify(invited);
+      expect([leg, /COURIER/.test(text)]).toEqual([leg, false]);
+      expect([leg, /"roles"/.test(text)]).toEqual([leg, false]);
+    }
+  });
 });
