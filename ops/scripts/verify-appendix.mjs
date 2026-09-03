@@ -41,7 +41,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DOC = path.join(root, 'docs', 'ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md');
+const DOC = path.join(root, 'docs', 'ADU-DB-01_Database_and_Data_Model_v1_14_ASCII.md');
 const FIXTURE = path.join(root, 'db', 'checks', 'fixtures', 'appendix-a.json');
 
 /** The nine schemas that hold tables. The tenth, `jobs`, is graphile-worker's. */
@@ -57,7 +57,7 @@ const fail = (m) => {
   console.error(`  FAIL  ${m}`);
 };
 
-console.log('\nADU-DB-01 v1.13 -- the appendices agree with what generated them\n');
+console.log('\nADU-DB-01 v1.14 -- the appendices agree with what generated them\n');
 
 if (!existsSync(DOC)) {
   console.error(`FAIL  ${path.relative(root, DOC)} is missing. This gate reads the installed document.`);
@@ -138,9 +138,25 @@ if (!appB) {
   const liveBySchema = Object.fromEntries(live.rows.map((r) => [r.schema, r.n]));
   const liveTotal = live.rows.reduce((s, r) => s + r.n, 0);
 
-  // Per-schema rows: | `core` | **88** |
+  /*
+   * Per-schema rows: | `core` | **90** |
+   *
+   * WHITESPACE-TOLERANT, and that is a fix rather than a loosening (T13; the
+   * adversarial pass on #45 found the same edge from the other side). The
+   * first version demanded exactly one space around each pipe, so a
+   * COLUMN-ALIGNED markdown table -- `| \`core\`         | **90** |`, which is
+   * ordinary markdown and what both the founder's document and
+   * generate-appendix.mjs emit -- parsed as ZERO rows, and the gate then
+   * reported "Appendix B has no row for schema core" about a document that
+   * has one. A parser that rejects valid markdown makes the gate wrong about
+   * the document instead of the document wrong about the database, which is
+   * the failure this gate exists to prevent, inverted.
+   */
   const docBySchema = Object.fromEntries(
-    [...appB.matchAll(/^\| `([a-z_]+)` \| \*{0,2}(\d+)\*{0,2} \|$/gm)].map((m) => [m[1], Number(m[2])]),
+    [...appB.matchAll(/^\|\s*`([a-z_]+)`\s*\|\s*\*{0,2}(\d+)\*{0,2}\s*\|$/gm)].map((m) => [
+      m[1],
+      Number(m[2]),
+    ]),
   );
   const totalMatch = appB.match(/\*\*(\d+) tables\.\*\*/);
   const docTotal = totalMatch ? Number(totalMatch[1]) : null;

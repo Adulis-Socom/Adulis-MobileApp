@@ -4,13 +4,49 @@
 
 | Document | Governs at | Where |
 |---|---|---|
-| **ADU-DB-01** | **v1.13** -- the appendices are GENERATED from `db/checks/fixtures/`, and `verify:appendix` compares document to fixture both ways | [`docs/ADU-DB-01_..._v1_13_ASCII.md`](../ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md) |
-| **ADU-AUTH-01** | **v2.5** | [`docs/ADU-AUTH-01_..._v2_5.md`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
+| **ADU-DB-01** | **v1.14** -- carries the schema ADU-AUTH-01 v2.6 requires (S30b) and four rulings the transcription produced. 116 tables, 71 enum types. The appendices are GENERATED from `db/checks/fixtures/` and `pg_class`, and `verify:appendix` compares document to fixture both ways | [`docs/ADU-DB-01_..._v1_14_ASCII.md`](../ADU-DB-01_Database_and_Data_Model_v1_14_ASCII.md) |
+| **ADU-AUTH-01** | **SPLIT ACROSS TWO INSTALLED REVISIONS -- see below.** **v2.6** governs authentication, sessions, recovery, operator authentication and abuse control. **v2.5** remains canonical for the permission catalogue, the 42x6 matrix and the SQL seed | [`v2.6`](../ADU-AUTH-01_Authentication_and_Authorization_v2_6.md) - [`v2.5`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
 | **ADU-API-01** | **v1.7** | [`docs/ADU-API-01_API_Contract_v1_7.md`](../ADU-API-01_API_Contract_v1_7.md) |
 | **ADU-CON-02** | **v3.2** | [`docs/ADU-CON-02_..._v3_2_ASCII.md`](../ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md) |
 | **ADU-REPO-01** | **v1.3** -- installed for the FIRST TIME at T10. It was cited 77 times across 33 files, including the `deps` gate's own title, and lived nowhere (D-94, D-140) | [`docs/ADU-REPO-01_..._v1_3.md`](../ADU-REPO-01_Repository_Structure_and_Concurrent_Development_v1_3.md) |
 | **ADU-VAL-01** | **v1.2** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, the `deferred-values` gate of the one list), **pinned at 14** since v1.2 removed `follower_threshold` (D-92: NULL there is decided) and the embedding dimension (a type question) | [`docs/registers/`](../registers/) |
 | The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
+
+## ADU-AUTH-01 is split, and v2.5 is not superseded
+
+**ADU-AUTH-01 v2.6 S0 requires this manifest to record the split, and it is the
+one entry in this file where "the newer version governs" is FALSE as a general
+statement.**
+
+```text
+AUTHENTICATION / SESSION / RECOVERY / OPERATIONS
+-> v2.6
+
+PERMISSION CATALOGUE / ROLE MATRIX / SQL SEED
+-> installed v2.5 canonical sections
+```
+
+| Question | Read |
+|---|---|
+| How does a person authenticate? Sessions, OTP, SMS routing, market activation, budgets, recovery, deletion, step-up, operators, enumeration | **v2.6** |
+| Which permission exists, what surface may exercise it, which role holds it, what the seed contains | **v2.5** S15.1, S16.2, S16.2a and the executable seed |
+
+**v2.5 stays in `docs/`. It is not moved to `superseded/`, and moving it would
+break a gate**: `pnpm verify:permission-doc` parses that file for the 42 codes,
+the 139 grants and the 42/40/19/16/10/12 per-role totals. v2.6 states the
+checksums and says in terms **"v2.6 does not reconstruct permissions from
+checksums"** and **"there is no permission-grant change in this revision"** --
+so the numbers in v2.6 are a description of v2.5's content, never a source it
+could be rebuilt from.
+
+> **The gate is how this split is checked rather than remembered.** If
+> `verify:permission-doc` goes red on an ADU-AUTH-01 change, the split was
+> recorded wrong -- and that is the gate doing its job at the exact moment it
+> should. It stayed green across this installation.
+
+**This is the same shape as the Tier 1 split** that put AUTH S16 in
+`amendments/` and S1-14 in `docs/`: one document's sections living in two
+places because two different things read them.
 
 **Installed at T5. The superseded copies are in [`docs/superseded/`](../superseded/)** rather than
 deleted, because a register entry that cites "v1.10 §5.5" needs the text it cited.

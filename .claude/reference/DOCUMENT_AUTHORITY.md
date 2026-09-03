@@ -8,9 +8,10 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PROJ-01_Project_Documentation_v9_0.md` — current supplied project baseline.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — binding product behaviour.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — binding seller-surface architecture.
-- `ADU-DB-01_Database_and_Data_Model_v1_13_ASCII.md` — binding database enforcement baseline. Installed at T10; its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and compared to the document by the `appendix` gate, so the document, the fixture and the database agree by construction.
+- `ADU-DB-01_Database_and_Data_Model_v1_14_ASCII.md` - binding database enforcement baseline. Installed at T13; carries the schema ADU-AUTH-01 v2.6 requires (S30b) and four rulings the transcription produced. Its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and `pg_class`, and compared to the document by the `appendix` gate, so the document, the fixture and the database agree by construction. 116 tables, 71 enum types.
 - `ADU-API-01_API_Contract_v1_7.md` — binding wire contract baseline. Installed at T5.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_5.md` — binding identity/access baseline. Installed at T5.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_6.md` - binding identity/access baseline for AUTHENTICATION, SESSIONS, RECOVERY, OPERATOR AUTHENTICATION and ABUSE CONTROL. Installed at T13.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_5.md` - STILL INSTALLED AND STILL CANONICAL, for the PERMISSION CATALOGUE, the 42x6 role-permission matrix and the executable SQL seed. v2.6 S0 supersedes v2.5 in part and leaves these three unchanged, explicitly, and does not reproduce them -- so v2.5 is not superseded and must not be moved to `superseded/`. `pnpm verify:permission-doc` parses it.
 - `ADU-SEC-01_Content_Security_Policy_v1_0.md` — binding browser-security baseline.
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — binding public-website baseline.
 - `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — binding architecture/operations record and standing developer manual. Installed at T10.
