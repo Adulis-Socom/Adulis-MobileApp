@@ -104,10 +104,9 @@ describe('T14 A4 - transport before supersession', () => {
     await cleanup();
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live,
+                                display_timezone, default_locale,
                                 activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'T14A4','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',false,
-               'ACTIVE', true, 'AFROMESSAGE')`,
+       VALUES ($1,'T14A4','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [MK],
     );
     const [q, p] = timing(MK);

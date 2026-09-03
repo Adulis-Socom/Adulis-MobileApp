@@ -48,8 +48,12 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
    * is D-112, and a suite that depends on it is a suite that passes for the
    * author and fails for everyone else.
    *
-   * It is deliberately NOT live: bootstrap orders by is_live and this suite
-   * must not become the market other suites resolve.
+   * Its market is ACTIVE (is_live is withdrawn -- D-183), but it is NEVER the
+   * market another suite resolves: bootstrap reads the OLDEST ACTIVE market
+   * (activation_state = 'ACTIVE' ORDER BY created_at ASC), and the SEED market
+   * -- created by db:seed before any test -- is always older. So this suite's
+   * own bootstrap resolves SEED, not this market, exactly as it did when both
+   * were is_live=false and ordering fell through to created_at.
    */
   const M = '77e00328-0000-4000-8000-000000000001';
   const minted: string[] = [];
@@ -124,8 +128,8 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     await admin.query(`DELETE FROM core.market WHERE id = $1`, [M]);
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'T8D','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',false, 'ACTIVE', true, 'AFROMESSAGE')`,
+                                display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider)
+       VALUES ($1,'T8D','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [M],
     );
     await admin.query(

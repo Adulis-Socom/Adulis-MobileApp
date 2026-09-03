@@ -118,23 +118,16 @@ try {
   await client.query('BEGIN');
   await client.query(
     `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                              display_timezone, default_locale, is_live)
-     VALUES ($1,'SEED','Ethiopia (seed)','PHASE_1','ETB','Africa/Addis_Ababa','en',false)
+                              display_timezone, default_locale)
+     VALUES ($1,'SEED','Ethiopia (seed)','PHASE_1','ETB','Africa/Addis_Ababa','en')
      ON CONFLICT (id) DO NOTHING`,
     [M],
   );
-  // is_live = FALSE, deliberately, and re-asserted here so a database seeded
-  // by an earlier version of this script is corrected by re-running it.
-  //
-  // Identity creation resolves "the market" with `SELECT id FROM core.market
-  // WHERE is_live LIMIT 1` -- no ORDER BY, and no uniqueness behind it
-  // (register D-104). A second live market makes that lookup arbitrary, and
-  // the c6 suite's new-account tests then land their accounts in THIS market,
-  // where c6's market-scoped teardown cannot see them -- so the next run of
-  // c6 gets a 200 where a 400 belongs. The seeded account already exists, and
-  // both live-market lookups are fallbacks used only when a phone has no
-  // account, so the console dev loop never needed this market to be live.
-  await client.query(`UPDATE core.market SET is_live = false WHERE id = $1`, [M]);
+  // is_live is WITHDRAWN (D-183): every market resolution now reads
+  // activation_state = 'ACTIVE', which the SMS/activation UPDATE below sets on
+  // this market. There is no boolean to assert and nothing to re-correct -- a
+  // market is resolvable iff it is ACTIVE, and the seed makes exactly this one
+  // ACTIVE, so identity creation and cart resolution find it unambiguously.
   await client.query(
     `INSERT INTO core.timing_config (id, market_id, reservation_window,
        payment_confirmation_window, fulfilment_window, offline_sync_horizon,

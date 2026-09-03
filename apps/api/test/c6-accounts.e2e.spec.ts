@@ -123,7 +123,7 @@ const browserCookie = async (): Promise<string> => {
    * cannot create an account, deliberately.
    *
    * The suite does it EXPLICITLY rather than by calling bootstrap, because
-   * bootstrap resolves a GLOBAL market (is_live DESC, created_at ASC) and a
+   * bootstrap resolves a GLOBAL market (activation_state = 'ACTIVE', oldest first) and a
    * test that goes through it silently asserts "my market is the earliest
    * live one in this database" -- true only by scheduling luck, and false the
    * moment another suite's live market is older. That reproduced D-104's
@@ -158,8 +158,8 @@ const browserCookie = async (): Promise<string> => {
     await purgeRateBuckets();
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'C6E','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',true, 'ACTIVE', true, 'AFROMESSAGE')`,
+                                display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider)
+       VALUES ($1,'C6E','Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [M],
     );
     await admin.query(

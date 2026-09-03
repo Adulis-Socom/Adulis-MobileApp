@@ -68,7 +68,8 @@ export class OrdersService {
       SELECT ${randomUUID()}, ${device}, ${account}, d_m.market_id
         FROM (SELECT coalesce(
                 (SELECT a.market_id FROM core.account a WHERE a.id = ${account}),
-                (SELECT m.id FROM core.market m ORDER BY m.is_live DESC, m.created_at ASC LIMIT 1)
+                (SELECT m.id FROM core.market m WHERE m.activation_state = 'ACTIVE'
+                   ORDER BY m.created_at ASC LIMIT 1)
               ) AS market_id) d_m
       RETURNING id, seller_id, status`.execute(trx);
     const cart = r.rows[0];

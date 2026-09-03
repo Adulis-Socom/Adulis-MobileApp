@@ -184,11 +184,11 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
     ] as const) {
       await admin.query(
         `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                  display_timezone, default_locale, is_live,
+                                  display_timezone, default_locale,
                                   activation_state, otp_enabled,
                                   sms_primary_provider, sms_fallback_provider,
                                   otp_daily_soft_limit, otp_daily_hard_limit)
-         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',false,
+         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',
                  $3::core.market_activation_state,$4,'AFROMESSAGE','SMSETHIOPIA',
                  100000, 200000)`,
         [id, code, state, otp],
@@ -485,8 +485,8 @@ describe('T13 Phase 3 - OTP delivery, failover and the market gates', () => {
       const id = randomUUID();
       await admin.query(
         `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                  display_timezone, default_locale, is_live)
-         VALUES ($1,'T13D','Default','PHASE_1','ETB','Africa/Addis_Ababa','en',false)`,
+                                  display_timezone, default_locale)
+         VALUES ($1,'T13D','Default','PHASE_1','ETB','Africa/Addis_Ababa','en')`,
         [id],
       );
       try {

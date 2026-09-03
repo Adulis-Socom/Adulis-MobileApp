@@ -84,9 +84,9 @@ describe('T8 Phase 3 - the market comes from the device', () => {
       // reach-across that t8-device-bootstrap avoids by staying non-live.
       await admin.query(
         `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                  display_timezone, default_locale, is_live, created_at,
+                                  display_timezone, default_locale, created_at,
                                   activation_state, otp_enabled, sms_primary_provider)
-         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',true,
+         VALUES ($1,$2,'Ethiopia','PHASE_1','ETB','Africa/Addis_Ababa','en',
                  now() + interval '10 years', 'ACTIVE', true, 'AFROMESSAGE')`,
         [id, code],
       );
@@ -539,13 +539,39 @@ describe('T8 Phase 3 - the market comes from the device', () => {
     for (const f of files) {
       const code = readFileSync(f, 'utf8')
         .split('\n')
-        .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*'))
+        .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*') && !l.trim().startsWith('--'))
         .join('\n');
       // Not just `is_live`: any read of core.market from the auth path is the
       // thing the ruling removed. A lookup written a different way is still
       // the same lookup.
       expect(code).not.toContain('is_live');
       expect(code).not.toContain('core.market');
+    }
+  });
+
+  it('the two market readers resolve by activation_state, never is_live (D-183)', async () => {
+    // is_live is WITHDRAWN (migration 0046): every market resolution reads
+    // activation_state = 'ACTIVE'. The two readers D-116 records -- /v1/bootstrap
+    // and the cart resolver -- are the ones the withdrawal moved, so this pins
+    // that they read the new column and never the dropped one.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const root = join(__dirname, '..', 'src', 'modules');
+    const readers = [
+      join(root, 'bootstrap', 'bootstrap.controller.ts'),
+      join(root, 'orders', 'orders.service.ts'),
+    ];
+    for (const f of readers) {
+      const code = readFileSync(f, 'utf8')
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*') && !l.trim().startsWith('--'))
+        .join('\n');
+      // The column is gone from the schema (0046), so a read of it would raise
+      // at runtime -- but a source assertion fails LOUDLY at review, before a
+      // database ever sees it.
+      expect(code).not.toContain('is_live');
+      // And each reader positively selects ACTIVE markets.
+      expect(code).toContain("activation_state = 'ACTIVE'");
     }
   });
 });

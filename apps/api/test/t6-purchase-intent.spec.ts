@@ -101,8 +101,8 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
 
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
-                                display_timezone, default_locale, is_live, activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'T6I','Intent','PHASE_1','ETB','Africa/Addis_Ababa','en',false, 'ACTIVE', true, 'AFROMESSAGE')`,
+                                display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider)
+       VALUES ($1,'T6I','Intent','PHASE_1','ETB','Africa/Addis_Ababa','en', 'ACTIVE', true, 'AFROMESSAGE')`,
       [M],
     );
     await admin.query(
