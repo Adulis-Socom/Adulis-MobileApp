@@ -93,8 +93,6 @@ export const am: Catalogue = {
     'ከመለያ መልሶ ማግኘት በኋላ የክፍያ ለውጦች ለሰባት ቀናት ተቆልፈዋል።',
   'error.payout.payout_locked_new_device':
     'ካላየነው መሣሪያ በመግባት ምክንያት የክፍያ ለውጦች ለሃያ አራት ሰዓታት ተቆልፈዋል። እርስዎ ካልሆኑ፣ ንቁ ክፍለ ጊዜዎችዎን ይገምግሙ።',
-  'error.payout.payout_locked_new_device_first_set':
-    'የክፍያ መረጃ መከመር የሚቻሉት ይህ መሳሪያ ከገባ በኋላ 24 ሰዓት ባለፉ ባላቶ ነው። ምንም ስህተት አልተፈጠረም፡ ይህ እቀባ በት ላይ ላልሰነው ማንኛውም መሳሪያ፡ እርድዎ የተመዝገቡበትን ይጨምራል።',
   'error.payout.payout_locked_no_timing_config': 'የክፍያ ለውጦች ለጊዜው አይገኙም።',
   'error.payout.payout_change_pending': 'የክፍያ ለውጥ አስቀድሞ በመጠባበቅ ላይ ነው።',
   'error.payout.payout_permission_denied': 'የክፍያ ዝርዝሮችን ለመቀየር ፈቃድ የለዎትም።',
