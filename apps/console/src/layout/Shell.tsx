@@ -5,17 +5,21 @@
  * primary destinations plus More, which opens a FULL-PAGE menu -- not a
  * drawer that traps focus.
  *
- * Top bar, every route: store name + seller switcher (rendered ONLY when
- * the account holds more than one seller), notification bell placeholder,
- * account menu placeholder.
+ * Top bar, every route: the seller switcher (store name, other stores, and
+ * "Create a store"), notification bell placeholder, account menu placeholder.
  *
- * D-97 IS CLOSED (T18 Phase 3): GET /v1/seller/list exists, so the switcher
- * is no longer blocked by a missing endpoint -- it is simply not built yet.
- * The chooser at "/" enumerates and redirects when there is exactly one.
+ * THE SWITCHER IS BUILT (T19 Phase 1) and it renders below two stores, which
+ * is a deliberate reading of ADU-REPO-01 S9.2's "only when the account holds
+ * more than one seller" rather than a contradiction of it -- see
+ * SellerSwitcher.tsx's header and the register entry. S9.2 protects against a
+ * menu that lies about having a choice; drawing nothing at one store would
+ * satisfy the letter and leave "Create a store" reachable only by typing a
+ * URL, which is the regression this phase exists to end.
  *
  * The seller id lives in the URL and ONLY the URL (S2.1): two stores in
  * two tabs are two URLs; nothing here stores it.
  */
+import { SellerSwitcher } from './SellerSwitcher';
 import { NavLink, Outlet, useParams } from 'react-router';
 import { en } from '@adulis/locale';
 import { IdleWarning } from '../auth/IdleWarning';
@@ -41,10 +45,11 @@ export function Shell() {
         {en['console.a11y.skip_to_content']}
       </a>
       <header className="topbar">
-        <span className="store-name">{en['console.shell.store']}</span>
-        {/* SellerSwitcher: only with >1 seller. The contract gap that made
-            this impossible (D-97) closed at T18 Phase 3; building it is the
-            remaining work, not the endpoint. */}
+        {/* SellerSwitcher (T19 Phase 1). It carries the store's own name, the
+            other stores when there are any, and "Create a store" ALWAYS --
+            which is the control #80's redirect took away when it stopped a
+            single-store seller ever seeing the chooser. */}
+        <SellerSwitcher />
         {/* SC-30 exists now (C-7): the bell is a LINK, not a dead control.
             Its unread COUNT stays owed -- drawing one would need a
             shell-level poll on every route, and the list itself carries the

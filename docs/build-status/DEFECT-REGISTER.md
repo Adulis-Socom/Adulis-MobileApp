@@ -3339,6 +3339,146 @@ Ruling discharged: T18 S5 -- "A hand-picked beta of twenty sellers is verified b
   surviving by inertia. audience_required or identity_required must be TRUE before open
   signup."
 Effect / Response, each:
+  THE PREDICATE IS "HAS NEVER HAD A PAYOUT ROW", NOT "HAS NO ACTIVE ROW". The first
+    draft read the ruling literally and used state = 'ACTIVE'. The adversarial pass broke
+    it in one move, and the move is free:
+      CANCEL-THEN-SET. core.fn_cancel_payout_change (0022) requires NO step-up, checks NO
+      lock and is deliberately easy -- "reverting must always be easier than changing".
+      An attacker who has taken over an account, on a device we have never seen, cancels
+      the seller's legitimate PENDING first set. That leaves no ACTIVE and no PENDING row,
+      an ACTIVE-only carve-out then applies, and the attacker sets their own bank account
+      UNLOCKED. Before this migration they were held for the full window.
+      Aggravating: activation is lazy and reader-driven. core.fn_activate_due_payout is
+      invoked from exactly ONE place in the product (the GET on /v1/seller/payout) and no
+      job calls it, so a due PENDING stays PENDING -- and stays cancellable -- until
+      somebody opens the payout screen. The window is not 24 hours; it is "until the
+      seller next looks".
+    A CANCELLED row is still a row, so "has this seller EVER had payout details" is the
+    question an attacker-controlled move cannot walk back. Asserted by an arm that
+    performs the whole attack and requires NEW_DEVICE at the end of it.
+  GUARD ORDER CHANGED, DELIBERATELY  one-pending-per-seller now runs BEFORE the
+    new-device lock. Without the move, a seller with a change already in flight would be
+    refused with a message about a device; the true and more useful answer is that they
+    have a change pending. Both are refusals and neither writes, so nothing is weakened.
+    Asserted by its own arm.
+  THE TWIN  payoutLockState (SC-24's proactive panel) carries the identical predicate in
+    an `ever` CTE. A panel that disagrees with the write path is worse than no panel, and
+    the first draft had them agreeing on the WRONG predicate, which would have hidden the
+    attack from the screen as well as from the server.
+  WHAT IS NOT RELAXED  a seller with ANY prior payout row changing from an unseen device
+    is still locked for the full window; the activation delay still stacks downstream;
+    RECOVERY_COOLING runs before this guard and knows nothing about payout rows, so a
+    first set cannot step around account recovery (asserted); step-up is still required
+    on every set, first or not.
+  T17'S SENTENCE IS RETIRED, WHICH IS THE BETTER OUTCOME  D-239 added a first-set variant
+    of the NEW_DEVICE message because the change-wording accused a day-old seller of a
+    break-in. Phase 4 removed the STATE instead of wording it more kindly, so the branch
+    became unreachable and the string is deleted rather than improved. D-239's "THE LOCK
+    ITSELF IS UNTOUCHED. Only the sentence changes" is superseded by this entry.
+  R20 KEPT ITS ASSERTION  the real-GET e2e now proves the opposite case (no lock at all),
+    so "locked implies the control is DISABLED" moved to the planted CHANGE arm rather
+    than being lost with the test that used to carry it. The pass caught that it would
+    otherwise have had no assertion anywhere in the suite.
+  A TEST THAT COULD NO LONGER FAIL  the unsuppressible-notification assertion counted
+    PAYOUT_CHANGE_REQUESTED rows globally with toBeGreaterThan(0). The new first-set arm
+    creates one, so the later assertion was satisfied in advance. It is now a delta,
+    scoped to the row its own arm creates.
+Verification: pnpm ci:local -- 25 gates. c4-financial 17/17, including: the panel silent
+  BEFORE a first set and reporting NEW_DEVICE one request AFTER it (the lock arms itself
+  the moment there is something to protect -- the carve-out is a property of the seller's
+  history, not of the device); a CHANGE from an unseen device still 409/NEW_DEVICE with
+  no row written; the full cancel-then-set attack ending in NEW_DEVICE; a PENDING change
+  refused as PAYOUT_CHANGE_PENDING; and recovery cooling still firing with no payout row.
+  Browser-drawn: zz-beta-walk step 4 turns from "on day one the payout control is
+  DISABLED and the screen says ..." into "payout details can be set on the day of
+  sign-up". T17's BETA-READINESS CANNOT #5 is answered.
+Pass: four adversarial lenses (takeover, twin consistency, migration fidelity, blast
+  radius). ONE BLOCKER-class finding -- the cancel-then-set path above -- plus a lost R20
+  assertion, a pre-satisfied notification assertion, and stale comments, all fixed before
+  merge. The findings were against my own first draft in every case.
+Ruling needed / DOCUMENT DEBT, recorded rather than assumed:
+  1. ADU-AUTH-01 v2.6 S20 states the new-device payout lock UNCONDITIONALLY, and v2.5's
+     invariant quantifies the guarantee as "an attacker needs 48 hours under a push
+     notification the real seller has already received". For a seller who has NEVER had
+     payout details it is now 24 (the activation delay alone). The narrowing is a founder
+     ruling (T18 S4) carried as an interim ruling; the specification is unreissued and
+     the amendment is owed. Neither document is edited here -- transcribe, do not design.
+  2. core.fn_cancel_payout_change accepting a row whose activates_at has already passed,
+     given that activation happens only when someone reads. Not touched by this phase.
+  3. Whether activation should have a job rather than depending on a reader.
+
+### D-245 - T19 Phase 1: the switcher #80 owed, the courier entry point moved, and a deviation from S9.2 recorded rather than argued in one file
+
+Severity:  a regression PR #80 shipped -- two routes reachable only by typing a URL
+Phase:     T19 Phase 1
+Source:    apps/console (SellerSwitcher.tsx new, Shell.tsx, SignIn.tsx, Chooser.tsx,
+           console.css, chooser.spec.ts, zz-beta-walk.spec.ts); packages/locale
+The regression, stated plainly: #80's redirect is RIGHT -- a returning seller belongs in
+  their store, not on a chooser -- and it shipped without its replacement. The chooser
+  carried two links, and forwarding a single-store seller past it left both reachable
+  only by typing a URL: "Create a store" and the courier entry point. That is exactly the
+  failure T17 recorded as the point where a real seller stops and messages the founder,
+  reintroduced by the fix for it. T18 S3 said to build the switcher in the same PR as the
+  redirect; that did not happen, and this entry is the debt.
+Effect / Response, each:
+  THE SWITCHER  built at last -- its blocker was D-97 and D-97 closed at T18 Phase 3.
+    Store name, other stores as links, and "Create a store" ALWAYS.
+  THE S9.2 DEVIATION, RECORDED HERE BECAUSE D-243 RESERVED IT FOR A RULING and arguing
+    it only inside the file that deviates is how a rule gets quietly talked around.
+    ADU-REPO-01 S9.2 says the switcher renders "ONLY when the account holds more than one
+    seller". This renders something at one store. The reading: S9.2 protects against a
+    menu that lies about having a choice, and at one store this is NOT a switcher -- it
+    is the store's name plus the one control that must not be lost. Drawing nothing would
+    satisfy the letter and leave the regression in place. Recorded as an interim reading
+    against an unreissued document; the alternative is to put "Create a store" somewhere
+    else entirely, which is a design decision and not made here.
+  THE COURIER ENTRY POINT moved to SIGN-IN, per T19 S2's ruling: a courier is not seller
+    staff, holds their own account, sees only assigned orders, and has no store to be
+    redirected into. Routing them through a store chooser was wrong before the redirect
+    made it visible.
+  AND THE CLICK HAD TO SHOW SOMETHING. /courier sits behind RequireSession, so following
+    that link while signed out bounces straight back to sign-in -- correctly, and with
+    `from` armed, so the courier DOES land on their deliveries after verifying. But the
+    round trip is invisible: the address bar ends where it started. On the one screen a
+    courier meets first that reads as a dead link, so the screen now says what will
+    happen.
+  IT ALSO STAYS ON THE CHOOSER, in EMPTY *and* READY. The first draft gated it on EMPTY
+    alone and the pass found the case that breaks: a courier who ALSO holds stores. With
+    two stores they land on the chooser and would have found nothing.
+Pass: three adversarial lenses. TWO BLOCKER-class findings, both against my own draft:
+  FAIL-QUIET CONFLATED FAILURE WITH EMPTINESS. The catch set rows = [], which renders
+    byte-identically to an account with exactly one store: the generic "Your store", a
+    menu with no stores in it, and no sign anything had failed -- for the whole session,
+    because the fetch runs once per Shell mount and Shell does not remount on navigation.
+    A seller with three stores who hit one dropped request would have concluded they had
+    lost access to two of them. The failure is now its own state, with a retry, and an
+    arm asserts the difference. (A 401 never reaches that catch: api() fires the global
+    unauthorized handler first and RequireSession redirects -- checked, not assumed.)
+  THE COURIER LINK GATED ON EMPTY (above).
+  Four more fixed: no CSS existed for ANY switcher class, so the menu rendered as an
+    unstyled in-flow block that pushed the whole page down, with default disc bullets;
+    the topbar's `margin-right: auto` was orphaned by the new nesting -- an auto margin on
+    a non-replaced INLINE box computes to zero, so the bell and Sign out silently
+    un-pushed from the right edge of every seller route; the menu had no dismissal path
+    (Escape and click-outside added, and it now closes on navigation, which otherwise
+    left a panel describing where you no longer are); and Shell.tsx's own header still
+    told the next engineer the switcher could not be built.
+Verification: pnpm ci:local -- 26 gates, 558/558, 65 e2e. New arms: the multi-store
+  switcher (the behaviour S9.2 actually rules, which had NO coverage -- names this store,
+  offers a switch, lists the other, Escape closes, switching navigates); the failed list
+  proving it is never mistaken for one store and that the rest of the console still
+  renders; and the single-store seller reaching "Create a store" from "/" without typing.
+  Browser-drawn, from the state that broke, in zz-beta-walk step 14:
+    "a returning seller is taken straight back into their store"
+    "a redirected seller still reaches Create a store, from the switcher"
+    "signing out reaches the courier entry point, which says it will resume there"
+  The walk owns its account and runs last, which is why it is the one place the SIGNED-IN
+  path can be driven: the shared suite session cannot sign out without revoking the row
+  every later spec authenticates with.
+Ruling needed: a courier who ALSO holds exactly ONE store is still redirected into it and
+  must sign out to reach /courier. Rare, and not fixable on the chooser -- that account
+  never sees the chooser. If it matters, the entry point belongs in the topbar beside the
+  switcher, which is the design decision this phase did not make.
   THE GATE  a market may not be open to public SELLER registration while measuring
     nothing about the sellers it admits. It fails when, for one market:
     seller_registration_enabled AND registration_enabled are true, AND

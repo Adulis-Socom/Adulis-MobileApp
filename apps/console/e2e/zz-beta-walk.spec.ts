@@ -331,6 +331,46 @@ test.describe('T17 -- what a beta seller can actually do', () => {
       await fresh.close();
     }
 
+    // -------------------------------------------------------- step 14 (b)
+    // The two routes #80's redirect took away. This walk owns its account and
+    // runs last, so it is the one place the SIGNED-IN path can be driven: the
+    // shared suite session cannot sign out without revoking the row every
+    // later spec authenticates with.
+    const back = await page.context().newPage();
+    try {
+      await back.goto('/', { timeout: 20_000, waitUntil: 'domcontentloaded' });
+      await back.locator('[data-switcher-toggle]').click({ timeout: 10_000 });
+      const create = back
+        .locator('[data-switcher-menu]')
+        .getByRole('link', { name: /create a store/i });
+      const reachable = (await create.count()) > 0;
+      note(
+        '14',
+        reachable ? 'OK' : 'CANNOT',
+        reachable
+          ? 'a redirected seller still reaches "Create a store", from the switcher'
+          : 'a redirected seller cannot reach store creation without typing /s/new',
+      );
+
+      await back.getByRole('button', { name: /sign out/i }).click({ timeout: 10_000 });
+      await back.waitForURL(/sign-in/, { timeout: 20_000 });
+      await back
+        .getByRole('link', { name: /deliveries assigned to you/i })
+        .click({ timeout: 10_000 });
+      const armed = await back.locator('[data-courier-resume]').count();
+      note(
+        '14',
+        armed > 0 ? 'OK' : 'CANNOT',
+        armed > 0
+          ? 'signing out reaches the courier entry point, which says it will resume there'
+          : 'the courier entry point was not reachable after signing out',
+      );
+      await back.screenshot({ path: path.join(SHOTS, '13-courier-from-signin.png'), fullPage: true });
+    } catch (e) {
+      note('14', 'CANNOT', `could not reach the recovered routes: ${String(e).slice(0, 90)}`);
+    } finally {
+      await back.close();
+    }
     fs.writeFileSync(path.join(SHOTS, 'findings.txt'), FINDINGS.join('\n'), 'utf8');
     // eslint-disable-next-line no-console
     console.log('\n===== WALK FINDINGS =====\n' + FINDINGS.join('\n') + '\n=========================\n');

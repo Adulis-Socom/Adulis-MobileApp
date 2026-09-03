@@ -17,7 +17,7 @@
  * Retry-After slot), TRANSPORT_ERROR (request id shown, selectable).
  */
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate, Link } from 'react-router';
 import { en } from '@adulis/locale';
 import { api, ApiError } from '../api/client';
 import { useIdempotencyKey } from '../lib/idempotency';
@@ -328,6 +328,38 @@ export function SignIn() {
           </button>
         </form>
       )}
+
+      {/*
+        THE COURIER'S WAY IN (T19 Phase 1, C-8).
+        It used to sit on the chooser at "/", behind a seller-shaped screen --
+        and #80's redirect then took a single-store seller past that screen
+        entirely, leaving /courier reachable only by typing a URL.
+        It belongs here rather than one screen later: a courier is not seller
+        staff. They hold their own account, they see only assigned orders, and
+        they have no store to be redirected into, so routing them through a
+        store chooser was wrong before the redirect made it visible.
+        The link is plain because the session carries no roles for the client
+        to gate on (the contract's roles[] rendering hint is the owed
+        refinement, D-228) -- a non-courier who follows it meets the EMPTY
+        state that explains itself.
+      */}
+      <p className="courier-link">
+        <Link to="/courier">{en['console.courier.chooser_link']}</Link>
+      </p>
+      {/*
+        AND THE CLICK HAS TO SHOW SOMETHING. /courier is behind RequireSession,
+        so following this link while signed out bounces straight back here --
+        correctly, and with `from` armed, so the courier DOES land on their
+        deliveries after verifying. But the round trip is invisible: the
+        address bar ends where it started and the screen looks unchanged, which
+        reads as a dead link on the one screen a courier meets first.
+        Saying so is the whole fix.
+      */}
+      {(location.state as { from?: string } | null)?.from === '/courier' ? (
+        <p className="hint" data-courier-resume>
+          {en['console.courier.after_signin']}
+        </p>
+      ) : null}
     </main>
   );
 }
