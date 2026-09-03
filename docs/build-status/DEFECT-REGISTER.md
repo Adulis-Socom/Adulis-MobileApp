@@ -3782,3 +3782,17 @@ Action:    A warm `pg` connection, five samples, bracketing each `clock_timestam
            MECHANISM NARROWED, NOT ESTABLISHED. `core.fn_notify_payout_change` is an AFTER INSERT OR UPDATE OF state trigger that returns without writing anything unless the row is NEW or its state actually changed. The arm's other assertions -- the change log and the ciphertext -- pass whether the write was an insert or an update, so ONLY the notification count can see the difference. Any path that turns that POST into an update, or into an idempotent replay, produces exactly the observed failure: 201, a good log row, good ciphertext, and no notification. Which path, and what makes it intermittent, is still not established.
            NOT FIXED, AND NOT PAPERED OVER. Changing the assertion to make it pass would remove the only thing in the suite that can tell an insert from an update.
 Ruling needed: none.
+
+### D-267 - The media proof needed a store in CI, and CI had none. Same class as D-265, found the same way
+
+Severity:  MAJOR (the fatal item's proof would not have run where it matters)
+Phase:     T20 - S4, found by CI after D-265's fix let the run reach gate 25
+Source:    `verify-console-e2e.mjs` requires the six R2_* values; the CI job had no object storage and no .env
+Found by:  Watching the gate. D-265's fix moved the failure from gate 11 to gate 25, which is what progress looks like.
+Effect:    THE SECOND INSTANCE OF THE SAME CLASS IN ONE ORDER, and that is the reason it gets its own entry rather than a line in D-265. My machine had the six values in .env, CI had none, and `pnpm ci:local` was green while the identical list went red -- exactly D-265's shape, with configuration in place of seeded rows. Two of these in one order says the class is not a coincidence: ANY gate that reads ambient state passes locally and is untested until CI happens to reach it.
+           The gate refused rather than degraded, which is the only reason this was visible at all. It could have skipped the media arms when storage was unset; then CI would have gone green while the proof of BETA-READINESS's last fatal item silently did not run. ADU-CON-02 S16 is explicit that there is no skip label, and this is why.
+Response:  CI GIVEN A REAL OBJECT STORE
+Action:    A step starts `minio/minio` and creates the two buckets exactly as docker-compose.yml does -- media public-read, evidence with no public access and a lifecycle rule on evidence/raw/ -- and the six values are passed to the gate step. A STEP AND NOT A `services:` CONTAINER because the official image needs `server /data` as its command and GitHub's `services:` cannot set one.
+           The credentials are the local container's own, in the clear, deliberately: they are the local-dev-password class, they grant nothing anywhere, and no real credential is in this repository or any report.
+           This also means the adapter's central claim is now exercised on a second machine: the same class talks to MinIO under six environment values in CI and would talk to Cloudflare R2 under six different ones, with no code path between them (D-249).
+Ruling needed: none.
