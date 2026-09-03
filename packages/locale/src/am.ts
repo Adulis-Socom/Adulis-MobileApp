@@ -229,7 +229,10 @@ export const am: Catalogue = {
   'console.states.upgrade': 'አዲስ የመተግበሪያ ስሪት ያስፈልጋል።',
   'console.states.upgrade_reload': 'እንደገና ጫን',
   'console.chooser.title': 'መደብር ይምረጡ',
-  'console.chooser.gap': 'መደብሮችዎን የሚዘረዝር የውል ነጥብ ገና የለም (መዝገብ D-97)፤ የተሰጠዎትን የመደብር መለያ ይለጥፉ።',
+  'console.chooser.gap':
+    'የመደብሮችዎ እዘህ መዘርዘር አሁን አይቻልም። የተሰጠዎትን የመደብር መለያ በመለጠፍ አንዱን ይክፈቱ።',
+  'console.chooser.create_prompt': 'ገና መደብር የለዎትም?',
+  'console.chooser.create_link': 'መደብር ይፈጥሩ',
   'console.chooser.id_label': 'የመደብር መለያ',
   'console.chooser.open_button': 'መደብር ክፈት',
   'console.demo.title': 'አሥራ ሁለቱ የማያ ገጽ ሁኔታዎች',

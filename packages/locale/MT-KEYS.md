@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-754 keys:
+756 keys:
 
 - `app.title`
 - `health.ok`
@@ -184,6 +184,8 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.states.upgrade_reload`
 - `console.chooser.title`
 - `console.chooser.gap`
+- `console.chooser.create_prompt`
+- `console.chooser.create_link`
 - `console.chooser.id_label`
 - `console.chooser.open_button`
 - `console.demo.title`
