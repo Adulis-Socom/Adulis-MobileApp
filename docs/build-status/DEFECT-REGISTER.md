@@ -3713,3 +3713,32 @@ Verification: whoami and get_metadata, both quoted above. Two calls, deliberatel
   -- there was no point spending more of a twenty-call monthly budget confirming
   a refusal that had already been stated plainly.
 Ruling needed: none. It is an access grant and a seat upgrade, not a decision.
+
+### D-263 - Correction to D-251: the commit-side image cap is a schema fact, not a second count
+
+Severity:  MINOR (precision in the register; no code change)
+Phase:     T20 - S4, adversarial pass
+Source:    D-251 states "The COMMIT-time check STAYS: it is the one that holds under two concurrent uploads, where both requests counted four and both were signed"
+Found by:  The media phase's adversarial pass, checking that claim instead of trusting it
+Effect:    The claim is TRUE in substance and MISLEADING in mechanism, which is the worse kind of register entry. There is no second count at COMMIT and there never was. `>= 5` appears exactly once in catalogue.service.ts, in REQUEST_UPLOAD. A reader following D-251 would look for a commit-time count, fail to find one, and reasonably conclude the cap had been left half-built.
+Response:  CORRECTED HERE - the register is append-only, so D-251 stands as written and this entry is what a reader of it must also read
+Action:    What actually holds at commit is the SCHEMA, and it is stronger than a count:
+
+             position int NOT NULL CHECK (position BETWEEN 1 AND 5),
+             CONSTRAINT product_image_position UNIQUE (product_id, position)
+
+           migration 0007's own comment says it exactly -- "UNIQUE (product_id, position)
+           caps images at five as a STRUCTURAL FACT ... five positions, five rows, no
+           counting logic anywhere." Two concurrent uploads that both counted four and
+           were both signed cannot produce six rows: there are only five positions and
+           each is unique per product. The second committer gets POSITION_TAKEN.
+           This is the doctrine working as written -- a rule the database can hold, the
+           database holds -- and the pre-mint count added in D-251 is NOT the cap. It is
+           a courtesy that refuses before the seller pays for three uploads. The cap
+           itself was never in application code and must not be moved there.
+           Migration 0048 made the UNIQUE constraint DEFERRABLE INITIALLY DEFERRED so a
+           reorder can swap positions in one statement; deferred uniqueness is checked at
+           COMMIT, so the concurrency guarantee above is unaffected -- one of the two
+           transactions still fails, just at commit rather than at insert. The CHECK is
+           not deferrable and is immediate either way.
+Ruling needed: none.
