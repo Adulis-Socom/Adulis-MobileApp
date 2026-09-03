@@ -154,6 +154,14 @@ test.describe('T17 -- what a beta seller can actually do', () => {
       .locator('[data-item][data-satisfied="false"]')
       .evaluateAll((els) => els.map((e) => e.getAttribute('data-item')));
     note('6', 'OK', `still to do before publishing: ${todo.join(', ')}`);
+    // THE ONE ASSERTION THIS DIAGNOSTIC MAKES, and the reason it makes it:
+    // everything else here RECORDS, but this must REFUSE. The only endpoint
+    // that satisfies IDENTITY_VERIFIED is operator-only, so a brand-new seller
+    // held by it cannot publish without the founder -- for every seller,
+    // indefinitely. It was held that way because this market's identity_config
+    // row was never seeded and 0018's rule fails closed to "required". If it
+    // comes back, this walk should go red rather than narrate the outage.
+    expect(todo).not.toContain('IDENTITY_VERIFIED');
     const unrouted = await page.locator('.readiness-action.unrouted').count();
     if (unrouted > 0) {
       note('6', 'EMBARRASSES', `${unrouted} readiness items show a raw code with no link to resolve them`);

@@ -2797,3 +2797,189 @@ Effect / Response, each:
 Verification: pnpm verify:console-e2e -- the ordering arm drives the REAL server (the seed's overdue lapsed payment first, rendering "Overdue"; the fresh payment; a claim the seeded buyer files THROUGH THE BUYER WIRE at +2 days, strictly interleaved; the unready order at +90h, ~3.8 days), asserts the region sits above the readiness list, the consequences render the server's sentences verbatim, and the claim row navigates to the claim. The Life-2 arm plants readiness-satisfied and an empty obligations list (the R21 pattern -- the seeded seller is genuinely obligated, so empty is unreachable for real) and asserts the good state, the week-on-week orders line from two REAL windowed reads, and the absence of any picker.
 Pass: one adversarial reviewer; rule-1 confirmed clean (no sort, no grouping, no derived trend -- two server numbers side by side; the date arithmetic is query parameters, the recorded Analytics precedent); the shared clock Set, the empty/good readings, the locale, and the ordering arm's non-fakeability all confirmed. ONE MAJOR, fixed: the brief's two windows OVERLAPPED by a day and "previous 7" spanned EIGHT -- the endpoint's window is inclusive calendar dates (hi = to + 1 day), so from=now-7d / to=now-7d counted the boundary day in both numbers; two honest server figures answering a dishonest question, invisible to the e2e's digit regex. Now seven DISJOINT days each (from=now-6d; from=now-13d&to=now-7d). One MINOR, fixed: an unknown consequence_key silently dropped the mandated "what happens if not" (and the comment claimed a log that never happened) -- it now renders AS the key, visible and greppable, the Feedback.tsx message_key precedent; a row whose stakes silently vanish is the list learning to lie. Doc arithmetic corrected: the unready deadline is clock_stopped_at(-78h) + 7d = +90h (~3.8 days), not "+~6 days"; the interleave margins (>=27h) stand. Recorded, not built: the obligations 403 rendering the retry-worded failure line is unreachable today (the door grant is held by every role; a split would need a grant that does not exist) -- noted against S3.4 should grants ever change; Home's loads inherit the pre-existing no-generation-guard shape (unreachable without a same-route seller switch; DailyBrief's cancelled flag covers its own); the e2e buyer-wire localhost hardcode and the UTC day boundary for an EAT market are inherited repo-wide patterns, named here for the harness-debt list.
 Ruling needed: none new (the badge's push mechanism is product work; the keeps stand at their homes).
+
+### D-237 - T17: the identity_config row that was never seeded, and the publication it silently blocked
+
+Severity:  no seller could EVER publish, in any market this seed creates; fixed here
+Phase:     T17 (S6, the first fix off the CANNOT list)
+Source:    ops/scripts/seed.mjs. The rule itself (0018) is UNCHANGED and correct.
+Finding:   T17's walk asked the server what a brand-new seller still owed and got
+  IDENTITY_VERIFIED back, on a market whose eligibility_config carries
+  id_verification_requirement = 'OPTIONAL'. The cause is not the rule: 0018 satisfies
+  IDENTITY_VERIFIED when an attestation exists OR when identity_config.identity_required
+  is false and the seller's eligibility path is not IDENTITY, and it fails CLOSED when
+  the config row is absent (coalesce(v_idreq, true)). Fail-closed is right. The defect is
+  that the seed writes market, timing_config, ladder_config and eligibility_config and
+  has never written identity_config -- so the row the rule reads did not exist, "required"
+  was the answer, and the ONLY endpoint that satisfies it is operator-only (G1.1; a seller
+  session gets 403). Every seller was therefore permanently one readiness item short of
+  publishing, and could only be cleared by an operator acting for them. The two settings
+  are orthogonal knobs, not one field written twice (0018 says so); their COMBINED effect
+  was the contradiction -- one row admitted the seller, the other held them forever.
+Effect / Response:
+  ROW  the seed now writes core.identity_config for the market it creates:
+    identity_required = false, verifier_kind = VIDEO_CALL, accepted_id_types = {}.
+    Guarded by WHERE NOT EXISTS, like every configuration row beside it, so reruns
+    change nothing. VIDEO_CALL and not KYC_VENDOR because no KYC vendor is selected
+    (the fake-adapter guard lists it as such) and G1.1's flow is an operator attesting
+    about a named person with no image ever reaching Adulis. accepted_id_types is empty,
+    which the table's own CHECK permits ONLY because identity is not required -- flip
+    that boolean and the constraint forces whoever flips it to say what is accepted.
+  NOT A NEW BUSINESS DECISION  the founder ruled it in session (T17 S6 follow-up), and
+    it follows the market this seed already describes. It is recorded here as an interim
+    ruling with its document debt: identity_required appears NOWHERE in ADU-VAL-01, so
+    per the root CLAUDE.md this was a genuine gap to report rather than a deliberate
+    deferral, and the next reissue should state the beta answer in the document.
+  WHAT IS NOT RELAXED  the second arm still carries v_eval.path <> 'IDENTITY'. A seller
+    who took the IDENTITY route to eligibility STILL needs a real attestation before
+    publishing -- no grace period, no bypass column. Only sellers admitted by the
+    AUDIENCE arm skip it, which is what OPTIONAL means. Proved, not asserted (below).
+  THE CONSEQUENCE, STATED  this market also carries audience_required = false and
+    follower_threshold = NULL, so every seller takes the AUDIENCE arm and passes it
+    trivially. After this row, NOTHING in this market verifies a seller's identity or
+    their audience. That is the beta that was asked for. It is the first line to revisit
+    when the beta ends, and it is written down here so that revisiting it is a decision
+    rather than a discovery.
+  ALREADY ASSUMED BY THE TESTS  c1-onboarding.e2e.spec.ts has been creating its own
+    market WITH an identity_config row (identity_required = false) since it was written.
+    The API suite therefore passed while the seeded market was broken -- a fixture that
+    supplies what production data lacks is how a whole-system defect stays invisible.
+Verification: against the reset database, through core.fn_publication_readiness for the
+  seller T17's walk created:
+    before   IDENTITY_VERIFIED | f | COMPLETE_IDENTITY_VERIFICATION
+    after    IDENTITY_VERIFIED | t |
+  and the safety arm proved by appending a second evaluation with path = IDENTITY inside
+  a rolled-back transaction (the table is append-only, so UPDATE is refused):
+    IDENTITY path, no attestation  -> f, COMPLETE_IDENTITY_VERIFICATION  (still blocked)
+    AUDIENCE path, no attestation  -> t                                  (clears)
+  The remaining three items for a new seller (STORE_PROFILE, PAYOUT_DETAILS,
+  FULFILMENT_CONFIG) are all seller-doable, PAYOUT_DETAILS only after the 24h new-device
+  lock -- which is a separate CANNOT on T17's list and is not touched here.
+  Regression guard: zz-beta-walk.spec.ts now makes its ONE assertion --
+  expect(todo).not.toContain('IDENTITY_VERIFIED') -- so if the row goes missing again the
+  walk goes red rather than narrating the outage in a log line nobody reads.
+Pass: adversarial, per S6 (this touches identity). Three things checked and one wording
+  corrected. (1) The first draft of the seed comment claimed the two rows "disagreed" as
+  though they were the same field; they are orthogonal by 0018's own comment, and the
+  claim is now stated as a contradiction in combined EFFECT, which is what it is.
+  (2) The IDENTITY-path arm was not taken on trust -- it was executed, and it still
+  blocks. (3) The production path: a seed is dev and local-beta data, so this does not
+  write the row in a production database. There is no operator API that writes
+  identity_config, and no production database exists (the API refuses to start under
+  NODE_ENV=production -- T17's first CANNOT). Recorded as owed: whichever of those two
+  arrives first must carry this row with it, or the same silent block returns on the day
+  the product is real.
+Ruling needed: the beta answer for identity_required belongs in ADU-VAL-01 or the
+  reissued document, not only in a seed and this entry; and an operator path for writing
+  market configuration, which today exists for no configuration table at all.
+
+### D-238 - T17: the chooser can create a store; the register number stops being read to sellers; the e2e harness stops leaving a seller behind
+
+Severity:  a new seller could not reach store creation without typing a URL; fixed
+Phase:     T17 (S6, the second fix off the CANNOT list)
+Source:    apps/console (Chooser.tsx, chooser.spec.ts); packages/locale; ops/scripts/verify-console-e2e.mjs
+Effect / Response, each:
+  LINK  T17's walk signed up a brand-new account, landed on "/", and found a box
+    demanding a store id it had never been given -- with NOTHING on screen offering to
+    make one. /s/new had to be typed into the address bar. The route already existed;
+    nothing pointed at it. The chooser now carries the prompt and the link. This is the
+    point at which a real seller stops and messages the founder, so it is the point
+    chooser.spec.ts now defends with its own test (click the link, land on /s/new, see
+    the create button).
+  SENTENCE  the gap sentence no longer reads a defect number to a seller in Addis. T9
+    S4.2's ruling was that the hole must be LABELLED ON SCREEN, and it still is -- what
+    changed is WHO the label is for. The register citation now rides the DOM as
+    data-gap="D-97" and the sentence is plain English. chooser.spec.ts asserts BOTH the
+    attribute and the plain sentence, AND that the seller-facing text does NOT contain
+    "D-97" -- so the hole still cannot be quietly closed over, which is what that test
+    was written to prevent, while the seller stops paying for our bookkeeping.
+  NOT FIXED, DELIBERATELY  enumerating the stores an account holds still has no
+    endpoint. D-97's own Action line rules why: "the endpoint's shape (owner stores
+    only? team memberships? role per store?) is contract design, not console
+    transcription." /v1/bootstrap does not carry memberships; every /v1/seller/* path
+    is scoped to one store by X-Adulis-Seller, and a GET under /v1/seller would trip
+    requiresSellerContext -- so serving it would mean either widening a security guard's
+    exemption list or inventing a new top-level namespace. Both are contract design.
+    The prime rule holds: report the gap, do not fill it. T17's walk therefore still
+    reports step 14 (a returning seller is asked to paste a store id) as CANNOT, and
+    that is correct rather than an oversight.
+  AMHARIC  two new keys carry Amharic that has NOT been reviewed by a speaker. T17 S4
+    put Amharic quality out of scope and a missing key is a compile error, so something
+    had to be written; MT-KEYS.md now lists both as machine-translated. Flagged here
+    and in the PR rather than passed off as done.
+  HARNESS  verify:console-e2e now resets the database AFTER a green run as well as
+    before. It always reset before driving, which made its own run honest and said
+    nothing about the next one -- but the suite now signs a seller UP for real
+    (zz-beta-walk), so every green run left an account, a seller, a product and a
+    variant behind. In ci:local the API `test` gate runs BEFORE console-e2e, so it
+    inherits whatever the PREVIOUS run left. Fifteen walk runs grew that into 73 failing
+    API tests with no code change behind them -- a regression introduced by this order's
+    own diagnostic, found by watching the failure count climb run over run rather than
+    by reading any one failure. Reset on SUCCESS only: a failed run dies with the
+    database intact, because the state a failure happened in is the evidence.
+Verification: pnpm ci:local -- all 25 gates, 531/531 API tests. pnpm verify:console-e2e
+  -- 58 passed, and the walk draws the fix in a browser: step 2 turns from "no link from
+  the chooser to creating a store -- /s/new must be typed" into "the chooser offers a
+  link to create a store", and goes on to use it. The teardown was verified by counting
+  rows afterwards: sellers=1, accounts=2, exactly what the seed defines.
+Flakes: two D-217-class OTP-budget failures were met and cleared on the way (429 vs 202
+  on a request leg, and one in t6-ownership-transfer). Different test each run, both
+  green in isolation, neither related to console or locale. Recorded, not chased.
+Ruling needed: the sellers-list endpoint's shape, which is D-97's standing question and
+  the only thing between a returning seller and their own store; and a speaker's review
+  of the two new Amharic strings.
+
+### D-239 - T17: the payout lock stops accusing a new seller; two gap sentences deleted, two DELIBERATE KEEPS left standing
+
+Severity:  a first-day seller was told their account may be compromised; fixed
+Phase:     T17 (S6, the sentence triage applied)
+Source:    apps/console (Payout.tsx, store-admin.spec.ts, ProductEditor.tsx, Stock.tsx);
+           packages/locale
+Effect / Response, each:
+  FIRST SET  the NEW_DEVICE lock sentence is correct for a CHANGE and wrong for a FIRST
+    SET. A seller who signed up minutes ago has no payout details at all, and the lock
+    still fires -- their only device is by definition one we have not seen. Telling that
+    person "a sign-in from a device we have not seen ... if that was not you" reports a
+    security event that did not happen, on the day they joined, on the screen where they
+    are trying to get paid. The panel now renders a first-set sentence when reason is
+    NEW_DEVICE and BOTH active and pending are null: "You can add payout details once
+    this device has been signed in for twenty-four hours. Nothing has gone wrong: this
+    wait applies to any device we have not seen before, including the one you signed up
+    on." Same lock, same reason, same lift, no accusation.
+    THE LOCK ITSELF IS UNTOUCHED. Only the sentence changes, and only when there is
+    nothing to change FROM. This is presentation chosen from server state, the same
+    shape as the existing reason->sentence map -- the console still computes nothing.
+  THE WARNING SURVIVES  a seller who HAS payout details and meets a new-device lock is
+    exactly the person the original sentence was written for: someone whose account may
+    be being taken over. A new planted arm proves that branch keeps the security wording
+    verbatim, and that the first-set sentence does NOT appear there. Both halves are
+    asserted, so a later simplification cannot collapse them into one.
+  DELETED, TWO  console.catalogue.editor.attributes_owed named a screen that does not
+    exist ("the category attribute list"), describing an intended design to a person who
+    cannot use it; console.catalogue.stock.confidence_owed taught a seller what stock
+    confidence is for the sole purpose of saying it is missing. Neither had a test and
+    neither guarded anything. Gone, with their keys, from both locales.
+  NOT DELETED, TWO -- AND THIS IS THE ENTRY'S POINT  T17's report triaged
+    console.catalogue.products.cap_unreported and console.insights.analytics.export_owed
+    as DELETE. Both were wrong, and the repository said so before I did:
+    insights-inbox.spec.ts marks the export sentence "DELIBERATE KEEP: the worker and job
+    table still do not exist (D-232)", and catalogue.spec.ts exists to assert that the
+    console "names the cap it cannot yet report ... no invented N of 10". Two recorded
+    decisions, each with a test standing over it. The triage was one line of judgement
+    written while reading a locale file; the keeps were made while reading the wire.
+    They were deleted, then RESTORED before merge. The report's SENTENCES list is left
+    as written -- it is a point-in-time record and this entry is where it is corrected,
+    not by editing the finding after the fact. Whether they should go remains the
+    founder's call, now with the counter-evidence attached.
+    The general lesson, which is the same one the chooser test encodes: a sentence that
+    reads as awkward to someone skimming is often load-bearing to someone who was there.
+    Check for the guard before removing the guarded thing.
+Verification: pnpm ci:local -- all 25 gates, 531/531 API tests. pnpm verify:console-e2e
+  -- 59 passed. The walk draws the first-set sentence in a browser on the day the seller
+  signs up, and the control remains DISABLED beside it (the lock is a separate CANNOT on
+  T17's list and is not touched here). store-admin.spec.ts asserts the real-server
+  first-set branch (the seeded seller has no payout details) and the planted change
+  branch, each denying the other's sentence.
+Ruling needed: whether cap_unreported and export_owed should go after all, against the
+  two deliberate keeps recorded above; and a speaker's review of the first-set sentence's
+  Amharic, which is machine-written like the rest of this order's new strings.

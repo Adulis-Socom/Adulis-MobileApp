@@ -20,11 +20,15 @@ test.describe('the store chooser -- D-97', () => {
 
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    // The gap, named where the seller reads it -- and naming the register
-    // entry, so the next person finds the reasoning rather than re-deriving it.
+    // The gap, still named where the seller reads it. T17 changed WHO the
+    // register number is for, not whether the hole is labelled: the sentence
+    // is now plain, and D-97 rides the DOM. BOTH are asserted, so the hole
+    // still cannot be quietly closed over -- deleting either fails here.
     const gap = page.locator('.hint');
-    await expect(gap).toContainText('D-97');
-    await expect(gap).toContainText(/no endpoint listing your stores/i);
+    await expect(gap).toHaveAttribute('data-gap', 'D-97');
+    await expect(gap).toContainText(/stores cannot be listed here yet/i);
+    // ...and the seller is never made to read the defect number.
+    await expect(gap).not.toContainText('D-97');
 
     // No list. If one ever appears here it was invented, because the contract
     // still has nowhere to get it from.
@@ -35,6 +39,20 @@ test.describe('the store chooser -- D-97', () => {
     const input = page.locator('#chooser-id');
     await expect(input).toBeVisible();
     await expect(page.locator('label[for="chooser-id"]')).toHaveCount(1);
+  });
+
+  test('a seller with no store can reach store creation without typing a URL', async ({ page }) => {
+    /*
+     * T17's walk: a brand-new account signs up, lands here, and finds a box
+     * demanding a store id it has never been given -- with nothing on screen
+     * offering to create one. /s/new had to be typed into the address bar.
+     * That is the point at which a real seller stops and messages us, so it
+     * is the point this test defends.
+     */
+    await page.goto('/');
+    await page.getByRole('link', { name: /create a store/i }).click();
+    await expect(page).toHaveURL(/\/s\/new$/);
+    await expect(page.getByRole('button', { name: /create my store/i })).toBeVisible();
   });
 
   test('a pasted id opens that store; a malformed one is refused before the network', async ({ page }) => {

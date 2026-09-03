@@ -152,8 +152,13 @@ test.describe('C-5 mutation arm -- the write cycle, for real', () => {
     await expect(
       publishRegion.getByText('This product cannot be published until each of these is resolved:'),
     ).toBeVisible();
+    // Two items, so "each of these" is genuinely plural. NOT "Identity
+    // verified" any more: T17/D-237 seeded the identity_config row this market
+    // was missing, so IDENTITY_VERIFIED is now SATISFIED for the seeded seller
+    // and naming it here would assert a blocker that no longer blocks. These
+    // two are the seeded seller's real remaining ones.
     await expect(publishRegion.getByText('Payout details')).toBeVisible();
-    await expect(publishRegion.getByText('Identity verified')).toBeVisible();
+    await expect(publishRegion.getByText('Eligibility satisfied')).toBeVisible();
     await expect(publishRegion.getByText('PUBLICATION_BLOCKED')).toHaveCount(0);
     await expect(publishRegion.getByText('PAYOUT_DETAILS')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();

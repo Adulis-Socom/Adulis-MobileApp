@@ -172,7 +172,6 @@ export function ProductEditor() {
           <button type="button" className="button" disabled={savingField} onClick={() => void saveFields()}>
             {en['console.catalogue.editor.save']}
           </button>
-          <p className="editor-attrs-owed">{en['console.catalogue.editor.attributes_owed']}</p>
         </div>
 
         <Variants

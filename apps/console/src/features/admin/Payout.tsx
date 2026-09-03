@@ -220,7 +220,19 @@ export function Payout() {
           and lift, before the seller reaches for the control -- not on a 409. */}
       {payout.reason ? (
         <section className="payout-lock blocked" data-payout-lock={payout.reason}>
-          <p>{LOCK_SENTENCE[payout.reason] ?? en['error.payout.payout_locked']}</p>
+          {/* T17: the NEW_DEVICE sentence is right for a CHANGE and wrong for a
+              FIRST SET. A seller who signed up minutes ago has no payout details
+              at all, and the lock still fires -- their only device is by
+              definition one we have not seen. Telling that person "a sign-in
+              from a device we have not seen ... if that was not you" reports a
+              security event that did not happen, on the day they joined. Same
+              server state, same lock, same lift: only the sentence changes, and
+              only when there is nothing to change FROM. */}
+          <p>
+            {payout.reason === 'NEW_DEVICE' && !payout.active && !payout.pending
+              ? en['error.payout.payout_locked_new_device_first_set']
+              : (LOCK_SENTENCE[payout.reason] ?? en['error.payout.payout_locked'])}
+          </p>
           {payout.payout_locked_until ? (
             <p>
               <strong>

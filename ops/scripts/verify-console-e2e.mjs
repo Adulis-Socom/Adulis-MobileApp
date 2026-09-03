@@ -287,4 +287,22 @@ if (run.status !== 0) {
   die('the console e2e suite failed');
 }
 
+/*
+ * LEAVE THE DATABASE AS WE FOUND IT.
+ *
+ * This gate resets BEFORE it drives, which makes its own run honest but says
+ * nothing about the next one. The suite now signs a seller UP for real
+ * (zz-beta-walk), so every green run used to leave behind an account, a
+ * seller, a product and a variant that no later run cleans up -- and in
+ * ci:local the API `test` gate runs BEFORE this one, so it inherits whatever
+ * the PREVIOUS console-e2e left. Fifteen runs of the T17 walk grew that into
+ * seventy-three failing API tests that had nothing to do with any code change:
+ * the purest kind of wasted afternoon, and the sort of thing that gets blamed
+ * on the last commit.
+ *
+ * Only on success. A FAILED run dies above with the database intact, because
+ * the state a failure happened in is the evidence.
+ */
+if (sh('pnpm', ['db:reset']).status !== 0) die('db:reset (teardown) failed');
+
 console.log(`\nPASS  the console works against the real API on a reset database (build ${BUILD_ID}).\n`);
