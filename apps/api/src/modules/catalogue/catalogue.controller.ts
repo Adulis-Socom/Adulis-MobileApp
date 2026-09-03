@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
@@ -38,6 +38,23 @@ function assertUuid(v: string, path: string): void {
     throw new AdulisException('VALIDATION_FAILED', { slots: { path } });
   }
 }
+
+/**
+ * One presigned PUT: where to send the bytes, and the key the COMMIT must name.
+ * `url` is short-lived (fifteen minutes) and is never stored.
+ */
+// No type annotation and no `as const`: SchemaObject lives behind a deep path
+// into @nestjs/swagger/dist, which dependency-cruiser refuses as unresolvable
+// (rightly -- it is a package internal), and `as const` makes `required`
+// readonly, which the decorator's own type rejects. A plain literal is both.
+const SIGNED_UPLOAD = {
+  type: 'object',
+  required: ['url', 'key'],
+  properties: {
+    url: { type: 'string', format: 'uri' },
+    key: { type: 'string' },
+  },
+};
 
 @Controller()
 export class CatalogueController {
@@ -142,8 +159,81 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.deleteVariant(trx, req, id));
   }
 
+  /**
+   * THE SCHEMAS ARE ON THE OPERATION NOW (T20 S4, D-98's class).
+   *
+   * These bodies are parsed by zod and were described to the contract by
+   * nothing at all, so `contracts/openapi.json` carried a path with no request
+   * schema and `schema.d.ts` generated no type for it. The console did what the
+   * console always does when the generated type is missing: it typed the shape
+   * LOCALLY -- which means a wire-shape change here compiles clean over there
+   * and fails in front of a seller holding a photograph.
+   *
+   * Transcribed from `imageBody` in catalogue.schemas.ts, not designed. If the
+   * two ever disagree the zod schema governs, because it is the one that
+   * actually refuses a request; this is the description of it.
+   */
   @Post('seller/products/:id/images')
-  @ApiOperation({ summary: 'Signed upload then commit — one catalogued path, two actions.' })
+  @ApiOperation({ summary: 'Signed upload then commit \u2014 one catalogued path, two actions.' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    description:
+      'REQUEST_UPLOAD signs the three derivative PUTs; COMMIT registers what landed. ' +
+      'The keys are server-minted at signing, so a commit can only name keys this API chose.',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          required: ['action', 'position'],
+          properties: {
+            action: { type: 'string', enum: ['REQUEST_UPLOAD'] },
+            position: { type: 'integer', minimum: 1, maximum: 5 },
+          },
+        },
+        {
+          type: 'object',
+          required: ['action', 'position', 'thumb_key', 'card_key', 'full_key'],
+          properties: {
+            action: { type: 'string', enum: ['COMMIT'] },
+            position: { type: 'integer', minimum: 1, maximum: 5 },
+            thumb_key: { type: 'string', minLength: 1, maxLength: 300 },
+            card_key: { type: 'string', minLength: 1, maxLength: 300 },
+            full_key: { type: 'string', minLength: 1, maxLength: 300 },
+          },
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'REQUEST_UPLOAD: three presigned PUTs, each with the key the commit must name.',
+    schema: {
+      type: 'object',
+      required: ['uploads'],
+      properties: {
+        // INLINED, not a $ref. Nothing registers a SignedUpload component, and
+        // a $ref to a component that does not exist generates a contract whose
+        // types resolve to `unknown` -- worse than no schema, because it looks
+        // described.
+        uploads: {
+          type: 'object',
+          required: ['thumb', 'card', 'full'],
+          properties: {
+            thumb: SIGNED_UPLOAD,
+            card: SIGNED_UPLOAD,
+            full: SIGNED_UPLOAD,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'COMMIT: the image row is registered.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), ' +
+      'OBJECT_NOT_UPLOADED, or POSITION_TAKEN.',
+  })
   async images(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -158,6 +248,10 @@ export class CatalogueController {
 
   @Delete('seller/products/:id/images/:position')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Removes one image and schedules the objects for purge.' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam({ name: 'position', schema: { type: 'integer', minimum: 1, maximum: 5 } })
+  @ApiResponse({ status: 204, description: 'Removed.' })
   async deleteImage(
     @Req() req: LocalizedRequest,
     @Param('id') id: string,
@@ -172,7 +266,27 @@ export class CatalogueController {
   }
 
   @Put('seller/products/:id/images/order')
-  @ApiOperation({ summary: 'The WHOLE ordering in one request — one transaction or a defect.' })
+  @ApiOperation({
+    summary:
+      'The WHOLE ordering in one request \u2014 UNIQUE (product_id, position) makes a ' +
+      'two-step swap a constraint violation, so this is one transaction or a defect.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({
+    description: 'Every image id, in the order they should appear. Partial orderings are refused.',
+    schema: {
+      type: 'object',
+      required: ['order'],
+      properties: {
+        order: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: { type: 'string', format: 'uuid' },
+        },
+      },
+    },
+  })
   async reorderImages(
     @Req() req: LocalizedRequest,
     @Param('id') id: string,

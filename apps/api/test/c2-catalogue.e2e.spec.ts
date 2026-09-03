@@ -333,7 +333,23 @@ describe('C2 — catalogue, media and stock', () => {
         card: r.body.uploads.card.key,
         full: r.body.uploads.full.key,
       };
-      expect(keys.full).toContain(`products/${productId}/img/1/`);
+      // SERVER-MINTED, PRODUCT-SCOPED, AND CARRYING NO POSITION (T20 S4.4).
+      // The key used to be products/<id>/img/<position>/<size>.webp, which made
+      // the object's NAME a copy of a column that reordering changes. Every
+      // reorder then either rewrote the storage -- copying megabytes to express
+      // a change of integer -- or left keys whose position segment disagreed
+      // with the row, and the second is what would have shipped. The position
+      // lives in core.product_image and nowhere else; the key is an opaque
+      // identity that survives being moved.
+      expect(keys.full).toContain(`products/${productId}/img/`);
+      expect(keys.full).toMatch(
+        new RegExp(`^products/${productId}/img/[0-9a-f-]{36}/full\\.webp$`),
+      );
+      expect(keys.full).not.toContain('/img/1/');
+      // One upload, one folder: the three derivatives are the same image.
+      const folder = (k: string): string => k.slice(0, k.lastIndexOf('/'));
+      expect(folder(keys.thumb)).toBe(folder(keys.full));
+      expect(folder(keys.card)).toBe(folder(keys.full));
       expect(r.body.uploads.full.url).toContain('http');
     });
 

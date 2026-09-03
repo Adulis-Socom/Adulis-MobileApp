@@ -137,9 +137,22 @@ describe('deployment adapters', () => {
       // is a fact about the DEVICE, and e2-notification acts on it by clearing
       // core.device.push_token -- so saying it here would un-register the very
       // devices that should receive the first push the day a provider lands.
-      expect(outcome).toBe('RETRYABLE');
+      //
+      // IT SAYS NO_PROVIDER NOW, AND RETRYABLE WAS THE BUG (T20 S5). RETRYABLE
+      // was the most honest of the three outcomes that existed when this test
+      // was written, and it was still wrong in the way that mattered: "try
+      // again" is a claim about a TRANSIENT failure, so every PUSH notification
+      // retried its full backoff and landed in FAILED. Four templates are
+      // PUSH-only -- including notification.chat.escalated, where a buyer asks
+      // what the assistant cannot answer and the seller never learns -- so the
+      // outcome the fleet actually produced was silence with a retry count.
+      // NO_PROVIDER is the fourth outcome and it is a fact about the PLATFORM
+      // rather than the device or the network, which is what lets the job fall
+      // the row back to IN_APP instead of retrying a vendor that is not there.
+      expect(outcome).toBe('NO_PROVIDER');
       expect(outcome).not.toBe('DELIVERED');
       expect(outcome).not.toBe('TOKEN_DEAD');
+      expect(outcome).not.toBe('RETRYABLE');
     });
   });
 

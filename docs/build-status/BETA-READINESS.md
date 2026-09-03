@@ -50,23 +50,65 @@ Steps 8 through 13 of this walk could not be performed as a seller, and the
 reason is not that they are unfinished: no buyer can start them. A seller who
 publishes has published to nobody.
 
-**3. A product cannot carry a photograph. (step 5)**
+**3. A product cannot carry a photograph. (step 5) -- CLOSED, T20 S4.**
 
-The product screen has no file input of any kind -- not a hidden one, not a
-disabled one. Screenshot `09-product-editor.png`. The screen states it plainly:
+*The finding is kept as written below because it is what the walk found. What
+follows it is what changed.*
 
-> "Adding an image resizes it in your browser and uploads three sizes. That
-> upload step is not on this screen yet."
+> The product screen has no file input of any kind -- not a hidden one, not a
+> disabled one. Screenshot `09-product-editor.png`. The screen states it plainly:
+>
+> > "Adding an image resizes it in your browser and uploads three sizes. That
+> > upload step is not on this screen yet."
+>
+> The three image endpoints exist in the contract. The console never calls them,
+> and the only storage implementation in the tree is a fake whose signed URL
+> points at `https://fake-r2.local/` and which reads back from an in-memory map
+> that only tests write to. Cloudflare R2 is decided; its credentials are not.
+> This is the unwired adapter the order asked to be told about plainly: there is
+> no real object-store class to configure, so this is not a credentials task.
+>
+> Without images there is no product, which makes this the first thing to fix
+> after deployment exists.
 
-The three image endpoints exist in the contract. The console never calls them,
-and the only storage implementation in the tree is a fake whose signed URL
-points at `https://fake-r2.local/` and which reads back from an in-memory map
-that only tests write to. Cloudflare R2 is decided; its credentials are not.
-This is the unwired adapter the order asked to be told about plainly: there is
-no real object-store class to configure, so this is not a credentials task.
+**What closed it.** There is a real object-store class now
+(`apps/api/src/common/adapters/s3-object-storage.ts`), the console calls the
+three endpoints, and the gap sentence is gone from the screen because the
+control it apologised for is on it.
 
-Without images there is no product, which makes this the first thing to fix
-after deployment exists.
+**It is closed against a real object store, not against the fake.** `docker
+compose` runs MinIO with the two buckets the design needs, and the adapter is
+one S3 implementation bound to both under two different sets of values -- so
+moving to Cloudflare R2 changes six environment variables and no code. That
+equivalence is the whole reason MinIO is admissible as proof here: the adapter
+cannot tell which one it is talking to.
+
+**The proof is a browser and a real file**, not a passing unit test. The beta
+walk's own step 5 now picks a PNG, resizes it in the page to three WebP
+derivatives, PUTs each to a presigned URL, commits the row, and asserts the
+rendered `<img>` reports `naturalWidth > 0` -- an assertion that a broken image
+fails and a stubbed one cannot satisfy:
+
+```
+WALK [OK] step 5: a photograph uploads from the browser and renders on the product
+```
+
+and the objects are in the bucket under opaque, position-free keys:
+
+```
+products/<product>/img/<uuid>/thumb.webp
+products/<product>/img/<uuid>/card.webp
+products/<product>/img/<uuid>/full.webp
+```
+
+`SC-10 media` covers the rest of S4.5: the image appears in the storefront API
+response, one can be deleted, the order can be changed by dragging, and a sixth
+image is refused **before** the upload begins rather than after three PUTs have
+already been paid for.
+
+**What is still true.** Nothing here makes a buyer able to see the photograph:
+fatal item 2 is untouched, and a product with a picture that nobody can visit is
+still a product nobody can visit.
 
 **4. No seller can ever publish. (step 6)**
 
@@ -188,7 +230,7 @@ about our engineering?
 | Sentence | Verdict | Why |
 |---|---|---|
 | chooser gap ("no endpoint ... register D-97") | **FIX** | The only one that names a defect number to a seller. It should say how to get into their store, not why we cannot list it. Deleted outright once the store list exists. |
-| media upload owed | **KEEP** | The most important sentence in the console. A seller who cannot find the image button needs to know it is absent, not that they are failing to find it. |
+| media upload owed | **RETIRED (T20 S4)** | Was KEEP, and the reasoning was right while it stood: a seller who cannot find the image button needs to know it is absent, not that they are failing to find it. It retired the day its gap closed, which is what a KEEP verdict is for. The screen now says what the control does ("Add a photo", and the limit) instead of what it cannot do. |
 | variants labels owed | **KEEP** | Explains why the box wants a typed string. Without it the free-text box looks like a mistake. |
 | payout new-device lock | **FIX** | Accurate for a change, wrong for a first set. See embarrassment 2. |
 | products cap unreported | **DELETE** | Tells the seller the limit exists, is unknown, and will be enforced later. That is three sentences of anxiety and no action. The server already refuses with a clear message when a limit is hit -- which is the honest moment to say so. |
@@ -206,8 +248,10 @@ about our engineering?
 | insights analytics export owed | **DELETE** | Advertises a paid feature ("Business") on a screen where it cannot be bought, and the plan comparison does not sell it either. Either sell it or say nothing. |
 | insights trust wire owed | **KEEP** | The seller's level drives what they can do; a blank panel with no explanation is worse. Retire it with the engine behind it. |
 
-Twelve KEEP, two FIX, four DELETE. The twelve are honest and should retire the
-day their gap closes. Deleting the four removes four places where the console
+Twelve KEEP, two FIX, four DELETE -- and as of T20 S4 the first of the twelve
+has retired, which is the mechanism working rather than a change of verdict. The
+remaining eleven are honest and should retire the same way, the day their gap
+closes. Deleting the four removes four places where the console
 talks about itself instead of to the seller, and costs nothing.
 
 ---
@@ -216,3 +260,12 @@ talks about itself instead of to the seller, and costs nothing.
 software does not start in production, no buyer can see a store, no product can
 carry a photograph, and every single seller needs Naod personally before they
 can publish at all.
+
+> **One of the four has since closed (T20 S4): a product can carry a
+> photograph.** The answer does not change, because the other three did not. The
+> heaviest of them is unchanged and is not an engineering task in this
+> workstream: **no buyer can see the store**, so a seller can now put a
+> photograph on a product that nobody can visit. Closing a fatal item moves the
+> answer no closer to yes while a fatal item is still open -- that is what
+> "fatal" means -- and the walk should be re-run rather than reasoned about when
+> the next one closes.

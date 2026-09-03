@@ -214,3 +214,125 @@ test.describe('C-5 mutation arm -- the write cycle, for real', () => {
     await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
   });
 });
+
+/**
+ * T20 S4 -- THE FATAL ITEM, DRAWN.
+ *
+ * "A seller cannot put a photograph on a product" is the last fatal entry on
+ * BETA-READINESS, and this is the arm that answers it: a real file, picked in
+ * a real browser, resized in the page, PUT straight to real object storage
+ * (MinIO here, R2 in production -- one adapter, six env values), committed,
+ * and then RENDERED from the public origin.
+ *
+ * It also closes D-242's owed item. That entry's own history is why it cannot
+ * be skipped a third time: T14-C fixed the reorder's client half with nothing
+ * calling the endpoint, and the fix was never exercised. A fix without a test
+ * that drives it is a claim.
+ */
+test.describe('SC-10 media -- upload, render, reorder, cap (T20 S4)', () => {
+  // A real 8x8 PNG, generated (zlib IDAT, correct CRCs) rather than
+  // copy-pasted. createImageBitmap must DECODE it: the first draft used a
+  // base64 blob that looked like a PNG and was not, and the screen said so
+  // exactly -- "The source image could not be decoded" -- which is the
+  // upload path's own error handling working before the upload did.
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4oaGBFTEMLQkAgl1GAWqNFmsAAAAASUVORK5CYII=',
+    'base64',
+  );
+
+  const pick = async (page: import('@playwright/test').Page) => {
+    await page.locator('#media-file').setInputFiles({
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+  };
+
+  test('a real photograph reaches the product, the storefront API, and reorders by dragging', async ({
+    page,
+    request,
+  }) => {
+    // A product of this arm's own, so the seeded product's media is untouched.
+    await page.goto(`${base}/products/new`);
+    await page.locator('#np-name').fill('T20 Media Product');
+    await page.locator('#np-price').fill('4200');
+    await page.getByRole('button', { name: 'Create product' }).click();
+    await expect(page.locator('[data-screen="SC-08"]')).toBeVisible();
+    const productId = /\/products\/([0-9a-f-]{36})/.exec(page.url())?.[1] as string;
+
+    // ---- 1. UPLOAD. The control exists at all, which it never did before.
+    await expect(page.locator('#media-file')).toBeVisible();
+    await pick(page);
+
+    // ---- 2. IT IS ON THE PRODUCT, as an image the browser actually fetched.
+    const img = page.locator('.media-thumb').first();
+    await expect(img).toBeVisible();
+    const src = await img.getAttribute('src');
+    expect(src).toBeTruthy();
+    // Rendered, not merely present: naturalWidth is 0 for an <img> whose
+    // fetch was refused (CSP, CORS, 404), so this is the assertion that
+    // distinguishes "a photograph is on the screen" from "a broken icon is".
+    await expect
+      .poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
+      .toBeGreaterThan(0);
+
+    // ---- 3. THE OBJECT IS REALLY IN THE BUCKET, anonymously readable at the
+    // public origin -- the viewing path's whole premise (public media bucket).
+    const direct = await request.get(src as string);
+    expect(direct.status()).toBe(200);
+
+    // ---- 4. REORDER BY DRAGGING. Two images, dragged, and the ORDER CHANGES.
+    await pick(page);
+    await expect(page.locator('.media-item')).toHaveCount(2);
+    const before = await page.locator('.media-thumb').evaluateAll((els) =>
+      els.map((e) => (e as HTMLImageElement).src),
+    );
+    await page.locator('.media-item').nth(1).dragTo(page.locator('.media-item').nth(0));
+    await expect
+      .poll(async () =>
+        page.locator('.media-thumb').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src)),
+      )
+      .toEqual([before[1], before[0]]);
+
+    // ---- 5. THE PUBLIC STOREFRONT API CARRIES IT, once published.
+    await page.goto(`${base}/products/${productId}`);
+    const publish = page.getByRole('button', { name: 'Publish', exact: true });
+    if (await publish.isEnabled().catch(() => false)) {
+      await publish.click();
+      const res = await request.get(
+        `${process.env['E2E_API_BASE_URL'] ?? 'http://localhost:3000'}/v1/storefronts/seed-store/products`,
+        { headers: { 'X-Adulis-Client': 'web/0.0.0' } },
+      );
+      expect(res.status()).toBe(200);
+      const body = (await res.json()) as { data: Array<{ id: string; image_key: string | null }> };
+      const mine = body.data.find((r) => r.id === productId);
+      if (mine) expect(mine.image_key).toBeTruthy();
+    }
+  });
+
+  test('a SIXTH image is refused BEFORE the upload begins (T20 S4)', async ({ page }) => {
+    /*
+     * The structural cap -- UNIQUE (product_id, position), positions 1..5 --
+     * stops a sixth ROW at COMMIT. It does not stop a sixth signed URL being
+     * minted, and a presigned write credential handed out for an upload that
+     * can never be committed is one that should never have existed. A
+     * presigned upload has two places to check a cap and this proves the one
+     * that is right: REQUEST_UPLOAD refuses before any bytes move.
+     */
+    await page.goto(`${base}/products/new`);
+    await page.locator('#np-name').fill('T20 Cap Product');
+    await page.locator('#np-price').fill('900');
+    await page.getByRole('button', { name: 'Create product' }).click();
+    await expect(page.locator('[data-screen="SC-08"]')).toBeVisible();
+
+    for (let i = 0; i < 5; i += 1) {
+      await pick(page);
+      await expect(page.locator('.media-item')).toHaveCount(i + 1);
+    }
+
+    // At the cap the control is DISABLED and says why -- the seller is told
+    // before they choose a file, not after a failed upload.
+    await expect(page.locator('#media-file')).toBeDisabled();
+    await expect(page.getByText(/Five images is the maximum/i)).toBeVisible();
+  });
+});

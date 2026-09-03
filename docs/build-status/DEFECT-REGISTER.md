@@ -3516,3 +3516,283 @@ Verification: pnpm ci:local -- 26 gates. The e2e arm starts where the parked cas
   data-screen div, deliberately outside the seller shell) and starting the arm one step
   past the state that broke.
 Ruling needed: none.
+
+### D-248 - The last fatal item that was an engineering task: a product can carry a photograph
+
+Severity:  RESOLVED (was BLOCKER - BETA-READINESS fatal item 3)
+Phase:     T20 - S4
+Source:    T17's beta walk, step 5: "The product screen has no file input of any kind -- not a hidden one, not a disabled one", and the only storage implementation in the tree was a fake signing https://fake-r2.local/ and reading back from an in-memory map that only tests wrote to
+Found by:  T17's walk; closed here against MinIO
+Effect:    Without an image there is no product. Nine of the ten publication-readiness items are reachable from nowhere but this console, so a seller who cannot add a photograph cannot sell.
+Response:  BUILT, and proven by a browser rather than by a test double
+Action:    apps/api/src/common/adapters/s3-object-storage.ts is ONE class implementing both MediaStorageAdapter and FinancialStorageAdapter, bound twice under two sets of values. Two buckets, because evidence/raw/ is plaintext: adulis-media is public-read with CORS for the console origin, adulis-evidence has no public access and a lifecycle rule expiring evidence/raw/ as a BACKSTOP -- the commit path deletes the raw object on success, and the lifecycle rule is what catches the commit that never came.
+Verification: the beta walk's own step 5, against real object storage: a PNG is picked in a browser, resized in the page to three WebP derivatives, PUT to presigned URLs, committed, and the rendered <img> reports naturalWidth > 0. "WALK [OK] step 5: a photograph uploads from the browser and renders on the product." The objects are in the bucket. SC-10 media covers the rest of S4.5.
+Ruling needed: none.
+
+### D-249 - MinIO is admissible proof for an R2 adapter only because the adapter cannot tell them apart
+
+Severity:  MINOR (a claim about scope of evidence, recorded so it is not overclaimed)
+Phase:     T20 - S4
+Source:    D-248's proof ran against MinIO in docker compose; Cloudflare R2 is the decided production store and its credentials exist in neither this repository nor the order
+Found by:  Stating the limit of what was proven
+Effect:    "It works" is a claim about MinIO. What makes it a claim about R2 is that S3ObjectStorage resolves its endpoint from R2_ACCOUNT_ID -- a bare account id becomes https://<id>.r2.cloudflarestorage.com, a URL is used as-is with forcePathStyle -- and reads five further values. NOTHING ELSE DIFFERS. Switching stores changes six environment variables and no code, which is the only reason a MinIO run says anything about R2.
+Response:  RECORDED, and the equivalence is the thing to re-check if either side changes
+Action:    If a future change makes the adapter branch on WHICH store it is talking to, this entry stops being true and the proof stops transferring. Nothing in the class branches today.
+Ruling needed: none.
+
+### D-250 - The media key carried a position, so a reorder was a storage rewrite or a lie
+
+Severity:  MAJOR (avoided before it shipped)
+Phase:     T20 - S4.4
+Source:    the signed key was products/<product>/img/<position>/<size>.webp
+Found by:  T20 S4.4's ruling, applied
+Effect:    The object's NAME was a copy of core.product_image.position, which reordering changes. Every reorder then had two options and both are wrong: copy the objects to new keys (megabytes of network to express a change of integer, on a connection where the upload itself is the expensive part), or leave the keys alone and ship an object whose name disagrees with its row. The second is what would have happened, because it is the one that looks like it works.
+Response:  FIXED before any reorder existed to break
+Action:    products/<product>/img/<uuid>/<size>.webp. The commit guard still matches on the products/<id>/img/ prefix, so a commit can still only name keys this API minted. Position lives in the row and nowhere else. c2-catalogue asserts the key is opaque, position-free, and that the three derivatives share one folder.
+Ruling needed: none.
+
+### D-251 - A five-image cap has two places to check it and only one of them is honest
+
+Severity:  MAJOR (avoided)
+Phase:     T20 - S4
+Source:    REQUEST_UPLOAD signed three PUTs without counting existing images; the cap was enforced at COMMIT
+Found by:  T20 S4's own warning that a presigned upload has two places to check a cap
+Effect:    A seller adding a sixth photograph would have resized it, uploaded three derivatives over a mobile connection, and THEN been told the limit is five. The bytes are the expensive part and they were spent before the refusal. Worse, the three orphaned objects are in the bucket with no row referencing them and no lifecycle rule covering that prefix.
+Response:  FIXED - the count is taken before the URLs are signed
+Action:    REQUEST_UPLOAD counts core.product_image for the product and refuses with IMAGE_CAP_REACHED before minting anything. The COMMIT-time check STAYS: it is the one that holds under two concurrent uploads, where both requests counted four and both were signed.
+Verification: an e2e arm asserts the sixth image is refused BEFORE any upload begins, not after.
+Ruling needed: none.
+
+### D-252 - CSP and bucket CORS are two different failures with one symptom
+
+Severity:  MINOR (diagnosability)
+Phase:     T20 - S4
+Source:    a direct-to-storage PUT can be stopped by this page's connect-src or by the bucket's own CORS, and in both cases fetch() rejects with an opaque TypeError
+Found by:  T18's ruling that these are "two different fixes, one symptom"
+Effect:    The seller sees "upload did not start" either way, and so does the engineer reading the failure. The two fixes are in different systems -- one is a header this repository ships, the other is a bucket setting that is not in this repository at all -- so guessing wrong costs a deploy.
+Response:  MADE DISTINGUISHABLE
+Action:    The page listens for securitypolicyviolation and records the last one; when a PUT rejects, the thrown message names which wall was hit -- "blocked by this page's security policy (connect-src blocked <uri>)" or "refused by storage before upload (bucket CORS or network)". The e2e harness derives BOTH origins so a misconfiguration of either is reproducible locally rather than only in production.
+Ruling needed: none.
+
+### D-253 - The push adapter said RETRYABLE when it meant there is no provider, and four templates reached nobody
+
+Severity:  MAJOR
+Phase:     T20 - S5
+Source:    NullPushAdapter.send() returned 'RETRYABLE'; ORDER_AWAITING_PAYMENT_MORNING, STOCK_CONFIDENCE_NUDGE, TRIAL_ENDING and notification.chat.escalated are PUSH-only
+Found by:  T20 S5, and D-240 had already recorded the gap
+Effect:    RETRYABLE is a claim about a TRANSIENT failure. With no provider bound it is permanent, so every PUSH notification burned its full backoff and landed in FAILED -- silence with a retry count next to it. notification.chat.escalated is the one that costs money: a buyer asks what the assistant cannot answer, it escalates, and the seller never learns. A lost sale with no trace.
+Response:  FIXED - a fourth outcome, and the row MOVES
+Action:    PushOutcome gains NO_PROVIDER, which is a fact about the PLATFORM rather than about the device (TOKEN_DEAD) or the network (RETRYABLE). The job then UPDATEs the notification's channel to IN_APP rather than inserting a twin: notifications.controller does not filter by channel, so a copy would appear twice in the seller's list. A bound provider returning RETRYABLE still fails, and a test asserts that separately so the fallback cannot swallow a real transport failure.
+Ruling needed: none.
+
+### D-254 - fn_activate_due_payout had no job, so "twenty-four hours" meant "until the seller next looks"
+
+Severity:  MAJOR
+Phase:     T20 - S6.1
+Source:    ADU-AUTH-01 v2.7 S20.1; core.fn_activate_due_payout was invoked from exactly one place, the GET on /v1/seller/payout
+Found by:  v2.7 change C, built here
+Effect:    A due PENDING payout change stayed PENDING -- and stayed CANCELLABLE -- until somebody opened the payout screen. The exposure window was never twenty-four hours; it was unbounded.
+Response:  BUILT - payout.activate_due, every five minutes
+Action:    Per-seller containment, which is the requirement and not a nicety: the ownership-transfer activation had none, so one raise would have stopped the sweep platform-wide. Each seller is claimed and run alone and a raise is logged and stepped over. Its own transaction, one statement, with nothing after it that can fail.
+Ruling needed: none.
+
+### D-255 - fn_activate_due_payout on the READ path is D-74's twin, and it is still there
+
+Severity:  MAJOR (registered, NOT fixed here)
+Phase:     T20 - S6.1
+Source:    apps/api/src/modules/financial/financial.service.ts getPayout runs core.fn_activate_due_payout inside the handler's transaction; migration 0022, since Tier 3
+Found by:  T20 S6.1 asked the question directly rather than assuming the answer
+Effect:    YES, IT IS THE TWIN. A failure later in that read rolls back an activation it just performed -- the exact shape D-74 recorded, where anything written at the top of a handler transaction is undone when the handler raises. It is less damaging than D-74's case only because the next read re-performs it; it is still a write whose durability depends on the success of an unrelated read.
+Response:  REGISTERED, not fixed
+Action:    The fix is a decision about the read path -- move the activation to its own connection, or drop the lazy call now that a job exists and accept that the screen is correct only to the last job tick. Both are behaviour changes to a screen this order did not scope. The NEW job is immune by construction and does not depend on this being fixed.
+Ruling needed: YES -- keep the lazy activation on its own connection, or remove it and let the job own activation entirely?
+
+### D-256 - A job from another document went into the S24 transcription and broke the assertion that made it a transcription
+
+Severity:  MINOR (caught by its own test, within the hour)
+Phase:     T20 - S6.1
+Source:    payoutActivateDue was first added to E5_JOBS, which feeds S24_JOBS
+Found by:  the test "registers exactly the twenty jobs S24 names, and no others", going red
+Effect:    S24_JOBS is a TRANSCRIPTION of ADU-DB-01 S24 and its test asserts the set both ways. A job from ADU-AUTH-01 v2.7 inside it turns twenty into twenty-one, and the obvious repair -- editing the 20 to a 21 -- destroys the only thing the assertion was for. The failure reads as a broken test rather than as a job filed under the wrong document, which is what makes it worth an entry.
+Response:  FIXED by separating the lists, not by editing the number
+Action:    RULED_JOBS holds jobs required by documents other than S24, each citing its own; SCHEDULED_JOBS is what the worker registers. Tests assert an S24 name never appears in RULED_JOBS and a RULED job never cites S24. The heartbeat was always outside the list for the same reason and is the precedent.
+Ruling needed: none.
+
+### D-257 - The heartbeat published the size of a transcription, not the number of jobs it runs
+
+Severity:  MINOR
+Phase:     T20 - S6.1
+Source:    makeHeartbeatJob(workerId, S24_JOBS.length)
+Found by:  D-256's fix, which made the two numbers different for the first time
+Effect:    jobs_registered exists to answer "is this worker running the full set?". It reported twenty while twenty-one were scheduled, so it could not have detected the one failure it is watched for. The numbers had been equal since the heartbeat was written, which is why nobody noticed the wrong one was being published.
+Response:  FIXED
+Action:    It publishes SCHEDULED_JOBS.length. cronItemsForTest had the same shape and now covers the scheduled set, with its doc comment corrected -- it does NOT cover the heartbeat's own cron, which is built inside startWorker from the worker's identity, and saying so is more useful than pretending otherwise.
+Ruling needed: none.
+
+### D-258 - The surface-marker gate found three disagreements, all in the direction the ruling did not anticipate
+
+Severity:  MINOR (documentation vs. grant; no grant changed)
+Phase:     T20 - S6.2
+Source:    ADU-AUTH-01 v2.7 S26.4 -- "a marker in a catalogue is a CLAIM about a grant, and nothing compared the two ... The grant governs; the marker is corrected to it"
+Found by:  pnpm verify:surface-markers, built here
+Effect:    v2.7 named one case (analytics overview) and expected the failure to be markers promising reach the grant refuses. That direction is CLEAN: no M in ADU-API-01 S12 over-promises. The other direction was not. THREE permissions are granted on MOBILE with no marked endpoint -- seller.reviews:read, seller.analytics.basic:read, seller.notifications.preferences:write. Nobody is broken by this today, which is exactly why it survives: the day someone builds the mobile screen, the review that should have questioned the grant has already happened and concluded nothing.
+Response:  MARKERS CORRECTED per S26.4; no grant touched
+Action:    Three rows in ADU-API-01 v1.11 S12 gain M, and the correction is recorded in S12 itself. THIS IS A DOCUMENT EDIT MADE BY THE BUILD, which is not ordinary -- it is made because S26.4 rules the direction explicitly and leaves nothing to design.
+Verification: the gate is proven to FIRE in both directions by planting each violation and observing red, then restoring. The path-to-permission mapping is read out of the source rather than transcribed, and a marked row whose permission cannot be resolved is a FAILURE, not a skip -- a reader that silently drops what it cannot parse is a gate that goes green by not looking.
+Ruling needed: none.
+
+### D-259 - Fifty-seven console styles referenced variables that were never defined anywhere
+
+Severity:  MAJOR (invisible until dark mode existed)
+Phase:     T20 - S6.3
+Source:    apps/console/src/console.css used var(--color-border, #d4cec4), var(--space-3, 0.75rem) and five more names in that convention; @adulis/tokens defines --adu-* and nothing else
+Found by:  auditing hardcoded colours before adding dark mode
+Effect:    Every one had a fallback, so every one silently rendered the literal. The storefront-preview region was not using the design system at all -- it looked correct, passed every gate, and would have stayed light-coloured in dark mode while the rest of the page inverted. A fallback is what makes this class invisible: without it the layout collapses and somebody fixes it the same day.
+Response:  FIXED - all 57 bound to real tokens; zero non---adu- variables remain
+Action:    One of the seven had no token to bind to. --space-3 (0.75rem, 12px) was used TWENTY-TWO times against a 4px scale that ran 4, 8, 16 -- so space.smd is added to both token files. Twenty-two authored uses of a value is evidence the scale was missing a step, not that the author was careless.
+Ruling needed: none.
+
+### D-260 - The two token files are still two files, and dark mode doubled the surface
+
+Severity:  MINOR (PARKED)
+Phase:     T20 - S6.3
+Source:    packages/tokens README: "One source would be better than two; until a build step derives one from the other, a drift between these files is a defect to fix in BOTH"
+Found by:  Adding a second mode to both by hand
+Effect:    index.ts and tokens.css carried one value set each and now carry two, so the number of places a drift can hide has doubled. Nothing compares them. This repository has a name for that shape and a gate for it in two other places (verify:permission-doc, verify:appendix): a value given in two forms is not verified until a comparator runs.
+Response:  PARKED, deliberately
+Action:    The comparator is a small script -- parse the custom properties, compare to the exports, both directions, both modes -- and it was not built because T20 S6.3 asked for dark mode and the window's remaining work was S7. It is the obvious next gate and it is cheap. Recorded rather than done.
+Ruling needed: none.
+
+### D-261 - A financial test arm fails under parallel load and passes alone; the mechanism is not established
+
+Severity:  MINOR (flake, PARKED with what was ruled out)
+Phase:     T20 - S4
+Source:    c4-financial.e2e.spec.ts "with step-up, an aged device and no locks", the notices count assertion at the end of the arm
+Found by:  one full API suite run; green in isolation and green on the next full run
+Effect:    Counted PAYOUT_CHANGE_REQUESTED rows scheduled_for >= a JS-captured startedAt returned 0. The arm's earlier assertions in the same request all passed, so the payout WAS written and only the notification count came back empty.
+Response:  PARKED - NOT diagnosed, and saying so is the point
+Action:    Ruled out: clock skew between Node and Postgres, which was the obvious cause and is the WRONG DIRECTION -- measured at +0.1s with Postgres AHEAD, which makes the filter more inclusive rather than less. Ruled out: cross-suite teardown, since c4 and c6 use distinct market and account ids and every other teardown is account-scoped. Not ruled out: anything else. Two green runs is not a diagnosis and this entry does not claim one.
+Ruling needed: none.
+
+### D-262 - BLOCKER: S7 cannot be drawn. The Figma account has neither edit access to the file nor a seat that could do the work
+
+Severity:  BLOCKER (external; nothing in this repository can clear it)
+Phase:     T20 - S7
+Source:    T20 S7 names file key FneEVVjS5zjOA03NrVu4Rs and asks for a polished seller console in both modes -- five screens at two breakpoints, twenty frames, a variable collection with Light/Dark modes, and Auto Layout throughout
+Found by:  Checking access before drawing anything, per S1.4's instruction to check the Figma MCP first
+Effect:    TWO INDEPENDENT BLOCKERS, and clearing either one alone is not enough.
+
+  1. NO EDIT ACCESS TO THE FILE. get_metadata on FneEVVjS5zjOA03NrVu4Rs returns
+     "Looks like you don't have edit access to this file. The file owner can
+     share it with you and make you an editor." Every write tool needs edit
+     rights, and so does renaming the file from "Untitled" (S7.1).
+
+  2. THE SEAT CANNOT AFFORD THE WORK EVEN WITH ACCESS. whoami reports one plan:
+     "Abenezer Mekonnen's team", tier STARTER, seat VIEW. Figma's published
+     limits put a View seat on Starter at UP TO 20 TOOL CALLS PER MONTH -- for
+     the whole month, not per session. S7 is twenty frames plus a two-mode
+     variable collection plus components; it is hundreds of calls. Twenty is
+     not a slow version of that work, it is not that work.
+
+  Also recorded as a fact rather than a conclusion: the authenticated Figma
+  identity is abenezerlibamu421@gmail.com, which is not the account this
+  repository's commits are authored by. Whether that is the intended account is
+  not something the build can determine.
+
+Response:  STOPPED, per S1.3 -- "A BLOCKER stops you"
+Action:    To clear it, BOTH are needed: (a) the file's owner shares
+  FneEVVjS5zjOA03NrVu4Rs with the authenticated Figma account as an EDITOR, and
+  (b) that account holds a Full or Dev seat on a Professional plan or better
+  (200 calls/day). Figma's own guidance is explicit that a Starter plan must be
+  upgraded and that the new seat must be Full or Dev.
+  NOTHING WAS DRAWN AND NOTHING WAS FAKED. No partial file was created in a
+  drafts folder to show progress -- a design in the wrong file is not the design
+  the order asked for, and would have spent a fifth of the monthly call budget
+  proving it.
+Verification: whoami and get_metadata, both quoted above. Two calls, deliberately
+  -- there was no point spending more of a twenty-call monthly budget confirming
+  a refusal that had already been stated plainly.
+Ruling needed: none. It is an access grant and a seat upgrade, not a decision.
+
+### D-263 - Correction to D-251: the commit-side image cap is a schema fact, not a second count
+
+Severity:  MINOR (precision in the register; no code change)
+Phase:     T20 - S4, adversarial pass
+Source:    D-251 states "The COMMIT-time check STAYS: it is the one that holds under two concurrent uploads, where both requests counted four and both were signed"
+Found by:  The media phase's adversarial pass, checking that claim instead of trusting it
+Effect:    The claim is TRUE in substance and MISLEADING in mechanism, which is the worse kind of register entry. There is no second count at COMMIT and there never was. `>= 5` appears exactly once in catalogue.service.ts, in REQUEST_UPLOAD. A reader following D-251 would look for a commit-time count, fail to find one, and reasonably conclude the cap had been left half-built.
+Response:  CORRECTED HERE - the register is append-only, so D-251 stands as written and this entry is what a reader of it must also read
+Action:    What actually holds at commit is the SCHEMA, and it is stronger than a count:
+
+             position int NOT NULL CHECK (position BETWEEN 1 AND 5),
+             CONSTRAINT product_image_position UNIQUE (product_id, position)
+
+           migration 0007's own comment says it exactly -- "UNIQUE (product_id, position)
+           caps images at five as a STRUCTURAL FACT ... five positions, five rows, no
+           counting logic anywhere." Two concurrent uploads that both counted four and
+           were both signed cannot produce six rows: there are only five positions and
+           each is unique per product. The second committer gets POSITION_TAKEN.
+           This is the doctrine working as written -- a rule the database can hold, the
+           database holds -- and the pre-mint count added in D-251 is NOT the cap. It is
+           a courtesy that refuses before the seller pays for three uploads. The cap
+           itself was never in application code and must not be moved there.
+           Migration 0048 made the UNIQUE constraint DEFERRABLE INITIALLY DEFERRED so a
+           reorder can swap positions in one statement; deferred uniqueness is checked at
+           COMMIT, so the concurrency guarantee above is unaffected -- one of the two
+           transactions still fails, just at commit rather than at insert. The CHECK is
+           not deferrable and is immediate either way.
+Ruling needed: none.
+
+### D-264 - D-260 discharged: the token comparator exists
+
+Severity:  RESOLVED (D-260 was PARKED in the same order)
+Phase:     T20 - S6.3
+Source:    D-260 parked the comparator because the window's remaining work was S7
+Found by:  S7 turning out to be blocked (D-262), which returned the time
+Effect:    n/a -- this closes a parked risk rather than reporting a new one.
+Response:  BUILT - gate `tokens`
+Action:    `pnpm verify:tokens` checks four things, and the last two are what dark mode added: every export has its custom property and every custom property its export (both directions, per group); the VALUES agree; MODE PARITY -- colorDark has exactly the keys color has, which is the shape T20 S7.3's Light/Dark collection needs; and the TWO dark blocks in tokens.css are identical to each other, which is the copy most likely to drift because CSS cannot express one body under two selectors here.
+Verification: it found two defects IN ITSELF before it found none in the tokens, and both are recorded in its header rather than quietly fixed. It was line-based, so it mis-read every single-line nested object and then reported the source as missing keys -- a comparator accusing the source of its own parsing bug, which trains a reader to disbelieve it. And it compared the CSS role indirection (`var(--adu-neutral-0)`) against the TS literal, reporting thirty-eight disagreements where there were none. Both are now resolved on both sides before comparison.
+Ruling needed: none.
+
+### D-265 - The gate list meant two different things on two machines, and only a CI run could tell
+
+Severity:  MAJOR (a green local gate list that does not mean what it says)
+Phase:     T20 - S4/S9, found when PR #85's CI went red
+Source:    `pnpm ci:local` green on 27 gates; the identical list red in CI on t14-a3-stamped-audience.spec.ts, five tests, all "expected 202, got 400" against the OTP endpoint
+Found by:  Looking at the gate rather than trusting the local run -- which is the exact discipline T20 S2 added the README badge for
+Effect:    AMBIENT STATE. That suite reads `core.market WHERE code = 'SEED'`, which only `ops/scripts/seed.mjs` creates, and NOTHING between `db:migrate` and the `test` gate created it. A developer's database has been seeded at some point; a CI database has not. The suite therefore passed for everyone who ran it locally and could never pass in CI.
+  IT WAS INVISIBLE BECAUSE THE TEST GATE IS SCOPED to packages changed against origin/main. The api suite had not actually run in CI for several merges -- the recent red mains failed at `mt-keys`, before `test` -- so the first branch to touch apps/api again inherited a failure that had been waiting since the suite was written. It was not caused by this order's changes.
+  AND IT FAILED SILENTLY, WHICH IS WHY IT POINTED AT THE WRONG PLACE. The setup is `INSERT INTO core.device ... SELECT ... WHERE code = 'SEED'`, and an INSERT ... SELECT over an empty SELECT inserts nothing and raises nothing. The device did not exist, so every OTP request 400'd, and five failures named the auth endpoint -- which was blameless.
+Response:  BOTH HALVES FIXED
+Action:    (1) The `migrate` gate runs `db:seed` as a second STEP -- a step and not a new gate, because ADU-RUL-03 S5.2 cites gates by position. The seed is idempotent, so it costs a local developer nothing and gives CI the state the suites were written against. A gate list that means something different on two machines is not a gate list.
+           (2) The suite checks `rowCount === 1` and throws naming the seed. One clear error instead of five that accuse the wrong subsystem.
+Verification: PROVEN BY CONTROLLED EXPERIMENT, twice -- the first attempt was invalid and is worth recording. Hiding the market with the suite run in a subprocess that had no `.env` produced five failures for an unrelated reason (a missing database password), which looked like confirmation and was not. Re-run with the environment loaded: market present -> 5 passed; market hidden -> 5 failed, carrying the new message, with no bare 400 anywhere; market restored -> 5 passed.
+Ruling needed: none.
+
+### D-266 - Correction to D-261: the right conclusion from a measurement that could not support it
+
+Severity:  MINOR (evidence quality in the register)
+Phase:     T20 - S9
+Source:    D-261 states clock skew was "Ruled out ... measured at +0.1s with Postgres AHEAD"
+Found by:  Re-reading my own method while the flake recurred
+Effect:    THE MEASUREMENT WAS WORTHLESS AND THE CONCLUSION HAPPENED TO BE RIGHT, which is the combination worth recording. Each sample spawned `docker exec ... psql`, so the ~100ms it reported was process startup latency with the clock offset buried somewhere inside it. It could not have detected a skew smaller than its own noise floor, and it would have reported "+0.1s, Postgres ahead" for a Postgres running a tenth of a second BEHIND. Anyone re-deriving the flake from that entry would have been reasoning from a number that measured the wrong thing.
+Response:  RE-MEASURED PROPERLY, and skew is genuinely ruled out
+Action:    A warm `pg` connection, five samples, bracketing each `clock_timestamp()` between a Node timestamp taken before the query and one taken after: round trip 1ms, and the database clock falls INSIDE the bracket every time. The clocks agree to within a millisecond. `core.notification.scheduled_for` defaults to `now()`, so the arm's `scheduled_for >= startedAt` filter is sound and is not the cause.
+           MECHANISM NARROWED, NOT ESTABLISHED. `core.fn_notify_payout_change` is an AFTER INSERT OR UPDATE OF state trigger that returns without writing anything unless the row is NEW or its state actually changed. The arm's other assertions -- the change log and the ciphertext -- pass whether the write was an insert or an update, so ONLY the notification count can see the difference. Any path that turns that POST into an update, or into an idempotent replay, produces exactly the observed failure: 201, a good log row, good ciphertext, and no notification. Which path, and what makes it intermittent, is still not established.
+           NOT FIXED, AND NOT PAPERED OVER. Changing the assertion to make it pass would remove the only thing in the suite that can tell an insert from an update.
+Ruling needed: none.
+
+### D-267 - The media proof needed a store in CI, and CI had none. Same class as D-265, found the same way
+
+Severity:  MAJOR (the fatal item's proof would not have run where it matters)
+Phase:     T20 - S4, found by CI after D-265's fix let the run reach gate 25
+Source:    `verify-console-e2e.mjs` requires the six R2_* values; the CI job had no object storage and no .env
+Found by:  Watching the gate. D-265's fix moved the failure from gate 11 to gate 25, which is what progress looks like.
+Effect:    THE SECOND INSTANCE OF THE SAME CLASS IN ONE ORDER, and that is the reason it gets its own entry rather than a line in D-265. My machine had the six values in .env, CI had none, and `pnpm ci:local` was green while the identical list went red -- exactly D-265's shape, with configuration in place of seeded rows. Two of these in one order says the class is not a coincidence: ANY gate that reads ambient state passes locally and is untested until CI happens to reach it.
+           The gate refused rather than degraded, which is the only reason this was visible at all. It could have skipped the media arms when storage was unset; then CI would have gone green while the proof of BETA-READINESS's last fatal item silently did not run. ADU-CON-02 S16 is explicit that there is no skip label, and this is why.
+Response:  CI GIVEN A REAL OBJECT STORE
+Action:    A step starts `minio/minio` and creates the two buckets exactly as docker-compose.yml does -- media public-read, evidence with no public access and a lifecycle rule on evidence/raw/ -- and the six values are passed to the gate step. A STEP AND NOT A `services:` CONTAINER because the official image needs `server /data` as its command and GitHub's `services:` cannot set one.
+           The credentials are the local container's own, in the clear, deliberately: they are the local-dev-password class, they grant nothing anywhere, and no real credential is in this repository or any report.
+           This also means the adapter's central claim is now exercised on a second machine: the same class talks to MinIO under six environment values in CI and would talk to Cloudflare R2 under six different ones, with no code path between them (D-249).
+Ruling needed: none.

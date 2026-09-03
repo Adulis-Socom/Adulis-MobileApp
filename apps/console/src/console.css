@@ -488,6 +488,11 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   width: min(20rem, 70vw);
   height: auto;
   margin: 0 auto;
+  /* THE ONE DELIBERATE LITERAL IN THIS FILE, and it must survive dark mode.
+     A QR code is read by a camera, not by a person: the quiet zone and the
+     light modules have to stay white whatever the theme is, because a scanner
+     thresholds on contrast and an inverted code is a code that does not scan.
+     Do not replace this with a surface token. */
   background: #ffffff;
 }
 .qr-explain { text-align: center; margin-top: var(--adu-space-md); }
@@ -578,17 +583,17 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
    sizes containers; nothing translated gets a fixed height.
    ========================================================================== */
 
-.more-menu .more-group { margin-block: var(--space-4, 1rem); }
+.more-menu .more-group { margin-block: var(--adu-space-md); }
 .more-menu ul { list-style: none; padding: 0; margin: 0; }
-.more-menu li { padding-block: var(--space-2, 0.5rem); }
+.more-menu li { padding-block: var(--adu-space-sm); }
 
-.sidenav-more { margin-top: var(--space-4, 1rem); }
+.sidenav-more { margin-top: var(--adu-space-md); }
 .sidenav-more h3 {
-  font-size: var(--text-sm, 0.875rem);
+  font-size: var(--adu-font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.75;
-  margin-block: var(--space-2, 0.5rem) 0;
+  margin-block: var(--adu-space-sm) 0;
 }
 .sidenav-more ul { list-style: none; padding: 0; margin: 0; }
 /* The bottom bar keeps plain More; the expanded groups are desktop only. */
@@ -596,55 +601,55 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   .sidenav-more { display: none; }
 }
 
-.form-block { display: grid; gap: var(--space-2, 0.5rem); max-width: 28rem; }
+.form-block { display: grid; gap: var(--adu-space-sm); max-width: 28rem; }
 .form-block label { font-weight: 600; }
 
-.fulfilment-method { margin-block: var(--space-3, 0.75rem); }
-.fulfilment-method .note-label { display: block; margin-top: var(--space-2, 0.5rem); }
+.fulfilment-method { margin-block: var(--adu-space-smd); }
+.fulfilment-method .note-label { display: block; margin-top: var(--adu-space-sm); }
 .fulfilment-method textarea { width: 100%; max-width: 28rem; }
 
-.weekday-row { margin-block: var(--space-3, 0.75rem); }
-.window-row { display: flex; gap: var(--space-2, 0.5rem); align-items: center; flex-wrap: wrap; }
+.weekday-row { margin-block: var(--adu-space-smd); }
+.window-row { display: flex; gap: var(--adu-space-sm); align-items: center; flex-wrap: wrap; }
 .override-list { list-style: none; padding: 0; }
 .override-list li {
   display: flex;
-  gap: var(--space-3, 0.75rem);
+  gap: var(--adu-space-smd);
   align-items: baseline;
-  padding-block: var(--space-2, 0.5rem);
+  padding-block: var(--adu-space-sm);
   flex-wrap: wrap;
 }
 .override-note { opacity: 0.8; }
 
 .storefront-preview .preview-card {
-  border: 1px solid var(--color-border, #d4cec4);
-  border-radius: var(--radius-2, 8px);
-  padding: var(--space-3, 0.75rem);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-smd);
   max-width: 28rem;
 }
 
 .courier-list, .team-list, .session-list ul { list-style: none; padding: 0; margin: 0; }
 .courier-row, .team-row, .session-row {
   display: flex;
-  gap: var(--space-3, 0.75rem);
+  gap: var(--adu-space-smd);
   align-items: baseline;
   flex-wrap: wrap;
-  padding-block: var(--space-2, 0.5rem);
-  border-bottom: 1px solid var(--color-border, #d4cec4);
+  padding-block: var(--adu-space-sm);
+  border-bottom: 1px solid var(--adu-color-border);
 }
-.confirm-remove { display: inline-flex; gap: var(--space-2, 0.5rem); align-items: baseline; flex-wrap: wrap; }
+.confirm-remove { display: inline-flex; gap: var(--adu-space-sm); align-items: baseline; flex-wrap: wrap; }
 
-.payout-actions { display: flex; gap: var(--space-3, 0.75rem); flex-wrap: wrap; margin-block: var(--space-3, 0.75rem); }
+.payout-actions { display: flex; gap: var(--adu-space-smd); flex-wrap: wrap; margin-block: var(--adu-space-smd); }
 .payout-facts ul { padding-inline-start: 1.25rem; }
 
 .pref-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: var(--space-2, 0.5rem);
+  gap: var(--adu-space-sm);
   align-items: start;
-  padding-block: var(--space-3, 0.75rem);
-  border-bottom: 1px solid var(--color-border, #d4cec4);
+  padding-block: var(--adu-space-smd);
+  border-bottom: 1px solid var(--adu-color-border);
 }
-.pref-row .pref-covers { display: block; font-size: var(--text-sm, 0.875rem); opacity: 0.8; }
+.pref-row .pref-covers { display: block; font-size: var(--adu-font-size-sm); opacity: 0.8; }
 .pref-row .hint, .pref-row .warn { grid-column: 1 / -1; }
 .pref-row.locked { opacity: 0.9; }
 
@@ -655,14 +660,14 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
    visual language above. No fixed heights on translated text.
    ========================================================================== */
 
-.kpi-tiles { display: flex; gap: var(--space-3, 0.75rem); flex-wrap: wrap; margin-block: var(--space-3, 0.75rem); }
+.kpi-tiles { display: flex; gap: var(--adu-space-smd); flex-wrap: wrap; margin-block: var(--adu-space-smd); }
 .kpi-tile {
-  border: 1px solid var(--color-border, #d4cec4);
-  border-radius: var(--radius-2, 8px);
-  padding: var(--space-3, 0.75rem);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-smd);
   min-width: 9rem;
   display: grid;
-  gap: var(--space-1, 0.25rem);
+  gap: var(--adu-space-xs);
 }
 .kpi-value { font-size: 1.5rem; font-weight: 700; }
 .analytics-full.locked { opacity: 0.75; }
@@ -670,55 +675,60 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .review-list, .claim-list, .conversation-list, .notification-list { list-style: none; padding: 0; margin: 0; }
 .review-card, .claim-card, .notification-row {
   display: flex;
-  gap: var(--space-3, 0.75rem);
+  gap: var(--adu-space-smd);
   align-items: baseline;
   flex-wrap: wrap;
-  padding-block: var(--space-3, 0.75rem);
-  border-bottom: 1px solid var(--color-border, #d4cec4);
+  padding-block: var(--adu-space-smd);
+  border-bottom: 1px solid var(--adu-color-border);
 }
 .review-body { flex-basis: 100%; margin: 0; }
 
-.conversation-row a { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; padding-block: var(--space-2, 0.5rem); }
+.conversation-row a { display: flex; gap: var(--adu-space-smd); align-items: baseline; padding-block: var(--adu-space-sm); }
 
-.message-list { list-style: none; padding: 0; display: grid; gap: var(--space-2, 0.5rem); }
+.message-list { list-style: none; padding: 0; display: grid; gap: var(--adu-space-sm); }
 .message {
-  border: 1px solid var(--color-border, #d4cec4);
-  border-radius: var(--radius-2, 8px);
-  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  padding: var(--adu-space-sm) var(--adu-space-smd);
   max-width: 42rem;
 }
 .message-seller, .message-team_member { margin-left: auto; }
 .message-bot { opacity: 0.9; }
-.message-sender { font-weight: 600; margin-right: var(--space-2, 0.5rem); }
-.message-time { font-size: var(--text-sm, 0.875rem); opacity: 0.75; }
-.message-body { margin-block: var(--space-1, 0.25rem) 0; }
-.composer { display: grid; gap: var(--space-2, 0.5rem); max-width: 42rem; margin-top: var(--space-4, 1rem); }
-.pinned-order { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; }
+.message-sender { font-weight: 600; margin-right: var(--adu-space-sm); }
+.message-time { font-size: var(--adu-font-size-sm); opacity: 0.75; }
+.message-body { margin-block: var(--adu-space-xs) 0; }
+.composer { display: grid; gap: var(--adu-space-sm); max-width: 42rem; margin-top: var(--adu-space-md); }
+.pinned-order { display: flex; gap: var(--adu-space-smd); align-items: baseline; }
 
-.notifications-header { display: flex; gap: var(--space-3, 0.75rem); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.notifications-header { display: flex; gap: var(--adu-space-smd); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
 .claim-evidence.readonly ul { padding-inline-start: 1.25rem; }
-.claim-remedy { display: grid; gap: var(--space-2, 0.5rem); max-width: 28rem; }
+.claim-remedy { display: grid; gap: var(--adu-space-sm); max-width: 28rem; }
 
 /* ==========================================================================
    C-8 -- SC-C1 courier. Mobile-first single column; no sidebar, no seller
    chrome. The QR block stays pure black-on-white (lib/qr.tsx says why).
    ========================================================================== */
 
-.courier-screen { max-width: 28rem; margin-inline: auto; padding: var(--space-3, 0.75rem); }
-.courier-header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3, 0.75rem); }
+.courier-screen { max-width: 28rem; margin-inline: auto; padding: var(--adu-space-smd); }
+.courier-header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--adu-space-smd); }
 .courier-orders { list-style: none; padding: 0; margin: 0; }
 .courier-order-row {
   display: flex;
-  gap: var(--space-3, 0.75rem);
+  gap: var(--adu-space-smd);
   align-items: baseline;
   flex-wrap: wrap;
   width: 100%;
   text-align: left;
-  padding: var(--space-3, 0.75rem);
-  border: 1px solid var(--color-border, #d4cec4);
-  border-radius: var(--radius-2, 8px);
-  margin-block: var(--space-2, 0.5rem);
+  padding: var(--adu-space-smd);
+  border: 1px solid var(--adu-color-border);
+  border-radius: var(--adu-radius-md);
+  margin-block: var(--adu-space-sm);
   background: transparent;
   min-height: 44px;
 }
-.courier-qr { max-width: 20rem; margin-block: var(--space-3, 0.75rem); }
+.courier-qr { max-width: 20rem; margin-block: var(--adu-space-smd); }
+
+/* T20 S4 -- media upload row */
+.media-item { display: flex; align-items: center; gap: var(--adu-space-xs); }
+.media-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: var(--adu-radius-sm); border: 1px solid var(--adu-color-border); }
+.media-upload { margin-top: var(--adu-space-sm); display: flex; flex-direction: column; gap: var(--adu-space-2xs); }

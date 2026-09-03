@@ -3,9 +3,10 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.16** (T15) · ADU-AUTH-01 **v2.6** (T13, and **v2.5
-remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`) ·
-ADU-API-01 **v1.10** · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
+**Governing documents:** ADU-DB-01 **v1.16** (T15) · ADU-AUTH-01 **v2.7** (T20, and **v2.5
+remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`;
+v2.7 S0: "There is no permission-grant change in this revision") ·
+ADU-API-01 **v1.11** (T20) · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
 governs and which amendments are live. A1, A2 and A3 are all absorbed into the installed
 text and no longer apply separately.
 

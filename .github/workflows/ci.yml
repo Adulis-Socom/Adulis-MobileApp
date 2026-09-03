@@ -154,10 +154,59 @@ jobs:
           psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "ALTER ROLE adulis_app LOGIN PASSWORD 'ci-password'"
           psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "ALTER ROLE adulis_jobs LOGIN PASSWORD 'ci-password'"
 
+      # ==================================================================
+      # OBJECT STORAGE, because the media path is not optional any more.
+      #
+      # T20 S4 made "a seller can put a photograph on a product" real, and the
+      # console-e2e gate proves it the only way it can be proven: a browser, a
+      # real file, three presigned PUTs and a rendered <img>. That needs a
+      # store. `verify-console-e2e.mjs` REFUSES TO RUN WITHOUT ONE rather than
+      # quietly skipping the media arms -- ADU-CON-02 S16 is explicit that
+      # there is no skip label, and a media proof that silently does not run in
+      # CI is worse than no proof, because the gate still reports green.
+      #
+      # A STEP, NOT A `services:` CONTAINER. The official minio image needs
+      # `server /data` as its command and GitHub's `services:` cannot set one.
+      # Running it here also keeps this identical to docker-compose.yml, which
+      # is the point: the adapter cannot tell MinIO from Cloudflare R2, so the
+      # six values below are the only difference between this and production.
+      # They are local-container credentials, not secrets.
+      # ==================================================================
+      - name: Start object storage and create the two buckets
+        run: |
+          docker run -d --name adulis-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=adulis-local \
+            -e MINIO_ROOT_PASSWORD=adulis-local-secret \
+            -e MINIO_API_CORS_ALLOW_ORIGIN='http://localhost:4173,http://localhost:5173' \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:9000/minio/health/live >/dev/null
+          # TWO BUCKETS, because evidence/raw/ is plaintext: the media bucket is
+          # public-read and the evidence bucket has no public access at all.
+          docker run --rm --network host --entrypoint sh minio/mc:latest -c "
+            mc alias set local http://localhost:9000 adulis-local adulis-local-secret &&
+            mc mb --ignore-existing local/adulis-media &&
+            mc mb --ignore-existing local/adulis-evidence &&
+            mc anonymous set download local/adulis-media &&
+            mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 || true
+          "
+
       - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
         run: pnpm ci:local
         env:
           ADULIS_SCOPE_FILTER: '...[origin/main]'
+          # The six values the object-store adapter reads. A bare account id
+          # would be treated as Cloudflare's; a URL is used verbatim with
+          # path-style addressing, which is what MinIO needs.
+          R2_ACCOUNT_ID: http://localhost:9000
+          R2_ACCESS_KEY_ID: adulis-local
+          R2_SECRET_ACCESS_KEY: adulis-local-secret
+          R2_MEDIA_BUCKET: adulis-media
+          R2_EVIDENCE_BUCKET: adulis-evidence
+          R2_MEDIA_PUBLIC_ORIGIN: http://localhost:9000/adulis-media
           # db-determinism shells psql and pg_dump through `docker exec`,
           # because the runner's own client tools are a major behind the
           # server (pg_dump 16 refuses a PG17 server outright). Locally that

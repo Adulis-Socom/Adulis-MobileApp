@@ -45,7 +45,9 @@
     "verify:deferred-values": "node --env-file-if-exists=.env ops/scripts/verify-deferred-values.mjs",
     "worker:install": "node ops/scripts/install-worker-schema.mjs",
     "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs",
-    "verify:transcription": "node --env-file-if-exists=.env ops/scripts/verify-transcription.mjs"
+    "verify:transcription": "node --env-file-if-exists=.env ops/scripts/verify-transcription.mjs",
+    "verify:surface-markers": "node ops/scripts/verify-surface-markers.mjs",
+    "verify:tokens": "node ops/scripts/verify-tokens.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

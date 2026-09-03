@@ -247,7 +247,40 @@ const GATES = [
   { id: 'error-locale', title: 'Every error code exists in both locale catalogues', cmd: ['pnpm', 'verify:error-locale'] },
   { id: 'build', title: 'Build', cmd: pnpm('build', { scoped: true }) },
   { id: 'extensions', title: 'The four extensions (Tier 0 gate)', cmd: ['pnpm', 'db:verify-extensions'] },
-  { id: 'migrate', title: 'Migrations apply', cmd: ['pnpm', 'db:migrate'] },
+  /**
+   * MIGRATE **AND SEED**, and the seed is not a convenience -- it is the
+   * difference between this list meaning the same thing locally and in CI.
+   *
+   * T20 found it the expensive way. `pnpm ci:local` was green on 27 gates while
+   * the identical list went red in CI, on a suite nobody had touched. The cause
+   * was ambient state: t14-a3 reads `core.market WHERE code = 'SEED'`, a
+   * developer's database has been seeded at some point and a CI database has
+   * not, and NOTHING BETWEEN db:migrate AND THE TEST GATE CREATED IT. Proven by
+   * hiding the market locally, which reproduced the CI failure exactly -- same
+   * suite, same five tests -- and restoring it, which fixed it.
+   *
+   * It had been invisible because the `test` gate is SCOPED to packages changed
+   * against origin/main, so the api suite had not actually run in CI for
+   * several merges; the first branch to touch apps/api again inherited a
+   * failure that had been waiting since the suite was written.
+   *
+   * A GATE LIST THAT MEANS SOMETHING DIFFERENT ON TWO MACHINES IS NOT A GATE
+   * LIST. The seed is idempotent (ON CONFLICT DO NOTHING), so running it here
+   * costs a local developer nothing and gives CI the state the suites were
+   * written against.
+   *
+   * A STEP, NOT A NEW GATE. ADU-RUL-03 S5.2 cites gates by POSITION, so
+   * inserting one here would renumber every gate after it in a governed
+   * document this repository does not edit.
+   */
+  {
+    id: 'migrate',
+    title: 'Migrations apply, and the seed the suites read',
+    steps: [
+      ['pnpm', 'db:migrate'],
+      ['pnpm', 'db:seed'],
+    ],
+  },
   { id: 'worker-schema', title: 'The worker queue schema is installed', cmd: ['pnpm', 'worker:install'] },
   { id: 'test', title: 'Test', cmd: pnpm('test', { scoped: true }) },
   /**
@@ -408,7 +441,38 @@ const GATES = [
    * document, a value removed from the database -- and its own self-check
    * caught a fence-index bug in this file before it ever compared anything.
    */
-  { id: 'transcription', title: 'Migration 0043 agrees with ADU-AUTH-01 v2.6 (both ways, self-checked)', cmd: ['pnpm', 'verify:transcription'] },];
+  { id: 'transcription', title: 'Migration 0043 agrees with ADU-AUTH-01 v2.6 (both ways, self-checked)', cmd: ['pnpm', 'verify:transcription'] },
+
+  /**
+   * APPENDED, like the two above it and for the same reason: ADU-RUL-03 S5.2
+   * cites gates by POSITION in a governed document this repository does not
+   * edit, so this list is append-only in practice whatever its shape suggests.
+   * Cite this one by name.
+   *
+   * ADU-AUTH-01 v2.7 S26.4 -- `core.permission.surfaces` is the authority for
+   * a surface, "and a gate now compares every catalogue marker to it". It
+   * found three disagreements on the very revision that asked for it, and all
+   * three were in the direction that document did NOT anticipate: grants wider
+   * than the catalogue, rather than markers wider than the grants. The one
+   * v1.11 named was real and was one of three.
+   */
+  { id: 'surface-markers', title: 'S12 surface markers agree with core.permission.surfaces, both ways', cmd: ['pnpm', 'verify:surface-markers'] },
+
+  /**
+   * APPENDED, for the reason given twice above.
+   *
+   * packages/tokens has said since it stopped being a placeholder that "a drift
+   * between these files is a defect to fix in BOTH" -- a rule that depends on
+   * someone remembering, which is a rule that holds until the week someone is
+   * busy. T20 S6.3 doubled what it guards: dark mode added a second value set,
+   * and the dark roles are written TWICE inside tokens.css because a theme has
+   * three states and CSS cannot say "these two selectors, one body" without a
+   * preprocessor this repository does not have. Two hand-maintained copies of
+   * thirty values drift silently -- the toggle and the OS preference disagree,
+   * on one machine, in one direction.
+   */
+  { id: 'tokens', title: 'index.ts and tokens.css agree, both modes, both directions', cmd: ['pnpm', 'verify:tokens'] },
+];
 
 if (process.argv.includes('--list')) {
   for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);

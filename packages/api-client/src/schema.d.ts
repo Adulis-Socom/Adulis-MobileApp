@@ -1518,6 +1518,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Removes one image and schedules the objects for purge. */
         delete: operations["CatalogueController_deleteImage"];
         options?: never;
         head?: never;
@@ -1532,7 +1533,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** The WHOLE ordering in one request — one transaction or a defect. */
+        /** The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect. */
         put: operations["CatalogueController_reorderImages"];
         post?: never;
         delete?: never;
@@ -1940,6 +1941,11 @@ export interface components {
              */
             locales: string[];
             market: components["schemas"]["BootstrapMarketDto"];
+            /**
+             * @description Public origin for product image keys (T20 S4).
+             * @example https://media.adulis.example
+             */
+            media_public_origin: string;
             /** @example 1.4.0 */
             min_supported_client: string;
             /**
@@ -3869,9 +3875,60 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description REQUEST_UPLOAD signs the three derivative PUTs; COMMIT registers what landed. The keys are server-minted at signing, so a commit can only name keys this API chose. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "REQUEST_UPLOAD";
+                    position: number;
+                } | {
+                    /** @enum {string} */
+                    action: "COMMIT";
+                    card_key: string;
+                    full_key: string;
+                    position: number;
+                    thumb_key: string;
+                };
+            };
+        };
         responses: {
+            /** @description REQUEST_UPLOAD: three presigned PUTs, each with the key the commit must name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        uploads: {
+                            card: {
+                                key: string;
+                                /** Format: uri */
+                                url: string;
+                            };
+                            full: {
+                                key: string;
+                                /** Format: uri */
+                                url: string;
+                            };
+                            thumb: {
+                                key: string;
+                                /** Format: uri */
+                                url: string;
+                            };
+                        };
+                    };
+                };
+            };
+            /** @description COMMIT: the image row is registered. */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3885,12 +3942,13 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
-                position: string;
+                position: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+            /** @description Removed. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -3908,7 +3966,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Every image id, in the order they should appear. Partial orderings are refused. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    order: string[];
+                };
+            };
+        };
         responses: {
             200: {
                 headers: {

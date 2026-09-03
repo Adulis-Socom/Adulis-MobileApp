@@ -105,6 +105,30 @@ if (!process.env['DATABASE_URL']) {
   );
 }
 
+/*
+ * T20 S4 -- REAL OBJECT STORAGE IS AS MANDATORY AS POSTGRES NOW. The media
+ * arms drive a real browser PUT against a real bucket; with the fake bound
+ * they would fail with a message about the wrong thing (OBJECT_NOT_UPLOADED
+ * from an adapter whose map only tests can populate). Named early, like the
+ * DATABASE_URL check above, and probed so a stopped container dies as
+ * 'MinIO is not answering' rather than as a red media test.
+ */
+const R2_KEYS = ['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_MEDIA_BUCKET','R2_EVIDENCE_BUCKET','R2_MEDIA_PUBLIC_ORIGIN'];
+const missingR2 = R2_KEYS.filter((k) => !process.env[k]);
+if (missingR2.length) {
+  die('object storage is not configured: ' + missingR2.join(', ') + ' unset.' +
+      ' The media arms need real storage (MinIO: docker compose up -d).' +
+      ' Run via pnpm verify:console-e2e (which loads .env) or export the six R2_* values.');
+}
+const MEDIA_ORIGIN = new URL(process.env['R2_MEDIA_PUBLIC_ORIGIN']).origin;
+{
+  const up = await fetch(MEDIA_ORIGIN + '/minio/health/live').then((r) => r.ok).catch(() => false);
+  if (!up) {
+    die('MinIO is not answering at ' + MEDIA_ORIGIN + ' (R2_MEDIA_PUBLIC_ORIGIN).' +
+        ' Start it: docker compose up -d  -- the adulis-minio service.');
+  }
+}
+
 console.log('\nConsole e2e -- the built console, the real API, a reset database');
 console.log(`   build id ${BUILD_ID}\n`);
 
@@ -277,6 +301,9 @@ const run = sh('pnpm', ['--filter', '@adulis/console', 'exec', 'playwright', 'te
     E2E_API_BASE_URL: API_BASE,
     E2E_CONSOLE_PORT: String(CONSOLE_PORT),
     E2E_EXPECT_BUILD_ID: BUILD_ID,
+    // T20 S4: one variable feeds the served CSP's connect-src AND img-src
+    // (serve.mjs derives both), the same discipline as the API origin.
+    E2E_MEDIA_ORIGIN: MEDIA_ORIGIN,
   },
 });
 stopApi();

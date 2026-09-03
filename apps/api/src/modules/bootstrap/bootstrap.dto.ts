@@ -38,4 +38,13 @@ export class BootstrapResponseDto {
 
   @ApiProperty({ type: 'object', additionalProperties: { type: 'boolean' } })
   feature_flags!: Record<string, boolean>;
+
+  // T20 S4 -- the public origin every client joins an image key against.
+  // The API returns bare object keys (payload budget, S9); the storage origin
+  // is server config, so one place owns it and every surface builds the same
+  // URL as `${media_public_origin}/${key}`. Empty string when object storage
+  // is not configured (the fake is bound) -- a client then renders no image
+  // rather than a broken one.
+  @ApiProperty({ example: 'https://media.adulis.example', description: 'Public origin for product image keys (T20 S4).' })
+  media_public_origin!: string;
 }

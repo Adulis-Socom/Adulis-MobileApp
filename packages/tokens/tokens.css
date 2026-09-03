@@ -7,6 +7,10 @@
  * Designed for sunlight and cheap Android: HIGH CONTRAST, one accent for action
  * only, semantic state that never stands on colour alone. Superset of the old
  * file: every property the console consumes is still here, at a real value.
+ *
+ * TWO MODES since T20 S6.3. Every role name below exists in both; a mode is a
+ * second VALUE for a name, never a second name. See the dark blocks at the foot
+ * of this file for why there are three of them and not one.
  */
 :root {
   /* the neutral ramp -- roles below are named positions on it */
@@ -77,6 +81,7 @@
   /* spacing (4px base) -- values unchanged from the placeholder */
   --adu-space-xs: 0.25rem;
   --adu-space-sm: 0.5rem;
+  --adu-space-smd: 0.75rem; /* T20 S6.3 -- the step the scale was missing */
   --adu-space-md: 1rem;
   --adu-space-lg: 1.5rem;
   --adu-space-xl: 2rem;
@@ -93,6 +98,114 @@
   --adu-focus-ring-width: 2px;
   --adu-focus-ring-offset: 2px;
   --adu-focus-ring-color: var(--adu-color-accent);
+}
+
+
+/*
+ * DARK MODE (T20 S6.3), and the shape of these three blocks is the point.
+ *
+ * ONLY THE RAMP AND THE HUES ARE REDEFINED. The role properties -- bg, surface,
+ * border, text -- are declared ONCE, on :root above, as var() references into
+ * the ramp. Redefining the ramp therefore moves every role with it, and a role
+ * added later cannot be forgotten here, because there is no "here" to forget it
+ * in. The alternative (restating forty roles per mode) grows a stale copy the
+ * first time someone adds the forty-first.
+ *
+ * THREE BLOCKS, NOT ONE, because a theme has three states and only two are
+ * usually written:
+ *
+ *   :root                        the light values. Always defined, never inside
+ *                                a media query -- a colour whose only
+ *                                definition is conditional is undefined when
+ *                                the condition is false.
+ *   prefers-color-scheme: dark   the OS preference, which is the DEFAULT state:
+ *                                the user has chosen nothing in our UI.
+ *                                Guarded by :not([data-theme="light"]) so an
+ *                                explicit light choice survives a dark OS.
+ *   [data-theme="dark"]          an explicit choice, which must also beat a
+ *                                LIGHT OS. Without this block the toggle works
+ *                                in one direction only, which is the bug that
+ *                                looks like "dark mode is broken on my machine"
+ *                                and reproduces for nobody else.
+ *
+ * `color-scheme` is set with the values so form controls, scrollbars and the
+ * canvas the browser paints behind the page follow -- otherwise a dark page
+ * renders with white native widgets and a white flash on load.
+ */
+:root:not([data-theme='dark']) {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+  color-scheme: dark;
+
+  --adu-neutral-0: #14120f;
+  --adu-neutral-50: #1c1a16;
+  --adu-neutral-100: #26231e;
+  --adu-neutral-200: #332f28;
+  --adu-neutral-300: #453f36;
+  --adu-neutral-400: #5c554a;
+  --adu-neutral-500: #8b8478;
+  --adu-neutral-600: #a9a296;
+  --adu-neutral-700: #c8c2b7;
+  --adu-neutral-800: #e2ddd4;
+  --adu-neutral-900: #f5f2ec;
+
+  --adu-color-accent: #8ab0ff;
+  --adu-color-accent-hover: #a4c2ff;
+  --adu-color-accent-active: #bcd3ff;
+  --adu-color-accent-text: #14120f;
+  --adu-color-accent-subtle: #1b2740;
+
+  --adu-color-danger: #ff9a90;
+  --adu-color-danger-bg: #2b1512;
+  --adu-color-danger-border: #7d2a22;
+  --adu-color-success: #58d29b;
+  --adu-color-success-bg: #0e2419;
+  --adu-color-success-border: #1f5c3f;
+  --adu-color-warn: #fbbf5c;
+  --adu-color-warn-bg: #2a1d09;
+  --adu-color-warn-border: #7a5314;
+  --adu-color-info: #8ab0ff;
+  --adu-color-info-bg: #1b2740;
+  --adu-color-info-border: #33509c;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --adu-neutral-0: #14120f;
+  --adu-neutral-50: #1c1a16;
+  --adu-neutral-100: #26231e;
+  --adu-neutral-200: #332f28;
+  --adu-neutral-300: #453f36;
+  --adu-neutral-400: #5c554a;
+  --adu-neutral-500: #8b8478;
+  --adu-neutral-600: #a9a296;
+  --adu-neutral-700: #c8c2b7;
+  --adu-neutral-800: #e2ddd4;
+  --adu-neutral-900: #f5f2ec;
+
+  --adu-color-accent: #8ab0ff;
+  --adu-color-accent-hover: #a4c2ff;
+  --adu-color-accent-active: #bcd3ff;
+  --adu-color-accent-text: #14120f;
+  --adu-color-accent-subtle: #1b2740;
+
+  --adu-color-danger: #ff9a90;
+  --adu-color-danger-bg: #2b1512;
+  --adu-color-danger-border: #7d2a22;
+  --adu-color-success: #58d29b;
+  --adu-color-success-bg: #0e2419;
+  --adu-color-success-border: #1f5c3f;
+  --adu-color-warn: #fbbf5c;
+  --adu-color-warn-bg: #2a1d09;
+  --adu-color-warn-border: #7a5314;
+  --adu-color-info: #8ab0ff;
+  --adu-color-info-bg: #1b2740;
+  --adu-color-info-border: #33509c;
 }
 
 /*

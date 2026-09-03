@@ -44,6 +44,7 @@ export interface BootstrapResponse {
   market: { code: string; display_currency: string; timezone: string };
   locales: readonly string[];
   feature_flags: Record<string, boolean>;
+  media_public_origin: string;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -238,6 +239,11 @@ export class BootstrapController {
       },
       locales: ['en', 'am'],
       feature_flags: {},
+      // Read straight from env, not from a bound adapter: bootstrap is a
+      // public read and should not depend on injecting the storage layer.
+      // Empty when unconfigured -- the client renders no image, never a broken
+      // src pointing at a host that is not there.
+      media_public_origin: process.env['R2_MEDIA_PUBLIC_ORIGIN'] ?? '',
     };
   }
 }

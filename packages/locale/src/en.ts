@@ -444,7 +444,10 @@ export const en = {
   'console.catalogue.media.up': 'Move up',
   'console.catalogue.media.down': 'Move down',
   'console.catalogue.media.remove': 'Remove',
-  'console.catalogue.media.upload_owed': 'Adding an image resizes it in your browser and uploads three sizes. That upload step is not on this screen yet.',
+  // T20 S4: the upload is built. The 'owed' sentence is retired.
+  'console.catalogue.media.add': 'Add an image',
+  'console.catalogue.media.add_help': 'Your photo is resized in your browser and uploaded in three sizes. Up to five images.',
+  'console.catalogue.media.at_cap': 'Five images is the maximum. Remove one to add another.',
   'console.catalogue.media.video_present': 'One video is attached.',
   'console.catalogue.media.remove_video': 'Remove video',
   'console.catalogue.media.no_video': 'No video attached.',

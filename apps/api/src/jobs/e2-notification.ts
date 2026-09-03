@@ -160,6 +160,7 @@ export const notificationPushSeller: Job = {
     let sent = 0;
     let failed = 0;
     let deadTokens = 0;
+    let fellBackToInApp = 0;
     for (const row of send) {
       // Every device the account has registered a token on. A person with
       // two phones gets it on both; a person with none gets no push and the
@@ -178,6 +179,7 @@ export const notificationPushSeller: Job = {
       }
 
       let delivered = false;
+      let noProvider = false;
       for (const device of devices.rows) {
         const outcome = await ctx.push.send({
           token: device.push_token,
@@ -186,6 +188,9 @@ export const notificationPushSeller: Job = {
           slots: row.slots ?? {},
         });
         if (outcome === 'DELIVERED') delivered = true;
+        // T20 S5: no vendor is bound. Not this device's fault and not
+        // transient -- so stop asking the devices and fall back once, below.
+        if (outcome === 'NO_PROVIDER') noProvider = true;
         if (outcome === 'TOKEN_DEAD') {
           // A permanently dead token is a fact about the device, not about
           // this notification: clearing it stops every future push wasting
@@ -199,12 +204,48 @@ export const notificationPushSeller: Job = {
       if (delivered) {
         await markSent(ctx, row.id, at);
         sent += 1;
+      } else if (noProvider) {
+        /*
+         * THE IN_APP FALLBACK, WHICH HAD NO PRODUCER (T20 S5).
+         *
+         * S9.3 names IN_APP as the fallback and the sender has always CLAIMED
+         * it -- notification.send takes ['SMS','IN_APP'] -- but nothing ever
+         * wrote a row on that channel, so the fallback existed on the read
+         * side with no writer. Meanwhile four templates are PUSH-only with no
+         * SMS twin (ORDER_AWAITING_PAYMENT_MORNING, STOCK_CONFIDENCE_NUDGE,
+         * TRIAL_ENDING and notification.chat.escalated), and with no vendor
+         * bound every one of them died FAILED. The escalation is the one that
+         * costs money: a buyer asks what the assistant cannot answer, it
+         * escalates, and the seller never learns -- a lost sale with no trace.
+         *
+         * THE ROW IS MOVED, NOT COPIED. A twin row would appear twice in the
+         * seller's list, because notifications.controller does not filter by
+         * channel: the same event, told twice, which is how a list people must
+         * read becomes a list people ignore. Moving it keeps one row per event
+         * and leaves it QUEUED, so notification.send -- which already claims
+         * IN_APP -- delivers it on its next minute and marks it SENT. The row
+         * IS the delivery; there is no provider to call.
+         *
+         * It needs no vendor and no credentials, which is why this could be
+         * built now and the push provider could not.
+         */
+        await sql`
+          UPDATE core.notification SET channel = 'IN_APP'
+           WHERE id = ${row.id} AND state = 'QUEUED'`.execute(ctx.db);
+        fellBackToInApp += 1;
       } else {
         await markFailed(ctx, row.id);
         failed += 1;
       }
     }
-    return { claimed: send.length + suppressed, sent, suppressed, failed, dead_tokens: deadTokens };
+    return {
+      claimed: send.length + suppressed,
+      sent,
+      suppressed,
+      failed,
+      dead_tokens: deadTokens,
+      in_app_fallback: fellBackToInApp,
+    };
   },
 };
 
