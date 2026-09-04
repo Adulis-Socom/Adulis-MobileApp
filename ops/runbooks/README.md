@@ -9,6 +9,8 @@ repository - so they cannot be a script and must not be lost in a pull request b
 | [`grant-founder-operator.md`](grant-founder-operator.md) | **Ready** - run once the founder account exists (T4 Phase F) |
 | [`billing-reconciliation.md`](billing-reconciliation.md) | **Ready** - per bank transfer (T6 Phase B, G1.7) |
 | [`activate-market.md`](activate-market.md) | **Ready** - once per market (T13 Phase 3, ADU-AUTH-01 v2.6 S9.4) |
+| [`deploy.md`](deploy.md) | **Ready** - every promote (T6 Phase D) |
+| [`staging.md`](staging.md) | **Ready, never run** - standing staging up the first time (T23 Phase 5) |
 
 **Written at T4 Phase F.** The founder operator grant is now
 [`grant-founder-operator.md`](grant-founder-operator.md). It could never have been a
@@ -45,7 +47,28 @@ document's own checklist: per-market OTP spend is not attributable in the instal
 S10.2's sender-registration rule is only half-enforceable because the schema does not
 carry WHERE registration is mandatory. Both are registered.
 
+**Added at T23 Phase 5.** [`staging.md`](staging.md), for standing a staging server up
+the first time - and `deploy.md` is now listed above too, having been hand-run since T6
+without appearing in its own index.
+
+**It exists for one step, and the step is step 7b.** `core.operator_grant` cannot be
+seeded: no account id exists until someone signs in through the ordinary phone-OTP path,
+and a grant is a decision about a person recorded in an append-only table. So it is done
+by hand, and **its absence is silent** - `verification.read_attestation` derives
+`actor_role` from that table, so with no rows nobody can review an identity, and identity
+review is one of the ten publication-readiness items. **No seller can ever publish
+anything, and nothing errors, and nothing logs.** The queues just grow.
+
+A runbook line saying "do not forget this" is a rule that holds until the week someone is
+busy, so the runbook is paired with `node ops/scripts/check-environment.mjs`: the same
+sentence, said by a command, against the database that is actually there. Every finding it
+prints names WHAT IS BLOCKED rather than what is missing - "0 operators" is a fact nobody
+acts on; "no seller can publish" is the same fact with its consequence attached.
+
 **Still owed:** the rest of the ADU-CON-02 S20.6 set - `rollback`, `restore-drill`,
 `incident`, `sms-failover`, `key-rotation`, `db-upgrade`. Each needs a deployment that
-exists. And `ops/render.yaml`, which S18 says "keeps infrastructure in the repo" and
-which has never been written - deploy.md step 0.
+exists.
+
+**`ops/render.yaml` is no longer owed** (T23 Phase 4, D-289). It exists, it has never been
+applied, its first line says so, and `pnpm verify:render-yaml` checks every claim it makes
+about this repository - though not, and it says so, whether Render accepts the schema.
