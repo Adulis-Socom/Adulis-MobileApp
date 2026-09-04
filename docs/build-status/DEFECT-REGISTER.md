@@ -3796,3 +3796,54 @@ Action:    A step starts `minio/minio` and creates the two buckets exactly as do
            The credentials are the local container's own, in the clear, deliberately: they are the local-dev-password class, they grant nothing anywhere, and no real credential is in this repository or any report.
            This also means the adapter's central claim is now exercised on a second machine: the same class talks to MinIO under six environment values in CI and would talk to Cloudflare R2 under six different ones, with no code path between them (D-249).
 Ruling needed: none.
+
+### D-268 - The payout GET no longer activates, and the installed document still says it should
+
+Severity:  BLOCKER (document debt, not code -- the code is correct and the document is not)
+Phase:     T21 - S1
+Source:    ADU-AUTH-01 v2.7 S20.1, verbatim: "The lazy path stays -- it costs nothing and makes the screen correct at the moment it is read. The job is what makes the interval mean twenty-four hours."
+Found by:  Routing the order's ruling through adulis-spec-router BEFORE implementing it, rather than after
+Effect:    T21 S1 RULES THE OPPOSITE. D-255 asked which of two fixes to take -- lazy activation on its own connection, or remove it and let the job own activation -- and the founder ruled REMOVE. That discharges D-255 and contradicts an installed, binding sentence in a document this order does not reissue. The router returned OPEN_DECISION on exactly this ground and was right to: nothing in ADU-API-01 S15, ADU-DB-01 S13.4 or S24 requires the read path to activate, but ADU-AUTH-01 S20.1 affirmatively KEEPS it.
+Response:  IMPLEMENTED AS AN INTERIM FOUNDER RULING, with the debt recorded here
+Action:    The spec router's own rule: "A founder instruction may authorize an interim ruling, but record the exact source/ruling and the unreissued document debt." The source is WORK ORDER T21 S1; the debt is ADU-AUTH-01 v2.7 S20.1's sentence, now false as written. The code says so at the point of removal rather than leaving a future reader to find the document and believe it.
+           THE COST IS REAL AND BOUNDED: a due PENDING can display as PENDING for up to one job period (five minutes) after activates_at. The order accepted that explicitly against a twenty-four hour delay.
+           D-241's remaining open ruling is NARROWED but not closed: fn_cancel_payout_change still accepts a row whose activates_at has passed, and that five-minute window is now the only such window rather than one of two.
+Ruling needed: YES -- reissue ADU-AUTH-01 S20.1 so the document and the code agree. Until then the document is wrong and this entry is the only thing that says so.
+
+### D-269 - Ownership transfer still activates on a read, and the reason it had to no longer holds
+
+Severity:  MINOR (registered, NOT fixed -- outside T21's scope)
+Phase:     T21 - S1
+Source:    apps/api/src/common/db/handler-transaction.ts, whose comment justified activating on the request path partly with "the S24 job set is closed at twenty names, so a sweeper is not available either"
+Found by:  Correcting that comment's citation of payout as the precedent FOR laziness
+Effect:    Payout was that precedent, and T21 S1 withdrew it -- so the comment now leans on an example that argues the opposite way. The second half has also stopped being true on its own terms: RULED_JOBS (registry.ts) is exactly the mechanism that made a twenty-first job available, and payout.activate_due used it. "A sweeper is not available" was true when written and is not now.
+Response:  COMMENT CORRECTED, BEHAVIOUR UNTOUCHED
+Action:    fn_activate_due_ownership_transfer is NOT payout's twin and must not be assumed to be. AMENDMENT A1.1 requires a live session held by the outgoing owner to lose those capabilities ON ITS NEXT REQUEST, with no re-authentication -- a requirement a five-minute sweep does not discharge by itself. Copying the payout decision here would trade a correctness guarantee for consistency, which is why this is registered rather than done.
+Ruling needed: YES -- does A1.1's "on its next request" permit a job-plus-read hybrid, or does it require the read path to keep activating?
+
+### D-270 - payout.activate_due has never activated anything: the grant it needed was not the grant it got
+
+Severity:  BLOCKER (fixed here)
+Phase:     T21 - S1
+Source:    db/migrations/0022 granted adulis_jobs EXECUTE on core.fn_activate_due_payout; the job's FIRST statement is a direct SELECT on core.payout_details, on which adulis_jobs held nothing
+Found by:  The first test in this repository's history to call payoutActivateDue.run(). It failed on its first statement.
+Effect:    Every tick raised "permission denied for table payout_details" and died WHOLE -- the discovery query sits outside the per-seller try/catch, so the containment that protects one seller from another does not protect the sweep from this. Verified against the running database: has_table_privilege('adulis_jobs','core.payout_details','SELECT') was false while has_function_privilege on the function was true. The grant it was given was real; it was the wrong one, and only by itself.
+           IT WAS MASKED BY THE DEFECT THIS ORDER REMOVED. The lazy call on the GET was the only thing actually activating payouts, so the broken job cost nothing while D-255 was live. Shipping S1 without migration 0049 would have meant payout changes never activate AT ALL -- a seller's new details PENDING forever while the money kept going to the old account. Two defects that were each survivable alone and fatal together.
+           WHY NOBODY SAW IT: the job shipped in T20 S6.1 with three tests, and all three assert only that its NAME is registered and scheduled. "Registered" and "works" are different claims that looked identical in the suite. A job with no behavioural test is a job nobody has run.
+Response:  FIXED - migration 0049 grants SELECT, and only SELECT
+Action:    The job reads to find work and hands that work to the SECURITY DEFINER function, which writes under its own rights; adulis_jobs gets no INSERT, UPDATE or DELETE because it needs none. Mirrors 0032's grant on core.session and 0043's on core.platform_otp_budget.
+           The behavioural test is the durable half of the fix: revoking the grant turns exactly one arm red, and nothing else.
+Ruling needed: none.
+
+### D-273 - The api suite has a cross-suite flake that reproduces on unmodified main
+
+Severity:  MAJOR (pre-existing, NOT introduced here, NOT diagnosed)
+Phase:     T21 - S1, observed while verifying
+Source:    Globally-scoped assertions in suites that jest runs in parallel workers
+Found by:  Running the full suite repeatedly on the branch AND on a clean main, because the first failure looked like mine and the controlled comparison refuted that
+Effect:    THE FULL SUITE FAILS ROUGHLY ONE RUN IN THREE, ON MAIN, WITH A DIFFERENT TEST EACH TIME. Observed: main run 2 of 3 failed on c4-financial's notification-delta arm AND t6-ownership-transfer's OWNERSHIP_TRANSFER_REQUESTED count; a branch run failed on t12-d89-invite-claim; the first full gate run failed on that same D-89 arm. That spec passes 3 of 3 alone. This is D-261's registered shape -- "fails under parallel load and passes alone" -- and it is WIDER than D-261 recorded: at least four distinct tests across at least three files.
+           The common shape is an assertion counting rows the suite does not own: "SELECT count(*) FROM financial.payout_credential" with no seller predicate; a count over every OWNERSHIP_TRANSFER_REQUESTED notification in the table. Another suite's fixture or teardown landing inside the before/after window changes the number, and the failure then accuses the subsystem under test.
+Response:  REGISTERED WITH EVIDENCE, NOT FIXED
+Action:    Not fixed here because it is neither this order's scope nor this order's defect, and because scoping those assertions means editing suites S1 has no business touching. What T21 DID do is avoid making it worse: the payout job's behavioural test was moved off the fleet-wide sweep onto a seller nothing else reads, after the sweep version reproduced a failure on demand (D-83's rule -- exactly one suite may own a global sweep).
+           The evidence is the useful part. "One run in three, a different test each time, on main" turns an intermittent red into a known quantity rather than a reason to disbelieve the suite -- which is the actual danger, and is how the seeded-market defect survived for several merges.
+Ruling needed: none. It is an engineering task with a known shape: scope every count to the fixture that owns it.
