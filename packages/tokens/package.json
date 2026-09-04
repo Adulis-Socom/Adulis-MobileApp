@@ -2,7 +2,7 @@
   "name": "@adulis/tokens",
   "version": "0.0.0",
   "private": true,
-  "description": "Design tokens -- PLACEHOLDER AWAITING DESIGN (T7 S7.2). Values only, no components.",
+  "description": "Design tokens -- values only, no components. Two colour modes under identical role names.",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {

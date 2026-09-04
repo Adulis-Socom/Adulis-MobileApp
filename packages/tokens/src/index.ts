@@ -243,6 +243,37 @@ export const focus = {
   ringColor: color.accent,
 } as const;
 
+/**
+ * THE DARK MODE'S FOCUS RING (T21 S2, D-271), and it is a correction rather
+ * than an addition.
+ *
+ * `focus.ringColor` above is `color.accent`, which TypeScript evaluates to the
+ * LIGHT accent (#1e40af) at the point of definition and freezes there. The CSS
+ * twin wrote `--adu-focus-ring-color: var(--adu-color-accent)` and kept the
+ * reference LIVE, so the dark blocks' accent moved it. The two files therefore
+ * disagreed in dark mode, and the disagreement was the whole point of the
+ * token: a 2px ring of #1e40af on a #14120f page is a focus indicator the
+ * colour of the ground it sits on -- rule 5's "visible" failing in exactly the
+ * mode the ring is hardest to see.
+ *
+ * The web surfaces read tokens.css and were never wrong. ANYTHING READING THIS
+ * FILE WAS, and React Native has no other source -- which is the same shape as
+ * D-259, where the console referenced variables that existed nowhere and every
+ * fallback rendered a literal that looked fine until a mode existed.
+ *
+ * Same names, second values -- the `colorModes` shape, for the same reason: a
+ * mode is a second VALUE for a name, never a second name, and a design tool
+ * cannot express as a mode anything that does not have a twin.
+ */
+export const focusDark = {
+  ringWidth: focus.ringWidth,
+  ringOffset: focus.ringOffset,
+  ringColor: colorDark.accent,
+} as const;
+
+/** The two modes, addressable by name -- the `colorModes` precedent. */
+export const focusModes = { light: focus, dark: focusDark } as const;
+
 export const breakpoint = {
   /** ADU-CON-02: sidebar at and above; bottom bar below. */
   desktop: 1024,
