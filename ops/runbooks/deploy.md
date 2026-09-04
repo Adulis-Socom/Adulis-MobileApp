@@ -1,6 +1,6 @@
 # Runbook — deploying the API and the worker
 
-**Status:** ready to follow; **`ops/render.yaml` does not exist yet** and step 0 says what to do about that.
+**Status:** ready to follow. **`ops/render.yaml` EXISTS since T23 Phase 4 (D-289) and has never been applied** -- step 0 says what that means.
 **Frequency:** every promote to production; staging is automatic on merge to `main`.
 **Owner:** CEO. **Source:** ADU-CON-02 v3.1 S18 (hosting), S19 (environments), S20.2 (heartbeat) ·
 T6 Phase D.
@@ -27,18 +27,32 @@ Neither leaves a trace when skipped until something is already wrong.
 
 ---
 
-## Step 0 — `ops/render.yaml` is missing, and the deploy is not blocked on it
+## Step 0 — `ops/render.yaml` exists and has never been applied
 
 ADU-CON-02 v3.1 S18 says *"`render.yaml` keeps infrastructure in the repo"* and names the
 topology: `adulis-db` (Postgres 17, PITR, private-network only) · `adulis-api` ×2
 (`node dist/main.js`, `/healthz`) · `adulis-worker` (`node dist/worker.js`) · a pre-deploy
 job running `pnpm db:migrate`.
 
-**The file has never been written** (register D-52's neighbourhood; recorded again as
-D-80). Until it is, the services are created by hand in Render's dashboard to that
-topology, and this runbook is the only place the shape is written down. Writing
-`ops/render.yaml` needs a Render account to verify against and is the first thing to do
-once one exists.
+**The file now exists (T23 Phase 4, D-289) and its first line says it has never been
+applied.** That line is deleted by the person who applies it and by nobody else.
+
+D-80 kept the file out for seventeen orders with a good argument -- "inventing a
+`render.yaml` that has never been applied would be a file that looks authoritative and
+has never been true" -- and T23 Phase 1 went looking for the account that would settle
+it, found no credentials of any kind, and parked. So the argument still stands, and what
+answers it is `pnpm verify:render-yaml` (gate `render-yaml`): it checks every claim the
+blueprint makes about THIS REPOSITORY -- that each script it runs exists, that
+`/healthz` is a route the API serves and is `@Public`, that the pre-deploy runs
+`worker:install`, that every variable `.env.example` declares is declared there, that no
+secret carries a literal value. It cannot check that Render accepts the schema, and it
+prints that limitation rather than implying otherwise.
+
+**It describes STAGING only.** Production is deliberately absent: a blueprint carrying
+two environments before either has ever been applied doubles the number of untrue
+statements in the file. Until it is applied, the services are still created by hand to
+the topology above -- but the topology is now a file you can diff instead of a paragraph
+you can misread.
 
 ---
 

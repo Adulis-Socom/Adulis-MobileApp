@@ -4186,3 +4186,78 @@ Action:    Each of the three now opens with the permanent fact and then lists wh
              insights.trust.wire_owed    KEEP  and DELIBERATELY UNTOUCHED: trust is a founder-owned engine, and this order forbids touching, stubbing, extending, designing or registering against it. The sentence is the honest face of that boundary.
 Verification: `verify:mt-keys` PASS (769 machine-translated, 2 HUMAN-REQUIRED -- the deleted key regenerated out of the list, the three reworded keys still present in both files). `tsc` clean on the console and on packages/locale, which is the gate that would have caught a key deleted from en.ts and left in am.ts or vice versa. `verify:console-e2e` green.
 Ruling needed: none. Nine of the ten sentences were already triaged in BETA-READINESS; this applies those verdicts and corrects the three that were triaged against the wrong fact.
+
+### D-289 - ops/render.yaml exists now, unapplied, with a gate over every claim it makes about this repository
+
+Severity:  MAJOR (fixed here) -- D-80 has been open since T6 and blocked on a fact, not a decision
+Phase:     T23 - Phase 4
+Source:    ADU-CON-02 v3.1 S18 -- "`render.yaml` keeps infrastructure in the repo" (:446) and "Topology (`ops/render.yaml`)" (:450)
+Found by:  D-80, in T6, while writing the deploy runbook and looking for the file it should point at
+Effect:    The hosting topology existed as one sentence in a document and a paragraph in `ops/runbooks/deploy.md`. Infrastructure created by hand in a dashboard is infrastructure nobody can review, diff or restore.
+           D-80's REASON FOR LEAVING IT ABSENT WAS GOOD, and it is why this stayed open for seventeen orders: "Writing it needs a Render account to verify against; inventing a `render.yaml` that has never been applied would be a file that looks authoritative and has never been true." T23 Phase 1 went looking for that account, found no credentials of any kind -- no environment variables, no `render` CLI, no `~/.render` -- and PARKED rather than simulating one. So the objection still stands in full.
+Response:  FIXED, and the objection answered rather than ignored
+Action:    The file lands, and its FIRST LINE says "THIS FILE HAS NEVER BEEN APPLIED." That sentence is deleted by the person who applies it and by nobody else, and `verify:render-yaml` notices when it goes.
+           WHAT MAKES IT MORE THAN A DRAFT is the gate beside it. It cannot check that Render accepts the schema -- only applying it can -- and it prints that limitation rather than implying otherwise. What it CAN check is every claim the blueprint makes about THIS REPOSITORY, which is exactly the set of claims that rot between the day a file is written and the day somebody runs it:
+             1. every pnpm script and node entry point it names exists
+             2. healthCheckPath is a route the API serves AND is @Public (D-79: without @Public it answers 401 to Render, every instance is marked unhealthy, and no deploy ever goes live)
+             3. the pre-deploy runs BOTH db:migrate and worker:install, from ONE service (D-52; two services migrating race each other)
+             4. every variable .env.example declares is declared for the API, and every VITE_* for the console
+             5. no secret carries a literal value, and NODE_ENV is in the closed set
+             6. every fromService names a service the file defines
+           THREE DECISIONS IN THE FILE ARE NOT TRANSCRIPTION and are argued where they are made. The three DATABASE_URLs are `sync: false` rather than `fromDatabase` because Render synthesises ONE connection string and this platform needs THREE ROLES -- collapsing them to the owner connection would make every privilege check in the schema untestable and would pass every test. The staging API is pinned to ONE INSTANCE because the OTP goes to a file on the instance that answered. And the static console declares NO NODE_ENV, because Vite picks React's development build from it.
+Verification: `pnpm verify:render-yaml` PASS. Every one of the six checks proven to FIRE by planting its violation: a renamed `worker:install`, a wrong health path, a preDeployCommand on the worker, a dropped CONSOLE_ORIGIN, a pasted DATABASE_URL, NODE_ENV on the console, and a misspelled fromService. All seven went red; restored, green.
+Ruling needed: none. What remains is applying it, which needs the account Phase 1 parked for.
+
+### D-290 - NEVER_LOG removes FIELDS, and a secret interpolated into `msg` is not a field
+
+Severity:  MAJOR (registered; the limit is now written down and asserted)
+Phase:     T23 - Phase 4
+Source:    apps/api/src/common/logging.ts -- `redact: { paths: [...NEVER_LOG], remove: true }` plus `formatters: { log: applyAllowList }`
+Found by:  Writing the test that was supposed to prove a staging OTP never reaches the logger -- and watching it PASS with the violation planted
+Effect:    TWO FINDINGS, and the second is only visible because the first was chased properly.
+           (1) THE FIRST INSTRUMENT WAS BLIND. The obvious test captures `process.stdout.write` and searches it for the code. pino writes through SonicBoom straight to file descriptor 1 and never touches `process.stdout.write`, so the capture saw nothing, the assertion passed, and the green meant NOTHING. A measurement that cannot observe the thing it rules out proves nothing about it.
+           (2) AND REDACTION WOULD NOT HAVE COVERED IT EITHER. `NEVER_LOG` names `otpCode` and `phone`, and `applyAllowList` drops unknown keys outright -- so the STRUCTURED field is genuinely removed. But `msg` is allow-listed and NOTHING READS ITS CONTENTS. `log.warn({ msg: `code ${code}` })` passes every control this repository has, and sms.adapter.ts's own comment ("the logger CANNOT carry an OTP -- the code and the phone are on NEVER_LOG") is true of the field and false of the sentence.
+Response:  REGISTERED, with the limit asserted in both directions
+Action:    The guarantee is now written where it can be checked rather than believed. One test logs `{ phone, otpCode }` as fields and asserts they are gone; the same test logs the code inside `msg` and asserts IT SURVIVES -- not a bug asserted as correct, a LIMIT written down, so that nobody reaches for "the logger redacts it" as a reason to log a secret.
+           The adapter's own guarantee is asserted ON THE SOURCE: FakeSmsAdapter's send path contains no logger call at all. That is a weaker instrument than a behavioural one and it says so -- but it is an instrument that FIRES, which the two stronger-looking ones were not.
+           STAGING'S OTP DESTINATION FOLLOWS FROM THIS. The founder's boundary for T23 is that "anyone who can read its logs can sign in as anyone", which describes what staging is WORTH, not a licence to move an OTP onto a log line -- ADU-RUL-03 S1.1 is a governing document and this window is unattended. So staging writes the code where development already writes it: a 0600 file, off stdout, outside every container log aggregator. That is what makes the staging API's instance count load-bearing, and `ops/render.yaml` pins it to one and says why.
+Verification: 10 tests in t8-node-env-boundary.spec.ts, all green. Both new guards proven to fire: a `log.warn` added to the send path turns the source assertion red; a negated fake-guard (`!== 'development' && !== 'test'`) turns the staging/production pair red. Restored, 570/570 API tests green.
+Ruling needed: YES, but small and not urgent -- should `applyAllowList` scan `msg` for the shapes it already refuses as fields (a six-digit code, an E.164 number)? It would catch this class rather than documenting it. It also risks a redaction that fires on an order reference, which is why it is not decided here.
+
+### D-291 - The console's CSP named two origins that had never been true, and were typed a second time
+
+Severity:  MAJOR (fixed here)
+Phase:     T23 - Phase 4
+Source:    apps/console/public/_headers -- `connect-src 'self' https://api.adulis.example https://media.adulis.example`, with a note saying they "are replaced with the real ones when DNS is provisioned"
+Found by:  T23 Phase 4's "CSP and CORS derived, not hardcoded"
+Effect:    A SECOND PLACE TO CONFIGURE AN ORIGIN THE BUILD ALREADY KNOWS. CORS was already derived -- `CONSOLE_ORIGIN`, one variable, read by the middleware -- and the CSP was not.
+           THE DRIFT IS SILENT IN THE DIRECTION THAT HURTS. A policy naming an API the bundle does not call refuses every fetch IN THE BROWSER, before it leaves the machine, with no server-side symptom to find. This repository has hit it twice: D-164 (the e2e server replayed the production directive at a localhost bundle, every fetch refused, and the suite went green against something else serving the port) and D-276 (the same drift reaching boot-smoke, which was red on unmodified main while the console mounted perfectly one line above).
+           Both were fixed by deriving the policy AT SERVE TIME, in two different harnesses. Neither fixed the artifact, so production would have shipped a policy naming two hostnames that have never existed.
+Response:  FIXED - the origins are substituted at BUILD time from the variables the bundle is built with
+Action:    `ops/scripts/build-headers.mjs` fills `${API_ORIGIN}` and `${MEDIA_ORIGIN}` in `public/_headers` from `VITE_API_BASE_URL` and `R2_MEDIA_PUBLIC_ORIGIN`, and writes `dist/_headers`. EVERY DIRECTIVE IS STILL WRITTEN, NOT ASSEMBLED, which is what ADU-CON-02 S3.9 requires -- and the script asserts that, comparing the directive list it wrote to the one it read, so it stays a substitution rather than becoming an assembler.
+           AN UNSET VARIABLE OMITS ITS ORIGIN RATHER THAN FAILING, and the first version had this wrong. It exited non-zero on the NODE_ENV principle that the permissive branch is the one nobody chose; `pnpm ci:local` failed within a minute, because `pnpm build` is a does-it-compile build with neither variable set. The principle survives in a better form: THE INVARIANT IS THAT THE POLICY NAMES EXACTLY THE ORIGINS THE BUILD WAS GIVEN, and a bundle built without VITE_API_BASE_URL has no API to call at all (`apiBase()` throws before fetch is reached -- the very fact boot-smoke's D-138 note rests on). `connect-src 'self'` is an exact description of that bundle, not a guess about it. A variable that is SET but is not a URL is still refused: that is a typo, not an absence.
+           A REAL DEPLOY FORGETTING THEM IS CAUGHT AT THE RIGHT LAYER -- `verify:render-yaml` asserts the console service declares every VITE_* variable .env.example names. A deployment mistake belongs to a gate over the blueprint, not to a gate over a compile.
+Verification: three behaviours proven -- built with both variables, the policy names both origins; built with neither, it names neither and says so; built with a non-URL, it refuses. An unresolved placeholder is refused too (a browser silently DROPS a source expression it cannot parse and enforces the rest, so a literal placeholder would ship a policy quietly stricter than the one written). `verify:console-e2e` 86 green, `boot-smoke` green.
+Ruling needed: D-138's open question -- whether `connect-src` belongs to boot-smoke's assertions at all -- is now answerable, because the artifact's policy and the artifact agree by construction. Left open deliberately: this phase changed the artifact, not that gate's stated coverage.
+
+### D-292 - What staging can and cannot do on the day this lands
+
+Severity:  INFORMATIONAL (scope, stated rather than implied)
+Phase:     T23 - Phase 4
+Source:    WORK ORDER T23 S4 -- deploy to staging
+Effect:    WHAT LANDED, all of it verifiable on this machine:
+             `ops/render.yaml`                 the topology, unapplied, gated (D-289)
+             `worker:install` in the deploy    D-52, asserted by the gate
+             /healthz 200 degraded not 503     ALREADY CORRECT since T4 (D-51). Verified, not changed: a stale WORKER reddens the body; only an unreachable DATABASE 503s, which is honest, because that instance genuinely cannot serve.
+             NODE_ENV=staging in the closed set  with the guard audit written out and two of its entries asserted (D-290)
+             the environment banner            served from /v1/bootstrap, rendered above the router so it also covers SIGN-IN -- which is where a real phone number is typed into the wrong server
+             TRUSTED_PROXY_HOPS                a validated COUNT, never a boolean
+             CSP derived, not typed            D-291
+             R2 buckets                        adulis-staging-media / adulis-staging-evidence, separate from production
+           WHAT DID NOT LAND, AND IT IS THE DEPLOY ITSELF. Phase 1 found no hosting credentials and parked; nothing here has been applied to a server. Every claim above is about this repository and its gates, and none is about a running staging instance. THE WORD "STAGING" IN THIS ENTRY NAMES A CONFIGURATION, NOT A URL.
+           TWO THINGS STAGING WILL NOT BE ABLE TO DO on the day it is first applied, both stated so the first operator is not surprised:
+             SIGN-IN NEEDS A SHELL. There is no SMS vendor (O-5b), so the OTP goes to a 0600 file on the API instance. `ops/runbooks/staging.md` says how to read it; the instance count is pinned to 1 so there is only one file to read.
+             THE FOUNDER OPERATOR GRANT IS NOT AUTOMATIC. It is Phase 5's, and it is the one that will be forgotten.
+Response:  REPORTED
+Action:    None owed here. The blueprint is applied by a person with an account, and the first line of the file tells them what to delete when they do.
+Ruling needed: none.

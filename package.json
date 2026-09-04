@@ -47,7 +47,8 @@
     "generate:appendix": "node --env-file-if-exists=.env ops/scripts/generate-appendix.mjs",
     "verify:transcription": "node --env-file-if-exists=.env ops/scripts/verify-transcription.mjs",
     "verify:surface-markers": "node ops/scripts/verify-surface-markers.mjs",
-    "verify:tokens": "node ops/scripts/verify-tokens.mjs"
+    "verify:tokens": "node ops/scripts/verify-tokens.mjs",
+    "verify:render-yaml": "node ops/scripts/verify-render-yaml.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -56,6 +57,7 @@
     "node-pg-migrate": "9.0.0",
     "pg": "8.23.0",
     "prettier": "3.9.6",
+    "yaml": "2.8.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.68.0",
     "@stoplight/prism-cli": "5.14.2",

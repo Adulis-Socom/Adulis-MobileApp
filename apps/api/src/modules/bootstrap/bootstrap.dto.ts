@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { NODE_ENVS, type NodeEnv } from '../../common/env';
 
 /**
  * GET /v1/bootstrap's response, decorated for the generated contract
@@ -47,4 +48,21 @@ export class BootstrapResponseDto {
   // rather than a broken one.
   @ApiProperty({ example: 'https://media.adulis.example', description: 'Public origin for product image keys (T20 S4).' })
   media_public_origin!: string;
+
+  /**
+   * WHICH SERVER THIS IS (T23 Phase 4). Additive, so no client changes
+   * (ADU-API-01's additive-compatibility rule).
+   *
+   * Served rather than baked into a client's build, for one reason: a
+   * build-time constant says which environment the BUNDLE was built for, and
+   * what matters is which API the seller is actually talking to. Those differ
+   * exactly when it is most dangerous -- a staging bundle pointed at
+   * production, or the reverse -- and a banner that can be wrong about that is
+   * worse than no banner.
+   */
+  @ApiProperty({
+    enum: NODE_ENVS,
+    description: 'Which server answered. The console draws its environment banner from this.',
+  })
+  environment!: NodeEnv;
 }

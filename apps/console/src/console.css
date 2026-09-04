@@ -789,3 +789,38 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .product-name { flex: 1 1 auto; font-weight: 500; }
 .product-price { font-weight: 600; font-variant-numeric: tabular-nums; }
 .cap-note { margin-block: var(--adu-space-sm); }
+
+/*
+ * THE ENVIRONMENT BANNER (T23 Phase 4). Renders on every non-production
+ * server, above everything, including sign-in.
+ *
+ * NO FIXED HEIGHT -- the sentence is the content, Amharic runs 30-50% longer,
+ * and a banner that clips its own warning is worse than none.
+ *
+ * EVERY COLOUR IS A TOKEN. This is the newest surface in the console and
+ * would be the easiest place to hardcode a "warning yellow";
+ * tokens-are-read.spec asserts three tokens and would not catch a literal on a
+ * class it does not know about, so the rule is kept by writing it, not by a
+ * gate. Both modes come free from the tokens.
+ *
+ * The 1px border width is a LITERAL because there is no border-width token --
+ * every border in this file is written the same way. Said rather than dressed
+ * up: an unnamed value in a comment claiming everything is named is how the
+ * next reader learns to distrust the comments.
+ *
+ * The TONE is decoration. Rule 4 (no colour alone) is satisfied by the words
+ * inside it -- "Staging", and a sentence saying what that means -- so this
+ * reads correctly in greyscale, in dark mode, and on a monochrome display.
+ */
+.env-banner {
+  padding: var(--adu-space-sm) var(--adu-space-md);
+  background: var(--adu-color-warn-bg);
+  color: var(--adu-color-warn);
+  border-bottom: 1px solid var(--adu-color-warn-border);
+  font-size: var(--adu-font-size-sm);
+  line-height: var(--adu-line-height-base);
+}
+
+.env-banner strong {
+  font-weight: var(--adu-font-weight-bold);
+}
