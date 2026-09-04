@@ -4089,11 +4089,18 @@ Source:    ops/scripts/seed.mjs creates no billing.subscription row; migration 0
 Found by:  SC-07's new cap counter rendering "your limit could not be resolved" in the seeded environment
 Effect:    fn_effective_limit resolves the tier from the seller's subscription and falls back to LISTED when there is none. 0016 deliberately seeds only the BETA row -- the priced tiers are a commercial decision that has not arrived -- so a seller with no subscription resolves to LISTED, finds no definition, and FAILS CLOSED.
            The behaviour is correct. THE FIXTURE IS NOT: every real beta seller has a BETA subscription, so the seeded environment reaches only the fallback and never the ordinary path. SC-07 therefore demonstrates "your product limit could not be resolved" rather than the sentence S8 actually specifies.
-Response:  ATTEMPTED, REVERTED, REGISTERED
+Response:  RULED AND FIXED IN T23 PHASE 2 -- the T22 text below is kept because it is the argument the ruling answers
+Ruling:    T23 S2: SEED TWO SELLERS, one with a BETA subscription and one without. Neither screen loses its demonstration, because the two screens are no longer arguing about one row.
+           IT IS TWO ACCOUNTS, NOT ONE, and that is not tidiness. chooser.spec.ts asserts that a single-store seller is taken STRAIGHT INTO their store rather than asked to choose -- D-97's closure -- and its comment states the fixture property it rests on: "The seeded account owns exactly one store, which is the shape almost every real seller has." Hanging the second seller off the same account made that true of nothing and turned four chooser tests red on the first run. So the second SELLER got a second OWNER (+251900000003), both accounts own exactly one store, and D-97's test keeps its subject.
+             seed-store        no subscription  -> SC-26 "honest about having none", SC-12's entitlement arm
+             seed-store-beta   BETA             -> SC-07 resolves cap 10, binding LEVEL, level NEW
+           THE COUNT GATE CAUGHT IT FIRST, which is the gate working: `db:reset` refused with "sellers: expected 1, got 2" before any test ran. Its EXPECTED map is a transcription of what the seed defines, so accounts and sellers moved together, with the reason written beside them.
+           AND SIGN-IN NEEDED A REAL FIX, not a fixture one. A second owner means a second sign-in, and `browser.newContext()` merges the config's `use.storageState` unless the option is given a VALUE -- `undefined` reads as "not specified", so the new context arrived carrying the FIRST account's session cookie and ADU-API-01 S5.1's Origin check refused the sign-in POST 403, correctly, as a cookie-carried write with no Origin. `storageState: { cookies: [], origins: [] }` is the honest empty.
+Verification: `pnpm verify:console-e2e` -- 86 passed, including SC-07's subscribed arm asserting `data-cap-binding="LEVEL"`, the text "0 of 10", the sentence "New sellers can list 10 products", the word "Established", and zero occurrences of "unlimited". SC-26 and the four chooser tests stayed green. On the wire: seed-store -> {"allowed":false,"reason":"NO_TIER_DEFINITION"}, seed-store-beta -> {"allowed":true,"cap":10,"binding":"LEVEL","level":"NEW","tier_cap":null,"level_cap":10}.
 Action:    Adding the BETA subscription to the seed WORKS -- the limit resolves to cap 10, binding LEVEL, level NEW, which is ADU-CON-03 S8's model sentence verbatim ("10 of 10 -- new sellers can list 10 products. This lifts when your store reaches Established.").
            IT ALSO BREAKS TWO SCREENS THAT ARE SEEDED TO DEMONSTRATE THE OPPOSITE. SC-26's e2e is titled "Subscription -- honest about having none", and SC-12's entitlement arm depends on the same absence. Both went red. The seed serves thirty screens, and one screen's realistic fixture is another screen's broken demonstration.
            So the number is proven where it can be proven without that cost: c2-catalogue asserts cap 2 / binding LEVEL / level NEW on the wire, and the e2e asserts the region renders, names a binding, and never prints "unlimited".
-Ruling needed: YES -- should the seed carry a BETA subscription, and if so what do SC-26 and SC-12 demonstrate instead? It is a fixture question with a product answer, which is why it is not decided here.
+Ruling needed: ANSWERED -- see Ruling above. It was a fixture question with a product answer, and the answer was that the fixture was too small to hold both truths.
 
 ### D-285 - Two focus-ring rules, and the one that lost was the token's
 
@@ -4109,6 +4116,15 @@ Effect:    BOTH RULES WERE LIVE AND THEY DISAGREED. The token said 2px and named
 Response:  FIXED - the console's rule now reads the tokens
 Action:    Width, colour and offset all come from `--adu-focus-ring-*`. The width is kept at the token's 2px rather than this file's 3px, and that direction is the point: A TOKEN THAT LOSES AN ARGUMENT WITH A STYLESHEET IS NOT A TOKEN.
 Verification: proven by the guard that found it. With the console reading the token, setting `--adu-focus-ring-width: 0px` turns rule 5 red in BOTH light and dark; before the fix the same plant changed nothing. Restored, and 83/83 green.
+T23 S2:    THE FIX WAS NOT THE WHOLE ANSWER, and T23 says why: the ring was one of SIXTY-NINE variables, ANY of which could be defined, verified and unread. Rule 5's guard asserts a ring is VISIBLE; it never asked whether the ring was the TOKEN's. So `apps/console/e2e/tokens-are-read.spec.ts` reads tokens.css per mode and compares it to `getComputedStyle`, on three shapes chosen because they are the three ways a token gets consumed:
+             the FOCUS RING     read as a whole DECLARATION, measured on a real Tab-focused element
+             the ACCENT         read as a COLOUR -- the one D-285 bypassed
+             the DANGER TRIPLE  read as a SET, where the failure is one of three hardcoded and the other two not
+           NOT ALL SIXTY-NINE, deliberately: a gate asserting every one would be a transcription of tokens.css with a browser attached, stale the day a token is renamed. These three go stale only if the console stops reading tokens at all, which is the thing being guarded.
+           Tagged `@safety`, so the dark project re-runs it. PROVEN TO FIRE TWICE, and the second plant is the one that argues for both modes:
+             `outline: 3px solid #1e40af` (D-285 verbatim)          -> RED in light AND dark, on the width
+             `outline: var(--adu-focus-ring-width) solid #1e40af`   -> GREEN in light, RED in dark
+           The second is the whole case for the dark project in one line: a hardcoded LIGHT accent is indistinguishable from a correct one in light mode and wrong in dark. Expected rgb(138, 176, 255), painted rgb(30, 64, 175). Restored, 86/86 green.
 Ruling needed: none.
 
 ### D-286 - Three of the six safety rules were enforced by absence, and none of the six ran in dark mode

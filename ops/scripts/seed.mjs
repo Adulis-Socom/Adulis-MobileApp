@@ -36,6 +36,40 @@ const M = '5eed0000-0000-4000-8000-000000000001';
 const ACCOUNT = '5eed0000-0000-4000-8000-000000000002';
 const PERSON = '5eed0000-0000-4000-8000-000000000003';
 const SELLER = '5eed0000-0000-4000-8000-000000000004';
+/**
+ * THE SECOND SELLER, AND WHY THERE ARE NOW TWO (T23 Phase 2, D-284).
+ *
+ * The seed carried ONE seller because one was enough. It stopped being enough
+ * the moment SC-07's cap counter became a number: that counter needs a
+ * subscription to resolve a limit at all, and SC-26's e2e is titled "honest
+ * about having none" and asserts exactly that absence.
+ *
+ * Both screens are right. A fixture that forces two screens to disagree is a
+ * fixture, not a product conflict -- so the fixture grows a second seller
+ * instead of one screen losing its test.
+ *
+ * SELLER      no subscription  -> SC-26 demonstrates the empty truth
+ * SELLER_SUB  BETA             -> SC-07 resolves cap 10, binding LEVEL
+ *
+ * Same owner account, deliberately: the e2e signs in once, and a seller the
+ * session cannot reach is a fixture no test can use.
+ */
+const SELLER_SUB = '5eed0000-0000-4000-8000-000000000024';
+/*
+ * ITS OWN ACCOUNT, and that is not tidiness.
+ *
+ * chooser.spec.ts asserts that a single-store seller is taken STRAIGHT INTO
+ * their store rather than asked to choose -- D-97's closure -- and its comment
+ * states the fixture property it rests on: "The seeded account owns exactly one
+ * store, which is the shape almost every real seller has."
+ *
+ * Hanging the second seller off the same account would make that true of
+ * nothing and take a real behaviour test with it. So the second SELLER gets a
+ * second OWNER, both accounts own exactly one store, and D-97's test keeps its
+ * subject.
+ */
+const ACCOUNT_SUB = '5eed0000-0000-4000-8000-000000000025';
+const PHONE_SUB = '+251900000003';
 const PHONE = '+251900000001';
 
 /*
@@ -316,6 +350,49 @@ try {
     `INSERT INTO core.seller_level_state (seller_id, level, since, computed_at)
      VALUES ($1,'NEW', now(), now()) ON CONFLICT (seller_id) DO NOTHING`,
     [SELLER],
+  );
+
+  // ---------------------------------------------------------------- D-284
+  // The subscribed seller, on its own account. Everything the first one has,
+  // plus the BETA subscription that lets billing.fn_effective_limit resolve a
+  // limit rather than fail closed on a missing tier definition.
+  await client.query(
+    `INSERT INTO core.account (id, phone_e164, market_id, status, age_declared_over_18)
+     VALUES ($1,$2,$3,'ACTIVE', true) ON CONFLICT (id) DO NOTHING`,
+    [ACCOUNT_SUB, PHONE_SUB, M],
+  );
+  await client.query(
+    `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
+                              store_name, handle, status)
+     VALUES ($1,$2,$3,'INDIVIDUAL','Seed Store (subscribed)','seed-store-beta','ACTIVE')
+     ON CONFLICT (id) DO NOTHING`,
+    [SELLER_SUB, M, ACCOUNT_SUB],
+  );
+  await client.query(
+    `INSERT INTO core.seller_public_stats (seller_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+    [SELLER_SUB],
+  );
+  await client.query(
+    `INSERT INTO core.seller_level_state (seller_id, level, since, computed_at)
+     VALUES ($1,'NEW', now(), now()) ON CONFLICT (seller_id) DO NOTHING`,
+    [SELLER_SUB],
+  );
+  /*
+   * BETA, not a priced tier. Migration 0016 seeds exactly one tier_definition
+   * -- the BETA row of S18.4's grid -- and deliberately no priced tiers,
+   * because those values are a commercial decision that has not arrived. BETA
+   * carries product_cap NULL (unlimited), so the ladder's NEW cap of 10 is what
+   * binds, and SC-07 says ADU-CON-03 S8's model sentence:
+   *   "10 of 10 -- new sellers can list 10 products. This lifts when your store
+   *    reaches Established."
+   * Which is the whole point: the counter must name WHICH limit binds, and a
+   * seller capped by their LEVEL is lifted by trading, not by paying.
+   */
+  await client.query(
+    `INSERT INTO billing.subscription (id, seller_id, state, beta_started_at)
+     VALUES (gen_random_uuid(), $1, 'BETA', now())
+     ON CONFLICT (seller_id) DO NOTHING`,
+    [SELLER_SUB],
   );
   // ------------------------------------------------------------------ trade
   await client.query(
