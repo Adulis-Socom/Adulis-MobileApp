@@ -34,9 +34,29 @@ body {
 }
 .skip-link:focus { left: 0; z-index: 10; }
 
+/*
+ * THE FOCUS RING IS THE TOKEN'S, NOT THIS FILE'S (T22 Phase 5, D-285).
+ *
+ * This rule used to hard-code `3px solid var(--adu-color-accent)` while
+ * packages/tokens declared 2px and a dedicated `--adu-focus-ring-color`. BOTH
+ * rules were live and they disagreed -- and because the token's is written
+ * `:where(...)`, deliberately at specificity ZERO so a surface can override
+ * the treatment, THIS ONE ALWAYS WON. The console rendered 3px and never once
+ * read the focus token.
+ *
+ * That made `focus.ringWidth` and `focus.ringColor` describe something nothing
+ * rendered, which is D-259's class from the other direction: there the console
+ * referenced variables that existed nowhere; here it defined its own value for
+ * a variable that did exist. It also meant T21's D-271 -- giving the ring a
+ * DARK value, because a 2px #1e40af ring on a #14120f page is invisible --
+ * bought the console nothing, because the console was not reading it.
+ *
+ * The width is kept at the token's value rather than this file's 3px: a token
+ * that loses an argument with a stylesheet is not a token.
+ */
 :focus-visible {
-  outline: 3px solid var(--adu-color-accent);
-  outline-offset: 2px;
+  outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color);
+  outline-offset: var(--adu-focus-ring-offset);
 }
 
 button, input {
@@ -732,3 +752,40 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .media-item { display: flex; align-items: center; gap: var(--adu-space-xs); }
 .media-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: var(--adu-radius-sm); border: 1px solid var(--adu-color-border); }
 .media-upload { margin-top: var(--adu-space-sm); display: flex; flex-direction: column; gap: var(--adu-space-2xs); }
+
+/* ---------------------------------------------------------------------------
+ * T22 Phase 4 -- SC-07's row, which had no rule of its own until now.
+ *
+ * Every class this screen uses was unstyled, so it rendered as browser-default
+ * HTML. That was survivable while the row was three pieces of text; it is not
+ * survivable the moment the row carries an <img>, which without a rule renders
+ * at its natural size -- a 640px card derivative per row.
+ *
+ * MINIMAL AND TOKEN-BOUND, not a design. The design port (T22 Phase 5) owns
+ * how this screen looks; this owns not being broken between the two.
+ *
+ * The empty tile is a real element with the same footprint as a real one, so a
+ * product without a photograph keeps its row aligned with the rows either side.
+ * A missing image that collapses the layout reads as a broken page rather than
+ * as a product nobody has photographed yet.
+ * ------------------------------------------------------------------------- */
+.product-row { border-bottom: 1px solid var(--adu-color-border); }
+.product-link {
+  display: flex;
+  align-items: center;
+  gap: var(--adu-space-smd);
+  padding: var(--adu-space-smd) var(--adu-space-xs);
+  min-height: var(--adu-touch-min);
+}
+.product-thumb {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: var(--adu-radius-sm);
+  border: 1px solid var(--adu-color-border);
+}
+.product-thumb-empty { background: var(--adu-color-surface-muted); }
+.product-name { flex: 1 1 auto; font-weight: 500; }
+.product-price { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cap-note { margin-block: var(--adu-space-sm); }

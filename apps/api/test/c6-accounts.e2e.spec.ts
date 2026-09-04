@@ -343,7 +343,9 @@ const browserCookie = async (): Promise<string> => {
       `DELETE FROM core.seller_eligibility_evaluation WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller_level_state WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.review WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
-      `DELETE FROM core.media_lifecycle WHERE reason='SELLER_DELETED'`,
+      // Reason-wide, not fixture-scoped: every suite that deletes a seller
+      // writes this reason. Narrowed to this suite's own seller (D-273).
+      `DELETE FROM core.media_lifecycle WHERE reason='SELLER_DELETED' AND object_key LIKE '%${SELLER}%'`,
       `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
       `DELETE FROM core.account_recovery_case WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,

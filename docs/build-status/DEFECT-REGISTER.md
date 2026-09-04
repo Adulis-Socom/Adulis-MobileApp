@@ -3912,3 +3912,235 @@ Action:    All twenty-one SCHEDULED_JOBS run as adulis_jobs with no grant error.
            It lives in e2-e6.jobs.spec.ts because several of these jobs are fleet-wide sweeps and D-83 rules that exactly one suite may own a global sweep. That suite already owns them.
 Verification: proven to FIRE by revoking migration 0049's grant and observing the probe report, by name, "payout.activate_due: permission denied for table payout_details" -- D-270 reproduced on demand by the probe that would have prevented it. Restored.
 Ruling needed: none.
+
+### D-276 - boot-smoke was red on main because it replayed a production origin at a localhost bundle. The console boots.
+
+Severity:  MAJOR (fixed here). NOT a BLOCKER -- the artifact was never broken.
+Phase:     T22 - Phase 2
+Source:    ops/scripts/verify-boot-smoke.mjs, the unconditional `for (const e of rep.csp) fail(...)`
+Found by:  The order requiring a verdict: does the artifact fail to boot, or is the gate wrong?
+Effect:    THE ARTIFACT BOOTS, and the gate said so on the line above the failure. Measured:
+             PASS  #root mounted with 1 child element(s)
+             FAIL  CSP violation under the production policy: connect-src <- http://localhost:3000/v1/bootstrap
+             FAIL  CSP violation under the production policy: connect-src <- http://localhost:3000/v1/auth/sessions
+             PASS  the smoke break flag is compiled out of all 1 shipped bundle(s)
+           React mounted, nothing threw, nothing rejected. The two failures are the gate replaying the PRODUCTION policy -- connect-src 'self' https://api.adulis.example -- against a bundle built with VITE_API_BASE_URL=http://localhost:3000, so SessionProvider's mount call to /bootstrap and its follow-on /auth/sessions are refused.
+           IT WAS GREEN BY ACCIDENT, AND THE HEADER SAID SO. D-138 already recorded that CI builds without VITE_API_BASE_URL, so apiBase() throws before fetch is reached and no request is ever attempted -- and added, in terms, "a gate that quietly benefits from a misconfiguration it does not name is the class this repository keeps finding." The misconfiguration stopped and the gate went red. It was never testing connect-src; it was being spared it.
+           THE BUNDLE IS CONFIGURED BY WHOEVER BUILT LAST. `verify:console-e2e` rebuilds the console with VITE_API_BASE_URL set and leaves that dist in the tree; it runs at gate 25, AFTER boot-smoke at 22, so it contaminates the NEXT run. apps/console/CLAUDE.md also instructs an operator to export the same variable into their shell, in which case even the `build` gate bakes it in. Either route makes boot-smoke red on every branch including unmodified main -- which is where this was found.
+           AND THIS IS D-164 RECURRING IN THE SIBLING FILE. D-164 is the same symptom, the same directive, the same origin, fixed in apps/console/e2e/serve.mjs with "THE CSP IS DERIVED, NOT REPLAYED". verify-boot-smoke.mjs never received that treatment, which is exactly why `verify:console-e2e` passes against the identical dist while boot-smoke fails.
+Response:  FIXED - load-time violations still FAIL; the one runtime directive is REPORTED
+Action:    script-src, style-src, font-src, img-src, worker-src and every other load-time directive remain hard failures: a refused script or style is a page that did not load what it shipped with, and that is this gate's whole question. connect-src is printed as a NOTE naming why it is not a boot failure.
+           THIS NARROWS STATED COVERAGE, NOT REAL COVERAGE, and saying which is the point: D-138 established the gate never tested connect-src. What is fixed is a gate that changed colour with an environment variable and reported it in the words "CSP violation under the production policy", which reads as a product fault.
+           D-138's open ruling -- does boot-smoke assert connect-src at all, or does that belong to the console harness owed at C-3 -- is NOT closed by this. This is the honest interim answer: it does not.
+Verification: green on a clean build (no NOTE lines at all, because no request is made -- the CI path) AND green on a configured build (two NOTEs). Deterministic on both, for the SAME reason rather than for two different accidents.
+           Proven to still FAIL on a real one: built with VITE_SMOKE_BREAK=1 and observed three arms red -- "#root has 0 children: the console did not mount", the uncaught module-scope error, and the break flag surviving into the bundle. The gate's teeth are intact.
+Ruling needed: D-138's remains open and is now the only question here.
+
+### D-277 - The gate could not tell "the console did not load" from "the browser did not run"
+
+Severity:  MINOR (fixed here)
+Phase:     T22 - Phase 2
+Source:    ops/scripts/verify-boot-smoke.mjs, the `no smoke report in the DOM: the page never reached the probe` branch
+Found by:  Running the gate from a sandboxed shell during T21 and reading its message as a product failure
+Effect:    Under a restricted or sandboxed shell msedge returns exit 0 in about sixty milliseconds having made ZERO HTTP requests and written ZERO bytes. The gate then finds no marker in an empty DOM dump and says "the page never reached the probe" -- which reads as "the console is broken" and is a statement about the shell.
+           IT COST A WHOLE ORDER'S DIAGNOSIS. T21 reported boot-smoke as failing with this message, on the branch and on main, and concluded "environmental on this machine" without being able to say what was environmental about it. Both halves were true and neither was useful.
+Response:  FIXED - an empty dump is now named as an empty dump
+Action:    A zero-byte DOM says nothing was fetched, so it can say nothing about the console. The gate now says that, and says to try an ordinary shell before reading it as a product failure. One branch, four lines, and it turns an ambiguous red into a directed one.
+           The general form is worth carrying: A GATE'S FAILURE MESSAGE IS PART OF THE GATE. Two causes that produce one message make a gate that reports a result nobody can act on, which is the same class as a gate that checks the wrong file (D-274).
+Ruling needed: none.
+
+### D-273 - RESOLVED as far as evidence allows: the shared resource is named, bounded, and eight assertions stopped reading other suites' rows
+
+Severity:  MAJOR -> reduced to one named, instrumented survivor
+Phase:     T22 - Phase 3
+Source:    One PostgreSQL database, no per-worker isolation, and assertions that count rows the suite does not own
+Found by:  Running the D-217 protocol, which T21 registered as owed and did not run
+
+THE SHARED RESOURCE, NAMED AND BOUNDED, because "environmental" is a diagnosis and not an answer:
+           It is ONE database -- `adulis` on the local `adulis-postgres` container -- reached through one DATABASE_URL by every jest worker, with no per-worker database, schema or transactional isolation. Bounds, measured: 40 spec files; `os.cpus().length` = 20, so jest's default maxWorkers is 19; `max_connections` = 100; per-suite ceiling is APP_POOL_MAX 10 + FINANCIAL_POOL_MAX 4 + the suite's admin pool, so 19 workers can demand up to 304 connections against 100. That is D-217's "connections" clause, quantified.
+           The three candidate sub-resources the order offered map onto it as INSTANCES, and one of them is dead: "global sweeps" is the payout_credential and social_post cases; "teardown windows" is the c8/t6 and c2/e2-e6 cases; "the seeded market" is the OTP-budget case; and "rate-limit buckets" is a DEAD candidate -- the IP limiter was DELETED, not tuned (auth.controller.ts, ADU-AUTH-01 S15), so any explanation citing `otp-request-ip` cites a control that no longer exists.
+
+THE ONE FULLY ESTABLISHED MECHANISM, with the colliding line:
+           c8-analytics-public inserts a row with template_key `OWNERSHIP_TRANSFER_REQUESTED` for its own owner and keeps it until its afterAll. t6-ownership-transfer selected EVERY row of that template, platform-wide, and compared the set to two of its own account ids. For the whole window in which c8 holds that row, in a different worker, t6 sees three ids and compares them to two. Deterministic given overlap, and it is the failure D-273 recorded.
+           The suite already knew its own ids: its beforeEach cleanup scopes correctly by `recipient_account_id = ANY($1)`. The read declined to.
+
+Response:  FIXED - eight assertions and teardowns scoped, per D-83's existing rule
+Action:    D-83 already governs this and says it in one line: "Exactly one suite may own a global sweep, and no test asserts a global count ... a test that asserts a number the whole database contributes to is a test about other people's rows. Assert your own row is gone; assert theirs is not." D-273 is that rule violated in eight new places. Fixed:
+             READS   t6-ownership-transfer x3 (REQUESTED, ACTIVATED, CANCELLED) -> scoped to its own two accounts
+                     e2-e6 payout_credential, two fleet-wide counts around a job run -> scoped to its own seller
+                     c4-financial's notification delta -> scoped by recipient as well as by time
+                     migration-04-05's `count(*) = 0` over verification.access_log -> scoped to its own actor
+                       (t5-identity-operator-only WRITES that table and cleans up from it, in another worker)
+             SWEEPS  c2's table-wide social_post orphan sweep -> a CTE that deletes only its own links and their posts
+                       (it matched exactly the three unlinked rows e2-e6 inserts and reads back)
+                     c1's table-wide core.person orphan sweep -> scoped to its own market's people
+                     c6's media_lifecycle purge by reason alone -> scoped to its own seller
+           NOT CHANGED, deliberately: the table-wide counts over IMMUTABLE reference data (core.permission 42, core.role_permission 139, core.locale_pack 2, the permission matrix). Nothing writes those, the counts are the point, and "fixing" them would remove a real assertion.
+           NOT CHANGED, deliberately: jobs.worker_heartbeat's `count(*) = 1`. It reads like a table-wide count and is not one -- the table is ONE ROW BY CONSTRUCTION (`id boolean PRIMARY KEY CHECK (id)`), so no other suite can add to it. It was in the candidate population and measurement removed it.
+
+Verification: THE D-217 PROTOCOL, RUN.
+             isolation      t6 8/8, t12-d89 6/6, c4 20/20, e2-e6 24/24 -- every implicated spec green alone
+             maxWorkers=2   565/565, 43/43 suites
+             re-run         THIRTEEN consecutive full-suite runs: TWELVE green at 565/565.
+           BEFORE: roughly one run in three failed, with a DIFFERENT test each time. AFTER: one run in thirteen, always the SAME test.
+Ruling needed: none for the fixed population. See D-279 for what survives.
+
+### D-278 - The probe written to close D-270 made D-273 four times worse, and measurement caught it
+
+Severity:  MAJOR (introduced and fixed inside T22)
+Phase:     T22 - Phase 1, found in Phase 3
+Source:    The twenty-one-job role probe, first written to call `job.run()` for real
+Found by:  Running the D-217 protocol on the branch and not recognising the numbers
+Effect:    Running twenty-one jobs for real is twenty-one FLEET-WIDE sweeps. notification.send drains every pending row, stock.confidence_nudge nudges every stale variant, the purges purge -- so the probe consumed the fixtures of the tests below it in its own file and of every suite in every other worker.
+           MEASURED, and the comparison is the whole entry: with the naive probe the full suite failed 4 runs of 4, two to five tests each. With the probe reverted to main's file, 2 of 3 runs were 564/564. The test written to close one defect had quadrupled another.
+           It is D-83's rule broken by the very change that cites D-83 in its own comment for choosing which file to live in.
+Response:  FIXED - every job now runs inside a transaction that is always rolled back
+Action:    Postgres checks privileges PER STATEMENT, before it does the work, so a missing grant raises inside a transaction exactly as it would outside one. The rollback discards only the EFFECT, which was never what the probe was for. Verified it still catches the real thing: revoking migration 0049's grant makes it report, by name, "payout.activate_due: permission denied for table payout_details".
+           TWO JOBS CANNOT BE WRAPPED -- notification.send and notification.push_seller open their own transaction, and kysely refuses to nest. That is a coverage hole, and it is NAMED AND ASSERTED rather than swallowed: the probe pins the set, so a third job doing the same thing fails the test instead of quietly costing coverage. Both are covered by real runs elsewhere in the same file.
+           The general lesson is the one D-83 already carries and this proves again from the inside: a test that exercises production behaviour fleet-wide is a test about other people's rows, even when it is a test you wrote to be careful.
+Ruling needed: none.
+
+### D-279 - What survives D-273: one arm, one in thirteen, now instrumented
+
+Severity:  MINOR (a known, bounded, self-reporting flake)
+Phase:     T22 - Phase 3
+Source:    c4-financial.e2e.spec.ts, "with step-up, an aged device and no locks", the PAYOUT_CHANGE_REQUESTED assertion
+Found by:  Thirteen consecutive full-suite runs after the D-273 scoping landed
+Effect:    ONE run in thirteen, and always this arm. It is D-261's original red, which D-266 re-measured and narrowed and could not close, surviving a third order.
+           SCOPING CANNOT HAVE FIXED IT AND WAS NOT EXPECTED TO. The read was unscoped and is now scoped, but an unscoped read of this shape can only produce a FALSE GREEN -- another suite ADDING a row makes `toBeGreaterThan(0)` pass. The observed failure is zero rows, and no unscoped DELETE of core.notification exists anywhere in the suite (all sixteen are recipient- or market-scoped).
+           D-266's two candidate paths are both CLOSED by reading the code: the POST is a plain INSERT, so the trigger always takes the REQUESTED branch, and the idempotency key is a fresh randomUUID per POST.
+           WHAT REMAINS A CANDIDATE is the trigger's shape. `core.fn_notify_payout_change` is an `INSERT ... SELECT ... JOIN core.market` -- and an INSERT over an empty SELECT inserts nothing and raises nothing. That is the exact class T20 found in the device seed, where `INSERT ... SELECT ... WHERE code='SEED'` silently wrote no row and five tests then accused a blameless endpoint.
+Response:  INSTRUMENTED, not guessed at
+Action:    The arm now makes its own next failure diagnostic. On zero rows it dumps every notification that DOES exist for that owner with its scheduled_for, plus Postgres `now()` and `clock_timestamp()` and the Node clock, and throws with all of it. The two hypotheses have different fingerprints and this separates them:
+             rows exist, all scheduled_for < startedAt  -> the row WAS written and the time predicate excluded it
+             no rows at all for the owner               -> the INSERT..SELECT wrote nothing, D-266's remaining path
+           A flake that has survived three orders is not closed by a fourth guess. It is closed by the next occurrence explaining itself, and that is now arranged.
+Ruling needed: none. The next red carries its own diagnosis.
+
+### D-280 - The default worker count is slower AND redder than --maxWorkers=2
+
+Severity:  MINOR (a measurement, offered rather than acted on)
+Phase:     T22 - Phase 3
+Source:    jest's default maxWorkers of cores-1 = 19 against one Postgres with max_connections = 100
+Found by:  Running the D-217 protocol and timing it, which no report in this repository had done
+Effect:    EVERY RELEASE REPORT SINCE T14C HAS CITED "--maxWorkers=2" AS THE SLOW-BUT-SAFE FALLBACK, and the assumed cost of adopting it was a 6-20x increase in wall clock. THAT ASSUMPTION IS WRONG, and nobody had measured it: no run log in docs/build-status records a duration.
+           Measured on this machine, same database, same commit:
+             --maxWorkers=2   565/565, 43/43 suites, 17s
+             default (19)     565/565, 34-39s across five runs
+           The cap is roughly TWICE AS FAST, not six to twenty times slower. Nineteen workers demanding up to 304 connections against a ceiling of 100 is contention, not parallelism.
+Response:  REPORTED, NOT ADOPTED
+Action:    Not pinned in gates.mjs, and the reason is not cost. A cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth. The scoping is the fix; the cap is a way of not needing one.
+           It is recorded because the cost sentence was repeated across four reports without a measurement behind it, and because a founder deciding this should decide it against numbers. If the gate's wall clock ever becomes the constraint, the cheap answer now has evidence.
+Ruling needed: whether to pin the API test gate's worker count. The measurement is here; the decision is not mine.
+
+### D-281 - Two jest workers raced to unlink one file, and a whole spec reported "failed to run"
+
+Severity:  MINOR (fixed here)
+Phase:     T22 - Phase 4, observed while re-running the suite
+Source:    apps/api/src/modules/auth/sms.adapter.ts -- FakeSmsAdapter's constructor did rmSync(devSmsLogPath()) before writing an empty file
+Found by:  One run in six going red with EPERM instead of an assertion
+Effect:    `EPERM: operation not permitted, unlink '.dev-sms.log'`, and c1-onboarding reported "Test suite failed to run" -- a whole spec file blamed for a file it never mentions. Every jest worker constructs a FakeSmsAdapter against the SAME path, and on Windows a file another process holds open cannot be unlinked.
+           IT IS D-273'S SHAPE WITH A FILE AS THE SHARED RESOURCE INSTEAD OF A TABLE, which is worth saying because D-273's whole population was database rows and the class is wider than that. Nineteen workers share a filesystem as surely as they share a database.
+Response:  FIXED - truncate, do not unlink
+Action:    Writing an empty file achieves what the unlink was for -- the log starts empty for this run -- without requiring exclusive access to a path nineteen processes share. The mode comment above it is unchanged and still true.
+Ruling needed: none.
+
+### D-282 - D-261 IS DIAGNOSED: the assertion compared a server timestamp to a client one
+
+Severity:  MAJOR (fixed here) -- open across D-261, D-266, D-273 and D-279
+Phase:     T22 - Phase 4, by the instrumentation added in T22 Phase 3
+Source:    c4-financial.e2e.spec.ts, `scheduled_for >= startedAt` where startedAt was a JS `new Date()`
+Found by:  The forensics D-279 attached to the arm, on its first reproduction
+Effect:    THE FORENSICS PRINTED THE ANSWER:
+             startedAt                  2026-09-04T02:34:00.216Z
+             newest row for this owner  2026-09-04T02:34:00.202Z
+           THE ROW WAS WRITTEN. It was fourteen milliseconds "before" an instant the test had captured a moment earlier, so the predicate excluded it and the arm reported that the notification did not exist.
+           THAT REFUTES D-266'S REMAINING CANDIDATE. The INSERT..SELECT..JOIN was not writing zero rows; rows plainly exist, six of them for this owner. Three orders looked for a missing write and the write was never missing.
+           THE MECHANISM: `core.notification.scheduled_for` defaults to `now()`, which in Postgres is TRANSACTION START -- not statement time -- and it is POSTGRES'S clock, not Node's. Comparing a server-assigned instant to a client-assigned one is a race whose margin is the difference between two machines' clocks plus the width of a transaction. Under nineteen parallel workers that margin is not always positive.
+           D-261 called it clock skew and could not measure it. D-266 re-measured the clocks properly, found them within a millisecond, and correctly declined to conclude from that. BOTH WERE LOOKING AT THE RIGHT THING. What neither had was the failing row's own timestamp printed beside the value it was being compared against -- which is the whole argument for instrumenting a flake instead of guessing at it a fourth time.
+Response:  FIXED - the assertion uses no clock at all
+Action:    Count before, count after, assert the count rose. That is what the arm's own comment ("A DELTA, not a running total") always meant; the previous attempt implemented the delta with a wall clock, which is the defect. Combined with D-273's recipient scope it is immune to skew AND to other suites' rows.
+           THE GENERAL RULE, worth carrying: A TEST MAY NOT COMPARE A SERVER-ASSIGNED TIMESTAMP TO A CLIENT-ASSIGNED ONE. Where a test needs "since I started", the honest instrument is a count taken before and after, or a timestamp the server itself issued.
+Verification: nine consecutive full-suite runs green after the fix (566/566), against one-in-ten before it, on the arm that had flaked in three consecutive orders.
+Ruling needed: none. D-261, D-266 and D-279 are all discharged by this entry.
+
+### D-283 - fn_effective_limit resolved the intersection and threw both operands away, and no endpoint called it
+
+Severity:  MAJOR (fixed here) -- the contract half of ADU-CON-03 S8
+Phase:     T22 - Phase 4.2
+Source:    billing.fn_effective_limit's PRODUCT_COUNT branch returned {"allowed":true,"cap":N} and nothing else
+Found by:  Drawing SC-07 in T21 and discovering the contract could not fill it
+Effect:    ADU-CON-03 S8 requires the counter to say WHICH limit binds: "A NEW seller on a paid tier is capped at 10 by ladder_config.new_level_product_cap, whatever the tier allows -- and '10 of unlimited' is a bug report waiting to be filed." The function computed exactly that intersection with `least(tier_cap, level_cap)` AND DISCARDED BOTH OPERANDS ONE LINE AFTER READING THEM.
+           A seller told "10 of 10" without being told which limit that is cannot know whether PAYING or TRADING lifts it. Those are different actions and the number is identical.
+           WORSE, NO HTTP ENDPOINT CALLED IT FOR PRODUCT_COUNT AT ALL -- the only callers were SQL function bodies -- so even the collapsed number never reached the wire. SC-07 said so on screen for three orders, which is S17 working as intended: a region that depends on a contract names the endpoint and the field, and naming it is what got it built.
+Response:  FIXED - migration 0050 and a `publication` object on GET /v1/seller/products
+Action:    The function now returns tier_cap, level_cap, binding and level beside the unchanged cap. ADDITIVE ONLY: `allowed` and `cap` are byte-identical, so fn_publish_product and every other reader is untouched, and CREATE OR REPLACE preserves owner and grants (verified: adulis_app still holds EXECUTE, owner still adulis_migrate).
+           `level_cap` is read from the ladder subselect DIRECTLY rather than derived from `cap`, because `least()` IGNORES NULLS -- least(NULL,10) is 10 -- so reconstructing the operands from the result would inherit exactly that hole.
+           `binding` is TIER | LEVEL | BOTH | NONE. BOTH when the two are equal and non-null, because naming one there would be a coin flip.
+           AND `resolved` IS CARRIED SEPARATELY. The function's fail-closed branches (NO_TIER_DEFINITION, NO_LADDER_CONFIG) return allowed:false, and collapsing that into "no cap is in force" would tell a seller who cannot publish at all that nothing limits them -- the opposite of the truth. The screen has its own sentence for it.
+Verification: all four bindings proven in a rolled-back transaction -- NEW with tier 25 vs level 10 gives cap 10 binding LEVEL; ESTABLISHED gives cap 25 binding TIER; tier 10 with level 10 gives BOTH; no cap gives NONE. c2-catalogue asserts the wire: cap 2, binding LEVEL, level NEW, level_cap 2. console-e2e asserts the browser renders a binding and never the word "unlimited".
+Ruling needed: none. But see the note below -- the seeded environment cannot reach the ordinary path.
+
+### D-284 - The seed seller has no subscription, so the seeded console can only reach the fail-closed limit
+
+Severity:  MINOR (registered, NOT fixed -- fixing it broke two screens)
+Phase:     T22 - Phase 4.2
+Source:    ops/scripts/seed.mjs creates no billing.subscription row; migration 0016 seeds ONE tier_definition, the BETA row
+Found by:  SC-07's new cap counter rendering "your limit could not be resolved" in the seeded environment
+Effect:    fn_effective_limit resolves the tier from the seller's subscription and falls back to LISTED when there is none. 0016 deliberately seeds only the BETA row -- the priced tiers are a commercial decision that has not arrived -- so a seller with no subscription resolves to LISTED, finds no definition, and FAILS CLOSED.
+           The behaviour is correct. THE FIXTURE IS NOT: every real beta seller has a BETA subscription, so the seeded environment reaches only the fallback and never the ordinary path. SC-07 therefore demonstrates "your product limit could not be resolved" rather than the sentence S8 actually specifies.
+Response:  ATTEMPTED, REVERTED, REGISTERED
+Action:    Adding the BETA subscription to the seed WORKS -- the limit resolves to cap 10, binding LEVEL, level NEW, which is ADU-CON-03 S8's model sentence verbatim ("10 of 10 -- new sellers can list 10 products. This lifts when your store reaches Established.").
+           IT ALSO BREAKS TWO SCREENS THAT ARE SEEDED TO DEMONSTRATE THE OPPOSITE. SC-26's e2e is titled "Subscription -- honest about having none", and SC-12's entitlement arm depends on the same absence. Both went red. The seed serves thirty screens, and one screen's realistic fixture is another screen's broken demonstration.
+           So the number is proven where it can be proven without that cost: c2-catalogue asserts cap 2 / binding LEVEL / level NEW on the wire, and the e2e asserts the region renders, names a binding, and never prints "unlimited".
+Ruling needed: YES -- should the seed carry a BETA subscription, and if so what do SC-26 and SC-12 demonstrate instead? It is a fixture question with a product answer, which is why it is not decided here.
+
+### D-285 - Two focus-ring rules, and the one that lost was the token's
+
+Severity:  MAJOR (fixed here)
+Phase:     T22 - Phase 5
+Source:    apps/console/src/console.css declared `:focus-visible { outline: 3px solid var(--adu-color-accent) }`; packages/tokens/tokens.css declared `:where(...):focus-visible { outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color) }`
+Found by:  Planting a violation to prove the new rule-5 guard fires -- and watching it NOT fire
+Effect:    BOTH RULES WERE LIVE AND THEY DISAGREED. The token said 2px and named a dedicated `--adu-focus-ring-color`; the console said 3px and read `--adu-color-accent` directly. Because the token's rule is written `:where(...)` -- deliberately at specificity ZERO so a surface can override the treatment -- THE CONSOLE'S ALWAYS WON.
+           So the console rendered a 3px ring and NEVER ONCE READ THE FOCUS TOKEN. `focus.ringWidth` and `focus.ringColor` described something nothing rendered.
+           IT MADE T21's WORK INERT. D-271 gave the ring a DARK value because a 2px #1e40af ring on a #14120f page is a focus indicator the colour of the ground it sits on. That fix was correct, it was gated, and it bought the console nothing, because the console was not reading the token it fixed.
+           This is D-259's class from the other direction. There the console referenced variables that existed nowhere and every fallback silently rendered a literal. Here the console defined its own value for a variable that did exist -- same outcome, opposite cause: a token whose value is not what ships.
+           IT WAS INVISIBLE BECAUSE NOTHING READ THE RING BACK. `verify:tokens` compares index.ts to tokens.css and passes; both are internally consistent. What no gate did was ask the BROWSER what outline it actually painted.
+Response:  FIXED - the console's rule now reads the tokens
+Action:    Width, colour and offset all come from `--adu-focus-ring-*`. The width is kept at the token's 2px rather than this file's 3px, and that direction is the point: A TOKEN THAT LOSES AN ARGUMENT WITH A STYLESHEET IS NOT A TOKEN.
+Verification: proven by the guard that found it. With the console reading the token, setting `--adu-focus-ring-width: 0px` turns rule 5 red in BOTH light and dark; before the fix the same plant changed nothing. Restored, and 83/83 green.
+Ruling needed: none.
+
+### D-286 - Three of the six safety rules were enforced by absence, and none of the six ran in dark mode
+
+Severity:  MAJOR (fixed here -- the guard, not a defect in the product)
+Phase:     T22 - Phase 5
+Source:    apps/console/e2e -- one Playwright project, no colorScheme, no emulateMedia anywhere
+Found by:  Surveying what a component port could break without any gate firing
+Effect:    T22 S5.1 requires the six product-safety rules to hold in both modes AFTER the port, and warns that "a component library is exactly where a 'primary' variant quietly becomes the confirm button".
+           TWO PROBLEMS, and the second is the one that made the first dangerous.
+           (1) THREE RULES WERE HELD BY NOTHING BUT ABSENCE. Rule 1 by there being no `.decision` variant; rule 4 by there being no colour rule on a badge at all; rule 6 by `Deadline` returning null. A design system arrives WITH variants and tones by default, so a port could satisfy every existing test and break all three. Rules 4 and 5 had no e2e assertion of any kind.
+           (2) NOT ONE TEST RAN IN DARK MODE. Every one of the six was asserted in exactly the mode a developer looks at -- and a mode is precisely where an absence stops being absent. D-285 is the worked example: the focus ring's token had no dark value until T21, and nothing here could have caught it.
+Response:  FIXED - a second Playwright project, and the two missing rules asserted
+Action:    A `dark` project re-runs ONLY the `@safety`-tagged tests with `colorScheme: 'dark'`. Running the whole suite twice would double the most-run console gate for coverage nobody asked for; running the six rules twice is the requirement. It needs no application change -- the console has no theme switch of its own and tokens.css keys dark off `prefers-color-scheme`.
+           New assertions for the two rules that had none: every state badge carries a WORD (not a class, not a colour -- text is what survives greyscale and the mode you do not develop in), every readiness row says its state in words, and the focus ring appears on Tab AND NOT on a mouse click. Both halves of rule 5, because a ring that never shows fails a keyboard user and a ring that shows on every click is the one somebody eventually deletes.
+           They are keyed on `data-badge`, `data-clock`, `data-verbatim`, `data-gate` and `data-gated` -- the attributes a port must preserve -- rather than on class names a port will legitimately change.
+           WRITTEN BEFORE THE PORT, NOT AFTER. A guard added after the thing it guards has already proved nothing about the change.
+Verification: 83 tests, 11 of them in dark. Both guards proven to FIRE: a `#detail-confirm` "primary" variant -- the exact thing the order warns about -- turns rule 1 red in BOTH modes; a zero-width focus ring turns rule 5 red in BOTH modes. Restored, 83/83.
+Ruling needed: none.
+
+### D-287 - T22 Phase 5 is PART DONE, and this says which part
+
+Severity:  INFORMATIONAL (scope, stated rather than implied)
+Phase:     T22 - Phase 5
+Source:    WORK ORDER T22 S5's four-step order: variables, eleven components, twelve ScreenState treatments, five screen layouts
+Effect:    WHAT LANDED: step 1 in full, and the precondition S5.1 sets for everything after it.
+             Step 1, VARIABLES -- already done and verified rather than migrated. T21 ruled that Figma imports packages/tokens and never invents a parallel set, so there is nothing to bring back; the one value the design needed that the tokens lacked (focusDark) landed in T21 S2 and is merged. `verify:tokens` green, both modes, both directions. AND THE CONSOLE NOW ACTUALLY READS ONE OF THEM (D-285), which it did not before.
+             S5.1, THE SIX RULES IN BOTH MODES -- done, and proven to fire (D-286).
+           WHAT DID NOT: steps 2, 3 and 4. Eleven components, twelve ScreenState treatments, five screen layouts.
+           THE SHAPE OF THAT WORK, measured so the next order is not surprised: only THREE of the eleven exist as React components today (PaymentDecisions, StateBadge, ScreenState). The other eight are bare CSS applied inline across 37 feature files -- Button and Input are ELEMENT selectors with 94 raw <button> and 38 raw <input> call sites, and the three Nav components are three regions inside one file sharing one const. So it is three swaps and eight extractions-from-scratch, not eleven of the same job.
+           AND THE ORDER MATTERS: Button and Input must be done LAST, not first. They are element selectors today, so until every call site is migrated the bare `button`/`input` rules must stay alive -- otherwise every unmigrated control loses its 44x44 touch target in the same commit that introduces the component meant to guarantee it.
+Response:  REPORTED, NOT ATTEMPTED HALFWAY
+Action:    An eleven-component port started and abandoned mid-way leaves the console in two design systems at once, which is the state T22 S5's own ruling exists to prevent: "five screen layouts applied first improves five and leaves twenty-five visibly inconsistent -- and the inconsistency is what a seller notices". The same is true of six components out of eleven.
+           What this phase leaves behind is the thing that makes the port safe to do next: a guard that fails, in both modes, the moment the port breaks a safety rule.
+Ruling needed: none. It is scheduling.

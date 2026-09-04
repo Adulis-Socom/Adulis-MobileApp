@@ -280,7 +280,18 @@ describe('migrations 04-05 — boundary, sellers, permissions', () => {
           [PERSON, ACCOUNT],
         );
         await c.query(`RESET ROLE`);
-        const { rows } = await c.query(`SELECT count(*)::int AS n FROM verification.access_log`);
+        // SCOPED TO THIS TEST'S OWN ACTOR (T22, D-273). This was a table-wide
+        // `count(*) = 0` over verification.access_log -- and that table IS
+        // written, by verification.read_attestation, which
+        // t5-identity-operator-only exercises in another worker and then has
+        // to clean up from in its own afterAll. So this arm asserted the
+        // emptiness of a table another suite legitimately fills.
+        // The claim it actually makes is unchanged: WRITING an attestation
+        // logs no access.
+        const { rows } = await c.query(
+          `SELECT count(*)::int AS n FROM verification.access_log WHERE actor_account_id = $1`,
+          [ACCOUNT],
+        );
         expect(rows[0].n).toBe(0);
       });
     });

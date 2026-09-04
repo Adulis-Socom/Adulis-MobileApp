@@ -482,7 +482,48 @@ describe('C4 — the financial boundary', () => {
 
 
     it('with step-up, an aged device and no locks: PENDING + delay + log + ciphertext', async () => {
-      const startedAt = new Date();
+      /**
+       * D-261 IS DIAGNOSED, AFTER THREE ORDERS (T22 Phase 4, D-279).
+       *
+       * This arm counted notifications with `scheduled_for >= startedAt`, where
+       * startedAt was a JS `new Date()`. The instrumentation added earlier in
+       * T22 caught it in the act and printed the answer:
+       *
+       *   startedAt                     2026-09-04T02:34:00.216Z
+       *   newest row for this owner     2026-09-04T02:34:00.202Z
+       *
+       * THE ROW WAS WRITTEN. It was 14 milliseconds "before" the instant the
+       * test had captured a moment earlier, so the predicate excluded it. That
+       * refutes D-266's remaining candidate -- the INSERT..SELECT writing
+       * nothing -- because rows plainly exist.
+       *
+       * `core.notification.scheduled_for` defaults to `now()`, which in
+       * Postgres is TRANSACTION START, not statement time; and it is Postgres's
+       * clock, not Node's. Comparing a server-assigned instant to a
+       * client-assigned one is a race whose margin is the difference between
+       * two machines' clocks plus the width of a transaction -- and under
+       * nineteen parallel workers that margin is not always positive.
+       *
+       * D-261 called it clock skew and could not measure it; D-266 re-measured
+       * the clocks, found them within a millisecond, and correctly refused to
+       * conclude from that. Both were looking at the right thing. What neither
+       * had was the failing row's own timestamp beside the value it was
+       * compared against.
+       *
+       * THE FIX USES NO CLOCK AT ALL. Count before, count after, assert the
+       * count rose. That is what "a delta, not a running total" always meant;
+       * the previous attempt implemented the delta with a wall clock, which is
+       * the defect. Combined with the recipient scope (D-273) it is immune to
+       * both skew and to other suites' rows.
+       */
+      const noticesBefore = (
+        await admin.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM core.notification
+            WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible
+              AND recipient_account_id = $1`,
+          [OWNER],
+        )
+      ).rows[0]?.n ?? 0;
       const r = await sellerReq('post', '/v1/seller/payout')
         .send({
           bank_code: 'CBE',
@@ -504,17 +545,20 @@ describe('C4 — the financial boundary', () => {
         [r.body.payout_details_id],
       );
       expect(cred.rows[0].n).toBeGreaterThan(ACCOUNT_NUMBER.length);
-      // A DELTA, not a running total. This used to be a global count with
-      // toBeGreaterThan(0), which any earlier arm that sets payout satisfies
-      // in advance -- so the assertion could no longer fail. Scope it to the
-      // row this arm created.
-      const notices = await admin.query(
-        `SELECT count(*)::int AS n FROM core.notification
-          WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible
-            AND scheduled_for >= $1`,
-        [startedAt],
-      );
-      expect(notices.rows[0].n).toBeGreaterThan(0);
+      // A DELTA, and now genuinely one: two counts of the same scoped
+      // predicate around the POST, with no instant on either side of a
+      // comparison. It fails if this arm's POST writes no notification, which
+      // is the thing the arm exists to prove, and it cannot fail for a reason
+      // that is really about two clocks.
+      const noticesAfter = (
+        await admin.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM core.notification
+            WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible
+              AND recipient_account_id = $1`,
+          [OWNER],
+        )
+      ).rows[0]?.n ?? 0;
+      expect(noticesAfter).toBeGreaterThan(noticesBefore);
     });
 
     it('a second request while one is pending is 409 PAYOUT_CHANGE_PENDING', async () => {

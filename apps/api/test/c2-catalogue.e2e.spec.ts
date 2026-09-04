@@ -191,13 +191,31 @@ describe('C2 — catalogue, media and stock', () => {
       `DELETE FROM core.order_payout_snapshot WHERE seller_id='${SELLER}'`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
       `DELETE FROM core.stock_event WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.product_social_post WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.social_post WHERE id NOT IN (SELECT social_post_id FROM core.product_social_post)`,
+      // WAS A TABLE-WIDE ORPHAN SWEEP (T22, D-273). It read
+      // "every social_post with no product link", which is precisely the shape
+      // e2-e6.jobs inserts -- three unlinked rows it then reads back -- so this
+      // teardown deleted another worker's fixtures mid-run. D-83: delete only
+      // your own.
+      //
+      // ONE STATEMENT, because the ordering is forced both ways:
+      // product_social_post carries the seller and the FK, so the link must go
+      // first, but once it is gone nothing identifies which posts were ours.
+      // The CTE deletes the links and hands their ids straight to the posts.
+      // core.social_post itself has no seller column -- id, platform,
+      // canonical_post_id, status, first_seen_at -- which is why the sweep was
+      // written table-wide in the first place.
+      `WITH mine AS (
+         DELETE FROM core.product_social_post WHERE seller_id='${SELLER}'
+         RETURNING social_post_id
+       )
+       DELETE FROM core.social_post WHERE id IN (SELECT social_post_id FROM mine)`,
       `DELETE FROM core.product_attribute_value WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.variant_attribute_value WHERE variant_id IN (SELECT id FROM core.product_variant WHERE seller_id='${SELLER}')`,
       `DELETE FROM core.product_image WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.product_video WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
-      `DELETE FROM core.media_lifecycle WHERE object_key LIKE 'products/%'`,
+      // Prefix-wide, not fixture-scoped: every suite's product media matches
+      // 'products/%'. Narrowed to this suite's own products (D-273).
+      `DELETE FROM core.media_lifecycle WHERE object_key LIKE 'products/%' AND object_key LIKE '%${SELLER}%'`,
       `DELETE FROM core.product_variant WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.product WHERE market_id='${M}'`,
       `DELETE FROM core.seller_fulfilment_method WHERE seller_id='${SELLER}'`,
@@ -233,6 +251,47 @@ describe('C2 — catalogue, media and stock', () => {
         .expect(201);
       productId = r.body.product_id;
       expect(r.body.visibility).toBe('DRAFT');
+    });
+
+    /**
+     * T22 Phase 4 -- THE LIST CARRIES WHAT SC-07 COULD NOT DRAW.
+     *
+     * Two regions ADU-CON-03 S8 specifies were owed for three orders, for the
+     * same reason each time: the contract did not carry the field. S17's rule
+     * is that a region depending on a contract NAMES the endpoint and the
+     * field, and naming them is what got them built.
+     *
+     *   image_key    the CARD derivative of the lowest-position image, or null
+     *   publication  the resolved cap AND WHICH LIMIT PRODUCED IT
+     *
+     * S8 is explicit that the counter must say which one binds, because a
+     * seller told "2 of 2" without being told whether that is their plan or
+     * their level cannot know whether paying or trading lifts it. This suite's
+     * fixture is a NEW seller whose ladder caps at 2, so LEVEL must bind.
+     */
+    it('the list carries image_key and a publication cap that names which limit binds', async () => {
+      const r = await read('/v1/seller/products').expect(200);
+
+      // Every row carries the key, present or explicitly null -- never absent,
+      // because an absent field and a product with no photograph are different
+      // facts and the console must be able to tell them apart.
+      expect(Array.isArray(r.body.data)).toBe(true);
+      for (const row of r.body.data) {
+        expect(row).toHaveProperty('image_key');
+      }
+
+      const pub = r.body.publication;
+      expect(pub.resolved).toBe(true);
+      expect(pub.used).toBe(0); // nothing published yet in this describe
+      expect(pub.cap).toBe(2); // the ladder's new_level_product_cap for this market
+      expect(pub.level).toBe('NEW');
+      // THE POINT OF THE FIELD: the number alone does not say what lifts it.
+      expect(pub.binding).toBe('LEVEL');
+      expect(pub.level_cap).toBe(2);
+      // And the operands are both present, so "which one binds" is a fact the
+      // response carries rather than something the client infers from the
+      // smaller number -- least() ignores NULLs, so inference would be wrong.
+      expect(pub).toHaveProperty('tier_cap');
     });
 
     it('403 for the ANALYST creating; 404 for a stranger reading', async () => {

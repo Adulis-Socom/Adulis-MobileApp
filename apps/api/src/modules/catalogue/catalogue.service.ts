@@ -82,6 +82,27 @@ export class CatalogueService {
     cursor: string | undefined,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:read');
+
+    /**
+     * T22 Phase 4.1 -- SC-07 could not draw a grid because this list carried no
+     * image reference at all.
+     *
+     * TRANSCRIBED, NOT DESIGNED: the storefront list already runs this exact
+     * correlated subquery (storefront.controller.ts), and two lists of the same
+     * products disagreeing about whether a product has a picture is the class
+     * this repository keeps finding.
+     *
+     * THE CARD DERIVATIVE, AND ONLY IT. A list of forty products pulling three
+     * derivatives each is 120 URLs to render forty thumbnails. Lowest position
+     * is the primary image, by the same rule the storefront uses.
+     *
+     * The field is `image_key`, NOT `image_url`. The API returns bare keys and
+     * /v1/bootstrap owns the origin -- and `*_url` is one of the three tokens
+     * Appendix C check 1 polices. It adds no column and no migration, so it
+     * cannot touch the `original_key` load-bearing absence: that absence
+     * forbids a COLUMN naming the upload as received, and this is a projection
+     * of an existing one.
+     */
     const r = await sql<{
       id: string;
       name: string;
@@ -90,15 +111,43 @@ export class CatalogueService {
       base_price_currency: string;
       display_order: number;
       created_at: Date;
+      image_key: string | null;
     }>`
-      SELECT id, name, visibility::text, base_price_minor, base_price_currency,
-             display_order, created_at
-        FROM core.product
-       WHERE seller_id = ${req.ctx?.sellerId}
-         AND (${cursor ?? null}::uuid IS NULL OR id > ${cursor ?? null}::uuid)
-       ORDER BY id
+      SELECT p.id, p.name, p.visibility::text, p.base_price_minor,
+             p.base_price_currency, p.display_order, p.created_at,
+             -- the card derivative of the lowest-position image; see above
+             (SELECT i.card_key FROM core.product_image i
+               WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key
+        FROM core.product p
+       WHERE p.seller_id = ${req.ctx?.sellerId}
+         AND (${cursor ?? null}::uuid IS NULL OR p.id > ${cursor ?? null}::uuid)
+       ORDER BY p.id
        LIMIT ${limit + 1}`.execute(trx);
     const page = r.rows.slice(0, limit);
+
+    /**
+     * T22 Phase 4.2 -- THE CAP COUNTER, which ADU-CON-03 S8 specifies and no
+     * endpoint could answer.
+     *
+     * "The product cap is the INTERSECTION of tier and level, and the counter
+     * must say which one binds ... '10 of unlimited' is a bug report waiting to
+     * be filed." `billing.fn_effective_limit` already computed the
+     * intersection and threw both operands away one line after reading them,
+     * and NO HTTP ENDPOINT CALLED IT for PRODUCT_COUNT at all -- so even the
+     * collapsed number never reached the wire.
+     *
+     * It rides on the list rather than a new endpoint: S8 names the counter as
+     * a REGION of this screen, the screen makes one request, `used` has to be a
+     * server-side count because the list is paginated, and `seats` on the team
+     * list already set the precedent for hanging a limit off a collection.
+     */
+    const lim = await sql<{ effective: Record<string, unknown> }>`
+      SELECT billing.fn_effective_limit(${req.ctx?.sellerId}, 'PRODUCT_COUNT') AS effective`.execute(trx);
+    const used = await sql<{ n: string }>`
+      SELECT count(*)::int AS n FROM core.product
+       WHERE seller_id = ${req.ctx?.sellerId} AND visibility = 'PUBLISHED'`.execute(trx);
+    const eff = (lim.rows[0]?.effective ?? {}) as Record<string, unknown>;
+
     return {
       data: page.map((p) => ({
         id: p.id,
@@ -106,7 +155,24 @@ export class CatalogueService {
         visibility: p.visibility,
         base_price: { amount_minor: Number(p.base_price_minor), currency: p.base_price_currency },
         display_order: p.display_order,
+        image_key: p.image_key,
       })),
+      publication: {
+        // `allowed:false` is the FAIL-CLOSED branch -- NO_TIER_DEFINITION or
+        // NO_LADDER_CONFIG -- and it is NOT the same as "no cap is in force".
+        // Collapsing the two would tell a seller who cannot publish at all that
+        // nothing limits them, which is the opposite of the truth.
+        resolved: eff['allowed'] === true,
+        reason: eff['reason'] ?? null,
+        used: Number(used.rows[0]?.n ?? 0),
+        cap: eff['cap'] === null || eff['cap'] === undefined ? null : Number(eff['cap']),
+        tier_cap: eff['tier_cap'] === null || eff['tier_cap'] === undefined ? null : Number(eff['tier_cap']),
+        level_cap: eff['level_cap'] === null || eff['level_cap'] === undefined ? null : Number(eff['level_cap']),
+        // TIER | LEVEL | BOTH | NONE. BOTH when the two operands are equal and
+        // non-null, because naming one of them there would be a coin flip.
+        binding: eff['binding'] ?? 'NONE',
+        level: eff['level'] ?? null,
+      },
       has_more: r.rows.length > limit,
       next_cursor: r.rows.length > limit ? page[page.length - 1]?.id : null,
     };

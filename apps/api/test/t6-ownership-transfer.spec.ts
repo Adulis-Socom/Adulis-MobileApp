@@ -274,8 +274,17 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
     // "Both parties notified unsuppressibly." A delay nobody is told about
     // is not a control, it is a wait.
     const n = await admin.query<{ recipient_account_id: string; suppressible: boolean }>(
+      // SCOPED TO THIS SUITE'S OWN PARTIES (T22, D-273). This read used to
+      // select every OWNERSHIP_TRANSFER_REQUESTED row in the database and
+      // compare the set to two account ids -- so ONE foreign row of that
+      // template failed it. c8-analytics-public inserts exactly that template
+      // for its own owner, in a different jest worker, and lives with it until
+      // its afterAll. The suite already knows its own ids; it just was not
+      // using them here (its beforeEach cleanup at :135 does).
       `SELECT recipient_account_id, suppressible FROM core.notification
-        WHERE template_key = 'OWNERSHIP_TRANSFER_REQUESTED'`,
+        WHERE template_key = 'OWNERSHIP_TRANSFER_REQUESTED'
+          AND recipient_account_id = ANY($1::uuid[])`,
+      [[OWNER, RECIPIENT]],
     );
     expect(n.rows.map((x) => x.recipient_account_id).sort()).toEqual([OWNER, RECIPIENT].sort());
     expect(n.rows.every((x) => x.suppressible === false)).toBe(true);
@@ -349,8 +358,11 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
 
     // (d) both told, again unsuppressibly
     const n = await admin.query<{ recipient_account_id: string; suppressible: boolean }>(
+      // Scoped, for the same reason as the REQUESTED read above (D-273).
       `SELECT recipient_account_id, suppressible FROM core.notification
-        WHERE template_key = 'OWNERSHIP_TRANSFER_ACTIVATED'`,
+        WHERE template_key = 'OWNERSHIP_TRANSFER_ACTIVATED'
+          AND recipient_account_id = ANY($1::uuid[])`,
+      [[OWNER, RECIPIENT]],
     );
     expect(n.rows.map((x) => x.recipient_account_id).sort()).toEqual([OWNER, RECIPIENT].sort());
     expect(n.rows.every((x) => x.suppressible === false)).toBe(true);
@@ -431,8 +443,12 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
     expect(t.rows[0]?.activated_at).toBeNull();
 
     const n = await admin.query<{ n: number }>(
+      // Scoped, for the same reason (D-273). An exact count over a shared
+      // table is the purest form of "a test about other people's rows".
       `SELECT count(*)::int AS n FROM core.notification
-        WHERE template_key = 'OWNERSHIP_TRANSFER_CANCELLED'`,
+        WHERE template_key = 'OWNERSHIP_TRANSFER_CANCELLED'
+          AND recipient_account_id = ANY($1::uuid[])`,
+      [[OWNER, RECIPIENT]],
     );
     expect(Number(n.rows[0]?.n)).toBe(2);
 
