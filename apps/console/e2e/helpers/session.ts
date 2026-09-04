@@ -48,6 +48,16 @@ export const API = process.env['E2E_API_BASE_URL'] ?? 'http://localhost:3000';
  */
 export const SEEDED = {
   sellerId: '5eed0000-0000-4000-8000-000000000004',
+  /**
+   * The SECOND seeded seller, the one WITH a BETA subscription (D-284).
+   * Same owner, so the one signed-in session reaches both. Use it where a
+   * screen needs a resolved entitlement -- SC-07's cap counter -- and use
+   * `sellerId` where a screen's subject is the ABSENCE of one, which is what
+   * SC-26 is titled after.
+   */
+  subscribedSellerId: '5eed0000-0000-4000-8000-000000000024',
+  /** Its owner's phone. Its OWN account, so each account owns one store. */
+  subscribedPhone: '+251900000003',
   phone: '+251900000001',
 } as const;
 

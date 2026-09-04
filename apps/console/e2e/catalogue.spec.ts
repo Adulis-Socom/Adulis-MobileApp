@@ -17,7 +17,7 @@
  *          accurate -- never one field that does both.
  */
 import { test, expect } from '@playwright/test';
-import { SEEDED } from './helpers/session';
+import { SEEDED, signInAs } from './helpers/session';
 
 const base = `/s/${SEEDED.sellerId}`;
 
@@ -59,6 +59,80 @@ test.describe('SC-07 -- products list', () => {
 
     // The filter row filters what LOADED, and says so (D-154 class).
     await expect(page.getByText(/These tabs filter the products already loaded/i)).toBeVisible();
+  });
+
+  /**
+   * THE OTHER SELLER, AND THE REASON THERE ARE TWO (T23, D-284).
+   *
+   * The seller above has no subscription, so the limit CANNOT be resolved and
+   * the honest sentence is that it could not be. This one has a BETA
+   * subscription, so it reaches the ordinary path -- and the ordinary path is
+   * the one ADU-CON-03 S8 actually specifies:
+   *
+   *   "10 of 10 -- new sellers can list 10 products. This lifts when your store
+   *    reaches Established."
+   *
+   * BETA's product_cap is NULL, so the LEVEL is what binds, which is the case
+   * S8 names explicitly: a seller capped by their level is lifted by trading,
+   * not by paying, and a counter that will not say which is a counter that
+   * cannot be acted on.
+   */
+  test('SC-07: the SUBSCRIBED seller sees a real number, and is told the LEVEL binds', async ({
+    browser,
+  }, testInfo) => {
+    /*
+     * ITS OWN CONTEXT AND ITS OWN SIGN-IN, because this seller has its own
+     * owner. chooser.spec asserts that a single-store seller is taken straight
+     * into their store (D-97) and rests on each account owning exactly one, so
+     * the second seller could not hang off the first account without taking a
+     * real behaviour test with it. The OTP budget is 3/hour PER PHONE, so a
+     * second phone spends nothing the shared sign-in relies on.
+     */
+    /*
+     * AN EXPLICITLY EMPTY storageState, NOT `undefined`.
+     *
+     * The config sets `use.storageState` to the signed-in state file, and
+     * Playwright merges context options by treating `undefined` as NOT GIVEN --
+     * so `newContext()` and `newContext({ storageState: undefined })` both
+     * arrive carrying the FIRST account's session cookie. That is not a stale
+     * cookie quietly ignored: ADU-API-01 S5.1's Origin check binds to exactly
+     * the requests that carry a session, so the sign-in POST for the second
+     * account was refused 403 by the CSRF control, correctly, for being a
+     * cookie-carried write with no Origin.
+     *
+     * `baseURL` comes from the project rather than a literal, because the dev
+     * server's port is chosen in one place and must stay chosen there.
+     */
+    const baseURL = testInfo.project.use.baseURL;
+    if (!baseURL) throw new Error('the project declares no baseURL to sign in against');
+    const context = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+      baseURL,
+    });
+    await signInAs(context, {
+      phone: SEEDED.subscribedPhone,
+      sellerId: SEEDED.subscribedSellerId,
+    });
+    const page = await context.newPage();
+
+    await page.goto(`/s/${SEEDED.subscribedSellerId}/products`);
+    await expect(page.locator('[data-screen="SC-07"]')).toBeVisible();
+
+    const cap = page.locator('[data-cap-binding]');
+    await expect(cap).toBeVisible();
+    await expect(cap).toHaveAttribute('data-cap-binding', 'LEVEL');
+
+    // The NUMBER, drawn. 0 published of a level cap of 10.
+    await expect(cap.locator('[data-cap-count]')).toHaveText('0 of 10');
+
+    // And the sentence that says what lifts it -- which is the whole point of
+    // carrying `binding` on the wire rather than just the smaller number.
+    await expect(cap).toContainText('New sellers can list 10 products');
+    await expect(cap).toContainText('Established');
+
+    // Still never the forbidden word.
+    await expect(page.getByText(/unlimited/i)).toHaveCount(0);
+    await context.close();
   });
 });
 
