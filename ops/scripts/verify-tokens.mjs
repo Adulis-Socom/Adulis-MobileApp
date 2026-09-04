@@ -57,7 +57,27 @@ const fail = (l, d = '') => {
   failures.push(l);
 };
 
-/** TS export name (and optional nested key) -> the custom-property prefix. */
+/**
+ * TS export name (and optional nested key) -> the custom-property prefix.
+ *
+ * T21 S2 ADDED THE LAST FOUR ROWS, AND THE REASON IS THE TABLE ITSELF. This
+ * list is hand-maintained, and "both directions" is only true of a property
+ * that some row's prefix actually matches: the orphan loop below iterates
+ * `table.keys()` filtered by `g.prefix`, so a custom property matched by NO row
+ * is visited by no direction of no check. `--adu-focus-ring-*`, `--adu-touch-*`
+ * and `--adu-font-family`/`--adu-font-mono` were in exactly that position --
+ * declared in tokens.css, exported from index.ts, and compared by nothing.
+ *
+ * The hole was not theoretical. `focus.ringColor` was `color.accent`, which
+ * TypeScript freezes at the LIGHT accent at the point of definition, while
+ * tokens.css wrote `var(--adu-color-accent)` and kept the reference live. In
+ * dark mode the two files therefore disagreed -- CSS gave the light-on-dark
+ * accent (#8ab0ff), TS gave the dark-on-light one (#1e40af), which is a focus
+ * ring the colour of the page it sits on. The web surfaces read the CSS and
+ * were right; anything reading the TS (React Native has no other source) was
+ * wrong, in the mode nobody develops in. See D-271 for that value, and
+ * D-272 for this table having been able to hide it.
+ */
 const GROUPS = [
   { export: 'neutral', prefix: '--adu-neutral-', mode: 'light' },
   { export: 'neutralDark', prefix: '--adu-neutral-', mode: 'dark' },
@@ -68,9 +88,24 @@ const GROUPS = [
   { export: 'font', nested: 'size', prefix: '--adu-font-size-', mode: 'light' },
   { export: 'font', nested: 'weight', prefix: '--adu-font-weight-', mode: 'light' },
   { export: 'font', nested: 'lineHeight', prefix: '--adu-line-height-', mode: 'light' },
+  // The font's own top-level keys. `except` hands the three nested groups above
+  // back to their own rows -- without it this row's orphan direction would
+  // report every --adu-font-size-* and --adu-font-weight-* as unexported.
+  {
+    export: 'font',
+    prefix: '--adu-font-',
+    mode: 'light',
+    except: ['--adu-font-size-', '--adu-font-weight-'],
+  },
+  { export: 'touchTarget', prefix: '--adu-touch-', mode: 'light' },
+  { export: 'focus', prefix: '--adu-focus-', mode: 'light' },
+  { export: 'focusDark', prefix: '--adu-focus-', mode: 'dark' },
 ];
 
 const kebab = (k) => k.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+
+/** Collapse whitespace runs to one space, for comparing wrapped font stacks. */
+const flat = (v) => String(v).replace(/\s+/g, ' ').trim();
 
 /** Strip // and block comments so a commented-out value is never read as one. */
 function decomment(src) {
@@ -106,16 +141,31 @@ function exportBody(src, name) {
 function pairs(body) {
   const items = [];
   let depth = 0;
+  let quote = null;
   let cur = '';
   for (const ch of body) {
-    if (ch === '{' || ch === '[') depth += 1;
-    if (ch === '}' || ch === ']') depth -= 1;
-    if (ch === ',' && depth === 0) {
-      items.push(cur);
-      cur = '';
+    // T21 S2: AND NOT ON COMMAS INSIDE A STRING, which is the same bug one
+    // level down. `font.family` is a font stack -- 'system-ui, -apple-system,
+    // "Segoe UI", ...' -- so a depth-only split cut it into six items and kept
+    // `system-ui` as the whole value. The check then reported a disagreement
+    // between a value and its own first word: the comparator accusing the
+    // source of its own parsing bug, exactly as the comment above describes.
+    // It stayed invisible because until T21 no GROUPS row reached a value
+    // containing a comma.
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
     } else {
-      cur += ch;
+      if (ch === '{' || ch === '[') depth += 1;
+      if (ch === '}' || ch === ']') depth -= 1;
+      if (ch === ',' && depth === 0) {
+        items.push(cur);
+        cur = '';
+        continue;
+      }
     }
+    cur += ch;
   }
   items.push(cur);
 
@@ -130,11 +180,33 @@ function pairs(body) {
   return out;
 }
 
-/** Resolve `neutral[500]` / `neutralDark[0]` to the literal it names. */
-function resolve(value, ramps) {
-  const m = /^(neutral|neutralDark)\[(\d+)\]$/.exec(value);
-  if (!m) return value;
-  return ramps[m[1]]?.get(m[2]) ?? value;
+/**
+ * Resolve an index.ts value that NAMES another token rather than stating one:
+ * `neutral[500]`, `neutralDark[0]`, `color.accent`, `colorDark.accent`.
+ *
+ * The bracket form was always here for the ramp. The DOT form is T21 S2's
+ * addition and it is the TS-side twin of `resolveCss` below: index.ts writes
+ * `ringColor: color.accent` exactly as tokens.css writes
+ * `var(--adu-color-accent)`, and a comparator that resolves one side's
+ * indirection but not the other reports a disagreement where there is none --
+ * which is how the first version of this check read `'color.accent' !==
+ * '#1e40af'` and blamed the source for its own blind spot.
+ *
+ * Resolution is iterative and depth-capped: a token may name a token that names
+ * a ramp step, and a cycle must not hang the gate.
+ */
+function resolve(value, tables) {
+  let v = value;
+  for (let hop = 0; hop < 4; hop += 1) {
+    const bracket = /^([A-Za-z][A-Za-z0-9_$]*)\[(\d+)\]$/.exec(v);
+    const dot = /^([A-Za-z][A-Za-z0-9_$]*)\.([A-Za-z][A-Za-z0-9_$]*)$/.exec(v);
+    const m = bracket ?? dot;
+    if (!m) return v;
+    const next = tables[m[1]]?.get(m[2]);
+    if (next === undefined || next === v) return v;
+    v = next;
+  }
+  return v;
 }
 
 /**
@@ -148,19 +220,46 @@ function resolve(value, ramps) {
  * resolving both sides reports thirty-eight disagreements where there are none
  * -- which is what the first run of this script did.
  */
-function resolveCss(value, rampVars) {
-  const m = /^var\((--adu-neutral-\d+)\)$/.exec(value.trim());
-  if (!m) return value;
-  return rampVars.get(m[1]) ?? value;
+function resolveCss(value, table) {
+  let v = value;
+  for (let hop = 0; hop < 4; hop += 1) {
+    // T21 S2: any --adu-* reference, not just the ramp. The focus ring points
+    // at a ROLE (`var(--adu-color-accent)`), which points at nothing in light
+    // and at an overridden literal in dark -- two hops in one mode, one in the
+    // other. A ramp-only regex saw the outer var() and gave up, so the focus
+    // row could never have been compared even once it was in the table above.
+    const m = /^var\((--adu-[a-z0-9-]+)\)$/.exec(String(v).trim());
+    if (!m) return v;
+    const next = table.get(m[1]);
+    if (next === undefined || next === v) return v;
+    v = next;
+  }
+  return v;
 }
 
 // ---------------------------------------------------------------- read
 const tsSrc = decomment(await readFile(TS, 'utf8'));
 const cssSrc = await readFile(CSS, 'utf8');
 
+/**
+ * The index.ts tables a value may NAME. The two ramps were always here; `color`
+ * and `colorDark` join them so `focus.ringColor: color.accent` resolves the
+ * same way `--adu-focus-ring-color: var(--adu-color-accent)` does on the CSS
+ * side. Resolution is per-mode by construction: the light rows resolve through
+ * `color`, the dark rows through `colorDark`, because that is what the value
+ * literally names.
+ */
 const ramps = {
   neutral: pairs(exportBody(tsSrc, 'neutral') ?? ''),
   neutralDark: pairs(exportBody(tsSrc, 'neutralDark') ?? ''),
+  color: pairs(exportBody(tsSrc, 'color') ?? ''),
+  colorDark: pairs(exportBody(tsSrc, 'colorDark') ?? ''),
+  // `focusDark` names `focus.ringWidth`/`focus.ringOffset` rather than
+  // restating '2px' twice -- the ring's GEOMETRY does not change with the
+  // theme, only its colour does, and saying so once is the point. Resolving
+  // that reference is this table's job; refusing it would push the source into
+  // duplicating a value to satisfy its own comparator.
+  focus: pairs(exportBody(tsSrc, 'focus') ?? ''),
 };
 
 /** Custom properties declared in a block of CSS text. */
@@ -242,14 +341,20 @@ for (const g of GROUPS) {
       missing.push(`${g.export}.${k} -> ${prop}`);
       continue;
     }
-    const actual = resolveCss(table.get(prop), table);
-    if (actual !== expected) wrong.push(`${prop}: css='${actual}' ts='${expected}'`);
+    const actual = String(resolveCss(table.get(prop), table));
+    // Compare on collapsed whitespace. The font stacks are wrapped across lines
+    // in BOTH files, at different columns, by the same formatter that is not
+    // allowed to change their meaning -- a line break inside a comma-separated
+    // list is formatting, not a value. Every other token is a single word, so
+    // this loosens nothing that was previously tight.
+    if (flat(actual) !== flat(expected)) wrong.push(`${prop}: css='${actual}' ts='${expected}'`);
   }
   // The other direction, for the groups whose prefix is theirs alone.
   const orphan = [];
   if (g.prefix !== '--adu-color-' || g.mode === 'light') {
     for (const prop of table.keys()) {
       if (!prop.startsWith(g.prefix)) continue;
+      if (g.except?.some((p) => prop.startsWith(p))) continue;
       const key = prop.slice(g.prefix.length);
       if (![...scope.keys()].some((k) => kebab(k) === key)) orphan.push(prop);
     }
