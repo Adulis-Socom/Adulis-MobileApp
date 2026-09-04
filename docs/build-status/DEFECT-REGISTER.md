@@ -4094,3 +4094,53 @@ Action:    Adding the BETA subscription to the seed WORKS -- the limit resolves 
            IT ALSO BREAKS TWO SCREENS THAT ARE SEEDED TO DEMONSTRATE THE OPPOSITE. SC-26's e2e is titled "Subscription -- honest about having none", and SC-12's entitlement arm depends on the same absence. Both went red. The seed serves thirty screens, and one screen's realistic fixture is another screen's broken demonstration.
            So the number is proven where it can be proven without that cost: c2-catalogue asserts cap 2 / binding LEVEL / level NEW on the wire, and the e2e asserts the region renders, names a binding, and never prints "unlimited".
 Ruling needed: YES -- should the seed carry a BETA subscription, and if so what do SC-26 and SC-12 demonstrate instead? It is a fixture question with a product answer, which is why it is not decided here.
+
+### D-285 - Two focus-ring rules, and the one that lost was the token's
+
+Severity:  MAJOR (fixed here)
+Phase:     T22 - Phase 5
+Source:    apps/console/src/console.css declared `:focus-visible { outline: 3px solid var(--adu-color-accent) }`; packages/tokens/tokens.css declared `:where(...):focus-visible { outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color) }`
+Found by:  Planting a violation to prove the new rule-5 guard fires -- and watching it NOT fire
+Effect:    BOTH RULES WERE LIVE AND THEY DISAGREED. The token said 2px and named a dedicated `--adu-focus-ring-color`; the console said 3px and read `--adu-color-accent` directly. Because the token's rule is written `:where(...)` -- deliberately at specificity ZERO so a surface can override the treatment -- THE CONSOLE'S ALWAYS WON.
+           So the console rendered a 3px ring and NEVER ONCE READ THE FOCUS TOKEN. `focus.ringWidth` and `focus.ringColor` described something nothing rendered.
+           IT MADE T21's WORK INERT. D-271 gave the ring a DARK value because a 2px #1e40af ring on a #14120f page is a focus indicator the colour of the ground it sits on. That fix was correct, it was gated, and it bought the console nothing, because the console was not reading the token it fixed.
+           This is D-259's class from the other direction. There the console referenced variables that existed nowhere and every fallback silently rendered a literal. Here the console defined its own value for a variable that did exist -- same outcome, opposite cause: a token whose value is not what ships.
+           IT WAS INVISIBLE BECAUSE NOTHING READ THE RING BACK. `verify:tokens` compares index.ts to tokens.css and passes; both are internally consistent. What no gate did was ask the BROWSER what outline it actually painted.
+Response:  FIXED - the console's rule now reads the tokens
+Action:    Width, colour and offset all come from `--adu-focus-ring-*`. The width is kept at the token's 2px rather than this file's 3px, and that direction is the point: A TOKEN THAT LOSES AN ARGUMENT WITH A STYLESHEET IS NOT A TOKEN.
+Verification: proven by the guard that found it. With the console reading the token, setting `--adu-focus-ring-width: 0px` turns rule 5 red in BOTH light and dark; before the fix the same plant changed nothing. Restored, and 83/83 green.
+Ruling needed: none.
+
+### D-286 - Three of the six safety rules were enforced by absence, and none of the six ran in dark mode
+
+Severity:  MAJOR (fixed here -- the guard, not a defect in the product)
+Phase:     T22 - Phase 5
+Source:    apps/console/e2e -- one Playwright project, no colorScheme, no emulateMedia anywhere
+Found by:  Surveying what a component port could break without any gate firing
+Effect:    T22 S5.1 requires the six product-safety rules to hold in both modes AFTER the port, and warns that "a component library is exactly where a 'primary' variant quietly becomes the confirm button".
+           TWO PROBLEMS, and the second is the one that made the first dangerous.
+           (1) THREE RULES WERE HELD BY NOTHING BUT ABSENCE. Rule 1 by there being no `.decision` variant; rule 4 by there being no colour rule on a badge at all; rule 6 by `Deadline` returning null. A design system arrives WITH variants and tones by default, so a port could satisfy every existing test and break all three. Rules 4 and 5 had no e2e assertion of any kind.
+           (2) NOT ONE TEST RAN IN DARK MODE. Every one of the six was asserted in exactly the mode a developer looks at -- and a mode is precisely where an absence stops being absent. D-285 is the worked example: the focus ring's token had no dark value until T21, and nothing here could have caught it.
+Response:  FIXED - a second Playwright project, and the two missing rules asserted
+Action:    A `dark` project re-runs ONLY the `@safety`-tagged tests with `colorScheme: 'dark'`. Running the whole suite twice would double the most-run console gate for coverage nobody asked for; running the six rules twice is the requirement. It needs no application change -- the console has no theme switch of its own and tokens.css keys dark off `prefers-color-scheme`.
+           New assertions for the two rules that had none: every state badge carries a WORD (not a class, not a colour -- text is what survives greyscale and the mode you do not develop in), every readiness row says its state in words, and the focus ring appears on Tab AND NOT on a mouse click. Both halves of rule 5, because a ring that never shows fails a keyboard user and a ring that shows on every click is the one somebody eventually deletes.
+           They are keyed on `data-badge`, `data-clock`, `data-verbatim`, `data-gate` and `data-gated` -- the attributes a port must preserve -- rather than on class names a port will legitimately change.
+           WRITTEN BEFORE THE PORT, NOT AFTER. A guard added after the thing it guards has already proved nothing about the change.
+Verification: 83 tests, 11 of them in dark. Both guards proven to FIRE: a `#detail-confirm` "primary" variant -- the exact thing the order warns about -- turns rule 1 red in BOTH modes; a zero-width focus ring turns rule 5 red in BOTH modes. Restored, 83/83.
+Ruling needed: none.
+
+### D-287 - T22 Phase 5 is PART DONE, and this says which part
+
+Severity:  INFORMATIONAL (scope, stated rather than implied)
+Phase:     T22 - Phase 5
+Source:    WORK ORDER T22 S5's four-step order: variables, eleven components, twelve ScreenState treatments, five screen layouts
+Effect:    WHAT LANDED: step 1 in full, and the precondition S5.1 sets for everything after it.
+             Step 1, VARIABLES -- already done and verified rather than migrated. T21 ruled that Figma imports packages/tokens and never invents a parallel set, so there is nothing to bring back; the one value the design needed that the tokens lacked (focusDark) landed in T21 S2 and is merged. `verify:tokens` green, both modes, both directions. AND THE CONSOLE NOW ACTUALLY READS ONE OF THEM (D-285), which it did not before.
+             S5.1, THE SIX RULES IN BOTH MODES -- done, and proven to fire (D-286).
+           WHAT DID NOT: steps 2, 3 and 4. Eleven components, twelve ScreenState treatments, five screen layouts.
+           THE SHAPE OF THAT WORK, measured so the next order is not surprised: only THREE of the eleven exist as React components today (PaymentDecisions, StateBadge, ScreenState). The other eight are bare CSS applied inline across 37 feature files -- Button and Input are ELEMENT selectors with 94 raw <button> and 38 raw <input> call sites, and the three Nav components are three regions inside one file sharing one const. So it is three swaps and eight extractions-from-scratch, not eleven of the same job.
+           AND THE ORDER MATTERS: Button and Input must be done LAST, not first. They are element selectors today, so until every call site is migrated the bare `button`/`input` rules must stay alive -- otherwise every unmigrated control loses its 44x44 touch target in the same commit that introduces the component meant to guarantee it.
+Response:  REPORTED, NOT ATTEMPTED HALFWAY
+Action:    An eleven-component port started and abandoned mid-way leaves the console in two design systems at once, which is the state T22 S5's own ruling exists to prevent: "five screen layouts applied first improves five and leaves twenty-five visibly inconsistent -- and the inconsistency is what a seller notices". The same is true of six components out of eleven.
+           What this phase leaves behind is the thing that makes the port safe to do next: a guard that fails, in both modes, the moment the port breaks a safety rule.
+Ruling needed: none. It is scheduling.

@@ -31,7 +31,7 @@ async function openDetail(page: Page, id: string) {
   await expect(page.locator('.state-region')).toBeVisible();
 }
 
-test.describe('SC-03 -- the orders list', () => {
+test.describe('SC-03 -- the orders list @safety', () => {
   test('renders the seeded orders, each with the clock its state governs', async ({ page }) => {
     await page.goto(`/s/${SEEDED.sellerId}/orders`);
 
@@ -112,7 +112,7 @@ test.describe('SC-03 -- the orders list', () => {
   });
 });
 
-test.describe('SC-04 -- the payment decisions', () => {
+test.describe('SC-04 -- the payment decisions @safety', () => {
   test('are equally weighted, verbatim, and carry the verify sentence', async ({ page }) => {
     await openDetail(page, ORDER.submitted);
 
@@ -209,7 +209,7 @@ test.describe('SC-04 -- the payment decisions', () => {
   });
 });
 
-test.describe('SC-04 -- R20, the handoff region', () => {
+test.describe('SC-04 -- R20, the handoff region @safety', () => {
   test('is DISABLED and not hidden before PAYMENT_CONFIRMED', async ({ page }) => {
     await openDetail(page, ORDER.submitted);
 

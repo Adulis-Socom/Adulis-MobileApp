@@ -34,9 +34,29 @@ body {
 }
 .skip-link:focus { left: 0; z-index: 10; }
 
+/*
+ * THE FOCUS RING IS THE TOKEN'S, NOT THIS FILE'S (T22 Phase 5, D-285).
+ *
+ * This rule used to hard-code `3px solid var(--adu-color-accent)` while
+ * packages/tokens declared 2px and a dedicated `--adu-focus-ring-color`. BOTH
+ * rules were live and they disagreed -- and because the token's is written
+ * `:where(...)`, deliberately at specificity ZERO so a surface can override
+ * the treatment, THIS ONE ALWAYS WON. The console rendered 3px and never once
+ * read the focus token.
+ *
+ * That made `focus.ringWidth` and `focus.ringColor` describe something nothing
+ * rendered, which is D-259's class from the other direction: there the console
+ * referenced variables that existed nowhere; here it defined its own value for
+ * a variable that did exist. It also meant T21's D-271 -- giving the ring a
+ * DARK value, because a 2px #1e40af ring on a #14120f page is invisible --
+ * bought the console nothing, because the console was not reading it.
+ *
+ * The width is kept at the token's value rather than this file's 3px: a token
+ * that loses an argument with a stylesheet is not a token.
+ */
 :focus-visible {
-  outline: 3px solid var(--adu-color-accent);
-  outline-offset: 2px;
+  outline: var(--adu-focus-ring-width) solid var(--adu-focus-ring-color);
+  outline-offset: var(--adu-focus-ring-offset);
 }
 
 button, input {
