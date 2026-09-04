@@ -509,11 +509,53 @@ describe('C4 — the financial boundary', () => {
       // in advance -- so the assertion could no longer fail. Scope it to the
       // row this arm created.
       const notices = await admin.query(
+        // SCOPED BY RECIPIENT AS WELL AS BY TIME (T22, D-273). The previous
+        // narrowing was by time ALONE, which still counts every seller's
+        // PAYOUT_CHANGE_REQUESTED row in the database inside the window.
+        // NOTE: this does NOT explain D-261/D-266's observed red -- another
+        // suite ADDING rows can only make `toBeGreaterThan(0)` pass, and no
+        // unscoped delete of core.notification exists anywhere in the suite.
+        // The unscoped read is a real defect (it can produce a FALSE GREEN)
+        // and is fixed here; the red remains undiagnosed and is NOT fitted to
+        // this theory to make the answer tidy.
         `SELECT count(*)::int AS n FROM core.notification
           WHERE template_key='PAYOUT_CHANGE_REQUESTED' AND NOT suppressible
-            AND scheduled_for >= $1`,
-        [startedAt],
+            AND scheduled_for >= $1 AND recipient_account_id = $2`,
+        [startedAt, OWNER],
       );
+      // D-261 / D-266 / D-273: THIS ARM STILL FLAKES, ABOUT ONCE IN TEN FULL
+      // RUNS, AND NOBODY HAS DIAGNOSED IT ACROSS THREE ORDERS. Scoping the read
+      // (above) cannot have fixed it -- an unscoped read can only produce a
+      // false GREEN -- and T22 measured it surviving: 9 of 10 runs green, the
+      // tenth red here and nowhere else.
+      //
+      // So the next red is made to explain itself. The two hypotheses have
+      // different fingerprints and this tells them apart:
+      //
+      //   rows exist, ALL scheduled_for < startedAt  -> a clock/window problem:
+      //       the row WAS written and the predicate excluded it
+      //   no rows at all for this seller, ever       -> the INSERT wrote
+      //       nothing. core.fn_notify_payout_change is an INSERT..SELECT that
+      //       JOINs core.market; an empty SELECT inserts nothing and raises
+      //       nothing, which is exactly the shape T20 found in the device seed
+      //       and D-266 named as the remaining candidate.
+      if (notices.rows[0].n === 0) {
+        const forensics = await admin.query(
+          `SELECT scheduled_for, template_key, suppressible
+             FROM core.notification
+            WHERE recipient_account_id = $1
+            ORDER BY scheduled_for DESC LIMIT 10`,
+          [OWNER],
+        );
+        const pgNow = (await admin.query(`SELECT now() AS n, clock_timestamp() AS c`)).rows[0];
+        throw new Error(
+          'D-261/D-266/D-273 reproduced. No PAYOUT_CHANGE_REQUESTED for this owner at or after ' +
+            `${startedAt.toISOString()}. Rows that DO exist for the owner: ` +
+            JSON.stringify(forensics.rows) +
+            ` | postgres now()=${String(pgNow.n)} clock_timestamp()=${String(pgNow.c)}` +
+            ` | node Date.now()=${new Date().toISOString()}`,
+        );
+      }
       expect(notices.rows[0].n).toBeGreaterThan(0);
     });
 

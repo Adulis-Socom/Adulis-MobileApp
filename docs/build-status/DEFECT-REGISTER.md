@@ -3948,3 +3948,87 @@ Response:  FIXED - an empty dump is now named as an empty dump
 Action:    A zero-byte DOM says nothing was fetched, so it can say nothing about the console. The gate now says that, and says to try an ordinary shell before reading it as a product failure. One branch, four lines, and it turns an ambiguous red into a directed one.
            The general form is worth carrying: A GATE'S FAILURE MESSAGE IS PART OF THE GATE. Two causes that produce one message make a gate that reports a result nobody can act on, which is the same class as a gate that checks the wrong file (D-274).
 Ruling needed: none.
+
+### D-273 - RESOLVED as far as evidence allows: the shared resource is named, bounded, and eight assertions stopped reading other suites' rows
+
+Severity:  MAJOR -> reduced to one named, instrumented survivor
+Phase:     T22 - Phase 3
+Source:    One PostgreSQL database, no per-worker isolation, and assertions that count rows the suite does not own
+Found by:  Running the D-217 protocol, which T21 registered as owed and did not run
+
+THE SHARED RESOURCE, NAMED AND BOUNDED, because "environmental" is a diagnosis and not an answer:
+           It is ONE database -- `adulis` on the local `adulis-postgres` container -- reached through one DATABASE_URL by every jest worker, with no per-worker database, schema or transactional isolation. Bounds, measured: 40 spec files; `os.cpus().length` = 20, so jest's default maxWorkers is 19; `max_connections` = 100; per-suite ceiling is APP_POOL_MAX 10 + FINANCIAL_POOL_MAX 4 + the suite's admin pool, so 19 workers can demand up to 304 connections against 100. That is D-217's "connections" clause, quantified.
+           The three candidate sub-resources the order offered map onto it as INSTANCES, and one of them is dead: "global sweeps" is the payout_credential and social_post cases; "teardown windows" is the c8/t6 and c2/e2-e6 cases; "the seeded market" is the OTP-budget case; and "rate-limit buckets" is a DEAD candidate -- the IP limiter was DELETED, not tuned (auth.controller.ts, ADU-AUTH-01 S15), so any explanation citing `otp-request-ip` cites a control that no longer exists.
+
+THE ONE FULLY ESTABLISHED MECHANISM, with the colliding line:
+           c8-analytics-public inserts a row with template_key `OWNERSHIP_TRANSFER_REQUESTED` for its own owner and keeps it until its afterAll. t6-ownership-transfer selected EVERY row of that template, platform-wide, and compared the set to two of its own account ids. For the whole window in which c8 holds that row, in a different worker, t6 sees three ids and compares them to two. Deterministic given overlap, and it is the failure D-273 recorded.
+           The suite already knew its own ids: its beforeEach cleanup scopes correctly by `recipient_account_id = ANY($1)`. The read declined to.
+
+Response:  FIXED - eight assertions and teardowns scoped, per D-83's existing rule
+Action:    D-83 already governs this and says it in one line: "Exactly one suite may own a global sweep, and no test asserts a global count ... a test that asserts a number the whole database contributes to is a test about other people's rows. Assert your own row is gone; assert theirs is not." D-273 is that rule violated in eight new places. Fixed:
+             READS   t6-ownership-transfer x3 (REQUESTED, ACTIVATED, CANCELLED) -> scoped to its own two accounts
+                     e2-e6 payout_credential, two fleet-wide counts around a job run -> scoped to its own seller
+                     c4-financial's notification delta -> scoped by recipient as well as by time
+                     migration-04-05's `count(*) = 0` over verification.access_log -> scoped to its own actor
+                       (t5-identity-operator-only WRITES that table and cleans up from it, in another worker)
+             SWEEPS  c2's table-wide social_post orphan sweep -> a CTE that deletes only its own links and their posts
+                       (it matched exactly the three unlinked rows e2-e6 inserts and reads back)
+                     c1's table-wide core.person orphan sweep -> scoped to its own market's people
+                     c6's media_lifecycle purge by reason alone -> scoped to its own seller
+           NOT CHANGED, deliberately: the table-wide counts over IMMUTABLE reference data (core.permission 42, core.role_permission 139, core.locale_pack 2, the permission matrix). Nothing writes those, the counts are the point, and "fixing" them would remove a real assertion.
+           NOT CHANGED, deliberately: jobs.worker_heartbeat's `count(*) = 1`. It reads like a table-wide count and is not one -- the table is ONE ROW BY CONSTRUCTION (`id boolean PRIMARY KEY CHECK (id)`), so no other suite can add to it. It was in the candidate population and measurement removed it.
+
+Verification: THE D-217 PROTOCOL, RUN.
+             isolation      t6 8/8, t12-d89 6/6, c4 20/20, e2-e6 24/24 -- every implicated spec green alone
+             maxWorkers=2   565/565, 43/43 suites
+             re-run         THIRTEEN consecutive full-suite runs: TWELVE green at 565/565.
+           BEFORE: roughly one run in three failed, with a DIFFERENT test each time. AFTER: one run in thirteen, always the SAME test.
+Ruling needed: none for the fixed population. See D-279 for what survives.
+
+### D-278 - The probe written to close D-270 made D-273 four times worse, and measurement caught it
+
+Severity:  MAJOR (introduced and fixed inside T22)
+Phase:     T22 - Phase 1, found in Phase 3
+Source:    The twenty-one-job role probe, first written to call `job.run()` for real
+Found by:  Running the D-217 protocol on the branch and not recognising the numbers
+Effect:    Running twenty-one jobs for real is twenty-one FLEET-WIDE sweeps. notification.send drains every pending row, stock.confidence_nudge nudges every stale variant, the purges purge -- so the probe consumed the fixtures of the tests below it in its own file and of every suite in every other worker.
+           MEASURED, and the comparison is the whole entry: with the naive probe the full suite failed 4 runs of 4, two to five tests each. With the probe reverted to main's file, 2 of 3 runs were 564/564. The test written to close one defect had quadrupled another.
+           It is D-83's rule broken by the very change that cites D-83 in its own comment for choosing which file to live in.
+Response:  FIXED - every job now runs inside a transaction that is always rolled back
+Action:    Postgres checks privileges PER STATEMENT, before it does the work, so a missing grant raises inside a transaction exactly as it would outside one. The rollback discards only the EFFECT, which was never what the probe was for. Verified it still catches the real thing: revoking migration 0049's grant makes it report, by name, "payout.activate_due: permission denied for table payout_details".
+           TWO JOBS CANNOT BE WRAPPED -- notification.send and notification.push_seller open their own transaction, and kysely refuses to nest. That is a coverage hole, and it is NAMED AND ASSERTED rather than swallowed: the probe pins the set, so a third job doing the same thing fails the test instead of quietly costing coverage. Both are covered by real runs elsewhere in the same file.
+           The general lesson is the one D-83 already carries and this proves again from the inside: a test that exercises production behaviour fleet-wide is a test about other people's rows, even when it is a test you wrote to be careful.
+Ruling needed: none.
+
+### D-279 - What survives D-273: one arm, one in thirteen, now instrumented
+
+Severity:  MINOR (a known, bounded, self-reporting flake)
+Phase:     T22 - Phase 3
+Source:    c4-financial.e2e.spec.ts, "with step-up, an aged device and no locks", the PAYOUT_CHANGE_REQUESTED assertion
+Found by:  Thirteen consecutive full-suite runs after the D-273 scoping landed
+Effect:    ONE run in thirteen, and always this arm. It is D-261's original red, which D-266 re-measured and narrowed and could not close, surviving a third order.
+           SCOPING CANNOT HAVE FIXED IT AND WAS NOT EXPECTED TO. The read was unscoped and is now scoped, but an unscoped read of this shape can only produce a FALSE GREEN -- another suite ADDING a row makes `toBeGreaterThan(0)` pass. The observed failure is zero rows, and no unscoped DELETE of core.notification exists anywhere in the suite (all sixteen are recipient- or market-scoped).
+           D-266's two candidate paths are both CLOSED by reading the code: the POST is a plain INSERT, so the trigger always takes the REQUESTED branch, and the idempotency key is a fresh randomUUID per POST.
+           WHAT REMAINS A CANDIDATE is the trigger's shape. `core.fn_notify_payout_change` is an `INSERT ... SELECT ... JOIN core.market` -- and an INSERT over an empty SELECT inserts nothing and raises nothing. That is the exact class T20 found in the device seed, where `INSERT ... SELECT ... WHERE code='SEED'` silently wrote no row and five tests then accused a blameless endpoint.
+Response:  INSTRUMENTED, not guessed at
+Action:    The arm now makes its own next failure diagnostic. On zero rows it dumps every notification that DOES exist for that owner with its scheduled_for, plus Postgres `now()` and `clock_timestamp()` and the Node clock, and throws with all of it. The two hypotheses have different fingerprints and this separates them:
+             rows exist, all scheduled_for < startedAt  -> the row WAS written and the time predicate excluded it
+             no rows at all for the owner               -> the INSERT..SELECT wrote nothing, D-266's remaining path
+           A flake that has survived three orders is not closed by a fourth guess. It is closed by the next occurrence explaining itself, and that is now arranged.
+Ruling needed: none. The next red carries its own diagnosis.
+
+### D-280 - The default worker count is slower AND redder than --maxWorkers=2
+
+Severity:  MINOR (a measurement, offered rather than acted on)
+Phase:     T22 - Phase 3
+Source:    jest's default maxWorkers of cores-1 = 19 against one Postgres with max_connections = 100
+Found by:  Running the D-217 protocol and timing it, which no report in this repository had done
+Effect:    EVERY RELEASE REPORT SINCE T14C HAS CITED "--maxWorkers=2" AS THE SLOW-BUT-SAFE FALLBACK, and the assumed cost of adopting it was a 6-20x increase in wall clock. THAT ASSUMPTION IS WRONG, and nobody had measured it: no run log in docs/build-status records a duration.
+           Measured on this machine, same database, same commit:
+             --maxWorkers=2   565/565, 43/43 suites, 17s
+             default (19)     565/565, 34-39s across five runs
+           The cap is roughly TWICE AS FAST, not six to twenty times slower. Nineteen workers demanding up to 304 connections against a ceiling of 100 is contention, not parallelism.
+Response:  REPORTED, NOT ADOPTED
+Action:    Not pinned in gates.mjs, and the reason is not cost. A cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth. The scoping is the fix; the cap is a way of not needing one.
+           It is recorded because the cost sentence was repeated across four reports without a measurement behind it, and because a founder deciding this should decide it against numbers. If the gate's wall clock ever becomes the constraint, the cheap answer now has evidence.
+Ruling needed: whether to pin the API test gate's worker count. The measurement is here; the decision is not mine.
