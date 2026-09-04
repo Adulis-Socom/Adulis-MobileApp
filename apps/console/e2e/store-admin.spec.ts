@@ -261,7 +261,12 @@ test.describe('SC-23 Couriers -- invite and revoke, for real', () => {
     // to see it, then leave the row for the next run's reset to clear.
     await page.locator('#courier-phone').fill('+251944000002');
     await page.getByRole('button', { name: 'Send invitation' }).click();
-    await expect(page.getByText(/Names, current assignments and last activity/)).toBeVisible();
+    // Same correction as the inbox (D-288): a courier has no name to report,
+    // ever, so only the assignments and the activity carry a "yet".
+    await expect(page.getByText(/Adulis stores no name for an account/)).toBeVisible();
+    await expect(
+      page.getByText(/Current assignments and last activity are not reported by the server yet/),
+    ).toBeVisible();
   });
 });
 

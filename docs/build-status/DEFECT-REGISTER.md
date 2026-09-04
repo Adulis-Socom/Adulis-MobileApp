@@ -4089,11 +4089,18 @@ Source:    ops/scripts/seed.mjs creates no billing.subscription row; migration 0
 Found by:  SC-07's new cap counter rendering "your limit could not be resolved" in the seeded environment
 Effect:    fn_effective_limit resolves the tier from the seller's subscription and falls back to LISTED when there is none. 0016 deliberately seeds only the BETA row -- the priced tiers are a commercial decision that has not arrived -- so a seller with no subscription resolves to LISTED, finds no definition, and FAILS CLOSED.
            The behaviour is correct. THE FIXTURE IS NOT: every real beta seller has a BETA subscription, so the seeded environment reaches only the fallback and never the ordinary path. SC-07 therefore demonstrates "your product limit could not be resolved" rather than the sentence S8 actually specifies.
-Response:  ATTEMPTED, REVERTED, REGISTERED
+Response:  RULED AND FIXED IN T23 PHASE 2 -- the T22 text below is kept because it is the argument the ruling answers
+Ruling:    T23 S2: SEED TWO SELLERS, one with a BETA subscription and one without. Neither screen loses its demonstration, because the two screens are no longer arguing about one row.
+           IT IS TWO ACCOUNTS, NOT ONE, and that is not tidiness. chooser.spec.ts asserts that a single-store seller is taken STRAIGHT INTO their store rather than asked to choose -- D-97's closure -- and its comment states the fixture property it rests on: "The seeded account owns exactly one store, which is the shape almost every real seller has." Hanging the second seller off the same account made that true of nothing and turned four chooser tests red on the first run. So the second SELLER got a second OWNER (+251900000003), both accounts own exactly one store, and D-97's test keeps its subject.
+             seed-store        no subscription  -> SC-26 "honest about having none", SC-12's entitlement arm
+             seed-store-beta   BETA             -> SC-07 resolves cap 10, binding LEVEL, level NEW
+           THE COUNT GATE CAUGHT IT FIRST, which is the gate working: `db:reset` refused with "sellers: expected 1, got 2" before any test ran. Its EXPECTED map is a transcription of what the seed defines, so accounts and sellers moved together, with the reason written beside them.
+           AND SIGN-IN NEEDED A REAL FIX, not a fixture one. A second owner means a second sign-in, and `browser.newContext()` merges the config's `use.storageState` unless the option is given a VALUE -- `undefined` reads as "not specified", so the new context arrived carrying the FIRST account's session cookie and ADU-API-01 S5.1's Origin check refused the sign-in POST 403, correctly, as a cookie-carried write with no Origin. `storageState: { cookies: [], origins: [] }` is the honest empty.
+Verification: `pnpm verify:console-e2e` -- 86 passed, including SC-07's subscribed arm asserting `data-cap-binding="LEVEL"`, the text "0 of 10", the sentence "New sellers can list 10 products", the word "Established", and zero occurrences of "unlimited". SC-26 and the four chooser tests stayed green. On the wire: seed-store -> {"allowed":false,"reason":"NO_TIER_DEFINITION"}, seed-store-beta -> {"allowed":true,"cap":10,"binding":"LEVEL","level":"NEW","tier_cap":null,"level_cap":10}.
 Action:    Adding the BETA subscription to the seed WORKS -- the limit resolves to cap 10, binding LEVEL, level NEW, which is ADU-CON-03 S8's model sentence verbatim ("10 of 10 -- new sellers can list 10 products. This lifts when your store reaches Established.").
            IT ALSO BREAKS TWO SCREENS THAT ARE SEEDED TO DEMONSTRATE THE OPPOSITE. SC-26's e2e is titled "Subscription -- honest about having none", and SC-12's entitlement arm depends on the same absence. Both went red. The seed serves thirty screens, and one screen's realistic fixture is another screen's broken demonstration.
            So the number is proven where it can be proven without that cost: c2-catalogue asserts cap 2 / binding LEVEL / level NEW on the wire, and the e2e asserts the region renders, names a binding, and never prints "unlimited".
-Ruling needed: YES -- should the seed carry a BETA subscription, and if so what do SC-26 and SC-12 demonstrate instead? It is a fixture question with a product answer, which is why it is not decided here.
+Ruling needed: ANSWERED -- see Ruling above. It was a fixture question with a product answer, and the answer was that the fixture was too small to hold both truths.
 
 ### D-285 - Two focus-ring rules, and the one that lost was the token's
 
@@ -4109,6 +4116,15 @@ Effect:    BOTH RULES WERE LIVE AND THEY DISAGREED. The token said 2px and named
 Response:  FIXED - the console's rule now reads the tokens
 Action:    Width, colour and offset all come from `--adu-focus-ring-*`. The width is kept at the token's 2px rather than this file's 3px, and that direction is the point: A TOKEN THAT LOSES AN ARGUMENT WITH A STYLESHEET IS NOT A TOKEN.
 Verification: proven by the guard that found it. With the console reading the token, setting `--adu-focus-ring-width: 0px` turns rule 5 red in BOTH light and dark; before the fix the same plant changed nothing. Restored, and 83/83 green.
+T23 S2:    THE FIX WAS NOT THE WHOLE ANSWER, and T23 says why: the ring was one of SIXTY-NINE variables, ANY of which could be defined, verified and unread. Rule 5's guard asserts a ring is VISIBLE; it never asked whether the ring was the TOKEN's. So `apps/console/e2e/tokens-are-read.spec.ts` reads tokens.css per mode and compares it to `getComputedStyle`, on three shapes chosen because they are the three ways a token gets consumed:
+             the FOCUS RING     read as a whole DECLARATION, measured on a real Tab-focused element
+             the ACCENT         read as a COLOUR -- the one D-285 bypassed
+             the DANGER TRIPLE  read as a SET, where the failure is one of three hardcoded and the other two not
+           NOT ALL SIXTY-NINE, deliberately: a gate asserting every one would be a transcription of tokens.css with a browser attached, stale the day a token is renamed. These three go stale only if the console stops reading tokens at all, which is the thing being guarded.
+           Tagged `@safety`, so the dark project re-runs it. PROVEN TO FIRE TWICE, and the second plant is the one that argues for both modes:
+             `outline: 3px solid #1e40af` (D-285 verbatim)          -> RED in light AND dark, on the width
+             `outline: var(--adu-focus-ring-width) solid #1e40af`   -> GREEN in light, RED in dark
+           The second is the whole case for the dark project in one line: a hardcoded LIGHT accent is indistinguishable from a correct one in light mode and wrong in dark. Expected rgb(138, 176, 255), painted rgb(30, 64, 175). Restored, 86/86 green.
 Ruling needed: none.
 
 ### D-286 - Three of the six safety rules were enforced by absence, and none of the six ran in dark mode
@@ -4144,3 +4160,289 @@ Response:  REPORTED, NOT ATTEMPTED HALFWAY
 Action:    An eleven-component port started and abandoned mid-way leaves the console in two design systems at once, which is the state T22 S5's own ruling exists to prevent: "five screen layouts applied first improves five and leaves twenty-five visibly inconsistent -- and the inconsistency is what a seller notices". The same is true of six components out of eleven.
            What this phase leaves behind is the thing that makes the port safe to do next: a guard that fails, in both modes, the moment the port breaks a safety rule.
 Ruling needed: none. It is scheduling.
+
+### D-288 - Three gap sentences promised a name the schema is built never to store
+
+Severity:  MINOR (fixed here) -- honesty of seller-facing copy, and one advertisement removed
+Phase:     T23 - Phase 3
+Source:    packages/locale/src/en.ts -- the ten remaining `_owed` sentences, triaged one by one against what the server returns TODAY
+Found by:  Reading `core.person` while checking whether the courier list's "Names ... not reported by the server yet" had closed
+Effect:    IT HAS NOT CLOSED AND IT NEVER WILL. `core.person` carries id, id_hash, id_hash_key_version, created_at. `core.account` carries a phone and a market. THERE IS NO NAME COLUMN ANYWHERE FOR A PERSON -- not for a buyer, not for a courier, not for the human behind a seller. A store has a `store_name`; a person has nothing.
+           So three sentences said "not reported by the server YET" about a field no server will ever report, and each one set a seller waiting for a release that is not coming:
+             console.store.couriers.columns_owed   "Names, current assignments and last activity are not reported by the server yet"
+             console.inbox.columns_owed            "Buyer names, message previews, unread markers ... are not reported by the server yet"
+             console.courier.details_owed          "The buyer name, the pickup point and the collection note are not reported to couriers yet"
+           AND THE CONSOLE ALREADY KNEW BETTER, TWO SCREENS AWAY. `console.trade.orders.no_buyer_name` states it correctly and as policy: "Adulis does not store a name for a buyer account, so there is none to display, and showing a phone number instead is not permitted where a conversation exists." BETA-READINESS's triage even flagged the trade pair as "not a gap sentence at all -- it states a deliberate privacy decision" and did not notice that three OTHER sentences were making the opposite claim about the same absence.
+           That is the whole defect: one product decision, told two ways, and the wrong way outnumbered the right one three to two.
+Response:  FIXED - the name clause states the policy; the genuinely-pending clauses keep their "yet"
+Action:    Each of the three now opens with the permanent fact and then lists what is actually owed, so the sentence stops mixing a decision with a backlog. The courier one still ENDS IN ITS INSTRUCTION ("call the number above to arrange the handoff") -- BETA-READINESS calls it "the only gap sentence that ends in an instruction", and that is the load-bearing half.
+           ONE DELETE, and it is the one the order names: `console.insights.analytics.export_owed` advertised a paid feature (Business) on a screen where it cannot be bought, and the plan comparison does not sell it either. Either sell it or say nothing. D-226's rule -- an export exists in no wire, and a control faked at a 404 is worse than an absence -- is untouched and is written where the sentence used to be. THE ABSENCE STAYS; THE ADVERTISEMENT GOES.
+           THE OTHER SIX ARE KEEP, and each was re-checked against the tree rather than carried forward on T20's verdict:
+             products.row_summary_owed   KEEP  GET /v1/seller/products returns id, name, base_price, image_key, visibility, display_order -- no stock, no variants. Still true.
+             variants.labels_owed        KEEP  core.attribute_definition has ZERO rows and no endpoint lists it; the editor returns bare attribute_definition_id UUIDs. Still true.
+             store.profile.logo_owed     KEEP  core.seller has no logo column. Still true.
+             store.identity.recheck_owed KEEP  no re-check endpoint exists. Still true.
+             claims.detail.history_owed  KEEP  the detail returns attachments, not an event trail. Still true.
+             insights.trust.wire_owed    KEEP  and DELIBERATELY UNTOUCHED: trust is a founder-owned engine, and this order forbids touching, stubbing, extending, designing or registering against it. The sentence is the honest face of that boundary.
+Verification: `verify:mt-keys` PASS (769 machine-translated, 2 HUMAN-REQUIRED -- the deleted key regenerated out of the list, the three reworded keys still present in both files). `tsc` clean on the console and on packages/locale, which is the gate that would have caught a key deleted from en.ts and left in am.ts or vice versa. `verify:console-e2e` green.
+Ruling needed: none. Nine of the ten sentences were already triaged in BETA-READINESS; this applies those verdicts and corrects the three that were triaged against the wrong fact.
+
+### D-289 - ops/render.yaml exists now, unapplied, with a gate over every claim it makes about this repository
+
+Severity:  MAJOR (fixed here) -- D-80 has been open since T6 and blocked on a fact, not a decision
+Phase:     T23 - Phase 4
+Source:    ADU-CON-02 v3.1 S18 -- "`render.yaml` keeps infrastructure in the repo" (:446) and "Topology (`ops/render.yaml`)" (:450)
+Found by:  D-80, in T6, while writing the deploy runbook and looking for the file it should point at
+Effect:    The hosting topology existed as one sentence in a document and a paragraph in `ops/runbooks/deploy.md`. Infrastructure created by hand in a dashboard is infrastructure nobody can review, diff or restore.
+           D-80's REASON FOR LEAVING IT ABSENT WAS GOOD, and it is why this stayed open for seventeen orders: "Writing it needs a Render account to verify against; inventing a `render.yaml` that has never been applied would be a file that looks authoritative and has never been true." T23 Phase 1 went looking for that account, found no credentials of any kind -- no environment variables, no `render` CLI, no `~/.render` -- and PARKED rather than simulating one. So the objection still stands in full.
+Response:  FIXED, and the objection answered rather than ignored
+Action:    The file lands, and its FIRST LINE says "THIS FILE HAS NEVER BEEN APPLIED." That sentence is deleted by the person who applies it and by nobody else, and `verify:render-yaml` notices when it goes.
+           WHAT MAKES IT MORE THAN A DRAFT is the gate beside it. It cannot check that Render accepts the schema -- only applying it can -- and it prints that limitation rather than implying otherwise. What it CAN check is every claim the blueprint makes about THIS REPOSITORY, which is exactly the set of claims that rot between the day a file is written and the day somebody runs it:
+             1. every pnpm script and node entry point it names exists
+             2. healthCheckPath is a route the API serves AND is @Public (D-79: without @Public it answers 401 to Render, every instance is marked unhealthy, and no deploy ever goes live)
+             3. the pre-deploy runs BOTH db:migrate and worker:install, from ONE service (D-52; two services migrating race each other)
+             4. every variable .env.example declares is declared for the API, and every VITE_* for the console
+             5. no secret carries a literal value, and NODE_ENV is in the closed set
+             6. every fromService names a service the file defines
+           THREE DECISIONS IN THE FILE ARE NOT TRANSCRIPTION and are argued where they are made. The three DATABASE_URLs are `sync: false` rather than `fromDatabase` because Render synthesises ONE connection string and this platform needs THREE ROLES -- collapsing them to the owner connection would make every privilege check in the schema untestable and would pass every test. The staging API is pinned to ONE INSTANCE because the OTP goes to a file on the instance that answered. And the static console declares NO NODE_ENV, because Vite picks React's development build from it.
+Verification: `pnpm verify:render-yaml` PASS. Every one of the six checks proven to FIRE by planting its violation: a renamed `worker:install`, a wrong health path, a preDeployCommand on the worker, a dropped CONSOLE_ORIGIN, a pasted DATABASE_URL, NODE_ENV on the console, and a misspelled fromService. All seven went red; restored, green.
+Ruling needed: none. What remains is applying it, which needs the account Phase 1 parked for.
+
+### D-290 - NEVER_LOG removes FIELDS, and a secret interpolated into `msg` is not a field
+
+Severity:  MAJOR (registered; the limit is now written down and asserted)
+Phase:     T23 - Phase 4
+Source:    apps/api/src/common/logging.ts -- `redact: { paths: [...NEVER_LOG], remove: true }` plus `formatters: { log: applyAllowList }`
+Found by:  Writing the test that was supposed to prove a staging OTP never reaches the logger -- and watching it PASS with the violation planted
+Effect:    TWO FINDINGS, and the second is only visible because the first was chased properly.
+           (1) THE FIRST INSTRUMENT WAS BLIND. The obvious test captures `process.stdout.write` and searches it for the code. pino writes through SonicBoom straight to file descriptor 1 and never touches `process.stdout.write`, so the capture saw nothing, the assertion passed, and the green meant NOTHING. A measurement that cannot observe the thing it rules out proves nothing about it.
+           (2) AND REDACTION WOULD NOT HAVE COVERED IT EITHER. `NEVER_LOG` names `otpCode` and `phone`, and `applyAllowList` drops unknown keys outright -- so the STRUCTURED field is genuinely removed. But `msg` is allow-listed and NOTHING READS ITS CONTENTS. `log.warn({ msg: `code ${code}` })` passes every control this repository has, and sms.adapter.ts's own comment ("the logger CANNOT carry an OTP -- the code and the phone are on NEVER_LOG") is true of the field and false of the sentence.
+Response:  REGISTERED, with the limit asserted in both directions
+Action:    The guarantee is now written where it can be checked rather than believed. One test logs `{ phone, otpCode }` as fields and asserts they are gone; the same test logs the code inside `msg` and asserts IT SURVIVES -- not a bug asserted as correct, a LIMIT written down, so that nobody reaches for "the logger redacts it" as a reason to log a secret.
+           The adapter's own guarantee is asserted ON THE SOURCE: FakeSmsAdapter's send path contains no logger call at all. That is a weaker instrument than a behavioural one and it says so -- but it is an instrument that FIRES, which the two stronger-looking ones were not.
+           STAGING'S OTP DESTINATION FOLLOWS FROM THIS. The founder's boundary for T23 is that "anyone who can read its logs can sign in as anyone", which describes what staging is WORTH, not a licence to move an OTP onto a log line -- ADU-RUL-03 S1.1 is a governing document and this window is unattended. So staging writes the code where development already writes it: a 0600 file, off stdout, outside every container log aggregator. That is what makes the staging API's instance count load-bearing, and `ops/render.yaml` pins it to one and says why.
+Verification: 10 tests in t8-node-env-boundary.spec.ts, all green. Both new guards proven to fire: a `log.warn` added to the send path turns the source assertion red; a negated fake-guard (`!== 'development' && !== 'test'`) turns the staging/production pair red. Restored, 570/570 API tests green.
+Ruling needed: YES, but small and not urgent -- should `applyAllowList` scan `msg` for the shapes it already refuses as fields (a six-digit code, an E.164 number)? It would catch this class rather than documenting it. It also risks a redaction that fires on an order reference, which is why it is not decided here.
+
+### D-291 - The console's CSP named two origins that had never been true, and were typed a second time
+
+Severity:  MAJOR (fixed here)
+Phase:     T23 - Phase 4
+Source:    apps/console/public/_headers -- `connect-src 'self' https://api.adulis.example https://media.adulis.example`, with a note saying they "are replaced with the real ones when DNS is provisioned"
+Found by:  T23 Phase 4's "CSP and CORS derived, not hardcoded"
+Effect:    A SECOND PLACE TO CONFIGURE AN ORIGIN THE BUILD ALREADY KNOWS. CORS was already derived -- `CONSOLE_ORIGIN`, one variable, read by the middleware -- and the CSP was not.
+           THE DRIFT IS SILENT IN THE DIRECTION THAT HURTS. A policy naming an API the bundle does not call refuses every fetch IN THE BROWSER, before it leaves the machine, with no server-side symptom to find. This repository has hit it twice: D-164 (the e2e server replayed the production directive at a localhost bundle, every fetch refused, and the suite went green against something else serving the port) and D-276 (the same drift reaching boot-smoke, which was red on unmodified main while the console mounted perfectly one line above).
+           Both were fixed by deriving the policy AT SERVE TIME, in two different harnesses. Neither fixed the artifact, so production would have shipped a policy naming two hostnames that have never existed.
+Response:  FIXED - the origins are substituted at BUILD time from the variables the bundle is built with
+Action:    `ops/scripts/build-headers.mjs` fills `${API_ORIGIN}` and `${MEDIA_ORIGIN}` in `public/_headers` from `VITE_API_BASE_URL` and `R2_MEDIA_PUBLIC_ORIGIN`, and writes `dist/_headers`. EVERY DIRECTIVE IS STILL WRITTEN, NOT ASSEMBLED, which is what ADU-CON-02 S3.9 requires -- and the script asserts that, comparing the directive list it wrote to the one it read, so it stays a substitution rather than becoming an assembler.
+           AN UNSET VARIABLE OMITS ITS ORIGIN RATHER THAN FAILING, and the first version had this wrong. It exited non-zero on the NODE_ENV principle that the permissive branch is the one nobody chose; `pnpm ci:local` failed within a minute, because `pnpm build` is a does-it-compile build with neither variable set. The principle survives in a better form: THE INVARIANT IS THAT THE POLICY NAMES EXACTLY THE ORIGINS THE BUILD WAS GIVEN, and a bundle built without VITE_API_BASE_URL has no API to call at all (`apiBase()` throws before fetch is reached -- the very fact boot-smoke's D-138 note rests on). `connect-src 'self'` is an exact description of that bundle, not a guess about it. A variable that is SET but is not a URL is still refused: that is a typo, not an absence.
+           A REAL DEPLOY FORGETTING THEM IS CAUGHT AT THE RIGHT LAYER -- `verify:render-yaml` asserts the console service declares every VITE_* variable .env.example names. A deployment mistake belongs to a gate over the blueprint, not to a gate over a compile.
+Verification: three behaviours proven -- built with both variables, the policy names both origins; built with neither, it names neither and says so; built with a non-URL, it refuses. An unresolved placeholder is refused too (a browser silently DROPS a source expression it cannot parse and enforces the rest, so a literal placeholder would ship a policy quietly stricter than the one written). `verify:console-e2e` 86 green, `boot-smoke` green.
+Ruling needed: D-138's open question -- whether `connect-src` belongs to boot-smoke's assertions at all -- is now answerable, because the artifact's policy and the artifact agree by construction. Left open deliberately: this phase changed the artifact, not that gate's stated coverage.
+
+### D-292 - What staging can and cannot do on the day this lands
+
+Severity:  INFORMATIONAL (scope, stated rather than implied)
+Phase:     T23 - Phase 4
+Source:    WORK ORDER T23 S4 -- deploy to staging
+Effect:    WHAT LANDED, all of it verifiable on this machine:
+             `ops/render.yaml`                 the topology, unapplied, gated (D-289)
+             `worker:install` in the deploy    D-52, asserted by the gate
+             /healthz 200 degraded not 503     ALREADY CORRECT since T4 (D-51). Verified, not changed: a stale WORKER reddens the body; only an unreachable DATABASE 503s, which is honest, because that instance genuinely cannot serve.
+             NODE_ENV=staging in the closed set  with the guard audit written out and two of its entries asserted (D-290)
+             the environment banner            served from /v1/bootstrap, rendered above the router so it also covers SIGN-IN -- which is where a real phone number is typed into the wrong server
+             TRUSTED_PROXY_HOPS                a validated COUNT, never a boolean
+             CSP derived, not typed            D-291
+             R2 buckets                        adulis-staging-media / adulis-staging-evidence, separate from production
+           SUPERSEDED IN PART, THE SAME DAY: Phase 1 was UNPARKED once credentials arrived, the probe ran against a real Render instance, and it FAILED (D-297). This entry's claim that the configuration is sound as far as it goes does NOT survive that: `pnpm db:migrate` cannot run as a managed role, so `render.yaml`'s preDeployCommand stops at migration 0001, and D-298 found the first deploy has no DATABASE_URL_MIGRATE to start with. Read D-297 and D-298 before this entry.
+           WHAT DID NOT LAND, AND IT IS THE DEPLOY ITSELF. Phase 1 found no hosting credentials and parked; nothing here has been applied to a server. Every claim above is about this repository and its gates, and none is about a running staging instance. THE WORD "STAGING" IN THIS ENTRY NAMES A CONFIGURATION, NOT A URL.
+           TWO THINGS STAGING WILL NOT BE ABLE TO DO on the day it is first applied, both stated so the first operator is not surprised:
+             SIGN-IN NEEDS A SHELL. There is no SMS vendor (O-5b), so the OTP goes to a 0600 file on the API instance. `ops/runbooks/staging.md` says how to read it; the instance count is pinned to 1 so there is only one file to read.
+             THE FOUNDER OPERATOR GRANT IS NOT AUTOMATIC. It is Phase 5's, and it is the one that will be forgotten.
+Response:  REPORTED
+Action:    None owed here. The blueprint is applied by a person with an account, and the first line of the file tells them what to delete when they do.
+Ruling needed: none.
+
+### D-293 - boot-smoke cannot run on this machine, and the reason is msedge.exe, not the console
+
+Severity:  MINOR (environmental; the gate is untouched and the property it guards is covered elsewhere today)
+Phase:     T23 - Phase 4
+Source:    ops/scripts/verify-boot-smoke.mjs spawns `msedge.exe --headless=new --dump-dom` and reads stdout from a file
+Found by:  `pnpm ci:local` at the end of T23 Phase 4
+Effect:    The gate reports "the browser exited without loading anything: the DOM dump is empty", which its own message correctly warns "says NOTHING about the console".
+           THE BROWSER IS THE VARIABLE, AND THE PROOF IS TWO LINES LONG. The same command against `data:text/html,<h1>hi</h1>` -- no server, no policy, no bundle -- also produces ZERO BYTES. So does `msedge.exe --version`. The launcher writes nothing to a redirected stdout from this shell at all, which is msedge.exe detaching from the console on Windows; 55 Edge processes were already running, and a fresh `--user-data-dir` did not change it. `--headless`, `--headless=old` and `--headless=new` all behave identically.
+           IT IS NOT THE SANDBOX. Re-run with the sandbox disabled: same zero bytes.
+           IT IS NOT T23's CHANGES. A `data:` URL exercises none of them.
+Response:  DIAGNOSED, NOT WORKED AROUND
+Action:    NOTHING IN THE GATE IS CHANGED. Loosening an assertion to get a green on one laptop is how a gate becomes decorative, and this one is already the only gate that RUNS the console rather than reading it.
+           CI IS UNAFFECTED, which is why this is MINOR: `.github/workflows/ci.yml` runs on `ubuntu-latest`, where the candidate list resolves to chromium or google-chrome, and neither has the Windows launcher's detach behaviour.
+           AND THE PROPERTY IS COVERED TODAY ANYWAY. `verify:console-e2e` serves the SAME built `apps/console/dist` and drives the SAME Edge -- over CDP, through Playwright, which is why it works -- and 88 tests passed against it in this phase. A console that did not mount could not have produced them. That is not a reason to leave boot-smoke broken; it is the reason nothing was rushed to fix it.
+           THE FIX, when someone takes it: drive the browser over CDP instead of `--dump-dom`. Playwright is already a dependency of `apps/console` and already launches this exact binary successfully. It is a rewrite of the gate's spawn block, not a change to what it asserts.
+Verification: `msedge.exe --headless=new --dump-dom "data:text/html,<h1>hi</h1>" > out` -> 0 bytes, exit 0. `msedge.exe --version > out` -> 0 bytes. Both with and without the sandbox.
+Ruling needed: none. It is work with a known shape, and it is not T23's.
+
+### D-294 - The operator grant is the step that gets forgotten, and its absence is silent
+
+Severity:  MAJOR (fixed here -- the guard, not a defect in the product)
+Phase:     T23 - Phase 5
+Source:    core.operator_grant, empty in every environment that has ever existed, including this laptop's
+Found by:  Writing `ops/runbooks/staging.md` and asking what would actually stop somebody skipping step 7b
+Effect:    IT CANNOT BE SEEDED, AND THAT IS CORRECT. No founder account id exists until someone signs in through the ordinary phone-OTP path, so a migration referencing one would have to invent it; and a grant is an audited decision about a person, recorded append-only with a granter and a reason. `grant-founder-operator.md` has said all of this since T4 Phase F.
+           WHAT NOTHING SAID IS WHAT HAPPENS WHEN IT IS SKIPPED. `verification.read_attestation` derives `actor_role` from that table. WITH NO ROWS, NOBODY CAN REVIEW AN IDENTITY -- and identity review is one of the ten publication-readiness items, so NO SELLER CAN EVER PUBLISH ANYTHING. Claim review and the moderation queue fill the same way.
+           AND NOTHING ERRORS. No exception, no log line, no red gate. The queues simply grow, and the symptom arrives days later as "why can nobody publish", which is a question about the product rather than about a step somebody missed.
+           THE LOCAL DATABASE HAS THIS DEFECT TODAY. The check's first run reported it here, on this machine, after twenty-three work orders.
+Response:  FIXED - the runbook line became a command
+Action:    `ops/scripts/check-environment.mjs` asks the database what this environment can and cannot do. It is the answer to "a runbook line saying do not forget this is a rule that holds until the week someone is busy".
+           EVERY FINDING NAMES WHAT IS BLOCKED, NOT WHAT IS MISSING, and that is the whole design. "0 operators" is a fact nobody acts on. "Nobody can review an identity, so no seller can publish" is the same fact with its consequence attached, and the consequence is what makes someone fix it. The same rule covers the worker (`worker:install` skipped -> boots, logs healthy, fails on its first task), the market (SUSPENDED -> no new entry, existing trade continues) and the extensions.
+           IT ALSO SAYS WHEN A FALSE FLAG IS THE RIGHT ANSWER. `seller_registration_enabled = false` is reported as OK, explicitly, because the launch gate is green BECAUSE it is false -- an operator reading a checklist must not tidy that up.
+           AND THE SEED CAN NO LONGER BE MISTAKEN FOR A MARKET. `ops/scripts/seed.mjs` refused `production` alone; the list is now ENUMERATED (`development`, `test`), so `staging` is refused and so is any environment added later. It writes a FIXTURE -- a market called SEED, two sellers, five orders in assorted states -- and a staging server carrying five seeded orders is a server where somebody eventually reconciles one, or quotes it in a bug report, or shows it to a person deciding whether the product works.
+Verification: run against this laptop's database, the check reports exactly one blocker -- no operators -- plus the extensions, worker, market and storage sections green. `NODE_ENV=staging pnpm db:seed` refuses and names the runbook that owns a real market. `NODE_ENV=test` still seeds, and `db-reset` and `console-e2e` stay green.
+           ONE FINDING IN THE CHECK WAS WRONG ON ITS FIRST RUN, and the fix is the more useful half: it reported `citext` missing against a healthy database, because the extension list had been typed from memory and `citext` is not one of the four. It now reads the list out of `db/init/00-extensions.sql`. A checklist that invents an item is worse than no checklist -- the next person either fixes something that was never wrong, or learns to skim the output.
+Ruling needed: none.
+
+### D-295 - ops/runbooks/staging.md, and what staging will not be able to do on its first day
+
+Severity:  INFORMATIONAL
+Phase:     T23 - Phase 5
+Source:    WORK ORDER T23 S5
+Effect:    `ops/runbooks/staging.md` is nine steps from an empty Render account to a console that says "Staging" on its own sign-in screen. `deploy.md` covers every deploy after the first; this covers the once.
+           IT OPENS BY STATING THE BOUNDARY RATHER THAN ASSUMING IT, in the founder's own words: staging is a real server on the internet with no confidentiality, anyone who can read its logs can sign in as anyone, it is invite-only, it carries no real seller, and it is not publicly linked. Everything after that follows from the boundary instead of from caution -- which is why the "do not enter a real bank account" line is followed by the reason it does not matter (the keys are `generateValue` and nobody holds them) rather than by an exhortation.
+           THREE STEPS CANNOT BE AUTOMATED and each says why: the four extensions (Render runs no init directory), the LOGIN passwords (migration 01 creates every role NOLOGIN because a password in a migration is a secret in git), and the operator grant (D-294).
+           AND IT ENDS WITH WHAT STAGING STILL CANNOT DO, so the first person through is not surprised: it cannot send an SMS (O-5b -- every sign-in needs a shell, which is the single biggest difference from production), cannot take or pay a payment, cannot serve a storefront, and cannot be promoted to production, because `ops/render.yaml` describes staging only.
+Response:  WRITTEN, NEVER RUN
+Action:    The status line says "Nothing in it has been run", for the same reason `ops/render.yaml`'s first line says what it says. Phase 1 found no hosting credentials and parked (D-292); a runbook claiming to be proven by a run that never happened would be the documentation version of the file D-80 refused to write.
+           `ops/runbooks/README.md` now lists `deploy.md` too, which has been hand-run since T6 Phase D without ever appearing in its own index.
+Ruling needed: none.
+
+### D-296 - A one-in-three 429 at the default worker count, and D-280's open ruling now has evidence on its side
+
+Severity:  MAJOR (reproducible; `pnpm ci:local` is red roughly one run in three because of it)
+Phase:     T23 - Phase 5, found by running `pnpm ci:local` at the end of the order
+Source:    `core.rate_limit_bucket`, shared by every concurrently running spec file
+Found by:  `pnpm ci:local` failing the `test` gate after two full API suites had passed at `--maxWorkers=2`
+Effect:    A DIFFERENT SPEC EACH TIME, THE SAME SYMPTOM: `429 Too Many Requests` on `POST /v1/auth/otp/request`.
+             run A  t12-d89-invite-claim   the enumeration arm: `resend` answered 202 for one phone and 429 for the other, so the invariant test failed for a reason that has nothing to do with the invariant
+             run B  t8-market-from-device  "the declaration is RECORDED, not just checked": a plain 202 became 429
+           IT IS D-273'S SHAPE, AGAIN, WITH A THIRD SHARED RESOURCE. D-273 was database rows; D-281 was a file on disk; this is a COUNTER, and a counter is worse than either, because the victim is whichever spec happens to ask third.
+Response:  DIAGNOSED AS FAR AS MEASUREMENT GOES, AND NO FURTHER. What is eliminated is eliminated by evidence; what is left is labelled as a hypothesis, because the last three orders each lost time to a cause recorded before it was established.
+Action:    ELIMINATED, EACH BY A MEASUREMENT:
+             the PLATFORM daily ceiling      5000 hard, 2000 soft, and today's `core.otp_delivery_attempt` count is 47. Not close.
+             cross-spec phone reuse          every `+251...` literal in apps/api/test was extracted and counted. No number appears in two spec FILES; the duplicates are repeated uses within one file.
+             a stale bucket from a prior run  the suites that fail clear `bucket_key IN ('otp-request','otp-request-ip')` in `beforeEach`.
+             the worker count being innocent  `--maxWorkers=2`: 570/570 twice. Default: 570/570, 570/570, then 1 failed. Running either failing spec ALONE passes.
+           NOT ESTABLISHED, AND STATED AS THE HYPOTHESIS IT IS: `RateLimitService.consume` executes on `APP_DATABASE` -- the pool -- while its caller is inside `runIdempotent`'s transaction with a `trx` it does not use. That is verified from the code and is very likely deliberate (a limiter that rolls back with the request does not limit). Its consequence is not deliberate: THE INCREMENT SURVIVES A ROLLBACK, so a request that fails or is retried has still spent budget, and contention produces retries. Against a limit of 3 per hour, three retries is the whole allowance. That would be worker-count-dependent by construction, which fits every observation above -- and fitting is not the same as being shown, so it is written here as the next thing to instrument rather than as the cause.
+           NOTHING WAS CHANGED. Not the limiter, not the specs, not the worker count. A 429 that appears once in three runs is exactly the kind of red that gets "fixed" by a retry or a cap, and both would hide it.
+           AND IT ANSWERS D-280's OPEN RULING WITH NEW EVIDENCE. D-280 measured that `--maxWorkers=2` is roughly TWICE AS FAST as the default and then declined to pin it, on the argument that "a cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth." THIS IS THE NINTH. Pinning the cap today would buy a green gate and lose the only signal that this exists. The scoping is still the fix; the cap is still a way of not needing one.
+Verification: five full API suite runs this session -- two at `--maxWorkers=2` (570/570, 570/570) and three at the default (570/570, 570/570, 1 failed). Both failing specs pass when run alone. `pnpm ci:local` fails at the `test` gate when it fails.
+Ruling needed: TWO, and they are related.
+           (a) Should `consume` run inside the caller's transaction? It changes what a rolled-back request costs, in both directions, and the answer is a security decision about whether a failed attempt should be free.
+           (b) D-280's question stands unchanged: whether to pin the API test gate's worker count. This entry is evidence for NOT pinning it yet.
+
+### D-297 - The Render probe FAILED, and the whole DDL path assumes a superuser nobody will ever grant it
+
+Severity:  CRITICAL (the deploy cannot run; the hosting ruling's mandatory precondition is unexecutable)
+Phase:     T23 - Phase 1, run for real once credentials arrived
+Source:    ops/provider-verify/probe.sql, and db/migrations/ across 24 files
+Found by:  Running the probe against a real Render managed PostgreSQL 17.11 instance (Frankfurt), which T23 Phase 1 had PARKED for want of credentials
+Effect:    THE PROBE FAILED. Three of eight capabilities passed and the script aborted:
+             CAPABILITY 1  PASS   vector 0.8.0, btree_gist 1.7, pg_trgm 1.6, pgcrypto 1.3
+             CAPABILITY 1b PASS   EXCLUDE USING gist rejected the overlap
+             CAPABILITY 2  PASS   six independent roles created
+             probe.sql:161        ERROR: must be able to SET ROLE "probe_app"   (exit 3)
+           Capabilities 3, 4a, 4b, 4c and 5 never executed, and neither did the teardown.
+           RENDER IS THEREFORE UNVERIFIED, NOT VINDICATED, and the first draft of this entry got that wrong. The control experiment below proves only that the error is not Render-SPECIFIC. It says nothing about whether Render can carry the verification and financial boundaries, because THE CAPABILITIES THAT TEST THEM DID NOT RUN. run-probe.md's rule is explicit and admits no exception for cause -- "Any failure disqualifies that provider that day. Not 'raises a question' -- disqualifies" -- and it says in the same breath that "a truncated transcript is a failure even when nothing in it says so".
+           THE MECHANISM, ESTABLISHED RATHER THAN GUESSED. The Render role is rolsuper=f, rolcreaterole=t, rolcreatedb=t, rolbypassrls=f, with CREATE on the database -- exactly the "superuser, OR a role with CREATEROLE and CREATE on the database" that run-probe.md:61 names as sufficient. It is not sufficient. PostgreSQL 16 split role membership into ADMIN, INHERIT and SET, and `createrole_self_grant` defaults to empty, so a non-superuser CREATEROLE role that creates a role receives admin_option=t, set_option=f, inherit_option=f. `CREATE SCHEMA ... AUTHORIZATION` calls check_can_set_role(), which walks only set_option edges. The error string is PG16's and no earlier version emits it.
+           NOT A RENDER PROPERTY, PROVEN BY CONTROL. A non-superuser CREATEROLE role on the LOCAL pgvector/pgvector:pg17 container -- same 17.11 -- created a role, showed set_option=f, and failed with the identical message.
+           AND RENDER IS BETTER THAN THE BASELINE IN ONE PLACE: it installed all four extensions as a non-superuser. The local image refuses `vector` without superuser, so the documented local command cannot even reach capability 2 (see D-299).
+UPDATE, SAME DAY -- RENDER NOW PASSES 8 OF 8, AND THE FINDING SURVIVES ANYWAY.
+           A second Render trial instance was provisioned with ONE statement, run once as the managed role: `ALTER ROLE CURRENT_USER SET createrole_self_grant = 'set, inherit'`. It is permitted on managed Postgres, it persists across reconnects, and the role stays rolsuper=f / is_superuser=off throughout. The probe then ran END TO END AS A NON-SUPERUSER: 8 of 8, exit 0, TEARDOWN PASS, 130 lines -- the same length as the local baseline. The transcript is in run-probe.md.
+           SO CAPABILITIES 3, 4a, 4b, 4c AND 5 ARE VERIFIED ON RENDER, which is what S18's "mandatory verification before any commitment" was asking for and what the first run could not answer. The Provider runs table carries both rows: the FAIL, and the PASS with its precondition.
+           `'set'` ALONE IS NOT ENOUGH, AND THAT WAS MEASURED RATHER THAN ASSUMED. With `createrole_self_grant = 'set'` the probe reaches 4b and fails at line 290 with `permission denied for schema probe_financial`: capability 4c does `RESET ROLE` and then verifies the access-log row AS THE OUTER ROLE, which needs INHERIT. So `inherit` is load-bearing for THIS PROBE'S VERIFICATION STEP, while `set` is what the blocking DDL construct itself requires. Worth keeping distinct: a real migrating role should satisfy the second with an explicit grant, not by inheriting a boundary owner's privileges -- inheriting them is exactly the collapse the two boundaries exist to prevent, and a provisioning step that hands the migrator INHERIT on adulis_financial deserves its own scrutiny before it is adopted.
+           WHAT THIS DOES NOT DO IS CLEAR THE MIGRATIONS. The probe proves the INSTANCE supports the shapes; it says nothing about `db/migrations/`. The GUC plausibly unblocks construct 1 and much of 4, because the role that runs the first migrate is the same role that creates the six adulis_* roles and would therefore hold SET+INHERIT on them -- BUT THAT IS AN INFERENCE AND WAS NOT RUN. And at least one construct is untouched by it BY INSPECTION: 0023:510 requires the NEW OWNER, adulis_migrate, to hold CREATE on schema `financial`, and 0023:499 grants only USAGE. The GUC changes what the EXECUTOR can do and nothing about what the new owner holds.
+CORRECTED BY MEASUREMENT -- SEE D-300. All fifty migrations DO run on Render as a non-superuser. This entry's prediction that they could not was drawn from the wrong arrangement: it assumed the six roles would be PRE-PROVISIONED, which leaves adulis_migrate with no membership and the GUC inert. Provision only adulis_migrate and let 0001 create the other five, and every construct this entry lists is satisfied. The specific claim that 0023:510 is "unreachable by any pre-migrate fix" IS WRONG -- adulis_migrate inherits adulis_financial, which owns the schema, so the new-owner CREATE check resolves true. That claim was an inference from a code read that was never executed, and executing it refuted it.
+Response:  FAILURE RECORDED, THEN RE-RUN UNDER AN EXPLICIT FOUNDER INSTRUCTION. NOTHING IN THE REPOSITORY PATCHED.
+Action:    THE BLAST RADIUS IS NOT probe.sql. Four distinct constructs in the DDL path each require the executor to SET ROLE to, or hold CREATE for, a role it is not a member of. All four are invisible under a superuser:
+             1. CREATE SCHEMA ... AUTHORIZATION   probe.sql:161-162; 0001:85-94 (ten schemas)
+             2. SET ROLE                          probe.sql:193, 255, 322 -- so patching line 161 alone moves the failure to 193, and capabilities 4a/4b/4c still never run
+             3. CREATE TABLE in a foreign-owned schema   0004 and 0012, the verification and financial boundaries
+             4. ALTER ... OWNER TO                86 statements across 24 migration files, 0004 through 0047
+           ONE OF THOSE IS UNREACHABLE BY ANY PRE-MIGRATE FIX. 0023:510 is `ALTER FUNCTION financial.purge_payout_credential(uuid[]) OWNER TO adulis_migrate`, and 0023:499 grants adulis_migrate only USAGE on schema financial. ALTER ... OWNER TO requires the NEW owner to hold CREATE on the schema, and PostgreSQL runs that check only when the executor is not a superuser. Schema `financial` does not exist until 0001 has run, so the grant cannot be a provisioning step: it has to go inside a migration, or the deploy has to run staged (`db:migrate up 22`, grant, `db:migrate up`). Nothing in the repository mentions staging a migration run.
+           AND IT FAILS ATOMICALLY. node-pg-migrate runs the whole `up` in one transaction, so migration 0001's failure rolls everything back: `pgmigrations` is left empty and not one of the fifty migrations is applied. The Render pre-deploy fails the deploy outright rather than leaving a half-built schema -- which is the good outcome, and is not the same as being safe.
+           THE TWO REMEDIES I TESTED DO NOT FIX THE DEPLOY, and the second draft of this entry claimed they did. Both were verified working ON RENDER for the probe's shape: `GRANT <role> TO current_user WITH SET TRUE` (permitted because admin_option=t), and `ALTER ROLE CURRENT_USER SET createrole_self_grant = 'set, inherit'` (permitted, and persistent across reconnects -- managed Postgres allows the ALTER). Neither reaches the migrations:
+             - the GRANT needs ADMIN OPTION, which is held only by the role that CREATED the target. adulis_migrate creates no roles, so for migrations 0004 and 0012 -- which run as adulis_migrate against schemas owned by adulis_verification and adulis_financial -- it holds nothing.
+             - 0001's role loop is guarded `IF NOT EXISTS` (0001:60-62). If provisioning pre-creates any adulis_* role, the migrating role never gets admin_option on it, and BOTH remedies fail on that role while succeeding on the others -- a partial, per-role failure that is harder to read than today's clean stop. The block's own header says the guard exists to survive "a provider trial instance whose bootstrap user we do not control", so this is a live case.
+           WHAT IS ACTUALLY NEEDED is a provisioning-time contract that does not exist anywhere in this repository: membership WITH SET for the migrating role in adulis_verification, adulis_financial and adulis_jobs, plus CREATE on the two boundary schemas, plus a decision about 0023's ordering. That is a privilege-model design, it is exactly what T23's order forbids inventing unattended, and it is not written here.
+           THE ASSUMPTION WAS NEVER SILENT -- ONLY UNSATISFIED. Migrations 0004, 0009, 0010, 0012, 0026 and 0027 each say in comments that they are "applied by a bootstrap superuser". The defect is not that nobody knew; it is that no provisioning step anywhere satisfies it on a host that will not grant superuser, and no gate could notice.
+           WHY NO GATE COULD NOTICE. docker-compose.yml:21 and .github/workflows/ci.yml:54 both set POSTGRES_USER=adulis_bootstrap, both files' own comments state that role is a superuser, and ci.yml:73 points DATABASE_URL_MIGRATE at it. NO DDL IN THIS REPOSITORY HAS EVER BEEN EXECUTED BY A NON-SUPERUSER. Every green `db:migrate` in its history is evidence about a superuser host and about nothing else -- the same shape as D-296's ambient state, one layer down. (The runtime boundary tests connect as adulis_app and are unaffected; this does not make them vacuous.)
+Verification: probe transcript captured; role attributes and pg_auth_members queried directly; control reproduced on the local container; both remedies executed against Render; 86 OWNER TO statements counted across 24 files; 0023:499 and 0023:510 read directly; ci.yml:49/54/73 read directly. The claim was then put to four independent adversarial reviewers with instructions to refute it -- one refuted the CONCLUSION (Render "not disqualified"), and that correction is adopted above; three confirmed the mechanism at high confidence and enlarged the scope from two files to four constructs.
+           NOT VERIFIED, AND SAID SO: migration 0001 was NOT executed against Render. The harness declined to run a migration file against the remote database, correctly. The migration conclusion is therefore an inference from a verified mechanism plus a direct code read, not an execution. `ops/scripts/install-worker-schema.mjs` -- the other half of the same preDeployCommand -- is on the same wall by the same reasoning and was likewise not executed.
+           TEARDOWN: the probe aborted before its own teardown, so the seven leftover probe_ roles were dropped by hand as run-probe.md instructs. That needed the same self-grant, because DROP OWNED BY hits check_can_set_role too -- the teardown assumes superuser as well. Instance verified pristine afterwards: 0 probe roles, 0 probe schemas, 0 objects in public, createrole_self_grant reset to default. No credential entered the repository, any commit, this register or the report.
+Ruling needed: YES, and it is the largest open question in the project.
+           (a) What runs the migrations on a managed host, with what membership? This is the privilege model and it is not an implementation detail.
+           (b) Does 0023's ordering change, or does the deploy run staged?
+           (c) Does run-probe.md's "any failure disqualifies" rule admit an instrument-defect exception? Today it does not, so Render is recorded as FAILED. Amending that rule belongs to whoever owns ADU-CON-02 S18, not to a probe run.
+           (d) Should CI grow a non-superuser migration job? It is the only thing that would have caught this, and it would catch the next one.
+           NOT ESCALATED, DELIBERATELY: this does NOT mean no managed provider can run this schema, and S18's hosting ruling is NOT unsound. Both remedies are ordinary SQL available to any CREATEROLE owner. The ruling stands; its mandatory precondition is currently unexecutable; Render is unverified. Nor is "any managed Postgres" proven -- one instance was tested, and a provider shipping createrole_self_grant='set, inherit' in its default parameter group would pass unchanged. The repository's own doctrine is that we test rather than assume.
+
+### D-298 - ops/render.yaml and staging.md cannot bootstrap: the first deploy has no DATABASE_URL_MIGRATE
+
+Severity:  MAJOR (the first deploy cannot start, independently of D-297)
+Phase:     T23 - Phase 5, found by the Phase 1 adversarial review the same day it was written
+Source:    ops/runbooks/staging.md steps 1, 3 and 4; ops/render.yaml's three sync:false database URLs
+Found by:  Reviewing D-297's blast radius, which surfaced a second and unrelated circularity
+Effect:    THE THREE STEPS REFER TO EACH OTHER IN A CIRCLE.
+             Step 1 defers the three DATABASE_URLs: "step 3 creates them, so leave these until then".
+             Step 3 defers the roles: migration 01 creates them NOLOGIN, so "if these ALTER ROLE statements fail with 'role does not exist', let the first deploy's pre-deploy run, then come back to this step".
+             Step 4 IS the first deploy, and its preDeployCommand is `pnpm db:migrate`, which reads DATABASE_URL_MIGRATE -- the value step 1 deferred and step 3 could not create.
+           So the first deploy cannot start. This is not the SET ROLE defect wearing a different hat: it would block the deploy even if D-297 were fully fixed.
+           THE ANSWER IS PROBABLY THE RENDER OWNER CONNECTION -- the one Render synthesises, which ops/render.yaml:38 already describes as "NOT any of the six roles migration 01 creates". But the runbook never says to put it in DATABASE_URL_MIGRATE for the first deploy, and adulis_migrate is never given a LOGIN password by any step in deploy.md or staging.md, so it is not obvious that the intended answer is "the owner runs the first migrate and adulis_migrate never runs one at all".
+Response:  REGISTERED, NOT GUESSED
+Action:    Naming the principal that runs the first migration is the same privilege-model decision as D-297(a), so it is not decided here. staging.md carries a blocking note at step 1 pointing at both entries, so nobody follows a runbook that cannot be followed.
+           NO GATE COVERS THIS EITHER. `verify:render-yaml` checks that the blueprint agrees with the repository -- script names, health path, declared variables -- and does no privilege or ordering reasoning at all. `check-environment.mjs` runs only AFTER migrations have been applied, so it cannot see a deploy that never started. Both gates are working as designed and neither is the right layer.
+Ruling needed: YES -- see D-297(a). One decision answers both.
+
+### D-299 - The probe's own documented command produces zero capability passes, and the document is a version behind the ruling it enforces
+
+Severity:  MINOR (documentation, but it is the document that gates a hosting commitment)
+Phase:     T23 - Phase 1
+Source:    ops/provider-verify/run-probe.md -- the "Running it" block and the header citation
+Found by:  Running the documented local command verbatim while establishing a control for D-297
+Effect:    TWO SEPARATE ROTS IN THE INSTRUMENT'S MANUAL.
+           (1) THE DOCUMENTED LOCAL COMMAND CANNOT RUN. It says `psql -U adulis_app`. Today that role is rolsuper=f, rolcreaterole=f, rolcreatedb=f. Run verbatim it fails at `CREATE EXTENSION vector` with "Must be superuser", produces ZERO capability passes, and cannot reach the six-role test at all -- and it also cannot execute the `CREATE DATABASE adulis_probe` the same block tells you to run. The 8-of-8 baseline transcript printed directly beneath it was captured when the compose superuser was still named adulis_app; docker-compose.yml now names it adulis_bootstrap and says so. So the transcript is not reproducible by the command above it, and has not been for some time.
+           (2) IT CITES A SUPERSEDED REVISION. The header names ADU-CON-02 v3.0 S18 and its step-3 row expects "check 14 = 107 tables". The governing revision is v3.2, which requires 114. `docs/amendments/README.md` is the authority on what governs, and this file is a version behind the ruling it exists to enforce.
+Response:  REGISTERED
+Action:    Not corrected in the same change as D-297, deliberately: the command's role name is evidence for D-297 -- it is the reason the probe was only ever run as a superuser -- and rewriting it in the same commit that records the finding would erase the trail. It is a one-line fix (`-U adulis_bootstrap`, and a note that the role must be able to SET ROLE to its AUTHORIZATION targets, not merely hold CREATEROLE), owed with whatever ruling answers D-297.
+Ruling needed: none beyond D-297.
+
+### D-300 - The migrations DO run on managed Postgres, and D-297's prediction was wrong in the part that mattered
+
+Severity:  MAJOR (a correction to D-297, and the first execution of ADU-CON-02 S18 steps 2 and 3)
+Phase:     T23 - Phase 1, third Render instance, on a founder instruction
+Source:    db/migrations/0001-0050 executed as adulis_migrate against Render managed PostgreSQL 17.11
+Found by:  The founder rejecting the arrangement D-297 tested and naming the one where the GUC does what it was chosen for
+Effect:    ALL FIFTY MIGRATIONS APPLIED AS A NON-SUPERUSER. `node-pg-migrate ... up` exit 0, 0001_foundation through 0050_effective_limit_says_which_binds, 117 tables, ten schemas with the correct owners -- `financial` to adulis_financial, `verification` to adulis_verification, `jobs` to adulis_jobs -- and `pnpm db:check` 16 PASS / 0 PENDING / 0 FAIL against the result. adulis_migrate was rolsuper=f throughout.
+           SO S18 STEP 2 AND STEP 3 ARE GREEN ON RENDER, both for the first time. run-probe.md recorded step 2 as "shape proven, migrations not run" since Tier 0 and step 3 as blocked by SPEC_VERSION_GAP; step 3's blocker is also stale -- `db:check` is 16 checks now, not the "0 checks present (pre-v1.7)" that file still claims.
+           THE ARRANGEMENT IS THE WHOLE FINDING, AND D-297 TESTED THE WRONG ONE. D-297 predicted that `createrole_self_grant` would be inert for adulis_migrate, on the reasoning that the GUC grants membership only in roles the role ITSELF CREATES, so pre-provisioning the six roles leaves adulis_migrate with nothing. That reasoning is correct and the conclusion drawn from it was wrong, because it assumed the six roles WOULD be pre-provisioned. THEY MUST NOT BE. Provision only adulis_migrate and let migration 0001 create the other five, and adulis_migrate ends up holding two grant rows per role -- admin_option=t from creating it, and set_option=t/inherit_option=t from the GUC -- which is exactly what every failing construct needed.
+           IT INVERTS A LINE IN THE STAGING RUNBOOK. staging.md step 3 says the roles get LOGIN passwords and, if they do not exist yet, to let the first deploy create them. That is the right order by accident. The stronger statement is now known: PRE-CREATING THE FIVE ROLES BREAKS THE DEPLOY, and it breaks it silently -- the GUC is still set, still visible in `SHOW`, and grants nothing.
+           AND 0023:510 PASSES. D-297 classified it as "unreachable by any pre-migrate fix" and "a defect in the migration rather than the provisioning". THAT WAS WRONG. `ALTER FUNCTION financial.purge_payout_credential(uuid[]) OWNER TO adulis_migrate` requires the NEW OWNER to hold CREATE on schema `financial`, and 0023:499 grants only USAGE -- but adulis_migrate INHERITS adulis_financial, which OWNS the schema, so `has_schema_privilege` resolves true through the inheritance. The function is owned by adulis_migrate and SECURITY DEFINER on the finished database. The classification was an inference from a code read that was never executed, and executing it refuted it.
+Response:  MEASURED, DECOMPOSED, NOTHING WORKED AROUND
+Action:    WHICH HALF OF THE GUC EACH FAILURE NEEDS -- four runs, same instance, reset between each:
+             set, inherit   50/50 PASS, db:check 16 PASS
+             set only       FAILS IN 0001: `permission denied for schema verification`   -> needs INHERIT
+             inherit only   FAILS IN 0001: `must be able to SET ROLE "adulis_verification"` -> needs SET
+             neither        FAILS IN 0001: `must be able to SET ROLE "adulis_verification"` (SET is reached first)
+           BOTH HALVES ARE REQUIRED AND BOTH BITE INSIDE MIGRATION 0001, which is narrower and more actionable than D-297's four-construct spread suggested:
+             SET      `CREATE SCHEMA verification AUTHORIZATION adulis_verification` (0001:86). Line 85 (`core AUTHORIZATION adulis_migrate`) succeeds because a role can always set-role to itself -- which is also why 68 of the 86 `OWNER TO` statements, the ones targeting adulis_migrate, were never at risk.
+             INHERIT  creating the Appendix A enum TYPES inside the `verification` schema, later in 0001. Creating an object in a schema owned by another role needs CREATE on that schema, which arrives by inheriting the owner.
+           ONE FAILURE NEEDED NEITHER, and nothing in the repository anticipates it:
+             FAILURE 1  `CREATE TABLE "public"."pgmigrations"` -> `permission denied for schema public`, raised BEFORE migration 0001 is read. PostgreSQL 15+ revoked PUBLIC's CREATE on schema `public`; the schema is owned by the database owner, and adulis_migrate's CREATE on the DATABASE is a different privilege. It needs `GRANT CREATE ON SCHEMA public TO adulis_migrate`. deploy.md's provisioning list does not mention it, and it blocks the deploy before any migration runs.
+           THE PROVISIONING CONTRACT, in full, as measured:
+             1. the owner creates adulis_migrate with LOGIN and CREATEROLE
+             2. GRANT CREATE, CONNECT ON DATABASE <db> TO adulis_migrate
+             3. GRANT CREATE ON SCHEMA public TO adulis_migrate
+             4. ALTER ROLE adulis_migrate SET createrole_self_grant = 'set, inherit'
+             5. DO NOT create the other five roles. Migration 0001 must create them.
+           Nothing else. No superuser, no hand-installed extensions -- adulis_migrate installed all four itself on Render, which the local pgvector image refuses.
+Verification: four full runs against Render (adulis_probe_3), reset to virgin between each. Final state left migrated and verified: 50 rows in pgmigrations, 117 tables, `db:check` 16 PASS / 0 PENDING / 0 FAIL, schema owners confirmed by query. No credential in the repository, any commit, this register or the report.
+           NOT TESTED: `pnpm worker:install`, the other half of render.yaml's preDeployCommand. D-297 flagged it as being on the same wall and it remains unrun.
+Ruling needed: D-297's rulings (a) and (b) are ANSWERED by measurement and can be closed: the principal is adulis_migrate, the membership comes from the GUC provided it creates the roles, and 0023 needs no reordering. What replaces them is smaller and concrete -- where does the five-step provisioning contract above live, given deploy.md and staging.md currently describe an order that would break it? D-297(c), the disqualification rule, and D-297(d), a non-superuser CI job, both stand unchanged.

@@ -287,7 +287,27 @@ show('after', c);
  * world nobody chose. The global budget row is S16's, and there can only
  * ever be one.
  */
-const EXPECTED = { markets: 1, accounts: 2, sellers: 1, devices: 0, timing: 1, orders: 5, stock_drift: 0, active_markets: 1, global_budget: 1 };
+/*
+ * sellers: TWO since T23 (D-284), and the second one is not a convenience.
+ *
+ * The seed carried ONE seller because one was enough. It stopped being enough
+ * when SC-07's cap counter became a number: that counter needs a subscription
+ * to resolve a limit at all, while SC-26's e2e is titled "honest about having
+ * none" and asserts exactly that absence. Both screens are right, so the
+ * FIXTURE grows rather than one screen losing its test.
+ *
+ *   seed-store       no subscription  -> the fail-closed sentence
+ *   seed-store-beta  BETA             -> cap 10, binding LEVEL
+ *
+ * accounts is THREE for the same reason: the second seller has its own
+ * owner, because chooser.spec asserts a single-store seller is taken
+ * straight into their store (D-97) and rests on each account owning one.
+ *
+ * This assertion caught the change the moment it landed, which is what it is
+ * for: a count here is a transcription of what the seed defines, and the two
+ * must move together or the seed has drifted from its own description.
+ */
+const EXPECTED = { markets: 1, accounts: 3, sellers: 2, devices: 0, timing: 1, orders: 5, stock_drift: 0, active_markets: 1, global_budget: 1 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)

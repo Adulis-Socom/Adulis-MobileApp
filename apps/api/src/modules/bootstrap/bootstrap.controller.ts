@@ -9,6 +9,7 @@ import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { BootstrapResponseDto } from './bootstrap.dto';
 import { RateLimitService } from '../../common/rate-limit/rate-limit.service';
+import { nodeEnv, type NodeEnv } from '../../common/env';
 import {
   BROWSER_DEVICE_COOKIE,
   clientSurface,
@@ -45,6 +46,21 @@ export interface BootstrapResponse {
   locales: readonly string[];
   feature_flags: Record<string, boolean>;
   media_public_origin: string;
+  /**
+   * WHICH SERVER THIS IS (T23 Phase 4). Additive, so no client changes
+   * (ADU-API-01's additive-compatibility rule).
+   *
+   * It is served from HERE rather than baked into the console's build for one
+   * reason: a build-time constant says which environment the BUNDLE was built
+   * for, and the thing that matters is which API the seller is actually
+   * talking to. Those differ exactly when it is most dangerous -- a staging
+   * bundle pointed at production, or the reverse -- and a banner that can be
+   * wrong about that is worse than none.
+   *
+   * The value is the validated NODE_ENV, not process.env: unset and
+   * unrecognised are already impossible by the time this runs.
+   */
+  environment: NodeEnv;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -244,6 +260,7 @@ export class BootstrapController {
       // Empty when unconfigured -- the client renders no image, never a broken
       // src pointing at a host that is not there.
       media_public_origin: process.env['R2_MEDIA_PUBLIC_ORIGIN'] ?? '',
+      environment: nodeEnv(),
     };
   }
 }

@@ -1,0 +1,312 @@
+# =============================================================================
+# ops/render.yaml -- the STAGING topology, in the repository (T23 Phase 4).
+#
+#   THIS FILE HAS NEVER BEEN APPLIED.
+#
+# That sentence is the first line of the file on purpose, and it is deleted by
+# the person who applies it and by nobody else. D-80 registered this file's
+# absence in T6 and said exactly why it stayed absent: "inventing a
+# render.yaml that has never been applied would be a file that looks
+# authoritative and has never been true." T23 Phase 1 went looking for a
+# Render account to verify against, found no credentials of any kind, and
+# PARKED rather than simulating one. So the objection still stands, and the
+# answer to it is not to keep the file missing -- infrastructure created by
+# hand in a dashboard is infrastructure nobody can review, diff or restore --
+# but to make the file say what it is.
+#
+# WHAT IS VERIFIED, TODAY, WITHOUT AN ACCOUNT. `pnpm verify:render-yaml`
+# (gate `render-yaml`) checks every claim this file makes ABOUT THIS
+# REPOSITORY: that each script it invokes exists in the package that owns it,
+# that the health check path is a route the API actually serves, that the
+# deploy runs `worker:install`, that every environment variable the API needs
+# is declared, and that no value here is a secret. Those are the claims that
+# rot between the day this is written and the day it is applied. What the gate
+# cannot check is whether Render accepts the schema, and it says so rather
+# than implying otherwise.
+#
+# WHAT IS NOT HERE: production. Staging first, one environment, deliberately.
+# A blueprint carrying two environments before either has ever been applied
+# doubles the number of untrue statements in the file.
+# =============================================================================
+
+databases:
+  - name: adulis-staging-db
+    databaseName: adulis
+    # The owner role Render creates. It is NOT any of the six roles migration
+    # 01 creates, and it is not what the API connects as -- see the envVars
+    # note on the three DATABASE_URLs below, which is the most important note
+    # in this file.
+    user: adulis_owner
+    postgresMajorVersion: "17"
+    plan: basic-256mb
+    ipAllowList: []            # private network only; no public ingress (S18)
+
+services:
+  # ---------------------------------------------------------------------------
+  # THE API
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: adulis-staging-api
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: .
+
+    # ONE INSTANCE, AND THE REASON IS NOT COST. There is no SMS vendor yet
+    # (O-5b is open), so staging binds FakeSmsAdapter, which writes the OTP to
+    # a 0600 file on the instance that answered -- never to the logger, because
+    # ADU-RUL-03 S1.1 puts the code and the phone on NEVER_LOG. With two
+    # instances an operator shelling in to read a code has a fifty per cent
+    # chance of an empty file. Production runs two (S18); staging runs one
+    # until a real SMS provider makes the file irrelevant.
+    numInstances: 1
+
+    # S18 names /healthz as the health check, and D-51 is why a stale WORKER
+    # does not 503 here: this endpoint answers "can this instance serve?", and
+    # a 503 for a dead worker would pull every healthy API instance out of
+    # rotation -- turning "orders stop expiring" into "the storefront is down".
+    # The stale worker reddens the BODY (status: degraded), which is what the
+    # uptime check alarms on.
+    healthCheckPath: /healthz
+
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @adulis/api build
+
+    # THE TWO STEPS NOTHING IN THE REPOSITORY CAN DO FOR YOU (deploy.md).
+    #
+    # `worker:install` is not part of `db:migrate` and cannot be: it installs
+    # graphile-worker's own tables as the DDL role, because the worker's first
+    # statement would otherwise be `create schema if not exists jobs`, and that
+    # needs CREATE on the DATABASE -- a standing privilege the runtime role
+    # must not hold (D-52). A worker that boots without it does not fail at
+    # startup. It fails on its first task, having logged healthy.
+    #
+    # Both run as the MIGRATE role, once per deploy, before any instance takes
+    # traffic.
+    preDeployCommand: pnpm db:migrate && pnpm worker:install
+
+    startCommand: node apps/api/dist/main.js
+
+    envVars:
+      # -- THE THREE DATABASE URLS, AND WHY NONE OF THEM IS `fromDatabase` ----
+      #
+      # Render can synthesise ONE connection string, for the owner role it
+      # created. This platform needs THREE, for three different roles with
+      # three different privilege sets -- adulis_app (runtime), adulis_jobs
+      # (the worker), adulis_migrate (DDL only). That separation is the
+      # verification and financial boundary; collapsing it to one owner
+      # connection would make every privilege check in the schema untestable
+      # and, worse, would pass every test.
+      #
+      # Migration 01 creates all six roles NOLOGIN, because a password in a
+      # migration is a secret in git. Granting LOGIN and a password is a
+      # provisioning step, run once per environment against the owner
+      # connection Render did synthesise. So these three are `sync: false`:
+      # Render prompts for them at apply time and stores them, and this file
+      # never sees a credential.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_JOBS
+        sync: false
+      - key: DATABASE_URL_MIGRATE
+        sync: false
+
+      # -- WHICH SERVER THIS IS -----------------------------------------------
+      # In the closed set since T23 Phase 4, and putting it there was an audit,
+      # not a one-line change: every `=== 'production'` guard takes its
+      # permissive branch for a new value on the day it is added. The audit is
+      # written out in apps/api/src/common/env.ts.
+      - key: NODE_ENV
+        value: staging
+
+      - key: PORT
+        value: 10000
+
+      # -- ONE PROXY HOP ------------------------------------------------------
+      # Render terminates TLS and forwards, which is exactly one hop, so
+      # `req.ip` becomes the caller rather than the load balancer. A COUNT,
+      # never `true`: `true` trusts every X-Forwarded-For entry a caller can
+      # write, which makes the client the author of its own address.
+      #
+      # THIS DOES NOT RE-ENABLE THE IP LIMITER. ADU-AUTH-01 v2.6 S15 removed
+      # that control rather than relaxing it, and S15.1 requires three things
+      # documented and tested before an IP limit may exist at all -- trusted
+      # hops, forwarding header, spoofed-header behaviour. This is the first.
+      - key: TRUSTED_PROXY_HOPS
+        value: 1
+
+      # -- THE CONSOLE ORIGIN -------------------------------------------------
+      # Exact, never a wildcard: the session cookie is sent with
+      # credentials: 'include', and this exact-match Origin check is one of the
+      # two independent CSRF controls (ADU-API-01 S5.1). Read off the static
+      # site below, so the two cannot drift.
+      - key: CONSOLE_ORIGIN
+        fromService:
+          name: adulis-staging-console
+          type: web
+          property: hostport
+
+      # -- THE THREE KEY SECRETS ----------------------------------------------
+      # Versioned ("_V1"); rotation adds _V2 and runs the re-encrypt job. Key
+      # material never enters Postgres (R15) and never enters this file.
+      #
+      # `generateValue`, not `sync: false`, because these are keys nobody needs
+      # to know: a staging value no human has ever seen is strictly better than
+      # one somebody pasted from a password manager. They are NOT generateValue
+      # in production, where losing the key means losing every encrypted payout
+      # credential and every piece of evidence.
+      - key: EVIDENCE_ENCRYPTION_KEY_V1
+        generateValue: true
+      - key: PAYOUT_ENCRYPTION_KEY_V1
+        generateValue: true
+      - key: IDENTITY_HASH_KEY_V1
+        generateValue: true
+
+      # -- OBJECT STORAGE -----------------------------------------------------
+      # SEPARATE BUCKETS FROM PRODUCTION, and this is not hygiene. Evidence is
+      # a photograph of a bank transfer; media is a seller's product
+      # photographs. A staging server with no confidentiality writing into the
+      # production bucket is a data incident with no attacker in it. The names
+      # carry the environment so a misconfiguration is visible in a URL.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_MEDIA_BUCKET
+        value: adulis-staging-media
+      - key: R2_EVIDENCE_BUCKET
+        value: adulis-staging-evidence
+      - key: R2_MEDIA_PUBLIC_ORIGIN
+        sync: false
+
+      # -- SMS ----------------------------------------------------------------
+      # No vendor is chosen (O-5b), so staging binds the fake and never reads
+      # these. Declared anyway, because the day a vendor exists the change is a
+      # value here and nothing else.
+      - key: SMS_PRIMARY_API_KEY
+        sync: false
+      - key: SMS_SECONDARY_API_KEY
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # THE WORKER -- the same build, a different entry point and a different ROLE
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: adulis-staging-worker
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @adulis/api build
+    startCommand: node apps/api/dist/worker.js
+
+    # NO preDeployCommand. The API's pre-deploy already ran db:migrate and
+    # worker:install against this database, and running migrations from two
+    # services is how two deploys race to apply the same migration.
+
+    envVars:
+      # The worker connects as adulis_jobs and NEVER as adulis_app. T4's first
+      # finding was that adulis_jobs could not reach schema core at all; the
+      # two processes hold different privileges on purpose.
+      - key: DATABASE_URL
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: DATABASE_URL
+      - key: DATABASE_URL_JOBS
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: DATABASE_URL_JOBS
+      - key: NODE_ENV
+        value: staging
+      - key: EVIDENCE_ENCRYPTION_KEY_V1
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: EVIDENCE_ENCRYPTION_KEY_V1
+      - key: PAYOUT_ENCRYPTION_KEY_V1
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: PAYOUT_ENCRYPTION_KEY_V1
+      - key: IDENTITY_HASH_KEY_V1
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: IDENTITY_HASH_KEY_V1
+      - key: R2_ACCOUNT_ID
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: R2_SECRET_ACCESS_KEY
+      - key: R2_MEDIA_BUCKET
+        value: adulis-staging-media
+      - key: R2_EVIDENCE_BUCKET
+        value: adulis-staging-evidence
+      - key: SMS_PRIMARY_API_KEY
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: SMS_PRIMARY_API_KEY
+      - key: SMS_SECONDARY_API_KEY
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: SMS_SECONDARY_API_KEY
+
+  # ---------------------------------------------------------------------------
+  # THE CONSOLE -- a static site, and NODE_ENV must not reach it
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: adulis-staging-console
+    runtime: static
+    branch: main
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @adulis/console build
+    staticPublishPath: apps/console/dist
+
+    # The router owns every path; a static host that 404s /s/:id/orders serves
+    # a broken app to anyone who reloads.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      # NO NODE_ENV HERE, DELIBERATELY. Vite picks React's DEVELOPMENT build
+      # from it, which doubles the bundle and ships development warnings to
+      # sellers on metered connections; the `production-react` gate fails on
+      # exactly that. The console learns which server it is talking to from
+      # /v1/bootstrap at runtime -- from the API it is ACTUALLY calling, which
+      # is the only source that cannot be wrong about it.
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: adulis-staging-api
+          type: web
+          property: hostport
+
+      # The CSP's origins are substituted from these at build time
+      # (ops/scripts/build-headers.mjs). Before T23 they were two example
+      # hostnames typed into public/_headers -- a second place to configure an
+      # origin the build already knows, and the drift is silent, because a
+      # policy naming an API the bundle does not call refuses every fetch in
+      # the BROWSER (D-164, D-276).
+      - key: R2_MEDIA_PUBLIC_ORIGIN
+        fromService:
+          name: adulis-staging-api
+          type: web
+          envVarKey: R2_MEDIA_PUBLIC_ORIGIN

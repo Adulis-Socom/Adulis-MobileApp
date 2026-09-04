@@ -1931,6 +1931,11 @@ export interface components {
         BootstrapResponseDto: {
             /** @enum {string} */
             client_status: "OK" | "UPGRADE_RECOMMENDED" | "UPGRADE_REQUIRED";
+            /**
+             * @description Which server answered. The console draws its environment banner from this.
+             * @enum {string}
+             */
+            environment: "development" | "test" | "staging" | "production";
             feature_flags: {
                 [key: string]: boolean;
             };

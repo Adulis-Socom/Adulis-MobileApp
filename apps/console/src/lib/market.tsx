@@ -39,7 +39,22 @@ interface BootstrapResponse {
   locales: string[];
   feature_flags: Record<string, boolean>;
   media_public_origin: string;
+  environment: Environment;
 }
+
+/**
+ * Which server answered. Read from the WIRE, never from the build.
+ *
+ * A build-time constant says which environment the bundle was compiled for;
+ * this says which API the seller is actually talking to. The two differ
+ * exactly when it matters most -- a staging bundle pointed at production, or
+ * the reverse -- and a banner that can be wrong about that is worse than none.
+ *
+ * Older servers do not send it, so the type admits undefined and the banner
+ * simply does not render. An absent banner is the pre-T23 behaviour; a banner
+ * guessing "production" from an absence would be the failure.
+ */
+export type Environment = 'development' | 'test' | 'staging' | 'production';
 
 interface MarketContextValue {
   /** null until the first bootstrap resolves; never guessed. */
@@ -49,6 +64,8 @@ interface MarketContextValue {
   readonly featureFlags: Readonly<Record<string, boolean>>;
   /** T20 S4: public origin for product image keys; '' when storage is unconfigured. */
   readonly mediaPublicOrigin: string;
+  /** Which server answered, or null before the first bootstrap resolves. */
+  readonly environment: Environment | null;
   /**
    * The A5 clock reference, as the server stated it, with the moment this
    * client received it. A screen that must show "time remaining" measures
@@ -104,6 +121,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       clientStatus: data?.client_status ?? null,
       featureFlags: data?.feature_flags ?? {},
       mediaPublicOrigin: data?.media_public_origin ?? '',
+      environment: data?.environment ?? null,
       serverTime: data && receivedAt ? { at: data.server_time, receivedAt } : null,
       booting,
       problem,
