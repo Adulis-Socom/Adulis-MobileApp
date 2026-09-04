@@ -3912,3 +3912,39 @@ Action:    All twenty-one SCHEDULED_JOBS run as adulis_jobs with no grant error.
            It lives in e2-e6.jobs.spec.ts because several of these jobs are fleet-wide sweeps and D-83 rules that exactly one suite may own a global sweep. That suite already owns them.
 Verification: proven to FIRE by revoking migration 0049's grant and observing the probe report, by name, "payout.activate_due: permission denied for table payout_details" -- D-270 reproduced on demand by the probe that would have prevented it. Restored.
 Ruling needed: none.
+
+### D-276 - boot-smoke was red on main because it replayed a production origin at a localhost bundle. The console boots.
+
+Severity:  MAJOR (fixed here). NOT a BLOCKER -- the artifact was never broken.
+Phase:     T22 - Phase 2
+Source:    ops/scripts/verify-boot-smoke.mjs, the unconditional `for (const e of rep.csp) fail(...)`
+Found by:  The order requiring a verdict: does the artifact fail to boot, or is the gate wrong?
+Effect:    THE ARTIFACT BOOTS, and the gate said so on the line above the failure. Measured:
+             PASS  #root mounted with 1 child element(s)
+             FAIL  CSP violation under the production policy: connect-src <- http://localhost:3000/v1/bootstrap
+             FAIL  CSP violation under the production policy: connect-src <- http://localhost:3000/v1/auth/sessions
+             PASS  the smoke break flag is compiled out of all 1 shipped bundle(s)
+           React mounted, nothing threw, nothing rejected. The two failures are the gate replaying the PRODUCTION policy -- connect-src 'self' https://api.adulis.example -- against a bundle built with VITE_API_BASE_URL=http://localhost:3000, so SessionProvider's mount call to /bootstrap and its follow-on /auth/sessions are refused.
+           IT WAS GREEN BY ACCIDENT, AND THE HEADER SAID SO. D-138 already recorded that CI builds without VITE_API_BASE_URL, so apiBase() throws before fetch is reached and no request is ever attempted -- and added, in terms, "a gate that quietly benefits from a misconfiguration it does not name is the class this repository keeps finding." The misconfiguration stopped and the gate went red. It was never testing connect-src; it was being spared it.
+           THE BUNDLE IS CONFIGURED BY WHOEVER BUILT LAST. `verify:console-e2e` rebuilds the console with VITE_API_BASE_URL set and leaves that dist in the tree; it runs at gate 25, AFTER boot-smoke at 22, so it contaminates the NEXT run. apps/console/CLAUDE.md also instructs an operator to export the same variable into their shell, in which case even the `build` gate bakes it in. Either route makes boot-smoke red on every branch including unmodified main -- which is where this was found.
+           AND THIS IS D-164 RECURRING IN THE SIBLING FILE. D-164 is the same symptom, the same directive, the same origin, fixed in apps/console/e2e/serve.mjs with "THE CSP IS DERIVED, NOT REPLAYED". verify-boot-smoke.mjs never received that treatment, which is exactly why `verify:console-e2e` passes against the identical dist while boot-smoke fails.
+Response:  FIXED - load-time violations still FAIL; the one runtime directive is REPORTED
+Action:    script-src, style-src, font-src, img-src, worker-src and every other load-time directive remain hard failures: a refused script or style is a page that did not load what it shipped with, and that is this gate's whole question. connect-src is printed as a NOTE naming why it is not a boot failure.
+           THIS NARROWS STATED COVERAGE, NOT REAL COVERAGE, and saying which is the point: D-138 established the gate never tested connect-src. What is fixed is a gate that changed colour with an environment variable and reported it in the words "CSP violation under the production policy", which reads as a product fault.
+           D-138's open ruling -- does boot-smoke assert connect-src at all, or does that belong to the console harness owed at C-3 -- is NOT closed by this. This is the honest interim answer: it does not.
+Verification: green on a clean build (no NOTE lines at all, because no request is made -- the CI path) AND green on a configured build (two NOTEs). Deterministic on both, for the SAME reason rather than for two different accidents.
+           Proven to still FAIL on a real one: built with VITE_SMOKE_BREAK=1 and observed three arms red -- "#root has 0 children: the console did not mount", the uncaught module-scope error, and the break flag surviving into the bundle. The gate's teeth are intact.
+Ruling needed: D-138's remains open and is now the only question here.
+
+### D-277 - The gate could not tell "the console did not load" from "the browser did not run"
+
+Severity:  MINOR (fixed here)
+Phase:     T22 - Phase 2
+Source:    ops/scripts/verify-boot-smoke.mjs, the `no smoke report in the DOM: the page never reached the probe` branch
+Found by:  Running the gate from a sandboxed shell during T21 and reading its message as a product failure
+Effect:    Under a restricted or sandboxed shell msedge returns exit 0 in about sixty milliseconds having made ZERO HTTP requests and written ZERO bytes. The gate then finds no marker in an empty DOM dump and says "the page never reached the probe" -- which reads as "the console is broken" and is a statement about the shell.
+           IT COST A WHOLE ORDER'S DIAGNOSIS. T21 reported boot-smoke as failing with this message, on the branch and on main, and concluded "environmental on this machine" without being able to say what was environmental about it. Both halves were true and neither was useful.
+Response:  FIXED - an empty dump is now named as an empty dump
+Action:    A zero-byte DOM says nothing was fetched, so it can say nothing about the console. The gate now says that, and says to try an ordinary shell before reading it as a product failure. One branch, four lines, and it turns an ambiguous red into a directed one.
+           The general form is worth carrying: A GATE'S FAILURE MESSAGE IS PART OF THE GATE. Two causes that produce one message make a gate that reports a result nobody can act on, which is the same class as a gate that checks the wrong file (D-274).
+Ruling needed: none.
