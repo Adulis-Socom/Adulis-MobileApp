@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `pnpm verify:surface-markers` -- ADU-AUTH-01 v2.7 S26.4, made executable.
+ * `pnpm verify:surface-markers` -- ADU-AUTH-01 v2.8 S26.4, made executable.
  *
  * S26.4: "`core.permission.surfaces` is the authority for which surface a
  *  permission is reachable from. Nothing else is."
@@ -181,7 +181,7 @@ const rows = parseCatalogue(md);
 const surfaces = parseGrants(sql);
 const routes = await buildRouteMap();
 
-console.log(`\nADU-AUTH-01 v2.7 S26.4 -- surface markers against core.permission.surfaces`);
+console.log(`\nADU-AUTH-01 v2.8 S26.4 -- surface markers against core.permission.surfaces`);
 console.log(`  catalogue rows: ${rows.length}   permissions: ${surfaces.size}   routes in source: ${routes.size}\n`);
 
 const marked = rows.filter((r) => r.markers.has(MOBILE_MARKER));

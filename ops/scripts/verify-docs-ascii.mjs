@@ -31,18 +31,33 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
 
-/** Enforced. A failure here fails the build. */
+/**
+ * Enforced. A failure here fails the build.
+ *
+ * A DOCUMENT IS GOVERNED IF IT GOVERNS *OR* IF A GATE PARSES IT. Those are two
+ * different reasons and this list holds both, which is why superseded revisions
+ * appear in it: `verify-permission-doc` parses AUTH v2.5 for the 42 codes and
+ * 139 grants, and `verify-transcription` parses AUTH v2.6 for the delivery
+ * layer. A mangled byte in either corrupts a gate's source of truth rather than
+ * merely its prose.
+ *
+ * [!] T22 FOUND TWO ENTRIES NAMING SUPERSEDED REVISIONS WHILE THE INSTALLED ONES
+ * WENT UNCHECKED (D-274): this list said AUTH `v2_6` after v2.7 was installed at
+ * T20, and API `v1_10` after v1.11 was installed in the same order. Both files
+ * still existed, so `readFile` succeeded and the gate reported PASS -- it was
+ * enforcing ASCII on documents nobody reads and not on the documents that
+ * govern. The `mustBeCurrent` check below is what makes that shape impossible
+ * to repeat: it is the comparator this list never had.
+ */
 const GOVERNED = [
   'docs/ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md',
-  // T13: ADU-AUTH-01 governs at v2.6 for authentication, sessions, recovery,
-  // operators and abuse control -- and v2.5 REMAINS INSTALLED AND GOVERNED for
-  // the permission catalogue, the 42x6 matrix and the SQL seed, which v2.6 S0
-  // leaves canonical and does not reproduce. Both are enforced because both are
-  // read: verify-permission-doc.mjs parses v2.5, and a mangled byte in either
-  // corrupts a gate's source of truth rather than merely its prose.
+  // T22: AUTH-01 governs at v2.8 for authentication, sessions, recovery,
+  // operators and abuse control. v2.6 and v2.5 stay enforced because gates
+  // still parse them, NOT because they govern -- see the note above.
+  'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_6.md',
   'docs/ADU-AUTH-01_Authentication_and_Authorization_v2_5.md',
-  'docs/ADU-API-01_API_Contract_v1_10_ASCII.md',
+  'docs/ADU-API-01_API_Contract_v1_11_ASCII.md',
   // T15: ADU-CON-03 arrives ASCII for the first time at v1.3 (v1.2 was a
   // pre-A3.5 supply); governed from this installation.
   'docs/ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md',
@@ -86,8 +101,101 @@ const scan = (buf) => {
 };
 
 let failures = 0;
+
+// ---------------------------------------------------------------------------
+// THE COMPARATOR THIS LIST NEVER HAD (T22, D-274).
+//
+// GOVERNED is a hand-maintained transcription of "which revision governs", and
+// nothing compared it to the directory. Two entries had gone stale -- AUTH v2.6
+// after v2.7 installed, API v1.10 after v1.11 installed -- and the gate passed
+// both times, because the superseded file was still on disk and still ASCII.
+// The check ran; it just ran on the wrong document.
+//
+// Two rules, and between them a newly installed revision cannot go unnoticed:
+//
+//   1. Every governed path EXISTS and is not under docs/superseded/. A
+//      superseded revision may be governed only if a gate parses it, and those
+//      live in docs/ by deliberate exception (v2.5, v2.6), never in superseded/.
+//   2. For every document FAMILY present at the top of docs/, the NEWEST
+//      revision on disk is governed. That is the rule that fires the day a new
+//      revision is installed and this list is not touched.
+// ---------------------------------------------------------------------------
+const familyOf = (base) => {
+  const m = /^(ADU-[A-Z0-9-]+?)_/.exec(base);
+  return m ? m[1] : base;
+};
+/** Sort key for a revision: v2_10 must beat v2_9, so compare numerically. */
+const revOf = (base) => {
+  const m = /_v(\d+)_(\d+)/.exec(base);
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : -1;
+};
+
+/**
+ * Every ADU document currently INSTALLED -- all of docs/ except superseded/.
+ * Recursive, because a governed document need not sit at the top level:
+ * ADU-VAL-01 lives in docs/registers/ and is governed from there.
+ */
+const walkDocs = async (dir) => {
+  const out = [];
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    if (e.isDirectory()) {
+      if (e.name === 'superseded') continue;
+      out.push(...(await walkDocs(path.join(dir, e.name))));
+    } else if (e.name.endsWith('.md') && e.name.startsWith('ADU-')) {
+      out.push(path.join(dir, e.name));
+    }
+  }
+  return out;
+};
+const installed = await walkDocs(path.join(root, 'docs'));
+const installedNames = new Set(installed.map((p) => path.basename(p)));
+
+const governedSet = new Set(GOVERNED.map((r) => path.basename(r)));
+const listProblems = [];
+
+for (const rel of GOVERNED) {
+  if (rel.includes('/superseded/')) {
+    listProblems.push(`${path.basename(rel)} is governed from docs/superseded/`);
+    continue;
+  }
+  if (!installedNames.has(path.basename(rel))) {
+    listProblems.push(`${path.basename(rel)} is governed but is not installed under docs/`);
+  }
+}
+
+const newestByFamily = new Map();
+for (const p of installed) {
+  const base = path.basename(p);
+  const fam = familyOf(base);
+  const cur = newestByFamily.get(fam);
+  if (!cur || revOf(base) > revOf(cur)) newestByFamily.set(fam, base);
+}
+for (const [fam, newest] of newestByFamily) {
+  // A family with no governed member at all is carried pre-A3.5 debt, which is
+  // reported below rather than enforced. This rule only says: IF a family is
+  // governed, it must be governed at its NEWEST installed revision.
+  const anyGoverned = [...governedSet].some((g) => familyOf(g) === fam);
+  if (anyGoverned && !governedSet.has(newest)) {
+    listProblems.push(
+      `${fam}: docs/ holds ${newest} but the governed entry is ` +
+        `${[...governedSet].filter((g) => familyOf(g) === fam).join(', ')}`,
+    );
+  }
+}
+
 console.log('\nA3.5 — ADU specification documents are ASCII\n');
-console.log('  governed (enforced):');
+console.log('  the governed list itself:');
+if (listProblems.length === 0) {
+  console.log(`    PASS  every governed path exists and names the newest installed revision  ${GOVERNED.length} documents`);
+} else {
+  failures += 1;
+  console.log('    FAIL  the governed list has gone stale against docs/');
+  for (const p of listProblems) console.log(`          ${p}`);
+  console.log('          A gate that checks a superseded revision reports PASS while the');
+  console.log('          document that governs is unchecked. Advance the list.');
+}
+
+console.log('\n  governed (enforced):');
 for (const rel of GOVERNED) {
   const buf = await readFile(path.join(root, rel));
   const off = scan(buf);

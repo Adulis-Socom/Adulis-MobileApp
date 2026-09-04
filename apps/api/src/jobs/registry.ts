@@ -49,7 +49,7 @@ export const S24_JOBS: readonly Job[] = [
  * beside this file asserts that citation is NOT S24.
  */
 export const RULED_JOBS: readonly Job[] = [
-  // ADU-AUTH-01 v2.7 S20.1 -- without it the twenty-four hour payout delay
+  // ADU-AUTH-01 v2.8 S20.1 -- without it the twenty-four hour payout delay
   // means "until the seller next opens the payout screen".
   payoutActivateDue,
 ];
