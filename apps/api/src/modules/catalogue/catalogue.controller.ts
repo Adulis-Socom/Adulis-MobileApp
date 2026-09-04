@@ -74,7 +74,86 @@ export class CatalogueController {
     );
   }
 
+  /**
+   * T22 Phase 4 -- THE RESPONSE IS DESCRIBED NOW, for D-98's reason.
+   *
+   * SC-07 needed two things this list did not carry: an image reference (it
+   * could not draw a grid) and the resolved product cap (it could not say
+   * which limit binds). Both are added here, and both are DESCRIBED, because
+   * an undescribed response generates no type and the console then types the
+   * shape locally -- "which means a wire-shape change here compiles clean over
+   * there and fails in front of a seller", in the words of the sibling comment
+   * below that made the same fix for the image bodies.
+   */
   @Get('seller/products')
+  @ApiOperation({
+    summary: 'The seller list. Carries the card image key and the resolved publication cap.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'A cursor page of products, plus `publication` -- the resolved product cap and WHICH ' +
+      'limit produced it. ADU-CON-03 S8: the cap is the intersection of tier and level and the ' +
+      'counter must say which one binds, because "10 of unlimited" is a bug report waiting to ' +
+      'be filed. `binding` is TIER, LEVEL, BOTH or NONE; a null `cap` is NONE and the screen ' +
+      'must never render it as the word "unlimited".',
+    schema: {
+      type: 'object',
+      required: ['data', 'publication', 'has_more', 'next_cursor'],
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['id', 'name', 'visibility', 'base_price', 'display_order', 'image_key'],
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+              visibility: { type: 'string' },
+              base_price: {
+                type: 'object',
+                required: ['amount_minor', 'currency'],
+                properties: {
+                  amount_minor: { type: 'integer' },
+                  currency: { type: 'string' },
+                },
+              },
+              display_order: { type: 'integer' },
+              image_key: {
+                type: 'string',
+                nullable: true,
+                description:
+                  'The CARD derivative of the lowest-position image, or null when the product ' +
+                  'has none. A bare key: /v1/bootstrap owns the origin.',
+              },
+            },
+          },
+        },
+        publication: {
+          type: 'object',
+          required: ['resolved', 'used', 'cap', 'tier_cap', 'level_cap', 'binding', 'level'],
+          properties: {
+            resolved: {
+              type: 'boolean',
+              description:
+                'False when the limit could not be resolved at all (NO_TIER_DEFINITION / ' +
+                'NO_LADDER_CONFIG). NOT the same as "no cap in force": a seller whose limit ' +
+                'cannot be resolved cannot publish.',
+            },
+            reason: { type: 'string', nullable: true },
+            used: { type: 'integer', description: 'PUBLISHED products, counted server-side.' },
+            cap: { type: 'integer', nullable: true },
+            tier_cap: { type: 'integer', nullable: true },
+            level_cap: { type: 'integer', nullable: true },
+            binding: { type: 'string', enum: ['TIER', 'LEVEL', 'BOTH', 'NONE'] },
+            level: { type: 'string', nullable: true },
+          },
+        },
+        has_more: { type: 'boolean' },
+        next_cursor: { type: 'string', format: 'uuid', nullable: true },
+      },
+    },
+  })
   async listProducts(
     @Req() req: LocalizedRequest,
     @Query('limit') limitRaw?: string,

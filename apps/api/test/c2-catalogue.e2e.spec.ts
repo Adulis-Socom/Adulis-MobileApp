@@ -253,6 +253,47 @@ describe('C2 — catalogue, media and stock', () => {
       expect(r.body.visibility).toBe('DRAFT');
     });
 
+    /**
+     * T22 Phase 4 -- THE LIST CARRIES WHAT SC-07 COULD NOT DRAW.
+     *
+     * Two regions ADU-CON-03 S8 specifies were owed for three orders, for the
+     * same reason each time: the contract did not carry the field. S17's rule
+     * is that a region depending on a contract NAMES the endpoint and the
+     * field, and naming them is what got them built.
+     *
+     *   image_key    the CARD derivative of the lowest-position image, or null
+     *   publication  the resolved cap AND WHICH LIMIT PRODUCED IT
+     *
+     * S8 is explicit that the counter must say which one binds, because a
+     * seller told "2 of 2" without being told whether that is their plan or
+     * their level cannot know whether paying or trading lifts it. This suite's
+     * fixture is a NEW seller whose ladder caps at 2, so LEVEL must bind.
+     */
+    it('the list carries image_key and a publication cap that names which limit binds', async () => {
+      const r = await read('/v1/seller/products').expect(200);
+
+      // Every row carries the key, present or explicitly null -- never absent,
+      // because an absent field and a product with no photograph are different
+      // facts and the console must be able to tell them apart.
+      expect(Array.isArray(r.body.data)).toBe(true);
+      for (const row of r.body.data) {
+        expect(row).toHaveProperty('image_key');
+      }
+
+      const pub = r.body.publication;
+      expect(pub.resolved).toBe(true);
+      expect(pub.used).toBe(0); // nothing published yet in this describe
+      expect(pub.cap).toBe(2); // the ladder's new_level_product_cap for this market
+      expect(pub.level).toBe('NEW');
+      // THE POINT OF THE FIELD: the number alone does not say what lifts it.
+      expect(pub.binding).toBe('LEVEL');
+      expect(pub.level_cap).toBe(2);
+      // And the operands are both present, so "which one binds" is a fact the
+      // response carries rather than something the client infers from the
+      // smaller number -- least() ignores NULLs, so inference would be wrong.
+      expect(pub).toHaveProperty('tier_cap');
+    });
+
     it('403 for the ANALYST creating; 404 for a stranger reading', async () => {
       await write('post', '/v1/seller/products', ANALYST_S)
         .send({ name: 'X', base_price_minor: 1, base_price_currency: 'ETB' })

@@ -1464,6 +1464,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The seller list. Carries the card image key and the resolved publication cap. */
         get: operations["CatalogueController_listProducts"];
         put?: never;
         post: operations["CatalogueController_createProduct"];
@@ -3784,11 +3785,44 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description A cursor page of products, plus `publication` -- the resolved product cap and WHICH limit produced it. ADU-CON-03 S8: the cap is the intersection of tier and level and the counter must say which one binds, because "10 of unlimited" is a bug report waiting to be filed. `binding` is TIER, LEVEL, BOTH or NONE; a null `cap` is NONE and the screen must never render it as the word "unlimited". */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        data: {
+                            base_price: {
+                                amount_minor: number;
+                                currency: string;
+                            };
+                            display_order: number;
+                            /** Format: uuid */
+                            id: string;
+                            /** @description The CARD derivative of the lowest-position image, or null when the product has none. A bare key: /v1/bootstrap owns the origin. */
+                            image_key: string | null;
+                            name: string;
+                            visibility: string;
+                        }[];
+                        has_more: boolean;
+                        /** Format: uuid */
+                        next_cursor: string | null;
+                        publication: {
+                            /** @enum {string} */
+                            binding: "TIER" | "LEVEL" | "BOTH" | "NONE";
+                            cap: number | null;
+                            level: string | null;
+                            level_cap: number | null;
+                            reason?: string | null;
+                            /** @description False when the limit could not be resolved at all (NO_TIER_DEFINITION / NO_LADDER_CONFIG). NOT the same as "no cap in force": a seller whose limit cannot be resolved cannot publish. */
+                            resolved: boolean;
+                            tier_cap: number | null;
+                            /** @description PUBLISHED products, counted server-side. */
+                            used: number;
+                        };
+                    };
+                };
             };
         };
     };

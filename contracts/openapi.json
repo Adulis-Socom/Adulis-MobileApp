@@ -2018,9 +2018,133 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "A cursor page of products, plus `publication` -- the resolved product cap and WHICH limit produced it. ADU-CON-03 S8: the cap is the intersection of tier and level and the counter must say which one binds, because \"10 of unlimited\" is a bug report waiting to be filed. `binding` is TIER, LEVEL, BOTH or NONE; a null `cap` is NONE and the screen must never render it as the word \"unlimited\".",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "publication",
+                    "has_more",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "visibility",
+                          "base_price",
+                          "display_order",
+                          "image_key"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "visibility": {
+                            "type": "string"
+                          },
+                          "base_price": {
+                            "type": "object",
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "properties": {
+                              "amount_minor": {
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "display_order": {
+                            "type": "integer"
+                          },
+                          "image_key": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The CARD derivative of the lowest-position image, or null when the product has none. A bare key: /v1/bootstrap owns the origin."
+                          }
+                        }
+                      }
+                    },
+                    "publication": {
+                      "type": "object",
+                      "required": [
+                        "resolved",
+                        "used",
+                        "cap",
+                        "tier_cap",
+                        "level_cap",
+                        "binding",
+                        "level"
+                      ],
+                      "properties": {
+                        "resolved": {
+                          "type": "boolean",
+                          "description": "False when the limit could not be resolved at all (NO_TIER_DEFINITION / NO_LADDER_CONFIG). NOT the same as \"no cap in force\": a seller whose limit cannot be resolved cannot publish."
+                        },
+                        "reason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "used": {
+                          "type": "integer",
+                          "description": "PUBLISHED products, counted server-side."
+                        },
+                        "cap": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "tier_cap": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "level_cap": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "binding": {
+                          "type": "string",
+                          "enum": [
+                            "TIER",
+                            "LEVEL",
+                            "BOTH",
+                            "NONE"
+                          ]
+                        },
+                        "level": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
           }
         },
+        "summary": "The seller list. Carries the card image key and the resolved publication cap.",
         "tags": [
           "Catalogue"
         ]

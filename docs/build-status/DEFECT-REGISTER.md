@@ -4032,3 +4032,65 @@ Response:  REPORTED, NOT ADOPTED
 Action:    Not pinned in gates.mjs, and the reason is not cost. A cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth. The scoping is the fix; the cap is a way of not needing one.
            It is recorded because the cost sentence was repeated across four reports without a measurement behind it, and because a founder deciding this should decide it against numbers. If the gate's wall clock ever becomes the constraint, the cheap answer now has evidence.
 Ruling needed: whether to pin the API test gate's worker count. The measurement is here; the decision is not mine.
+
+### D-281 - Two jest workers raced to unlink one file, and a whole spec reported "failed to run"
+
+Severity:  MINOR (fixed here)
+Phase:     T22 - Phase 4, observed while re-running the suite
+Source:    apps/api/src/modules/auth/sms.adapter.ts -- FakeSmsAdapter's constructor did rmSync(devSmsLogPath()) before writing an empty file
+Found by:  One run in six going red with EPERM instead of an assertion
+Effect:    `EPERM: operation not permitted, unlink '.dev-sms.log'`, and c1-onboarding reported "Test suite failed to run" -- a whole spec file blamed for a file it never mentions. Every jest worker constructs a FakeSmsAdapter against the SAME path, and on Windows a file another process holds open cannot be unlinked.
+           IT IS D-273'S SHAPE WITH A FILE AS THE SHARED RESOURCE INSTEAD OF A TABLE, which is worth saying because D-273's whole population was database rows and the class is wider than that. Nineteen workers share a filesystem as surely as they share a database.
+Response:  FIXED - truncate, do not unlink
+Action:    Writing an empty file achieves what the unlink was for -- the log starts empty for this run -- without requiring exclusive access to a path nineteen processes share. The mode comment above it is unchanged and still true.
+Ruling needed: none.
+
+### D-282 - D-261 IS DIAGNOSED: the assertion compared a server timestamp to a client one
+
+Severity:  MAJOR (fixed here) -- open across D-261, D-266, D-273 and D-279
+Phase:     T22 - Phase 4, by the instrumentation added in T22 Phase 3
+Source:    c4-financial.e2e.spec.ts, `scheduled_for >= startedAt` where startedAt was a JS `new Date()`
+Found by:  The forensics D-279 attached to the arm, on its first reproduction
+Effect:    THE FORENSICS PRINTED THE ANSWER:
+             startedAt                  2026-09-04T02:34:00.216Z
+             newest row for this owner  2026-09-04T02:34:00.202Z
+           THE ROW WAS WRITTEN. It was fourteen milliseconds "before" an instant the test had captured a moment earlier, so the predicate excluded it and the arm reported that the notification did not exist.
+           THAT REFUTES D-266'S REMAINING CANDIDATE. The INSERT..SELECT..JOIN was not writing zero rows; rows plainly exist, six of them for this owner. Three orders looked for a missing write and the write was never missing.
+           THE MECHANISM: `core.notification.scheduled_for` defaults to `now()`, which in Postgres is TRANSACTION START -- not statement time -- and it is POSTGRES'S clock, not Node's. Comparing a server-assigned instant to a client-assigned one is a race whose margin is the difference between two machines' clocks plus the width of a transaction. Under nineteen parallel workers that margin is not always positive.
+           D-261 called it clock skew and could not measure it. D-266 re-measured the clocks properly, found them within a millisecond, and correctly declined to conclude from that. BOTH WERE LOOKING AT THE RIGHT THING. What neither had was the failing row's own timestamp printed beside the value it was being compared against -- which is the whole argument for instrumenting a flake instead of guessing at it a fourth time.
+Response:  FIXED - the assertion uses no clock at all
+Action:    Count before, count after, assert the count rose. That is what the arm's own comment ("A DELTA, not a running total") always meant; the previous attempt implemented the delta with a wall clock, which is the defect. Combined with D-273's recipient scope it is immune to skew AND to other suites' rows.
+           THE GENERAL RULE, worth carrying: A TEST MAY NOT COMPARE A SERVER-ASSIGNED TIMESTAMP TO A CLIENT-ASSIGNED ONE. Where a test needs "since I started", the honest instrument is a count taken before and after, or a timestamp the server itself issued.
+Verification: nine consecutive full-suite runs green after the fix (566/566), against one-in-ten before it, on the arm that had flaked in three consecutive orders.
+Ruling needed: none. D-261, D-266 and D-279 are all discharged by this entry.
+
+### D-283 - fn_effective_limit resolved the intersection and threw both operands away, and no endpoint called it
+
+Severity:  MAJOR (fixed here) -- the contract half of ADU-CON-03 S8
+Phase:     T22 - Phase 4.2
+Source:    billing.fn_effective_limit's PRODUCT_COUNT branch returned {"allowed":true,"cap":N} and nothing else
+Found by:  Drawing SC-07 in T21 and discovering the contract could not fill it
+Effect:    ADU-CON-03 S8 requires the counter to say WHICH limit binds: "A NEW seller on a paid tier is capped at 10 by ladder_config.new_level_product_cap, whatever the tier allows -- and '10 of unlimited' is a bug report waiting to be filed." The function computed exactly that intersection with `least(tier_cap, level_cap)` AND DISCARDED BOTH OPERANDS ONE LINE AFTER READING THEM.
+           A seller told "10 of 10" without being told which limit that is cannot know whether PAYING or TRADING lifts it. Those are different actions and the number is identical.
+           WORSE, NO HTTP ENDPOINT CALLED IT FOR PRODUCT_COUNT AT ALL -- the only callers were SQL function bodies -- so even the collapsed number never reached the wire. SC-07 said so on screen for three orders, which is S17 working as intended: a region that depends on a contract names the endpoint and the field, and naming it is what got it built.
+Response:  FIXED - migration 0050 and a `publication` object on GET /v1/seller/products
+Action:    The function now returns tier_cap, level_cap, binding and level beside the unchanged cap. ADDITIVE ONLY: `allowed` and `cap` are byte-identical, so fn_publish_product and every other reader is untouched, and CREATE OR REPLACE preserves owner and grants (verified: adulis_app still holds EXECUTE, owner still adulis_migrate).
+           `level_cap` is read from the ladder subselect DIRECTLY rather than derived from `cap`, because `least()` IGNORES NULLS -- least(NULL,10) is 10 -- so reconstructing the operands from the result would inherit exactly that hole.
+           `binding` is TIER | LEVEL | BOTH | NONE. BOTH when the two are equal and non-null, because naming one there would be a coin flip.
+           AND `resolved` IS CARRIED SEPARATELY. The function's fail-closed branches (NO_TIER_DEFINITION, NO_LADDER_CONFIG) return allowed:false, and collapsing that into "no cap is in force" would tell a seller who cannot publish at all that nothing limits them -- the opposite of the truth. The screen has its own sentence for it.
+Verification: all four bindings proven in a rolled-back transaction -- NEW with tier 25 vs level 10 gives cap 10 binding LEVEL; ESTABLISHED gives cap 25 binding TIER; tier 10 with level 10 gives BOTH; no cap gives NONE. c2-catalogue asserts the wire: cap 2, binding LEVEL, level NEW, level_cap 2. console-e2e asserts the browser renders a binding and never the word "unlimited".
+Ruling needed: none. But see the note below -- the seeded environment cannot reach the ordinary path.
+
+### D-284 - The seed seller has no subscription, so the seeded console can only reach the fail-closed limit
+
+Severity:  MINOR (registered, NOT fixed -- fixing it broke two screens)
+Phase:     T22 - Phase 4.2
+Source:    ops/scripts/seed.mjs creates no billing.subscription row; migration 0016 seeds ONE tier_definition, the BETA row
+Found by:  SC-07's new cap counter rendering "your limit could not be resolved" in the seeded environment
+Effect:    fn_effective_limit resolves the tier from the seller's subscription and falls back to LISTED when there is none. 0016 deliberately seeds only the BETA row -- the priced tiers are a commercial decision that has not arrived -- so a seller with no subscription resolves to LISTED, finds no definition, and FAILS CLOSED.
+           The behaviour is correct. THE FIXTURE IS NOT: every real beta seller has a BETA subscription, so the seeded environment reaches only the fallback and never the ordinary path. SC-07 therefore demonstrates "your product limit could not be resolved" rather than the sentence S8 actually specifies.
+Response:  ATTEMPTED, REVERTED, REGISTERED
+Action:    Adding the BETA subscription to the seed WORKS -- the limit resolves to cap 10, binding LEVEL, level NEW, which is ADU-CON-03 S8's model sentence verbatim ("10 of 10 -- new sellers can list 10 products. This lifts when your store reaches Established.").
+           IT ALSO BREAKS TWO SCREENS THAT ARE SEEDED TO DEMONSTRATE THE OPPOSITE. SC-26's e2e is titled "Subscription -- honest about having none", and SC-12's entitlement arm depends on the same absence. Both went red. The seed serves thirty screens, and one screen's realistic fixture is another screen's broken demonstration.
+           So the number is proven where it can be proven without that cost: c2-catalogue asserts cap 2 / binding LEVEL / level NEW on the wire, and the e2e asserts the region renders, names a binding, and never prints "unlimited".
+Ruling needed: YES -- should the seed carry a BETA subscription, and if so what do SC-26 and SC-12 demonstrate instead? It is a fixture question with a product answer, which is why it is not decided here.

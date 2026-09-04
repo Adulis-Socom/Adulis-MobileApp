@@ -1,4 +1,4 @@
-import { appendFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
 import { createLogger } from '../../common/logging';
@@ -64,7 +64,16 @@ export class FakeSmsAdapter implements SmsAdapter {
       // measured run shows 0666 with the machine's other principals able to
       // read it. A developer on a shared Windows machine should treat this
       // file as world-readable -- or point DEV_SMS_LOG somewhere protected.
-      rmSync(devSmsLogPath(), { force: true });
+      // TRUNCATE, DO NOT UNLINK (T22, D-281). Every jest worker constructs one
+      // of these against the SAME path, and on Windows a file another process
+      // holds open cannot be unlinked: `rmSync` raises EPERM, the constructor
+      // throws, and a whole spec file reports "Test suite failed to run" for a
+      // reason that has nothing to do with it. Observed once in six runs.
+      //
+      // Writing an empty file achieves what the unlink was for -- the log
+      // starts empty for this run -- without requiring exclusive access to a
+      // path nineteen workers share. It is D-273's shape with a FILE as the
+      // shared resource instead of a table.
       writeFileSync(devSmsLogPath(), '', { encoding: 'utf8', mode: 0o600 });
       // The PATH is safe to log; what the file contains is not.
       log.warn({ msg: `[FAKE SMS] development codes are written to ${devSmsLogPath()}` });

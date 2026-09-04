@@ -7,9 +7,10 @@
  * the screens broke on real data.
  *
  * What C-5's traps require a browser to have DRAWN (ADU-CON-03 v1.2 S8):
- *   SC-07  the list renders, the honest cap-note is present (the counter the
- *          contract cannot yet supply is named, not faked), the filter note
- *          says filtering is over what loaded.
+ *   SC-07  the list renders, THE CAP COUNTER IS A NUMBER AND NAMES WHICH LIMIT
+ *          BINDS (T22 Phase 4.2 -- it was an honest placeholder for three
+ *          orders because no endpoint returned the resolved limit), and the
+ *          filter note says filtering is over what loaded.
  *   SC-08  the editor renders the product with its Variants and Media
  *          sections and a publication control.
  *   SC-11  stock offers TWO DISTINCT actions -- Set count AND Confirm stock is
@@ -29,9 +30,32 @@ test.describe('SC-07 -- products list', () => {
     await expect(page.locator('[data-product]').first()).toBeVisible();
     await expect(page.getByText('Seed Coffee 1kg')).toBeVisible();
 
-    // The cap counter is HONEST about the field it lacks (S8, S17): no invented
-    // "N of 10", a plain statement that the server owns the limit.
-    await expect(page.getByText(/product limit is set by the server/i)).toBeVisible();
+    // ------------------------------------------------------------------
+    // THE CAP COUNTER (T22 Phase 4.2). ADU-CON-03 S8: "the counter must say
+    // which one binds", because "10 of unlimited" is a bug report waiting to
+    // be filed. For three orders this region was an honest placeholder --
+    // billing.fn_effective_limit computed the tier-and-level intersection and
+    // threw both operands away, and no endpoint called it for PRODUCT_COUNT at
+    // all. GET /v1/seller/products now carries `publication`.
+    // ------------------------------------------------------------------
+    const cap = page.locator('[data-cap-binding]');
+    await expect(cap).toBeVisible();
+
+    // Whichever limit is in force, the SENTENCE names it rather than saying
+    // "your tier or level" -- the phrasing S8 exists to forbid.
+    const binding = await cap.getAttribute('data-cap-binding');
+    expect(['TIER', 'LEVEL', 'BOTH', 'NONE']).toContain(binding);
+
+    // A cap that exists is DRAWN AS A NUMBER; a cap that does not is drawn as
+    // no number at all. What must never appear either way is the word the spec
+    // forbids: S8:415 -- the screen must not print "unlimited".
+    if (binding === 'NONE') {
+      await expect(cap.locator('[data-cap-count]')).toHaveCount(0);
+    } else {
+      await expect(cap.locator('[data-cap-count]')).toBeVisible();
+      await expect(cap.locator('[data-cap-count]')).toHaveText(/\d+ of \d+/);
+    }
+    await expect(page.getByText(/unlimited/i)).toHaveCount(0);
 
     // The filter row filters what LOADED, and says so (D-154 class).
     await expect(page.getByText(/These tabs filter the products already loaded/i)).toBeVisible();
