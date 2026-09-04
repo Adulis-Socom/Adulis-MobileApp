@@ -164,10 +164,15 @@ describe('C1 — onboarding and verification', () => {
       `UPDATE core.seller SET person_id = NULL WHERE market_id='${M}'`,
       `DELETE FROM core.seller_public_stats WHERE seller_id IN (SELECT id FROM core.seller WHERE market_id='${M}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
-      `DELETE FROM core.person WHERE id NOT IN (SELECT person_id FROM core.account WHERE person_id IS NOT NULL)
-         AND id NOT IN (SELECT person_id FROM core.seller WHERE person_id IS NOT NULL)
-         AND id NOT IN (SELECT representative_person_id FROM core.seller_company_detail)
-         AND id NOT IN (SELECT person_id FROM verification.identity_attestation)`,
+      // WAS A TABLE-WIDE ORPHAN SWEEP (T22, D-273). "Every person nothing
+      // references" deletes another worker's row the instant that suite has
+      // detached it and not yet re-attached it -- a window every suite with a
+      // person fixture opens. Scoped to the people this market's own accounts
+      // and sellers ever pointed at.
+      `DELETE FROM core.person WHERE id IN (
+          SELECT person_id FROM core.account WHERE market_id='${M}' AND person_id IS NOT NULL
+          UNION SELECT person_id FROM core.seller WHERE market_id='${M}' AND person_id IS NOT NULL
+        )`,
       `DELETE FROM core.step_up_challenge WHERE account_id='${OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${ANALYST}','${STRANGER}')`,

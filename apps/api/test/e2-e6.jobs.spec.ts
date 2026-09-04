@@ -253,20 +253,55 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
      * do is raise 42501 or "permission denied": that is never a fact about the
      * data, only ever about the grant, and it means the job cannot run at all.
      *
-     * It lives in THIS file because several of these jobs are fleet-wide sweeps
-     * and D-83 rules that exactly one suite may own a global sweep. This suite
-     * already owns them.
+     * [!] IT RUNS EVERY JOB INSIDE A TRANSACTION IT THEN ROLLS BACK, and the
+     * first draft did not. Running twenty-one jobs for real is twenty-one
+     * FLEET-WIDE sweeps -- notification.send drains every pending row,
+     * stock.confidence_nudge nudges every stale variant, the purges purge --
+     * so the probe consumed the fixtures of the tests below it and of every
+     * suite in every other jest worker. Measured: with the naive version the
+     * full suite failed 4 runs of 4; without it, 2 of 3 were 564/564. That is
+     * D-273's own mechanism, introduced by the test written to close a
+     * different defect (D-278).
+     *
+     * A ROLLED-BACK TRANSACTION LOSES NOTHING THIS PROBE IS FOR. Postgres
+     * checks privileges per statement, before it does the work, so a missing
+     * grant raises inside the transaction exactly as it would outside it. What
+     * the rollback discards is only the effect -- which is the half that was
+     * never the point.
      */
     it('every scheduled job RUNS as adulis_jobs -- no job is stopped by a grant (v2.8 S20.1a)', async () => {
       const denied: string[] = [];
       const otherRaises: string[] = [];
+      const ROLLBACK = 'T22_PROBE_ROLLBACK';
+
+      /**
+       * TWO JOBS OPEN THEIR OWN TRANSACTION, so they cannot be wrapped in one:
+       * kysely answers "calling the transaction method for a Transaction is not
+       * supported" and the job raises before it has touched anything the grant
+       * would refuse. THAT IS A COVERAGE HOLE AND IT IS NAMED HERE RATHER THAN
+       * SWALLOWED -- a probe that silently skips is the shape that let D-270
+       * live for four tiers.
+       *
+       * Both are covered instead by a REAL run, in the E2 describe below, which
+       * exercises them against this suite's own fixtures. The assertion after
+       * the loop pins the set: if a third job starts managing its own
+       * transaction, this test says so instead of quietly covering one less.
+       */
+      const MANAGES_OWN_TRANSACTION = ['notification.send', 'notification.push_seller'];
+
       for (const job of SCHEDULED_JOBS) {
         const probe = createJobHarness(T0);
         try {
-          await job.run(probe.ctx);
+          await probe.ctx.db.transaction().execute(async (trx) => {
+            // The job's statements run on the transaction, as adulis_jobs.
+            await job.run({ ...probe.ctx, db: trx as unknown as typeof probe.ctx.db });
+            // Always undo. The probe asks whether the role MAY, never what happens.
+            throw new Error(ROLLBACK);
+          });
         } catch (e) {
           const msg = String((e as { message?: string })?.message ?? e);
-          // 42501 is insufficient_privilege. The message form is what pg
+          if (msg.includes(ROLLBACK)) continue; // rolled back as designed
+          // 42501 is insufficient_privilege. This is the message form pg
           // surfaces through kysely for a missing table or schema grant.
           if (/permission denied|42501|insufficient.privilege/i.test(msg)) {
             denied.push(`${job.name}: ${msg.split('\n')[0]}`);
@@ -277,10 +312,18 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
           await probe.close();
         }
       }
-      // Reported, not asserted: a non-permission raise is the job doing its job.
-      if (otherRaises.length) console.log('  jobs that raised for a NON-grant reason:', otherRaises);
-      expect(denied).toEqual([]);
+      // A non-permission raise is the job doing its job and is not asserted on;
+      // it is carried into the failure message below so a red is readable
+      // without a console statement the lint rules forbid.
+      expect({ denied, otherRaises }).toEqual({ denied: [], otherRaises });
       expect(SCHEDULED_JOBS.length).toBe(21);
+
+      // The coverage hole, pinned. Exactly these two may be un-probed, and only
+      // because they open their own transaction; each is run for real below.
+      const nested = otherRaises
+        .filter((r) => r.includes('transaction method for a Transaction'))
+        .map((r) => r.split(':')[0]);
+      expect(nested.sort()).toEqual([...MANAGES_OWN_TRANSACTION].sort());
     });
   });
 
@@ -585,17 +628,33 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       h.evidenceStorage.seed('evidence/keep', Buffer.from('keep'));
       h.evidenceStorage.seed('evidence/purge', Buffer.from('purge'));
 
-      const credsBefore = (
-        await admin.query(`SELECT count(*)::int AS n FROM financial.payout_credential`)
-      ).rows[0].n;
+      // SCOPED TO THIS SUITE'S OWN SELLER (T22, D-273). These two counts were
+      // fleet-wide `count(*) FROM financial.payout_credential`, taken around a
+      // job run and compared -- so ANY other suite creating or deleting a
+      // credential inside the window failed this arm, and c4-financial does
+      // exactly that in its own teardown. c4's own comment already records the
+      // collision happening ("E4's fleet-wide payout_credential count went
+      // 2 -> 1"), which is this defect observed from the other side.
+      //
+      // D-83: assert your own row is gone; assert theirs is not. The purge must
+      // leave THIS suite's credential alone, and that is what is asserted.
+      const ownCreds = async (): Promise<number> =>
+        (
+          await admin.query(
+            `SELECT count(*)::int AS n FROM financial.payout_credential pc
+               JOIN core.payout_details pd ON pd.id = pc.payout_details_id
+              WHERE pd.seller_id = $1`,
+            [SELLER],
+          )
+        ).rows[0].n;
+
+      const credsBefore = await ownCreds();
 
       const r = await financialPurgePaymentEvidence.run(h.ctx);
       expect(Number(r['purged'])).toBeGreaterThanOrEqual(1);
 
-      // THE ASSERTION THAT MATTERS: every payout credential still exists.
-      const credsAfter = (
-        await admin.query(`SELECT count(*)::int AS n FROM financial.payout_credential`)
-      ).rows[0].n;
+      // THE ASSERTION THAT MATTERS: this seller's payout credentials still exist.
+      const credsAfter = await ownCreds();
       expect(credsAfter).toBe(credsBefore);
       const mine = await admin.query(
         `SELECT count(*)::int AS n FROM financial.payout_credential WHERE payout_details_id=$1`,

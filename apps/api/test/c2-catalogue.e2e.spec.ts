@@ -191,13 +191,31 @@ describe('C2 — catalogue, media and stock', () => {
       `DELETE FROM core.order_payout_snapshot WHERE seller_id='${SELLER}'`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
       `DELETE FROM core.stock_event WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.product_social_post WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.social_post WHERE id NOT IN (SELECT social_post_id FROM core.product_social_post)`,
+      // WAS A TABLE-WIDE ORPHAN SWEEP (T22, D-273). It read
+      // "every social_post with no product link", which is precisely the shape
+      // e2-e6.jobs inserts -- three unlinked rows it then reads back -- so this
+      // teardown deleted another worker's fixtures mid-run. D-83: delete only
+      // your own.
+      //
+      // ONE STATEMENT, because the ordering is forced both ways:
+      // product_social_post carries the seller and the FK, so the link must go
+      // first, but once it is gone nothing identifies which posts were ours.
+      // The CTE deletes the links and hands their ids straight to the posts.
+      // core.social_post itself has no seller column -- id, platform,
+      // canonical_post_id, status, first_seen_at -- which is why the sweep was
+      // written table-wide in the first place.
+      `WITH mine AS (
+         DELETE FROM core.product_social_post WHERE seller_id='${SELLER}'
+         RETURNING social_post_id
+       )
+       DELETE FROM core.social_post WHERE id IN (SELECT social_post_id FROM mine)`,
       `DELETE FROM core.product_attribute_value WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.variant_attribute_value WHERE variant_id IN (SELECT id FROM core.product_variant WHERE seller_id='${SELLER}')`,
       `DELETE FROM core.product_image WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.product_video WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
-      `DELETE FROM core.media_lifecycle WHERE object_key LIKE 'products/%'`,
+      // Prefix-wide, not fixture-scoped: every suite's product media matches
+      // 'products/%'. Narrowed to this suite's own products (D-273).
+      `DELETE FROM core.media_lifecycle WHERE object_key LIKE 'products/%' AND object_key LIKE '%${SELLER}%'`,
       `DELETE FROM core.product_variant WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.product WHERE market_id='${M}'`,
       `DELETE FROM core.seller_fulfilment_method WHERE seller_id='${SELLER}'`,
