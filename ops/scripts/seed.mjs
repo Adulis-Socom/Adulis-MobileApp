@@ -24,11 +24,34 @@ if (!CONNECTION) {
   console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: docker compose up -d && cp .env.example .env');
   process.exit(2);
 }
-// This script writes a market and an account that can receive a code. The
-// fake adapters refuse to construct in production; this had no equivalent
-// refusal, so it inherits the same one.
-if (process.env.NODE_ENV === 'production') {
-  console.error('FAIL  refusing to seed with NODE_ENV=production. This script writes a market, a seller and an account that can receive a code.');
+/*
+ * THE ENVIRONMENTS THIS MAY RUN IN ARE ENUMERATED, NOT NEGATED (T23 Phase 5).
+ *
+ * It used to refuse `production` alone, inheriting the fake adapters' rule.
+ * That was correct and it was also a negated guard, which silently admits
+ * every value added to NODE_ENVS afterwards -- and T23 Phase 4 added one.
+ *
+ * STAGING IS REFUSED, AND NOT OUT OF CAUTION. This script writes a FIXTURE: a
+ * market called SEED, two sellers, five orders in assorted states, and an
+ * account that can receive a code. It exists so the e2e harness has something
+ * to assert against. A staging server carrying five seeded orders is a server
+ * where somebody eventually reasons from one -- reconciles it, quotes it in a
+ * bug report, or shows it to a person deciding whether the product works.
+ *
+ * A real environment gets its market from ops/runbooks/activate-market.md,
+ * which is the runbook that owns those columns and explains each one, and
+ * ops/runbooks/staging.md step 6 says so at the point of temptation.
+ */
+const SEEDABLE = ['development', 'test'];
+if (!SEEDABLE.includes(process.env.NODE_ENV ?? '')) {
+  console.error(
+    `FAIL  refusing to seed with NODE_ENV=${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}. ` +
+      `This script writes a FIXTURE -- a market, two sellers, five orders and an account that can ` +
+      `receive a code -- and only ${SEEDABLE.join(' and ')} may carry one.`,
+  );
+  console.error(
+    '      A real environment gets its market from ops/runbooks/activate-market.md.',
+  );
   process.exit(2);
 }
 

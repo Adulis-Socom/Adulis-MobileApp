@@ -4279,3 +4279,60 @@ Action:    NOTHING IN THE GATE IS CHANGED. Loosening an assertion to get a green
            THE FIX, when someone takes it: drive the browser over CDP instead of `--dump-dom`. Playwright is already a dependency of `apps/console` and already launches this exact binary successfully. It is a rewrite of the gate's spawn block, not a change to what it asserts.
 Verification: `msedge.exe --headless=new --dump-dom "data:text/html,<h1>hi</h1>" > out` -> 0 bytes, exit 0. `msedge.exe --version > out` -> 0 bytes. Both with and without the sandbox.
 Ruling needed: none. It is work with a known shape, and it is not T23's.
+
+### D-294 - The operator grant is the step that gets forgotten, and its absence is silent
+
+Severity:  MAJOR (fixed here -- the guard, not a defect in the product)
+Phase:     T23 - Phase 5
+Source:    core.operator_grant, empty in every environment that has ever existed, including this laptop's
+Found by:  Writing `ops/runbooks/staging.md` and asking what would actually stop somebody skipping step 7b
+Effect:    IT CANNOT BE SEEDED, AND THAT IS CORRECT. No founder account id exists until someone signs in through the ordinary phone-OTP path, so a migration referencing one would have to invent it; and a grant is an audited decision about a person, recorded append-only with a granter and a reason. `grant-founder-operator.md` has said all of this since T4 Phase F.
+           WHAT NOTHING SAID IS WHAT HAPPENS WHEN IT IS SKIPPED. `verification.read_attestation` derives `actor_role` from that table. WITH NO ROWS, NOBODY CAN REVIEW AN IDENTITY -- and identity review is one of the ten publication-readiness items, so NO SELLER CAN EVER PUBLISH ANYTHING. Claim review and the moderation queue fill the same way.
+           AND NOTHING ERRORS. No exception, no log line, no red gate. The queues simply grow, and the symptom arrives days later as "why can nobody publish", which is a question about the product rather than about a step somebody missed.
+           THE LOCAL DATABASE HAS THIS DEFECT TODAY. The check's first run reported it here, on this machine, after twenty-three work orders.
+Response:  FIXED - the runbook line became a command
+Action:    `ops/scripts/check-environment.mjs` asks the database what this environment can and cannot do. It is the answer to "a runbook line saying do not forget this is a rule that holds until the week someone is busy".
+           EVERY FINDING NAMES WHAT IS BLOCKED, NOT WHAT IS MISSING, and that is the whole design. "0 operators" is a fact nobody acts on. "Nobody can review an identity, so no seller can publish" is the same fact with its consequence attached, and the consequence is what makes someone fix it. The same rule covers the worker (`worker:install` skipped -> boots, logs healthy, fails on its first task), the market (SUSPENDED -> no new entry, existing trade continues) and the extensions.
+           IT ALSO SAYS WHEN A FALSE FLAG IS THE RIGHT ANSWER. `seller_registration_enabled = false` is reported as OK, explicitly, because the launch gate is green BECAUSE it is false -- an operator reading a checklist must not tidy that up.
+           AND THE SEED CAN NO LONGER BE MISTAKEN FOR A MARKET. `ops/scripts/seed.mjs` refused `production` alone; the list is now ENUMERATED (`development`, `test`), so `staging` is refused and so is any environment added later. It writes a FIXTURE -- a market called SEED, two sellers, five orders in assorted states -- and a staging server carrying five seeded orders is a server where somebody eventually reconciles one, or quotes it in a bug report, or shows it to a person deciding whether the product works.
+Verification: run against this laptop's database, the check reports exactly one blocker -- no operators -- plus the extensions, worker, market and storage sections green. `NODE_ENV=staging pnpm db:seed` refuses and names the runbook that owns a real market. `NODE_ENV=test` still seeds, and `db-reset` and `console-e2e` stay green.
+           ONE FINDING IN THE CHECK WAS WRONG ON ITS FIRST RUN, and the fix is the more useful half: it reported `citext` missing against a healthy database, because the extension list had been typed from memory and `citext` is not one of the four. It now reads the list out of `db/init/00-extensions.sql`. A checklist that invents an item is worse than no checklist -- the next person either fixes something that was never wrong, or learns to skim the output.
+Ruling needed: none.
+
+### D-295 - ops/runbooks/staging.md, and what staging will not be able to do on its first day
+
+Severity:  INFORMATIONAL
+Phase:     T23 - Phase 5
+Source:    WORK ORDER T23 S5
+Effect:    `ops/runbooks/staging.md` is nine steps from an empty Render account to a console that says "Staging" on its own sign-in screen. `deploy.md` covers every deploy after the first; this covers the once.
+           IT OPENS BY STATING THE BOUNDARY RATHER THAN ASSUMING IT, in the founder's own words: staging is a real server on the internet with no confidentiality, anyone who can read its logs can sign in as anyone, it is invite-only, it carries no real seller, and it is not publicly linked. Everything after that follows from the boundary instead of from caution -- which is why the "do not enter a real bank account" line is followed by the reason it does not matter (the keys are `generateValue` and nobody holds them) rather than by an exhortation.
+           THREE STEPS CANNOT BE AUTOMATED and each says why: the four extensions (Render runs no init directory), the LOGIN passwords (migration 01 creates every role NOLOGIN because a password in a migration is a secret in git), and the operator grant (D-294).
+           AND IT ENDS WITH WHAT STAGING STILL CANNOT DO, so the first person through is not surprised: it cannot send an SMS (O-5b -- every sign-in needs a shell, which is the single biggest difference from production), cannot take or pay a payment, cannot serve a storefront, and cannot be promoted to production, because `ops/render.yaml` describes staging only.
+Response:  WRITTEN, NEVER RUN
+Action:    The status line says "Nothing in it has been run", for the same reason `ops/render.yaml`'s first line says what it says. Phase 1 found no hosting credentials and parked (D-292); a runbook claiming to be proven by a run that never happened would be the documentation version of the file D-80 refused to write.
+           `ops/runbooks/README.md` now lists `deploy.md` too, which has been hand-run since T6 Phase D without ever appearing in its own index.
+Ruling needed: none.
+
+### D-296 - A one-in-three 429 at the default worker count, and D-280's open ruling now has evidence on its side
+
+Severity:  MAJOR (reproducible; `pnpm ci:local` is red roughly one run in three because of it)
+Phase:     T23 - Phase 5, found by running `pnpm ci:local` at the end of the order
+Source:    `core.rate_limit_bucket`, shared by every concurrently running spec file
+Found by:  `pnpm ci:local` failing the `test` gate after two full API suites had passed at `--maxWorkers=2`
+Effect:    A DIFFERENT SPEC EACH TIME, THE SAME SYMPTOM: `429 Too Many Requests` on `POST /v1/auth/otp/request`.
+             run A  t12-d89-invite-claim   the enumeration arm: `resend` answered 202 for one phone and 429 for the other, so the invariant test failed for a reason that has nothing to do with the invariant
+             run B  t8-market-from-device  "the declaration is RECORDED, not just checked": a plain 202 became 429
+           IT IS D-273'S SHAPE, AGAIN, WITH A THIRD SHARED RESOURCE. D-273 was database rows; D-281 was a file on disk; this is a COUNTER, and a counter is worse than either, because the victim is whichever spec happens to ask third.
+Response:  DIAGNOSED AS FAR AS MEASUREMENT GOES, AND NO FURTHER. What is eliminated is eliminated by evidence; what is left is labelled as a hypothesis, because the last three orders each lost time to a cause recorded before it was established.
+Action:    ELIMINATED, EACH BY A MEASUREMENT:
+             the PLATFORM daily ceiling      5000 hard, 2000 soft, and today's `core.otp_delivery_attempt` count is 47. Not close.
+             cross-spec phone reuse          every `+251...` literal in apps/api/test was extracted and counted. No number appears in two spec FILES; the duplicates are repeated uses within one file.
+             a stale bucket from a prior run  the suites that fail clear `bucket_key IN ('otp-request','otp-request-ip')` in `beforeEach`.
+             the worker count being innocent  `--maxWorkers=2`: 570/570 twice. Default: 570/570, 570/570, then 1 failed. Running either failing spec ALONE passes.
+           NOT ESTABLISHED, AND STATED AS THE HYPOTHESIS IT IS: `RateLimitService.consume` executes on `APP_DATABASE` -- the pool -- while its caller is inside `runIdempotent`'s transaction with a `trx` it does not use. That is verified from the code and is very likely deliberate (a limiter that rolls back with the request does not limit). Its consequence is not deliberate: THE INCREMENT SURVIVES A ROLLBACK, so a request that fails or is retried has still spent budget, and contention produces retries. Against a limit of 3 per hour, three retries is the whole allowance. That would be worker-count-dependent by construction, which fits every observation above -- and fitting is not the same as being shown, so it is written here as the next thing to instrument rather than as the cause.
+           NOTHING WAS CHANGED. Not the limiter, not the specs, not the worker count. A 429 that appears once in three runs is exactly the kind of red that gets "fixed" by a retry or a cap, and both would hide it.
+           AND IT ANSWERS D-280's OPEN RULING WITH NEW EVIDENCE. D-280 measured that `--maxWorkers=2` is roughly TWICE AS FAST as the default and then declined to pin it, on the argument that "a cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth." THIS IS THE NINTH. Pinning the cap today would buy a green gate and lose the only signal that this exists. The scoping is still the fix; the cap is still a way of not needing one.
+Verification: five full API suite runs this session -- two at `--maxWorkers=2` (570/570, 570/570) and three at the default (570/570, 570/570, 1 failed). Both failing specs pass when run alone. `pnpm ci:local` fails at the `test` gate when it fails.
+Ruling needed: TWO, and they are related.
+           (a) Should `consume` run inside the caller's transaction? It changes what a rolled-back request costs, in both directions, and the answer is a security decision about whether a failed attempt should be free.
+           (b) D-280's question stands unchanged: whether to pin the API test gate's worker count. This entry is evidence for NOT pinning it yet.
