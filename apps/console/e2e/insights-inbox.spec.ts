@@ -72,10 +72,22 @@ test.describe('SC-12 Analytics -- the wire, not the wireframe', () => {
     await expect(locked.getByRole('button')).toBeDisabled();
     await expect(page.getByText(/does not include this section/)).toBeVisible();
 
-    // Export exists on no wire; the absence is words, not a dead button.
-    // DELIBERATE KEEP: the worker and job table still do not exist (D-232).
-    await expect(page.getByText(/Exporting your data/)).toBeVisible();
+    /*
+     * EXPORT IS ABSENT IN BOTH DIRECTIONS NOW (T23 Phase 3, D-288).
+     *
+     * D-232 still holds and is why there is no control: the export worker and
+     * its job table do not exist, and a button faked at a 404 is worse than an
+     * absence. What changed is the SENTENCE. It advertised a paid feature
+     * ("Business") on a screen where it cannot be bought, and the plan
+     * comparison does not sell it either -- so it quoted a price to a seller
+     * with no way to pay it. Either sell it or say nothing.
+     *
+     * Asserted as a PAIR, because the failure this guards is either half
+     * arriving alone: a control with no service behind it, or the
+     * advertisement coming back.
+     */
     await expect(page.getByRole('button', { name: /export/i })).toHaveCount(0);
+    await expect(page.getByText(/Exporting your data/)).toHaveCount(0);
   });
 });
 
@@ -270,7 +282,11 @@ test.describe('SC-20/SC-21 -- a real conversation, both sides driven', () => {
       // reply is DRIVEN -- a real POST through the real key gate.
       await page.goto(`${base}/inbox`);
       await expect(page.locator('[data-screen="SC-20"]')).toBeVisible();
-      await expect(page.getByText(/Buyer names, message previews/)).toBeVisible();
+      // The sentence names the PERMANENT fact first and the backlog second:
+      // core.person has no name column, so a buyer name is not "yet" (D-288).
+      await expect(page.getByText(/Adulis stores no name for a buyer account/)).toBeVisible();
+      await expect(page.getByText(/Message previews, unread markers/)).toBeVisible();
+      await expect(page.getByText(/Buyer names[^.]*not reported by the server yet/)).toHaveCount(0);
       await page.locator('.conversation-row a').first().click();
 
       await expect(page.locator('[data-screen="SC-21"]')).toBeVisible();

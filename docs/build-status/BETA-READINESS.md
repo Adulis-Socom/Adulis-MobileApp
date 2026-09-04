@@ -239,19 +239,30 @@ about our engineering?
 | stock confidence owed | **DELETE** | A seller does not know what stock confidence is and does not need to. This sentence teaches them a concept solely to say it is missing. |
 | store profile logo owed | **KEEP** | Short, true, and answers the exact question a seller asks when they cannot find the logo field. |
 | store identity recheck owed | **KEEP** | Prevents a seller repeatedly hunting for a re-check button. Wrong count on screen without it. |
-| store couriers columns owed | **KEEP** | A seller staring at a list of bare phone numbers needs to know that is all there is. |
-| courier details owed | **KEEP** | Load-bearing: it tells the courier what to do instead ("call the number above"). The only gap sentence that ends in an instruction. |
+| store couriers columns owed | **KEEP, then FIXED (T23 S3)** | A seller staring at a list of bare phone numbers needs to know that is all there is -- true, and the reason it stays. But it said the NAMES were "not reported by the server yet", and `core.person` has no name column at all, so the wait it described has no end (D-288). Now states the policy, then what is genuinely owed. |
+| courier details owed | **KEEP, then FIXED (T23 S3)** | Load-bearing: it tells the courier what to do instead ("call the number above"). The only gap sentence that ends in an instruction, and it still ends in it. Its "buyer name ... not reported yet" clause was the same wrong fact as the two rows above (D-288). |
 | claims detail history owed | **KEEP** | A seller assembling a case needs to know the trail shown is partial before they rely on it. |
-| inbox columns owed | **KEEP** | Same reason. The list is thin enough to look broken without it. |
+| inbox columns owed | **KEEP, then FIXED (T23 S3)** | Same reason. The list is thin enough to look broken without it. Same correction: "Buyer names ... not reported by the server yet" promised a column the schema will never carry (D-288). |
 | trade orders no buyer name | **KEEP** | Not a gap sentence at all -- it states a deliberate privacy decision. Reads as an apology for a feature; it is a policy. Worth rewording so it does not sit among the "not yet" sentences, but never deleted. |
 | trade detail no buyer name | **KEEP** | Same, shorter. Correct as written. |
-| insights analytics export owed | **DELETE** | Advertises a paid feature ("Business") on a screen where it cannot be bought, and the plan comparison does not sell it either. Either sell it or say nothing. |
+| insights analytics export owed | **DELETED (T23 S3)** | Advertises a paid feature ("Business") on a screen where it cannot be bought, and the plan comparison does not sell it either. Either sell it or say nothing. Carried out; D-226's absence of a faked control stays. |
 | insights trust wire owed | **KEEP** | The seller's level drives what they can do; a blank panel with no explanation is worse. Retire it with the engine behind it. |
 
 Twelve KEEP, two FIX, four DELETE -- and as of T20 S4 the first of the twelve
 has retired, which is the mechanism working rather than a change of verdict. The
 remaining eleven are honest and should retire the same way, the day their gap
-closes. Deleting the four removes four places where the console
+closes.
+
+> **T23 Phase 3 re-triaged the ten that were still standing, and three KEEPs
+> came back FIX.** Not because the verdict was wrong -- each of the three does
+> earn its place on the screen -- but because all three were triaged against a
+> fact that is not true. They said a NAME was "not reported by the server yet".
+> `core.person` carries an id and a hash; `core.account` carries a phone.
+> **There is no name column anywhere for a person**, so "yet" described a wait
+> with no end. The trade pair two rows below already said this correctly, and
+> this table noticed that about the trade pair without noticing the other three
+> were contradicting it (D-288). The other six KEEPs were re-checked against the
+> tree, not carried forward, and all six are still true. Deleting the four removes four places where the console
 talks about itself instead of to the seller, and costs nothing.
 
 ---
