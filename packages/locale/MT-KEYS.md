@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-764 keys:
+765 keys:
 
 - `app.title`
 - `health.ok`
@@ -510,6 +510,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `console.admin.payout.pending_heading`
 - `console.admin.payout.pending_details`
 - `console.admin.payout.activates_at`
+- `console.admin.payout.activation_due`
 - `console.admin.payout.before_heading`
 - `console.admin.payout.fact_24h`
 - `console.admin.payout.fact_previous_stays`

@@ -580,6 +580,7 @@ export const am: Catalogue = {
   'console.admin.payout.pending_heading': 'Pending change',
   'console.admin.payout.pending_details': '{bank} - ending {last4}',
   'console.admin.payout.activates_at': 'Activates at {time}.',
+  'console.admin.payout.activation_due': 'Activation is due. This page refreshes itself until the new details take effect.',
   'console.admin.payout.before_heading': 'Before changing payout details',
   'console.admin.payout.fact_24h': 'The new account takes effect in 24 hours, not now.',
   'console.admin.payout.fact_previous_stays': 'The current details stay in force until then.',

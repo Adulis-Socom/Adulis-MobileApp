@@ -27,6 +27,12 @@
  * and the 409's message remains the backstop if a lock lands mid-session. One
  * cause-neutral code with a reason slot (PAYOUT_LOCKED); only the sentence
  * differs, and that is the locale's job.
+ *
+ * THIS SCREEN'S GET NO LONGER ACTIVATES ANYTHING (T21 S1, D-268). Opening the
+ * page used to be what moved a due PENDING row to ACTIVE. It does not any more:
+ * `payout.activate_due` owns activation. What that costs is a window -- up to
+ * one job period -- in which the deadline has passed and the server still says
+ * PENDING, and the deadline-driven refetch below is what pays it, per S3.1.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
@@ -97,6 +103,39 @@ export function Payout() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * THE DEADLINE DRIVES A REFETCH, AND DECIDES NOTHING (T21 S1, D-268).
+   *
+   * Activation used to happen on this screen's own GET, so opening the page
+   * was what moved a due row. T21 S1 dropped that: `payout.activate_due` owns
+   * activation now, and between `activates_at` and the job's next sweep the
+   * server still says PENDING. Without this effect the panel would sit on a
+   * deadline in the past until the seller reloaded by hand -- which is the
+   * "pending forever" the order named.
+   *
+   * ADU-CON-03 S3.1 is the rule and it is followed literally: "A countdown may
+   * DISPLAY a server-supplied deadline; it may not DECIDE anything when the
+   * countdown reaches zero -- it refetches and shows what the server says."
+   * So this schedules a refetch AT the deadline, then keeps asking while the
+   * server still reports PENDING, and renders whatever comes back. It computes
+   * no state, invents no thirteenth ScreenState, and adds no ACTIVATING value
+   * the enum does not have -- all three of which S3's closed set forbids.
+   */
+  const pendingActivatesAt = payout?.pending?.activates_at ?? null;
+  useEffect(() => {
+    if (pendingActivatesAt === null) return;
+    const msUntilDue = new Date(pendingActivatesAt).getTime() - Date.now();
+    if (msUntilDue > 0) {
+      // One refetch, a second after the deadline. Nothing happens before it.
+      const t = setTimeout(() => void load(), msUntilDue + 1000);
+      return () => clearTimeout(t);
+    }
+    // Due, and the server has not swept yet. Ask again until it has; the
+    // effect tears down as soon as `pending` stops being a due row.
+    const t = setInterval(() => void load(), 30_000);
+    return () => clearInterval(t);
+  }, [pendingActivatesAt, load]);
 
   const change = async () => {
     if (!sellerId) return;
@@ -213,6 +252,17 @@ export function Payout() {
               })}
             </strong>
           </p>
+          {/* ADDED, never substituted. The server-supplied deadline above stays
+              on screen and stays true; this only says that it has passed and
+              that the page is still asking. Replacing the sentence would be the
+              console asserting an activation the server has not reported, which
+              is the half of S3.1 that is forbidden rather than the half that is
+              required. Rendered from the same value the refetch effect watches,
+              so the note and the timer can never disagree. */}
+          {pendingActivatesAt !== null &&
+          new Date(pendingActivatesAt).getTime() <= Date.now() ? (
+            <p data-payout-activation="DUE">{en['console.admin.payout.activation_due']}</p>
+          ) : null}
         </section>
       ) : null}
 

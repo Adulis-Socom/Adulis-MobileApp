@@ -207,10 +207,33 @@ export class FinancialService {
 
   // ------------------------------------------------------------------ payout
 
-  /** GET /v1/seller/payout — account_last4 only; core holds nothing more. */
+  /**
+   * GET /v1/seller/payout — account_last4 only; core holds nothing more.
+   *
+   * THIS READ NO LONGER ACTIVATES (T21 S1, D-268). It used to run
+   * `core.fn_activate_due_payout` here, inside the handler's transaction, which
+   * made it D-74's twin: a failure later in the read rolled back an activation
+   * it had just performed (D-255, registered in T20 S6.1 and ruled on here).
+   *
+   * THE RULING DROPPED THE CALL RATHER THAN MOVING IT TO ITS OWN CONNECTION.
+   * A separate connection fixes the rollback and leaves a GET whose side effect
+   * depends on whether anyone opened a screen — the shape that made the
+   * interval unbounded in the first place — and a write outside the request's
+   * transaction cannot be rolled back when the request SHOULD fail, which is
+   * the mirror of the same bug. `payout.activate_due` (ADU-AUTH-01 v2.7 S20.1,
+   * registered through RULED_JOBS) owns activation, every five minutes, in its
+   * own transaction, per seller. Against a twenty-four hour delay the lazy path
+   * bought freshness nobody can perceive.
+   *
+   * [!] THIS CONTRADICTS AN INSTALLED BINDING SENTENCE. ADU-AUTH-01 v2.7 S20.1
+   * says "The lazy path stays -- it costs nothing and makes the screen correct
+   * at the moment it is read." That sentence is now false by founder ruling
+   * (T21 S1), and the document is NOT reissued. The debt is registered as
+   * D-268 and listed in RULINGS-NEEDED; do not read this comment as authority
+   * over the document without that entry.
+   */
   async getPayout(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
     await assertPermission(trx, req, 'seller.payout:read');
-    await sql`SELECT core.fn_activate_due_payout(${req.ctx?.sellerId})`.execute(trx);
     const r = await sql<Record<string, unknown>>`
       SELECT id, bank_code, account_last4, state::text, requested_at,
              activates_at, activated_at

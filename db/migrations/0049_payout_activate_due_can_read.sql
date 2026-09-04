@@ -1,0 +1,51 @@
+-- ============================================================================
+-- 0049 -- payout.activate_due could never run (WORK ORDER T21 S1 -- D-270)
+--
+-- Transcribes: ADU-AUTH-01 v2.7 S20.1 (payout activation), which requires the
+-- activation to run on a job in "its own transaction, never lazily inside a
+-- handler's". It adds no rule of its own -- it supplies the one grant that
+-- requirement needs and 0022 did not give. The GRANT of EXECUTE on
+-- core.fn_activate_due_payout stays exactly as 0022 wrote it.
+--
+-- THE JOB T20 BUILT TO BOUND THE PAYOUT DELAY HAS NEVER ACTIVATED ANYTHING.
+--
+-- 0022 granted adulis_jobs EXECUTE on core.fn_activate_due_payout, which is
+-- SECURITY DEFINER and therefore needs no table grant of its own. But the job
+-- does not start with that function. It starts by FINDING the due sellers:
+--
+--     SELECT DISTINCT seller_id FROM core.payout_details
+--      WHERE state = 'PENDING' AND activates_at IS NOT NULL AND activates_at <= now()
+--
+-- -- a direct read of core.payout_details, on which adulis_jobs held nothing.
+-- Every tick raised `permission denied for table payout_details` on its FIRST
+-- statement, which is outside the per-seller try/catch, so the sweep died whole
+-- rather than skipping a seller. Verified against the running database:
+--   has_table_privilege('adulis_jobs','core.payout_details','SELECT') = false
+--   has_function_privilege('adulis_jobs','core.fn_activate_due_payout(uuid)','EXECUTE') = true
+-- The grant it was given was real; it was the wrong one, and only by itself.
+--
+-- WHY NOBODY SAW IT. The job shipped in T20 S6.1 with three tests, and all
+-- three assert only that its NAME is registered and scheduled -- nothing ever
+-- called run(). A job with no behavioural test is a job nobody has run, and
+-- "registered" and "works" are different claims that looked the same in the
+-- suite. T21 S1 added the behavioural test, and the test failed on its first
+-- execution, which is the only reason this entry exists.
+--
+-- WHY IT IS URGENT RATHER THAN MERELY WRONG. Until T21 S1 the lazy call on
+-- GET /v1/seller/payout was the ONLY thing that actually activated a payout
+-- change -- the broken job was masked by the very defect (D-255) the ruling
+-- removed. Ship the removal without this grant and payout changes never
+-- activate at all: a seller's new bank details would sit PENDING forever and
+-- the money would keep going to the old account.
+--
+-- SELECT ONLY. The job reads to find work and then hands the work to the
+-- SECURITY DEFINER function, which does every write under its own rights.
+-- adulis_jobs gets no INSERT, no UPDATE, no DELETE here, because it needs
+-- none: the boundary that made the function SECURITY DEFINER is the same
+-- boundary that says the sweeper may look but not touch. This mirrors 0032's
+-- `GRANT SELECT ON core.session TO adulis_jobs` and 0043's grant on
+-- core.platform_otp_budget -- a job that must find its own work is given
+-- exactly the read that finds it.
+-- ============================================================================
+
+GRANT SELECT ON core.payout_details TO adulis_jobs;
