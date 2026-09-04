@@ -348,6 +348,44 @@ below when they happen.
 > `0023:510`, which needs `adulis_migrate` to hold CREATE on schema `financial`
 > where `0023:499` grants only USAGE — is untouched by this GUC by inspection.
 > D-297 stays open.
+>
+> ### STEPS 2 AND 3 ARE NOW GREEN ON RENDER (T23, D-300)
+>
+> Run on a third instance with **only `adulis_migrate` provisioned** and migration
+> 0001 left to create the other five roles:
+>
+> **All fifty migrations applied as a non-superuser.** `node-pg-migrate ... up`
+> exit 0, 117 tables, ten schemas with the correct owners, and **`pnpm db:check`
+> 16 PASS / 0 PENDING / 0 FAIL** against the result.
+>
+> Which half of the GUC each failure needs, decomposed over four runs:
+>
+> | `createrole_self_grant` | result |
+> |---|---|
+> | `set, inherit` | **50/50 PASS**, `db:check` 16 PASS |
+> | `set` only | fails in 0001, `permission denied for schema verification` -> needs **INHERIT** |
+> | `inherit` only | fails in 0001, `must be able to SET ROLE "adulis_verification"` -> needs **SET** |
+> | neither | fails in 0001, SET is reached first |
+>
+> **Both halves are required and both bite inside migration 0001** -- SET for
+> `CREATE SCHEMA verification AUTHORIZATION` at 0001:86, INHERIT for creating the
+> Appendix A enum types inside that schema. Line 85 succeeds because a role can
+> always set-role to itself, which is also why the 68 `OWNER TO adulis_migrate`
+> statements were never at risk.
+>
+> **One failure needs neither, and nothing in the repo anticipates it:**
+> `CREATE TABLE "public"."pgmigrations"` -> `permission denied for schema public`,
+> raised **before migration 0001 is read**. PostgreSQL 15+ revoked PUBLIC's CREATE
+> on schema `public`. It needs `GRANT CREATE ON SCHEMA public TO adulis_migrate`.
+>
+> **The five-step contract, as measured:** owner creates `adulis_migrate` with
+> LOGIN and CREATEROLE; `GRANT CREATE, CONNECT ON DATABASE`; `GRANT CREATE ON
+> SCHEMA public`; `ALTER ROLE adulis_migrate SET createrole_self_grant = 'set,
+> inherit'`; **and do NOT create the other five roles** -- pre-creating them
+> leaves the GUC inert and breaks the deploy silently.
+>
+> **Step 3's blocker is also stale.** This file says `db:check` prints "0 checks
+> present (pre-v1.7)". It is 16 checks now, and they pass.
 
 ### Render transcript — 2026-09-04, 8 of 8, non-superuser
 
