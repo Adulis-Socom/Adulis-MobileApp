@@ -52,6 +52,41 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
+  /**
+   * TWO PROJECTS, AND THE SECOND ONE IS THE POINT (T22 Phase 5).
+   *
+   * Until T22 not one test in this suite ran in dark mode. Playwright had a
+   * single project, no `colorScheme` and no `emulateMedia` anywhere -- so every
+   * one of ADU-CON-03's six safety rules was asserted in exactly the mode a
+   * developer looks at, and the mode a seller might not be in was covered by
+   * nobody.
+   *
+   * That matters more than it sounds, because THREE of the six are enforced by
+   * ABSENCE -- no `.decision` variant, no colour rule on a badge, a `Deadline`
+   * that returns null -- and a mode is precisely where an absence stops being
+   * absent. The focus ring is the worked example: its token aliases the accent,
+   * and until T21 it had NO DARK VALUE AT ALL (D-271), which is a 2px ring the
+   * colour of the page it sits on. Nothing here could have caught that.
+   *
+   * The dark project re-runs ONLY the @safety tests. Running the whole suite
+   * twice would double the gate for coverage nobody asked for; running the six
+   * rules twice is the requirement the order actually sets.
+   *
+   * It needs no application change: the console has no theme switch of its own,
+   * and tokens.css keys dark off `prefers-color-scheme`, which is what
+   * `colorScheme` sets.
+   */
+  projects: [
+    {
+      name: 'light',
+      use: { colorScheme: 'light' },
+    },
+    {
+      name: 'dark - the six rules only',
+      use: { colorScheme: 'dark' },
+      grep: /@safety/,
+    },
+  ],
   webServer: {
     command: `node e2e/serve.mjs ${PORT}`,
     url: `http://localhost:${PORT}/`,
