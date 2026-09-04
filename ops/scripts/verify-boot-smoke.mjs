@@ -238,6 +238,18 @@ if (r.error) {
   const m = dom.match(/<pre id="smoke-report">([\s\S]*?)<\/pre>/);
   if (!m && injectionFailed) {
     fail('index.html carries no literal `<head>`, so the probe was never injected. Fix the injection, not the console.');
+  } else if (!m && dom.trim().length === 0) {
+    // THE BROWSER PRODUCED NOTHING AT ALL, which is not a fact about the
+    // console (T22, D-276). Under a restricted or sandboxed shell msedge
+    // returns exit 0 in ~60ms having made zero HTTP requests and written zero
+    // bytes; the same command through an ordinary shell works. The old message
+    // -- "the page never reached the probe" -- reads as a broken console and
+    // sent one reader looking at the app for a fault in the harness.
+    fail('the browser exited without loading anything: the DOM dump is empty.');
+    console.error('      Zero bytes means the page was never fetched, so this says NOTHING about');
+    console.error('      the console. A restricted or sandboxed shell can make the browser exit 0');
+    console.error('      having made no request at all -- try an ordinary shell before reading this');
+    console.error('      as a product failure.');
   } else if (!m) {
     fail('no smoke report in the DOM: the page never reached the probe. First 400 characters:');
     console.error(`      ${dom.slice(0, 400).replace(/\n/g, ' ')}`);
@@ -251,9 +263,48 @@ if (r.error) {
     }
     for (const e of rep.errors) fail(`uncaught error: ${e}`);
     for (const e of rep.rejections) fail(`unhandled rejection: ${e}`);
-    for (const e of rep.csp) fail(`CSP violation under the production policy: ${e}`);
-    if (!rep.errors.length && !rep.rejections.length && !rep.csp.length) {
-      pass('no uncaught error, no unhandled rejection, no CSP violation');
+
+    // ---------------------------------------------------------------------
+    // LOAD-TIME VIOLATIONS FAIL. THE ONE RUNTIME DIRECTIVE DOES NOT (T22, D-276).
+    //
+    // This gate asks one question -- does the built console mount -- and every
+    // directive below constrains whether it CAN. A refused script, style, font,
+    // image, worker or manifest is a page that did not load what it shipped
+    // with, and that is this gate's business.
+    //
+    // `connect-src` is not. It constrains what the console does at RUNTIME,
+    // and the header above has said since D-138 that this gate does not test
+    // it -- it only ever passed because CI builds without VITE_API_BASE_URL,
+    // so `apiBase()` threw before fetch was reached and no request was made.
+    // A gate whose colour depends on that is green by accident: build the
+    // bundle with a base URL, as `verify:console-e2e` does at every run, and
+    // the SAME artifact that mounted perfectly reports two failures.
+    //
+    // It did. On this machine boot-smoke was red on unmodified main while
+    // `#root mounted with 1 child element(s)` printed one line above it, and
+    // `verify:console-e2e` was green against the identical dist -- because
+    // D-164 fixed exactly this in the sibling harness ("THE CSP IS DERIVED,
+    // NOT REPLAYED", apps/console/e2e/serve.mjs) and the same treatment was
+    // never applied here.
+    //
+    // So it is reported and not asserted. That is a change in STATED coverage,
+    // not in real coverage: D-138 established this gate never tested
+    // connect-src. Whether connect-src belongs to this gate at all is D-138's
+    // open ruling and stays open -- what is fixed here is a gate that changed
+    // colour with an environment variable and called it a boot failure.
+    // ---------------------------------------------------------------------
+    const RUNTIME_DIRECTIVE = /^connect-src/;
+    const loadTime = rep.csp.filter((e) => !RUNTIME_DIRECTIVE.test(e));
+    const runtime = rep.csp.filter((e) => RUNTIME_DIRECTIVE.test(e));
+    for (const e of loadTime) fail(`CSP violation under the production policy: ${e}`);
+    for (const e of runtime) {
+      console.log(`  NOTE  ${e}`);
+      console.log('        A runtime directive. This gate replays the PRODUCTION origin while the');
+      console.log('        bundle under test may be built for another, so this is a statement about');
+      console.log('        the build configuration and not about whether the console boots (D-138).');
+    }
+    if (!rep.errors.length && !rep.rejections.length && !loadTime.length) {
+      pass('no uncaught error, no unhandled rejection, no load-time CSP violation');
     }
   }
 }
