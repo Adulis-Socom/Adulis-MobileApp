@@ -4261,3 +4261,21 @@ Effect:    WHAT LANDED, all of it verifiable on this machine:
 Response:  REPORTED
 Action:    None owed here. The blueprint is applied by a person with an account, and the first line of the file tells them what to delete when they do.
 Ruling needed: none.
+
+### D-293 - boot-smoke cannot run on this machine, and the reason is msedge.exe, not the console
+
+Severity:  MINOR (environmental; the gate is untouched and the property it guards is covered elsewhere today)
+Phase:     T23 - Phase 4
+Source:    ops/scripts/verify-boot-smoke.mjs spawns `msedge.exe --headless=new --dump-dom` and reads stdout from a file
+Found by:  `pnpm ci:local` at the end of T23 Phase 4
+Effect:    The gate reports "the browser exited without loading anything: the DOM dump is empty", which its own message correctly warns "says NOTHING about the console".
+           THE BROWSER IS THE VARIABLE, AND THE PROOF IS TWO LINES LONG. The same command against `data:text/html,<h1>hi</h1>` -- no server, no policy, no bundle -- also produces ZERO BYTES. So does `msedge.exe --version`. The launcher writes nothing to a redirected stdout from this shell at all, which is msedge.exe detaching from the console on Windows; 55 Edge processes were already running, and a fresh `--user-data-dir` did not change it. `--headless`, `--headless=old` and `--headless=new` all behave identically.
+           IT IS NOT THE SANDBOX. Re-run with the sandbox disabled: same zero bytes.
+           IT IS NOT T23's CHANGES. A `data:` URL exercises none of them.
+Response:  DIAGNOSED, NOT WORKED AROUND
+Action:    NOTHING IN THE GATE IS CHANGED. Loosening an assertion to get a green on one laptop is how a gate becomes decorative, and this one is already the only gate that RUNS the console rather than reading it.
+           CI IS UNAFFECTED, which is why this is MINOR: `.github/workflows/ci.yml` runs on `ubuntu-latest`, where the candidate list resolves to chromium or google-chrome, and neither has the Windows launcher's detach behaviour.
+           AND THE PROPERTY IS COVERED TODAY ANYWAY. `verify:console-e2e` serves the SAME built `apps/console/dist` and drives the SAME Edge -- over CDP, through Playwright, which is why it works -- and 88 tests passed against it in this phase. A console that did not mount could not have produced them. That is not a reason to leave boot-smoke broken; it is the reason nothing was rushed to fix it.
+           THE FIX, when someone takes it: drive the browser over CDP instead of `--dump-dom`. Playwright is already a dependency of `apps/console` and already launches this exact binary successfully. It is a rewrite of the gate's spawn block, not a change to what it asserts.
+Verification: `msedge.exe --headless=new --dump-dom "data:text/html,<h1>hi</h1>" > out` -> 0 bytes, exit 0. `msedge.exe --version > out` -> 0 bytes. Both with and without the sandbox.
+Ruling needed: none. It is work with a known shape, and it is not T23's.
