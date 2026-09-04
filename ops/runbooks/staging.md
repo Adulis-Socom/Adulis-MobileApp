@@ -1,8 +1,6 @@
 # Runbook — standing staging up for the first time
 
-**Status: BLOCKED.** Written when Phase 1 was parked for want of a hosting account; the
-probe has since run against a real Render instance and **failed** (D-297), and the first
-deploy has no `DATABASE_URL_MIGRATE` (D-298). **Nothing in it has been run.**
+**Status: ready to follow. Nothing in it has been run.** D-297 and D-298 are CLOSED by the T23 run: fifty migrations applied as `adulis_migrate`, non-superuser, `db:check` 16/0/0. The provisioning contract that makes it work is step 0 below.
 **Frequency:** once. Redeploys are [`deploy.md`](deploy.md).
 **Owner:** CEO. **Source:** WORK ORDER T23 S4/S5 · ADU-CON-02 v3.2 S18, S19 · `ops/render.yaml`.
 
@@ -42,26 +40,47 @@ You need three things this repository cannot give you:
 
 ---
 
-> # [!] BLOCKED — do not follow this runbook yet (T23 Phase 1, D-297 and D-298)
+## Step 0 -- the provisioning contract, and it is the whole difference
+
+**ADU-DB-01 v1.19 S4.4b.1, measured.** Fifty migrations ran under exactly these five lines
+with `rolsuper=f`. Reproduced verbatim rather than referenced -- five lines are shorter
+than a pointer to them, and a pointer is a second place to go stale.
+
+```text
+1  owner creates adulis_migrate with LOGIN and CREATEROLE
+2  GRANT CREATE, CONNECT ON DATABASE <db> TO adulis_migrate
+3  GRANT CREATE ON SCHEMA public TO adulis_migrate
+4  ALTER ROLE adulis_migrate SET createrole_self_grant = 'set, inherit'
+5  do NOT create the other five roles -- 0001 must
+```
+
+> ### [!] Line 5 is a PROHIBITION, not a sequencing note
 >
-> Written before the provider probe could be run. The probe has since run against
-> a real Render instance and **failed**, and two blockers stand between this page
-> and a working staging server. Both need a founder ruling, not an edit.
+> **Do NOT pre-create the five roles. `0001` must.**
 >
-> **D-297 — the migrations cannot run as a managed role.** `CREATE SCHEMA ...
-> AUTHORIZATION`, `SET ROLE`, `CREATE TABLE` in a foreign-owned schema and 86
-> `ALTER ... OWNER TO` statements all require the executor to be a superuser, or
-> to hold membership it is never granted. Managed Postgres does not give you
-> superuser. **Step 4's `pnpm db:migrate` stops at migration 0001 and rolls the
-> whole run back**, so not one of the fifty migrations applies.
+> `createrole_self_grant` grants membership only in roles **the role itself creates**.
+> `0001:60-62` guards role creation with `IF NOT EXISTS`, so if you create them first,
+> **`adulis_migrate` creates nothing, receives nothing, and holds zero membership in the
+> other five.**
 >
-> **D-298 — the first deploy has no `DATABASE_URL_MIGRATE`.** Step 1 defers it to
-> step 3, step 3 defers the roles to the first `db:migrate`, and step 4 *is* that
-> deploy. The circle has no entry point. This blocks the deploy even if D-297 is
-> fixed.
+> **The GUC stays set. It stays visible in `SHOW`. It grants nothing.**
 >
-> Everything else below — the boundary, the extensions, the OTP file, the
-> operator grant, what staging still cannot do — is unaffected and still correct.
+> An earlier version of this runbook let the first deploy create the roles and was
+> therefore **right by accident** -- it read as a sequencing convenience, so the obvious
+> tidy-up was to provision all six together up front. That tidy-up breaks the deploy
+> silently. **A step whose correctness depends on nobody doing the obvious thing will
+> eventually be done**, which is why the reason is written here beside the instruction
+> rather than in a document somebody may not open.
+
+**Line 3 fails before `0001` is read.** `CREATE TABLE "public"."pgmigrations"` ->
+`permission denied for schema public`. PostgreSQL 15 revoked `PUBLIC`'s `CREATE` on
+schema `public`, and `CREATE` on the DATABASE is a different privilege.
+
+**Both halves of line 4 are required** -- `set` alone fails in `0001` on
+*permission denied for schema verification*; `inherit` alone fails on
+*must be able to SET ROLE "adulis_verification"*.
+
+---
 
 ## Step 1 — apply the blueprint
 
@@ -77,7 +96,8 @@ none of them should ever be:**
 
 | prompt | what to give it |
 |---|---|
-| `DATABASE_URL`, `DATABASE_URL_JOBS`, `DATABASE_URL_MIGRATE` | three different roles — **step 3 creates them**, so leave these until then. **D-298: this is circular and unresolved** — step 4's pre-deploy needs `DATABASE_URL_MIGRATE` before step 3 can produce it |
+| `DATABASE_URL_MIGRATE` | **`adulis_migrate`, created by step 0** — it exists before the first deploy, which is what closes D-298's circularity |
+| `DATABASE_URL`, `DATABASE_URL_JOBS` | `adulis_app` and `adulis_jobs` — **created by migration `0001`**, so these are filled in at step 3, after the first deploy |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the Cloudflare R2 credentials for the **staging** buckets |
 | `R2_MEDIA_PUBLIC_ORIGIN` | the public origin of `adulis-staging-media` |
 | `SMS_PRIMARY_API_KEY`, `SMS_SECONDARY_API_KEY` | anything — no vendor exists, and nothing reads them |
@@ -103,31 +123,28 @@ psql "$OWNER_URL" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
 ## Step 3 — give the runtime roles a password
 
-Migration 01 creates all six roles `NOLOGIN`, because **a password in a migration is a
-secret in git**. Granting LOGIN is a provisioning step, run once per environment against
+Migration `0001` creates **five** roles `NOLOGIN`, because **a password in a migration is
+a secret in git**. Granting LOGIN is a provisioning step, run once per environment against
 the owner connection:
 
 ```sql
-ALTER ROLE adulis_app     LOGIN PASSWORD '<generated>';
-ALTER ROLE adulis_jobs    LOGIN PASSWORD '<generated>';
-ALTER ROLE adulis_migrate LOGIN PASSWORD '<generated>';
+ALTER ROLE adulis_app  LOGIN PASSWORD '<generated>';
+ALTER ROLE adulis_jobs LOGIN PASSWORD '<generated>';
 ```
+
+**`adulis_migrate` is not in that list and must not be.** It was created with `LOGIN` at
+step 0, before the first deploy, because the deploy connects as it.
 
 Generate three different values, put each in the matching Render environment variable from
 step 1, and **do not write them down anywhere this repository can reach**.
 
-> Roles do not exist until `db:migrate` has run at least once. If these `ALTER ROLE`
-> statements fail with "role does not exist", let the first deploy's pre-deploy run, then
-> come back to this step.
+> These two roles do not exist until `db:migrate` has run, which is correct and is **not**
+> a circularity: `adulis_migrate` already exists from step 0 and is what runs the deploy.
+> If they fail with "role does not exist", the first deploy has not completed yet.
 
 ---
 
 ## Step 4 — the first deploy
-
-> **This step is where D-297 stops the deploy.** `db:migrate` fails at migration
-> 0001 line 85 with `must be able to SET ROLE "adulis_migrate"`, and because
-> node-pg-migrate runs the whole `up` in one transaction, nothing at all is
-> applied. Do not work around it here; the fix is a privilege-model decision.
 
 The blueprint's `preDeployCommand` runs both steps that nothing else will:
 

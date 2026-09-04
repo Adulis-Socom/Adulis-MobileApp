@@ -35,13 +35,41 @@
  * 114 names, for the reason the document gives: reproducing them "would be a
  * fourth copy of a fact that has already drifted three times".
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DOC = path.join(root, 'docs', 'ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md');
+/*
+ * THE INSTALLED REVISION, RESOLVED -- NOT PINNED (T24, D-304).
+ *
+ * This line named v1.16 literally, so installing v1.19 turned the gate red
+ * with "the installed document is missing" -- a gate reporting a defect in the
+ * document set when the only thing wrong was its own hardcoded filename.
+ *
+ * The same failure the GOVERNED list in verify-docs-ascii.mjs had before T22
+ * gave it a directory comparator, and the same one ADU-DB-01 keeps registering
+ * about itself: a fact written in two places drifts at the next revision.
+ *
+ * Newest ADU-DB-01 at the top of docs/, compared numerically so v1_10 beats
+ * v1_9. docs/superseded/ is not searched, which is what makes "newest on disk"
+ * mean "installed".
+ */
+const revOf = (base) => {
+  const m = /_v(\d+)_(\d+)/.exec(base);
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : -1;
+};
+const dbDocs = readdirSync(path.join(root, 'docs'))
+  .filter((f) => f.startsWith('ADU-DB-01_') && f.endsWith('.md'))
+  .sort((a, b) => revOf(b) - revOf(a));
+if (dbDocs.length === 0) {
+  console.error('FAIL  no ADU-DB-01 revision is installed at the top of docs/.');
+  process.exit(1);
+}
+const DOC = path.join(root, 'docs', dbDocs[0]);
+const DOC_REV = /_v(\d+)_(\d+)/.exec(dbDocs[0]);
+const DOC_LABEL = DOC_REV ? `v${DOC_REV[1]}.${DOC_REV[2]}` : dbDocs[0];
 const FIXTURE = path.join(root, 'db', 'checks', 'fixtures', 'appendix-a.json');
 
 /** The nine schemas that hold tables. The tenth, `jobs`, is graphile-worker's. */
@@ -57,7 +85,7 @@ const fail = (m) => {
   console.error(`  FAIL  ${m}`);
 };
 
-console.log('\nADU-DB-01 v1.16 -- the appendices agree with what generated them\n');
+console.log(`\nADU-DB-01 ${DOC_LABEL} -- the appendices agree with what generated them\n`);
 
 if (!existsSync(DOC)) {
   console.error(`FAIL  ${path.relative(root, DOC)} is missing. This gate reads the installed document.`);
