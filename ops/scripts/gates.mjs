@@ -472,6 +472,30 @@ const GATES = [
    * on one machine, in one direction.
    */
   { id: 'tokens', title: 'index.ts and tokens.css agree, both modes, both directions', cmd: ['pnpm', 'verify:tokens'] },
+
+  /**
+   * APPENDED, for the reason given three times above.
+   *
+   * THE FIRST GATE OVER A FILE NOBODY HAS EVER RUN. `ops/render.yaml` was
+   * kept OUT of this repository for seventeen orders by a good argument
+   * (D-80): "inventing a render.yaml that has never been applied would be a
+   * file that looks authoritative and has never been true." T23 Phase 1 went
+   * looking for the Render account that would settle it, found no credentials
+   * of any kind, and parked rather than simulating one.
+   *
+   * So the file lands unapplied, and this is what stops it becoming the thing
+   * D-80 feared. It checks every claim the blueprint makes ABOUT THIS
+   * REPOSITORY -- the claims that ROT between writing and applying. A script
+   * renamed in a tidy-up, a route moved, a variable added to .env.example and
+   * forgotten here: each is a deploy that fails in a way nothing else notices,
+   * and `worker:install` disappearing is the worst of them, because a worker
+   * without its tables BOOTS, LOGS HEALTHY, and fails on its first task
+   * (D-52).
+   *
+   * It cannot check that Render accepts the schema, and it prints that
+   * limitation rather than implying otherwise.
+   */
+  { id: 'render-yaml', title: 'The staging blueprint agrees with the repository it deploys', cmd: ['pnpm', 'verify:render-yaml'] },
 ];
 
 if (process.argv.includes('--list')) {

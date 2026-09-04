@@ -54,11 +54,33 @@
 # `report-to` pointing at a group that does not exist is silently dead. It is
 # added in the same change that stands the collector up (section 13.2 rollout).
 #
-# The hosts below are the specification's example origins. They are replaced with
-# the real ones when DNS is provisioned; that change is a diff on this file.
+# ---------------------------------------------------------------------------
+# THE ORIGINS ARE DERIVED, NOT TYPED (T23 Phase 4).
+#
+# What stood here was two example hostnames -- api.adulis.example and
+# media.adulis.example -- with a note saying they would be "replaced with the
+# real ones when DNS is provisioned". That is a second place to configure an
+# origin the build already knows, and A POLICY HARDCODED IN ONE FILE AND AN
+# ORIGIN CONFIGURED IN ANOTHER WILL DRIFT, SILENTLY. D-164 proved it in the
+# sibling harness: the e2e server replayed this production directive at a
+# localhost bundle, every fetch was refused by connect-src before it left the
+# browser, and the suite went green against something else serving the port.
+# D-276 was the same drift reaching boot-smoke.
+#
+# So the two origins are now PLACEHOLDERS filled at build time by
+# ops/scripts/build-headers.mjs, from the SAME variables the bundle is built
+# with -- VITE_API_BASE_URL and R2_MEDIA_PUBLIC_ORIGIN. One value, one place,
+# and a build whose policy cannot disagree with the code it ships beside.
+#
+# EVERYTHING ELSE IN THIS FILE IS STILL WRITTEN, NOT ASSEMBLED, which is what
+# section 3.9 requires: the policy is reviewable in a diff. Two origin tokens
+# are substituted; no directive is added, removed or reordered, and the build
+# step REFUSES to write a file with an unresolved placeholder rather than
+# shipping a policy with a literal placeholder in it.
+# ---------------------------------------------------------------------------
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://media.adulis.example blob:; font-src 'self'; connect-src 'self' https://api.adulis.example https://media.adulis.example; frame-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; worker-src 'self'; manifest-src 'self'; require-trusted-types-for 'script'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' ${MEDIA_ORIGIN} blob:; font-src 'self'; connect-src 'self' ${API_ORIGIN} ${MEDIA_ORIGIN}; frame-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; worker-src 'self'; manifest-src 'self'; require-trusted-types-for 'script'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

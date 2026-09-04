@@ -38,6 +38,21 @@ export function devSmsLogPath(): string {
   return process.env['DEV_SMS_LOG'] ?? join(process.cwd(), '.dev-sms.log');
 }
 
+/**
+ * The two environments that write the code to disk, ENUMERATED rather than
+ * negated.
+ *
+ * `nodeEnv() !== 'production'` would have been shorter and is the bug: a
+ * negated guard silently admits every value added to NODE_ENVS after it is
+ * written, which is the exact mechanism by which `staging` would have turned
+ * four other guards permissive the day it was added. Adding a fifth
+ * environment must be a decision taken HERE, in a diff, not a consequence.
+ */
+function writesTheCodeToDisk(): boolean {
+  const e = nodeEnv();
+  return e === 'development' || e === 'staging';
+}
+
 const log = createLogger();
 
 /**
@@ -45,9 +60,35 @@ const log = createLogger();
  * message's slots; local development reads it from the file named above.
  */
 export class FakeSmsAdapter implements SmsAdapter {
+  /**
+   * STAGING IS TREATED AS DEVELOPMENT HERE, AND ONLY HERE (T23 Phase 4).
+   *
+   * The order's Phase 4 stands a staging server up, and a staging server
+   * nobody can sign in to is not a staging server. There is no SMS vendor yet
+   * (O-5b is open), so staging binds this fake -- and the fake must put the
+   * code somewhere an invited operator can reach.
+   *
+   * IT IS NOT THE LOGGER, and that is not caution, it is a governing rule.
+   * ADU-RUL-03 S1.1 makes the logger the only egress in apps/api and puts the
+   * code and the phone on NEVER_LOG precisely so they never reach a log line.
+   * The founder's boundary for T23 -- "anyone who can read its logs can sign in
+   * as anyone" -- describes what staging IS WORTH, not a licence to move an
+   * OTP onto a log line; the redaction list is a rule in a governing document,
+   * and this window is unattended. So the code goes where it already goes: a
+   * 0600 file, off stdout, outside every container log aggregator.
+   *
+   * WHICH MAKES THE INSTANCE COUNT LOAD-BEARING. Two API instances means the
+   * file is on whichever one answered, and an operator shelling in has a fifty
+   * per cent chance of an empty file. `ops/render.yaml` pins the staging API to
+   * ONE instance for exactly this reason, and says so there.
+   *
+   * Production reaches none of this: it cannot construct this adapter at all
+   * (assertFakeIsPermitted), and that refusal is provable because NODE_ENV is
+   * asserted at boot.
+   */
   constructor() {
     assertFakeIsPermitted('FakeSmsAdapter');
-    if (nodeEnv() === 'development') {
+    if (writesTheCodeToDisk()) {
       // REMOVED, then created 0600 (#25 review, corrected by #26's). Two
       // reasons, both about a file holding live codes and phone numbers: it
       // must not grow across months of development, and on a shared machine
@@ -76,7 +117,7 @@ export class FakeSmsAdapter implements SmsAdapter {
       // shared resource instead of a table.
       writeFileSync(devSmsLogPath(), '', { encoding: 'utf8', mode: 0o600 });
       // The PATH is safe to log; what the file contains is not.
-      log.warn({ msg: `[FAKE SMS] development codes are written to ${devSmsLogPath()}` });
+      log.warn({ msg: `[FAKE SMS] ${nodeEnv()} codes are written to ${devSmsLogPath()}` });
     }
   }
 
@@ -96,7 +137,7 @@ export class FakeSmsAdapter implements SmsAdapter {
     // aggregator. Production cannot reach it because production cannot
     // construct this adapter at all (assertFakeIsPermitted, above), and that
     // refusal is now provable because NODE_ENV is asserted at boot.
-    if (nodeEnv() === 'development') {
+    if (writesTheCodeToDisk()) {
       appendFileSync(
         devSmsLogPath(),
         `${new Date().toISOString()} to ${message.phone}: ${message.templateKey} ` +

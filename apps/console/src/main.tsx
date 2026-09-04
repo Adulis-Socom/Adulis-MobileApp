@@ -5,6 +5,7 @@ import '@adulis/tokens/tokens.css';
 import './console.css';
 import { SessionProvider } from './auth/session';
 import { MarketProvider } from './lib/market';
+import { EnvironmentBanner } from './lib/EnvironmentBanner';
 import { UpgradeGate } from './lib/UpgradeGate';
 import { router } from './router';
 
@@ -39,6 +40,13 @@ createRoot(el).render(
       probe waits on this provider's `booting`.
     */}
     <MarketProvider>
+      {/*
+        THE BANNER SITS OUTSIDE THE ROUTER, not inside the Shell, because
+        sign-in is outside the Shell -- and typing a real phone number into
+        the wrong server is the mistake it exists to prevent (T23 Phase 4).
+        It renders nothing on production.
+      */}
+      <EnvironmentBanner />
       <SessionProvider>
         <UpgradeGate>
           <RouterProvider router={router} />

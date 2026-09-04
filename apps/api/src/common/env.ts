@@ -15,7 +15,47 @@
  * branch was written second.
  */
 
-export const NODE_ENVS = ['development', 'test', 'production'] as const;
+/**
+ * THE CLOSED SET. `staging` joined it in T23 Phase 4, and adding a value here
+ * is not a one-line change: EVERY GUARD THAT ASKS `=== 'production'` TAKES ITS
+ * PERMISSIVE BRANCH FOR THE NEW VALUE, silently, on the day it is added. That
+ * is the exact failure this file was written to prevent, so the audit is
+ * recorded here rather than left to be repeated.
+ *
+ * Every site that reads this value, and what staging does at each:
+ *
+ *   assertFakeIsPermitted()      refuses only in production. STAGING PERMITS
+ *     common/adapters/fake-guard  FAKES, deliberately: there is no SMS vendor
+ *                                 contract yet (O-5b is open), so a staging
+ *                                 that refused fakes could not sign anyone in.
+ *
+ *   FakeSmsAdapter               development writes the code to a 0600 file;
+ *     modules/auth/sms.adapter    STAGING WRITES IT TO THE LOGGER, which is the
+ *                                 boundary the founder stated for T23: "staging
+ *                                 is a real server on the internet with no
+ *                                 confidentiality -- anyone who can read its
+ *                                 logs can sign in as anyone. It is
+ *                                 invite-only, it carries no real seller, and
+ *                                 it is not publicly linked." The branch is
+ *                                 keyed on `=== 'staging'` EXACTLY, never on
+ *                                 `!== 'production'`: a negated guard admits
+ *                                 every value added after it, which is how this
+ *                                 defect class propagates.
+ *
+ *   ops/scripts/seed.mjs         refuses production. Staging IS seeded -- it
+ *                                 carries no real seller, and a market that was
+ *                                 never seeded is a staging server nobody can
+ *                                 sign in to.
+ *
+ *   ops/scripts/gates.mjs        keys off `development`; unaffected.
+ *
+ * The console build is NOT in this set and must never be. `NODE_ENV=staging`
+ * reaching Vite ships React's development build, which the `production-react`
+ * gate fails on. The console learns its environment from `/v1/bootstrap`, at
+ * runtime, from the API it is actually talking to -- which is also the only
+ * source that cannot disagree with reality.
+ */
+export const NODE_ENVS = ['development', 'test', 'staging', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENVS)[number];
 
 let resolved: NodeEnv | null = null;

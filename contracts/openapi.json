@@ -3165,6 +3165,16 @@
             "type": "string",
             "example": "https://media.adulis.example",
             "description": "Public origin for product image keys (T20 S4)."
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "test",
+              "staging",
+              "production"
+            ],
+            "description": "Which server answered. The console draws its environment banner from this."
           }
         },
         "required": [
@@ -3174,7 +3184,8 @@
           "market",
           "locales",
           "feature_flags",
-          "media_public_origin"
+          "media_public_origin",
+          "environment"
         ]
       }
     }
