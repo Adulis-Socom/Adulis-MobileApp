@@ -9,6 +9,8 @@ import {
   FakeFinancialStorageAdapter,
   FINANCIAL_STORAGE_ADAPTER,
 } from '../src/modules/financial/financial-storage.adapter';
+import { payoutActivateDue } from '../src/jobs/e5-transport-ledger';
+import { createJobHarness } from './jobs-harness';
 
 /**
  * C4 — the financial boundary, end to end: the payout write path with every
@@ -36,6 +38,15 @@ const VARIANT = 'aaaa1111-2222-4000-8000-00000000000d';
 const OTP = 'aaaa1111-2222-4000-8000-00000000000e';
 const SU_PAYOUT = 'aaaa1111-2222-4000-8000-00000000000f';
 const SU_REISSUE = 'aaaa1111-2222-4000-8000-000000000010';
+/**
+ * A SELLER THAT EXISTS ONLY TO BE SWEPT (T21 S1). The payout job is global --
+ * it activates every due seller in the database -- so the row it operates on
+ * must be one no other test in this file reads. SELLER's row cannot be it: the
+ * order, evidence and reissue arms all need SELLER's ACTIVE payout to keep its
+ * credential, and an activation would supersede it with a credential-less row.
+ */
+const SELLER_SWEEP = 'aaaa1111-2222-4000-8000-000000000011';
+const PD_SWEEP = 'aaaa1111-2222-4000-8000-000000000012';
 
 const ACCOUNT_NUMBER = '1000123456789';
 const storage = new FakeFinancialStorageAdapter();
@@ -167,6 +178,26 @@ describe('C4 — the financial boundary', () => {
       [SU_PAYOUT, SU_REISSUE, OWNER, OTP],
     );
 
+    // The sweep-only seller and its one due PENDING row, LAST because a PENDING
+    // row needs a step-up challenge to point at: 0012's
+    // `payout_pending_requires_step_up` makes step_up_challenge_id NOT NULL on
+    // any row entering PENDING (13.4), so this cannot be inserted before the
+    // challenges above exist. No ACTIVE row for this seller, so activating it
+    // supersedes nothing and no credential is touched.
+    await admin.query(
+      `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
+                                store_name, handle, status)
+       VALUES ($1,$2,$3,'INDIVIDUAL','C4 Sweep Store','c4-sweep-store','ACTIVE')`,
+      [SELLER_SWEEP, M, OWNER],
+    );
+    await admin.query(
+      `INSERT INTO core.payout_details (id, seller_id, bank_code, account_last4,
+         state, requested_at, activates_at, requested_by_account_id, step_up_challenge_id)
+       VALUES ($1,$2,'CBE','9911','PENDING', now() - interval '25 hours',
+               now() - interval '1 hour', $3, $4)`,
+      [PD_SWEEP, SELLER_SWEEP, OWNER, SU_PAYOUT],
+    );
+
     const moduleRef = await Test.createTestingModule({ imports: [C4AppModule] })
       .overrideProvider(FINANCIAL_STORAGE_ADAPTER)
       .useValue(storage)
@@ -200,8 +231,10 @@ describe('C4 — the financial boundary', () => {
       `DELETE FROM core.step_up_challenge WHERE account_id='${OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
       `DELETE FROM core.account_recovery_case WHERE account_id='${OWNER}'`,
-      `DELETE FROM core.seller_public_stats WHERE seller_id='${SELLER}'`,
-      `DELETE FROM core.seller WHERE id='${SELLER}'`,
+      `DELETE FROM core.payout_change_log WHERE seller_id='${SELLER_SWEEP}'`,
+      `DELETE FROM core.payout_details WHERE seller_id='${SELLER_SWEEP}'`,
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER}','${SELLER_SWEEP}')`,
+      `DELETE FROM core.seller WHERE id IN ('${SELLER}','${SELLER_SWEEP}')`,
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${BUYER}','${STRANGER}')`,
       `DELETE FROM core.session WHERE account_id IN ('${OWNER}','${BUYER}','${STRANGER}')`,
       `DELETE FROM core.device WHERE id IN ('${DEVICE}','${NEW_DEVICE}')`,
@@ -496,17 +529,150 @@ describe('C4 — the financial boundary', () => {
       expect(r.body.code).toBe('PAYOUT_CHANGE_PENDING');
     });
 
-    it('activation on the due date: prior superseded, log written, GET shows active', async () => {
+    /**
+     * T21 S1 (D-268) SPLIT THE OLD SINGLE TEST INTO THREE, because the old one
+     * asserted the thing that was just removed. It read
+     * "activation on the due date: prior superseded, log written, GET shows
+     * active" and it drove the activation THROUGH THE GET -- which was also,
+     * silently, the only producer of an ACTIVE payout row in this whole file.
+     * Deleting it would have taken order creation, evidence and reissue with
+     * it (core.fn_create_order raises restrict_violation with no ACTIVE row)
+     * and left `fn_activate_due_payout` with no behavioural coverage anywhere
+     * in the repository -- the three existing job references assert only that
+     * its NAME is registered.
+     */
+
+    it('the GET does NOT activate a due change -- the read that wrote is gone (T21 S1, D-268)', async () => {
       await admin.query(
         `UPDATE core.payout_details SET activates_at = now() - interval '1 minute'
           WHERE seller_id=$1 AND state='PENDING'`,
         [SELLER],
       );
+      const logsBefore = await admin.query(
+        `SELECT count(*)::int AS n FROM core.payout_change_log
+          WHERE seller_id=$1 AND outcome='ACTIVATED'`,
+        [SELLER],
+      );
+
+      // Read it twice. Under the old code the FIRST of these activated the row.
+      await sellerReq('get', '/v1/seller/payout').expect(200);
+      const r = await sellerReq('get', '/v1/seller/payout').expect(200);
+
+      // THIS IS THE ARM THAT GOES RED IF THE LAZY CALL EVER COMES BACK.
+      expect(r.body.pending).not.toBeNull();
+      expect(r.body.pending.account_last4).toBe(ACCOUNT_NUMBER.slice(-4));
+      const logsAfter = await admin.query(
+        `SELECT count(*)::int AS n FROM core.payout_change_log
+          WHERE seller_id=$1 AND outcome='ACTIVATED'`,
+        [SELLER],
+      );
+      expect(logsAfter.rows[0].n).toBe(logsBefore.rows[0].n);
+    });
+
+    it('a failing GET rolls back nothing, because there is nothing to roll back (D-268)', async () => {
+      // Force a REAL failure INSIDE the handler transaction, at a point AFTER
+      // the one the activation used to occupy: payoutLockState's `rec` CTE
+      // reads core.account_recovery_case, which nothing else on this request
+      // path touches. This is D-74's exact shape -- a handler that raises
+      // after the top of its own transaction -- and the point of the ruling is
+      // that there is no longer a write above it to lose.
+      await admin.query(`REVOKE SELECT ON core.account_recovery_case FROM adulis_app`);
+      try {
+        await sellerReq('get', '/v1/seller/payout').expect(500);
+      } finally {
+        await admin.query(`GRANT SELECT ON core.account_recovery_case TO adulis_app`);
+      }
+
+      // The due row is untouched: not activated, not damaged, not logged.
+      const still = await admin.query(
+        `SELECT state::text AS state FROM core.payout_details
+          WHERE seller_id=$1 AND state='PENDING'`,
+        [SELLER],
+      );
+      expect(still.rows).toHaveLength(1);
+
+      // And it is still activatable -- the failure cost the row nothing.
+      const ok = await sellerReq('get', '/v1/seller/payout').expect(200);
+      expect(ok.body.pending).not.toBeNull();
+    });
+
+    it('activation on the due date: prior superseded, log written, GET shows active', async () => {
+      // PER SELLER, NOT THE FLEET SWEEP. `payout.activate_due` is global -- it
+      // activates every due seller in the database -- and running it from here
+      // put a second suite's global sweep into a parallel jest worker, which is
+      // D-83's registered flake ("exactly one suite may own a global sweep")
+      // and it fired: c4's teardown moved inside E4's before/after window and
+      // E4's fleet-wide payout_credential count went 2 -> 1 for reasons that
+      // had nothing to do with the evidence purge it was testing.
+      //
+      // So this calls the same SECURITY DEFINER function the job calls, for
+      // THIS seller only, and the job's own run() is covered where global
+      // sweeps already live: e2-e6.jobs.spec.ts, E5.
+      const activated = await admin.query(
+        `SELECT core.fn_activate_due_payout($1) AS did`,
+        [SELLER],
+      );
+      expect(activated.rows[0].did).toBe(true);
+
       const r = await sellerReq('get', '/v1/seller/payout').expect(200);
       expect(r.body.active.account_last4).toBe(ACCOUNT_NUMBER.slice(-4));
       expect(r.body.pending).toBeNull();
       const hist = await sellerReq('get', '/v1/seller/payout/history').expect(200);
       expect(hist.body.data.map((x: { outcome: string }) => x.outcome)).toContain('ACTIVATED');
+    });
+
+    /**
+     * THE JOB, ACTUALLY RUN -- and the test that found D-270.
+     *
+     * `payout.activate_due` shipped in T20 with three tests, all of which
+     * assert only that its NAME is registered and scheduled. Nothing ever
+     * called run(). The first time anything did, it raised
+     * `permission denied for table payout_details`: 0022 gave adulis_jobs
+     * EXECUTE on the SECURITY DEFINER function but no SELECT on the table the
+     * job reads to FIND its work, and that read is the job's first statement,
+     * outside the per-seller try/catch. The job had never activated anything.
+     *
+     * It stayed invisible because the lazy call this order removes was doing
+     * the work -- the defect masked by the defect. Migration 0049 supplies the
+     * grant; this arm is why it was ever noticed, and it goes red again if the
+     * grant is ever dropped.
+     *
+     * The harness connects as adulis_jobs. Running it as the admin role would
+     * certify the grant green without testing it (apps/api/CLAUDE.md).
+     */
+    it('the JOB activates a due change with no read at all, as adulis_jobs (T21 S1, D-270)', async () => {
+      const before = await admin.query(
+        `SELECT state::text AS state FROM core.payout_details WHERE id=$1`,
+        [PD_SWEEP],
+      );
+      expect(before.rows[0].state).toBe('PENDING');
+
+      const h = createJobHarness(new Date());
+      let result: Record<string, unknown>;
+      try {
+        result = (await payoutActivateDue.run(h.ctx)) as Record<string, unknown>;
+      } finally {
+        await h.close();
+      }
+      // The sweep is fleet-wide, so `due` and `activated` are not this
+      // seller's alone and are asserted only as lower bounds. `raised` is the
+      // D-270 guard proper: without the grant the job throws before this.
+      expect(Number(result['due'])).toBeGreaterThanOrEqual(1);
+      expect(Number(result['activated'])).toBeGreaterThanOrEqual(1);
+      expect(Number(result['raised'])).toBe(0);
+
+      const after = await admin.query(
+        `SELECT state::text AS state, activated_at FROM core.payout_details WHERE id=$1`,
+        [PD_SWEEP],
+      );
+      expect(after.rows[0].state).toBe('ACTIVE');
+      expect(after.rows[0].activated_at).not.toBeNull();
+
+      const log = await admin.query(
+        `SELECT outcome FROM core.payout_change_log WHERE seller_id=$1`,
+        [SELLER_SWEEP],
+      );
+      expect(log.rows.map((r: { outcome: string }) => r.outcome)).toContain('ACTIVATED');
     });
 
     it('cancelling a pending change needs no step-up — reverting is easier', async () => {

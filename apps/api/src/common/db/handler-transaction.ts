@@ -49,11 +49,22 @@ export class HandlerTransaction {
    * A1.1 requires that "a live session held by the outgoing owner across the
    * activation boundary must lose those capabilities on its next request,
    * with no re-authentication." That is only true if something activates on
-   * that request. The payout precedent (`core.fn_activate_due_payout`, 0022)
-   * is lazy on GET /v1/seller/payout, which would leave the outgoing owner
-   * as Owner indefinitely if nobody happened to read the transfer — and the
-   * S24 job set is closed at twenty names, so a sweeper is not available
-   * either.
+   * that request. Activating on a read leaves the outgoing owner as Owner
+   * indefinitely if nobody happens to read the transfer, which is why this one
+   * sits on the path every seller-scoped request already takes rather than on
+   * one screen's GET.
+   *
+   * [!] THE PAYOUT PRECEDENT NAMED HERE HAS BEEN WITHDRAWN, and this comment
+   * used to lean on it. `core.fn_activate_due_payout` was lazy on
+   * GET /v1/seller/payout; T21 S1 dropped that call (D-268), so payout is now
+   * the COUNTER-example: a read that writes, removed. The claim that "the S24
+   * job set is closed at twenty names, so a sweeper is not available either"
+   * has also stopped being true on its own terms -- RULED_JOBS (registry.ts)
+   * is exactly the mechanism a twenty-first job used, and payout took it.
+   * WHETHER OWNERSHIP TRANSFER SHOULD TAKE IT TOO IS AN OPEN QUESTION and is
+   * registered as D-269 rather than answered here: A1.1's "on its next request,
+   * with no re-authentication" is a requirement a five-minute sweep does not
+   * discharge by itself, so this is not a copy of the payout decision.
    *
    * This is the one place every seller-scoped handler passes through, and it
    * is already inside the transaction, so the cost is one statement rather

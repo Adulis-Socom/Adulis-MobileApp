@@ -80,9 +80,17 @@ export const payoutActivateDue: Job = {
    * product -- the GET on /v1/seller/payout -- and no job called it. A due
    * PENDING therefore stayed PENDING, and stayed CANCELLABLE, until somebody
    * opened the payout screen: the exposure was never twenty-four hours, it was
-   * "until the seller next looks". The lazy path stays (it costs nothing and
-   * makes the screen correct at the moment it is read); this is what gives the
-   * number its meaning.
+   * "until the seller next looks". This job is what gives the number its
+   * meaning.
+   *
+   * AND SINCE T21 S1 IT IS THE ONLY THING THAT ACTIVATES. v2.7 S20.1 kept the
+   * lazy path -- "it costs nothing and makes the screen correct at the moment
+   * it is read" -- and the founder ruling in T21 S1 dropped it (D-268). A read
+   * that writes was the defect, not the transaction it wrote in; against a
+   * twenty-four hour delay the freshness it bought is imperceptible. The cost
+   * is real and bounded and worth naming: a due PENDING can display as PENDING
+   * for up to five minutes after activates_at, which is this job's period.
+   * S20.1's sentence is not reissued -- see D-268 and RULINGS-NEEDED.
    *
    * PER-PAYOUT CONTAINMENT, and it is the requirement rather than a nicety.
    * The ownership-transfer activation had none: one raise would have fronted
@@ -93,13 +101,13 @@ export const payoutActivateDue: Job = {
    * ITS OWN TRANSACTION, NEVER LAZILY INSIDE A HANDLER'S -- D-74's lesson,
    * paid twice. The ownership activation ran at the top of a seller-scoped
    * handler transaction, the handler then failed, and the rollback took the
-   * activation with it. `fn_activate_due_payout` HAS THE SAME SHAPE ON THE GET
-   * PATH TODAY (financial.service.ts getPayout runs it inside the handler's
-   * trx, so a later failure in that read rolls back an activation it just
-   * performed) -- that is D-74's twin, it has been in 0022 since Tier 3, and it
-   * is registered rather than fixed here because the fix is a decision about
-   * the read path. THIS job is immune by construction: one statement, one
-   * transaction, per seller, with nothing after it to fail.
+   * activation with it. `fn_activate_due_payout` HAD THE SAME SHAPE ON THE GET
+   * PATH (getPayout ran it inside the handler's trx, so a later failure in that
+   * read rolled back an activation it had just performed) -- D-74's twin,
+   * present in 0022 since Tier 3, registered as D-255 and REMOVED in T21 S1.
+   * THIS job was immune by construction from the day it was written: one
+   * statement, one transaction, per seller, with nothing after it to fail. That
+   * property is why it could be handed the whole job rather than half of it.
    */
   async run(ctx: JobContext): Promise<JobResult> {
     const due = await sql<{ seller_id: string }>`
