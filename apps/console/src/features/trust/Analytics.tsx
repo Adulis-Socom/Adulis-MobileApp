@@ -231,9 +231,16 @@ export function Analytics() {
         </section>
       ) : null}
 
-      {/* Export exists in no wire yet; Business's entitlement is named, the
-          control is not faked at a 404 (D-226). */}
-      <p className="hint">{en['console.insights.analytics.export_owed']}</p>
+      {/*
+       * NO EXPORT SENTENCE (T23 Phase 3). It advertised a paid feature
+       * ("Business") on a screen where it cannot be bought, and the plan
+       * comparison does not sell it either -- so it named a price to a seller
+       * with no way to pay it. Either sell it or say nothing.
+       *
+       * D-226's rule is untouched and is why there is still no control here:
+       * an export exists in no wire, and a button faked at a 404 is worse than
+       * an absence. The absence stays; the advertisement goes.
+       */}
     </section>
   );
 }

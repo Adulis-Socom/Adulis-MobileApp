@@ -4160,3 +4160,29 @@ Response:  REPORTED, NOT ATTEMPTED HALFWAY
 Action:    An eleven-component port started and abandoned mid-way leaves the console in two design systems at once, which is the state T22 S5's own ruling exists to prevent: "five screen layouts applied first improves five and leaves twenty-five visibly inconsistent -- and the inconsistency is what a seller notices". The same is true of six components out of eleven.
            What this phase leaves behind is the thing that makes the port safe to do next: a guard that fails, in both modes, the moment the port breaks a safety rule.
 Ruling needed: none. It is scheduling.
+
+### D-288 - Three gap sentences promised a name the schema is built never to store
+
+Severity:  MINOR (fixed here) -- honesty of seller-facing copy, and one advertisement removed
+Phase:     T23 - Phase 3
+Source:    packages/locale/src/en.ts -- the ten remaining `_owed` sentences, triaged one by one against what the server returns TODAY
+Found by:  Reading `core.person` while checking whether the courier list's "Names ... not reported by the server yet" had closed
+Effect:    IT HAS NOT CLOSED AND IT NEVER WILL. `core.person` carries id, id_hash, id_hash_key_version, created_at. `core.account` carries a phone and a market. THERE IS NO NAME COLUMN ANYWHERE FOR A PERSON -- not for a buyer, not for a courier, not for the human behind a seller. A store has a `store_name`; a person has nothing.
+           So three sentences said "not reported by the server YET" about a field no server will ever report, and each one set a seller waiting for a release that is not coming:
+             console.store.couriers.columns_owed   "Names, current assignments and last activity are not reported by the server yet"
+             console.inbox.columns_owed            "Buyer names, message previews, unread markers ... are not reported by the server yet"
+             console.courier.details_owed          "The buyer name, the pickup point and the collection note are not reported to couriers yet"
+           AND THE CONSOLE ALREADY KNEW BETTER, TWO SCREENS AWAY. `console.trade.orders.no_buyer_name` states it correctly and as policy: "Adulis does not store a name for a buyer account, so there is none to display, and showing a phone number instead is not permitted where a conversation exists." BETA-READINESS's triage even flagged the trade pair as "not a gap sentence at all -- it states a deliberate privacy decision" and did not notice that three OTHER sentences were making the opposite claim about the same absence.
+           That is the whole defect: one product decision, told two ways, and the wrong way outnumbered the right one three to two.
+Response:  FIXED - the name clause states the policy; the genuinely-pending clauses keep their "yet"
+Action:    Each of the three now opens with the permanent fact and then lists what is actually owed, so the sentence stops mixing a decision with a backlog. The courier one still ENDS IN ITS INSTRUCTION ("call the number above to arrange the handoff") -- BETA-READINESS calls it "the only gap sentence that ends in an instruction", and that is the load-bearing half.
+           ONE DELETE, and it is the one the order names: `console.insights.analytics.export_owed` advertised a paid feature (Business) on a screen where it cannot be bought, and the plan comparison does not sell it either. Either sell it or say nothing. D-226's rule -- an export exists in no wire, and a control faked at a 404 is worse than an absence -- is untouched and is written where the sentence used to be. THE ABSENCE STAYS; THE ADVERTISEMENT GOES.
+           THE OTHER SIX ARE KEEP, and each was re-checked against the tree rather than carried forward on T20's verdict:
+             products.row_summary_owed   KEEP  GET /v1/seller/products returns id, name, base_price, image_key, visibility, display_order -- no stock, no variants. Still true.
+             variants.labels_owed        KEEP  core.attribute_definition has ZERO rows and no endpoint lists it; the editor returns bare attribute_definition_id UUIDs. Still true.
+             store.profile.logo_owed     KEEP  core.seller has no logo column. Still true.
+             store.identity.recheck_owed KEEP  no re-check endpoint exists. Still true.
+             claims.detail.history_owed  KEEP  the detail returns attachments, not an event trail. Still true.
+             insights.trust.wire_owed    KEEP  and DELIBERATELY UNTOUCHED: trust is a founder-owned engine, and this order forbids touching, stubbing, extending, designing or registering against it. The sentence is the honest face of that boundary.
+Verification: `verify:mt-keys` PASS (769 machine-translated, 2 HUMAN-REQUIRED -- the deleted key regenerated out of the list, the three reworded keys still present in both files). `tsc` clean on the console and on packages/locale, which is the gate that would have caught a key deleted from en.ts and left in am.ts or vice versa. `verify:console-e2e` green.
+Ruling needed: none. Nine of the ten sentences were already triaged in BETA-READINESS; this applies those verdicts and corrects the three that were triaged against the wrong fact.
