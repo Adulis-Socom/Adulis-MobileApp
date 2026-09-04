@@ -35,7 +35,7 @@ Found while placing this order's first branch in the stack. PR #93 is that route
 
 ---
 
-## The four findings this order did not go looking for
+## The five findings this order did not go looking for
 
 Each is the same shape as T22's three: **a guarantee that was true where it was
 written and false where it was needed.**
@@ -46,6 +46,7 @@ written and false where it was needed.**
 | **D-290** | The test proving a staging OTP never reaches the logger **passed with the violation planted**. Chasing that found the real limit: `NEVER_LOG` removes **fields**, and `msg` is allow-listed with nothing reading its contents |
 | **D-291** | The console's CSP named **two hostnames that have never existed**, typed a second time beside the variables the build already had. Fixed twice at *serve* time, in two harnesses, never in the artifact |
 | **D-294** | `core.operator_grant` is empty in **every environment that has ever existed, including this laptop's** -- and the consequence is that no seller can ever publish anything, silently |
+| **D-296** | `pnpm ci:local` is red **one run in three**, with a 429 in a different spec each time. D-273's shape with a **counter** as the third shared resource -- and it is the ninth instance D-280 predicted a worker cap would hide |
 
 ---
 
@@ -340,6 +341,14 @@ status line says *"Nothing in it has been run."*
   `ubuntu-latest`; `verify:console-e2e` drives the same built `dist` in the same
   browser over CDP, 88 green.
 - **Nothing was deployed.** No server exists.
+- **D-296 was not fixed.** A reproducible one-in-three 429 across concurrently
+  running specs, found by running `ci:local` at the end of the order. Four causes
+  eliminated by measurement, and the remaining hypothesis -- `consume` runs on
+  the pool rather than the caller's transaction, so the increment survives a
+  rollback -- is written down as a hypothesis rather than as a cause, because the
+  last three orders each lost time to a cause recorded before it was
+  established. Nothing was changed: a 429 that appears once in three runs is
+  exactly the red that gets "fixed" by a retry or a cap, and both would hide it.
 
 ---
 
@@ -354,9 +363,14 @@ status line says *"Nothing in it has been run."*
 3. **A ruling on the port** (D-287, restated). It is now the only substantial
    piece of the console that is not done, it cannot be done halfway, and it wants
    a window of its own rather than the tail of one.
-4. **A small ruling from D-290**: should `applyAllowList` scan `msg` for the
+4. **Two related rulings from D-296.** Should the rate limiter's `consume` run
+   inside the caller's transaction -- which decides whether a failed attempt is
+   free -- and does D-280's worker-cap question change now that its predicted
+   ninth instance has appeared? This entry is evidence for **not** pinning the
+   cap yet: it would buy a green gate and lose the only signal that this exists.
+5. **A small ruling from D-290**: should `applyAllowList` scan `msg` for the
    shapes it already refuses as fields -- a six-digit code, an E.164 number? It
    would catch that class rather than documenting it, and it risks a redaction
    that fires on an order reference. Not decided here.
-5. **Grant yourself the operator role on your own machine.** `core.operator_grant`
+6. **Grant yourself the operator role on your own machine.** `core.operator_grant`
    is empty here too, and it has been for twenty-three orders.

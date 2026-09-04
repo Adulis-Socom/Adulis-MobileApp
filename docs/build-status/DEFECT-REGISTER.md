@@ -4312,3 +4312,27 @@ Response:  WRITTEN, NEVER RUN
 Action:    The status line says "Nothing in it has been run", for the same reason `ops/render.yaml`'s first line says what it says. Phase 1 found no hosting credentials and parked (D-292); a runbook claiming to be proven by a run that never happened would be the documentation version of the file D-80 refused to write.
            `ops/runbooks/README.md` now lists `deploy.md` too, which has been hand-run since T6 Phase D without ever appearing in its own index.
 Ruling needed: none.
+
+### D-296 - A one-in-three 429 at the default worker count, and D-280's open ruling now has evidence on its side
+
+Severity:  MAJOR (reproducible; `pnpm ci:local` is red roughly one run in three because of it)
+Phase:     T23 - Phase 5, found by running `pnpm ci:local` at the end of the order
+Source:    `core.rate_limit_bucket`, shared by every concurrently running spec file
+Found by:  `pnpm ci:local` failing the `test` gate after two full API suites had passed at `--maxWorkers=2`
+Effect:    A DIFFERENT SPEC EACH TIME, THE SAME SYMPTOM: `429 Too Many Requests` on `POST /v1/auth/otp/request`.
+             run A  t12-d89-invite-claim   the enumeration arm: `resend` answered 202 for one phone and 429 for the other, so the invariant test failed for a reason that has nothing to do with the invariant
+             run B  t8-market-from-device  "the declaration is RECORDED, not just checked": a plain 202 became 429
+           IT IS D-273'S SHAPE, AGAIN, WITH A THIRD SHARED RESOURCE. D-273 was database rows; D-281 was a file on disk; this is a COUNTER, and a counter is worse than either, because the victim is whichever spec happens to ask third.
+Response:  DIAGNOSED AS FAR AS MEASUREMENT GOES, AND NO FURTHER. What is eliminated is eliminated by evidence; what is left is labelled as a hypothesis, because the last three orders each lost time to a cause recorded before it was established.
+Action:    ELIMINATED, EACH BY A MEASUREMENT:
+             the PLATFORM daily ceiling      5000 hard, 2000 soft, and today's `core.otp_delivery_attempt` count is 47. Not close.
+             cross-spec phone reuse          every `+251...` literal in apps/api/test was extracted and counted. No number appears in two spec FILES; the duplicates are repeated uses within one file.
+             a stale bucket from a prior run  the suites that fail clear `bucket_key IN ('otp-request','otp-request-ip')` in `beforeEach`.
+             the worker count being innocent  `--maxWorkers=2`: 570/570 twice. Default: 570/570, 570/570, then 1 failed. Running either failing spec ALONE passes.
+           NOT ESTABLISHED, AND STATED AS THE HYPOTHESIS IT IS: `RateLimitService.consume` executes on `APP_DATABASE` -- the pool -- while its caller is inside `runIdempotent`'s transaction with a `trx` it does not use. That is verified from the code and is very likely deliberate (a limiter that rolls back with the request does not limit). Its consequence is not deliberate: THE INCREMENT SURVIVES A ROLLBACK, so a request that fails or is retried has still spent budget, and contention produces retries. Against a limit of 3 per hour, three retries is the whole allowance. That would be worker-count-dependent by construction, which fits every observation above -- and fitting is not the same as being shown, so it is written here as the next thing to instrument rather than as the cause.
+           NOTHING WAS CHANGED. Not the limiter, not the specs, not the worker count. A 429 that appears once in three runs is exactly the kind of red that gets "fixed" by a retry or a cap, and both would hide it.
+           AND IT ANSWERS D-280's OPEN RULING WITH NEW EVIDENCE. D-280 measured that `--maxWorkers=2` is roughly TWICE AS FAST as the default and then declined to pin it, on the argument that "a cap makes the remaining instances of this class INVISIBLE rather than absent -- it would have hidden every one of the eight assertions D-273 just fixed, and it would hide the ninth." THIS IS THE NINTH. Pinning the cap today would buy a green gate and lose the only signal that this exists. The scoping is still the fix; the cap is still a way of not needing one.
+Verification: five full API suite runs this session -- two at `--maxWorkers=2` (570/570, 570/570) and three at the default (570/570, 570/570, 1 failed). Both failing specs pass when run alone. `pnpm ci:local` fails at the `test` gate when it fails.
+Ruling needed: TWO, and they are related.
+           (a) Should `consume` run inside the caller's transaction? It changes what a rolled-back request costs, in both directions, and the answer is a security decision about whether a failed attempt should be free.
+           (b) D-280's question stands unchanged: whether to pin the API test gate's worker count. This entry is evidence for NOT pinning it yet.
