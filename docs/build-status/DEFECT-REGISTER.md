@@ -3847,3 +3847,27 @@ Response:  REGISTERED WITH EVIDENCE, NOT FIXED
 Action:    Not fixed here because it is neither this order's scope nor this order's defect, and because scoping those assertions means editing suites S1 has no business touching. What T21 DID do is avoid making it worse: the payout job's behavioural test was moved off the fleet-wide sweep onto a seller nothing else reads, after the sweep version reproduced a failure on demand (D-83's rule -- exactly one suite may own a global sweep).
            The evidence is the useful part. "One run in three, a different test each time, on main" turns an intermittent red into a known quantity rather than a reason to disbelieve the suite -- which is the actual danger, and is how the seeded-market defect survived for several merges.
 Ruling needed: none. It is an engineering task with a known shape: scope every count to the fixture that owns it.
+
+### D-271 - The focus ring had no dark value, and the mode it fails in is the one it matters most in
+
+Severity:  MAJOR (fixed on the packages/tokens branch, PR #86)
+Phase:     T21 - S2
+Source:    packages/tokens/src/index.ts, focus.ringColor: color.accent
+Found by:  Mirroring the ring into a Figma variable, which forced the question "what is its dark value?" and found there was none
+Effect:    `color.accent` is evaluated by TypeScript at the point of definition, so `focus.ringColor` FROZE at the light accent (#1e40af). tokens.css wrote `var(--adu-color-accent)` and kept the reference LIVE, so the dark blocks moved it. The two files therefore disagreed in dark mode, and the disagreement was the entire point of the token: a 2px #1e40af ring on a #14120f page is a focus indicator the colour of the ground it sits on.
+           THE WEB SURFACES WERE NEVER WRONG -- they read the CSS. Anything reading the TS was, and React Native has no other source. Same shape as D-259, where the console referenced variables that existed nowhere and every fallback rendered a literal that looked fine until a mode existed.
+Response:  FIXED - focusDark and focusModes, the colorModes shape
+Action:    ringWidth and ringOffset are NAMED from `focus` rather than restated: the ring's geometry does not change with the theme, only its colour does, and saying that once is the point. tokens.css needed no change; it was already correct.
+Ruling needed: none.
+
+### D-272 - verify:tokens could not have found D-271: its GROUPS table is the gate
+
+Severity:  MAJOR (fixed on the packages/tokens branch, PR #86)
+Phase:     T21 - S2
+Source:    ops/scripts/verify-tokens.mjs -- the orphan loop only visits custom properties matching some GROUPS row's prefix
+Found by:  Asking why a gate that claims both directions had not already caught D-271
+Effect:    "Every TS export has its custom property, and every custom property has its export -- BOTH DIRECTIONS" is true only of a property some row's prefix MATCHES. `--adu-focus-ring-width`, `--adu-focus-ring-offset`, `--adu-focus-ring-color`, `--adu-touch-min`, `--adu-font-family` and `--adu-font-mono` matched no row at all, so they were compared by no direction of no check -- eight custom properties outside a gate reporting itself green. The hand-maintained list had grown a hole, which is the same class the comparator was built to catch one level up.
+Response:  FIXED - four rows added, and three comparator defects fixed to make them mean anything
+Action:    (1) `resolve` follows a DOT reference (color.accent, focus.ringWidth), the TS-side twin of what resolveCss already did for var(); a comparator that resolves one side's indirection and not the other reports disagreements where there are none. (2) `resolveCss` follows ANY --adu-* reference, not only the ramp -- the ring points at a ROLE, so a ramp-only regex gave up at the outer var(). (3) `pairs` respects QUOTES: it split on commas at depth zero, so the font stack parsed as `system-ui` and the check reported a value disagreeing with its own first word. That last one is precisely what the function's existing comment warns about one level up, and it was invisible only because no row had ever reached a value containing a comma.
+           PROVEN TO FIRE: four violations planted one at a time -- the dark ring frozen at the light accent, a 44px target drifting to 40px in CSS only, one character changed in the mono stack, and a ring offset drifting in CSS only -- each observed red, then restored. The offset plant fails TWO rows, which is correct: the geometry is shared across modes.
+Ruling needed: none.
