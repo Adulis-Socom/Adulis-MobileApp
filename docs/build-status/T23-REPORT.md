@@ -1,7 +1,9 @@
 # T23 REPORT - Finish It, Then Put It Somewhere
 
 **Order:** T23 - "Finish It, Then Put It Somewhere"
-**Phase 1 PARKED** (no hosting credentials). **Phases 3, 4 and 5 complete.**
+**Phase 1 RUN AND FAILED** - parked for credentials, then unparked when they
+arrived. The probe hit a real Render instance and aborted at capability 3.
+**Phases 3, 4 and 5 complete, and Phase 4's deploy is now known not to work.**
 **Phase 2 part done, and this says which part and why the rest was left.**
 **Unattended, no reviewer.**
 
@@ -9,19 +11,33 @@
 
 ## The answer first
 
-**Nothing was deployed, because there was nothing to deploy to.** Phase 1's probe
-needed a real hosting provider and this machine has no Render credentials of any
-kind -- no environment variable, no `render` CLI, no `~/.render`, no
-`ops/render.yaml`. The order named that phase its **only STOP condition** and
-said what to do: *"PARK the phase, say so, and continue to Phase 2 -- do not
-simulate it."* It is parked. **Every use of the word "staging" in this report and
-in these six pull requests names a CONFIGURATION, not a URL.**
+**Nothing was deployed, and it now turns out nothing COULD have been.** Phase 1
+was parked for want of credentials and the order's other four phases were built on
+top of that gap. When credentials arrived, the probe ran against a real Render
+managed PostgreSQL 17.11 instance and **failed at capability 3**.
+
+**The finding is much larger than the probe.** `CREATE SCHEMA ... AUTHORIZATION`,
+`SET ROLE`, `CREATE TABLE` in a foreign-owned schema and **86 `ALTER ... OWNER TO`
+statements across 24 migration files** all require the executor to be a superuser
+or to hold membership it is never granted -- and managed Postgres does not give
+you superuser. `pnpm db:migrate` stops at migration 0001 and, because
+node-pg-migrate runs the whole `up` in one transaction, **applies nothing at
+all**. So Phase 4's `render.yaml` describes a deploy that cannot currently start,
+and Phase 5's runbook is marked BLOCKED.
+
+**Every use of the word "staging" in this report still names a CONFIGURATION, not
+a URL** -- and now for a second, harder reason.
 
 **Which made the order's own priority ruling the one that mattered:** *"Phases 1
 and 4 matter more than a complete Phase 2. A console at 96% on a server beats one
 at 100% on a laptop."* Phase 1 could not be done, so Phase 4 got the window, and
 the eleven-component port did not. That is a scheduling decision and it is argued
 at the bottom rather than implied.
+
+**And no gate could have caught it.** `docker-compose.yml` and `ci.yml` both make
+the migrating role a superuser, and both say so in their own comments. **No DDL in
+this repository has ever been executed by a non-superuser**, so every green
+`db:migrate` in its history is evidence about a superuser host and nothing else.
 
 **Six pull requests. Twenty-five of twenty-six gates green.** The twenty-sixth is
 `boot-smoke`, red on this machine because `msedge.exe --dump-dom` produces zero
@@ -35,7 +51,7 @@ Found while placing this order's first branch in the stack. PR #93 is that route
 
 ---
 
-## The five findings this order did not go looking for
+## The six findings this order did not go looking for
 
 Each is the same shape as T22's three: **a guarantee that was true where it was
 written and false where it was needed.**
@@ -46,33 +62,101 @@ written and false where it was needed.**
 | **D-290** | The test proving a staging OTP never reaches the logger **passed with the violation planted**. Chasing that found the real limit: `NEVER_LOG` removes **fields**, and `msg` is allow-listed with nothing reading its contents |
 | **D-291** | The console's CSP named **two hostnames that have never existed**, typed a second time beside the variables the build already had. Fixed twice at *serve* time, in two harnesses, never in the artifact |
 | **D-294** | `core.operator_grant` is empty in **every environment that has ever existed, including this laptop's** -- and the consequence is that no seller can ever publish anything, silently |
+| **D-297** | The Render probe **FAILED**. The schema's whole DDL path assumes a superuser -- four constructs, 86 `OWNER TO` statements, 24 files -- so `db:migrate` cannot run on any managed host as the repository stands |
 | **D-296** | `pnpm ci:local` is red **one run in three**, with a 429 in a different spec each time. D-273's shape with a **counter** as the third shared resource -- and it is the ninth instance D-280 predicted a worker cap would hide |
 
 ---
 
-## Phase 1 - PARKED, with the instrument verified
+## Phase 1 - UNPARKED, RUN, AND FAILED
 
-The order asked for ADU-CON-02 S18.2's four-step capability probe against a real
-Render trial instance. **There is no such instance and no credentials to make
-one.** Searched: the environment, `~/.render`, `~/.config/render`, the shell
-history, `ops/`, and the repository for any provider reference. Nothing.
+**This section replaces the one written earlier the same day.** Phase 1 was parked
+for want of credentials; credentials arrived; the probe ran against a real Render
+managed PostgreSQL 17.11 instance in Frankfurt. **It failed.**
 
-The order was explicit about what not to do: *"Do not work around it. A
-workaround invented unattended, on the privilege model, is the worst possible
-artifact of this window."*
+```
+CAPABILITY 1  PASS   vector 0.8.0, btree_gist 1.7, pg_trgm 1.6, pgcrypto 1.3
+CAPABILITY 1b PASS   EXCLUDE USING gist rejected the overlap
+CAPABILITY 2  PASS   six independent roles created
+probe.sql:161        ERROR: must be able to SET ROLE "probe_app"      exit 3
+```
 
-**What was done instead is labelled for exactly what it is.** `ops/provider-verify/probe.sql`
-has existed since ADU-CON-02 S18.2 and had never been run in twenty-two orders,
-so it was run **against the local container as an instrument check**: exit 0, all
-five capabilities PASS, `TEARDOWN PASS: no probe_ roles or schemas remain`.
+Capabilities 3, 4a, 4b, 4c and 5 never ran. Neither did the teardown.
 
-**That is not a provider result and must not be read as one.** The local
-`adulis_bootstrap` role is a superuser (`rolsuper: true`) -- which is precisely
-the property the probe exists to test the *absence* of on a managed provider. All
-the run establishes is that the probe executes cleanly and cleans up after
-itself. It is an instrument that has now been fired once.
+**RENDER IS UNVERIFIED, NOT VINDICATED**, and my first reading of this got it
+wrong. The control experiment below proves only that the error is not
+Render-*specific*. It says nothing about whether Render can carry the
+verification and financial boundaries, **because the capabilities that test them
+did not execute.** `run-probe.md`'s rule admits no exception for cause -- *"Any
+failure disqualifies that provider that day"* -- and adds that *"a truncated
+transcript is a failure even when nothing in it says so"*. So the Provider runs
+table records **FAIL (3 of 8)**, and amending that rule belongs to whoever owns
+ADU-CON-02 S18, not to a probe run.
 
----
+### The mechanism, established rather than guessed
+
+The Render role is `rolsuper=f, rolcreaterole=t, rolcreatedb=t, rolbypassrls=f`
+with `CREATE` on the database -- **exactly** the precondition `run-probe.md`
+states. That precondition is wrong. PostgreSQL 16 split role membership into
+ADMIN, INHERIT and SET; `createrole_self_grant` defaults to empty; so a
+`CREATEROLE` role that creates a role gets `admin_option=t` but **`set_option=f`**,
+and `CREATE SCHEMA ... AUTHORIZATION` needs SET.
+
+**A control on the local container -- same 17.11 image, non-superuser -- failed
+with the identical message.** Not a provider property.
+
+### The part that matters more than the probe
+
+**The same four constructs run through the schema's whole DDL path**, and every
+one is invisible under a superuser:
+
+| construct | where |
+|---|---|
+| `CREATE SCHEMA ... AUTHORIZATION` | `probe.sql:161-162`; `0001:85-94`, ten schemas |
+| `SET ROLE` | `probe.sql:193, 255, 322` -- so patching 161 alone moves the failure to 193 |
+| `CREATE TABLE` in a foreign-owned schema | `0004`, `0012` -- the two boundaries |
+| `ALTER ... OWNER TO` | **86 statements across 24 migration files**, 0004 to 0047 |
+
+So `render.yaml`'s `preDeployCommand` stops at migration 0001 line 85 -- and
+because node-pg-migrate runs the whole `up` in one transaction, **nothing at all
+applies.** One of these is unreachable by any pre-migrate fix: `0023:510` needs
+`adulis_migrate` to hold CREATE on schema `financial`, which `0023:499` does not
+grant and which cannot exist before `0001` has run.
+
+**Neither remedy I tested fixes the deploy**, and my first reading claimed
+otherwise. Both work on Render for the *probe's* shape -- `GRANT ... WITH SET`,
+and `ALTER ROLE ... SET createrole_self_grant`, which is permitted and persists.
+Neither reaches the migrations: the GRANT needs ADMIN OPTION that `adulis_migrate`
+never holds, and `0001`'s `IF NOT EXISTS` role guard silently disables both on any
+role a provider pre-created.
+
+### Why no gate could have caught it
+
+`docker-compose.yml:21` and `ci.yml:54` both make the migrating role a superuser
+-- both files say so in their own comments -- and `ci.yml:73` points
+`DATABASE_URL_MIGRATE` at it. **No DDL in this repository has ever been executed
+by a non-superuser.** Every green `db:migrate` in its history is evidence about a
+superuser host and nothing else.
+
+### What was not verified, said plainly
+
+**Migration 0001 was not executed against Render.** The harness declined to run a
+migration file against the remote database, correctly. The migration conclusion is
+an inference from a verified mechanism plus a direct code read. `install-worker-schema.mjs`
+-- the other half of the same pre-deploy -- is on the same wall by the same
+reasoning and was likewise not run.
+
+**This finding was adversarially reviewed before being recorded.** Four
+independent reviewers were asked to refute it; one refuted the *conclusion* (the
+"Render is not disqualified" framing, corrected above), and three confirmed the
+mechanism at high confidence while enlarging the scope from two files to four
+constructs. Registered as **D-297**, with **D-298** (the bootstrap circularity in
+my own staging runbook) and **D-299** (the probe's manual is unrunnable and cites a
+superseded revision).
+
+**Teardown:** the probe aborted before its own, so the seven leftover `probe_`
+roles were dropped by hand -- which needed the same self-grant, because
+`DROP OWNED BY` hits the identical check. Instance verified pristine afterwards.
+No credential entered the repository, any commit, the register or this report.
 
 ## Phase 2 - two rulings landed, the port not started
 
@@ -354,23 +438,34 @@ status line says *"Nothing in it has been run."*
 
 ## What needs you
 
+0. **D-297 outranks everything else in this report.** The schema's DDL path cannot
+   run on managed Postgres, so Phase 4's blueprint and Phase 5's runbook both
+   describe a deploy that cannot start. It needs a privilege-model ruling: what
+   principal runs the migrations, with what membership, and does `0023`'s ordering
+   change or does the deploy run staged? **Do not let the six green pull requests
+   below read as "staging is ready".** It is not.
+
 1. **Merge #93 first.** T22's phases 2-5 and its report have no route to `main`
    and have not had one since they were merged into each other. Everything in
    this order is stacked on top of that.
-2. **A Render account**, so Phase 1's probe can run and `ops/render.yaml` can
-   stop saying it has never been applied. Until then Phase 4 is configuration
-   that has never met a server.
-3. **A ruling on the port** (D-287, restated). It is now the only substantial
+2. **A ruling on `run-probe.md`'s disqualification rule** (D-297c). It says any
+   failure disqualifies a provider that day, with no exception for a defect in
+   our own instrument. Render is therefore recorded as **FAIL**. If that is not
+   what the rule is meant to do, amending it belongs to whoever owns
+   ADU-CON-02 S18 -- not to a probe run, and not to me.
+3. **A non-superuser migration job in CI** (D-297d). It is the only thing that
+   would have caught this, and it is the only thing that will catch the next one.
+4. **A ruling on the port** (D-287, restated). It is now the only substantial
    piece of the console that is not done, it cannot be done halfway, and it wants
    a window of its own rather than the tail of one.
-4. **Two related rulings from D-296.** Should the rate limiter's `consume` run
+5. **Two related rulings from D-296.** Should the rate limiter's `consume` run
    inside the caller's transaction -- which decides whether a failed attempt is
    free -- and does D-280's worker-cap question change now that its predicted
    ninth instance has appeared? This entry is evidence for **not** pinning the
    cap yet: it would buy a green gate and lose the only signal that this exists.
-5. **A small ruling from D-290**: should `applyAllowList` scan `msg` for the
+6. **A small ruling from D-290**: should `applyAllowList` scan `msg` for the
    shapes it already refuses as fields -- a six-digit code, an E.164 number? It
    would catch that class rather than documenting it, and it risks a redaction
    that fires on an order reference. Not decided here.
-6. **Grant yourself the operator role on your own machine.** `core.operator_grant`
+7. **Grant yourself the operator role on your own machine.** `core.operator_grant`
    is empty here too, and it has been for twenty-three orders.

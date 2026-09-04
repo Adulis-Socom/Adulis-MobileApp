@@ -4254,6 +4254,7 @@ Effect:    WHAT LANDED, all of it verifiable on this machine:
              TRUSTED_PROXY_HOPS                a validated COUNT, never a boolean
              CSP derived, not typed            D-291
              R2 buckets                        adulis-staging-media / adulis-staging-evidence, separate from production
+           SUPERSEDED IN PART, THE SAME DAY: Phase 1 was UNPARKED once credentials arrived, the probe ran against a real Render instance, and it FAILED (D-297). This entry's claim that the configuration is sound as far as it goes does NOT survive that: `pnpm db:migrate` cannot run as a managed role, so `render.yaml`'s preDeployCommand stops at migration 0001, and D-298 found the first deploy has no DATABASE_URL_MIGRATE to start with. Read D-297 and D-298 before this entry.
            WHAT DID NOT LAND, AND IT IS THE DEPLOY ITSELF. Phase 1 found no hosting credentials and parked; nothing here has been applied to a server. Every claim above is about this repository and its gates, and none is about a running staging instance. THE WORD "STAGING" IN THIS ENTRY NAMES A CONFIGURATION, NOT A URL.
            TWO THINGS STAGING WILL NOT BE ABLE TO DO on the day it is first applied, both stated so the first operator is not surprised:
              SIGN-IN NEEDS A SHELL. There is no SMS vendor (O-5b), so the OTP goes to a 0600 file on the API instance. `ops/runbooks/staging.md` says how to read it; the instance count is pinned to 1 so there is only one file to read.
@@ -4336,3 +4337,73 @@ Verification: five full API suite runs this session -- two at `--maxWorkers=2` (
 Ruling needed: TWO, and they are related.
            (a) Should `consume` run inside the caller's transaction? It changes what a rolled-back request costs, in both directions, and the answer is a security decision about whether a failed attempt should be free.
            (b) D-280's question stands unchanged: whether to pin the API test gate's worker count. This entry is evidence for NOT pinning it yet.
+
+### D-297 - The Render probe FAILED, and the whole DDL path assumes a superuser nobody will ever grant it
+
+Severity:  CRITICAL (the deploy cannot run; the hosting ruling's mandatory precondition is unexecutable)
+Phase:     T23 - Phase 1, run for real once credentials arrived
+Source:    ops/provider-verify/probe.sql, and db/migrations/ across 24 files
+Found by:  Running the probe against a real Render managed PostgreSQL 17.11 instance (Frankfurt), which T23 Phase 1 had PARKED for want of credentials
+Effect:    THE PROBE FAILED. Three of eight capabilities passed and the script aborted:
+             CAPABILITY 1  PASS   vector 0.8.0, btree_gist 1.7, pg_trgm 1.6, pgcrypto 1.3
+             CAPABILITY 1b PASS   EXCLUDE USING gist rejected the overlap
+             CAPABILITY 2  PASS   six independent roles created
+             probe.sql:161        ERROR: must be able to SET ROLE "probe_app"   (exit 3)
+           Capabilities 3, 4a, 4b, 4c and 5 never executed, and neither did the teardown.
+           RENDER IS THEREFORE UNVERIFIED, NOT VINDICATED, and the first draft of this entry got that wrong. The control experiment below proves only that the error is not Render-SPECIFIC. It says nothing about whether Render can carry the verification and financial boundaries, because THE CAPABILITIES THAT TEST THEM DID NOT RUN. run-probe.md's rule is explicit and admits no exception for cause -- "Any failure disqualifies that provider that day. Not 'raises a question' -- disqualifies" -- and it says in the same breath that "a truncated transcript is a failure even when nothing in it says so".
+           THE MECHANISM, ESTABLISHED RATHER THAN GUESSED. The Render role is rolsuper=f, rolcreaterole=t, rolcreatedb=t, rolbypassrls=f, with CREATE on the database -- exactly the "superuser, OR a role with CREATEROLE and CREATE on the database" that run-probe.md:61 names as sufficient. It is not sufficient. PostgreSQL 16 split role membership into ADMIN, INHERIT and SET, and `createrole_self_grant` defaults to empty, so a non-superuser CREATEROLE role that creates a role receives admin_option=t, set_option=f, inherit_option=f. `CREATE SCHEMA ... AUTHORIZATION` calls check_can_set_role(), which walks only set_option edges. The error string is PG16's and no earlier version emits it.
+           NOT A RENDER PROPERTY, PROVEN BY CONTROL. A non-superuser CREATEROLE role on the LOCAL pgvector/pgvector:pg17 container -- same 17.11 -- created a role, showed set_option=f, and failed with the identical message.
+           AND RENDER IS BETTER THAN THE BASELINE IN ONE PLACE: it installed all four extensions as a non-superuser. The local image refuses `vector` without superuser, so the documented local command cannot even reach capability 2 (see D-299).
+Response:  RECORDED AS A FAILURE. NOTHING PATCHED.
+Action:    THE BLAST RADIUS IS NOT probe.sql. Four distinct constructs in the DDL path each require the executor to SET ROLE to, or hold CREATE for, a role it is not a member of. All four are invisible under a superuser:
+             1. CREATE SCHEMA ... AUTHORIZATION   probe.sql:161-162; 0001:85-94 (ten schemas)
+             2. SET ROLE                          probe.sql:193, 255, 322 -- so patching line 161 alone moves the failure to 193, and capabilities 4a/4b/4c still never run
+             3. CREATE TABLE in a foreign-owned schema   0004 and 0012, the verification and financial boundaries
+             4. ALTER ... OWNER TO                86 statements across 24 migration files, 0004 through 0047
+           ONE OF THOSE IS UNREACHABLE BY ANY PRE-MIGRATE FIX. 0023:510 is `ALTER FUNCTION financial.purge_payout_credential(uuid[]) OWNER TO adulis_migrate`, and 0023:499 grants adulis_migrate only USAGE on schema financial. ALTER ... OWNER TO requires the NEW owner to hold CREATE on the schema, and PostgreSQL runs that check only when the executor is not a superuser. Schema `financial` does not exist until 0001 has run, so the grant cannot be a provisioning step: it has to go inside a migration, or the deploy has to run staged (`db:migrate up 22`, grant, `db:migrate up`). Nothing in the repository mentions staging a migration run.
+           AND IT FAILS ATOMICALLY. node-pg-migrate runs the whole `up` in one transaction, so migration 0001's failure rolls everything back: `pgmigrations` is left empty and not one of the fifty migrations is applied. The Render pre-deploy fails the deploy outright rather than leaving a half-built schema -- which is the good outcome, and is not the same as being safe.
+           THE TWO REMEDIES I TESTED DO NOT FIX THE DEPLOY, and the second draft of this entry claimed they did. Both were verified working ON RENDER for the probe's shape: `GRANT <role> TO current_user WITH SET TRUE` (permitted because admin_option=t), and `ALTER ROLE CURRENT_USER SET createrole_self_grant = 'set, inherit'` (permitted, and persistent across reconnects -- managed Postgres allows the ALTER). Neither reaches the migrations:
+             - the GRANT needs ADMIN OPTION, which is held only by the role that CREATED the target. adulis_migrate creates no roles, so for migrations 0004 and 0012 -- which run as adulis_migrate against schemas owned by adulis_verification and adulis_financial -- it holds nothing.
+             - 0001's role loop is guarded `IF NOT EXISTS` (0001:60-62). If provisioning pre-creates any adulis_* role, the migrating role never gets admin_option on it, and BOTH remedies fail on that role while succeeding on the others -- a partial, per-role failure that is harder to read than today's clean stop. The block's own header says the guard exists to survive "a provider trial instance whose bootstrap user we do not control", so this is a live case.
+           WHAT IS ACTUALLY NEEDED is a provisioning-time contract that does not exist anywhere in this repository: membership WITH SET for the migrating role in adulis_verification, adulis_financial and adulis_jobs, plus CREATE on the two boundary schemas, plus a decision about 0023's ordering. That is a privilege-model design, it is exactly what T23's order forbids inventing unattended, and it is not written here.
+           THE ASSUMPTION WAS NEVER SILENT -- ONLY UNSATISFIED. Migrations 0004, 0009, 0010, 0012, 0026 and 0027 each say in comments that they are "applied by a bootstrap superuser". The defect is not that nobody knew; it is that no provisioning step anywhere satisfies it on a host that will not grant superuser, and no gate could notice.
+           WHY NO GATE COULD NOTICE. docker-compose.yml:21 and .github/workflows/ci.yml:54 both set POSTGRES_USER=adulis_bootstrap, both files' own comments state that role is a superuser, and ci.yml:73 points DATABASE_URL_MIGRATE at it. NO DDL IN THIS REPOSITORY HAS EVER BEEN EXECUTED BY A NON-SUPERUSER. Every green `db:migrate` in its history is evidence about a superuser host and about nothing else -- the same shape as D-296's ambient state, one layer down. (The runtime boundary tests connect as adulis_app and are unaffected; this does not make them vacuous.)
+Verification: probe transcript captured; role attributes and pg_auth_members queried directly; control reproduced on the local container; both remedies executed against Render; 86 OWNER TO statements counted across 24 files; 0023:499 and 0023:510 read directly; ci.yml:49/54/73 read directly. The claim was then put to four independent adversarial reviewers with instructions to refute it -- one refuted the CONCLUSION (Render "not disqualified"), and that correction is adopted above; three confirmed the mechanism at high confidence and enlarged the scope from two files to four constructs.
+           NOT VERIFIED, AND SAID SO: migration 0001 was NOT executed against Render. The harness declined to run a migration file against the remote database, correctly. The migration conclusion is therefore an inference from a verified mechanism plus a direct code read, not an execution. `ops/scripts/install-worker-schema.mjs` -- the other half of the same preDeployCommand -- is on the same wall by the same reasoning and was likewise not executed.
+           TEARDOWN: the probe aborted before its own teardown, so the seven leftover probe_ roles were dropped by hand as run-probe.md instructs. That needed the same self-grant, because DROP OWNED BY hits check_can_set_role too -- the teardown assumes superuser as well. Instance verified pristine afterwards: 0 probe roles, 0 probe schemas, 0 objects in public, createrole_self_grant reset to default. No credential entered the repository, any commit, this register or the report.
+Ruling needed: YES, and it is the largest open question in the project.
+           (a) What runs the migrations on a managed host, with what membership? This is the privilege model and it is not an implementation detail.
+           (b) Does 0023's ordering change, or does the deploy run staged?
+           (c) Does run-probe.md's "any failure disqualifies" rule admit an instrument-defect exception? Today it does not, so Render is recorded as FAILED. Amending that rule belongs to whoever owns ADU-CON-02 S18, not to a probe run.
+           (d) Should CI grow a non-superuser migration job? It is the only thing that would have caught this, and it would catch the next one.
+           NOT ESCALATED, DELIBERATELY: this does NOT mean no managed provider can run this schema, and S18's hosting ruling is NOT unsound. Both remedies are ordinary SQL available to any CREATEROLE owner. The ruling stands; its mandatory precondition is currently unexecutable; Render is unverified. Nor is "any managed Postgres" proven -- one instance was tested, and a provider shipping createrole_self_grant='set, inherit' in its default parameter group would pass unchanged. The repository's own doctrine is that we test rather than assume.
+
+### D-298 - ops/render.yaml and staging.md cannot bootstrap: the first deploy has no DATABASE_URL_MIGRATE
+
+Severity:  MAJOR (the first deploy cannot start, independently of D-297)
+Phase:     T23 - Phase 5, found by the Phase 1 adversarial review the same day it was written
+Source:    ops/runbooks/staging.md steps 1, 3 and 4; ops/render.yaml's three sync:false database URLs
+Found by:  Reviewing D-297's blast radius, which surfaced a second and unrelated circularity
+Effect:    THE THREE STEPS REFER TO EACH OTHER IN A CIRCLE.
+             Step 1 defers the three DATABASE_URLs: "step 3 creates them, so leave these until then".
+             Step 3 defers the roles: migration 01 creates them NOLOGIN, so "if these ALTER ROLE statements fail with 'role does not exist', let the first deploy's pre-deploy run, then come back to this step".
+             Step 4 IS the first deploy, and its preDeployCommand is `pnpm db:migrate`, which reads DATABASE_URL_MIGRATE -- the value step 1 deferred and step 3 could not create.
+           So the first deploy cannot start. This is not the SET ROLE defect wearing a different hat: it would block the deploy even if D-297 were fully fixed.
+           THE ANSWER IS PROBABLY THE RENDER OWNER CONNECTION -- the one Render synthesises, which ops/render.yaml:38 already describes as "NOT any of the six roles migration 01 creates". But the runbook never says to put it in DATABASE_URL_MIGRATE for the first deploy, and adulis_migrate is never given a LOGIN password by any step in deploy.md or staging.md, so it is not obvious that the intended answer is "the owner runs the first migrate and adulis_migrate never runs one at all".
+Response:  REGISTERED, NOT GUESSED
+Action:    Naming the principal that runs the first migration is the same privilege-model decision as D-297(a), so it is not decided here. staging.md carries a blocking note at step 1 pointing at both entries, so nobody follows a runbook that cannot be followed.
+           NO GATE COVERS THIS EITHER. `verify:render-yaml` checks that the blueprint agrees with the repository -- script names, health path, declared variables -- and does no privilege or ordering reasoning at all. `check-environment.mjs` runs only AFTER migrations have been applied, so it cannot see a deploy that never started. Both gates are working as designed and neither is the right layer.
+Ruling needed: YES -- see D-297(a). One decision answers both.
+
+### D-299 - The probe's own documented command produces zero capability passes, and the document is a version behind the ruling it enforces
+
+Severity:  MINOR (documentation, but it is the document that gates a hosting commitment)
+Phase:     T23 - Phase 1
+Source:    ops/provider-verify/run-probe.md -- the "Running it" block and the header citation
+Found by:  Running the documented local command verbatim while establishing a control for D-297
+Effect:    TWO SEPARATE ROTS IN THE INSTRUMENT'S MANUAL.
+           (1) THE DOCUMENTED LOCAL COMMAND CANNOT RUN. It says `psql -U adulis_app`. Today that role is rolsuper=f, rolcreaterole=f, rolcreatedb=f. Run verbatim it fails at `CREATE EXTENSION vector` with "Must be superuser", produces ZERO capability passes, and cannot reach the six-role test at all -- and it also cannot execute the `CREATE DATABASE adulis_probe` the same block tells you to run. The 8-of-8 baseline transcript printed directly beneath it was captured when the compose superuser was still named adulis_app; docker-compose.yml now names it adulis_bootstrap and says so. So the transcript is not reproducible by the command above it, and has not been for some time.
+           (2) IT CITES A SUPERSEDED REVISION. The header names ADU-CON-02 v3.0 S18 and its step-3 row expects "check 14 = 107 tables". The governing revision is v3.2, which requires 114. `docs/amendments/README.md` is the authority on what governs, and this file is a version behind the ruling it exists to enforce.
+Response:  REGISTERED
+Action:    Not corrected in the same change as D-297, deliberately: the command's role name is evidence for D-297 -- it is the reason the probe was only ever run as a superuser -- and rewriting it in the same commit that records the finding would erase the trail. It is a one-line fix (`-U adulis_bootstrap`, and a note that the role must be able to SET ROLE to its AUTHORIZATION targets, not merely hold CREATEROLE), owed with whatever ruling answers D-297.
+Ruling needed: none beyond D-297.

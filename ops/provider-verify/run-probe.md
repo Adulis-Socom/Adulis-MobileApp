@@ -291,11 +291,39 @@ that the probe is correct and that the reference image passes it. Render,
 DigitalOcean and AWS RDS each need their own run on a trial instance, recorded
 below when they happen.
 
+> ### [!] The 2026-08-26 baseline establishes LESS than that (T23, D-297)
+>
+> It was run as a **superuser**, and a superuser is the one principal for which
+> this probe cannot fail. Run as a non-superuser `CREATEROLE` role — which is
+> what every managed provider gives you — the probe **aborts at capability 3**:
+>
+> ```
+> probe.sql:161  ERROR:  must be able to SET ROLE "probe_app"
+> ```
+>
+> PostgreSQL 16 split role membership into ADMIN, INHERIT and SET.
+> `createrole_self_grant` defaults to empty, so a `CREATEROLE` role that creates
+> a role gets `admin_option=t` but **`set_option=f`** — and
+> `CREATE SCHEMA ... AUTHORIZATION` requires SET. The same abort happens on the
+> local container under a non-superuser, so **it is not a provider property**.
+>
+> **The precondition on line 61 below is therefore wrong.** "A superuser, or a
+> role with CREATEROLE and CREATE on the database" is *not* sufficient on
+> PostgreSQL 16+. The real requirement is that the role can **SET ROLE to every
+> `AUTHORIZATION` target**, which a bare `CREATEROLE` role cannot do by default.
+>
+> **And it is not only line 161.** `SET ROLE` at lines 193, 255 and 322 fails the
+> same way, so capabilities 4a, 4b and 4c would not run even if 161 were patched;
+> `DROP OWNED BY` in the teardown fails too. **The same four constructs run
+> through `db/migrations/` — including 86 `ALTER ... OWNER TO` statements across
+> 24 files — so this is a finding about the schema's DDL path, not only about the
+> probe.** D-297 carries the full analysis and the open rulings.
+
 ### Provider runs
 
 | Date | Provider | Instance | Result | Run by |
 |---|---|---|---|---|
-| 2026-08-26 | Local Docker | `pgvector/pgvector:pg17` (PostgreSQL 17.11) | **PASS** (8 of 8) | Tier 0 bootstrap |
-| — | Render (Frankfurt) | — | *not yet run* — **required before commitment** | — |
+| 2026-08-26 | Local Docker | `pgvector/pgvector:pg17` (PostgreSQL 17.11) | **PASS** (8 of 8) — *as a SUPERUSER; see below* | Tier 0 bootstrap |
+| **2026-09-04** | **Render (Frankfurt)** | Managed PostgreSQL **17.11**, trial | **FAIL (3 of 8)** — aborted at capability 3, `must be able to SET ROLE` | T23 Phase 1 |
 | — | DigitalOcean (Frankfurt) | — | *not yet run* — fallback 1 | — |
 | — | AWS RDS | — | *not yet run* — fallback 2 | — |
