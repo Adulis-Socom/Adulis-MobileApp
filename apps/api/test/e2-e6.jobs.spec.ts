@@ -232,6 +232,56 @@ describe('E2-E6 — notification, trust, retention, transport, billing', () => {
       // job that runs, and is recorded, under a name it shares.
       expect(new Set(names).size).toBe(names.length);
     });
+
+    /**
+     * THE D-47 PROBE, RESTORED AND MADE SELF-EXTENDING (T22 Phase 1).
+     *
+     * ADU-AUTH-01 v2.8 S20.1a: "Prove a job runs by running it as its own role,
+     * never by reading the migration." D-47 found twenty jobs holding EXECUTE
+     * and no USAGE on `core`, by exactly this probe, before a line of the worker
+     * existed. THE PROBE WAS NEVER REPEATED FOR JOBS ADDED LATER, and D-270 --
+     * payout.activate_due holding EXECUTE on the function and no SELECT on the
+     * table it reads to find its work -- is what that cost. Four tiers invisible.
+     *
+     * This iterates SCHEDULED_JOBS rather than a list of names, so a job added
+     * tomorrow is probed tomorrow without anyone remembering to add it. That is
+     * the whole difference between this and the probe that went stale.
+     *
+     * IT ASSERTS ON THE PERMISSION CLASS ONLY. A job is allowed to raise for an
+     * ordinary reason -- ledger.assert_zero is REQUIRED to throw on an
+     * unbalanced ledger, and another suite may have planted one. What no job may
+     * do is raise 42501 or "permission denied": that is never a fact about the
+     * data, only ever about the grant, and it means the job cannot run at all.
+     *
+     * It lives in THIS file because several of these jobs are fleet-wide sweeps
+     * and D-83 rules that exactly one suite may own a global sweep. This suite
+     * already owns them.
+     */
+    it('every scheduled job RUNS as adulis_jobs -- no job is stopped by a grant (v2.8 S20.1a)', async () => {
+      const denied: string[] = [];
+      const otherRaises: string[] = [];
+      for (const job of SCHEDULED_JOBS) {
+        const probe = createJobHarness(T0);
+        try {
+          await job.run(probe.ctx);
+        } catch (e) {
+          const msg = String((e as { message?: string })?.message ?? e);
+          // 42501 is insufficient_privilege. The message form is what pg
+          // surfaces through kysely for a missing table or schema grant.
+          if (/permission denied|42501|insufficient.privilege/i.test(msg)) {
+            denied.push(`${job.name}: ${msg.split('\n')[0]}`);
+          } else {
+            otherRaises.push(`${job.name}: ${msg.split('\n')[0]}`);
+          }
+        } finally {
+          await probe.close();
+        }
+      }
+      // Reported, not asserted: a non-permission raise is the job doing its job.
+      if (otherRaises.length) console.log('  jobs that raised for a NON-grant reason:', otherRaises);
+      expect(denied).toEqual([]);
+      expect(SCHEDULED_JOBS.length).toBe(21);
+    });
   });
 
   describe('E2 — notification', () => {

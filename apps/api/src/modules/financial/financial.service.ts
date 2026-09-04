@@ -220,17 +220,16 @@ export class FinancialService {
    * depends on whether anyone opened a screen — the shape that made the
    * interval unbounded in the first place — and a write outside the request's
    * transaction cannot be rolled back when the request SHOULD fail, which is
-   * the mirror of the same bug. `payout.activate_due` (ADU-AUTH-01 v2.7 S20.1,
+   * the mirror of the same bug. `payout.activate_due` (ADU-AUTH-01 v2.8 S20.1,
    * registered through RULED_JOBS) owns activation, every five minutes, in its
    * own transaction, per seller. Against a twenty-four hour delay the lazy path
    * bought freshness nobody can perceive.
    *
-   * [!] THIS CONTRADICTS AN INSTALLED BINDING SENTENCE. ADU-AUTH-01 v2.7 S20.1
-   * says "The lazy path stays -- it costs nothing and makes the screen correct
-   * at the moment it is read." That sentence is now false by founder ruling
-   * (T21 S1), and the document is NOT reissued. The debt is registered as
-   * D-268 and listed in RULINGS-NEEDED; do not read this comment as authority
-   * over the document without that entry.
+   * THE DOCUMENT DEBT IS DISCHARGED (T22 Phase 1). T21 shipped this against an
+   * installed sentence that said the opposite -- v2.7 S20.1's "The lazy path
+   * stays" -- and registered the disagreement as D-268 because the code and the
+   * document may not silently differ. ADU-AUTH-01 v2.8 WITHDRAWS that sentence
+   * in terms, so the document now says what this code does and D-268 is closed.
    */
   async getPayout(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
     await assertPermission(trx, req, 'seller.payout:read');

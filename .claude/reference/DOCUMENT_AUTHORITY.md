@@ -9,11 +9,12 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — binding product behaviour.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — binding seller-surface architecture.
 - `ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md` - binding database enforcement baseline. Installed at T15; v1.16 removes S0's stale table count rather than correcting it (D-222.5 -- a number with no checker and no reader schedules its own next finding). Its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and `pg_class`, and compared to the document by the `appendix` gate, so the document, the fixture and the database agree by construction. 116 tables, 71 enum types.
-- `ADU-API-01_API_Contract_v1_10_ASCII.md` - binding wire contract baseline (T16: four corrections v1.9 owed itself, the eight reads catalogued, GET /v1/seller/obligations)
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` - binding wire contract baseline. Installed at T20: S12's path strings are GENERATED from `contracts/openapi.json` rather than hand-written, and S12's surface markers are gate-compared to `core.permission.surfaces` in both directions. v1.10's substance is carried forward; v1.10 moved to `superseded/` at T22.
 - `ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md` - binding console content architecture (T15: three stale passages corrected -- G1.1 on SC-22, G1.6 on SC-25, S2.3's numbering)
 - `ADU-RUL-06_Rulings_on_the_T13_Register.md` and `ADU-RUL-07_Contract_Rulings.md` - founder rulings, binding as scoped in each. Installed at T5.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_6.md` - binding identity/access baseline for AUTHENTICATION, SESSIONS, RECOVERY, OPERATOR AUTHENTICATION and ABUSE CONTROL. Installed at T13.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_5.md` - STILL INSTALLED AND STILL CANONICAL, for the PERMISSION CATALOGUE, the 42x6 role-permission matrix and the executable SQL seed. v2.6 S0 supersedes v2.5 in part and leaves these three unchanged, explicitly, and does not reproduce them -- so v2.5 is not superseded and must not be moved to `superseded/`. `pnpm verify:permission-doc` parses it.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` - binding identity/access baseline for AUTHENTICATION, SESSIONS, RECOVERY, OPERATOR AUTHENTICATION and ABUSE CONTROL. Installed at T22; supersedes v2.7's half. It withdraws v2.7 S20.1's "The lazy path stays", records S20.1a (a grant on a function is not a grant on what the function reads) and corrects S0.3: `IN_APP` has a writer.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_6.md` - SUPERSEDED as a governing document, STILL INSTALLED because a gate parses it: `pnpm verify:transcription` compares migration 0043 to its delivery layer in both directions. Do not move it to `superseded/` for the same reason v2.5 is not moved.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_5.md` - STILL INSTALLED AND STILL CANONICAL, for the PERMISSION CATALOGUE, the 42x6 role-permission matrix and the executable SQL seed. v2.8 S0 supersedes v2.5 in part and leaves these three unchanged, explicitly, and does not reproduce them -- so v2.5 is not superseded and must not be moved to `superseded/`. `pnpm verify:permission-doc` parses it.
 - `ADU-SEC-01_Content_Security_Policy_v1_0.md` — binding browser-security baseline.
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — binding public-website baseline.
 - `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — binding architecture/operations record and standing developer manual. Installed at T10.
@@ -29,8 +30,8 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
 2. **Database enforcement:** `ADU-DB-01 v1.16` governs.
-3. **API/wire behaviour:** `ADU-API-01 v1.10` governs.
-4. **Authentication/authorization:** `ADU-AUTH-01 v2.5` governs.
+3. **API/wire behaviour:** `ADU-API-01 v1.11` governs.
+4. **Authentication/authorization:** `ADU-AUTH-01 v2.8` governs for authentication, sessions, recovery, operators and abuse control; `ADU-AUTH-01 v2.5` remains canonical for the permission catalogue, the 42x6 matrix and the SQL seed. The split is recorded in `docs/amendments/README.md`.
 5. **Seller surface placement:** `ADU-ARCH-01 v2.0` governs.
 6. **Browser security:** `ADU-SEC-01 v1.0` governs.
 7. **Public website:** `ADU-WEB-01 v1.0` governs, subject to PRD on product facts.

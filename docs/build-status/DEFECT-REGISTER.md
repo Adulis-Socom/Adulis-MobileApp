@@ -3871,3 +3871,44 @@ Response:  FIXED - four rows added, and three comparator defects fixed to make t
 Action:    (1) `resolve` follows a DOT reference (color.accent, focus.ringWidth), the TS-side twin of what resolveCss already did for var(); a comparator that resolves one side's indirection and not the other reports disagreements where there are none. (2) `resolveCss` follows ANY --adu-* reference, not only the ramp -- the ring points at a ROLE, so a ramp-only regex gave up at the outer var(). (3) `pairs` respects QUOTES: it split on commas at depth zero, so the font stack parsed as `system-ui` and the check reported a value disagreeing with its own first word. That last one is precisely what the function's existing comment warns about one level up, and it was invisible only because no row had ever reached a value containing a comma.
            PROVEN TO FIRE: four violations planted one at a time -- the dark ring frozen at the light accent, a 44px target drifting to 40px in CSS only, one character changed in the mono stack, and a ring offset drifting in CSS only -- each observed red, then restored. The offset plant fails TWO rows, which is correct: the geometry is shared across modes.
 Ruling needed: none.
+
+### D-268 - CLOSED by ADU-AUTH-01 v2.8
+
+Severity:  BLOCKER (document debt) -- DISCHARGED
+Phase:     T21 - S1, closed T22 - Phase 1
+Source:    ADU-AUTH-01 v2.7 S20.1, "The lazy path stays -- it costs nothing and makes the screen correct at the moment it is read"
+Found by:  Routing T21's ruling through adulis-spec-router before implementing it
+Effect:    T21 shipped the removal of the lazy payout activation against an installed binding sentence that said the opposite, as an interim founder ruling, and registered the disagreement here because the code and the document may not silently differ.
+Response:  CLOSED. ADU-AUTH-01 v2.8 S20.1 WITHDRAWS the sentence in terms: "v2.7's 'The lazy path stays' is WITHDRAWN. The GET stops activating. The job owns activation entirely."
+Action:    The two code comments that carried the debt now say it is discharged rather than owed -- financial.service.ts getPayout and the payout.activate_due header. THE DEBT WAS OPEN FOR ONE ORDER, which is the point: it was recorded, it was visible, and it was paid. An interim ruling that is never written down is a code base that quietly disagrees with its own specification.
+Ruling needed: none. Discharged.
+
+### D-274 - The ASCII gate governed two superseded revisions, and the manifest disagreed with itself
+
+Severity:  MAJOR (fixed here)
+Phase:     T22 - Phase 1
+Source:    ops/scripts/verify-docs-ascii.mjs GOVERNED named ADU-AUTH-01 v2_6 and ADU-API-01 v1_10; docs/amendments/README.md's split block named v2.6
+Found by:  Installing v2.8 and reading the list the installation had to touch
+Effect:    THREE STALE COPIES, ALL FROM ONE ORDER'S INSTALL. T20 installed ADU-AUTH-01 v2.7 and ADU-API-01 v1.11 and advanced neither the ASCII gate's governed list nor the manifest's own split block.
+           The gate did not go red, and could not have: both superseded files were still on disk and still ASCII, so readFile succeeded and every line printed PASS. IT WAS ENFORCING ASCII ON DOCUMENTS NOBODY READS AND NOT ON THE DOCUMENTS THAT GOVERN. A gate checking the wrong file is worse than no gate, because it reports a result.
+           The manifest was worse in kind. Its table row said v2.7 governs authentication; its own split block, eleven lines below, said "-> v2.6" -- the file whose entire job is to say which revision governs, disagreeing with itself, in the one entry where "the newer version governs" is explicitly FALSE as a general statement and a reader therefore CANNOT fall back on the general rule.
+           And DOCUMENT_AUTHORITY.md, which every skill instructs an agent to read first, still answered "ADU-API-01 v1.10 governs" and "ADU-AUTH-01 v2.5 governs" -- two and three revisions behind.
+Response:  FIXED, and made mechanical
+Action:    The list now names v2.8 and v1.11. v2.7 and v1.10 are moved to docs/superseded/; v2.6 and v2.5 STAY in docs/ and stay governed for a different reason, which the comment now states: a document is governed if it GOVERNS or if A GATE PARSES IT. verify-transcription parses v2.6, verify-permission-doc parses v2.5.
+           THE DURABLE HALF IS THE COMPARATOR, because the list is a hand-maintained transcription and this project's answer to those is never "remember harder". Two rules: every governed path exists and is not under superseded/; and for every document family installed under docs/, if the family is governed at all it is governed at its NEWEST installed revision. The second rule is the one that fires the day a revision is installed and the list is not touched.
+Verification: proven to FIRE by planting the exact T20 mistake -- the governed entry set back to v2.6 while v2.8 is installed -- and observing red naming both families. Restored green. 12 governed documents.
+Ruling needed: none.
+
+### D-275 - The D-47 probe, restored and made self-extending
+
+Severity:  MINOR (a probe rebuilt, no defect found by it)
+Phase:     T22 - Phase 1
+Source:    ADU-AUTH-01 v2.8 S20.1a -- "Prove a job runs by running it as its own role, never by reading the migration", and its note that the D-47 probe "was not repeated for jobs added later"
+Found by:  The order asking for it directly
+Effect:    D-47 found twenty jobs holding EXECUTE and no USAGE on core, by running them as adulis_jobs before a line of the worker existed. It was a ONE-OFF. Four tiers later payout.activate_due shipped holding EXECUTE on a SECURITY DEFINER function and no SELECT on the table it reads to find its work (D-270), and nothing looked, because the probe that would have caught it was a thing somebody once did rather than a thing that runs.
+Response:  BUILT as a permanent test, and it found NOTHING -- which is the result, stated plainly
+Action:    All twenty-one SCHEDULED_JOBS run as adulis_jobs with no grant error. The probe iterates SCHEDULED_JOBS rather than a list of names, so a job added tomorrow is probed tomorrow with nobody remembering to add it -- the whole difference between this and the probe that went stale.
+           It asserts on the PERMISSION CLASS ONLY. A job may raise for an ordinary reason; ledger.assert_zero is REQUIRED to throw on an unbalanced ledger. What no job may do is raise 42501 or "permission denied", which is never a fact about the data and always a fact about the grant.
+           It lives in e2-e6.jobs.spec.ts because several of these jobs are fleet-wide sweeps and D-83 rules that exactly one suite may own a global sweep. That suite already owns them.
+Verification: proven to FIRE by revoking migration 0049's grant and observing the probe report, by name, "payout.activate_due: permission denied for table payout_details" -- D-270 reproduced on demand by the probe that would have prevented it. Restored.
+Ruling needed: none.

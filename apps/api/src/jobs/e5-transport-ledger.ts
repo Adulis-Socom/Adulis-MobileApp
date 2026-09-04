@@ -72,9 +72,9 @@ export const ledgerAssertZero: Job = {
 export const payoutActivateDue: Job = {
   name: 'payout.activate_due',
   cron: '*/5 * * * *',
-  cadenceNote: 'ADU-AUTH-01 v2.7 S20.1: the delay must mean twenty-four hours',
+  cadenceNote: 'ADU-AUTH-01 v2.8 S20.1: the delay must mean twenty-four hours',
   /**
-   * THE JOB THAT MAKES THE INTERVAL MEAN WHAT IT SAYS (v2.7 S20.1).
+   * THE JOB THAT MAKES THE INTERVAL MEAN WHAT IT SAYS (v2.8 S20.1).
    *
    * core.fn_activate_due_payout was invoked from exactly ONE place in the
    * product -- the GET on /v1/seller/payout -- and no job called it. A due
@@ -85,12 +85,21 @@ export const payoutActivateDue: Job = {
    *
    * AND SINCE T21 S1 IT IS THE ONLY THING THAT ACTIVATES. v2.7 S20.1 kept the
    * lazy path -- "it costs nothing and makes the screen correct at the moment
-   * it is read" -- and the founder ruling in T21 S1 dropped it (D-268). A read
-   * that writes was the defect, not the transaction it wrote in; against a
+   * it is read" -- and the founder ruling in T21 S1 dropped it. A read that
+   * writes was the defect, not the transaction it wrote in; against a
    * twenty-four hour delay the freshness it bought is imperceptible. The cost
    * is real and bounded and worth naming: a due PENDING can display as PENDING
    * for up to five minutes after activates_at, which is this job's period.
-   * S20.1's sentence is not reissued -- see D-268 and RULINGS-NEEDED.
+   * ADU-AUTH-01 v2.8 WITHDRAWS that sentence, so the document and this job now
+   * agree and D-268's debt is discharged.
+   *
+   * [!] AND IT HAD NEVER RUN. v2.8 S20.1a: this job held EXECUTE on the
+   * SECURITY DEFINER function and no SELECT on core.payout_details, which the
+   * discovery query below reads DIRECTLY -- outside the per-seller try/catch,
+   * so every tick died whole. Migration 0049 supplies the grant. The rule the
+   * document draws from it governs every job in this file: a grant on a
+   * function is not a grant on what the function reads, and a job is proven by
+   * running it as its own role, never by reading the migration.
    *
    * PER-PAYOUT CONTAINMENT, and it is the requirement rather than a nicety.
    * The ownership-transfer activation had none: one raise would have fronted
@@ -169,7 +178,7 @@ export const analyticsCreatePartition: Job = {
 /**
  * E5's contribution to the S24 transcription -- FOUR, and payoutActivateDue is
  * deliberately NOT among them. S24 does not name it: it comes from ADU-AUTH-01
- * v2.7 S20.1, so it is registered through registry.ts's RULED_JOBS instead.
+ * v2.8 S20.1, so it is registered through registry.ts's RULED_JOBS instead.
  * Adding it here would have made the "exactly the twenty S24 names, and no
  * others" assertion a test that no longer transcribes anything.
  */

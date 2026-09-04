@@ -85,7 +85,7 @@ describe('the worker runtime', () => {
     // green because SOME worker beat recently.
     expect(rows.rows).toHaveLength(1);
     // Twenty-one SCHEDULED (S24's twenty plus payout activation from
-    // ADU-AUTH-01 v2.7 S20.1), not counting the heartbeat itself.
+    // ADU-AUTH-01 v2.8 S20.1), not counting the heartbeat itself.
     expect(rows.rows[0]).toMatchObject({ worker_id: 'test-worker', jobs_registered: 21 });
   });
 
@@ -150,7 +150,7 @@ describe('the worker runtime', () => {
     const handle = await startWorker(log);
     try {
       // Twenty from S24, the heartbeat (ADU-CON-02 S20.2), and payout
-      // activation (T20 S6.1 / ADU-AUTH-01 v2.7 S20.1 -- the job that makes
+      // activation (T20 S6.1 / ADU-AUTH-01 v2.8 S20.1 -- the job that makes
       // the twenty-four hour delay mean twenty-four hours rather than "until
       // the seller next opens the payout screen").
       expect(handle.jobNames).toHaveLength(22);

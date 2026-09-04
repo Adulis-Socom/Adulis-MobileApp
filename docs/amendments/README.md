@@ -5,7 +5,7 @@
 | Document | Governs at | Where |
 |---|---|---|
 | **ADU-DB-01** | **v1.16** -- one line removed: S0 stated a table count through three revisions while the appendices said something else, and the correction is REMOVAL, not update (D-222.5 -- a number with no checker and no reader schedules its own next finding). **Nothing else changes: 116 tables, 71 enum types, migrations 0001-0046.** Appendices GENERATED and `verify:appendix` compares both ways | [`docs/ADU-DB-01_..._v1_16_ASCII.md`](../ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md) |
-| **ADU-AUTH-01** | **SPLIT ACROSS TWO INSTALLED REVISIONS -- see below.** **v2.7** governs authentication, sessions, recovery, operator authentication and abuse control (installed T20; supersedes v2.6's half). **v2.5** remains canonical for the permission catalogue, the 42x6 matrix and the SQL seed -- **v2.7 S0 states there is no permission-grant change in the revision**, so the split is unchanged in shape | [`v2.7`](../ADU-AUTH-01_Authentication_and_Authorization_v2_7_ASCII.md) - [`v2.5`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
+| **ADU-AUTH-01** | **SPLIT ACROSS TWO INSTALLED REVISIONS -- see below.** **v2.8** governs authentication, sessions, recovery, operator authentication and abuse control (installed T22; supersedes v2.7's half). It **WITHDRAWS v2.7 S20.1's "The lazy path stays"** -- the job owns payout activation and the `GET` stops activating -- records **S20.1a**, where `payout.activate_due` held `EXECUTE` on the function and no `SELECT` on the table it reads to find its work, and corrects S0.3: **`IN_APP` has a writer**. **v2.5** remains canonical for the permission catalogue, the 42x6 matrix and the SQL seed -- **v2.8 S0 states there is no permission-grant change in the revision**, so the split is unchanged in shape | [`v2.8`](../ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md) - [`v2.5`](../ADU-AUTH-01_Authentication_and_Authorization_v2_5.md) |
 | **ADU-API-01** | **v1.11** (installed T20) -- the S12 path strings are now GENERATED from `contracts/openapi.json` rather than hand-written (three of v1.10's were wrong), and S12's surface markers are gate-compared to `core.permission.surfaces` in both directions. v1.10's substance is carried forward | [`docs/ADU-API-01_..._v1_11_ASCII.md`](../ADU-API-01_API_Contract_v1_11_ASCII.md) |
 | **ADU-CON-03** | **v1.3** -- three stale passages v1.2 preserved because it did not read them: SC-22 no longer hands identity to a KYC vendor (D-224.9, G1.1 governs), SC-25's ownership transfer is BUILT (D-224.10, G1.6 governs), S2.3's More table renumbered with Payout under Billing (D-224.11); S17 item 2 corrected -- the couriers endpoint EXISTS and returns the wrong object (D-224.4). GOVERNED (ASCII for the first time). Still supersedes RUL-07 S3/S4 where they overlap | [`docs/ADU-CON-03_..._v1_3.md`](../ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md) |
 | **ADU-RUL-06** | **v1.0** -- seven rulings on the T13 register (D-190, D-192, D-193, D-196, D-202, D-203, D-204.1; records D-206). Built into T14 Part A; installed now | [`docs/ADU-RUL-06_..._Register.md`](../ADU-RUL-06_Rulings_on_the_T13_Register.md) |
@@ -17,21 +17,28 @@
 
 ## ADU-AUTH-01 is split, and v2.5 is not superseded
 
-**ADU-AUTH-01 v2.6 S0 requires this manifest to record the split, and it is the
+**ADU-AUTH-01 v2.8 S0 requires this manifest to record the split, and it is the
 one entry in this file where "the newer version governs" is FALSE as a general
 statement.**
 
 ```text
 AUTHENTICATION / SESSION / RECOVERY / OPERATIONS
--> v2.6
+-> v2.8
 
 PERMISSION CATALOGUE / ROLE MATRIX / SQL SEED
 -> installed v2.5 canonical sections
 ```
 
+> [!] **This block said `-> v2.6` until T22, through the whole of v2.7's
+> installation.** The table row above was advanced at T20 and the block below it
+> was not, so the manifest disagreed with itself about which revision answered
+> the authentication question -- **in the one file whose entire job is to say
+> which revision governs.** It is the stale-copy class the root `CLAUDE.md`
+> names, arriving in the document that exists to prevent it (D-274).
+
 | Question | Read |
 |---|---|
-| How does a person authenticate? Sessions, OTP, SMS routing, market activation, budgets, recovery, deletion, step-up, operators, enumeration | **v2.6** |
+| How does a person authenticate? Sessions, OTP, SMS routing, market activation, budgets, recovery, deletion, step-up, operators, enumeration | **v2.8** |
 | Which permission exists, what surface may exercise it, which role holds it, what the seed contains | **v2.5** S15.1, S16.2, S16.2a and the executable seed |
 
 **v2.5 stays in `docs/`. It is not moved to `superseded/`, and moving it would
