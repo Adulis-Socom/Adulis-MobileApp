@@ -21,10 +21,46 @@ export interface ProductRow {
   readonly visibility: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   readonly base_price: Money;
   readonly display_order: number;
+  /**
+   * The CARD derivative of the lowest-position image, or null (T22 Phase 4.1).
+   * A BARE KEY, not a URL: /v1/bootstrap owns the origin, and the console joins
+   * the two exactly as Media.tsx does.
+   */
+  readonly image_key: string | null;
+}
+
+/**
+ * The resolved product cap and WHICH limit produced it (T22 Phase 4.2).
+ *
+ * ADU-CON-03 S8: "the counter must say which one binds". A NEW seller on a paid
+ * tier is capped by the LEVEL whatever the tier allows, and a seller told
+ * "10 of 10" without being told which limit that is cannot know whether paying
+ * or trading lifts it. Those are different actions.
+ *
+ * `cap: null` means no cap is in force. S8:415 forbids the screen printing the
+ * word "unlimited", so a null renders as an absence of a number, never as a
+ * word standing in for one.
+ */
+export interface PublicationLimit {
+  /**
+   * FALSE when the server could not resolve a limit at all (its fail-closed
+   * NO_TIER_DEFINITION / NO_LADDER_CONFIG branches). That is NOT "no cap is in
+   * force": a seller whose limit cannot be resolved cannot publish, and telling
+   * them nothing limits them would be the opposite of the truth.
+   */
+  readonly resolved: boolean;
+  readonly reason: string | null;
+  readonly used: number;
+  readonly cap: number | null;
+  readonly tier_cap: number | null;
+  readonly level_cap: number | null;
+  readonly binding: 'TIER' | 'LEVEL' | 'BOTH' | 'NONE';
+  readonly level: string | null;
 }
 
 export interface ProductPage {
   readonly data: readonly ProductRow[];
+  readonly publication: PublicationLimit;
   readonly has_more: boolean;
   readonly next_cursor: string | null;
 }
