@@ -62,12 +62,12 @@ written and false where it was needed.**
 | **D-290** | The test proving a staging OTP never reaches the logger **passed with the violation planted**. Chasing that found the real limit: `NEVER_LOG` removes **fields**, and `msg` is allow-listed with nothing reading its contents |
 | **D-291** | The console's CSP named **two hostnames that have never existed**, typed a second time beside the variables the build already had. Fixed twice at *serve* time, in two harnesses, never in the artifact |
 | **D-294** | `core.operator_grant` is empty in **every environment that has ever existed, including this laptop's** -- and the consequence is that no seller can ever publish anything, silently |
-| **D-297** | The Render probe **FAILED**. The schema's whole DDL path assumes a superuser -- four constructs, 86 `OWNER TO` statements, 24 files -- so `db:migrate` cannot run on any managed host as the repository stands |
+| **D-297** | The Render probe **FAILED**, then **PASSED 8 of 8** once `createrole_self_grant` was provisioned. Render is verified; the schema's DDL path still is not -- four constructs, 86 `OWNER TO` statements, 24 files, and `0023:510` untouched by the fix |
 | **D-296** | `pnpm ci:local` is red **one run in three**, with a 429 in a different spec each time. D-273's shape with a **counter** as the third shared resource -- and it is the ninth instance D-280 predicted a worker cap would hide |
 
 ---
 
-## Phase 1 - UNPARKED, RUN, AND FAILED
+## Phase 1 - RUN TWICE: FAILED, THEN PASSED 8 OF 8
 
 **This section replaces the one written earlier the same day.** Phase 1 was parked
 for want of credentials; credentials arrived; the probe ran against a real Render
@@ -82,7 +82,32 @@ probe.sql:161        ERROR: must be able to SET ROLE "probe_app"      exit 3
 
 Capabilities 3, 4a, 4b, 4c and 5 never ran. Neither did the teardown.
 
-**RENDER IS UNVERIFIED, NOT VINDICATED**, and my first reading of this got it
+### Then, on a founder instruction, it passed
+
+A second Render instance was provisioned with one statement as the managed role
+-- `ALTER ROLE CURRENT_USER SET createrole_self_grant = 'set, inherit'` -- and the
+probe ran **end to end as a non-superuser: 8 of 8, exit 0, `TEARDOWN PASS`**, 130
+lines, the same length as the local baseline. The role stayed `rolsuper=f` and
+`is_superuser=off` throughout. **Capabilities 3, 4a, 4b, 4c and 5 are therefore
+VERIFIED on Render** -- the answer S18's mandatory verification was asking for,
+and the one the first run could not give.
+
+**`'set'` alone is not enough, and that was measured.** It fails at line 290:
+capability 4c does `RESET ROLE` and verifies the access-log row *as the outer
+role*, which needs INHERIT. So `inherit` is load-bearing for the probe's own
+verification, while `set` is what the blocking DDL construct requires. That
+distinction matters before anyone adopts the GUC as a provisioning step: handing
+a migrating role INHERIT on `adulis_financial` gives it the boundary owner's
+privileges, which is close to the collapse the two boundaries exist to prevent.
+
+**It does not clear the migrations.** The probe proves the *instance* supports the
+shapes. `0023:510` still needs `adulis_migrate` to hold CREATE on schema
+`financial` where `0023:499` grants only USAGE, and the GUC changes what the
+*executor* can do, not what the new owner holds. **D-297 stays open.**
+
+### The first run, and the reading I got wrong
+
+**RENDER WAS UNVERIFIED, NOT VINDICATED**, and my first reading of this got it
 wrong. The control experiment below proves only that the error is not
 Render-*specific*. It says nothing about whether Render can carry the
 verification and financial boundaries, **because the capabilities that test them
