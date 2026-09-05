@@ -1,6 +1,6 @@
 # FINAL TEST REPORT - What Breaks, And At What Number
 
-**Order:** T25. **Status: STOPPED on a BLOCKER (D-320) at the end of Phases 2 and 3 and reported; the author instructed the order to continue. Phase 4 in progress on that instruction. A SECOND BLOCKER (D-325, a cross-tenant write) was confirmed by the refutation pass after the stop and is reported in SECURITY; no attack was launched after the stop -- the refuters that found it were already running.**
+**Order:** T25. **Status: COMPLETE. Phases 0-4 run and reported. The order STOPPED on a BLOCKER (D-320) after Phases 2 and 3; the author instructed it to continue; a SECOND BLOCKER (D-325, a cross-tenant write) was confirmed by the refutation pass; Phase 4 ran on that instruction. Two blockers, thirty-two register entries (D-310 to D-352), one ruling the product cannot open without (D-328).**
 
 ---
 
@@ -340,28 +340,65 @@ NOT TESTED: the mutating POSTs (publish, payment/confirm) returned **500 for the
 
 ## QUALITY
 
-**Phase 4 was not started.** The order says stop on a tenant-isolation failure, and D-320 is one. Everything below is what was prepared and what quality-shaped findings the earlier phases produced on the way -- not the day-in-the-life, not the edges, not the accessibility audit, not the Amharic layout pass. **Those four are NOT TESTED**, and the reason is the stop, not the machine.
+**Where it ran:** the built console, served with its production CSP on this laptop, driven in the console's own bundled Chromium at 360x740, 768x1024 and 1280x800, against the local API and database, with real image bytes through a real MinIO. Five walkers -- a seller's day, the data edges, the failure paths, an accessibility audit, the Amharic path -- and a second agent per finding that would block or embarrass. **The session limit ended two of the five walkers and twenty of the verifiers before they could return**; both walkers had already written their findings and screenshots to disk, and those are what is reported, marked "one author" where no second agent reproduced them. Every item names its screenshot under `<scratchpad>/p4/`.
 
-**What was ready when the stop came, so the next run starts at the first screen:**
+**Before anything else: the console this order first served could not sign anyone in.** Both bundles were built by hand without `VITE_API_BASE_URL`; the resolver throws before the first fetch; the sign-in form says "Something went wrong on our side... request id: -" and no request leaves the browser. That is the author's build, not the product (`render.yaml` sets the variable; the e2e harness sets it for its own build) -- but the header gate only NOTES the absence and ships, and every walker lost its first hour to it (D-350). The walkers swapped a correct bundle in at the browser level; the served consoles were then rebuilt properly.
 
-| piece | state | where |
-|---|---|---|
-| the API, `development`, fake SMS writing codes to `.dev-sms.log` | up on :3000 | `apps/api/dist/main.js` |
-| the shipped console, served with its CSP by the e2e static server | up on :5173 | `node e2e/serve.mjs 5173` |
-| **the Amharic-forced console** (`navigatorPrefersAmharic()` returning `true`, the only switch there is -- `AM_ENABLED` exists in comments alone) | built in a detached worktree, up on :5174 | `<scratchpad>/wt-am`; never committed |
-| an accessibility engine | axe-core 4.10.2, installed OUTSIDE the repository | `<scratchpad>/p4/node_modules/axe-core` |
-| a browser | the MCP browser needs a system Chrome this machine lacks; the console's bundled Chromium (Playwright 1.56.1, build 1194) was being installed at the stop | `pnpm --filter @adulis/console exec playwright install chromium` |
-| the seeded seller and buyer, and the sign-in path | `+251900000001` / `+251900000002`, OTP from the dev SMS log | `apps/console/e2e/helpers/session.ts` |
+### A seller's day, as the day walker lived it -- 64 screens from sign-up to the next morning
 
-**What the earlier phases found that a seller would feel, in the order a seller would meet them:**
+**What a seller CAN do, unaided:** get a code for a new phone and sign in; see "You do not have a store yet" and create one; save fulfilment; set payout through the step-up dialog (the code arrives, the dialog traps focus, the pending change and its activation time are shown); create a product, upload two photographs that render back, add free-text variants, set stock; take a payment (the buyer's evidence image renders beside the verify-first sentence) and confirm it; invite a courier, mark ready, assign, hand to the courier; see the buyer's scan turn the order to "Handed off" and the history line appear; answer a claim with a remedy and a deadline; and come back the next morning on the remembered device to a Home that says "Nothing needs you right now" with the week's numbers (`p4/01/62-next-morning-home.png`).
 
-1. **The API and the worker exit on the first closed connection** (D-310). A seller's symptom is a 502 for the length of a boot, on no schedule, with nothing in the log that says why. This is the first thing in this report to fix and it is not a security finding.
-2. **A garbage cursor is a 500** (D-324). A seller's browser will not send one; a stale bookmark or a back button on a paginated list might, and the page says "something went wrong, try again" for a URL that will never work.
-3. **Seller-controlled text is stored as typed** (class 4.6). The renderer's escaping is the whole defence on the console, and it was not audited -- that is Phase 4's first screen. The CSP that would have been the second defence is not served by the blueprinted deployment (D-318).
-4. **The console e2e harness dies on a directory URL** (D-316), which is a test-quality finding: a run that fails this way reads as a product outage.
-5. **"Six load tests" is three** (D-312), and the three cannot run on a managed provider (D-307); the repository's repeatable coverage of the deployed tier is zero.
+**What a seller CANNOT do, and the nine points where the walker had to know something a seller would not:**
 
-**What embarrasses, on the evidence so far:** nothing a buyer sees. Every buyer-facing path that was attacked -- OTP, enumeration, handoff, evidence, payout -- held. What embarrasses is on the seller side and is invisible until it is looked for: a competitor reading your live orders through a status code, and a step-up code approved for one member spent on another.
+| # | where it stops | what a seller sees | what it took to get past | register |
+|---|---|---|---|---|
+| 1 | linking a social account (SC-22) | "Something went wrong on our side" with a request id | knowing the boot log says no TikTok/Instagram client is bound and the check degrades to a 503 | D-332 |
+| 2 | the store profile readiness item | a category select with nothing in it | inserting a `core.category` row -- the table is empty on a fresh deployment | D-330 |
+| 3 | **publishing anything** | "Your current plan does not include this." -- no link, no plan named | inserting a BETA `billing.subscription` row, as the seed does for the seeded seller and nothing does for anyone else | D-329, D-349 |
+| 4 | buying a plan (SC-26) | the step-up modal opens already showing "The request is not valid." twice; no code arrives | reading that the console sends the tier NAME where the API wants a uuid, and that no LISTED tier definition exists anyway | D-329 |
+| 5 | **taking an order on day one** | nothing -- the storefront simply cannot create an order | knowing the first payout is PENDING for 24 hours and `fn_create_order` requires ACTIVE; moving `activates_at` and running the job | D-331 |
+| 6 | the buyer scanning the QR | a courier who scans gets 403 COURIER_CANNOT_SCAN | knowing the scanner must be the BUYER; the seller's screen does not say so | note in D-328 |
+| 7 | **receiving a review** | the buyer gets 409 ORDER_NOT_TERMINAL on a handed-off order | `UPDATE core."order" SET state = 'COMPLETED'` by hand -- **nothing in the product performs the ratified "settlement" transition** | D-328 |
+| 8 | changing payout on day one | "Payout changes are locked for twenty-four hours after a sign-in from a device we have not seen" | waiting, or knowing the lock is the new-device rule applied to the first device | D-331 |
+| 9 | reading the console at all | the request-id "-" error | rebuilding the bundle with the API origin | D-350 |
+
+Items 3, 5 and 7 are the ones a beta cannot open with: a seller who does everything right cannot publish, cannot sell today, and can never be reviewed.
+
+### The edges -- zero, one, two hundred products; fifty lines; five images and a video; three stores; Ge'ez names
+
+**Holds:** honest empty states; 200 products created at 8 ms a POST and paged correctly (ten API pages of 20 at 6-8 ms, no duplicates); five images through the presigned flow rendering from MinIO; three stores under one account with the switcher and `X-Adulis-Seller` isolating each (404s); a fifty-line order rendering every line; Ge'ez store, product and variant names rendering without clipping on the English console.
+
+**Embarrasses:** the 200-product list is in UUID order with no search or sort and tabs that filter only loaded rows -- nine "Load more" clicks and 25 screens at 360 (D-340); list bullets steal 60 px so every product name wraps to three lines at 360 (D-337); the editor with five images scrolls sideways at 360 (478 px wide) and with fifty variants puts Publish fourteen screens down (D-338); variant rows read "Size L / BlueETB 1,250.00Active5 in stock" (D-337); the fifty-line order puts every action nine screens down after fifty "Can't Fulfil" buttons and shows no total anywhere on the detail (D-339); the console has no control to attach a video, and a video attached by API never reaches the storefront (D-341); an Amharic-named product is published at the slug "product" (D-342); chooser rows run name, handle and role together (D-337).
+
+### The failure paths -- the API down, the network dropping mid-upload, a duplicate submit, the back button, two tabs
+
+**Holds, and it is the best result in this section:** double-submit is fully defeated -- every double-click and every lost-response retry produced exactly one row, through mount-minted idempotency keys and busy-disabled buttons (verified); with the API down mid-session the seller sees TRANSPORT_ERROR with a Retry, a STALE banner, keeps typed text, and recovers when the API returns (verified).
+
+**Fails or embarrasses:** a lost image-COMMIT response -- the bad-connection retry the key exists for -- blocks every further upload with "This retry key was already used for a different request" until a reload, and leaves the wrong photo on the product (D-333, verified, BLOCKS); a drop mid-PUT says "refused by storage before upload (bucket CORS or network)" about a transfer that was flowing, offers no retry, and leaves orphan objects nothing reclaims (D-347); a reload during any blip drops a signed-in seller onto a blank sign-in page -- `bootProblem` is captured and never rendered (D-344, verified); Publish while down puts its error banner above the viewport and leaves the button enabled (D-345); Back after creating a product re-opens a blank form and a second tap makes a second product (D-346, a note); two tabs do silent last-writer-wins on product fields, and stale actions surface as "The request is not valid." or a 404 above a still-shown pending panel (D-343, verified).
+
+### Accessibility, audited: keyboard-only, a screen reader on SC-04, contrast in both modes, 44 px at 360
+
+**Holds:** a keyboard-only seller can sign up, create a store, list a product with an image, set payout through the step-up dialog (which traps focus and closes on Escape) and reach the money screen; **the focus ring is visible on every stop at 8.72:1 light and 8.67:1 dark**; text contrast passes in both modes except three elements; axe-core 4.10.2 finds **no critical violations** on 26 screens in either mode; buttons, the bottom bar, the switcher and the dialog controls meet 44 px.
+
+**Blocks a keyboard seller:** the payment-evidence dialog on SC-04 -- the money screen -- does not take, trap or restore focus; Tab walks the page's own "Confirm Payment Received" behind the backdrop before it reaches the dialog (D-334).
+
+**Embarrasses:** focus is dropped to `<body>` after every step change, route change and self-disabling button, so nothing is announced and the seller starts from the top (D-336); on SC-04 a blind seller hears the state and the two decisions correctly named but **no order total and no order reference**, and two obligations on Home carry the same accessible name with the countdown glued on (D-337); the bell is a 7x24 link on every screen, the More menu is 21 px links, every select and textarea is under 44 px (D-335); two hints and the dark-mode "New price" placeholder -- the only visible label for that field -- fail contrast, a `<main>` nests inside `<main>`, empty states jump h1 -> h3, and the entity-type radios stretch to the full row so the circle sits 600 px from its label (D-348). **All of this is one author: every accessibility verifier died on the session limit.**
+
+### The Amharic path -- for layout, not translation
+
+**The switch does not switch.** `navigatorPrefersAmharic()` is the only Amharic control in the console, and flipping it to `true` in a worktree build yields English chrome with the store's own Ge'ez name (`p4/05/shots/am-build/home-360.png`): the value it computes reaches date and currency formatting only, and **every component imports `en` from `@adulis/locale` directly; nothing imports `am`** (D-351). The walker therefore injected the 771-key machine-translated `am` catalogue into the DOM itself -- the wiring the console does not have -- and, separately, inflated every visible string by half with Ethiopic glyphs.
+
+**With the real Amharic strings in place: 93 screens at three widths, zero new clips, wraps or overflows relative to English.** The two pages wider than 360 (the products list at 362-370, the editor with images at 478) are exactly as wide in English (D-338). Mixed-script seams show the same missing separators English has ("...23h 52m left" glued to a Ge'ez link), and the keys outside the machine-translated set stay English on the same screen ("Today", "Published products"), which is MT-KEYS working as designed (`p4/05/shots/am-swap/home-360.png`).
+
+**Under uniform 50% expansion, the list the human translation pass will pay for is short:** the top bar -- store name, "Stores", "Sign out" -- and the Development banner push **26 of 31 screens to 426-441 px wide at 360** (`p4/05/shots/am-expand/home-360.png`), one component; five buttons wrap to two lines ("Sign out", "Move up", "Move down", "View payment instructions - code required"); three plan-table cells wrap at 768 (D-352). No fixed-height container clipped. The payout-change dialog could not be opened in the Amharic modes (a locator timeout at all three widths) and is NOT TESTED there.
+
+**Instrument note:** the API's origin check compares against exactly one origin, so a console served on :5174 cannot read a single API response; the walker launched that mode with web security disabled and an Origin rewrite. The measurements stand; the served :5174 console was never usable as a seller would use it.
+
+### NOT TESTED in Phase 4, and why
+
+- **A second author on the day, the accessibility findings and most of the edges** -- the session limit took twenty of twenty-six verifiers. Nine verifications ran and reproduced all nine of their findings.
+- **The payout-change dialog in Amharic** (locator timeout); **a genuine MP4** (no encoder here; WebM bytes under an `.mp4` key were accepted); **the buyer's storefront experience of a PENDING payout**; **payment-confirm double-submit** (the screen needs a buyer's submission, which no new seller reaches on day one); **SC-06's QR modal and the courier controls by keyboard**.
+- **A real device.** The order asked for one; this is Chromium at 360x740 on a laptop. Touch, a soft keyboard, a slow radio and a real screen reader were not in the room.
 
 ---
 
@@ -383,6 +420,20 @@ NOT TESTED: the mutating POSTs (publish, payment/confirm) returned **500 for the
 
 **Two things a second author taught this list.** Items 1 and 3 were HELD until a skeptic asked "which function did you NOT call?" and "which role did you NOT connect as?" -- the attacker's four functions all used the safe pattern, and the attacker's one role was the one the reviews describe. **Before a beta, the tests that stand in for those two skeptics are: every seller-scoped write function called once with a stranger actor, and every role's table privileges in the two boundary schemas asserted to be none.** Both are a page of SQL, and both would have found these on the day they were written.
 
+**What Phase 4 adds to the list -- the three things a beta cannot open with, and one ruling:**
+
+| # | fix | register | why |
+|---|---|---|---|
+| 10 | **a first-subscription path**: the console's `target_ref`, `fn_open_purchase_intent` for a seller with no row, and a LISTED tier definition -- or a BETA row granted on sign-up while the beta lasts | D-329, D-349 | no seller can publish today; three walkers hit it independently |
+| 11 | **the category seed**, and a picker that shows names | D-330 | the store profile readiness item cannot be satisfied |
+| 12 | **the first payout activating at once**, or the 24 h shown to the seller as a timed readiness item | D-331 | a seller cannot sell on the day they sign up, and nothing says so |
+| 13 | **settlement**: whatever moves HANDED_OFF to COMPLETED -- a ruling first, then the function or job | **D-328** | no order completes, no review is possible, no seller ever leaves NEW |
+| 14 | **the lost-COMMIT upload trap**: re-mint the idempotency key on any terminal response | D-333 | the bad-connection retry locks the seller out of their photos |
+| 15 | **focus management on the evidence dialog**, copied from the step-up dialog | D-334 | a keyboard seller confirms a payment through a control they cannot see |
+| 16 | **the `am` catalogue wired to the resolved locale** | D-351 | the console has one language and no path to the second; the layout is already ready for it |
+
+**What can wait in the console, and why:** the list bullets, the run-together spans, the sideways editor, the missing order total, the UUID-ordered list, the 44 px targets, the focus drops, the three contrast misses (D-335 through D-340, D-348) -- each is a day or less, none loses data, and all of them together are what "embarrasses" means in this report; the video path (D-341), the Ge'ez slug (D-342), the two-tab overwrite (D-343), the blank sign-in on reload (D-344), the off-screen banner (D-345), the orphaned uploads (D-347), and the build gate that notes instead of failing (D-350).
+
 **What can wait, and what it costs to wait:** the database tier (Stage 1 at 1,000 sellers -- cost, not code); the pooler (Stage 2, when the arithmetic says so); notification retention (D-315 -- a ruling first); the three unwritten load tests (D-312); the harness fix (D-316). **What cannot be decided by this report:** whether RLS was ever meant to carry tenant isolation (D-319) -- if it was, the 34 tables need policies and the RAM section says what that costs; if it was not, the reviews that say it does are wrong and should say so. Either way, until it is decided, **the service WHERE clause is the tenant boundary and every reviewer should read it as such.**
 
-**What this report did not do, said plainly:** it did not run on the deployment (there is none), it did not reach Phase 4, its boundary class is pending a replacement agent, and its author is its largest gap.
+**What this report did not do, said plainly:** it did not run on the deployment (there is none); it lost twenty of its Phase 4 second authors and eight of its Phase 2/3 skeptics to a session limit, so the accessibility findings and most of the seller's day stand on one author; it never put the console in a real hand on a real phone; and its author is its largest gap.
