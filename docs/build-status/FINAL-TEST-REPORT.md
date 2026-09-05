@@ -1,6 +1,6 @@
 # FINAL TEST REPORT - What Breaks, And At What Number
 
-**Order:** T25. **Status: STOPPED on a BLOCKER (D-320) at the end of Phases 2 and 3. Phases 0, 1, 2 and 3 complete and reported; Phase 4 NOT STARTED, per the order's stop rule. Refutations still running at the stop are folded in as they return; no new attack was launched after it.**
+**Order:** T25. **Status: STOPPED on a BLOCKER (D-320) at the end of Phases 2 and 3 and reported; the author instructed the order to continue. Phase 4 in progress on that instruction. A SECOND BLOCKER (D-325, a cross-tenant write) was confirmed by the refutation pass after the stop and is reported in SECURITY; no attack was launched after the stop -- the refuters that found it were already running.**
 
 ---
 
@@ -311,9 +311,20 @@ NOT TESTED: the mutating POSTs (publish, payment/confirm) returned **500 for the
 
 **4.7 Secrets -- HELD 8, NOT TESTED 1.** The built console (4 files, 550 KB, no source maps): zero key-shaped strings (AWS, Stripe, SSH, Slack, GitHub, JWT, DSN, Twilio, Mailgun), zero 32+ hex runs (so no R2 account id), zero base64 blobs over 40 chars except React's own `internalSetStateDoNotUseOrYouWillBreakYourApp`, no unexpected hostname; `*.js.map` requests return the SPA fallback. Two refuters widened it: an entropy scan, a literal-value check of every `.env` secret against the bundle, and a **deliberately hostile rebuild with the whole `.env` exported into the build shell plus a `VITE_` canary** -- only the two `VITE_` names the code references were inlined. The API's log under a REAL sign-in (OTP requested through the running API, code read from `.dev-sms.log`, verified): the code, the phone, the session token and the Idempotency-Key are absent as substrings of ANY line -- the D-290 test, done the way D-290 says it must be. NOT TESTED: a production build with the deploy environment and the production log level. **Commands:** `p23/class11/`.
 
-### What the second author changed
+### What the second author changed -- and it changed the report
 
-Nine refutations had returned at the stop. **Seven confirmed a HELD** (evidence bucket, mint isolation, image traversal, bundle secrets x2, logs, and the D-203 count); **one confirmed a FAILED** (D-317, against the document's own words); **one overturned a HELD into a FAILED** (D-318 -- the attacker read the policy file; the skeptic asked who serves it). Sixteen were still running, among them the skeptics for D-320, D-321, D-322, D-323 and D-324; their verdicts are appended to the register entries when they return, and none of them was allowed to start a new attack class after the stop.
+**Twenty-four refutations returned; eight died on a session limit** (seven tenant-class skeptics and one secrets skeptic), so seven of 3.1's items and one of 4.7's have one author only. Of the twenty-four: **eighteen confirmed a HELD, one confirmed a FAILED** (D-317, against the document's own words), **one withdrew a FAILED** (the step-up rollback is D-32's documented atomic consumption -- D-323 amended to a wording note), **and four overturned a HELD into a FAILED, two of them the most serious findings in this report:**
+
+| overturned | what the attacker saw | what the skeptic asked |
+|---|---|---|
+| **D-325, BLOCKER** -- `fn_cancel_line` | four seller-scoped write functions refuse a stranger with U0002: HELD | *the fifth?* Its guard compares `seller_id <> (subquery)`; for a stranger the subquery is NULL and the `IF` never fires. **As seller A through the API: `POST /v1/seller/orders/{B's order}/reservations/{B's line}/cancel` -> 200, B's order CANCELLED_BY_SELLER, stock released, committed** |
+| **D-326, MAJOR** -- the financial boundary | `adulis_app` cannot read the tables and every read logs: HELD | *which OTHER role?* `adulis_jobs` holds `SELECT, UPDATE ON financial.payment_evidence` from 0012:627, never revoked after D-48 -- **reads unlogged, and an UPDATE repoints evidence** |
+| **D-318, MAJOR** -- the CSP | the policy file is tight: HELD | *who serves it?* Nobody: `render.yaml` publishes a static site with no `headers:` |
+| D-323 -> withdrawn | consumption rolls back: FAILED | *was anything committed undone?* No -- that is D-32 as specified |
+
+**3.4 The boundaries -- HELD 12, FAILED 1 (D-326), NOT TESTED 1.** The replacement agent, as `adulis_app` directly: reads succeed only for the rightful actor (owner, team ADMIN, an entitled operator; IDENTITY_REVIEWER for attestation), fail closed for a stranger, a wrong-role operator and a revoked grant, and work with no GUCs set because both functions authorise on `p_actor` alone; **naming another actor as the reader logs that actor only if that actor holds the grant** -- the logged role is derived server-side, there is no "logged reader" parameter, so SR-1's complete-but-false row is not constructible; every successful read wrote exactly one `access_log` row naming the actor passed (3 financial, 1 verification, delta-verified) and every denied read wrote none; evidence is ciphertext (the repo's own `encryptFramed` hides a distinctive marker and a 200 KB constant run; round-trip decrypts) and the function returns only `object_key` and the key VERSION name, never bytes or key material; `adulis_app` is denied SELECT on both access logs and every underlying table; all ten SR-1 definer functions are non-PUBLIC (`has_function_privilege` false) and `adulis_jobs` is refused execution of both escorts. The one observation the order did not ask for: `read_attestation` denies with 42501, which the API maps to 500 (D-327). NOT TESTED: `render_payment_instructions`' ciphertext path end to end (the payout class built that fixture and covered the privilege half). **Commands:** `p23/3.4-boundaries/01_ciphertext.js`, `02_app_reads.sql`, `03_verify_log.sql`, `04_privs.sql`; the skeptic's `refute/repro.sh`.
+
+**The stop, restated.** D-320 was the BLOCKER the order stopped on. **D-325 is a second, and it is a write.** Phase 4 was started on the author's instruction to continue past the first; the second is reported here at the moment it was confirmed.
 
 ### NOT TESTED, and why -- the list the order asked for
 
