@@ -4673,3 +4673,115 @@ Response:  RECORDED. Not fixed in T25.
 Action:    none here. Either an index on `(order_id, template_key)` or, better, a retention rule for `core.notification`, which the schema does not have and E4's retention jobs do not cover.
 Verification: the plan is in FINAL-TEST-REPORT.md CAPACITY.
 Ruling needed: whether `core.notification` is meant to be retained forever -- nothing in ADU-DB-01 v1.19 says, and E4 lists retention for media, evidence, waitlist and unbound devices but not notifications.
+
+### D-316 - The console e2e static server exits on a request for a directory path
+
+Severity:  MINOR (test harness, not product; it is the server Playwright's `webServer` runs, so a stray directory URL ends an e2e run)
+Phase:     T25 - Phase 3 (found by an attacker probing the served console during Phase 2/3)
+Source:    apps/console/e2e/serve.mjs:93-96 -- `if (!file.startsWith(path.resolve(DIST)) || !existsSync(file)) file = index.html; ... res.end(readFileSync(file))`
+Found by:  the 5173 server serving the shipped console for T25 died mid-run with `Error: EISDIR: illegal operation on a directory, read` at `serve.mjs:96`
+Effect:    `existsSync` is true for a directory, so a request for `/assets` (or `/` with a trailing path segment that names a directory) passes the fallback check and reaches `readFileSync`, which throws; nothing catches it, and the process exits. The traversal guard on the line above is correct and is not the issue. In a Playwright run every subsequent test fails with a connection refusal that reads as a product outage.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. `statSync(file).isFile()` in place of `existsSync`, or a try/catch around the read that falls back to index.html.
+Verification: `curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/assets` against a running `node e2e/serve.mjs 5173` -- the request hangs and the server's log ends with the EISDIR stack.
+Ruling needed: none.
+
+### D-317 - A product image is validated by byte COUNT only: any bytes, any content-type, land under a product-image key and are served from the public media origin
+
+Severity:  MAJOR (ADU-CON-02 S8.1 promises the COMMIT "validates dimensions/bytes and HEADs each object"; the adapter's own docstring promises "bytes and pixel dimensions"; neither happens)
+Phase:     T25 - Phase 3, class 4.3 (media), FAILED, and the refuter confirmed it with an independent fixture
+Source:    apps/api/src/modules/catalogue -- `handleImage` COMMIT checks only `obj.bytes > cap`; `S3ObjectStorage.inspect` returns `{ bytes, contentType }` and nothing reads width/height anywhere in apps/api/src; the presigned PUT is signed with `X-Amz-SignedHeaders=host` only, so the content-type is not part of the signature
+Found by:  PUT of a 45-byte ASCII body ('NOT-A-WEBP-IMAGE plain text <html>hi</html>') to a minted image URL with `Content-Type: image/webp`, then `text/plain`, then no content-type at all -- HTTP 200 all three; anonymous HEAD of the stored object -> 200, `Content-Type: text/plain`, `Content-Length: 45`; COMMIT -> 201 `{committed:true}`; GET the product -> the image row is registered.
+Effect:    Arbitrary bytes, including HTML, are stored under a product-image key and served from the public media origin with an attacker-chosen content-type. On the media origin, not the console origin, so the console's CSP is not the thing that catches it; what it enables is content hosting under the platform's name and a stored-HTML page at a URL that looks like a product image. The console renders `<img>` from these keys and an `<img>` will not execute HTML, so this is not an XSS on the console -- it is the "content-type enforced, or only declared?" question in the order's 4.3, answered: only declared, and not even signed.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The COMMIT should refuse an object whose magic bytes are not the declared image type and whose dimensions cannot be read, which is what S8.1 already says it does; signing `content-type` into the presigned PUT closes the other half.
+Verification: `node <scratchpad>/p23/class07/probe2_contenttype.mjs` (attacker) and the refuter's independent run under namespace 7d079000; both in the T25 Phase 3 transcripts.
+Ruling needed: none. The document is right and the code disagrees with it.
+
+### D-318 - The console's security headers live in a Cloudflare-Pages `_headers` file, and the only deployment the repository defines is a Render static site that does not read one
+
+Severity:  MAJOR (the CSP, HSTS and frame policy the console is reviewed against would not be served by the deployment as written)
+Phase:     T25 - Phase 3, class 4.7/4.6; found by a REFUTER, not the attacker -- the attacker read the policy in `apps/console/public/_headers` and called CSP tightness HELD; the skeptic asked who serves that file
+Source:    apps/console/public/_headers (Cloudflare Pages format, built into dist/_headers by ops/scripts/build-headers.mjs); ops/render.yaml publishes the console with `runtime: static`, `staticPublishPath: apps/console/dist`, a `routes:` rewrite, and NO `headers:` key
+Found by:  refuter for class 11 item 4.7a: "Render static sites take response headers only from the blueprint `headers:` key"; the T23 gate `verify-render-yaml.mjs` checks the blueprint's shape but not that it carries the policy
+Effect:    On Render as blueprinted, the console ships with no Content-Security-Policy, no Strict-Transport-Security, no X-Frame-Options / frame-ancestors -- every header the e2e harness (`e2e/serve.mjs` replays `dist/_headers`) and `boot-smoke` assert is present locally and absent in production. The XSS findings in class 4.6 (the API stores seller markup byte-for-byte and relies on the renderer and the CSP) lose their second line of defence. Nothing in CI compares the two files, so the drift is invisible.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Either `render.yaml` carries a `headers:` block generated from the same source as `_headers` (one generator, two outputs), or the console is hosted where `_headers` is honoured; and `verify-render-yaml.mjs` should fail when the blueprint's header set and `dist/_headers` disagree.
+Verification: `grep -n "headers:" ops/render.yaml` prints nothing; `grep -c "Content-Security-Policy" apps/console/dist/_headers` prints 1.
+Ruling needed: which host the console is meant to ship on -- ADU-CON-02 and render.yaml disagree by implication, and T24 Phase 4 (never executed) would have been the first time anyone looked at the served headers.
+
+### D-319 - Row-level security is not a tenant-isolation layer in this schema, and every review since SR-1 has counted it as one
+
+Severity:  MAJOR as a documentation and review-premise defect; NOT a live breach -- the scope check and the composite FKs held every cross-tenant attack in T25 that reached them
+Phase:     T25 - Phase 2, class 3.1
+Source:    the live catalogue: 119 application tables, 5 with RLS, 8 policies, 3 for `adulis_app` and all three on `core."order"` (SELECT `USING (actor_role <> 'COURIER')`, UPDATE `USING (true)`, INSERT with no predicate); 34 seller-scoped tables `adulis_app` can SELECT with no policy
+Found by:  the order's own instruction -- "three layers must each hold independently: RLS, the scope check, and the composite foreign keys; prove each in isolation." As `adulis_app` (rolbypassrls = f) with the GUCs set to seller A, every one of seller B's rows on all ten tenant tables the attacker built was visible: order, product, product_variant, reservation, stock_event, payout_details, claim, review, seller_courier, seller_team_member. The positive control (a COURIER actor sees 0 unassigned orders) proves RLS is live and fences exactly couriers.
+Effect:    Isolation on the read path is held by one thing: the service's WHERE clause on `seller_id = ctx.sellerId`, standing on `fn_has_permission` having accepted that seller for that actor. A handler that omits the WHERE, or filters by the wrong column, has nothing beneath it -- and D-320 is exactly that shape, found in the same pass. The composite FKs hold the WRITE path (a child row cannot name one seller's parent under another's id) and were proven in isolation; they say nothing about reads. `financial.payout_credential` is fenced by GRANT alone. `core.order_courier_assignment` has no `seller_id` and no composite FK at all, so that layer does not exist for courier assignment.
+           The reviews that describe RLS as a tenant layer (SECURITY-REVIEW.md, the T25 order itself) describe a schema that was designed but not built, or built for a different purpose: the `courier_assigned_orders` policy is precise and correct for couriers and is the whole of it.
+Response:  RECORDED. Not fixed in T25; this is a ruling, not a patch.
+Action:    none here. Either ADU-DB-01 states that RLS is a courier fence and tenant isolation is held by the scope check plus the service WHERE (and the reviews are corrected to say so), or a tenant policy set is designed for the 34 tables -- which is a schema decision with a performance cost the RAM section of this report makes concrete.
+Verification: the inventory queries and the ten-table attack are in FINAL-TEST-REPORT.md SECURITY; `SELECT schemaname||'.'||tablename, cmd, qual FROM pg_policies WHERE 'adulis_app' = ANY(roles)` prints three rows, all on core.order.
+Ruling needed: yes -- whether RLS was ever meant to carry tenant isolation. The document set does not say, and the code answers no.
+
+### D-320 - BLOCKER: DELETE on a product or variant tells any seller whether ANOTHER seller's product exists and is selling right now
+
+Severity:  BLOCKER (T25 S8: "a tenant-isolation failure" -- the order stopped on it; Phase 4 was not started)
+Phase:     T25 - Phase 2, class 3.1; found by the attacker, reproduced by the author before the stop
+Source:    apps/api/src/modules/catalogue/catalogue.service.ts `deleteProduct` (~line 300) and `deleteVariant` (~line 394): `assertPermission(trx, req, 'seller.products:write')` -- which checks that the ACTOR may write to the ACTOR'S seller and says nothing about the product -- then `SELECT count(*) FROM core.reservation r JOIN core.product_variant v ON v.id = r.variant_id WHERE v.product_id = ${productId} AND r.state = 'ACTIVE'` with NO seller predicate, and `throw new AdulisException('PRODUCT_HAS_ACTIVE_ORDERS')` (409) before the first seller-scoped statement runs
+Found by:  as the owner of seller A, with `X-Adulis-Seller: A`, the console Origin, and seller B's ids:
+             DELETE /v1/seller/products/<B's product with an ACTIVE reservation>   -> 409 PRODUCT_HAS_ACTIVE_ORDERS
+             DELETE /v1/seller/products/<B's product with none>                    -> 404 NOT_FOUND
+             DELETE /v1/seller/products/<an id that does not exist>                -> 404 NOT_FOUND
+           B's rows unchanged afterwards. Same shape on DELETE /v1/seller/variants/{id} (VARIANT_HAS_ACTIVE_ORDERS).
+Effect:    The order's rule is "404, not 403: a 403 confirms the object exists." A 409 confirms more: that the object exists AND has a live reservation at this moment. Product and variant ids are not secrets -- they appear in storefront links -- so any seller with a console session can poll a competitor's catalogue and read, per product, per minute, whether it is selling. Nothing is deleted and no row is read across the tenant line, which is why the composite FKs and the scope check both "held" in the same pass: this is the one read the service layer makes before it scopes, and D-319 is why nothing beneath it caught it.
+Response:  RECORDED; THE ORDER STOPPED HERE. Not fixed in T25.
+Action:    none here. The pre-check needs `AND v.seller_id = ${sellerId}` (or the whole delete moves into a seller-scoped function, which apps/api/CLAUDE.md already asks of every state-changing endpoint); the same grep -- a count or existence read keyed by a client-supplied id with no `seller_id` -- should be run over every service before a beta, because the pattern is the shape of D-319's consequence, not a one-off.
+Verification: the three curl lines above, run from the T25 transcript against the class-01 fixture (namespace 7d01) on the local API; the attacker's `p23/01/attack.sh` lines 55 and 62.
+Ruling needed: none on the defect. One on scope: whether the same unscoped-pre-check pattern exists elsewhere is a question for the build order that fixes it, and it should be answered by grep, not by memory.
+
+### D-321 - A seller can bind any object in the media bucket, including another seller's, as their own product video
+
+Severity:  MAJOR (not a BLOCKER: media objects are world-readable by design, so nothing confidential crosses; the ownership guard the image path has is simply missing on the video path)
+Phase:     T25 - Phase 3, class 4.3
+Source:    apps/api/src/modules/catalogue -- `handleVideo` COMMIT performs no prefix or ownership check on `body.key`; `handleImage` COMMIT pins the key to `products/<productId>/img/`
+Found by:  owner B mints and PUTs a real object at `products/<PROD_B>/img/<uuid>/full.webp`; owner A commits a video on PROD_A with `key` = that object -> 201 `{committed:true}`; GET /v1/seller/products/<PROD_A> returns `video.key` = seller B's object. Bounded: `key = 'evidence/framed/...'` -> 409 OBJECT_NOT_UPLOADED, so the video key can name only the media bucket.
+Effect:    Hotlinking and content spoofing under another seller's name; combined with D-317, a seller can commit as "their video" any bytes anyone has ever uploaded to the media bucket. The refuter for the image-side guard confirmed the image path holds against eight traversal crafts; the video path has no guard to hold.
+Response:  RECORDED. Not fixed in T25. (Refutation of this item was still running at the stop; the finding is the attacker's, with the guard's absence confirmed in source by the author.)
+Action:    none here. The same `startsWith('products/<productId>/')` guard the image path uses.
+Verification: `node <scratchpad>/p23/class07/probe3_traversal.mjs` steps 4-6.
+Ruling needed: none.
+
+### D-322 - A step-up challenge is bound to a target at issuance and the binding is never read: a challenge for member C revokes member B
+
+Severity:  MAJOR (intra-account: fn_has_permission and the function's own seller_id WHERE still hold, so it is not cross-tenant; it is the S9.2 binding, documented in 0003:260, unenforced)
+Phase:     T25 - Phase 2, class 3.3
+Source:    `core.step_up_challenge.target_ref` is WRITTEN at issuance (auth.service.ts:~500) and READ nowhere: `fn_assert_step_up(p_challenge, p_account, p_action)` has no target parameter, and none of the eight consuming call sites (payout, reissue, team, subscription, deletion, revoke_all, identity, ownership) passes the operated object; `grep -rn target_ref apps/api db` returns the schema comment and the INSERT
+Found by:  a TEAM_CHANGE challenge minted with `target_ref` = member C, spent on `DELETE /v1/seller/team/<member B>` -> 204; B revoked, the C-targeted challenge consumed. Positive control: a challenge for A revoking A -> 204.
+Effect:    The step-up SMS names the action but not the target (`sms.otp.step_up.<action>`, slots = {code}), so a user who approved "reissue order A" or "transfer ownership to member X" cannot tell it was spent on order B or member Y. Highest-impact instance is OWNERSHIP_TRANSFER (`to_member_id` from the body, `target_ref` unchecked) -- confirmed by reading `fn_request_ownership_transfer`, not driven over HTTP.
+Response:  RECORDED. Not fixed in T25. (Refutation still running at the stop.)
+Action:    none here. `fn_assert_step_up` takes the target and compares; every call site passes it; the SMS template names it.
+Verification: `bash <scratchpad>/p23/03/probe.sh` (A6 control, A7 attack).
+Ruling needed: none.
+
+### D-323 - Step-up consumption rolls back with the handler, so a challenge aimed at a failing target survives to be spent elsewhere
+
+Severity:  MAJOR only in combination with D-322; alone it is fail-safe (never more than one SUCCESSFUL mutation per challenge)
+Phase:     T25 - Phase 2, class 3.3
+Source:    `fn_assert_step_up` marks `consumed_at` inside the handler's transaction (it is the first statement of e.g. `fn_reissue_instructions`); a later raise in the same handler rolls the consumption back
+Found by:  a satisfied REISSUE_INSTRUCTIONS challenge spent on a nonexistent order -> consumed, then U0002 (404), then `consumed_at` back to NULL; the SAME challenge spent again reached the order lookup (404 again, not 403 consumed). A satisfied TEAM_CHANGE challenge spent on an invite that fails 409 TIER_LIMIT_REACHED after consumption -> reused on DELETE team/<member> -> 204.
+Effect:    The order's 3.3 names this: "the reason a rollback must not resurrect a challenge." With D-322, an actor keeps one OTP alive by aiming it at a failing target and spends it on any same-action target later. No path was found where a committed out-of-transaction side effect pairs with a rolled-back consumption (deletion's purge runs on its own connection only after commit).
+Response:  RECORDED. Not fixed in T25. (Refutation still running at the stop.)
+Action:    none here. Consumption on its own connection (the D-69 pattern `RateLimitService.consume` already uses), or a "spent" write that survives the handler's rollback.
+Verification: `bash <scratchpad>/p23/03/probe3.sh` (R1, R2).
+Ruling needed: none; the design note in 0003 already states the intended binding.
+
+### D-324 - A malformed cursor, or any unmapped database refusal, is a 500 -- and it masked a whole class of write-path tests
+
+Severity:  MINOR as robustness (any caller can produce repeated 500s with a garbage cursor); MAJOR as an instrument, because it made class 3.1's mutating-endpoint isolation tests NOT TESTED
+Phase:     T25 - Phase 3, class 4.6; and class 3.1, where it masked results
+Source:    list endpoints cast the raw cursor (`${cursor}::timestamptz`) and the API maps an unmapped SQLSTATE to 500 INTERNAL (pg-error-translator.ts); `api.log`: `unmapped database refusal [22007]` (invalid datetime) and `[22P02]` (invalid text representation)
+Found by:  `GET /v1/storefronts/<handle>/reviews?cursor=not-a-timestamp` -> 500; `GET /v1/seller/orders?cursor=not-a-cursor` -> 500; a valid ISO cursor -> 200. Not an injection: the value is bound and `pg_sleep` never fired (5-44 ms). Separately, class 3.1's POST attacks (publish, payment/confirm) returned 500 for BOTH the attack and the rightful-actor control, from the same unmapped-refusal path, so the cross-tenant verdict on those endpoints is NOT TESTED rather than HELD.
+Response:  RECORDED. Not fixed in T25. (Refutation of the cursor item still running at the stop.)
+Action:    none here. Validate the cursor shape before the cast (400 VALIDATION_FAILED); map 22007/22P02 to 400 in the translator so a bad input is never a 500.
+Verification: the two GET lines above against the local API; `grep -c "unmapped database refusal" <scratchpad>/api.log`.
+Ruling needed: none.

@@ -1,6 +1,6 @@
 # FINAL TEST REPORT - What Breaks, And At What Number
 
-**Order:** T25. **Status: Phases 0 and 1 complete and reported; Phases 2 and 3 (security) next, then Phase 4 (quality). Reported between phases as the order requires.**
+**Order:** T25. **Status: STOPPED on a BLOCKER (D-320) at the end of Phases 2 and 3. Phases 0, 1, 2 and 3 complete and reported; Phase 4 NOT STARTED, per the order's stop rule. Refutations still running at the stop are folded in as they return; no new attack was launched after it.**
 
 ---
 
@@ -225,3 +225,150 @@ Nothing here changes the architecture. One API, one PostgreSQL, two processes, n
 **Stage 3 -- the catalogue. Trigger: 300,000 variants (5,000 sellers at this shape), or the 1 GB tier's index set above its `shared_buffers`.** The next tier up, again. **Not recommended:** dropping any of `product_variant`'s five indexes (two are the isolation design; the other three serve the storefront, the seller console and the uniqueness rule), a search engine for `idx_product_name_trgm`, or a read replica -- each is an architecture change with a reissue behind it, and none is needed inside this table.
 
 **What can wait, and why:** D-315 (notification retention -- a ruling first, then a job); D-312 (the three unwritten load tests -- a build order); the sweep's structural 500/minute (a `LIMIT` change when a burst is a real event rather than a hypothetical). **What cannot wait is Stage 0, and Stage 0 is a day.**
+
+---
+
+## SECURITY
+
+**Where it ran:** the API built from this branch, booted on this laptop in `development` against the local database, with the fake SMS and push adapters bound. **Not the deployed surface** -- there is none (WHERE IT RAN). Every attack below was made with real HTTP requests or real SQL as the role named; every verdict names the command. The attackers were eleven agents, one per class, and **every FAILED verdict and every HELD verdict in a BLOCKER class was then attacked by a second agent whose only job was to refute it** -- because the order's warning stands: the agent testing its own work is the largest gap in this report, and a second author reduces that gap without closing it.
+
+### The map first: what actually holds tenant isolation, table by table
+
+The order says three layers -- RLS, the scope check, the composite foreign keys -- must each hold independently. **Measured on the local database before any attack, that is not the shape of the schema:**
+
+```
+tables in the application schemas                 119
+tables with row-level security                      5
+policies for adulis_app                             3   -- ALL on core."order"
+   SELECT   USING (actor_role <> 'COURIER')             -- a role filter, not a tenant filter
+   UPDATE   USING (true)
+   INSERT   (no predicate)
+seller-scoped tables adulis_app can SELECT with
+   NO policy at all                                34   -- product, product_variant, reservation,
+                                                        --   cart, cart_line, payout_details,
+                                                        --   seller_team_member, stock_event, review ...
+composite (tenant-pinning) foreign keys             15
+SECURITY DEFINER functions                          63
+functions that call fn_has_permission themselves     4
+```
+
+**So RLS is not a tenant layer here.** It restricts couriers on one table. On the 34 seller-scoped tables `adulis_app` can read, isolation is held by exactly two things: **the scope check** (`fn_has_permission` raising `U0002`/`U0001`, called by the guard on every seller-scoped request and by four functions), and **the composite FKs**, which make it impossible to *write* a child row that names one seller's parent under another seller's id -- but say nothing about *reads*. A read that reaches a table with the wrong `seller_id` in its WHERE clause, or with none, has nothing beneath it. That is the layer the attacks below lean on hardest, and the reason "which layer is the ONLY one holding it" is asked per table.
+
+### THE ORDER STOPPED HERE: one BLOCKER, reproduced by the author
+
+**`DELETE /v1/seller/products/{id}` and `/v1/seller/variants/{id}` tell any seller whether another seller's product exists and is selling right now.** The handler asserts `seller.products:write` (the actor may write to the actor's OWN seller -- true), then counts ACTIVE reservations by the client-supplied product id with **no seller predicate**, and throws 409 before the first seller-scoped statement. As the owner of seller A, with the console Origin and B's ids:
+
+```
+DELETE /v1/seller/products/<B's product with a live reservation>   409  PRODUCT_HAS_ACTIVE_ORDERS
+DELETE /v1/seller/products/<B's product with none>                  404  NOT_FOUND
+DELETE /v1/seller/products/<an id that does not exist>              404  NOT_FOUND
+B's rows afterwards: unchanged
+```
+
+The order's rule is "404, not 403 -- a 403 confirms the object exists." **A 409 confirms it exists and is selling.** Product ids are in storefront links, so this is a competitor's live-sales signal, per product, on demand. Nothing is deleted and nothing is read across the line, which is exactly why the FKs and the scope check both held in the same pass: it is the one read the service makes before it scopes, and the map above is why nothing beneath it caught it. **D-320. Phase 4 was not started.** The refuters that were already running when it was found finish on their own and their verdicts are folded in below; no further attack was launched after the stop.
+
+### Verdicts by attack class
+
+Every class ran as one agent against the local API with real requests; every FAILED, and every HELD in the four BLOCKER classes (3.1, 3.4, 4.3, 4.7), was handed to a second agent told to refute it. **"Refutation pending" means the skeptic had not returned when the order stopped.**
+
+| class | HELD | FAILED | NOT TESTED | the verdict in one line |
+|---|---|---|---|---|
+| **3.1 tenant isolation** | 12 | **2** | 4 | reads, header-swap, scope check, composite FKs all hold; **the DELETE pre-check leaks (BLOCKER, D-320)**; RLS holds nothing seller-vs-seller (D-319) |
+| **3.2 the six gates** | 9 | 0 | 1 | all six fail alone, each above or inside `fn_has_permission`; the seller-status 409 gate is not `fn_has_permission`'s and was not driven |
+| **3.3 step-up** | 7 | **2** | 1 | audience, replay, foreign challenge, wrong action, expiry, concurrent reuse all refuse; **target binding unenforced (D-322); consumption rolls back (D-323)**; 3 of 8 actions driven end to end |
+| **3.4 boundaries** | -- | -- | -- | **the first agent returned nothing usable; re-run in progress at the stop.** What stands is T24's evidence (D-309): `read_attestation` refuses an ungranted operator and `adulis_app` cannot read `access_log` |
+| **4.1 enumeration** | 8 | 0 | 2 | byte-identical on every anonymous phone path; timing 0.97-1.17x; **D-203's countable version holds on both sides** |
+| **4.2 idempotency** | 5 | 0 | 3 | D-69 holds on every must-be-indistinguishable endpoint; the rest by inspection |
+| **4.3 media** | 4 | **2** | 1 | mint isolation and the evidence bucket hold (both refuter-confirmed); **video key unowned (D-321); bytes unvalidated (D-317, refuter-confirmed)**; R2's real policy NOT TESTED |
+| **4.4 handoff** | 15 | 0 | 2 | forgery, replay, third-party scan all refuse; the composite key needs the buyer -- proven |
+| **4.5 payout** | 6 | 0 | 2 | cancel-then-set locked; the chain end to end; the outgoing owner loses payout AND evidence on the flipping request |
+| **4.6 web surface** | 8 | **2** | 3 | injection parameterised; session rules hold; **CSP not served by the defined deployment (D-318, found by a refuter)**; garbage cursor -> 500 (D-324) |
+| **4.7 secrets** | 8 | 0 | 1 | bundle and logs clean under a real OTP sign-in; two refuters widened the search and found nothing |
+
+**3.1 Tenant isolation -- HELD 12, FAILED 2, NOT TESTED 4.**
+HELD: as A's owner, every read with B's ids -> 404 (products, orders, variants and stock events, QR, claims, chat messages, reviews, payout, payment evidence); `X-Adulis-Seller: B` on A's session -> 404 from `fn_has_permission` U0002; direct calls: stranger U0002, suspended member U0001, rightful void; 404-for-stranger vs 403-for-suspended-member mid-session through the API; the five composite FKs (`variant_product_seller`, `stock_event_variant_seller`, `reservation_order_seller`, `cart_line_variant_seller`, `cart_line_single_seller`) each refuse a child naming A's seller under B's parent; seller-scoped functions called with A's actor and B's target refuse; courier revoke isolated. **Commands:** `p23/01/attack.sh`, `scope.sql`, `fk.sql`, `fk2.sql`, `rls.sql`.
+FAILED: **D-320** (above). **D-319**: as `adulis_app` with the GUCs set to A, every one of B's rows on all ten tenant tables is visible -- RLS is live (the courier control sees 0) and fences couriers only.
+NOT TESTED: the mutating POSTs (publish, payment/confirm) returned **500 for the attack AND the rightful control** from unmapped database refusals (D-324), so their isolation is unmeasured, not held; `order_courier_assignment` has no `seller_id` and no composite FK, so that layer does not exist for it; team revoke needs a step-up challenge (class 3.3's surface); the buyer-vs-buyer axis was not built.
+**Per table, the ONLY layer holding reads is the service WHERE on `seller_id`.** Writes have the FKs beneath them. `financial.payout_credential` has GRANT alone.
+
+**3.2 The six gates -- HELD 9, NOT TESTED 1.** State: account SUSPENDED -> 401 SESSION_REVOKED at `authenticate` while `fn_has_permission` still returns void, so state is enforced ABOVE the function. Standing: a member suspended mid-session fails the very next request (R28), 403; revoked -> 404. Role: a role without the permission -> U0001 directly and 403 through the endpoint. Surface: a MOBILE session on a console-only permission -> 403. Entitlement: 409 TIER_LIMIT_REACHED from `billing.fn_effective_limit` with `fn_has_permission` returning void. Scope: a seller the actor never touched -> U0002/404. Every non-granted permission called directly -> U0001. NOT TESTED: the seller-state 409 (SAFETY_SUSPENDED / CLOSING) -- by design not `fn_has_permission`'s gate ("gate 0", its own comment) and enforced in specific services; the seller-scoped console READ paths do not check it. **Commands:** `p23/02/`.
+
+**3.3 Step-up -- HELD 7, FAILED 2, NOT TESTED 1.** HELD, with a working positive control (real request -> OTP from `.dev-sms.log` -> verify -> consume): MOBILE session -> 403; consumed challenge replayed -> 403 STEP_UP_REQUIRED; another account's challenge -> the same 403 (no existence oracle); a different action's challenge -> 403 STEP_UP_ACTION_MISMATCH; expired -> 403 STEP_UP_EXPIRED; **two parallel requests with one challenge -> exactly one 200 and one 403** (D-32's `FOR UPDATE`). FAILED: **D-322** -- a challenge minted for member C spent on member B -> 204 (`target_ref` written at issuance, read by nothing); **D-323** -- a challenge spent on a failing handler is un-consumed by the rollback and spendable again. NOT TESTED: five of the eight actions end to end (PAYOUT_CHANGE, SUBSCRIPTION_CHANGE, SELLER_DELETION, IDENTITY, OWNERSHIP_TRANSFER need heavy state fixtures); driven for REVOKE_ALL_SESSIONS (full matrix), TEAM_CHANGE and REISSUE_INSTRUCTIONS; the mechanism is one function, `core.fn_assert_step_up`, so the matrix results transfer and the target gap transfers with them. **Commands:** `p23/03/probe.sh`, `probe3.sh`.
+
+**3.4 The boundaries -- NOT REPORTED BY THIS PASS.** The agent assigned `financial.read_payment_evidence` and `verification.read_attestation` returned a one-line placeholder instead of a result; a replacement was launched and had not returned at the stop. What is already on record from T24 Phase 3 (D-309), measured on Render as `adulis_app`: `read_attestation` as a granted operator returns; as an ungranted account raises `no grant permits reading an identity attestation`; `adulis_app` selecting `verification.access_log` -> `permission denied`. Ciphertext-vs-plaintext, "naming another actor", and "every read logged with the right actor" are **NOT TESTED in T25 until the replacement returns**, and this line will be replaced when it does.
+
+**4.1 Enumeration -- HELD 8, NOT TESTED 2.** Every anonymous phone-taking path (`auth/otp/request`, `/resend`, `auth/recovery`, `deletion/otp/request`, both verify endpoints): same status, byte-identical body, identical Content-Length, no timing header, 20-sample median wall-clock ratio 0.97-1.17x registered vs unregistered. `auth/recovery` does registration-dependent work (an `account_recovery_case` INSERT for known numbers -- 20 rows created) at a ~1.4 ms delta with a byte-identical response: a note, not a finding. **D-203, both sides:** the issuer stamps `otp_max_attempts` from the DEVICE's market (3 for a registered phone whose account lives in a market set to 6, issued through a market-A device), and verify reads the stamp: refusals before the 429 were 2/2/2 for registered / unregistered / account-in-another-market, and 5 in a second market set to 6 -- the count tracks public device-market configuration, never registration. Handle and device-id axes distinguish existing from missing by design (public storefront lookup; an unenumerable device echo). NOT TESTED: the cookie-presented (`__Host-adulis_browser`) variant -- the two presentations converge in `requestingDevice()` by code, not exercised; the deployed tier's timing floor. **Commands:** `p23/class05/`.
+
+**4.2 The idempotency channel -- HELD 5, NOT TESTED 3.** D-69 holds where it must: the courier invite (G1.8), `auth/recovery` ("202 for any number"), `auth/otp/request`, `deletion/otp/request` all COMMIT on the registered and the unregistered branch; a same-body replay returns `X-Adulis-Idempotent-Replay: true`, a different body returns 409 IDEMPOTENCY_KEY_REUSED, identically for a known and an unknown phone. NOT TESTED: `storefront/post-links/resolve` (never throws, so the precondition cannot be met), the seller-owned mutation POSTs and the buyer POSTs -- by inspection they operate on the caller's own resources with no hidden-fact branch; each would need a bespoke stateful fixture to reach an in-handler failure. **Commands:** `p23/class06/`.
+
+**4.3 Media -- HELD 4, FAILED 2, NOT TESTED 1.** The API is bound to the REAL S3 adapter against a live local MinIO (`adulis-media`, `adulis-evidence`), so presigned PUTs and bucket policies were exercised, not faked. HELD: minting an image URL for another seller's product -> 404 at the composite `product.seller_id` check, and the forged `X-Adulis-Seller` variant -> 404 (refuter: reproduced, then eight traversal crafts -- literal `..`, `%2e%2e`, `..%2f`, `//../`, evidence-crossing -- all refused, by MinIO and by the image COMMIT's `products/<productId>/img/` prefix guard); **the evidence bucket has no unsigned path**: anonymous GET / HEAD / list / prefix-list / PUT / DELETE / `?policy` on `evidence/raw` and `evidence/framed` -> 403, the only evidence URL any client ever receives is the buyer's own 900-second signed PUT, and framed keys never leave the server (refuter-confirmed with a wider set of vectors than the attacker's). FAILED: **D-321** (video COMMIT key unowned); **D-317** (bytes validated by count only; content-type not even signed -- refuter-confirmed against ADU-CON-02 S8.1's own promise). NOT TESTED: **the production R2 buckets' actual policy** -- no credential and no Cloudflare console here; the code sets no public policy and R2 defaults private, so what a person with the dashboard must check is that neither `adulis-evidence` nor `adulis-staging-evidence` has an `r2.dev` public URL or a public custom domain enabled. **Commands:** `p23/class07/probe1_mint_isolation.sh`, `probe2_contenttype.mjs`, `probe3_traversal.mjs`.
+
+**4.4 The handoff token -- HELD 15, NOT TESTED 2.** Forgery is refused at three layers, each isolated: a garbage signature, a genuine HMAC for the wrong (order, nonce) tuple, and a mismatched pair -> REJECTED_SIGNATURE with no scan row; a valid photographed QR scanned by a third-party account, by the seller's courier for a DIFFERENT order, and by a buyer who is not the order's buyer -> 403 COURIER_CANNOT_SCAN, nothing consumed; the composite key requires the buyer's account -- proven by the same valid token succeeding only for the rightful courier on the rightful order. NOT TESTED: forging with the real signing key (deliberately -- it would mean using the secret and proves nothing the nonce and composite results do not); the concurrent double-consume race (`handoff_scan.nonce` UNIQUE plus a 23505 catch by design, not exercised). **Commands:** `p23/08/`.
+
+**4.5 Payout -- HELD 6, NOT TESTED 2.** Cancel-then-set: a first set from an unseen device, cancelled, then set again from the same device -> 409 PAYOUT_LOCKED / NEW_DEVICE, while the same request from a seen device -> 201; at the DB layer, holding the device constant and toggling only the row's existence isolates the predicate ("ever had" = any row, CANCELLED included). The chain end to end: request -> unsuppressible PAYOUT_CHANGE_REQUESTED SMS -> 24 h (advanced as the superuser) -> `payout.activate_due`'s body as `adulis_jobs` (0049's grant works) supersedes the prior ACTIVE and writes an unsuppressible PAYOUT_CHANGE_ACTIVATED. Ownership transfer: the outgoing owner reads payout 200 the request before and **404 on the very request that flips `owner_account_id`**, and loses payment-evidence access (U0002) at the same instant; the new owner reads 200 with no re-auth. One latent fail-open, noted not failed: the new-device guard is `p_device IS NOT NULL AND ...`, so a device-less session would skip the lock -- sign-in always binds `session.device_id` (verified in `auth.service.ts`), so no such session exists. NOT TESTED: the RECOVERY_COOLING lock (guard 3, outside the class's three targets); the `*/5` cron tick itself. **Commands:** `p23/class09/chain_end_to_end.sh`.
+
+**4.6 The web surface -- HELD 8, FAILED 2, NOT TESTED 3.** XSS: every seller-controlled field the console renders (product name, description, store name, profile description, variant key, chat message) stores and returns attacker markup byte-for-byte as `application/json` -- the API is not an HTML sink, so the burden is the renderer's (Phase 4, not reached) and the CSP's. CSP: **served as a real header by the e2e server and asserted by `boot-smoke` -- and absent from the only deployment the repository defines**: a refuter found `ops/render.yaml` publishes the console as a Render static site with no `headers:` key, so the policy in `_headers` is never sent (**D-318**). Session: fixation (a client-chosen session id) refused; revocation takes effect on the NEXT request; the remembered-device cookie alone authenticates nobody; `__Host-` attributes as documented. Injection: search, handle, slug, sort, cursors, ILIKE patterns, arrays -- every value bound, `pg_sleep` never fired (5-44 ms). FAILED: **D-324**, a garbage cursor -> 500. NOT TESTED: a courier NAME field and a seller review RESPONSE (neither exists on this surface -- the invite takes a phone only; reviews are buyer-written and seller-read); **browser enforcement of the CSP** (no system Chrome; the MCP browser could not launch -- the same wall Phase 4 would have met and solved with the console's bundled Chromium). **Commands:** `p23/class10/`.
+
+**4.7 Secrets -- HELD 8, NOT TESTED 1.** The built console (4 files, 550 KB, no source maps): zero key-shaped strings (AWS, Stripe, SSH, Slack, GitHub, JWT, DSN, Twilio, Mailgun), zero 32+ hex runs (so no R2 account id), zero base64 blobs over 40 chars except React's own `internalSetStateDoNotUseOrYouWillBreakYourApp`, no unexpected hostname; `*.js.map` requests return the SPA fallback. Two refuters widened it: an entropy scan, a literal-value check of every `.env` secret against the bundle, and a **deliberately hostile rebuild with the whole `.env` exported into the build shell plus a `VITE_` canary** -- only the two `VITE_` names the code references were inlined. The API's log under a REAL sign-in (OTP requested through the running API, code read from `.dev-sms.log`, verified): the code, the phone, the session token and the Idempotency-Key are absent as substrings of ANY line -- the D-290 test, done the way D-290 says it must be. NOT TESTED: a production build with the deploy environment and the production log level. **Commands:** `p23/class11/`.
+
+### What the second author changed
+
+Nine refutations had returned at the stop. **Seven confirmed a HELD** (evidence bucket, mint isolation, image traversal, bundle secrets x2, logs, and the D-203 count); **one confirmed a FAILED** (D-317, against the document's own words); **one overturned a HELD into a FAILED** (D-318 -- the attacker read the policy file; the skeptic asked who serves it). Sixteen were still running, among them the skeptics for D-320, D-321, D-322, D-323 and D-324; their verdicts are appended to the register entries when they return, and none of them was allowed to start a new attack class after the stop.
+
+### NOT TESTED, and why -- the list the order asked for
+
+- **The deployed surface.** There is none. Every verdict above is the local API against the local database with fakes for SMS and push and a real MinIO for storage; every number is an upper bound on what a deployment would show.
+- **The boundaries (3.4)** until the replacement agent returns.
+- **The production R2 bucket policy** (no credential): the one check a person with the Cloudflare dashboard must make is written out in 4.3.
+- **Browser enforcement of the CSP** and **the renderer's XSS escaping**: Phase 4's surface, not reached because of the stop.
+- **Five of the eight step-up actions end to end**; the mechanism is one function and was driven through three of them.
+- **The write-path isolation of publish and payment/confirm** -- masked by D-324's 500s on both sides.
+- **The author testing the author's work.** Eleven attackers and twenty-five skeptics reduce that gap; a second person removes it, and this report has not had one.
+
+---
+
+## QUALITY
+
+**Phase 4 was not started.** The order says stop on a tenant-isolation failure, and D-320 is one. Everything below is what was prepared and what quality-shaped findings the earlier phases produced on the way -- not the day-in-the-life, not the edges, not the accessibility audit, not the Amharic layout pass. **Those four are NOT TESTED**, and the reason is the stop, not the machine.
+
+**What was ready when the stop came, so the next run starts at the first screen:**
+
+| piece | state | where |
+|---|---|---|
+| the API, `development`, fake SMS writing codes to `.dev-sms.log` | up on :3000 | `apps/api/dist/main.js` |
+| the shipped console, served with its CSP by the e2e static server | up on :5173 | `node e2e/serve.mjs 5173` |
+| **the Amharic-forced console** (`navigatorPrefersAmharic()` returning `true`, the only switch there is -- `AM_ENABLED` exists in comments alone) | built in a detached worktree, up on :5174 | `<scratchpad>/wt-am`; never committed |
+| an accessibility engine | axe-core 4.10.2, installed OUTSIDE the repository | `<scratchpad>/p4/node_modules/axe-core` |
+| a browser | the MCP browser needs a system Chrome this machine lacks; the console's bundled Chromium (Playwright 1.56.1, build 1194) was being installed at the stop | `pnpm --filter @adulis/console exec playwright install chromium` |
+| the seeded seller and buyer, and the sign-in path | `+251900000001` / `+251900000002`, OTP from the dev SMS log | `apps/console/e2e/helpers/session.ts` |
+
+**What the earlier phases found that a seller would feel, in the order a seller would meet them:**
+
+1. **The API and the worker exit on the first closed connection** (D-310). A seller's symptom is a 502 for the length of a boot, on no schedule, with nothing in the log that says why. This is the first thing in this report to fix and it is not a security finding.
+2. **A garbage cursor is a 500** (D-324). A seller's browser will not send one; a stale bookmark or a back button on a paginated list might, and the page says "something went wrong, try again" for a URL that will never work.
+3. **Seller-controlled text is stored as typed** (class 4.6). The renderer's escaping is the whole defence on the console, and it was not audited -- that is Phase 4's first screen. The CSP that would have been the second defence is not served by the blueprinted deployment (D-318).
+4. **The console e2e harness dies on a directory URL** (D-316), which is a test-quality finding: a run that fails this way reads as a product outage.
+5. **"Six load tests" is three** (D-312), and the three cannot run on a managed provider (D-307); the repository's repeatable coverage of the deployed tier is zero.
+
+**What embarrasses, on the evidence so far:** nothing a buyer sees. Every buyer-facing path that was attacked -- OTP, enumeration, handoff, evidence, payout -- held. What embarrasses is on the seller side and is invisible until it is looked for: a competitor reading your live orders through a status code, and a step-up code approved for one member spent on another.
+
+---
+
+## RECOMMENDATION
+
+**What to fix before a beta -- in this order, and every one of them is small:**
+
+| # | fix | register | why first |
+|---|---|---|---|
+| 1 | **the unscoped pre-check in `deleteProduct` / `deleteVariant`**, and a grep for the same shape (a count or existence read keyed by a client id with no `seller_id`) across every service | **D-320** | the BLOCKER; one line, and the grep is the real deliverable |
+| 2 | **an `error` listener on all three pools** | D-310 | the process exits on the first blip; three lines |
+| 3 | **step-up target binding** -- `fn_assert_step_up` takes and compares the target, every call site passes it, the SMS names it | D-322 | an approved code is spent on the wrong member or order |
+| 4 | **step-up consumption that survives the handler's rollback** | D-323 | alone it is fail-safe; with 3 unfixed it keeps a code alive |
+| 5 | **`headers:` in `render.yaml` generated from the same source as `_headers`**, and the blueprint gate failing when they disagree | D-318 | the console ships without its CSP |
+| 6 | **magic-byte and dimension validation at image COMMIT, content-type signed into the PUT; the prefix guard on the video key** | D-317, D-321 | the document already says the first; the second is copying a guard |
+| 7 | **validate the cursor before the cast; map 22007 / 22P02 to 400** | D-324 | it also unmasks the write-path isolation tests |
+| 8 | **`pgPool` into `run()`; the two indexes; the connection alarm** | capacity Stage 0 | a day, and the numbers above assume it |
+
+**What can wait, and what it costs to wait:** the database tier (Stage 1 at 1,000 sellers -- cost, not code); the pooler (Stage 2, when the arithmetic says so); notification retention (D-315 -- a ruling first); the three unwritten load tests (D-312); the harness fix (D-316). **What cannot be decided by this report:** whether RLS was ever meant to carry tenant isolation (D-319) -- if it was, the 34 tables need policies and the RAM section says what that costs; if it was not, the reviews that say it does are wrong and should say so. Either way, until it is decided, **the service WHERE clause is the tenant boundary and every reviewer should read it as such.**
+
+**What this report did not do, said plainly:** it did not run on the deployment (there is none), it did not reach Phase 4, its boundary class is pending a replacement agent, and its author is its largest gap.
