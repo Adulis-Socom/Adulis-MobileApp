@@ -371,14 +371,17 @@ NOT TESTED: the mutating POSTs (publish, payment/confirm) returned **500 for the
 
 | # | fix | register | why first |
 |---|---|---|---|
-| 1 | **the unscoped pre-check in `deleteProduct` / `deleteVariant`**, and a grep for the same shape (a count or existence read keyed by a client id with no `seller_id`) across every service | **D-320** | the BLOCKER; one line, and the grep is the real deliverable |
-| 2 | **an `error` listener on all three pools** | D-310 | the process exits on the first blip; three lines |
-| 3 | **step-up target binding** -- `fn_assert_step_up` takes and compares the target, every call site passes it, the SMS names it | D-322 | an approved code is spent on the wrong member or order |
-| 4 | **step-up consumption that survives the handler's rollback** | D-323 | alone it is fail-safe; with 3 unfixed it keeps a code alive |
-| 5 | **`headers:` in `render.yaml` generated from the same source as `_headers`**, and the blueprint gate failing when they disagree | D-318 | the console ships without its CSP |
-| 6 | **magic-byte and dimension validation at image COMMIT, content-type signed into the PUT; the prefix guard on the video key** | D-317, D-321 | the document already says the first; the second is copying a guard |
-| 7 | **validate the cursor before the cast; map 22007 / 22P02 to 400** | D-324 | it also unmasks the write-path isolation tests |
-| 8 | **`pgPool` into `run()`; the two indexes; the connection alarm** | capacity Stage 0 | a day, and the numbers above assume it |
+| 1 | **`fn_cancel_line`'s seller-arm guard rewritten as its siblings have it (`IF NOT FOUND`)**, and a grep of every scope predicate in `db/migrations` for an inequality against a subquery | **D-325** | a seller cancels another seller's order line through the API today, committed; the grep finds the next one |
+| 2 | **the unscoped pre-check in `deleteProduct` / `deleteVariant`**, and a grep for the same shape (a count or existence read keyed by a client id with no `seller_id`) across every service | **D-320** | the first BLOCKER; one line, and the grep is the real deliverable |
+| 3 | **`REVOKE SELECT, UPDATE ON financial.payment_evidence FROM adulis_jobs`**, the purge job re-run to prove 0026's functions carry it, and Appendix C check 10 extended to assert no role but the owner holds a table privilege in `financial` or `verification` | D-326 | the worker reads the boundary table unlogged and can repoint evidence; D-48 already believes the grant is gone |
+| 4 | **an `error` listener on all three pools** | D-310 | the process exits on the first blip; three lines |
+| 5 | **step-up target binding** -- `fn_assert_step_up` takes and compares the target, every call site passes it, the SMS names it | D-322 | an approved code is spent on the wrong member or order (the rollback half, D-323, turned out to be D-32 as designed and needs a word, not a fix) |
+| 6 | **`headers:` in `render.yaml` generated from the same source as `_headers`**, and the blueprint gate failing when they disagree | D-318 | the console ships without its CSP |
+| 7 | **magic-byte and dimension validation at image COMMIT, content-type signed into the PUT; the prefix guard on the video key** | D-317, D-321 | the document already says the first; the second is copying a guard |
+| 8 | **validate the cursor before the cast; map 22007 / 22P02 to 400**; `read_attestation`'s denial as U0001 | D-324, D-327 | it also unmasks the write-path isolation tests; and a denial must never look like our own grant bug |
+| 9 | **`pgPool` into `run()`; the two indexes; the connection alarm** | capacity Stage 0 | a day, and the numbers above assume it |
+
+**Two things a second author taught this list.** Items 1 and 3 were HELD until a skeptic asked "which function did you NOT call?" and "which role did you NOT connect as?" -- the attacker's four functions all used the safe pattern, and the attacker's one role was the one the reviews describe. **Before a beta, the tests that stand in for those two skeptics are: every seller-scoped write function called once with a stranger actor, and every role's table privileges in the two boundary schemas asserted to be none.** Both are a page of SQL, and both would have found these on the day they were written.
 
 **What can wait, and what it costs to wait:** the database tier (Stage 1 at 1,000 sellers -- cost, not code); the pooler (Stage 2, when the arithmetic says so); notification retention (D-315 -- a ruling first); the three unwritten load tests (D-312); the harness fix (D-316). **What cannot be decided by this report:** whether RLS was ever meant to carry tenant isolation (D-319) -- if it was, the 34 tables need policies and the RAM section says what that costs; if it was not, the reviews that say it does are wrong and should say so. Either way, until it is decided, **the service WHERE clause is the tenant boundary and every reviewer should read it as such.**
 
