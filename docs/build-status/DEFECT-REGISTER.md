@@ -4598,3 +4598,78 @@ Verification: **The seed.** `NODE_ENV=test pnpm db:reset` -> PASS, and `core.ope
            The first two are D-294's chain, closed and shown to fail closed. **The third is Appendix C check 10's invariant holding on a managed provider** -- `adulis_app` has no table privilege in `verification`, so the boundary is reachable only through the logging function, which until now had only ever been asserted under a superuser.
            TWO SUBSTITUTIONS, STATED RATHER THAN GLOSSED. The account was inserted by hand because **no API is deployed to sign anyone in** -- that is Phase 4, and `grant-founder-operator.md` step 1 explicitly says to stop when the account does not exist rather than create one. So this run tests the runbook's STATEMENTS and the privilege model beneath them; it does not test step 1, and it is not a founder who signed in. And the market row needed `sms_primary_provider` before it would accept `otp_enabled = true` -- `market_otp_requires_route` refused it, which is the schema declining to describe a market that can issue an OTP it has no way to send.
 Ruling needed: none.
+
+### D-310 - One idle connection closed from the server side ends the API process, and the worker process, with no log line
+
+Severity:  BLOCKER for availability (not on T25's stop list, which is security; recorded, not fixed -- T25 produces a list)
+Phase:     T25 - Phase 1
+Source:    apps/api/src/common/db/database.ts:35 and :45; apps/api/src/jobs/runtime.ts:58 -- `new Pool({ connectionString, max })` with nothing attached; apps/api/src/main.ts installs no `uncaughtException` handler
+Found by:  the first pool-40 contention run crashed its client after 94 orders. The cause was lost to an output filter, so it was reproduced on purpose: the identical Pool shape as `adulis_app` against Render, ten idle clients, ONE backend terminated by the owner role with `pg_terminate_backend`.
+Effect:    `Unhandled 'error' event` on `BoundPool`, SQLSTATE 57P01, exit code 1, two and a half seconds after the terminate, with no load at all. node-postgres emits `error` on the POOL when an idle client's socket dies; an EventEmitter with no `error` listener throws; an uncaught throw ends the process. Kysely's dialect adds no listener of its own.
+           **In production nobody runs pg_terminate_backend, and it does not matter:** a managed-Postgres maintenance restart, a failover, the provider's idle-connection reaper, or a network blip on any one of the 14 API or 23 worker connections raises the same event. Each one ends the process. Render restarts it, so the symptom is not "down" -- it is a boot's worth of 502s, every in-flight request dropped, every cron tick the worker misses while it reboots (the expiry sweep and the notification send are on `* * * * *`), and NO LINE IN ANY LOG SAYING WHY, because the process is gone before pino flushes.
+Response:  RECORDED. Not fixed in T25, whose closing instruction is that it produces a list.
+Action:    none in this order. The fix is one listener per pool that logs and lets the pool discard the dead client, which is what node-postgres documents; it is three lines and it changes availability from "restarts on the first blip" to "survives it". It belongs in a build order, with a test that terminates a backend and asserts the process is still there.
+Verification: the reproduction is in the FINAL-TEST-REPORT.md CAPACITY section verbatim. Measured on the identical pool construction, not on the API binary (booting the API against Render needs the staging environment T24 Phase 4 could not create); the shape is the same three lines, so the caveat is about the test, not the conclusion.
+Ruling needed: none. This is the first thing that breaks, and it breaks at one seller.
+
+### D-311 - A synthetic cohort loaded onto a managed instance cannot be removed by a non-superuser, so a probe instance is reset, never cleaned
+
+Severity:  MINOR (operational; a consequence of a design that is correct)
+Phase:     T25 - Phase 1
+Source:    the 22 append-only tables (Appendix C check 5): `trg_append_only` raises on UPDATE and DELETE for every role, and the owner is not exempt
+Found by:  planning the removal of the 7c00... capacity cohort from `adulis_probe_3` after measurement: every order the contention runs created has a `core.stock_event` row, and `stock_event` is append-only, so the variant cannot be deleted, so the product, the seller, the accounts and the market cannot be deleted either. The T24 Phase 2 attempt to clean a fixture by hand as `adulis_migrate` had already succeeded on 4 of 35 DELETEs (D-307).
+Effect:    `adulis_probe_3` now carries 5,000 synthetic sellers, 300,000 variants, 160,000 orders and their ledger rows, and no role short of a superuser can take them out. That is the append-only invariant doing its job -- the schema does not distinguish a synthetic stock event from a real one, and it should not.
+Response:  RECORDED; nothing worked around. The cohort stays, labelled by its `7c00` prefix; the instance is a probe and is deleted, not cleaned, when the measurements are no longer needed.
+Action:    none. A future load fixture that must be removable goes onto its own instance from the start -- which is what this one did.
+Verification: `SELECT count(*) FROM core.stock_event WHERE variant_id::text LIKE '7c00%'` is non-zero and `DELETE FROM core.stock_event WHERE ...` as `adulis_migrate` raises from `trg_append_only`; the T24 D-307 record already holds the general form.
+Ruling needed: none.
+
+### D-312 - "Six load tests" is three: A1 measurements (2), (3) and (4) were run once and never made repeatable
+
+Severity:  MINOR (documentation and coverage)
+Phase:     T25 - Phase 0
+Source:    apps/api/test-load/api.loadtest.ts carries `it` blocks numbered (1), (5) and (6); SECURITY-REVIEW.md SR-11 describes six measurements
+Found by:  the T25 instrument check, reading the file the review cites before trusting its number
+Effect:    (2) the catalogue read under fan-out, (3) the seller order list under load, and (4) the QR scan burst exist as prose in a review and as nothing in the repository. A reader who counts six repeatable load tests is counting three and a paragraph. The three that exist also cannot run on a managed provider (D-307), so as of T25 the repository's repeatable load coverage on the deployed tier is ZERO; T25 Phase 1 re-did (1) by hand outside the harness for that reason.
+Response:  RECORDED. T25 does not add tests; it produces a list.
+Action:    none here. Either the three missing blocks are written or SR-11 says "three" -- the honest number is the one the file holds.
+Verification: `grep -n "it('(" apps/api/test-load/api.loadtest.ts` prints three lines.
+Ruling needed: none.
+
+### D-313 - Releasing a reservation scans the entire stock ledger: the expiry sweep's per-order cost grows with every order ever placed
+
+Severity:  MAJOR at scale (invisible today; the ledger is small everywhere it has ever run)
+Phase:     T25 - Phase 1
+Source:    db/migrations/0042_d173_release_derives_from_ledger.sql, `fn_release_reservation_stock`: `SELECT ... FROM core.stock_event e WHERE e.reservation_id = p_reservation AND e.reason = 'ORDER_CREATED'`
+Found by:  measuring `order.expire_sweep` against Render over a 10,000-order backlog and asking where the per-order server time went. `EXPLAIN (ANALYZE, BUFFERS)` of the function's own predicate: `Seq Scan on stock_event ... Rows Removed by Filter: 11026 ... Buffers: shared hit=233`, 2.1 ms at 11,027 rows.
+Effect:    `core.stock_event` carries four indexes and none of them serves this predicate: `stock_release_once` is `(reservation_id, reason) WHERE reason IN ('ORDER_EXPIRED','LINE_CANCELLED')` -- the RELEASE side, built for idempotency -- and the reserving side has nothing. So every expiry and every line cancellation reads the whole ledger once. The ledger holds at least one `ORDER_CREATED` row for every order ever created plus every seller stock adjustment, and it is append-only, so it never shrinks: at A1's shape (one order per seller per day) 5,000 sellers write ~1.8 million rows a year, ~180 MB at the measured ~16 KB per 1,000 rows, which on the 256 MB tier no longer fits in cache. Linear on the measured plan: ~40,000 buffers per lookup instead of 233, one to two seconds per expiry from disk, 500 expiries per run, a run that takes longer than the minute it is scheduled on, and a sweep that falls behind permanently -- with the release of stock, which is what the sweep exists to do, arriving hours late.
+           Today, and at 50 or 500 sellers for a long time, it is 2 ms and nobody will see it. It is the second thing that breaks in the worker path, after the pool crash (D-310), and it breaks silently in the second year.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The fix is one partial index -- `(reservation_id) WHERE reason = 'ORDER_CREATED'` -- mirroring the one the release side already has; a migration, since a merged migration is never edited. It belongs in a build order with the plan re-checked after.
+Verification: the EXPLAIN is in FINAL-TEST-REPORT.md CAPACITY; the ledger stamps every expiry (`core.order_state_transition.occurred_at`), and the measured per-order cost from this laptop was 505 ms median with ~485 ms of that being five round trips at 97 ms, so the server share today is ~20 ms and the seq scan is 2 ms of it.
+Ruling needed: none.
+
+### D-314 - The expiry sweep's partial index keeps every order the sweep has ever expired, because the clock constraint requires it to
+
+Severity:  MAJOR at scale (invisible today; linear in orders-expired-ever, and the sweep runs every minute)
+Phase:     T25 - Phase 1
+Source:    `idx_order_expiry_sweep` is `btree (expires_at) WHERE (clock_stopped_at IS NULL)`; `order_clock_consistency` is `CASE WHEN state IN (PAYMENT_CONFIRMED, HANDED_OFF, COMPLETED) THEN clock_stopped_at IS NOT NULL WHEN state IN (CREATED, NOTIFIED, PAYMENT_SUBMITTED, EXPIRED_UNCLAIMED) THEN clock_stopped_at IS NULL ELSE true END`
+Found by:  `EXPLAIN (ANALYZE, BUFFERS)` of `order.expire_sweep`'s candidate query on Render before and after the sweep expired 1,000 orders of a 10,000-order backlog: before, `Buffers: shared hit=20`, 0.17 ms; after, `Buffers: shared hit=47`, 0.585 ms, `Rows Removed by Filter: 937`.
+Effect:    An order that expires unclaimed MUST keep `clock_stopped_at` NULL -- the constraint says so, deliberately: the clock never stopped, the order simply ran out. So it satisfies the index predicate for the rest of its life. The sweep's query orders by `expires_at` and filters on `state = ANY('{CREATED,NOTIFIED}')`, and `state` is not in the index, so every run walks every expired order (oldest first, because those expired first), fetches its heap row to read `state`, discards it, and only then reaches the first due one. Linear in expired-ever, once a minute, forever. At A1's shape with one order in five going unclaimed, 5,000 sellers add ~1,000 rows to that walk every day: 365,000 heap fetches per sweep by the end of year one, on the 256 MB tier where the order table (23 MB heap + 35 MB index at 150,000 orders, measured) no longer fits in cache. The comment on the job says the index "reads its own set and never the table"; it did, on a database in which nothing had ever expired.
+           `order.close_confirmation_window` reads the same index with a `PAYMENT_SUBMITTED` filter and inherits the same walk.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. One migration: a replacement partial index with `AND state IN ('CREATED','NOTIFIED')` in its predicate (and a sibling for `PAYMENT_SUBMITTED` if the confirmation-window job keeps reading it), then drop the old one. The constraint is right and must not change.
+Verification: the two plans are in FINAL-TEST-REPORT.md CAPACITY, and `SELECT state, count(*) FROM core."order" WHERE clock_stopped_at IS NULL AND expires_at < now() GROUP BY 1` on `adulis_probe_3` prints `EXPIRED_UNCLAIMED | 1000` beside the due rows.
+Ruling needed: none.
+
+### D-315 - The morning reminder's idempotency check scans the whole notification table, once per market per day
+
+Severity:  MINOR (linear, daily, and the notification table is the fastest-growing table in the schema)
+Phase:     T25 - Phase 1
+Source:    apps/api/src/jobs/e2-notification.ts, `notification.morning_reminder`: `NOT EXISTS (SELECT 1 FROM core.notification n WHERE n.order_id = o.id AND n.template_key = ... AND n.scheduled_for > ...)`; `core.notification` carries `notification_pkey`, `idx_notification_queue (scheduled_for) WHERE state = 'QUEUED'` and `idx_notification_unread (recipient_account_id) WHERE read_at IS NULL` -- nothing on `order_id` or `template_key`
+Found by:  `EXPLAIN (ANALYZE, BUFFERS)` of the job's own INSERT ... SELECT on Render, literal and parameterised: `Seq Scan on notification n ... Filter: (template_key = ... AND scheduled_for > ...)`, hash anti-join at 9,300 candidate orders; 3.3 s warm, of which the scan is the part that grows.
+Effect:    Every notification the platform has ever queued -- sends, pushes, reminders, nudges -- is read once per market per day to decide which orders already got this morning's reminder. At 5,000 sellers the table grows by tens of thousands of rows a day and is never purged (no retention job names it); a year in, the daily reminder reads a few million rows to write a few thousand. Not a ceiling -- it is once a day -- but it is the query in this report whose cost grows fastest relative to its work.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Either an index on `(order_id, template_key)` or, better, a retention rule for `core.notification`, which the schema does not have and E4's retention jobs do not cover.
+Verification: the plan is in FINAL-TEST-REPORT.md CAPACITY.
+Ruling needed: whether `core.notification` is meant to be retained forever -- nothing in ADU-DB-01 v1.19 says, and E4 lists retention for media, evidence, waitlist and unbound devices but not notifications.
