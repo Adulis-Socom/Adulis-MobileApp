@@ -4826,3 +4826,263 @@ Ruling needed: none.
 
 Response:  The skeptic reproduced the attacker's observation and showed it is D-32 as installed and specified: consumption is transaction-atomic with the authorised action (0023's header and the `consumed_at` COMMENT say "a rolled-back action rolls the consumption back with it"; c6-accounts.e2e.spec.ts:1022 pins it; ADU-AUTH-01 v2.8 S21.3 "Consumption: atomic"). A failed handler commits nothing -- no idempotency record, no rows, no SMS -- so there was never a consumed challenge to resurrect, and at most one COMMITTED mutation per challenge holds in every path checked. The harm the attacker described ("aim it at a failing target, spend it elsewhere") needs no rollback at all: it is D-322, reproduced by the skeptic with a never-failed challenge. Severity is withdrawn to a documentation note: S21.4's "rollback must not resurrect a consumed challenge" reads consistently only if "consumed" means consumed by a committed action, and the sentence should say "committed".
 Ruling needed: none; a word in the next AUTH revision.
+
+### T25 Phase 4 -- the quality list. Every entry below names the screenshot that shows it. "One author" means the second-author verification died on the session limit; "verified" means a second agent reproduced it from a fresh context.
+
+### D-328 - Nothing in the product moves an order from HANDED_OFF to COMPLETED, so no order ever completes, no buyer can review, and the ladder never counts a handoff
+
+Severity:  MAJOR (a product gap, not a bug: the transition is ratified and nothing performs it)
+Phase:     T25 - Phase 4, the day in the life (one author; confirmed by the author in source)
+Source:    db/migrations/0011:275 ratifies `('HANDED_OFF', 'COMPLETED', 'settlement', ..., 'ADU-CON-01 R8')`; 0013:266 and 0021:361 have triggers that REACT to COMPLETED; 0010:446 and 0028:385 COUNT COMPLETED orders for the ladder; no function, trigger, job or service anywhere sets `state = 'COMPLETED'`
+Found by:  the buyer's `POST /orders/:id/review` on a handed-off order -> 409 VALIDATION_FAILED `{reason: ORDER_NOT_TERMINAL, state: HANDED_OFF}`; the walker had to `UPDATE core."order" SET state = 'COMPLETED'` by hand to reach the Reviews screen
+Effect:    Every order stops at HANDED_OFF. Reviews require a terminal state, so the review path (SC-14) is unreachable in the product; `fn_recompute_seller_level` counts COMPLETED orders as handoffs, so no seller ever leaves NEW; Home's "Completed handoffs" is 0 forever. The transition table calls the missing step "settlement", and the document set does not say what settles an order -- a buyer confirmation, a timer, an operator, a payout event.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here; a ruling first.
+Verification: `grep -rn "state = 'COMPLETED'" db/migrations apps/api/src` prints only reads and triggers; the walker's `p4/01/day.mjs` step "review".
+Ruling needed: YES -- what settlement is and who performs it. ADU-CON-01 R8 is cited by the transition row and answers neither.
+
+### D-329 - A new seller cannot buy a plan, and without one cannot publish: the console sends the tier NAME where the API wants a uuid, the seller has no subscription row to change, and no LISTED tier definition exists
+
+Severity:  BLOCKS A SELLER (found independently by three walkers: the day, the data edges and the accessibility classes)
+Phase:     T25 - Phase 4
+Source:    apps/console/src/.../Subscription.tsx `guard('SUBSCRIPTION_CHANGE', tier, ...)` passes `target_ref = 'LISTED'`; the step-up request validates `target_ref` as uuid -> 400; behind it `fn_open_purchase_intent` refuses a seller with no `billing.subscription` row (`out of scope`); `billing.tier_definition` holds a BETA row and a BUSINESS row and nothing for LISTED / ASSISTED / VERIFIED_PRO, so `billing.fn_effective_limit` answers `{reason: NO_TIER_DEFINITION, allowed: false}` -- the seeded seller answers the same
+Found by:  publish with all nine readiness items satisfied -> 409 TIER_LIMIT_REACHED; the Products screen: "Your product limit could not be resolved, so it is not shown"; the publish blocker: "Your current plan does not include this." with no link and no plan named; Subscription: "No subscription yet. Compare the plans below and choose one." -> choose Listed / Monthly -> the step-up modal opens already showing "The request is not valid." twice, and no SMS arrives (screenshot p4/01/39-subscription-stepup-modal.png). All three walkers got past it only by inserting a BETA `billing.subscription` row, which is what `ops/scripts/seed.mjs` does for the seeded seller and no operator endpoint does for anyone else.
+Effect:    On a fresh deployment no seller can publish, and the screens that should say why say "your plan does not include this" to a seller who has no plan and cannot get one.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Three separate defects: the console's target_ref; a first-subscription path (`fn_open_purchase_intent` for a seller with no row); the tier seed. And a publish blocker that links to the subscription screen and names the plan.
+Verification: `p4/01/stepup-probe.out`, `p4/01/subscription-probe.out`, `p4/02/05-log.json`, `p4/04/shots/editor-04-published.png`.
+Ruling needed: whether a BETA subscription is meant to be granted automatically on sign-up during the beta -- nothing grants it today.
+
+### D-330 - A fresh deployment has no categories, so the STORE_PROFILE readiness item can never be satisfied through the console
+
+Severity:  BLOCKS A SELLER (two walkers independently; each inserted a `core.category` row to continue)
+Phase:     T25 - Phase 4
+Source:    `fn_publication_readiness` requires `category_id IS NOT NULL`; `core.category` is empty after `db:migrate` and `db:seed` (the two rows the day walker saw were other walkers' inserts); the Profile picker offers codes only
+Found by:  `PATCH /seller/profile {description}` -> 200 with STORE_PROFILE still false; `GET /v1/categories` -> `{"data":[]}` before any tester inserted
+Effect:    A seller reaches "Store profile -- Complete this" on Home and a category select with nothing in it, and there is no path forward.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. A category seed is a business decision (ADU-VAL-01 may already carry it as OPEN), and a picker that shows names, not codes.
+Verification: `p4/02/05-order-prereqs.mjs`; `p4/04/shots/home-00-after-create.png`.
+Ruling needed: the category list itself.
+
+### D-331 - A new seller cannot take an order for twenty-four hours: the first payout row is PENDING and fn_create_order requires ACTIVE
+
+Severity:  BLOCKS A SELLER on day one (by design, and the design should be stated to the seller)
+Phase:     T25 - Phase 4 (two walkers)
+Source:    `core.fn_request_payout_change` writes the first payout as PENDING with `activates_at = now() + new_device_payout_lock` (24 h); `fn_create_order` (0028:121-124) raises `seller has no active payout details` unless a row is ACTIVE; activation is `payout.activate_due`, a worker job
+Found by:  the day walker's payout screen after step-up: "Pending change CBE - ending 6789 Activates at Sep 6, 2026, 3:49 PM" (p4/01/20-payout-after-stepup.png); the data-edges walker: no order until it moved `activates_at` into the past and ran `fn_activate_due_payout`
+Effect:    A seller who signs up, sets everything and publishes on day one has a store nobody can buy from until tomorrow, and nothing on Home, Products or the storefront says so; a buyer's failure is whatever the storefront makes of `restrict_violation`.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. If the 24 h is right for a FIRST payout (it exists for changes from an unseen device), the readiness list should carry it as a timed item; if it is not, the first payout should activate at once.
+Verification: `p4/02/05-order-prereqs.mjs`; `p4/01/state.json` payoutDone.
+Ruling needed: whether the new-device lock is meant to apply to a seller's first payout.
+
+### D-332 - Linking a social account fails with "Something went wrong" when no platform client is bound, instead of degrading to the manual path the boot log promises
+
+Severity:  BLOCKS A SELLER where no TikTok/Instagram client is configured (this machine; likely staging)
+Phase:     T25 - Phase 4, the day in the life (one author)
+Source:    api.log at boot: "[NO SOCIAL PLATFORM] no TikTok/Instagram client is bound; verification degrades to the manual path and post checks record UNKNOWN"; SC-22 "Check account control" -> 503 -> the console's generic error with a request id
+Found by:  p4/01/12-identity-after-check.png; linked accounts stay PENDING
+Effect:    The one sentence the seller sees is the generic failure; nothing offers the manual path the adapter says it degrades to.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The eligibility screen should render the degraded state as a state, not as an error.
+Verification: `p4/01/day.mjs` step "social"; `grep -a "NO SOCIAL PLATFORM" <scratchpad>/api.log`.
+Ruling needed: none.
+
+### D-333 - A lost image-COMMIT response blocks every further upload with "retry key already used" and leaves the wrong photo on the product
+
+Severity:  BLOCKS A SELLER (verified from a fresh context, twice)
+Phase:     T25 - Phase 4, the failure paths
+Source:    the media editor mints its idempotency key once per mount and re-mints only on success; when COMMIT reaches the server (201, image created) but the response is lost, the next pick reuses the key with a different body -> 409 IDEMPOTENCY_KEY_REUSED, rendered as "This retry key was already used for a different request."
+Found by:  route-abort of the COMMIT response after the server had committed position 3; the intended second photo never uploads; after reload the product shows the first, unintended one (p4/03/04b-b-after-different-file.png)
+Effect:    Exactly the bad-connection retry the key exists for locks the seller out of the media section until a reload they have no reason to try.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Re-mint on any terminal response, or reconcile on 409 by reading the product back.
+Verification: `p4/03/` scripts; the verifier's `p4/edges-failure/verify/`.
+Ruling needed: none.
+
+### D-334 - The payment-evidence dialog on the money screen does not take, trap or restore focus: a keyboard seller tabs through the page's own decision buttons behind the backdrop
+
+Severity:  BLOCKS A SELLER who uses a keyboard (one author -- every accessibility verifier died)
+Phase:     T25 - Phase 4, accessibility
+Source:    SC-04 -> "View evidence" (SC-05): after Enter, `activeElement` stays on the opener; Tab #1-#3 land on the page's "Confirm Payment Received", "Payment Not Received", "Reissue payment instructions" behind the backdrop; #4-#6 reach the dialog's controls; Escape works only if focus happens to be inside. The step-up dialog, by contrast, traps correctly.
+Found by:  p4/04/shots/evidence-01-after-10-tabs.png
+Effect:    A blind or keyboard seller can confirm a payment they have not looked at, from a control they cannot see.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The same focus management the step-up dialog already has.
+Verification: `p4/04/` keyboard script; the aria snapshot `sc04-aria-1280.txt`.
+Ruling needed: none.
+
+### D-335 - At 360 px the notification bell is a 7 x 24 link on every screen, the whole More menu is 21 px links, and every select and textarea is under 44 px
+
+Severity:  EMBARRASSES, and fails the 44 px rule the website spec sets (one author)
+Phase:     T25 - Phase 4, accessibility
+Source:    measured `getBoundingClientRect` on every screen at 360x740: `a.bell` 7x24 everywhere; /more links 37-147 x 21; 'New product' 92x21; 'Review payment' 115x24; selects and textareas under 44 tall. Buttons, the bottom bar, the switcher menu and the dialog controls pass.
+Found by:  p4/04/shots/t360-more.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the numbers above, per element, in the class-04 result.
+Ruling needed: none.
+
+### D-336 - Focus is dropped to <body> after every step change, route change and self-disabling button, so nothing is announced and a keyboard seller starts over from the top
+
+Severity:  EMBARRASSES; for a screen-reader seller it is the difference between a flow and a maze (one author)
+Phase:     T25 - Phase 4, accessibility
+Source:    after "Send me a code" the code field is not focused; after verify, after "Create a store", after "Create my store", after "Create product", after Enter on "Add variant" and on "Publish", and after the step-up modal closes (its opener unmounted, so `opener?.focus()` had nothing to return to) -- `document.activeElement === body` every time
+Found by:  p4/04/shots/signin-02-code-step.png and the keyboard log
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-04 keyboard script.
+Ruling needed: none.
+
+### D-337 - Lists keep the browser's bullet and 40 px indent, and adjacent spans have no separator: product names wrap to three lines at 360, variant rows read as one word, and two obligations get the same accessible name
+
+Severity:  EMBARRASSES (verified for the variant rows and the chooser; the rest one author)
+Phase:     T25 - Phase 4, data edges and accessibility
+Source:    `ul.product-list` `list-style-type: disc`, `li display: list-item`; at 360 the name column is 60 px and 'Canvas print 198' becomes three lines; variant rows: "Size L / BlueETB 1,250.00Active5 in stock"; the store chooser: "<name>selam-art-c02Owner"; Orders rows: "Payment submitted1 itemsETB 500.00Time left..."; Home: two links both named "A payment is waiting for your confirmation" with the countdown glued on
+Found by:  p4/02/03-200-products-360-geez-row.png, p4/02/07-chooser-360.png, p4/04/shots/editor-01-variant-added.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the computed styles and innerText in the class-02 and class-04 results.
+Ruling needed: none.
+
+### D-338 - The product editor scrolls sideways at 360 px once it has five images, and with fifty variants the Publish button is fourteen screens down
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, data edges
+Source:    each `.media-item` row (thumbnail, label, Move up, Move down, Remove) is 406 px wide; `documentElement.scrollWidth` 478 at viewport 360 (360 before the images); the top bar and the Development banner are cut off when the page pans; with 50 variants the editor is 10,362 px tall and `#publish-heading` sits at 10,201 px
+Found by:  p4/02/04-media-editor-360-full.png; the Amharic pass measured the same 478 px in English and in Amharic
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 result and `p4/05/results-en.json` product-edit@360.
+Ruling needed: none.
+
+### D-339 - A fifty-line order puts every action nine screens down and shows no total anywhere on the detail
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    SC-04 with 50 lines at 360: page 7,218 px; the Payment region starts at 6,421 px after fifty "Can't Fulfil" buttons; Reissue, Mark Ready, Assign, Hand to the courier, Show QR all below; `innerText` contains no "63,240" though the Orders list shows ETB 63,240.00 for the same order
+Found by:  p4/02/06-order-detail-360-bottom.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 measurements.
+Ruling needed: none.
+
+### D-340 - Two hundred products are listed in UUID order with no search and no sort, and the status tabs filter only the rows already loaded
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    the list query is `ORDER BY p.id`; nine "Load more" clicks (~100 ms each) to see all 200; the Ge'ez-named product sat at row 48; 25 screens tall at 360
+Found by:  p4/02/03-200-products-360-filter-published.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 measurements (API pages 6-8 ms, cursor correct, no duplicates -- the API is fine; the screen is not).
+Ruling needed: none.
+
+### D-341 - The console cannot attach a video, and a video attached through the API is never returned to the storefront
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    Media.tsx: the file input accepts `image/*` only and the only `/video` call is DELETE; through the API REQUEST_UPLOAD / PUT / COMMIT succeed and the seller's product shows `video={key, duration, height, bytes}`, but `GET /storefronts/:handle/products/:slug` returns `video=undefined` and `storefront.controller.ts` has no video query
+Found by:  p4/02/04-media-editor-360-full.png ("No video attached." with no way to attach one)
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-342 - An Amharic-named product is published at the slug "product", and the next at "product-2"
+
+Severity:  EMBARRASSES (one author; deterministic in source)
+Phase:     T25 - Phase 4, data edges
+Source:    `core.fn_product_slug` strips every non-ASCII character (`regexp_replace(name, '[^a-zA-Z0-9]+', '-')`) and falls back to `product` when nothing is left
+Found by:  `GET /storefronts/selam-art-c02/products` -> `[{slug: 'product', name: '<Ge'ez name>'}]`
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: what the storefront URL of a Ge'ez-named product should be -- a transliteration, the id, or the name percent-encoded.
+
+### D-343 - Two tabs on the same product silently lose the other tab's edit: PATCH sends the whole form, last writer wins, no conflict shown
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    tab A renames the product (PATCH 200); tab B, still holding the old name, saves a description; PATCH sends `{name, description}`; the server ends with the old name and the new description; tab A's rename is gone with no message. Stale actions elsewhere fail safe but generically: a stale duplicate variant key -> 409 rendered as "The request is not valid."; a stale image reorder -> 400 "The request is not valid."; a stale payout cancel -> 404 "Not found." with the pending panel still shown.
+Found by:  p4/03/07b-tabA-after-reload.png, p4/03/07h-tabB-stale-cancel.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-344 - A reload during any API blip drops a signed-in seller onto a blank sign-in page: session.tsx captures the boot problem and SignIn never renders it
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    with `/v1/` unreachable, `page.reload()` of /s/:id/orders lands on /sign-in with an empty banner; `bootProblem` is set in session.tsx and read nowhere (grep); the cookie is still valid, so typing the store URL back in works once the API is back
+Found by:  p4/03/03b-i-signin-send-while-down.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-345 - Publish while the API is down renders its failure banner above the viewport and leaves the button enabled
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, the failure paths
+Source:    after the Publish tap with `/v1/` aborted: `window.scrollY` 1153, the error banner's box at y = -926, the Publish button at y = 635 and `isEnabled() === true`
+Found by:  p4/03/03c-publish-down-viewport.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-346 - Back after creating a product returns to a blank create form, and a second tap creates a second product
+
+Severity:  NOTE (the verifier reproduced it and ranked it a note: the idempotency key is minted per mount, so this is the browser's history, not a lost guard -- double-click on the same button is fully defeated)
+Phase:     T25 - Phase 4, the failure paths
+Found by:  p4/03/06a-back-after-create.png; `core.product` count for the name = 2
+Response:  RECORDED.
+Ruling needed: none.
+
+### D-347 - A drop mid-upload leaves orphan objects in the media bucket, and the message blames bucket CORS for a mid-transfer reset with no retry control
+
+Severity:  NOTE for the orphans (verified; nothing reclaims them and `media.lifecycle` does not know them), EMBARRASSES for the message (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    aborting `card.webp`'s PUT after `thumb.webp` returned 200: the screen says "Upload could not start -- refused by storage before upload (bucket CORS or network)" and offers no Retry; the bucket holds six image directories for a product with two committed rows
+Found by:  p4/03/04b-put-aborted.png; `docker exec adulis-minio ls -R /data/adulis-media/products/<id>` vs `core.product_image`
+Response:  RECORDED.
+Ruling needed: none.
+
+### D-348 - Two hint paragraphs and one dark-mode placeholder fail contrast; a <main> is nested inside <main>; empty states jump from h1 to h3
+
+Severity:  EMBARRASSES (one author; axe-core 4.10.2 on all 26 screens, both modes, under a bypassCSP context)
+Phase:     T25 - Phase 4, accessibility
+Source:    `/notification-preferences .locked > p.hint` #868079 on #ffffff = 3.9:1 (light) and 4.32:1 (dark); `/closure .hint` 4.43:1 (dark); the per-variant "New price" placeholder #757575 on #3b3b3b = 2.43:1 in dark mode, and it is the only visible label because the real label is visually hidden; `landmark-no-duplicate-main` on Home, Orders and Order detail; heading order h1 -> h3 in empty states and h4 under h2 in the reject step. No critical violations. The focus ring passes at 8.72:1 light and 8.67:1 dark on every stop.
+Found by:  p4/04/shots/axe-1280-notifprefs.png, contrast-dark-editor.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-349 - The publish blocker says "Your current plan does not include this." and links nowhere; the Products cap note says the limit "could not be resolved"
+
+Severity:  EMBARRASSES (three walkers)
+Phase:     T25 - Phase 4
+Source:    with D-329 in force, the publication panel lists one blocker with no link to /subscription and no plan named; the Subscription screen never mentions publishing
+Found by:  p4/01/30-product-after-publish.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-350 - A console built without VITE_API_BASE_URL cannot call any API and ships with a NOTE from the header gate
+
+Severity:  MINOR as a gate (render.yaml:296 sets the variable for the deployed build, and the e2e harness sets it for its own); it cost every Phase 4 walker its first hour, and it is what a developer's hand build produces
+Phase:     T25 - Phase 4 (all five walkers)
+Source:    `resolveApiBaseUrl()` throws when the variable is unset and the bundle folds it to an unconditional throw; ops/scripts/build-headers.mjs:67 prints `NOTE VITE_API_BASE_URL is not set, so the policy names no origin for it` and exits 0
+Found by:  the served sign-in form: "Something went wrong on our side. Try again. If you contact support, quote this request id: -", zero requests leaving the browser (p4/01/00-shipped-console-config-error-360.png)
+Response:  RECORDED. The author rebuilt both served consoles with the variable set, as the harness does; the walkers had already swapped the asset in at the browser level.
+Action:    none here. The gate should FAIL, not note: a bundle that cannot call an API is not a build.
+Ruling needed: none.
+
+### D-351 - The console has no Amharic wiring: every component imports the English catalogue directly, and the locale the switch computes reaches formatting only
+
+Severity:  MAJOR as a gap between the documents and the build (ADU-PRD-01's localisation invariant and ADU-CON-02's shared catalogue describe a bilingual console; the code renders one language and has no path to the other)
+Phase:     T25 - Phase 4, the Amharic path
+Source:    apps/console/src/lib/market.tsx:114 `const locale = data?.locales?.includes('am') && navigatorPrefersAmharic() ? 'am' : 'en'` feeds `{ timezone, currency, locale }` for formatting; `grep -rn "from '@adulis/locale'" apps/console/src` shows every importer taking `en` (IdleWarning, RequireSession, SignIn, StepUpModal, Feedback, ScreenState, CourierScreen, Closure, ...) and none taking `am`; `AM_ENABLED` exists in comments in packages/locale and nowhere in code
+Found by:  a worktree build with `navigatorPrefersAmharic()` returning `true`, served on :5174 against a market whose bootstrap lists `["en","am"]`: English chrome, Ge'ez store name only (p4/05/shots/am-build/home-360.png; Ethiopic character count on Home = the store name's 16). The walker injected packages/locale's `am` strings into the DOM by hand to measure anything.
+Effect:    "AM_ENABLED on, with machine-translated strings" -- the order's 5.4 -- is not a configuration the product can be put in. The human translation pass's cost (D-352) was measurable only by simulation. When the wiring is written, the layout results below hold; the seams that will need care are the mixed-script joins the English console already lacks separators for (D-337).
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. A `t()` that selects the catalogue by the resolved locale, with the MT-KEYS gating packages/locale already describes; then the layout pass re-run on the real thing.
+Verification: the grep above; `p4/05/shoot.mjs` header (the four modes and why "am-swap" exists).
+Ruling needed: none on the defect; the documents already say what the console should do.
+
+### D-352 - Under 50% string expansion the top bar breaks the width of 26 of 31 screens at 360 px; with the real machine-translated Amharic nothing new breaks
+
+Severity:  MINOR now (the real catalogue causes no new layout failure); the entry exists because it is the list the order asked for
+Phase:     T25 - Phase 4, the Amharic path (one author; 93 screens x 3 widths x 4 modes, measured programmatically)
+Source:    `header.topbar` with `div.seller-switcher` (store name + "Stores" + the switcher dot) and the "Sign out" button, and the Development banner above it: at 360 with every string 1.5x wider the document is 426-441 px on home, orders, every order detail, product-new, product-stock, eligibility, profile, payouts, fulfilment, availability, couriers, team, subscription, sessions, notification-preferences, closure, insights (all three), claims, inbox, notifications, more -- one component, every screen it sits on; plus `button-wraps` on "Sign out" (courier header too), "Move up", "Move down", "View payment instructions - code required"; plus `cell-wraps` in the plan-comparison table at 768 ("Verified Pro", "All products plus custom flows", "Included, with roles")
+Found by:  `p4/05/diff.mjs am-expand` against the English baseline; p4/05/shots/am-expand/home-360.png
+Effect:    With the real `am` strings (`diff-am-swap.json`): 0 new, 0 worse across 93 screens at three widths. The English baseline itself carries 219 findings of the same kinds (61 spill-x, 51 clip-x, 51 clip-y, 30 button-wraps, 19 overlap, 7 cell-wraps), most of them the items registered as D-337 and D-338 -- Amharic inherits them and adds nothing.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The top bar needs a wrapping or truncating store name before the human translation lands; the rest is D-337/D-338.
+Verification: `p4/05/results-en.json`, `results-am-swap.json`, `results-am-expand.json` and the two diffs; every screen's screenshot under `p4/05/shots/<mode>/`.
+Ruling needed: none.
