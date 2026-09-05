@@ -265,7 +265,7 @@ DELETE /v1/seller/products/<an id that does not exist>              404  NOT_FOU
 B's rows afterwards: unchanged
 ```
 
-The order's rule is "404, not 403 -- a 403 confirms the object exists." **A 409 confirms it exists and is selling.** Product ids are in storefront links, so this is a competitor's live-sales signal, per product, on demand. Nothing is deleted and nothing is read across the line, which is exactly why the FKs and the scope check both held in the same pass: it is the one read the service makes before it scopes, and the map above is why nothing beneath it caught it. **D-320. Phase 4 was not started.** The refuters that were already running when it was found finish on their own and their verdicts are folded in below; no further attack was launched after the stop.
+The order's rule is "404, not 403 -- a 403 confirms the object exists." **A 409 confirms it exists and is selling.** Product ids are in storefront links, so this is a competitor's live-sales signal, per product, on demand. Nothing is deleted and nothing is read across the line, which is exactly why the FKs and the scope check both held in the same pass: it is the one read the service makes before it scopes, and the map above is why nothing beneath it caught it. **D-320. The order stopped here and reported; the author instructed it to continue, and Phase 4 ran on that instruction.** The refuters that were already running when it was found finished on their own and their verdicts are folded in below; no further attack was launched after the stop.
 
 ### Verdicts by attack class
 
