@@ -780,8 +780,24 @@ describe('C1 — onboarding and verification', () => {
 
   describe('company details and fulfilment', () => {
     it('409 SELLER_NOT_COMPANY on an individual seller — the composite FK speaks', async () => {
+      /*
+       * THE CALLER'S OWN PERSON, since T26 Phase 1 (register D-361).
+       *
+       * This used to mint a fresh core.person row and name it. That passed
+       * because `representative_person_id` was written straight through with
+       * no resolution of any kind -- which is the defect T26 closed: the
+       * column feeds core.fn_seller_attestation_person, so naming another
+       * store's natural person borrowed that person's identity attestation.
+       * The representative must now be a person this ACCOUNT already holds,
+       * and this seller's own person row is exactly that.
+       *
+       * The assertion is unchanged and so is what it is about: an INDIVIDUAL
+       * seller is refused by the composite FK on (seller_id, entity_type),
+       * and the refusal is reached only once the representative resolves.
+       */
       const person = await admin.query(
-        `INSERT INTO core.person (id) VALUES (gen_random_uuid()) RETURNING id`,
+        `SELECT person_id AS id FROM core.seller WHERE id = $1`,
+        [sellerId],
       );
       const r = await request(app.getHttpServer())
         .patch('/v1/seller/company-details')

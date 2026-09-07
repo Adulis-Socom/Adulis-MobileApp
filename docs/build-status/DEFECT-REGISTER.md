@@ -5168,3 +5168,71 @@ Response:  RECORDED. Not fixed in T26.
 Action:    none here. Either `--runInBand` in the `test` script (correct and slower), or per-worker namespacing of every fixture id from `JEST_WORKER_ID` (correct, faster, and a change to 44 files).
 Verification: the three runs above. `pnpm db:reset` between the second and the third changed nothing about which suite flaked.
 Ruling needed: none.
+
+### T26 Phase 1, the refutation pass. The order's instruction to the refuter was "find the third endpoint, not confirm the two", and it found two the author's sweep did not -- both because the author counted PATH parameters and an id is client-supplied wherever the client supplies it.
+
+### D-360 - POST /v1/handoffs/sync tells any account whether a stranger's order is past PAYMENT_CONFIRMED, in a 200 body
+
+Severity:  MAJOR. Same shape as D-320 and a narrower signal -- "this order exists and is being fulfilled" rather than "and is selling" -- but reachable by ANY authenticated account with no seller relationship and no courier role, on an endpoint whose whole purpose is offline batch submission.
+Phase:     T26 - Phase 1, the refutation pass; missed by the author's sweep because the object id is in the REQUEST BODY (`scans[].order_ref`) and the sweep's table enumerated path parameters
+Source:    apps/api/src/modules/handoff/handoff.service.ts `processScan`. The QR-token read -- `SELECT nonce, signing_key_version FROM core.order_qr_token WHERE order_id = ${scan.order_ref}`, with no buyer predicate -- ran BEFORE the buyer resolution at the end of the block. `core.order_qr_token` carries no RLS (the only ENABLE ROW LEVEL SECURITY in the schema is on `core."order"`, D-319) and `adulis_app` holds SELECT on all of it.
+Found by:  two requests differing only in `order_ref`, as an account with no relationship to the seller, the buyer or the order:
+             a stranger's order past PAYMENT_CONFIRMED -> 200 `{outcome: REJECTED_SIGNATURE}`
+             an id that does not exist                 -> 200 `{outcome: REJECTED_UNKNOWN_ORDER}`
+           A QR token exists only from PAYMENT_CONFIRMED (R20), so REJECTED_SIGNATURE is the disclosure. No nonce or signature is needed: any 64 hex characters produce it.
+Effect:    Order ids reach buyers and couriers. A competitor or a former courier can poll them and read, per order, whether payment has been confirmed and the goods are moving -- the fulfilment half of what D-320 gave them for the catalogue half. Nothing is written and no row crosses the tenant line, which is why every write-path check passed over it.
+Response:  FIXED in T26 Phase 1. The order and its buyer are resolved first; the token read now runs only for the order's own buyer.
+Action:    COURIER_CANNOT_SCAN is KEPT and NARROWED to the actor it names -- a live `core.seller_courier` of the order's seller, who already has the order in their own list and learns nothing from being told why their scan was refused. Every other non-buyer now receives REJECTED_UNKNOWN_ORDER, byte-identical to a nonexistent order. That narrowing is a judgement about who deserves the message and a ruling is invited on it; the alternative -- removing the message entirely -- costs a courier a correct explanation for a mistake they will make.
+Verification: the `POST /v1/handoffs/sync {order_ref}` row of `t26-ownership-before-rules.e2e.spec.ts`, which needed a SECOND seeded order past PAYMENT_CONFIRMED to discriminate at all: against B's PAYMENT_SUBMITTED order both branches answered REJECTED_UNKNOWN_ORDER and the case passed while proving nothing. That near-miss is recorded here because it is the failure mode of every test in this class.
+Ruling needed: which actors may be told COURIER_CANNOT_SCAN rather than "no such order".
+
+### D-361 - A COMPANY seller could name ANOTHER store's natural person as its representative, and borrow that person's identity verification
+
+Severity:  MAJOR, and it is not an oracle: a committed cross-tenant read-through of identity evidence, on the gate identity verification exists to hold
+Phase:     T26 - Phase 1, the refutation pass; the second body-supplied id the path-parameter sweep did not reach
+Source:    apps/api/src/modules/onboarding/onboarding.service.ts `patchCompanyDetails` wrote `body.representative_person_id` straight into `core.seller_company_detail` with no resolution of any kind. `core.fn_seller_attestation_person` (0018) returns exactly that column for a COMPANY seller, and `core.fn_evaluate_eligibility` then asks `verification.has_attestation(v_person)`.
+Found by:  as seller A (COMPANY), with seller B's `core.person` id: `PATCH /v1/seller/company-details` -> 200 `{updated: true}`, and A's attestation person is now B's. With an id that does not exist -> 409 VALIDATION_FAILED `{reason: SELLER_NOT_COMPANY}`, because the handler mapped EVERY 23503 to the composite-FK's meaning -- so the same endpoint was also an existence probe over `core.person`.
+Effect:    A company seller whose market sets `id_verification_requirement` to MANDATORY_ALL or MANDATORY_WITHOUT_AUDIENCE could satisfy IDENTITY_ATTESTATION_REQUIRED on a natural person it has no relationship to, and become eligible without anyone having verified anybody at that store. The seeded market uses OPTIONAL, which is why nothing has noticed.
+Response:  FIXED in T26 Phase 1. The representative is resolved BEFORE the write: it must be a `core.person` this ACCOUNT already holds through a seller it owns, and anything else answers 404 -- the same answer for a person that does not exist and one this account may not name.
+Action:    THE UNDERLYING GAP IS NOT FIXED AND MUST NOT BE INVENTED HERE. Nothing in the product creates a `core.person` row for a company's representative: `createSeller` mints one only for an INDIVIDUAL seller, and the operator attestation path explicitly refuses to ("an operator attesting about a person who does not exist is a mistake, not a signup"). The body schema makes `representative_person_id` REQUIRED, and the console asks a seller to TYPE a uuid into a form field. So a company whose owner holds no individual store still cannot complete this endpoint -- correctly, now, instead of by naming a stranger.
+Verification: the `PATCH /v1/seller/company-details {representative_person_id}` row of the sweep; against the pre-T26 handler the foreign-person branch returns 200 and the nonexistent one 409. `apps/api/test/c1-onboarding.e2e.spec.ts` was updated in the same commit: it minted a fresh person and named it, which passed only because nothing resolved the field.
+Ruling needed: YES -- where a company representative's `core.person` row comes from, and who may attest about it.
+
+### D-362 - fn_cancel_ownership_transfer's guard has fn_cancel_line's NULL hole, spelled NOT IN
+
+Severity:  MINOR (LATENT, not live: `p_actor` is `req.ctx?.accountId` on an authenticated route and the pipeline refuses before a handler runs without one). Registered because the class is the point, not the instance.
+Phase:     T26 - Phase 1, the refutation pass -- and it refutes a claim made in this very phase
+Source:    db/migrations/0034_seller_ownership_transfer.sql:291 -- `IF NOT FOUND OR p_actor NOT IN (v_t.from_account_id, v_t.to_account_id)`. Both list columns are NOT NULL so the list side is total; `NULL NOT IN (a, b)` is NULL, `false OR NULL` is NULL, and the guard does not fire.
+Found by:  an adversarial read of EVERY `IF NOT FOUND OR` guard in db/migrations, after 0051's header claimed to have closed "the NULL-actor twin before anybody finds it". It closed that twin inside `fn_cancel_line` and inferred, from a grep for `<> (SELECT`, that `fn_cancel_line` was the only member of the class. The grep was right about its own spelling and too narrow about the class.
+Effect:    None today. The value of the entry is the correction: D-325's Action named "an inequality against a subquery" as THE grep, and the class is wider than one spelling -- any comparison in a guard that can evaluate to NULL belongs to it. The audit that matters is over guard SHAPES, not over one operator.
+Response:  FIXED by `db/migrations/0052_ownership_transfer_guard_null_actor.sql`: two `IS DISTINCT FROM` comparisons in place of `NOT IN`. CREATE OR REPLACE, body otherwise byte-identical to 0034's.
+Action:    none further. Every other `IF NOT FOUND OR` guard in db/migrations (0012:411, 0014:285, 0014:293, 0019:49, 0023:76, 0023:164, 0023:341, 0028:143, 0038:34) is either already `IS DISTINCT FROM` or a NOT NULL column against a literal, and no `NOT IN (SELECT ...)` exists anywhere in the migrations.
+Verification: the `fn_cancel_ownership_transfer refuses a NULL actor` case in `t26-ownership-before-rules.e2e.spec.ts`, run inside a transaction that rolls back.
+Ruling needed: none.
+
+### D-363 - The T26 sweep's population was counted from PATH parameters, and the class is larger
+
+Severity:  MINOR as a defect; it is a correction to a claim this build order made, recorded because the claim was the deliverable
+Phase:     T26 - Phase 1, the refutation pass
+Source:    the sweep's own table in `apps/api/test/t26-ownership-before-rules.e2e.spec.ts` as first written: 53 routes, every one of them enumerated from `@Param` declarations in the controllers
+Found by:  the refuter's independent enumeration. 61 routes carry a path parameter; minus the 8 excluded by name (5 public `storefronts/{handle}`, 2 `availability-overrides/{date}`, 1 `devices/{id}`) = 53, which is arithmetically right and answers a narrower question than the one the order asked. A further 9 routes take an owned-object identifier ONLY in the body and appeared nowhere: `POST /v1/handoffs/sync`, `PATCH /v1/seller/company-details`, `POST /v1/cart/lines`, `POST /v1/orders`, `POST /v1/billing/mark-transferred`, `POST /v1/claims`, `POST /v1/conversations`, `POST /v1/seller/ownership-transfer`, `POST /v1/seller/identity-verification`. Eight more are in the table by their path id while their body id is never varied.
+Effect:    The two worst findings of this phase (D-360, D-361) were both in the nine. "We fixed the ones we found" is what T25 already said, and counting the wrong population is how a sweep says it again with a number attached.
+Response:  PARTLY FIXED. The population is 62, and the table now carries 55 cases -- the 53 path routes plus the two body-id routes that were defective. The remaining seven body-id routes were traced by hand and are clean: `POST /v1/cart/lines` is D-356 (recorded, adjacent); `POST /v1/orders`, `POST /v1/claims`, `POST /v1/conversations` and `POST /v1/billing/mark-transferred` resolve their ids against the caller before any rule; `POST /v1/seller/ownership-transfer` and `POST /v1/seller/identity-verification` are step-up-gated and scope inside their named functions.
+Action:    Add a case per body-supplied id, so the table's asserted count covers the whole class rather than the half that is easy to enumerate. Not done here because each needs a fixture that makes it discriminate -- the near-miss recorded in D-360 is what a case without one is worth.
+Verification: `grep -c "@Param(" apps/api/src/modules/*/*.controller.ts` against the table's `CASES.length`, which the suite asserts.
+Ruling needed: none.
+
+### D-364 - Two of the sweep's own cases proved nothing, and one of its controls asserted its own fixture
+
+Severity:  MINOR (test-quality), and it is the entry this phase would most like not to have written
+Phase:     T26 - Phase 1, the refutation pass
+Source:    `apps/api/test/t26-ownership-before-rules.e2e.spec.ts` as first written
+Found by:  the refuter reading the cases for whether they pass for the right reason. Three did not.
+             * `PATCH /v1/cart/lines/{id}` and `DELETE /v1/cart/lines/{id}`: the fixture gave BUYER_B a cart and BUYER_A none, so `resolveCart` returned null and both branches threw NOT_FOUND before `lineId` reached any statement. Both would have passed against `UPDATE core.cart_line ... WHERE id = ${lineId}` with no cart predicate at all.
+             * the D-325 positive control asserted `SELECT EXISTS (... core.seller WHERE id = B AND owner_account_id = B_OWNER)` -- a fact its own INSERT guarantees -- and never called `core.fn_cancel_line`. It would have passed identically if 0051's rewritten guard raised U0002 for the LEGITIMATE owner too, which is the one failure mode a rewritten guard most needs a control for.
+           A fourth, found by the author while fixing the first three: the `POST /v1/handoffs/sync` case as first written pointed at a PAYMENT_SUBMITTED order, which carries no QR token, so both branches answered REJECTED_UNKNOWN_ORDER and the case passed against the defective handler.
+Effect:    A green sweep that covers less than it claims is worse than no sweep, because the number in the report is what the next order will trust.
+Response:  FIXED in T26 Phase 1. BUYER_A has their own cart and line; the control calls the function on its own connection inside a transaction that rolls back and asserts the reservation reached CANCELLED_BY_SELLER; the handoff case points at a second seeded order past PAYMENT_CONFIRMED with its QR minted.
+Action:    none further. The general lesson is in the file: every case in this class must be checked to FAIL against the pre-fix code, and three of these were not.
+Verification: reverting each fix turns exactly the intended cases red -- 409 for the D-320 rows, REJECTED_SIGNATURE against REJECTED_UNKNOWN_ORDER for D-360, 200 against 409 for D-361.
+Ruling needed: none.
