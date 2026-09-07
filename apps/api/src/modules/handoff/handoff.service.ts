@@ -172,8 +172,8 @@ export class HandoffService {
          WHERE o.id = ${scan.order_ref}`.execute(trx);
       const owner = order.rows[0];
       if (!owner) return this.rejected(scan, 'REJECTED_UNKNOWN_ORDER');
-      if (owner.buyer_account_id !== ctx.accountId) {
-        if (owner.is_courier) throw new AdulisException('COURIER_CANNOT_SCAN');
+      const isBuyer = owner.buyer_account_id === ctx.accountId;
+      if (!isBuyer && !owner.is_courier) {
         // Indistinguishable from an order that does not exist.
         return this.rejected(scan, 'REJECTED_UNKNOWN_ORDER');
       }
@@ -194,6 +194,24 @@ export class HandoffService {
       }
       if (qrSignature(scan.order_ref, scan.nonce, t.signing_key_version) !== scan.signature) {
         return this.rejected(scan, 'REJECTED_SIGNATURE');
+      }
+
+      /*
+       * COURIER_CANNOT_SCAN STAYS BELOW THE SIGNATURE, and that placement is
+       * the batch contract rather than a preference. It THROWS -- it is a
+       * catalogued 403 -- so it escapes processScan and aborts the whole
+       * batch, discarding the per-item outcomes of every other scan in it,
+       * against 12.6.1's "200 whenever the batch was well-formed".
+       *
+       * Above the signature check it would be reachable on an ORDER ID ALONE,
+       * so one courier typo could destroy a queue of doorway scans collected
+       * offline. Here it needs what it has always needed: the real nonce and
+       * a signature over the QR the server minted -- which is exactly the
+       * courier who pointed a scanner at a customer's code, and is the person
+       * the message is written for.
+       */
+      if (!isBuyer) {
+        throw new AdulisException('COURIER_CANNOT_SCAN');
       }
 
       try {

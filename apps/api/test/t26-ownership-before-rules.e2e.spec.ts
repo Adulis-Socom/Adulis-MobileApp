@@ -117,6 +117,16 @@ const B_PERSON = `${N}28`;
 const B_ORDER_READY = `${N}2b`;
 const B_RES_READY = `${N}2c`;
 const B_QR = `${N}2d`;
+/*
+ * Seller A's owner also holds an INDIVIDUAL store, so A_OWNER has a
+ * `core.person` -- the only thing a company representative may legitimately
+ * name. Without it the D-361 check has no positive control at all.
+ */
+const A_SOLO = `${N}2e`;
+const A_PERSON = `${N}2f`;
+/** A team member of seller A: ADMIN holds seller.store:write and is not the Owner. */
+const A_STAFF = `${N}30`;
+const A_STAFF_S = `${N}31`;
 /** BUYER_A's OWN cart, so the cart-line cases actually reach the line id. */
 const A_CART = `${N}29`;
 const A_CART_LINE = `${N}2a`;
@@ -460,6 +470,39 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       [B_QR, B_ORDER_READY],
     );
     await admin.query(`INSERT INTO core.person (id) VALUES ($1)`, [B_PERSON]);
+    await admin.query(`INSERT INTO core.person (id) VALUES ($1)`, [A_PERSON]);
+    await admin.query(
+      `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
+         store_name, handle, status, person_id)
+       VALUES ($1,$2,$3,'INDIVIDUAL','T26 A solo','t26-a-solo','ACTIVE',$4)`,
+      [A_SOLO, M, A_OWNER, A_PERSON],
+    );
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status)
+       VALUES ($1,'+251922260007',$2,'ACTIVE')`,
+      [A_STAFF, M],
+    );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role, invited_by)
+       VALUES (gen_random_uuid(), $1, $2, 'ADMIN', $3)`,
+      [SELLER_A, A_STAFF, A_OWNER],
+    );
+    /*
+     * COURIER is a live courier OF SELLER B. Without this row the batch case
+     * below cannot discriminate: a non-courier is answered
+     * REJECTED_UNKNOWN_ORDER before COURIER_CANNOT_SCAN is ever considered, so
+     * the case would pass against the placement it exists to refuse.
+     */
+    await admin.query(
+      `INSERT INTO core.seller_courier (id, seller_id, account_id)
+       VALUES (gen_random_uuid(), $1, $2)`,
+      [SELLER_B, COURIER],
+    );
+    await admin.query(
+      `INSERT INTO core.session (id, account_id, audience, device_id, expires_at)
+       VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')`,
+      [A_STAFF_S, A_STAFF, DEVICE_A],
+    );
     await admin.query(`UPDATE core.seller SET person_id = $1 WHERE id = $2`, [
       B_PERSON,
       SELLER_B,
@@ -509,7 +552,8 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `DELETE FROM core.account_device WHERE id='${B_ACCOUNT_DEVICE}'`,
       `DELETE FROM core.notification WHERE recipient_account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${B_TEAM_ACCOUNT}')`,
       `DELETE FROM core.seller_courier_invite WHERE seller_id='${SELLER_B}'`,
-      `DELETE FROM core.seller_team_member WHERE seller_id='${SELLER_B}'`,
+      `DELETE FROM core.seller_courier WHERE seller_id='${SELLER_B}'`,
+      `DELETE FROM core.seller_team_member WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM chat.message WHERE conversation_id='${B_CONVERSATION}'`,
       `DELETE FROM chat.conversation WHERE id='${B_CONVERSATION}'`,
       `DELETE FROM core.claim_evidence_item WHERE claim_id='${B_CLAIM}'`,
@@ -534,7 +578,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `DELETE FROM core.seller_level_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.seller_level_state WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
-      `DELETE FROM core.person WHERE id='${B_PERSON}'`,
+      `DELETE FROM core.person WHERE id IN ('${B_PERSON}','${A_PERSON}')`,
       `DELETE FROM core.step_up_challenge WHERE account_id='${A_OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
       `DELETE FROM core.session WHERE account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}')`,
@@ -809,6 +853,72 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       });
     },
   );
+
+  /*
+   * ---------------------------------------------------- the review's findings
+   *
+   * Two regressions the first version of these fixes introduced, each pinned
+   * by the test that would have caught it. Both were found by review, after
+   * the sweep above was green -- which is the point of running one.
+   */
+  describe('the fixes did not cost what they were fixing', () => {
+    it('a batch carrying a foreign order id still returns 200 with per-item outcomes', async () => {
+      /*
+       * COURIER_CANNOT_SCAN THROWS, so it escapes processScan and takes the
+       * WHOLE BATCH with it -- against 12.6.1's "200 whenever the batch was
+       * well-formed". Hoisting it above the signature check made it reachable
+       * on an order id alone, so one courier typo would have discarded a queue
+       * of doorway scans collected offline. It sits below the signature again,
+       * where it needs the real QR, and this asserts the batch survives.
+       */
+      const r = await request(app.getHttpServer())
+        .post('/v1/handoffs/sync')
+        .set('Authorization', `Bearer ${COURIER_S}`)
+        .set('X-Adulis-Device', DEVICE_A)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          scans: [
+            { order_ref: B_ORDER_READY, nonce: randomUUID(),
+              signed_at: 1788000000000, signature: 'a'.repeat(64) },
+            { order_ref: randomUUID(), nonce: randomUUID(),
+              signed_at: 1788000000001, signature: 'b'.repeat(64) },
+          ],
+        });
+      expect(r.status).toBe(200);
+      expect(r.body.results).toHaveLength(2);
+      // The courier's own signature is wrong, so item one is a per-item
+      // rejection like any other -- and item two still gets its outcome.
+      expect(r.body.results.map((x: { outcome: string }) => x.outcome)).toEqual([
+        'REJECTED_SIGNATURE',
+        'REJECTED_UNKNOWN_ORDER',
+      ]);
+    });
+
+    it('a team member with seller.store:write may still set company details', async () => {
+      /*
+       * The representative is resolved against the STORE'S OWNER, not the
+       * caller. Scoped to the caller it would 404 a staff member on an
+       * endpoint the permission matrix lets them use -- a permission granted
+       * by one check and taken away by the next.
+       */
+      const r = await request(app.getHttpServer())
+        .patch('/v1/seller/company-details')
+        .set('Cookie', cookie(A_STAFF_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .set('X-Adulis-Seller', SELLER_A)
+        .send({
+          registration_identifier: 'REG-STAFF',
+          trade_licence_number: 'TL-STAFF',
+          tin: '0012345679',
+          representative_person_id: A_PERSON,
+          representative_relationship: 'Director',
+        });
+      expect({ status: r.status, body: r.body }).toEqual({
+        status: 200,
+        body: { updated: true },
+      });
+    });
+  });
 
   /**
    * The D-320 reproduction, stated as the register states it. The middle line

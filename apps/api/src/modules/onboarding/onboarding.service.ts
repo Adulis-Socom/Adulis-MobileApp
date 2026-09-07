@@ -646,17 +646,33 @@ export class OnboardingService {
      * explicitly does not ("an operator attesting about a person who does not
      * exist is a mistake, not a signup"). So the only person ids that exist
      * belong to individual sellers, and the narrowest resolution that invents
-     * no new rule is: the representative must be a natural person THIS ACCOUNT
-     * already holds. Where a company's representative person is supposed to
-     * come from is a gap, and D-361 reports it rather than filling it in.
+     * no new rule is: the representative must be a natural person THIS STORE'S
+     * OWNER already holds. Where a company's representative person is supposed
+     * to come from is a gap, and D-361 reports it rather than filling it in.
+     *
+     * THE STORE'S OWNER, NOT THE CALLER. `seller.store:write` is held by team
+     * members as well as the Owner, so scoping this to `req.ctx.accountId`
+     * would 404 a staff member on an endpoint the permission matrix lets them
+     * use -- a permission granted by one check and taken away by the next. The
+     * representative belongs to the STORE, not to whoever is typing.
+     *
+     * [!] THE CONSEQUENCE, STATED RATHER THAN DISCOVERED LATER: a company
+     * whose owner holds no individual store has no person to name, so
+     * COMPANY_DETAILS (one of publication readiness's items, 0018) cannot go
+     * green and that seller cannot publish. That is not a regression this
+     * check introduces -- before it, the only way through was to name a
+     * stranger's person and borrow their identity attestation, which is the
+     * defect. It is the gap becoming visible, and D-361 asks for the ruling
+     * that closes it.
      */
     const person = await sql<{ person_id: string }>`
       SELECT s.person_id FROM core.seller s
-       WHERE s.owner_account_id = ${req.ctx?.accountId}
-         AND s.person_id = ${body.representative_person_id}
+       WHERE s.person_id = ${body.representative_person_id}
+         AND s.owner_account_id = (SELECT owner_account_id FROM core.seller
+                                    WHERE id = ${req.ctx?.sellerId})
        LIMIT 1`.execute(trx);
     if (!person.rows[0]) {
-      // The same answer for a person that does not exist and one this account
+      // The same answer for a person that does not exist and one this store
       // may not name: S19's rule, applied to a body parameter.
       throw new AdulisException('NOT_FOUND');
     }
