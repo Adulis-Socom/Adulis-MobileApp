@@ -5086,3 +5086,85 @@ Response:  RECORDED. Not fixed in T25.
 Action:    none here. The top bar needs a wrapping or truncating store name before the human translation lands; the rest is D-337/D-338.
 Verification: `p4/05/results-en.json`, `results-am-swap.json`, `results-am-expand.json` and the two diffs; every screen's screenshot under `p4/05/shots/<mode>/`.
 Ruling needed: none.
+
+### T26 Phase 1 -- the class D-320 belongs to, swept. The two entries below that carry FIXED are closed by a build order rather than recorded by one.
+
+### D-320 (CLOSED in T26 Phase 1) - the DELETE pre-check oracle, and the rule it produced
+
+Severity:  was BLOCKER; closed
+Phase:     T26 - Phase 1
+Source:    apps/api/src/modules/catalogue/catalogue.service.ts `deleteProduct` and `deleteVariant`
+Response:  FIXED. Ownership is resolved against `req.ctx.sellerId` before the live-reservation count runs, and the count carries the seller predicate as well -- redundant by design, so that a later edit to either statement alone cannot reopen it.
+Action:    THE RULING THIS PRODUCED, which is larger than the patch: **ownership is resolved before any business rule is evaluated.** A handler taking a client-supplied object id resolves it against the actor's seller (or account) first, and everything else runs after. The 409 was never the defect; its POSITION was, and a business-rule check that precedes an ownership check is an oracle whatever the rule is.
+Verification: `pnpm --filter @adulis/api test -- t26-ownership-before-rules` -- 60 tests, 53 of them one per id-taking route. Reverting the two service methods to their pre-T26 bodies turns the DELETE product case from PASS to `status: 409` against an expected 404: the defect reproduced by the test that closes it.
+Ruling needed: none. The scope question this entry asked -- "whether the same unscoped-pre-check pattern exists elsewhere ... should be answered by grep, not by memory" -- is answered in T26-REPORT.md: 53 id-taking routes, 53 checked, four in the class.
+
+### D-325 (CLOSED in T26 Phase 1) - fn_cancel_line's scope guard, and the grep it named
+
+Severity:  was BLOCKER; closed
+Phase:     T26 - Phase 1
+Source:    `core.fn_cancel_line`, seller arm
+Response:  FIXED by `db/migrations/0051_cancel_line_scope_guard.sql`. The guard is restructured into three arms, each two-valued, each raising unless a relationship is POSITIVELY found -- the siblings' `IF NOT FOUND` shape, expressed as `NOT EXISTS`. Nothing in it compares a value against a subquery any more.
+Action:    Two things beyond the patch. (1) The buyer arm's `<>` became `IS DISTINCT FROM`: `buyer_account_id` is NOT NULL so the column side was total, but a NULL `p_actor` made the whole expression NULL and that arm would have fallen through exactly as the seller arm did. It is now asserted directly. (2) The audit this entry asked for -- "an inequality against a subquery in a guard is the grep" -- was run over `db/migrations`, and `core.fn_cancel_line` was the only occurrence. Every sibling seller-scoped function (fn_confirm_payment, fn_reject_payment, fn_mark_order_ready, fn_report_refund, fn_publish_product, fn_unpublish_product, fn_reissue_instructions, fn_confirm_receipt, fn_acknowledge_refund, financial.render_payment_instructions) opens with `SELECT ... WHERE id = p_target AND <owner column> = p_owner; IF NOT FOUND THEN RAISE U0002`.
+Verification: t26-ownership-before-rules.e2e.spec.ts drives the endpoint over HTTP and calls the function directly with a stranger seller-actor, a total stranger and a NULL actor; the reservation is re-read afterwards and is still ACTIVE. Against the pre-0051 function all three of those refuse to raise.
+Ruling needed: none.
+
+### D-353 - POST /v1/orders/{id}/cancel answered a foreign order with the business rule's code, because the ownership predicate and the rule were one query
+
+Severity:  MINOR (no disclosure: a foreign order and a nonexistent one were byte-identical, both 409 ORDER_ALREADY_TERMINAL -- it is registered because it is D-320's SHAPE without D-320's leak, and the shape is what T26 was sent to sweep)
+Phase:     T26 - Phase 1, the sweep; found by the generated test, not by reading
+Source:    apps/api/src/modules/orders/orders.service.ts `cancelOrder`: one SELECT carried `r.order_id = $1 AND r.state = 'ACTIVE' AND o.buyer_account_id = $2`, and zero rows threw ORDER_ALREADY_TERMINAL
+Found by:  the sweep's 404 assertion, which this case failed at 409 for both ids
+Effect:    A buyer was told their own order was already terminal about an order that was never theirs. Nothing leaked -- the two answers agree -- but "not yours" and "yours, and finished" are different facts and one query cannot answer both. The next edit that widened the rule would have widened an oracle with it, which is how D-320 came to exist.
+Response:  FIXED in T26 Phase 1. The order is resolved against `buyer_account_id` first (404), then the active-line count decides the 409.
+Action:    none further.
+Verification: the `POST /v1/orders/{id}/cancel` row of the sweep; it fails at `status: 409` against the pre-T26 body.
+Ruling needed: none.
+
+### D-354 - fn_cancel_line takes no p_seller, so the active-seller binding on the one endpoint that calls it lives in the handler and not in the database
+
+Severity:  MINOR (no live break, and the handler holds it) -- recorded because the doctrine says the database holds what the database can hold, and here it does not
+Phase:     T26 - Phase 1, while fixing D-325
+Source:    `core.fn_cancel_line(p_order, p_reservation, p_actor, p_as_seller)` -- four arguments, no seller. Its siblings all take `p_seller` and scope on it, so the seller a caller PROVED a permission for and the seller the write LANDS on are the same by construction. This one derives the seller from the order and checks only that the actor holds SOME live relationship to it.
+Found by:  reading the fix through. With 0051's guard alone, an actor who is a live member of two stores could pass assertPermission for store A (via `X-Adulis-Seller: A`) and cancel a line in store B -- a permission checked against one seller, an action taken on another.
+Effect:    Bounded to accounts holding relationships with two or more sellers, and to `seller.orders:respond`. Not reachable by a stranger: that was D-325 and it is closed.
+Response:  MITIGATED, not eliminated. `orders.service.ts cancelLineAsSeller` now resolves the order against `req.ctx.sellerId` before calling the function, which is what the T26 ruling requires of the handler in any case.
+Action:    Adding `p_seller` would DROP and CREATE a signature that `core.fn_delete_account` calls from two merged migrations (0023, 0038), so it needs a migration that recreates those callers too. Worth doing, and worth doing deliberately rather than inside a BLOCKER fix.
+Verification: the sweep's `POST /v1/seller/orders/{id}/reservations/{rid}/cancel` row covers the stranger case at both layers. The two-seller case has no fixture yet, and that is the test that should arrive with the signature change.
+Ruling needed: none on the defect; a scheduling call on the signature.
+
+### D-355 - PATCH /v1/devices/{id} is @Public() and resolves no ownership at all, so a leaked device id repoints an account's push notifications
+
+Severity:  MAJOR if the id is obtainable. The id is a server-minted uuid returned only to the device that registered it, so exploitation needs a leak -- an access log, a shared URL, a proxy -- rather than a guess.
+Phase:     T26 - Phase 1, the sweep; excluded from the generated table with this entry as the stated reason
+Source:    apps/api/src/modules/auth/auth.controller.ts `@Patch('devices/:id') @Public()` -> auth.service.ts `patchDevice(trx, deviceId, body)`: `UPDATE core.device SET push_token = ..., notification_permission = ... WHERE id = $1`, with no account predicate and no session requirement. The service is not passed `req` at all, so it could not scope if it wanted to.
+Found by:  the class question asked of every id-taking handler -- "does anything happen before the ownership resolution?" -- answered here with "there is no ownership resolution"
+Effect:    Two things, and the second is the one that matters. (1) A 404-vs-200 split tells any caller whether a device id exists. (2) `core.device.push_token` is the delivery address for that device's notifications, and `core.account_device` binds devices to accounts AFTER registration -- so a PATCH against a bound device rewrites where a signed-in account's push notifications go, from an unauthenticated request.
+Response:  RECORDED. Not fixed in T26. The endpoint is @Public() deliberately: a device registers BEFORE any identity exists (C6, the pre-identity endpoints), and until an account claims it there is no owner to resolve against. Choosing the rule here is what the prime rule forbids.
+Action:    none here. The shape a fix probably takes: once a device carries an `account_id` or a live `core.account_device` row, the PATCH requires a session for that account; before that it stays public. That is a contract change to a pre-identity endpoint, so it is a ruling.
+Verification: `grep -n "patchDevice" apps/api/src/modules/auth/auth.service.ts` -- the UPDATE's WHERE clause is the id and nothing else; `grep -n "@Public" apps/api/src/modules/auth/auth.controller.ts` shows the route carrying it.
+Ruling needed: YES -- whether an unauthenticated caller may patch a device an account has since claimed, and what a claimed device's PATCH requires.
+
+### D-356 - POST /v1/cart/lines confirms that an UNPUBLISHED product's variant exists, and will add it to a cart
+
+Severity:  MINOR. The leak is one bit -- "this variant id exists, and it is this store's" -- and ordering it still fails: fn_create_order revalidates and getCart already renders the line unavailable.
+Phase:     T26 - Phase 1, the sweep. Adjacent to the class rather than in it: a buyer OWNS no variant, so there is no ownership resolution to put first. The resolution this endpoint skips is VISIBILITY.
+Source:    apps/api/src/modules/orders/orders.service.ts `addLine`: `SELECT seller_id FROM core.product_variant WHERE id = ${body.variant_id}` with no visibility, no status and no seller-status predicate. 404 when absent, 409 CART_SELLER_CONFLICT when it belongs to a different seller than the cart, 201 otherwise -- three distinguishable answers.
+Found by:  reading every id-taking handler for the sweep. chat.service.ts already answers this exact question correctly on its own anchor path: "a buyer's anchor must be a product the public catalogue would show them (PUBLISHED) -- anything else turns the anchor probe into an oracle over the seller's drafts and moderation-unpublished rows."
+Effect:    A buyer with a variant id learns whether it exists and which store holds it, whether or not the product is DRAFT, UNPUBLISHED or moderation-hidden, and whether the seller is ACTIVE. The comparable read in chat is guarded and this one is not; the inconsistency is the finding, more than the exposure.
+Response:  RECORDED. Not fixed in T26: adding `AND p.visibility = 'PUBLISHED'` changes what an existing endpoint accepts, and several suites add lines against fixture products whose visibility was never the point of the test. A small change with a test-fixture blast radius belongs in its own PR.
+Action:    none here. The predicate chat.service.ts already uses, applied to the cart's variant lookup.
+Verification: `grep -n "FROM core.product_variant WHERE id" apps/api/src/modules/orders/orders.service.ts`, compared with the `owned` query in chat.service.ts `postMessage`.
+Ruling needed: none -- the storefront contract already says an unpublished product is not visible.
+
+### D-357 - The API suite is not isolated between suites under its own default runner: one suite failed in one run of three and passed alone
+
+Severity:  MINOR (a harness reliability defect, not a product one) -- registered because it is the class that makes a green run unfalsifiable
+Phase:     T26 - Phase 1, running the gates
+Source:    `apps/api/jest.config.js` sets no `maxWorkers`, so `pnpm --filter @adulis/api test` runs suites in parallel against ONE database. Suites take fixed market codes and fixed ids and clean up in `afterAll`.
+Found by:  three consecutive full runs on a freshly reset database: 630/630, then 629/630 with `t12-d89-invite-claim.spec.ts` failing, then 630/630 again. That suite passes alone and under `--runInBand`, every time.
+Effect:    Two costs. (1) A failure cannot be read as a defect without a re-run, which is the state db-reset.mjs's own header warns about: "you cannot tell a defect from a deposit." (2) A suite that dies before its afterAll leaves rows that break the NEXT run of a DIFFERENT suite. Observed directly in this phase: T25's leftover fixtures -- market codes C01, C02, C03 and C06 in namespace `7d%` -- made `migration-06-07-catalogue-and-stock` and `c6-accounts` fail 43 tests, identically on HEAD and on the T26 branch, until `pnpm db:reset`.
+Response:  RECORDED. Not fixed in T26.
+Action:    none here. Either `--runInBand` in the `test` script (correct and slower), or per-worker namespacing of every fixture id from `JEST_WORKER_ID` (correct, faster, and a change to 44 files).
+Verification: the three runs above. `pnpm db:reset` between the second and the third changed nothing about which suite flaked.
+Ruling needed: none.
