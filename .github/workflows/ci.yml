@@ -130,13 +130,24 @@ jobs:
       # legitimately between a service container and docker-compose and
       # cannot fail because someone wrote something wrong.
       #
-      # ADULIS_SCOPE_FILTER is the one difference, expressed once: CI scopes
-      # typecheck/build/test to changed packages plus dependents
-      # (ADU-REPO-01 S7); a developer runs everything. S11.2's two foot-guns
-      # travel with it - fetch-depth 0 above, or `origin/main` is not a ref
-      # and NOTHING is selected; and the script's own `!adulis-platform`,
-      # because the workspace root is selectable and its scripts are
-      # `pnpm -r`, so a filtered run re-enters unfiltered.
+      # ADULIS_SCOPE_FILTER is the one difference, expressed once: on a
+      # BRANCH or a PR, CI scopes typecheck/build/test to changed packages
+      # plus dependents (ADU-REPO-01 S7); a developer runs everything.
+      #
+      # ON A PUSH TO MAIN IT IS EMPTY, and that is a correction rather than a
+      # refinement. `...[origin/main]` diffs against origin/main, which on a
+      # push to main IS the commit being built -- so the selection was empty,
+      # pnpm printed "No projects matched the filters", and seven gates
+      # (typecheck, lint, build, test, and the three that read the console's
+      # dist) exited 0 without running. Main's CI could not go red on a type
+      # error, a lint error or a failing test. A branch has a base to diff
+      # against; main IS the base, so main gets the whole list.
+      #
+      # S11.2's two foot-guns still travel with the filter - fetch-depth 0
+      # above, or `origin/main` is not a ref and NOTHING is selected; and the
+      # script's own `!adulis-platform`, because the workspace root is
+      # selectable and its scripts are `pnpm -r`, so a filtered run re-enters
+      # unfiltered.
       # ==================================================================
       # Migration 01 creates every role NOLOGIN, because a password in a
       # migration is a secret in git. So the runtime roles cannot be given a
@@ -197,7 +208,27 @@ jobs:
       - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
         run: pnpm ci:local
         env:
-          ADULIS_SCOPE_FILTER: '...[origin/main]'
+          # EMPTY ON A PUSH TO MAIN, AND SCOPED EVERYWHERE ELSE.
+          #
+          # `...[origin/main]` means "the packages changed since origin/main,
+          # plus their dependents". On a PUSH TO MAIN that ref IS the commit
+          # being built, so the diff is empty, the filter selects nothing, and
+          # pnpm prints "No projects matched the filters" and exits 0. Seven
+          # gates -- typecheck, lint, build, test and the three that read the
+          # console's dist -- were therefore passing on main without running:
+          # main's CI could not go red on a type error, a lint error or a
+          # failing test, only on the unscoped gates below them.
+          #
+          # A branch has a base to diff against. Main IS the base, so it gets
+          # the whole list.
+          #
+          # THE SHAPE OF THIS EXPRESSION IS DELIBERATE. The obvious spelling --
+          # `(ref == main) && '' || '...[origin/main]'` -- is wrong in GitHub
+          # Actions, because the empty string is FALSY there: the `&&` yields
+          # '', the `||` then discards it and the filter comes back anyway. The
+          # condition is inverted so the empty case is the fallback and nothing
+          # depends on '' being truthy.
+          ADULIS_SCOPE_FILTER: ${{ github.ref != 'refs/heads/main' && '...[origin/main]' || '' }}
           # The six values the object-store adapter reads. A bare account id
           # would be treated as Cloudflare's; a URL is used verbatim with
           # path-style addressing, which is what MinIO needs.
