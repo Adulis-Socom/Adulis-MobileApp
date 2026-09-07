@@ -620,6 +620,46 @@ export class OnboardingService {
     body: CompanyDetailsBody,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.store:write');
+    /*
+     * THE REPRESENTATIVE IS RESOLVED BEFORE ANYTHING IS WRITTEN
+     * (T26 Phase 1 ruling; register D-361).
+     *
+     * `representative_person_id` arrives in the BODY and was written straight
+     * through. Two consequences, and the second is not an oracle at all.
+     *
+     * (1) Every 23503 was mapped to SELLER_NOT_COMPANY, so an existing person
+     *     id answered 200 and a nonexistent one answered 409 -- an existence
+     *     probe over core.person, keyed on a value the caller supplies.
+     *
+     * (2) The one that matters: `core.fn_seller_attestation_person` (0018)
+     *     returns THIS COLUMN for a COMPANY seller, and
+     *     `fn_evaluate_eligibility` then asks
+     *     `verification.has_attestation(v_person)`. A company seller could
+     *     therefore name a natural person belonging to ANOTHER store and
+     *     satisfy IDENTITY_ATTESTATION_REQUIRED on that person's verification.
+     *     Not a probe -- a committed read-through of somebody else's identity
+     *     evidence, on the gate identity verification exists to hold.
+     *
+     * WHAT THE CHECK CAN HONESTLY BE. Nothing in the product creates a
+     * `core.person` row for a company's representative: `createSeller` mints
+     * one only for an INDIVIDUAL seller, and the operator attestation path
+     * explicitly does not ("an operator attesting about a person who does not
+     * exist is a mistake, not a signup"). So the only person ids that exist
+     * belong to individual sellers, and the narrowest resolution that invents
+     * no new rule is: the representative must be a natural person THIS ACCOUNT
+     * already holds. Where a company's representative person is supposed to
+     * come from is a gap, and D-361 reports it rather than filling it in.
+     */
+    const person = await sql<{ person_id: string }>`
+      SELECT s.person_id FROM core.seller s
+       WHERE s.owner_account_id = ${req.ctx?.accountId}
+         AND s.person_id = ${body.representative_person_id}
+       LIMIT 1`.execute(trx);
+    if (!person.rows[0]) {
+      // The same answer for a person that does not exist and one this account
+      // may not name: S19's rule, applied to a body parameter.
+      throw new AdulisException('NOT_FOUND');
+    }
     try {
       await sql`
         INSERT INTO core.seller_company_detail

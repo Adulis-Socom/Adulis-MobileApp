@@ -138,6 +138,46 @@ export class HandoffService {
         return this.rejected(scan, 'REJECTED_REPLAY');
       }
 
+      /*
+       * OWNERSHIP FIRST, AND IT USED TO BE LAST (T26 Phase 1 ruling; register
+       * D-360). The QR-token lookup below ran BEFORE this block, keyed on the
+       * client-supplied `order_ref` with no buyer predicate, and
+       * `core.order_qr_token` has no RLS and is readable by adulis_app in
+       * full. So the three outcomes an arbitrary authenticated account could
+       * read off a stranger's order id were:
+       *
+       *   an order past PAYMENT_CONFIRMED   REJECTED_SIGNATURE
+       *   an order not yet there            REJECTED_UNKNOWN_ORDER
+       *   an id that does not exist         REJECTED_UNKNOWN_ORDER
+       *
+       * A token exists only from PAYMENT_CONFIRMED (R20), so REJECTED_SIGNATURE
+       * meant "that order is real AND it is being fulfilled right now" -- D-320
+       * exactly, spelled as an outcome string inside a 200 body instead of a
+       * status code, which is why the sweep's path-parameter table did not see
+       * it: this endpoint takes its object id in the REQUEST BODY.
+       *
+       * COURIER_CANNOT_SCAN IS KEPT, AND NARROWED TO THE ACTOR IT NAMES. A
+       * courier of the order's seller already knows the order exists -- it is
+       * in their own list -- so telling them why their scan was refused
+       * discloses nothing and is the message 12.6's invariant asks for. To
+       * anyone else the answer is now identical to a nonexistent order.
+       */
+      const order = await sql<{ buyer_account_id: string; is_courier: boolean }>`
+        SELECT o.buyer_account_id,
+               EXISTS (SELECT 1 FROM core.seller_courier sc
+                        WHERE sc.seller_id = o.seller_id
+                          AND sc.account_id = ${ctx.accountId}
+                          AND sc.revoked_at IS NULL) AS is_courier
+          FROM core."order" o
+         WHERE o.id = ${scan.order_ref}`.execute(trx);
+      const owner = order.rows[0];
+      if (!owner) return this.rejected(scan, 'REJECTED_UNKNOWN_ORDER');
+      if (owner.buyer_account_id !== ctx.accountId) {
+        if (owner.is_courier) throw new AdulisException('COURIER_CANNOT_SCAN');
+        // Indistinguishable from an order that does not exist.
+        return this.rejected(scan, 'REJECTED_UNKNOWN_ORDER');
+      }
+
       // The signature must verify against the QR the server minted.
       const token = await sql<{ nonce: string; signing_key_version: number }>`
         SELECT nonce, signing_key_version FROM core.order_qr_token
@@ -154,17 +194,6 @@ export class HandoffService {
       }
       if (qrSignature(scan.order_ref, scan.nonce, t.signing_key_version) !== scan.signature) {
         return this.rejected(scan, 'REJECTED_SIGNATURE');
-      }
-
-      // Visibility: the scanner must be the order's buyer. The composite
-      // FK would refuse anyway; answering first keeps a courier's attempt
-      // a clean 403-shaped outcome rather than a 500 (12.6's invariant).
-      const order = await sql<{ buyer_account_id: string }>`
-        SELECT buyer_account_id FROM core."order"
-         WHERE id = ${scan.order_ref}`.execute(trx);
-      if (!order.rows[0]) return this.rejected(scan, 'REJECTED_UNKNOWN_ORDER');
-      if (order.rows[0].buyer_account_id !== ctx.accountId) {
-        throw new AdulisException('COURIER_CANNOT_SCAN');
       }
 
       try {
