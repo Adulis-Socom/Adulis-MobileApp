@@ -5169,6 +5169,33 @@ Action:    none here. Either `--runInBand` in the `test` script (correct and slo
 Verification: the three runs above. `pnpm db:reset` between the second and the third changed nothing about which suite flaked.
 Ruling needed: none.
 
+### D-358 - The ladder demotes every seller it promotes, on the very next sweep: tenure is measured from `since`, and a promotion resets `since`
+
+Severity:  MAJOR today, and a BLOCKER for the ladder the day D-328 is answered. It is invisible now only because nothing ever completes an order, so no seller reaches the promotion at all -- the two defects hide each other.
+Phase:     T26 - Phase 2, on the first run of a real promotion at test scale. Found by the fixture, not by reading: with the production 60-day threshold the oscillation takes 61 days to observe and with a one-day threshold it takes two sweeps.
+Source:    `core.fn_recompute_seller_level` (db/migrations/0028_ladder_new_to_established.sql). Tenure is `v_tenure := now() - v_state.since`, and the UPDATE that applies a new level sets `since = now()`. A promotion is a level change, so the moment a seller reaches ESTABLISHED its tenure is zero; the next sweep fails `v_tenure >= new_to_established_min_tenure`, the ELSE branch targets NEW, `v_target <> v_state.level` is true, and the seller is demoted.
+Found by:  a rolled-back probe first, then pinned in `apps/api/test/t26-trust-ladder-test-scale.spec.ts`. Three sweeps of the real `level.recompute` job over one seller with tenure 3 days and 2 COMPLETED orders, thresholds 1 day / 2:
+             before        NEW          tenure 3 days
+             after sweep 1 ESTABLISHED  tenure 00:00:00
+             after sweep 2 NEW          tenure 00:00:00
+             after sweep 3 NEW
+           and `core.seller_level_event` holds `NEW -> ESTABLISHED  COMPUTED` followed by `ESTABLISHED -> NEW  COMPUTED`.
+Effect:    At production scale a seller is ESTABLISHED for exactly one nightly run out of every sixty-one days, for as long as the ladder runs, and the append-only `seller_level_event` history fills with a promotion/demotion pair per cycle. Everything downstream of the level moves with it: the NEW product cap re-applies overnight (a seller who published above ten while ESTABLISHED is over the cap the next morning), the storefront badge flickers, and `seller_level_at_order` is stamped from whichever side of the oscillation an order arrives on.
+Response:  RECORDED. Not fixed in T26 -- and deliberately not worked around in the fixture either: the seeded ESTABLISHED store survives only because its `since` is three days old against a one-day threshold, which is the same defect seen from the side where it happens not to bite.
+Action:    none here; a ruling first. 0028's column comment says "A demotion resets it, which is hysteresis", which is deliberate and right. The reset on PROMOTION is the half no document asks for. Two shapes are available and they are different products: reset `since` only on demotion (tenure then means "time since the last demotion or ladder entry"), or give the ladder a separate `ladder_entered_at` that no level change touches (tenure means "time on the ladder"). ADU-DB-01 does not define tenure's origin at all -- 0028's own comment registers that as open -- so choosing here would be inventing an answer to an open product question.
+Verification: `pnpm --filter @adulis/api test -- t26-trust-ladder-test-scale`; the describe block named "D-358 -- the run after a promotion demotes it again" asserts the demotion as a CHARACTERIZATION, so the fix flips that expectation deliberately rather than silently.
+Ruling needed: YES -- what tenure is measured from, and whether a promotion resets it.
+
+### D-359 - The non-production seed carries a one-day, two-order ladder, and nothing but NODE_ENV stands between it and a market
+
+Severity:  MINOR as built (the guard holds and is tested); recorded because the consequence of the guard failing is silent and slow rather than loud
+Phase:     T26 - Phase 2, written down as the risk the change creates rather than one it found
+Source:    `ops/scripts/seed.mjs` now writes `core.ladder_config` with `new_to_established_min_tenure = interval '1 day'` and `new_to_established_min_orders = 2`, where ADU-VAL-01 S2 sets 60 days and 50.
+Found by:  asking what this change costs if it outlives its usefulness
+Effect:    In a real market those thresholds would promote every trading seller inside a week, lifting the NEW product cap and the transaction cap for sellers the ladder exists to hold at NEW -- and it would look like the ladder working, not like a misconfiguration. Nothing downstream would raise.
+Response:  ACCEPTED, with the guard already in place and now stated. `seed.mjs` enumerates the environments it may run in (`development`, `test`) rather than negating production, so a NODE_ENV added later is refused by default -- T23 Phase 5's correction, and this change is the first one that would have been dangerous without it. Staging is refused with production. A real market's row comes from `ops/runbooks/activate-market.md`, which owns those columns and explains each.
+Action:    none required today. If a check is ever wanted, its neighbourhood is the launch gate: `pnpm verify:trust-before-open-signup` already refuses to let a market open to public seller signup while measuring nothing, and "a market open to signup whose ladder thresholds are below the ADU-VAL-01 values" is the same sentence with the inequality the other way round. It is not added here because the gate is about markets that are open, and no market is.
+Verification: `NODE_ENV=staging pnpm db:seed` exits 2 with the enumerated-environments message; `grep -n "SEEDABLE" ops/scripts/seed.mjs`.
 ### T26 Phase 1, the refutation pass. The order's instruction to the refuter was "find the third endpoint, not confirm the two", and it found two the author's sweep did not -- both because the author counted PATH parameters and an id is client-supplied wherever the client supplies it.
 
 ### D-360 - POST /v1/handoffs/sync tells any account whether a stranger's order is past PAYMENT_CONFIRMED, in a 200 body
