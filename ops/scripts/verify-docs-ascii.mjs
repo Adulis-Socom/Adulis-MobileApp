@@ -50,7 +50,7 @@ const root = path.resolve(here, '..', '..');
  * to repeat: it is the comparator this list never had.
  */
 const GOVERNED = [
-  'docs/ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md',
+  'docs/ADU-DB-01_Database_and_Data_Model_v1_19_ASCII.md',
   // T22: AUTH-01 governs at v2.8 for authentication, sessions, recovery,
   // operators and abuse control. v2.6 and v2.5 stay enforced because gates
   // still parse them, NOT because they govern -- see the note above.

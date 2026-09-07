@@ -313,6 +313,21 @@ export class OrdersService {
     req: AuthedRequest,
     orderId: string,
   ): Promise<unknown> {
+    /*
+     * OWNERSHIP FIRST (T26 Phase 1 sweep; register D-353). The ownership
+     * predicate and the business rule used to be ONE query, and the caller
+     * got the business rule's answer: a foreign order and a nonexistent one
+     * both came back 409 ORDER_ALREADY_TERMINAL. That leaked nothing -- the
+     * two are byte-identical, which is why this is not a second D-320 -- but
+     * it told a buyer their OWN order was terminal about an order that was
+     * never theirs, and it left the class's shape in place for the next edit
+     * to widen. Fusing the two questions is the habit; separating them is
+     * the rule.
+     */
+    const owns = await sql<{ id: string }>`
+      SELECT id FROM core."order"
+       WHERE id = ${orderId} AND buyer_account_id = ${req.ctx?.accountId}`.execute(trx);
+    if (!owns.rows[0]) throw new AdulisException('NOT_FOUND');
     const lines = await sql<{ id: string }>`
       SELECT r.id FROM core.reservation r
         JOIN core."order" o ON o.id = r.order_id
@@ -525,6 +540,33 @@ export class OrdersService {
     reservationId: string,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.orders:respond');
+    /*
+     * OWNERSHIP AGAINST THE ACTIVE SELLER, BEFORE THE FUNCTION RUNS
+     * (T26 Phase 1 ruling; register D-325, and D-354 for what this line
+     * closes that migration 0051 cannot).
+     *
+     * This is the ONE seller-scoped write whose named function takes no
+     * p_seller. Its siblings -- fn_confirm_payment, fn_reject_payment,
+     * fn_mark_order_ready, fn_report_refund -- are all handed
+     * req.ctx.sellerId and scope on it, so the seller the caller PROVED a
+     * permission for and the seller the write LANDS on are the same by
+     * construction. fn_cancel_line derives its seller from the order and
+     * checks only that the actor holds SOME relationship to it, so without
+     * the read below an actor who is a live member of two stores could pass
+     * assertPermission for store A and cancel a line in store B -- a
+     * permission checked against one seller, an action taken on another.
+     *
+     * Adding p_seller to the function would drop and recreate a signature
+     * that core.fn_delete_account calls from two merged migrations, so the
+     * binding lives here, where the active seller already does (S4.2 -- the
+     * active seller is a request parameter, never session state). This is
+     * not the invariant reimplemented: 0051 still holds the relationship
+     * check in the database and raises U0002 on its own.
+     */
+    const owns = await sql<{ id: string }>`
+      SELECT id FROM core."order"
+       WHERE id = ${orderId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
+    if (!owns.rows[0]) throw new AdulisException('NOT_FOUND');
     await sql`SELECT core.fn_cancel_line(
       ${orderId}, ${reservationId}, ${req.ctx?.accountId}, true)`.execute(trx);
     return { cancelled: reservationId };

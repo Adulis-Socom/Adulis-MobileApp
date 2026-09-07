@@ -58,6 +58,65 @@ you can misread.
 
 ## Before the first deploy, once per environment
 
+### Step 0 of 0 -- the five-line provisioning contract (ADU-DB-01 v1.19 S4.4b.1)
+
+**Measured, not reasoned.** Fifty migrations ran as `adulis_migrate` with `rolsuper=f` on a
+managed provider under exactly these five lines and nothing else. Reproduced here verbatim
+rather than referenced, because it is five lines and a reference is a second place to be
+stale.
+
+```text
+1  owner creates adulis_migrate with LOGIN and CREATEROLE
+2  GRANT CREATE, CONNECT ON DATABASE <db> TO adulis_migrate
+3  GRANT CREATE ON SCHEMA public TO adulis_migrate
+4  ALTER ROLE adulis_migrate SET createrole_self_grant = 'set, inherit'
+5  do NOT create the other five roles -- 0001 must
+```
+
+**No superuser. No hand-installed extensions** -- `adulis_migrate` installed all four
+itself on Render, which the local `pgvector` image refuses.
+
+> ### [!] Line 3 fails BEFORE migration 0001 is read
+>
+> ```text
+> CREATE TABLE "public"."pgmigrations"
+> ERROR:  permission denied for schema public
+> ```
+>
+> PostgreSQL 15 revoked `PUBLIC`'s `CREATE` on schema `public`, and **`CREATE` on the
+> DATABASE is a different privilege.** The failure is on **node-pg-migrate's own tracking
+> table**, so the deploy stops there before a single line of the schema is tested, and
+> nothing in this repository anticipated it until it was run.
+
+> ### [!] Line 5 is a PROHIBITION, and the reason travels with it
+>
+> **Do NOT pre-create the five roles. `0001` must.**
+>
+> `createrole_self_grant` grants membership only in roles the role **itself creates**, and
+> `0001:60-62` guards creation with `IF NOT EXISTS`. Pre-provision them and
+> **`adulis_migrate` creates nothing, receives nothing, and holds zero membership in the
+> other five.**
+>
+> **The GUC stays set. It stays visible in `SHOW`. It grants nothing.** That is a
+> provisioning step which looks correct, reports correct, and disables the mechanism it
+> configures -- the worst failure shape in ADU-DB-01.
+
+> ### [!] Both halves of line 4 are required
+>
+> | `createrole_self_grant` | result |
+> |---|---|
+> | **`set, inherit`** | **50/50 PASS, `db:check` 16/0/0** |
+> | `set` only | fails in `0001` -- *permission denied for schema verification* |
+> | `inherit` only | fails in `0001` -- *must be able to SET ROLE "adulis_verification"* |
+> | neither | fails in `0001` -- SET is reached first |
+>
+> **SET** is for `CREATE SCHEMA verification AUTHORIZATION` at `0001:86`; **INHERIT** is
+> for creating the Appendix A enum types *inside* that schema. `0001:85` succeeds because
+> a role can always set-role to itself -- which is also why 68 of the 86
+> `ALTER ... OWNER TO` statements were never at risk.
+
+---
+
 1. **The four extensions.** `db/init/00-extensions.sql`, run as the DDL role. Render's
    managed Postgres does not run an init directory.
 
@@ -66,7 +125,9 @@ you can misread.
    pnpm db:verify-extensions
    ```
 
-2. **Migrate**, which creates the six roles among everything else.
+2. **Migrate**, which creates **five** of the six roles among everything else --
+   `adulis_migrate` already exists, from line 1 of the contract above, and **must not be
+   created here.**
 
    ```bash
    pnpm db:migrate

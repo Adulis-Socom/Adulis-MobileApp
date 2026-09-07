@@ -8,7 +8,7 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PROJ-01_Project_Documentation_v9_0.md` — current supplied project baseline.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — binding product behaviour.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — binding seller-surface architecture.
-- `ADU-DB-01_Database_and_Data_Model_v1_16_ASCII.md` - binding database enforcement baseline. Installed at T15; v1.16 removes S0's stale table count rather than correcting it (D-222.5 -- a number with no checker and no reader schedules its own next finding). Its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and `pg_class`, and compared to the document by the `appendix` gate, so the document, the fixture and the database agree by construction. 116 tables, 71 enum types.
+- `ADU-DB-01_Database_and_Data_Model_v1_19_ASCII.md` - binding database enforcement baseline. Installed at T24; v1.19 records the FIRST execution of the privilege model by a non-superuser: fifty migrations as `adulis_migrate`, `db:check` 16/0/0, and the five-line provisioning contract of S4.4b.1 measured rather than reasoned. v1.17 and v1.18 were never installed. Its Appendix A and Appendix B are GENERATED from `db/checks/fixtures/` and `pg_class` and compared by the `appendix` gate. 116 tables, 71 enum types.
 - `ADU-API-01_API_Contract_v1_11_ASCII.md` - binding wire contract baseline. Installed at T20: S12's path strings are GENERATED from `contracts/openapi.json` rather than hand-written, and S12's surface markers are gate-compared to `core.permission.surfaces` in both directions. v1.10's substance is carried forward; v1.10 moved to `superseded/` at T22.
 - `ADU-CON-03_Seller_Console_Content_Architecture_v1_3.md` - binding console content architecture (T15: three stale passages corrected -- G1.1 on SC-22, G1.6 on SC-25, S2.3's numbering)
 - `ADU-RUL-06_Rulings_on_the_T13_Register.md` and `ADU-RUL-07_Contract_Rulings.md` - founder rulings, binding as scoped in each. Installed at T5.
@@ -29,7 +29,7 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 ## Authority by question
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
-2. **Database enforcement:** `ADU-DB-01 v1.16` governs.
+2. **Database enforcement:** `ADU-DB-01 v1.19` governs.
 3. **API/wire behaviour:** `ADU-API-01 v1.11` governs.
 4. **Authentication/authorization:** `ADU-AUTH-01 v2.8` governs for authentication, sessions, recovery, operators and abuse control; `ADU-AUTH-01 v2.5` remains canonical for the permission catalogue, the 42x6 matrix and the SQL seed. The split is recorded in `docs/amendments/README.md`.
 5. **Seller surface placement:** `ADU-ARCH-01 v2.0` governs.

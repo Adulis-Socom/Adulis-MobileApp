@@ -417,6 +417,48 @@ try {
      ON CONFLICT (seller_id) DO NOTHING`,
     [SELLER_SUB],
   );
+  /*
+   * ------------------------------------------------------------ THE OPERATOR
+   *
+   * NON-PRODUCTION SEEDS A FOUNDER GRANT. PRODUCTION NEVER DOES, and the two
+   * answers are different for a reason that is not convenience.
+   *
+   * E4's ruling stands for production: no founder account id exists until
+   * somebody signs up through the ordinary phone-OTP path, so a grant
+   * referencing one would have to invent an account. `core.account` has no
+   * production seed and never will.
+   *
+   * HERE IT IS DIFFERENT, because the seeded account already exists two hundred
+   * lines above -- it is the account the console e2e signs in as. Granting to
+   * it invents nothing.
+   *
+   * AND WITHOUT IT A FRESH CLONE CANNOT COMPLETE THE JOURNEY. The chain is:
+   * no operator -> verification.read_attestation finds no grant and raises ->
+   * identity review cannot happen -> IDENTITY_VERIFIED is never satisfied ->
+   * one of the ten publication-readiness items never goes green -> NO SELLER
+   * CAN PUBLISH. A seed that cannot publish a seller is a seed that cannot test
+   * the product, and the failure is silent: nothing raises, the eight other
+   * items pass, and the system behaves exactly as designed.
+   *
+   * ADMIN rather than IDENTITY_REVIEWER, and only here. The runbook is emphatic
+   * that a real grant takes the NARROWEST role that does the job, because the
+   * access log records every decision against whatever role was held. A
+   * development fixture has no access log anyone will read and needs to
+   * exercise claim review and moderation too, so one row is honest where five
+   * would be noise. `grant-founder-operator.md` is unchanged and still governs
+   * the real thing.
+   *
+   * granted_by_account_id is NULL, which the schema permits for exactly this
+   * case: the first grant has nobody above it.
+   */
+  await client.query(
+    `INSERT INTO core.operator_grant (id, account_id, role, granted_by_account_id, reason)
+     VALUES (gen_random_uuid(), $1, 'ADMIN', NULL,
+             'Seeded founder operator -- NON-PRODUCTION ONLY. Without it no identity review is possible and no seeded seller can publish.')
+     ON CONFLICT DO NOTHING`,
+    [ACCOUNT],
+  );
+
   // ------------------------------------------------------------------ trade
   await client.query(
     `INSERT INTO core.account (id, phone_e164, market_id, status, age_declared_over_18)

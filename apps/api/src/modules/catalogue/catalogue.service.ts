@@ -302,11 +302,39 @@ export class CatalogueService {
     productId: string,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:write');
+    /*
+     * OWNERSHIP IS RESOLVED BEFORE ANY BUSINESS RULE IS EVALUATED
+     * (T26 Phase 1 ruling; register D-320).
+     *
+     * This SELECT used to come AFTER the live-reservation count, and the
+     * count had no seller predicate. assertPermission is true here -- the
+     * actor may write to the ACTOR'S seller -- and says nothing about this
+     * product, so the count ran against any seller's rows and threw 409
+     * PRODUCT_HAS_ACTIVE_ORDERS before the first seller-scoped statement.
+     * Product ids appear in storefront links, so that answered, per product
+     * and on demand, whether a COMPETITOR'S product exists and is selling
+     * right now: 409 for a foreign product with a live reservation, 404 for
+     * a foreign product without one, 404 for an id that does not exist.
+     *
+     * The 409 was never the defect; its POSITION was. A business-rule check
+     * that precedes an ownership check is an oracle whatever the rule is,
+     * so the rule for this whole class is the order of the two statements,
+     * not the wording of either.
+     */
+    const owner = await sql<{ id: string }>`
+      SELECT id FROM core.product
+       WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
+    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+
+    // The seller predicate stays on the count as well. It is redundant now
+    // that ownership is resolved above, and it is the redundancy that makes
+    // a future edit to either statement alone unable to reopen this.
     const live = await sql<{ n: number }>`
       SELECT count(*)::int AS n
         FROM core.reservation r
         JOIN core.product_variant v ON v.id = r.variant_id
-       WHERE v.product_id = ${productId} AND r.state = 'ACTIVE'`.execute(trx);
+       WHERE v.product_id = ${productId} AND v.seller_id = ${req.ctx?.sellerId}
+         AND r.state = 'ACTIVE'`.execute(trx);
     if ((live.rows[0]?.n ?? 0) > 0) {
       throw new AdulisException('PRODUCT_HAS_ACTIVE_ORDERS');
     }
@@ -390,9 +418,19 @@ export class CatalogueService {
     variantId: string,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:write');
+    // OWNERSHIP FIRST -- the variant twin of D-320, identical in shape and
+    // found in the same pass. See deleteProduct above for why the order of
+    // these two statements is the rule and the 409 is not.
+    const owner = await sql<{ id: string }>`
+      SELECT id FROM core.product_variant
+       WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
+    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+
     const live = await sql<{ n: number }>`
-      SELECT count(*)::int AS n FROM core.reservation
-       WHERE variant_id = ${variantId} AND state = 'ACTIVE'`.execute(trx);
+      SELECT count(*)::int AS n FROM core.reservation r
+        JOIN core.product_variant v ON v.id = r.variant_id
+       WHERE r.variant_id = ${variantId} AND v.seller_id = ${req.ctx?.sellerId}
+         AND r.state = 'ACTIVE'`.execute(trx);
     if ((live.rows[0]?.n ?? 0) > 0) {
       throw new AdulisException('VARIANT_HAS_ACTIVE_ORDERS');
     }

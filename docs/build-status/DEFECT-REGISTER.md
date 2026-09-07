@@ -4446,3 +4446,793 @@ Action:    WHICH HALF OF THE GUC EACH FAILURE NEEDS -- four runs, same instance,
 Verification: four full runs against Render (adulis_probe_3), reset to virgin between each. Final state left migrated and verified: 50 rows in pgmigrations, 117 tables, `db:check` 16 PASS / 0 PENDING / 0 FAIL, schema owners confirmed by query. No credential in the repository, any commit, this register or the report.
            NOT TESTED: `pnpm worker:install`, the other half of render.yaml's preDeployCommand. D-297 flagged it as being on the same wall and it remains unrun.
 Ruling needed: D-297's rulings (a) and (b) are ANSWERED by measurement and can be closed: the principal is adulis_migrate, the membership comes from the GUC provided it creates the roles, and 0023 needs no reordering. What replaces them is smaller and concrete -- where does the five-step provisioning contract above live, given deploy.md and staging.md currently describe an order that would break it? D-297(c), the disqualification rule, and D-297(d), a non-superuser CI job, both stand unchanged.
+
+### D-301 - ADU-DB-01 v1.19 contradicts itself on the GUC, in the revision that withdraws the ruling
+
+Severity:  MINOR (documentation, in the section whose whole subject is a claim that was wrong)
+Phase:     T24 - Phase 1, found while transcribing
+Source:    ADU-DB-01 v1.19 S0.1 item D and S4.4b.1's table, against S4.4b's opening
+Found by:  Transcribing the supplied document verbatim rather than paraphrasing it
+Effect:    S0.1 item D says "v1.18's `'set'`-alone ruling is WITHDRAWN. Both halves are required and both bite inside `0001`", and S4.4b.1's four-run table shows `set` alone failing. **S4.4b's opening still prints the v1.18 ruling as live**: "`ALTER ROLE adulis_migrate SET createrole_self_grant = 'set'` is a PROVISIONING step", followed by the whole v1.18 block arguing `'set'` NOT `'set, inherit'`.
+           So the section that carries the corrected contract also carries the superseded one, four paragraphs apart, with no marker saying which governs. **A reader who opens S4.4b for the provisioning value finds `'set'` first.**
+           IT IS THE DOCUMENT'S OWN RECURRING SHAPE, in the revision written about exactly that. v1.11 announced an Appendix A withdrawal and left the block. v1.12 declared Appendix B reconciled and named none of the tables. v1.16's S0 carried a count for three revisions. This is the fourth instance of "a correction declared in the change table and not performed in the body", and v1.19's own S0.4 names the cause: **surgical editing preserves what it does not read.**
+Response:  TRANSCRIBED VERBATIM, NOT SILENTLY FIXED
+Action:    The installed `docs/ADU-DB-01_..._v1_19_ASCII.md` reproduces S4.4b exactly as supplied, contradiction included. A first draft of the transcription "helpfully" rewrote the block to say `'set, inherit'` -- which would have made the installed document disagree with the one the founder signed, in a section about privilege, in a way no gate could see. **Reverted before commit.**
+           THE THREE RUNBOOKS CARRY THE CORRECT VALUE, and that is where it matters: `deploy.md`, `staging.md` and `run-probe.md` each reproduce the five-line contract verbatim with `'set, inherit'`, which is what a deploy actually reads. The document's internal contradiction does not reach an operator.
+Verification: `grep -c "createrole_self_grant = 'set'"` in the installed document returns the v1.18 line at S4.4b; S0.1 D and S4.4b.1 both say both halves are required. All three runbooks carry `'set, inherit'`.
+Ruling needed: YES, and it is one line -- delete or mark the v1.18 block in S4.4b at the next revision. Recorded rather than applied because **editing a governing document to remove a contradiction is a document amendment, not a transcription**, and this order's Phase 1 is an installation.
+
+### D-302 - The spec router cites four superseded document versions
+
+Severity:  MINOR (D-02's class, and the skill is the first thing every order loads)
+Phase:     T24 - Phase 1
+Source:    `.claude/skills/adulis-spec-router/SKILL.md`, the "Governing sources" list
+Found by:  Loading it first, as WORK ORDER T24 S1 directs
+Effect:    The router's list is the first thing an agent reads, and four of its eleven entries name revisions that have been superseded for several orders:
+             Database        cites `ADU-DB-01_..._v1_6.md`     -- v1.19 governs from this order
+             API             cites `ADU-API-01_..._v1_3.md`    -- v1.11 governs
+             Auth            cites `ADU-AUTH-01_..._v2_0.md`   -- v2.8 governs
+             Build/operations cites `ADU-CON-02_..._v3_0.md`   -- v3.2 governs
+           Its own "Shared source protocol" says **"Do not substitute an older revision when a newer named revision is required"** -- and the list it supplies is the older revision, by name, four times. An agent following the skill faithfully reads the wrong file.
+           D-02 covers the outcome (the installed document wins) but not the cause: **nothing compares the skill's list to `docs/`.** That is the same shape as the GOVERNED list in `verify-docs-ascii.mjs` before T22 gave it a directory comparator.
+Response:  REGISTERED, NOT PATCHED IN THIS ORDER
+Action:    Not corrected here because the skills are not loaded in this session at all (D-303) and editing an unloaded skill on the strength of a stale citation is two changes with one review. The fix is small and has a known shape: the same family/newest-revision comparison `verify-docs-ascii.mjs` already performs, run over the skill's list.
+Ruling needed: none. It is work.
+
+### D-303 - The project's own skills are not loaded, because the session started one directory too high
+
+Severity:  MINOR (operational; it is the habit `CLAUDE.md` calls the most consequential in the repository)
+Phase:     T24 - Phase 1
+Source:    Session working directory `C:/Users/naods/Documents/Work`, one level above the clone
+Found by:  `Skill(adulis-spec-router)` returning "Unknown skill" while `.claude/skills/adulis-spec-router/SKILL.md` exists
+Effect:    Seventeen project skills live in `.claude/skills/` and NONE of them is registered. WORK ORDER T24 S1 names four by name -- `adulis-spec-router`, `adulis-migration-engineer`, `security-guidance`, `claude-md-management` -- and none can be invoked.
+           The root `CLAUDE.md` predicts this exactly: **"Started at the repository root you get this file and nothing else"**, and **"this is the single most consequential operational habit in the repository, it costs nothing, and it is invisible when it is skipped."** It was invisible for twenty-three orders.
+           IT IS WORSE THAN THE SKILLS BEING ABSENT, because the order's instruction to load them reads as satisfied by an agent that reads the files instead -- which is what happened here, deliberately and stated -- but would read as satisfied by an agent that skipped them silently.
+Response:  WORKED AROUND EXPLICITLY, AND SAID SO
+Action:    The skills were READ from `.claude/skills/` and followed as text. That is not the same as invoking them: a skill's `allowed-tools`/`disallowed-tools` frontmatter is not enforced when it is read rather than loaded, so `adulis-spec-router`'s `disallowed-tools: Edit Write Bash` did not bind this session.
+           The remedy is one line and belongs to the operator, not to a commit: **start the session in `adulis-platform/`, or in `apps/api` or `apps/console` for a workstream.** `/context` lists what actually loaded.
+Verification: `ls .claude/skills/` lists seventeen; `Skill(adulis-spec-router)` returns "Unknown skill".
+Ruling needed: none.
+
+### D-304 - The appendix gate pinned the document filename, so installing v1.19 turned it red
+
+Severity:  MINOR (fixed here) -- the gate, not the document
+Phase:     T24 - Phase 1
+Source:    ops/scripts/verify-appendix.mjs, `const DOC = path.join(root, 'docs', 'ADU-DB-01_..._v1_16_ASCII.md')`
+Found by:  Running the gate immediately after installing v1.19 and superseding v1.16
+Effect:    The gate read a LITERAL filename, so the moment the document it checks was superseded it failed with "docs/ADU-DB-01_..._v1_16_ASCII.md is missing. This gate reads the installed document."
+           **A gate reporting a defect in the document set when the only thing wrong was its own hardcoded filename.** It would have said the same on every future revision, and the tempting fix each time is to bump the literal -- which schedules the identical finding for v1.20.
+           SAME SHAPE, THIRD TIME. `verify-docs-ascii.mjs`'s GOVERNED list held two stale entries until T22 gave it a directory comparator. ADU-DB-01's own S0.4 names the cause in general terms: **a fact written in two places drifts at the next revision.** This is that fact written in `docs/` and in a gate.
+Response:  FIXED - the gate resolves the installed revision instead of naming it
+Action:    Newest `ADU-DB-01_*` at the TOP of `docs/`, compared numerically so `v1_10` beats `v1_9`. `docs/superseded/` is not searched, which is precisely what makes "newest on disk" mean "installed" -- the same rule `verify-docs-ascii.mjs` rule 2 already uses, now applied to the one gate that reads the document's body.
+           It also prints the revision it read (`ADU-DB-01 v1.19 -- the appendices agree...`), so a run against the wrong document is visible in the output rather than inferred from a green.
+Verification: `node ops/scripts/gates.mjs --only docs-ascii,transcription,appendix,surface-markers` -- 4 of 4 PASS, the appendix gate reporting v1.19.
+Ruling needed: none.
+
+### D-305 - worker:install needs nothing beyond the five-line contract, and that is the finding
+
+Severity:  INFORMATIONAL (a negative result, recorded because the order predicted a positive one)
+Phase:     T24 - Phase 2
+Source:    ops/scripts/install-worker-schema.mjs, run against Render as adulis_migrate with rolsuper=f
+Found by:  Running it, for the first time anywhere
+Effect:    **Exit 0. Six tables in schema `jobs`, granted to `adulis_jobs`.** No privilege failure, and no grant beyond the S4.4b.1 contract.
+           WORK ORDER T24 S3 said "Expect a privilege finding. Every other component has produced one, and this is the first time this installer has met a non-superuser." It did not produce one, and a negative result that was predicted is worth as much as a positive one -- **the next reader should not go looking for a grant that is not needed.**
+           WHY IT PASSES, which is not luck. The installer does three things and the contract already covers all three: graphile-worker's own `create schema if not exists jobs` needs CREATE on the DATABASE (contract line 2); creating tables inside schema `jobs`, which `0001` gave to `adulis_jobs`, needs CREATE on that schema, which arrives because `adulis_migrate` INHERITS `adulis_jobs` (line 4's `inherit`); and `ALTER ... OWNER TO adulis_jobs` needs SET ROLE membership in the new owner, which arrives from the same line's `set`. **Both halves of the GUC are load-bearing here too, for the same two reasons they are load-bearing in `0001`.**
+Verification: `DATABASE_URL_MIGRATE=... node ops/scripts/install-worker-schema.mjs` -> `worker schema installed: 6 tables in schema jobs, granted to adulis_jobs`. Afterwards: schema `jobs` owned by `adulis_jobs`; all five graphile tables, the `jobs` view and three sequences owned by `adulis_jobs`; 45 table privileges held by `adulis_jobs` in that schema.
+Ruling needed: none.
+
+### D-306 - jobs.worker_heartbeat is owned by whoever ran the migration, which D-49 forbids -- and locally that is the superuser
+
+Severity:  MINOR (works today by explicit grant; the rule it breaks exists because of D-50)
+Phase:     T24 - Phase 2
+Source:    db/migrations/0026_worker_grants_heartbeat_and_job_functions.sql:141, `CREATE TABLE jobs.worker_heartbeat`
+Found by:  Reading ownership after `worker:install` on Render and comparing it to the local instance
+Effect:    Schema `jobs` is owned by `adulis_jobs`. **`jobs.worker_heartbeat` is not.**
+             LOCAL   owner = `adulis_bootstrap`  -- THE SUPERUSER
+             RENDER  owner = `adulis_migrate`    -- the migrator, non-superuser
+           S4.4a's companion rule (D-49) is explicit: **"every table is owned by its schema's owner, not by whoever ran the migration."** `0026` creates this one without an `ALTER ... OWNER TO`, so it lands on the executing role in both environments, and the two environments disagree about who that is.
+           IT WORKS ANYWAY, and that is why nobody saw it: `0026:154` grants `SELECT, INSERT, UPDATE ON jobs.worker_heartbeat TO adulis_jobs` explicitly, and Render confirms all three are held. The heartbeat job writes fine. **A rule enforced by an explicit grant instead of by ownership is a rule that holds until somebody adds a statement the grant does not cover.**
+           THE LOCAL CASE IS THE ONE THAT MATTERS. D-49's original finding was `analytics.event` bootstrap-owned inside a schema authorized to `adulis_migrate`, and D-50 was a `SECURITY DEFINER` function owned by a superuser lending superuser privileges. This is the same first half. No definer function currently attaches to `worker_heartbeat`, so the second half has not happened -- **but the reason it has not is that nobody has written one yet, not that anything prevents it.**
+Response:  REGISTERED, NOT PATCHED
+Action:    Not fixed here for the reason ADU-DB-01 v1.19 S4.4b states plainly: **a merged migration is never edited.** The correction is one `ALTER TABLE jobs.worker_heartbeat OWNER TO adulis_jobs` in a new migration, and it belongs with whatever else `0051` carries rather than alone in this order's Phase 2.
+           And there is a check-shaped version worth more than the fix: **Appendix C has no check for D-49.** Check 10 asserts the definer class; nothing asserts that every table is owned by its schema's owner. That query is one line and would have found this in Tier 2.
+Verification: `SELECT relname, pg_get_userbyid(relowner) FROM pg_class ... WHERE nspname='jobs'` on both instances; `information_schema.table_privileges` confirms adulis_jobs holds SELECT/INSERT/UPDATE.
+Ruling needed: none -- it is a migration and a check.
+
+### D-307 - The API test suite cannot run against a managed provider: its teardown needs a superuser
+
+Severity:  MAJOR (blocks Phase 2's 21-job probe on the deployed instance, and every other suite with it)
+Phase:     T24 - Phase 2
+Source:    apps/api/test/e2-e6.jobs.spec.ts:149 and :189, and the same pair in c1-onboarding, c2-catalogue and c3-orders
+Found by:  Running the T22 all-jobs probe against Render as adulis_migrate
+Effect:    ```
+           error: permission denied to set parameter "session_replication_role"
+           ```
+           `SET session_replication_role = replica` suppresses constraint triggers so fixture rows can be deleted without regard to foreign-key order. **It is superuser-only.** Four spec files use it in `afterAll`, and on a managed provider none of them can tear down.
+           **THE SUITE IS THEREFORE NOT RE-RUNNABLE THERE, WHICH IS WORSE THAN NOT RUNNING.** The first attempt left its fixture markets behind; the second failed in `beforeAll` with `duplicate key value violates unique constraint "market_pkey"` -- a confusing error two layers from its cause.
+           **AND THE DELETES GENUINELY NEED IT.** Running the extracted teardown by hand as `adulis_migrate`: **4 of 35 DELETE statements succeeded** and both fixture markets survived. The parameter is not defensive tidiness; the deletion order alone does not satisfy the constraints.
+           IT IS THE SAME SHAPE AS EVERY OTHER FINDING IN THIS FAMILY. `docker-compose.yml` and `ci.yml` both make the migrator a superuser, so this has been invisible for twenty-three orders -- and ADU-DB-01 v1.19 S4.4b.4 says exactly why: **"the environment every gate runs in makes the failing checks unreachable."** This is that sentence reaching the test harness rather than the schema.
+Response:  REPORTED, NOT WORKED AROUND
+Action:    **The 21-job probe was NOT run on the deployed instance**, and this order's report says so rather than substituting a weaker check that would have looked equivalent. WORK ORDER T24's closing instruction is "Stop and report on any privilege failure. Do not work around one", and inventing a superuser-free teardown mid-order is a change to how every fixture in this repository is cleaned up.
+           THE SHAPE OF THE FIX, for whoever takes it: fixtures deleted in dependency order need no `session_replication_role`, and the four suites that use it are deleting cross-schema graphs where the order is genuinely hard. The cheaper alternative is a per-suite schema or a transaction-wrapped suite that rolls back -- both are real changes to the harness, not a patch.
+           SEPARATELY AND NOT A PRIVILEGE ISSUE: the probe also exceeded jest's 5 s default running twenty-one jobs over a transatlantic link. `--testTimeout` covers that and it is latency, not permissions -- recorded so the two are not confused when someone reads the first failure.
+Verification: two runs against Render; `error: permission denied to set parameter "session_replication_role"`; 4/35 deletes succeeding without it; local `adulis_bootstrap` runs the same suite green.
+Ruling needed: YES -- how do fixtures get cleaned up on a host that will not grant superuser? It decides whether the API suite can ever run against a real provider, which is the only place these findings have ever surfaced.
+
+### D-308 - A job was enqueued, taken and PROVEN to have acted, on the deployed instance
+
+Severity:  INFORMATIONAL (the positive result Phase 2 asked for)
+Phase:     T24 - Phase 2
+Source:    A real graphile-worker process against Render, connected as adulis_jobs
+Found by:  WORK ORDER T24 S3 -- "confirm it did the thing rather than that it logged"
+Effect:    **The effect, not the log.** A task was enqueued through `makeWorkerUtils` **as `adulis_jobs`**, a real `run()` worker took it, and its statement wrote a row to `jobs.worker_heartbeat` -- the same table the real heartbeat job writes and `/healthz` reads.
+             before: 0 heartbeat rows
+             enqueued: 1 job waiting
+             Completed task 3 (prove_heartbeat, 102.00ms) with success
+             after: 1 heartbeat row, beat_at = 2026-09-04T22:57:42.862Z
+             queue drained: 0 jobs left
+           **Three separate things are proven and only the first is usually checked**: the enqueue succeeded as the runtime role; the worker CONNECTED and took the job as that role; and the job's own statement committed a row. The queue draining to zero is the fourth -- a job that fails retries twenty-five times and still logs "connected".
+           A FIRST ATTEMPT FAILED AND THE FAILURE IS WORTH KEEPING: `null value in column "worker_id"`. That is a NOT NULL violation, **not a permission denial** -- which is itself evidence that `adulis_jobs` could reach and write the table. The probe's own statement was wrong; the grant was not.
+Verification: `JOBS_URL=... MIGRATE_URL=... node provejob.mjs` -> `PASS  a job was enqueued as adulis_jobs, taken by a real worker, and its EFFECT is in the table.`
+Ruling needed: none.
+
+### D-309 - The founder operator grant is seeded in non-production and executed on a managed provider
+
+Severity:  MAJOR (fixed here) -- D-294's chain, closed at both ends
+Phase:     T24 - Phase 3
+Source:    ops/scripts/seed.mjs had no operator grant; ops/runbooks/grant-founder-operator.md had never been executed anywhere
+Found by:  D-294 in T23, which found core.operator_grant empty in every environment that has ever existed, including this laptop's
+Effect:    THE CHAIN, AND IT IS SILENT AT EVERY LINK: no operator -> `verification.read_attestation` finds no grant and raises -> identity review cannot happen -> `IDENTITY_VERIFIED` is never satisfied -> one of the ten publication-readiness items never goes green -> **no seller can publish, ever.** Nothing errors, nothing logs, the other items pass, and the system behaves exactly as designed.
+Response:  FIXED, WITH TWO DIFFERENT ANSWERS FOR TWO DIFFERENT PLACES
+Action:    **NON-PRODUCTION SEEDS IT.** `seed.mjs` grants `ADMIN` to the already-seeded account -- which invents nothing, because that account is created two hundred lines above and is the one the console e2e signs in as. **A seed that cannot publish a seller is a seed that cannot test the product.**
+           `ADMIN` here and nowhere else: the runbook is emphatic that a real grant takes the NARROWEST role that does the job, because the access log records every decision against whatever role was held. A development fixture has no access log anyone reads and needs claim review and moderation too, so one row is honest where five would be noise.
+           **PRODUCTION STAYS HAND-RUN.** E4's ruling is untouched and is right: no account id exists until somebody signs up through the ordinary phone-OTP path, so a production grant would have to invent an account. `grant-founder-operator.md` still governs it.
+Verification: **The seed.** `NODE_ENV=test pnpm db:reset` -> PASS, and `core.operator_grant` on this laptop now holds one live `ADMIN` on `+251900000001` with `granted_by_account_id` NULL, which the schema permits for exactly this case: the first grant has nobody above it. **This machine had zero operators for twenty-three orders.**
+           **The runbook, on Render, as `adulis_migrate` with `rolsuper=f`.** Steps 1, 3 and 4 executed verbatim; the statement that worked is the runbook's own, unmodified:
+             INSERT INTO core.operator_grant (id, account_id, role, granted_by_account_id, reason)
+             VALUES (gen_random_uuid(), '<account id>', 'IDENTITY_REVIEWER', NULL, '...');
+           **AND THE GRANT WAS PROVEN TO DO SOMETHING**, which is the part an INSERT does not establish. Calling `verification.read_attestation` as `adulis_app`:
+             as the granted operator      -> returns; no raise
+             as an account with no grant  -> ERROR: no grant permits reading an identity attestation
+             adulis_app SELECTing the log -> ERROR: permission denied for table access_log
+           The first two are D-294's chain, closed and shown to fail closed. **The third is Appendix C check 10's invariant holding on a managed provider** -- `adulis_app` has no table privilege in `verification`, so the boundary is reachable only through the logging function, which until now had only ever been asserted under a superuser.
+           TWO SUBSTITUTIONS, STATED RATHER THAN GLOSSED. The account was inserted by hand because **no API is deployed to sign anyone in** -- that is Phase 4, and `grant-founder-operator.md` step 1 explicitly says to stop when the account does not exist rather than create one. So this run tests the runbook's STATEMENTS and the privilege model beneath them; it does not test step 1, and it is not a founder who signed in. And the market row needed `sms_primary_provider` before it would accept `otp_enabled = true` -- `market_otp_requires_route` refused it, which is the schema declining to describe a market that can issue an OTP it has no way to send.
+Ruling needed: none.
+
+### D-310 - One idle connection closed from the server side ends the API process, and the worker process, with no log line
+
+Severity:  BLOCKER for availability (not on T25's stop list, which is security; recorded, not fixed -- T25 produces a list)
+Phase:     T25 - Phase 1
+Source:    apps/api/src/common/db/database.ts:35 and :45; apps/api/src/jobs/runtime.ts:58 -- `new Pool({ connectionString, max })` with nothing attached; apps/api/src/main.ts installs no `uncaughtException` handler
+Found by:  the first pool-40 contention run crashed its client after 94 orders. The cause was lost to an output filter, so it was reproduced on purpose: the identical Pool shape as `adulis_app` against Render, ten idle clients, ONE backend terminated by the owner role with `pg_terminate_backend`.
+Effect:    `Unhandled 'error' event` on `BoundPool`, SQLSTATE 57P01, exit code 1, two and a half seconds after the terminate, with no load at all. node-postgres emits `error` on the POOL when an idle client's socket dies; an EventEmitter with no `error` listener throws; an uncaught throw ends the process. Kysely's dialect adds no listener of its own.
+           **In production nobody runs pg_terminate_backend, and it does not matter:** a managed-Postgres maintenance restart, a failover, the provider's idle-connection reaper, or a network blip on any one of the 14 API or 23 worker connections raises the same event. Each one ends the process. Render restarts it, so the symptom is not "down" -- it is a boot's worth of 502s, every in-flight request dropped, every cron tick the worker misses while it reboots (the expiry sweep and the notification send are on `* * * * *`), and NO LINE IN ANY LOG SAYING WHY, because the process is gone before pino flushes.
+Response:  RECORDED. Not fixed in T25, whose closing instruction is that it produces a list.
+Action:    none in this order. The fix is one listener per pool that logs and lets the pool discard the dead client, which is what node-postgres documents; it is three lines and it changes availability from "restarts on the first blip" to "survives it". It belongs in a build order, with a test that terminates a backend and asserts the process is still there.
+Verification: the reproduction is in the FINAL-TEST-REPORT.md CAPACITY section verbatim. Measured on the identical pool construction, not on the API binary (booting the API against Render needs the staging environment T24 Phase 4 could not create); the shape is the same three lines, so the caveat is about the test, not the conclusion.
+Ruling needed: none. This is the first thing that breaks, and it breaks at one seller.
+
+### D-311 - A synthetic cohort loaded onto a managed instance cannot be removed by a non-superuser, so a probe instance is reset, never cleaned
+
+Severity:  MINOR (operational; a consequence of a design that is correct)
+Phase:     T25 - Phase 1
+Source:    the 22 append-only tables (Appendix C check 5): `trg_append_only` raises on UPDATE and DELETE for every role, and the owner is not exempt
+Found by:  planning the removal of the 7c00... capacity cohort from `adulis_probe_3` after measurement: every order the contention runs created has a `core.stock_event` row, and `stock_event` is append-only, so the variant cannot be deleted, so the product, the seller, the accounts and the market cannot be deleted either. The T24 Phase 2 attempt to clean a fixture by hand as `adulis_migrate` had already succeeded on 4 of 35 DELETEs (D-307).
+Effect:    `adulis_probe_3` now carries 5,000 synthetic sellers, 300,000 variants, 160,000 orders and their ledger rows, and no role short of a superuser can take them out. That is the append-only invariant doing its job -- the schema does not distinguish a synthetic stock event from a real one, and it should not.
+Response:  RECORDED; nothing worked around. The cohort stays, labelled by its `7c00` prefix; the instance is a probe and is deleted, not cleaned, when the measurements are no longer needed.
+Action:    none. A future load fixture that must be removable goes onto its own instance from the start -- which is what this one did.
+Verification: `SELECT count(*) FROM core.stock_event WHERE variant_id::text LIKE '7c00%'` is non-zero and `DELETE FROM core.stock_event WHERE ...` as `adulis_migrate` raises from `trg_append_only`; the T24 D-307 record already holds the general form.
+Ruling needed: none.
+
+### D-312 - "Six load tests" is three: A1 measurements (2), (3) and (4) were run once and never made repeatable
+
+Severity:  MINOR (documentation and coverage)
+Phase:     T25 - Phase 0
+Source:    apps/api/test-load/api.loadtest.ts carries `it` blocks numbered (1), (5) and (6); SECURITY-REVIEW.md SR-11 describes six measurements
+Found by:  the T25 instrument check, reading the file the review cites before trusting its number
+Effect:    (2) the catalogue read under fan-out, (3) the seller order list under load, and (4) the QR scan burst exist as prose in a review and as nothing in the repository. A reader who counts six repeatable load tests is counting three and a paragraph. The three that exist also cannot run on a managed provider (D-307), so as of T25 the repository's repeatable load coverage on the deployed tier is ZERO; T25 Phase 1 re-did (1) by hand outside the harness for that reason.
+Response:  RECORDED. T25 does not add tests; it produces a list.
+Action:    none here. Either the three missing blocks are written or SR-11 says "three" -- the honest number is the one the file holds.
+Verification: `grep -n "it('(" apps/api/test-load/api.loadtest.ts` prints three lines.
+Ruling needed: none.
+
+### D-313 - Releasing a reservation scans the entire stock ledger: the expiry sweep's per-order cost grows with every order ever placed
+
+Severity:  MAJOR at scale (invisible today; the ledger is small everywhere it has ever run)
+Phase:     T25 - Phase 1
+Source:    db/migrations/0042_d173_release_derives_from_ledger.sql, `fn_release_reservation_stock`: `SELECT ... FROM core.stock_event e WHERE e.reservation_id = p_reservation AND e.reason = 'ORDER_CREATED'`
+Found by:  measuring `order.expire_sweep` against Render over a 10,000-order backlog and asking where the per-order server time went. `EXPLAIN (ANALYZE, BUFFERS)` of the function's own predicate: `Seq Scan on stock_event ... Rows Removed by Filter: 11026 ... Buffers: shared hit=233`, 2.1 ms at 11,027 rows.
+Effect:    `core.stock_event` carries four indexes and none of them serves this predicate: `stock_release_once` is `(reservation_id, reason) WHERE reason IN ('ORDER_EXPIRED','LINE_CANCELLED')` -- the RELEASE side, built for idempotency -- and the reserving side has nothing. So every expiry and every line cancellation reads the whole ledger once. The ledger holds at least one `ORDER_CREATED` row for every order ever created plus every seller stock adjustment, and it is append-only, so it never shrinks: at A1's shape (one order per seller per day) 5,000 sellers write ~1.8 million rows a year, ~180 MB at the measured ~16 KB per 1,000 rows, which on the 256 MB tier no longer fits in cache. Linear on the measured plan: ~40,000 buffers per lookup instead of 233, one to two seconds per expiry from disk, 500 expiries per run, a run that takes longer than the minute it is scheduled on, and a sweep that falls behind permanently -- with the release of stock, which is what the sweep exists to do, arriving hours late.
+           Today, and at 50 or 500 sellers for a long time, it is 2 ms and nobody will see it. It is the second thing that breaks in the worker path, after the pool crash (D-310), and it breaks silently in the second year.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The fix is one partial index -- `(reservation_id) WHERE reason = 'ORDER_CREATED'` -- mirroring the one the release side already has; a migration, since a merged migration is never edited. It belongs in a build order with the plan re-checked after.
+Verification: the EXPLAIN is in FINAL-TEST-REPORT.md CAPACITY; the ledger stamps every expiry (`core.order_state_transition.occurred_at`), and the measured per-order cost from this laptop was 505 ms median with ~485 ms of that being five round trips at 97 ms, so the server share today is ~20 ms and the seq scan is 2 ms of it.
+Ruling needed: none.
+
+### D-314 - The expiry sweep's partial index keeps every order the sweep has ever expired, because the clock constraint requires it to
+
+Severity:  MAJOR at scale (invisible today; linear in orders-expired-ever, and the sweep runs every minute)
+Phase:     T25 - Phase 1
+Source:    `idx_order_expiry_sweep` is `btree (expires_at) WHERE (clock_stopped_at IS NULL)`; `order_clock_consistency` is `CASE WHEN state IN (PAYMENT_CONFIRMED, HANDED_OFF, COMPLETED) THEN clock_stopped_at IS NOT NULL WHEN state IN (CREATED, NOTIFIED, PAYMENT_SUBMITTED, EXPIRED_UNCLAIMED) THEN clock_stopped_at IS NULL ELSE true END`
+Found by:  `EXPLAIN (ANALYZE, BUFFERS)` of `order.expire_sweep`'s candidate query on Render before and after the sweep expired 1,000 orders of a 10,000-order backlog: before, `Buffers: shared hit=20`, 0.17 ms; after, `Buffers: shared hit=47`, 0.585 ms, `Rows Removed by Filter: 937`.
+Effect:    An order that expires unclaimed MUST keep `clock_stopped_at` NULL -- the constraint says so, deliberately: the clock never stopped, the order simply ran out. So it satisfies the index predicate for the rest of its life. The sweep's query orders by `expires_at` and filters on `state = ANY('{CREATED,NOTIFIED}')`, and `state` is not in the index, so every run walks every expired order (oldest first, because those expired first), fetches its heap row to read `state`, discards it, and only then reaches the first due one. Linear in expired-ever, once a minute, forever. At A1's shape with one order in five going unclaimed, 5,000 sellers add ~1,000 rows to that walk every day: 365,000 heap fetches per sweep by the end of year one, on the 256 MB tier where the order table (23 MB heap + 35 MB index at 150,000 orders, measured) no longer fits in cache. The comment on the job says the index "reads its own set and never the table"; it did, on a database in which nothing had ever expired.
+           `order.close_confirmation_window` reads the same index with a `PAYMENT_SUBMITTED` filter and inherits the same walk.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. One migration: a replacement partial index with `AND state IN ('CREATED','NOTIFIED')` in its predicate (and a sibling for `PAYMENT_SUBMITTED` if the confirmation-window job keeps reading it), then drop the old one. The constraint is right and must not change.
+Verification: the two plans are in FINAL-TEST-REPORT.md CAPACITY, and `SELECT state, count(*) FROM core."order" WHERE clock_stopped_at IS NULL AND expires_at < now() GROUP BY 1` on `adulis_probe_3` prints `EXPIRED_UNCLAIMED | 1000` beside the due rows.
+Ruling needed: none.
+
+### D-315 - The morning reminder's idempotency check scans the whole notification table, once per market per day
+
+Severity:  MINOR (linear, daily, and the notification table is the fastest-growing table in the schema)
+Phase:     T25 - Phase 1
+Source:    apps/api/src/jobs/e2-notification.ts, `notification.morning_reminder`: `NOT EXISTS (SELECT 1 FROM core.notification n WHERE n.order_id = o.id AND n.template_key = ... AND n.scheduled_for > ...)`; `core.notification` carries `notification_pkey`, `idx_notification_queue (scheduled_for) WHERE state = 'QUEUED'` and `idx_notification_unread (recipient_account_id) WHERE read_at IS NULL` -- nothing on `order_id` or `template_key`
+Found by:  `EXPLAIN (ANALYZE, BUFFERS)` of the job's own INSERT ... SELECT on Render, literal and parameterised: `Seq Scan on notification n ... Filter: (template_key = ... AND scheduled_for > ...)`, hash anti-join at 9,300 candidate orders; 3.3 s warm, of which the scan is the part that grows.
+Effect:    Every notification the platform has ever queued -- sends, pushes, reminders, nudges -- is read once per market per day to decide which orders already got this morning's reminder. At 5,000 sellers the table grows by tens of thousands of rows a day and is never purged (no retention job names it); a year in, the daily reminder reads a few million rows to write a few thousand. Not a ceiling -- it is once a day -- but it is the query in this report whose cost grows fastest relative to its work.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Either an index on `(order_id, template_key)` or, better, a retention rule for `core.notification`, which the schema does not have and E4's retention jobs do not cover.
+Verification: the plan is in FINAL-TEST-REPORT.md CAPACITY.
+Ruling needed: whether `core.notification` is meant to be retained forever -- nothing in ADU-DB-01 v1.19 says, and E4 lists retention for media, evidence, waitlist and unbound devices but not notifications.
+
+### D-316 - The console e2e static server exits on a request for a directory path
+
+Severity:  MINOR (test harness, not product; it is the server Playwright's `webServer` runs, so a stray directory URL ends an e2e run)
+Phase:     T25 - Phase 3 (found by an attacker probing the served console during Phase 2/3)
+Source:    apps/console/e2e/serve.mjs:93-96 -- `if (!file.startsWith(path.resolve(DIST)) || !existsSync(file)) file = index.html; ... res.end(readFileSync(file))`
+Found by:  the 5173 server serving the shipped console for T25 died mid-run with `Error: EISDIR: illegal operation on a directory, read` at `serve.mjs:96`
+Effect:    `existsSync` is true for a directory, so a request for `/assets` (or `/` with a trailing path segment that names a directory) passes the fallback check and reaches `readFileSync`, which throws; nothing catches it, and the process exits. The traversal guard on the line above is correct and is not the issue. In a Playwright run every subsequent test fails with a connection refusal that reads as a product outage.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. `statSync(file).isFile()` in place of `existsSync`, or a try/catch around the read that falls back to index.html.
+Verification: `curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/assets` against a running `node e2e/serve.mjs 5173` -- the request hangs and the server's log ends with the EISDIR stack.
+Ruling needed: none.
+
+### D-317 - A product image is validated by byte COUNT only: any bytes, any content-type, land under a product-image key and are served from the public media origin
+
+Severity:  MAJOR (ADU-CON-02 S8.1 promises the COMMIT "validates dimensions/bytes and HEADs each object"; the adapter's own docstring promises "bytes and pixel dimensions"; neither happens)
+Phase:     T25 - Phase 3, class 4.3 (media), FAILED, and the refuter confirmed it with an independent fixture
+Source:    apps/api/src/modules/catalogue -- `handleImage` COMMIT checks only `obj.bytes > cap`; `S3ObjectStorage.inspect` returns `{ bytes, contentType }` and nothing reads width/height anywhere in apps/api/src; the presigned PUT is signed with `X-Amz-SignedHeaders=host` only, so the content-type is not part of the signature
+Found by:  PUT of a 45-byte ASCII body ('NOT-A-WEBP-IMAGE plain text <html>hi</html>') to a minted image URL with `Content-Type: image/webp`, then `text/plain`, then no content-type at all -- HTTP 200 all three; anonymous HEAD of the stored object -> 200, `Content-Type: text/plain`, `Content-Length: 45`; COMMIT -> 201 `{committed:true}`; GET the product -> the image row is registered.
+Effect:    Arbitrary bytes, including HTML, are stored under a product-image key and served from the public media origin with an attacker-chosen content-type. On the media origin, not the console origin, so the console's CSP is not the thing that catches it; what it enables is content hosting under the platform's name and a stored-HTML page at a URL that looks like a product image. The console renders `<img>` from these keys and an `<img>` will not execute HTML, so this is not an XSS on the console -- it is the "content-type enforced, or only declared?" question in the order's 4.3, answered: only declared, and not even signed.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The COMMIT should refuse an object whose magic bytes are not the declared image type and whose dimensions cannot be read, which is what S8.1 already says it does; signing `content-type` into the presigned PUT closes the other half.
+Verification: `node <scratchpad>/p23/class07/probe2_contenttype.mjs` (attacker) and the refuter's independent run under namespace 7d079000; both in the T25 Phase 3 transcripts.
+Ruling needed: none. The document is right and the code disagrees with it.
+
+### D-318 - The console's security headers live in a Cloudflare-Pages `_headers` file, and the only deployment the repository defines is a Render static site that does not read one
+
+Severity:  MAJOR (the CSP, HSTS and frame policy the console is reviewed against would not be served by the deployment as written)
+Phase:     T25 - Phase 3, class 4.7/4.6; found by a REFUTER, not the attacker -- the attacker read the policy in `apps/console/public/_headers` and called CSP tightness HELD; the skeptic asked who serves that file
+Source:    apps/console/public/_headers (Cloudflare Pages format, built into dist/_headers by ops/scripts/build-headers.mjs); ops/render.yaml publishes the console with `runtime: static`, `staticPublishPath: apps/console/dist`, a `routes:` rewrite, and NO `headers:` key
+Found by:  refuter for class 11 item 4.7a: "Render static sites take response headers only from the blueprint `headers:` key"; the T23 gate `verify-render-yaml.mjs` checks the blueprint's shape but not that it carries the policy
+Effect:    On Render as blueprinted, the console ships with no Content-Security-Policy, no Strict-Transport-Security, no X-Frame-Options / frame-ancestors -- every header the e2e harness (`e2e/serve.mjs` replays `dist/_headers`) and `boot-smoke` assert is present locally and absent in production. The XSS findings in class 4.6 (the API stores seller markup byte-for-byte and relies on the renderer and the CSP) lose their second line of defence. Nothing in CI compares the two files, so the drift is invisible.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Either `render.yaml` carries a `headers:` block generated from the same source as `_headers` (one generator, two outputs), or the console is hosted where `_headers` is honoured; and `verify-render-yaml.mjs` should fail when the blueprint's header set and `dist/_headers` disagree.
+Verification: `grep -n "headers:" ops/render.yaml` prints nothing; `grep -c "Content-Security-Policy" apps/console/dist/_headers` prints 1.
+Ruling needed: which host the console is meant to ship on -- ADU-CON-02 and render.yaml disagree by implication, and T24 Phase 4 (never executed) would have been the first time anyone looked at the served headers.
+
+### D-319 - Row-level security is not a tenant-isolation layer in this schema, and every review since SR-1 has counted it as one
+
+Severity:  MAJOR as a documentation and review-premise defect; NOT a live breach -- the scope check and the composite FKs held every cross-tenant attack in T25 that reached them
+Phase:     T25 - Phase 2, class 3.1
+Source:    the live catalogue: 119 application tables, 5 with RLS, 8 policies, 3 for `adulis_app` and all three on `core."order"` (SELECT `USING (actor_role <> 'COURIER')`, UPDATE `USING (true)`, INSERT with no predicate); 34 seller-scoped tables `adulis_app` can SELECT with no policy
+Found by:  the order's own instruction -- "three layers must each hold independently: RLS, the scope check, and the composite foreign keys; prove each in isolation." As `adulis_app` (rolbypassrls = f) with the GUCs set to seller A, every one of seller B's rows on all ten tenant tables the attacker built was visible: order, product, product_variant, reservation, stock_event, payout_details, claim, review, seller_courier, seller_team_member. The positive control (a COURIER actor sees 0 unassigned orders) proves RLS is live and fences exactly couriers.
+Effect:    Isolation on the read path is held by one thing: the service's WHERE clause on `seller_id = ctx.sellerId`, standing on `fn_has_permission` having accepted that seller for that actor. A handler that omits the WHERE, or filters by the wrong column, has nothing beneath it -- and D-320 is exactly that shape, found in the same pass. The composite FKs hold the WRITE path (a child row cannot name one seller's parent under another's id) and were proven in isolation; they say nothing about reads. `financial.payout_credential` is fenced by GRANT alone. `core.order_courier_assignment` has no `seller_id` and no composite FK at all, so that layer does not exist for courier assignment.
+           The reviews that describe RLS as a tenant layer (SECURITY-REVIEW.md, the T25 order itself) describe a schema that was designed but not built, or built for a different purpose: the `courier_assigned_orders` policy is precise and correct for couriers and is the whole of it.
+Response:  RECORDED. Not fixed in T25; this is a ruling, not a patch.
+Action:    none here. Either ADU-DB-01 states that RLS is a courier fence and tenant isolation is held by the scope check plus the service WHERE (and the reviews are corrected to say so), or a tenant policy set is designed for the 34 tables -- which is a schema decision with a performance cost the RAM section of this report makes concrete.
+Verification: the inventory queries and the ten-table attack are in FINAL-TEST-REPORT.md SECURITY; `SELECT schemaname||'.'||tablename, cmd, qual FROM pg_policies WHERE 'adulis_app' = ANY(roles)` prints three rows, all on core.order.
+Ruling needed: yes -- whether RLS was ever meant to carry tenant isolation. The document set does not say, and the code answers no.
+
+### D-320 - BLOCKER: DELETE on a product or variant tells any seller whether ANOTHER seller's product exists and is selling right now
+
+Severity:  BLOCKER (T25 S8: "a tenant-isolation failure" -- the order stopped on it; Phase 4 was not started)
+Phase:     T25 - Phase 2, class 3.1; found by the attacker, reproduced by the author before the stop
+Source:    apps/api/src/modules/catalogue/catalogue.service.ts `deleteProduct` (~line 300) and `deleteVariant` (~line 394): `assertPermission(trx, req, 'seller.products:write')` -- which checks that the ACTOR may write to the ACTOR'S seller and says nothing about the product -- then `SELECT count(*) FROM core.reservation r JOIN core.product_variant v ON v.id = r.variant_id WHERE v.product_id = ${productId} AND r.state = 'ACTIVE'` with NO seller predicate, and `throw new AdulisException('PRODUCT_HAS_ACTIVE_ORDERS')` (409) before the first seller-scoped statement runs
+Found by:  as the owner of seller A, with `X-Adulis-Seller: A`, the console Origin, and seller B's ids:
+             DELETE /v1/seller/products/<B's product with an ACTIVE reservation>   -> 409 PRODUCT_HAS_ACTIVE_ORDERS
+             DELETE /v1/seller/products/<B's product with none>                    -> 404 NOT_FOUND
+             DELETE /v1/seller/products/<an id that does not exist>                -> 404 NOT_FOUND
+           B's rows unchanged afterwards. Same shape on DELETE /v1/seller/variants/{id} (VARIANT_HAS_ACTIVE_ORDERS).
+Effect:    The order's rule is "404, not 403: a 403 confirms the object exists." A 409 confirms more: that the object exists AND has a live reservation at this moment. Product and variant ids are not secrets -- they appear in storefront links -- so any seller with a console session can poll a competitor's catalogue and read, per product, per minute, whether it is selling. Nothing is deleted and no row is read across the tenant line, which is why the composite FKs and the scope check both "held" in the same pass: this is the one read the service layer makes before it scopes, and D-319 is why nothing beneath it caught it.
+Response:  RECORDED; THE ORDER STOPPED HERE. Not fixed in T25.
+Action:    none here. The pre-check needs `AND v.seller_id = ${sellerId}` (or the whole delete moves into a seller-scoped function, which apps/api/CLAUDE.md already asks of every state-changing endpoint); the same grep -- a count or existence read keyed by a client-supplied id with no `seller_id` -- should be run over every service before a beta, because the pattern is the shape of D-319's consequence, not a one-off.
+Verification: the three curl lines above, run from the T25 transcript against the class-01 fixture (namespace 7d01) on the local API; the attacker's `p23/01/attack.sh` lines 55 and 62.
+Ruling needed: none on the defect. One on scope: whether the same unscoped-pre-check pattern exists elsewhere is a question for the build order that fixes it, and it should be answered by grep, not by memory.
+
+### D-321 - A seller can bind any object in the media bucket, including another seller's, as their own product video
+
+Severity:  MAJOR (not a BLOCKER: media objects are world-readable by design, so nothing confidential crosses; the ownership guard the image path has is simply missing on the video path)
+Phase:     T25 - Phase 3, class 4.3
+Source:    apps/api/src/modules/catalogue -- `handleVideo` COMMIT performs no prefix or ownership check on `body.key`; `handleImage` COMMIT pins the key to `products/<productId>/img/`
+Found by:  owner B mints and PUTs a real object at `products/<PROD_B>/img/<uuid>/full.webp`; owner A commits a video on PROD_A with `key` = that object -> 201 `{committed:true}`; GET /v1/seller/products/<PROD_A> returns `video.key` = seller B's object. Bounded: `key = 'evidence/framed/...'` -> 409 OBJECT_NOT_UPLOADED, so the video key can name only the media bucket.
+Effect:    Hotlinking and content spoofing under another seller's name; combined with D-317, a seller can commit as "their video" any bytes anyone has ever uploaded to the media bucket. The refuter for the image-side guard confirmed the image path holds against eight traversal crafts; the video path has no guard to hold.
+Response:  RECORDED. Not fixed in T25. (Refutation of this item was still running at the stop; the finding is the attacker's, with the guard's absence confirmed in source by the author.)
+Action:    none here. The same `startsWith('products/<productId>/')` guard the image path uses.
+Verification: `node <scratchpad>/p23/class07/probe3_traversal.mjs` steps 4-6.
+Ruling needed: none.
+
+### D-322 - A step-up challenge is bound to a target at issuance and the binding is never read: a challenge for member C revokes member B
+
+Severity:  MAJOR (intra-account: fn_has_permission and the function's own seller_id WHERE still hold, so it is not cross-tenant; it is the S9.2 binding, documented in 0003:260, unenforced)
+Phase:     T25 - Phase 2, class 3.3
+Source:    `core.step_up_challenge.target_ref` is WRITTEN at issuance (auth.service.ts:~500) and READ nowhere: `fn_assert_step_up(p_challenge, p_account, p_action)` has no target parameter, and none of the eight consuming call sites (payout, reissue, team, subscription, deletion, revoke_all, identity, ownership) passes the operated object; `grep -rn target_ref apps/api db` returns the schema comment and the INSERT
+Found by:  a TEAM_CHANGE challenge minted with `target_ref` = member C, spent on `DELETE /v1/seller/team/<member B>` -> 204; B revoked, the C-targeted challenge consumed. Positive control: a challenge for A revoking A -> 204.
+Effect:    The step-up SMS names the action but not the target (`sms.otp.step_up.<action>`, slots = {code}), so a user who approved "reissue order A" or "transfer ownership to member X" cannot tell it was spent on order B or member Y. Highest-impact instance is OWNERSHIP_TRANSFER (`to_member_id` from the body, `target_ref` unchecked) -- confirmed by reading `fn_request_ownership_transfer`, not driven over HTTP.
+Response:  RECORDED. Not fixed in T25. (Refutation still running at the stop.)
+Action:    none here. `fn_assert_step_up` takes the target and compares; every call site passes it; the SMS template names it.
+Verification: `bash <scratchpad>/p23/03/probe.sh` (A6 control, A7 attack).
+Ruling needed: none.
+
+### D-323 - Step-up consumption rolls back with the handler, so a challenge aimed at a failing target survives to be spent elsewhere
+
+Severity:  MAJOR only in combination with D-322; alone it is fail-safe (never more than one SUCCESSFUL mutation per challenge)
+Phase:     T25 - Phase 2, class 3.3
+Source:    `fn_assert_step_up` marks `consumed_at` inside the handler's transaction (it is the first statement of e.g. `fn_reissue_instructions`); a later raise in the same handler rolls the consumption back
+Found by:  a satisfied REISSUE_INSTRUCTIONS challenge spent on a nonexistent order -> consumed, then U0002 (404), then `consumed_at` back to NULL; the SAME challenge spent again reached the order lookup (404 again, not 403 consumed). A satisfied TEAM_CHANGE challenge spent on an invite that fails 409 TIER_LIMIT_REACHED after consumption -> reused on DELETE team/<member> -> 204.
+Effect:    The order's 3.3 names this: "the reason a rollback must not resurrect a challenge." With D-322, an actor keeps one OTP alive by aiming it at a failing target and spends it on any same-action target later. No path was found where a committed out-of-transaction side effect pairs with a rolled-back consumption (deletion's purge runs on its own connection only after commit).
+Response:  RECORDED. Not fixed in T25. (Refutation still running at the stop.)
+Action:    none here. Consumption on its own connection (the D-69 pattern `RateLimitService.consume` already uses), or a "spent" write that survives the handler's rollback.
+Verification: `bash <scratchpad>/p23/03/probe3.sh` (R1, R2).
+Ruling needed: none; the design note in 0003 already states the intended binding.
+
+### D-324 - A malformed cursor, or any unmapped database refusal, is a 500 -- and it masked a whole class of write-path tests
+
+Severity:  MINOR as robustness (any caller can produce repeated 500s with a garbage cursor); MAJOR as an instrument, because it made class 3.1's mutating-endpoint isolation tests NOT TESTED
+Phase:     T25 - Phase 3, class 4.6; and class 3.1, where it masked results
+Source:    list endpoints cast the raw cursor (`${cursor}::timestamptz`) and the API maps an unmapped SQLSTATE to 500 INTERNAL (pg-error-translator.ts); `api.log`: `unmapped database refusal [22007]` (invalid datetime) and `[22P02]` (invalid text representation)
+Found by:  `GET /v1/storefronts/<handle>/reviews?cursor=not-a-timestamp` -> 500; `GET /v1/seller/orders?cursor=not-a-cursor` -> 500; a valid ISO cursor -> 200. Not an injection: the value is bound and `pg_sleep` never fired (5-44 ms). Separately, class 3.1's POST attacks (publish, payment/confirm) returned 500 for BOTH the attack and the rightful-actor control, from the same unmapped-refusal path, so the cross-tenant verdict on those endpoints is NOT TESTED rather than HELD.
+Response:  RECORDED. Not fixed in T25. (Refutation of the cursor item still running at the stop.)
+Action:    none here. Validate the cursor shape before the cast (400 VALIDATION_FAILED); map 22007/22P02 to 400 in the translator so a bad input is never a 500.
+Verification: the two GET lines above against the local API; `grep -c "unmapped database refusal" <scratchpad>/api.log`.
+Ruling needed: none.
+
+### D-325 - BLOCKER: a seller cancels ANOTHER seller's order line -- fn_cancel_line's scope guard is defeated by SQL three-valued logic
+
+Severity:  BLOCKER (a committed cross-tenant destructive write; T25's second stop condition met, worse in kind than D-320)
+Phase:     T25 - Phase 2, class 3.1; found by a REFUTER of the attacker's "write-path isolation at the function layer: HELD" -- the attacker had driven four functions that all use the safe pattern and never this one
+Source:    `core.fn_cancel_line` (db/migrations, the orders migration and its successors), seller arm: the guard raises only when `p_as_seller AND v_order.seller_id <> (SELECT s.id FROM core.seller s WHERE s.id = v_order.seller_id AND (owner OR member))`. For an actor with no relationship to the order's seller the subquery returns NULL; `seller_id <> NULL` is NULL; `true AND NULL` is NULL; `IF (NULL)` does not fire; the function proceeds. Reachable through `POST /v1/seller/orders/:id/reservations/:rid/cancel` (orders.service.ts `cancelLineAsSeller`, `p_as_seller = true`).
+Found by:  (1) at the function layer on the class-01 fixture: `core.fn_cancel_line(B_order, B_reservation, A_owner, true)` succeeded -- B's reservation CANCELLED_BY_SELLER, B's order CANCELLED_BY_SELLER, stock released with a LINE_CANCELLED event; a total stranger as actor also succeeded; rolled back. (2) With the API's exact request GUCs set, the same. (3) Through the API in the refuter's own namespace 7d019000: as seller A's owner with `X-Adulis-Seller: A`, POST .../reservations/{B's}/cancel -> **HTTP 200 `{"cancelled": ...}`**, and the database afterwards shows B's reservation and order CANCELLED_BY_SELLER and the stock event written -- a COMMITTED cross-tenant write. The rightful owner B also succeeds: attacker and rightful actor are indistinguishable, the opposite of isolation.
+Effect:    Any seller with a console session can cancel any other seller's order lines, given the order and reservation ids -- and D-320 hands them the product side of that, while order ids reach a seller's couriers and buyers. The buyer arm is safe (`buyer_account_id <> p_actor` on a NOT NULL column), which is why the attacker's `p_as_seller = false` control raised U0002 and why every sibling function (confirm_payment, reject_payment, mark_order_ready, publish_product) isolates correctly: they use `SELECT ... WHERE id = p_target AND seller_id = p_seller; IF NOT FOUND THEN RAISE U0002`. This one compares against a subquery that can be NULL. Why the attacker missed it: in their fixture B's reservation had no ORDER_CREATED event, so the D-173 release guard would have aborted the transaction and masked the break as an unrelated error.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Rewrite the guard as the siblings have it (`IF NOT FOUND`), and audit every scope predicate in db/migrations for an inequality against a subquery -- `<>` beside a `SELECT` in a guard is the grep. A test that calls every seller-scoped write function with a stranger actor belongs in Appendix C or the permission-matrix suite; the matrix proves grants, not scope.
+Verification: `<scratchpad>/p23/3.1-tenant/refute/cancel_line_fn2.sql`, `replay_guc2.sql`, and the API run in `fixture.sql` + the refuter's transcript. The author's own probe, rolled back, on the intact class-01 fixture: `SELECT core.fn_cancel_line(<B order>, <B reservation>, <A owner>, true)` reached line 53 (`fn_release_reservation_stock`) and failed there on D-173's fixture-data guard -- past the scope guard at line 19; the same call with `false` (buyer arm) raised `out of scope` U0002 at line 19. `pg_get_functiondef` prints the guard verbatim: `v_order.seller_id <> (SELECT s.id FROM core.seller s WHERE s.id = v_order.seller_id AND (owner OR live member))`.
+Ruling needed: none on the defect.
+
+### D-326 - adulis_jobs can read and UPDATE financial.payment_evidence directly, unlogged -- a grant from 0012 that D-48 says was never there
+
+Severity:  MAJOR (breaks the boundary's audit invariant -- "you cannot read the evidence without logging the read, because there is no other way" -- and D-46's "lesser-role compromise does not reach evidence"; NOT one of T25's four stop conditions, because the table holds pointers, never plaintext)
+Phase:     T25 - Phase 2, class 3.4; found by the REFUTER of the placeholder result -- the attacker (and the replacement) tested one connecting role, adulis_app
+Source:    db/migrations/0012_financial_boundary_payments_payouts.sql:627 `GRANT SELECT, UPDATE ON financial.payment_evidence TO adulis_jobs`, issued for the original purge job that touched the table by name; 0026 rebuilt purge as SECURITY DEFINER functions (`list_purgeable_evidence`, `purge_payment_evidence`) precisely so the worker would need no table privilege, D-48 records that it holds none, and no migration revoked the 0012 grant (0025 and 0026 revoke only PUBLIC on functions)
+Found by:  the privilege matrix as the superuser: `financial.payment_evidence -> adulis_jobs = SELECT:t, UPDATE:t` (payout_credential and all of verification correctly deny jobs). Live, connected as adulis_jobs: `SELECT id, order_id, object_key, encryption_key_ref, frame_count FROM financial.payment_evidence` returned the rows and `financial.access_log` stayed 8 -> 8; `read_payment_evidence(...)` as jobs -> permission denied for function (so the sanctioned path is closed to it while the unsanctioned one is open); INSERT into access_log as jobs -> permission denied (its reads are structurally unloggable); `UPDATE financial.payment_evidence SET object_key = 'ATTACKER-REPOINTED/' || object_key ... RETURNING` -> UPDATE 1 (rolled back).
+Effect:    A compromise of the worker's connection string reads every evidence pointer and the key VERSION name without a log row, and can repoint or clear an evidence row -- integrity and availability of evidence, not confidentiality of bytes (the ciphertext is in the bucket, the key in the API's environment). The order's 3.4 asks "confirm every read wrote its log row": for adulis_app, yes, twelve of twelve; for adulis_jobs there is a read path with no log.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. One migration: `REVOKE SELECT, UPDATE ON financial.payment_evidence FROM adulis_jobs`, then re-run the purge job to prove 0026's definer functions carry it; and Appendix C check 10 extended to assert that NO role but the boundary owner holds a table privilege in `financial` or `verification`, which is the assertion D-48 believed was already true.
+Verification: `<scratchpad>/p23/3.4-boundaries/refute/repro.sh` (seeds one row through the sanctioned escort, reads and updates it as jobs unlogged, deletes it).
+Ruling needed: none.
+
+### D-327 - verification.read_attestation denies with SQLSTATE 42501, which the API maps to 500, while its financial sibling denies with U0001
+
+Severity:  MINOR (fails closed, leaks nothing; a doctrine violation -- apps/api/CLAUDE.md: "Never raise 42501 deliberately: one code meaning both you may not and our grants are wrong hides a real privilege bug behind a clean denial")
+Phase:     T25 - Phase 2, class 3.4 (the replacement agent)
+Source:    db/migrations/0004_verification_boundary.sql, `read_attestation`: the no-grant raise uses `insufficient_privilege`; 0012's `read_payment_evidence` uses U0001
+Found by:  a CLAIM_REVIEWER (wrong role), a stranger and a revoked IDENTITY_REVIEWER calling read_attestation -> `no grant permits reading an identity attestation`, SQLSTATE 42501, no row, no log row
+Effect:    An operator without the grant sees a 500 from the API, and an operator watching for real 42501s (a misconfigured grant -- D-326 is one) cannot tell the two apart in the log. The T24 Phase 3 proof (D-309) saw the same raise and read it as the boundary holding, which it is; the code is the finding.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. A one-line ERRCODE change in a roll-forward migration; 0004 is merged and is never edited.
+Verification: `<scratchpad>/p23/3.4-boundaries/02_app_reads.sql` (RA-2/3/4).
+Ruling needed: none.
+
+### D-323 (amended after refutation) - consumption that rolls back was the DOCUMENTED design; the finding reduces to a wording note
+
+Response:  The skeptic reproduced the attacker's observation and showed it is D-32 as installed and specified: consumption is transaction-atomic with the authorised action (0023's header and the `consumed_at` COMMENT say "a rolled-back action rolls the consumption back with it"; c6-accounts.e2e.spec.ts:1022 pins it; ADU-AUTH-01 v2.8 S21.3 "Consumption: atomic"). A failed handler commits nothing -- no idempotency record, no rows, no SMS -- so there was never a consumed challenge to resurrect, and at most one COMMITTED mutation per challenge holds in every path checked. The harm the attacker described ("aim it at a failing target, spend it elsewhere") needs no rollback at all: it is D-322, reproduced by the skeptic with a never-failed challenge. Severity is withdrawn to a documentation note: S21.4's "rollback must not resurrect a consumed challenge" reads consistently only if "consumed" means consumed by a committed action, and the sentence should say "committed".
+Ruling needed: none; a word in the next AUTH revision.
+
+### T25 Phase 4 -- the quality list. Every entry below names the screenshot that shows it. "One author" means the second-author verification died on the session limit; "verified" means a second agent reproduced it from a fresh context.
+
+### D-328 - Nothing in the product moves an order from HANDED_OFF to COMPLETED, so no order ever completes, no buyer can review, and the ladder never counts a handoff
+
+Severity:  MAJOR (a product gap, not a bug: the transition is ratified and nothing performs it)
+Phase:     T25 - Phase 4, the day in the life (one author; confirmed by the author in source)
+Source:    db/migrations/0011:275 ratifies `('HANDED_OFF', 'COMPLETED', 'settlement', ..., 'ADU-CON-01 R8')`; 0013:266 and 0021:361 have triggers that REACT to COMPLETED; 0010:446 and 0028:385 COUNT COMPLETED orders for the ladder; no function, trigger, job or service anywhere sets `state = 'COMPLETED'`
+Found by:  the buyer's `POST /orders/:id/review` on a handed-off order -> 409 VALIDATION_FAILED `{reason: ORDER_NOT_TERMINAL, state: HANDED_OFF}`; the walker had to `UPDATE core."order" SET state = 'COMPLETED'` by hand to reach the Reviews screen
+Effect:    Every order stops at HANDED_OFF. Reviews require a terminal state, so the review path (SC-14) is unreachable in the product; `fn_recompute_seller_level` counts COMPLETED orders as handoffs, so no seller ever leaves NEW; Home's "Completed handoffs" is 0 forever. The transition table calls the missing step "settlement", and the document set does not say what settles an order -- a buyer confirmation, a timer, an operator, a payout event.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here; a ruling first.
+Verification: `grep -rn "state = 'COMPLETED'" db/migrations apps/api/src` prints only reads and triggers; the walker's `p4/01/day.mjs` step "review".
+Ruling needed: YES -- what settlement is and who performs it. ADU-CON-01 R8 is cited by the transition row and answers neither.
+
+### D-329 - A new seller cannot buy a plan, and without one cannot publish: the console sends the tier NAME where the API wants a uuid, the seller has no subscription row to change, and no LISTED tier definition exists
+
+Severity:  BLOCKS A SELLER (found independently by three walkers: the day, the data edges and the accessibility classes)
+Phase:     T25 - Phase 4
+Source:    apps/console/src/.../Subscription.tsx `guard('SUBSCRIPTION_CHANGE', tier, ...)` passes `target_ref = 'LISTED'`; the step-up request validates `target_ref` as uuid -> 400; behind it `fn_open_purchase_intent` refuses a seller with no `billing.subscription` row (`out of scope`); `billing.tier_definition` holds a BETA row and a BUSINESS row and nothing for LISTED / ASSISTED / VERIFIED_PRO, so `billing.fn_effective_limit` answers `{reason: NO_TIER_DEFINITION, allowed: false}` -- the seeded seller answers the same
+Found by:  publish with all nine readiness items satisfied -> 409 TIER_LIMIT_REACHED; the Products screen: "Your product limit could not be resolved, so it is not shown"; the publish blocker: "Your current plan does not include this." with no link and no plan named; Subscription: "No subscription yet. Compare the plans below and choose one." -> choose Listed / Monthly -> the step-up modal opens already showing "The request is not valid." twice, and no SMS arrives (screenshot p4/01/39-subscription-stepup-modal.png). All three walkers got past it only by inserting a BETA `billing.subscription` row, which is what `ops/scripts/seed.mjs` does for the seeded seller and no operator endpoint does for anyone else.
+Effect:    On a fresh deployment no seller can publish, and the screens that should say why say "your plan does not include this" to a seller who has no plan and cannot get one.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Three separate defects: the console's target_ref; a first-subscription path (`fn_open_purchase_intent` for a seller with no row); the tier seed. And a publish blocker that links to the subscription screen and names the plan.
+Verification: `p4/01/stepup-probe.out`, `p4/01/subscription-probe.out`, `p4/02/05-log.json`, `p4/04/shots/editor-04-published.png`.
+Ruling needed: whether a BETA subscription is meant to be granted automatically on sign-up during the beta -- nothing grants it today.
+
+### D-330 - A fresh deployment has no categories, so the STORE_PROFILE readiness item can never be satisfied through the console
+
+Severity:  BLOCKS A SELLER (two walkers independently; each inserted a `core.category` row to continue)
+Phase:     T25 - Phase 4
+Source:    `fn_publication_readiness` requires `category_id IS NOT NULL`; `core.category` is empty after `db:migrate` and `db:seed` (the two rows the day walker saw were other walkers' inserts); the Profile picker offers codes only
+Found by:  `PATCH /seller/profile {description}` -> 200 with STORE_PROFILE still false; `GET /v1/categories` -> `{"data":[]}` before any tester inserted
+Effect:    A seller reaches "Store profile -- Complete this" on Home and a category select with nothing in it, and there is no path forward.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. A category seed is a business decision (ADU-VAL-01 may already carry it as OPEN), and a picker that shows names, not codes.
+Verification: `p4/02/05-order-prereqs.mjs`; `p4/04/shots/home-00-after-create.png`.
+Ruling needed: the category list itself.
+
+### D-331 - A new seller cannot take an order for twenty-four hours: the first payout row is PENDING and fn_create_order requires ACTIVE
+
+Severity:  BLOCKS A SELLER on day one (by design, and the design should be stated to the seller)
+Phase:     T25 - Phase 4 (two walkers)
+Source:    `core.fn_request_payout_change` writes the first payout as PENDING with `activates_at = now() + new_device_payout_lock` (24 h); `fn_create_order` (0028:121-124) raises `seller has no active payout details` unless a row is ACTIVE; activation is `payout.activate_due`, a worker job
+Found by:  the day walker's payout screen after step-up: "Pending change CBE - ending 6789 Activates at Sep 6, 2026, 3:49 PM" (p4/01/20-payout-after-stepup.png); the data-edges walker: no order until it moved `activates_at` into the past and ran `fn_activate_due_payout`
+Effect:    A seller who signs up, sets everything and publishes on day one has a store nobody can buy from until tomorrow, and nothing on Home, Products or the storefront says so; a buyer's failure is whatever the storefront makes of `restrict_violation`.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. If the 24 h is right for a FIRST payout (it exists for changes from an unseen device), the readiness list should carry it as a timed item; if it is not, the first payout should activate at once.
+Verification: `p4/02/05-order-prereqs.mjs`; `p4/01/state.json` payoutDone.
+Ruling needed: whether the new-device lock is meant to apply to a seller's first payout.
+
+### D-332 - Linking a social account fails with "Something went wrong" when no platform client is bound, instead of degrading to the manual path the boot log promises
+
+Severity:  BLOCKS A SELLER where no TikTok/Instagram client is configured (this machine; likely staging)
+Phase:     T25 - Phase 4, the day in the life (one author)
+Source:    api.log at boot: "[NO SOCIAL PLATFORM] no TikTok/Instagram client is bound; verification degrades to the manual path and post checks record UNKNOWN"; SC-22 "Check account control" -> 503 -> the console's generic error with a request id
+Found by:  p4/01/12-identity-after-check.png; linked accounts stay PENDING
+Effect:    The one sentence the seller sees is the generic failure; nothing offers the manual path the adapter says it degrades to.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The eligibility screen should render the degraded state as a state, not as an error.
+Verification: `p4/01/day.mjs` step "social"; `grep -a "NO SOCIAL PLATFORM" <scratchpad>/api.log`.
+Ruling needed: none.
+
+### D-333 - A lost image-COMMIT response blocks every further upload with "retry key already used" and leaves the wrong photo on the product
+
+Severity:  BLOCKS A SELLER (verified from a fresh context, twice)
+Phase:     T25 - Phase 4, the failure paths
+Source:    the media editor mints its idempotency key once per mount and re-mints only on success; when COMMIT reaches the server (201, image created) but the response is lost, the next pick reuses the key with a different body -> 409 IDEMPOTENCY_KEY_REUSED, rendered as "This retry key was already used for a different request."
+Found by:  route-abort of the COMMIT response after the server had committed position 3; the intended second photo never uploads; after reload the product shows the first, unintended one (p4/03/04b-b-after-different-file.png)
+Effect:    Exactly the bad-connection retry the key exists for locks the seller out of the media section until a reload they have no reason to try.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. Re-mint on any terminal response, or reconcile on 409 by reading the product back.
+Verification: `p4/03/` scripts; the verifier's `p4/edges-failure/verify/`.
+Ruling needed: none.
+
+### D-334 - The payment-evidence dialog on the money screen does not take, trap or restore focus: a keyboard seller tabs through the page's own decision buttons behind the backdrop
+
+Severity:  BLOCKS A SELLER who uses a keyboard (one author -- every accessibility verifier died)
+Phase:     T25 - Phase 4, accessibility
+Source:    SC-04 -> "View evidence" (SC-05): after Enter, `activeElement` stays on the opener; Tab #1-#3 land on the page's "Confirm Payment Received", "Payment Not Received", "Reissue payment instructions" behind the backdrop; #4-#6 reach the dialog's controls; Escape works only if focus happens to be inside. The step-up dialog, by contrast, traps correctly.
+Found by:  p4/04/shots/evidence-01-after-10-tabs.png
+Effect:    A blind or keyboard seller can confirm a payment they have not looked at, from a control they cannot see.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The same focus management the step-up dialog already has.
+Verification: `p4/04/` keyboard script; the aria snapshot `sc04-aria-1280.txt`.
+Ruling needed: none.
+
+### D-335 - At 360 px the notification bell is a 7 x 24 link on every screen, the whole More menu is 21 px links, and every select and textarea is under 44 px
+
+Severity:  EMBARRASSES, and fails the 44 px rule the website spec sets (one author)
+Phase:     T25 - Phase 4, accessibility
+Source:    measured `getBoundingClientRect` on every screen at 360x740: `a.bell` 7x24 everywhere; /more links 37-147 x 21; 'New product' 92x21; 'Review payment' 115x24; selects and textareas under 44 tall. Buttons, the bottom bar, the switcher menu and the dialog controls pass.
+Found by:  p4/04/shots/t360-more.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the numbers above, per element, in the class-04 result.
+Ruling needed: none.
+
+### D-336 - Focus is dropped to <body> after every step change, route change and self-disabling button, so nothing is announced and a keyboard seller starts over from the top
+
+Severity:  EMBARRASSES; for a screen-reader seller it is the difference between a flow and a maze (one author)
+Phase:     T25 - Phase 4, accessibility
+Source:    after "Send me a code" the code field is not focused; after verify, after "Create a store", after "Create my store", after "Create product", after Enter on "Add variant" and on "Publish", and after the step-up modal closes (its opener unmounted, so `opener?.focus()` had nothing to return to) -- `document.activeElement === body` every time
+Found by:  p4/04/shots/signin-02-code-step.png and the keyboard log
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-04 keyboard script.
+Ruling needed: none.
+
+### D-337 - Lists keep the browser's bullet and 40 px indent, and adjacent spans have no separator: product names wrap to three lines at 360, variant rows read as one word, and two obligations get the same accessible name
+
+Severity:  EMBARRASSES (verified for the variant rows and the chooser; the rest one author)
+Phase:     T25 - Phase 4, data edges and accessibility
+Source:    `ul.product-list` `list-style-type: disc`, `li display: list-item`; at 360 the name column is 60 px and 'Canvas print 198' becomes three lines; variant rows: "Size L / BlueETB 1,250.00Active5 in stock"; the store chooser: "<name>selam-art-c02Owner"; Orders rows: "Payment submitted1 itemsETB 500.00Time left..."; Home: two links both named "A payment is waiting for your confirmation" with the countdown glued on
+Found by:  p4/02/03-200-products-360-geez-row.png, p4/02/07-chooser-360.png, p4/04/shots/editor-01-variant-added.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the computed styles and innerText in the class-02 and class-04 results.
+Ruling needed: none.
+
+### D-338 - The product editor scrolls sideways at 360 px once it has five images, and with fifty variants the Publish button is fourteen screens down
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, data edges
+Source:    each `.media-item` row (thumbnail, label, Move up, Move down, Remove) is 406 px wide; `documentElement.scrollWidth` 478 at viewport 360 (360 before the images); the top bar and the Development banner are cut off when the page pans; with 50 variants the editor is 10,362 px tall and `#publish-heading` sits at 10,201 px
+Found by:  p4/02/04-media-editor-360-full.png; the Amharic pass measured the same 478 px in English and in Amharic
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 result and `p4/05/results-en.json` product-edit@360.
+Ruling needed: none.
+
+### D-339 - A fifty-line order puts every action nine screens down and shows no total anywhere on the detail
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    SC-04 with 50 lines at 360: page 7,218 px; the Payment region starts at 6,421 px after fifty "Can't Fulfil" buttons; Reissue, Mark Ready, Assign, Hand to the courier, Show QR all below; `innerText` contains no "63,240" though the Orders list shows ETB 63,240.00 for the same order
+Found by:  p4/02/06-order-detail-360-bottom.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 measurements.
+Ruling needed: none.
+
+### D-340 - Two hundred products are listed in UUID order with no search and no sort, and the status tabs filter only the rows already loaded
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    the list query is `ORDER BY p.id`; nine "Load more" clicks (~100 ms each) to see all 200; the Ge'ez-named product sat at row 48; 25 screens tall at 360
+Found by:  p4/02/03-200-products-360-filter-published.png
+Response:  RECORDED. Not fixed in T25.
+Verification: the class-02 measurements (API pages 6-8 ms, cursor correct, no duplicates -- the API is fine; the screen is not).
+Ruling needed: none.
+
+### D-341 - The console cannot attach a video, and a video attached through the API is never returned to the storefront
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, data edges
+Source:    Media.tsx: the file input accepts `image/*` only and the only `/video` call is DELETE; through the API REQUEST_UPLOAD / PUT / COMMIT succeed and the seller's product shows `video={key, duration, height, bytes}`, but `GET /storefronts/:handle/products/:slug` returns `video=undefined` and `storefront.controller.ts` has no video query
+Found by:  p4/02/04-media-editor-360-full.png ("No video attached." with no way to attach one)
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-342 - An Amharic-named product is published at the slug "product", and the next at "product-2"
+
+Severity:  EMBARRASSES (one author; deterministic in source)
+Phase:     T25 - Phase 4, data edges
+Source:    `core.fn_product_slug` strips every non-ASCII character (`regexp_replace(name, '[^a-zA-Z0-9]+', '-')`) and falls back to `product` when nothing is left
+Found by:  `GET /storefronts/selam-art-c02/products` -> `[{slug: 'product', name: '<Ge'ez name>'}]`
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: what the storefront URL of a Ge'ez-named product should be -- a transliteration, the id, or the name percent-encoded.
+
+### D-343 - Two tabs on the same product silently lose the other tab's edit: PATCH sends the whole form, last writer wins, no conflict shown
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    tab A renames the product (PATCH 200); tab B, still holding the old name, saves a description; PATCH sends `{name, description}`; the server ends with the old name and the new description; tab A's rename is gone with no message. Stale actions elsewhere fail safe but generically: a stale duplicate variant key -> 409 rendered as "The request is not valid."; a stale image reorder -> 400 "The request is not valid."; a stale payout cancel -> 404 "Not found." with the pending panel still shown.
+Found by:  p4/03/07b-tabA-after-reload.png, p4/03/07h-tabB-stale-cancel.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-344 - A reload during any API blip drops a signed-in seller onto a blank sign-in page: session.tsx captures the boot problem and SignIn never renders it
+
+Severity:  EMBARRASSES (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    with `/v1/` unreachable, `page.reload()` of /s/:id/orders lands on /sign-in with an empty banner; `bootProblem` is set in session.tsx and read nowhere (grep); the cookie is still valid, so typing the store URL back in works once the API is back
+Found by:  p4/03/03b-i-signin-send-while-down.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-345 - Publish while the API is down renders its failure banner above the viewport and leaves the button enabled
+
+Severity:  EMBARRASSES (one author)
+Phase:     T25 - Phase 4, the failure paths
+Source:    after the Publish tap with `/v1/` aborted: `window.scrollY` 1153, the error banner's box at y = -926, the Publish button at y = 635 and `isEnabled() === true`
+Found by:  p4/03/03c-publish-down-viewport.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-346 - Back after creating a product returns to a blank create form, and a second tap creates a second product
+
+Severity:  NOTE (the verifier reproduced it and ranked it a note: the idempotency key is minted per mount, so this is the browser's history, not a lost guard -- double-click on the same button is fully defeated)
+Phase:     T25 - Phase 4, the failure paths
+Found by:  p4/03/06a-back-after-create.png; `core.product` count for the name = 2
+Response:  RECORDED.
+Ruling needed: none.
+
+### D-347 - A drop mid-upload leaves orphan objects in the media bucket, and the message blames bucket CORS for a mid-transfer reset with no retry control
+
+Severity:  NOTE for the orphans (verified; nothing reclaims them and `media.lifecycle` does not know them), EMBARRASSES for the message (verified)
+Phase:     T25 - Phase 4, the failure paths
+Source:    aborting `card.webp`'s PUT after `thumb.webp` returned 200: the screen says "Upload could not start -- refused by storage before upload (bucket CORS or network)" and offers no Retry; the bucket holds six image directories for a product with two committed rows
+Found by:  p4/03/04b-put-aborted.png; `docker exec adulis-minio ls -R /data/adulis-media/products/<id>` vs `core.product_image`
+Response:  RECORDED.
+Ruling needed: none.
+
+### D-348 - Two hint paragraphs and one dark-mode placeholder fail contrast; a <main> is nested inside <main>; empty states jump from h1 to h3
+
+Severity:  EMBARRASSES (one author; axe-core 4.10.2 on all 26 screens, both modes, under a bypassCSP context)
+Phase:     T25 - Phase 4, accessibility
+Source:    `/notification-preferences .locked > p.hint` #868079 on #ffffff = 3.9:1 (light) and 4.32:1 (dark); `/closure .hint` 4.43:1 (dark); the per-variant "New price" placeholder #757575 on #3b3b3b = 2.43:1 in dark mode, and it is the only visible label because the real label is visually hidden; `landmark-no-duplicate-main` on Home, Orders and Order detail; heading order h1 -> h3 in empty states and h4 under h2 in the reject step. No critical violations. The focus ring passes at 8.72:1 light and 8.67:1 dark on every stop.
+Found by:  p4/04/shots/axe-1280-notifprefs.png, contrast-dark-editor.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-349 - The publish blocker says "Your current plan does not include this." and links nowhere; the Products cap note says the limit "could not be resolved"
+
+Severity:  EMBARRASSES (three walkers)
+Phase:     T25 - Phase 4
+Source:    with D-329 in force, the publication panel lists one blocker with no link to /subscription and no plan named; the Subscription screen never mentions publishing
+Found by:  p4/01/30-product-after-publish.png
+Response:  RECORDED. Not fixed in T25.
+Ruling needed: none.
+
+### D-350 - A console built without VITE_API_BASE_URL cannot call any API and ships with a NOTE from the header gate
+
+Severity:  MINOR as a gate (render.yaml:296 sets the variable for the deployed build, and the e2e harness sets it for its own); it cost every Phase 4 walker its first hour, and it is what a developer's hand build produces
+Phase:     T25 - Phase 4 (all five walkers)
+Source:    `resolveApiBaseUrl()` throws when the variable is unset and the bundle folds it to an unconditional throw; ops/scripts/build-headers.mjs:67 prints `NOTE VITE_API_BASE_URL is not set, so the policy names no origin for it` and exits 0
+Found by:  the served sign-in form: "Something went wrong on our side. Try again. If you contact support, quote this request id: -", zero requests leaving the browser (p4/01/00-shipped-console-config-error-360.png)
+Response:  RECORDED. The author rebuilt both served consoles with the variable set, as the harness does; the walkers had already swapped the asset in at the browser level.
+Action:    none here. The gate should FAIL, not note: a bundle that cannot call an API is not a build.
+Ruling needed: none.
+
+### D-351 - The console has no Amharic wiring: every component imports the English catalogue directly, and the locale the switch computes reaches formatting only
+
+Severity:  MAJOR as a gap between the documents and the build (ADU-PRD-01's localisation invariant and ADU-CON-02's shared catalogue describe a bilingual console; the code renders one language and has no path to the other)
+Phase:     T25 - Phase 4, the Amharic path
+Source:    apps/console/src/lib/market.tsx:114 `const locale = data?.locales?.includes('am') && navigatorPrefersAmharic() ? 'am' : 'en'` feeds `{ timezone, currency, locale }` for formatting; `grep -rn "from '@adulis/locale'" apps/console/src` shows every importer taking `en` (IdleWarning, RequireSession, SignIn, StepUpModal, Feedback, ScreenState, CourierScreen, Closure, ...) and none taking `am`; `AM_ENABLED` exists in comments in packages/locale and nowhere in code
+Found by:  a worktree build with `navigatorPrefersAmharic()` returning `true`, served on :5174 against a market whose bootstrap lists `["en","am"]`: English chrome, Ge'ez store name only (p4/05/shots/am-build/home-360.png; Ethiopic character count on Home = the store name's 16). The walker injected packages/locale's `am` strings into the DOM by hand to measure anything.
+Effect:    "AM_ENABLED on, with machine-translated strings" -- the order's 5.4 -- is not a configuration the product can be put in. The human translation pass's cost (D-352) was measurable only by simulation. When the wiring is written, the layout results below hold; the seams that will need care are the mixed-script joins the English console already lacks separators for (D-337).
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. A `t()` that selects the catalogue by the resolved locale, with the MT-KEYS gating packages/locale already describes; then the layout pass re-run on the real thing.
+Verification: the grep above; `p4/05/shoot.mjs` header (the four modes and why "am-swap" exists).
+Ruling needed: none on the defect; the documents already say what the console should do.
+
+### D-352 - Under 50% string expansion the top bar breaks the width of 26 of 31 screens at 360 px; with the real machine-translated Amharic nothing new breaks
+
+Severity:  MINOR now (the real catalogue causes no new layout failure); the entry exists because it is the list the order asked for
+Phase:     T25 - Phase 4, the Amharic path (one author; 93 screens x 3 widths x 4 modes, measured programmatically)
+Source:    `header.topbar` with `div.seller-switcher` (store name + "Stores" + the switcher dot) and the "Sign out" button, and the Development banner above it: at 360 with every string 1.5x wider the document is 426-441 px on home, orders, every order detail, product-new, product-stock, eligibility, profile, payouts, fulfilment, availability, couriers, team, subscription, sessions, notification-preferences, closure, insights (all three), claims, inbox, notifications, more -- one component, every screen it sits on; plus `button-wraps` on "Sign out" (courier header too), "Move up", "Move down", "View payment instructions - code required"; plus `cell-wraps` in the plan-comparison table at 768 ("Verified Pro", "All products plus custom flows", "Included, with roles")
+Found by:  `p4/05/diff.mjs am-expand` against the English baseline; p4/05/shots/am-expand/home-360.png
+Effect:    With the real `am` strings (`diff-am-swap.json`): 0 new, 0 worse across 93 screens at three widths. The English baseline itself carries 219 findings of the same kinds (61 spill-x, 51 clip-x, 51 clip-y, 30 button-wraps, 19 overlap, 7 cell-wraps), most of them the items registered as D-337 and D-338 -- Amharic inherits them and adds nothing.
+Response:  RECORDED. Not fixed in T25.
+Action:    none here. The top bar needs a wrapping or truncating store name before the human translation lands; the rest is D-337/D-338.
+Verification: `p4/05/results-en.json`, `results-am-swap.json`, `results-am-expand.json` and the two diffs; every screen's screenshot under `p4/05/shots/<mode>/`.
+Ruling needed: none.
+
+### T26 Phase 1 -- the class D-320 belongs to, swept. The two entries below that carry FIXED are closed by a build order rather than recorded by one.
+
+### D-320 (CLOSED in T26 Phase 1) - the DELETE pre-check oracle, and the rule it produced
+
+Severity:  was BLOCKER; closed
+Phase:     T26 - Phase 1
+Source:    apps/api/src/modules/catalogue/catalogue.service.ts `deleteProduct` and `deleteVariant`
+Response:  FIXED. Ownership is resolved against `req.ctx.sellerId` before the live-reservation count runs, and the count carries the seller predicate as well -- redundant by design, so that a later edit to either statement alone cannot reopen it.
+Action:    THE RULING THIS PRODUCED, which is larger than the patch: **ownership is resolved before any business rule is evaluated.** A handler taking a client-supplied object id resolves it against the actor's seller (or account) first, and everything else runs after. The 409 was never the defect; its POSITION was, and a business-rule check that precedes an ownership check is an oracle whatever the rule is.
+Verification: `pnpm --filter @adulis/api test -- t26-ownership-before-rules` -- 60 tests, 53 of them one per id-taking route. Reverting the two service methods to their pre-T26 bodies turns the DELETE product case from PASS to `status: 409` against an expected 404: the defect reproduced by the test that closes it.
+Ruling needed: none. The scope question this entry asked -- "whether the same unscoped-pre-check pattern exists elsewhere ... should be answered by grep, not by memory" -- is answered in T26-REPORT.md: 53 id-taking routes, 53 checked, four in the class.
+
+### D-325 (CLOSED in T26 Phase 1) - fn_cancel_line's scope guard, and the grep it named
+
+Severity:  was BLOCKER; closed
+Phase:     T26 - Phase 1
+Source:    `core.fn_cancel_line`, seller arm
+Response:  FIXED by `db/migrations/0051_cancel_line_scope_guard.sql`. The guard is restructured into three arms, each two-valued, each raising unless a relationship is POSITIVELY found -- the siblings' `IF NOT FOUND` shape, expressed as `NOT EXISTS`. Nothing in it compares a value against a subquery any more.
+Action:    Two things beyond the patch. (1) The buyer arm's `<>` became `IS DISTINCT FROM`: `buyer_account_id` is NOT NULL so the column side was total, but a NULL `p_actor` made the whole expression NULL and that arm would have fallen through exactly as the seller arm did. It is now asserted directly. (2) The audit this entry asked for -- "an inequality against a subquery in a guard is the grep" -- was run over `db/migrations`, and `core.fn_cancel_line` was the only occurrence. Every sibling seller-scoped function (fn_confirm_payment, fn_reject_payment, fn_mark_order_ready, fn_report_refund, fn_publish_product, fn_unpublish_product, fn_reissue_instructions, fn_confirm_receipt, fn_acknowledge_refund, financial.render_payment_instructions) opens with `SELECT ... WHERE id = p_target AND <owner column> = p_owner; IF NOT FOUND THEN RAISE U0002`.
+Verification: t26-ownership-before-rules.e2e.spec.ts drives the endpoint over HTTP and calls the function directly with a stranger seller-actor, a total stranger and a NULL actor; the reservation is re-read afterwards and is still ACTIVE. Against the pre-0051 function all three of those refuse to raise.
+Ruling needed: none.
+
+### D-353 - POST /v1/orders/{id}/cancel answered a foreign order with the business rule's code, because the ownership predicate and the rule were one query
+
+Severity:  MINOR (no disclosure: a foreign order and a nonexistent one were byte-identical, both 409 ORDER_ALREADY_TERMINAL -- it is registered because it is D-320's SHAPE without D-320's leak, and the shape is what T26 was sent to sweep)
+Phase:     T26 - Phase 1, the sweep; found by the generated test, not by reading
+Source:    apps/api/src/modules/orders/orders.service.ts `cancelOrder`: one SELECT carried `r.order_id = $1 AND r.state = 'ACTIVE' AND o.buyer_account_id = $2`, and zero rows threw ORDER_ALREADY_TERMINAL
+Found by:  the sweep's 404 assertion, which this case failed at 409 for both ids
+Effect:    A buyer was told their own order was already terminal about an order that was never theirs. Nothing leaked -- the two answers agree -- but "not yours" and "yours, and finished" are different facts and one query cannot answer both. The next edit that widened the rule would have widened an oracle with it, which is how D-320 came to exist.
+Response:  FIXED in T26 Phase 1. The order is resolved against `buyer_account_id` first (404), then the active-line count decides the 409.
+Action:    none further.
+Verification: the `POST /v1/orders/{id}/cancel` row of the sweep; it fails at `status: 409` against the pre-T26 body.
+Ruling needed: none.
+
+### D-354 - fn_cancel_line takes no p_seller, so the active-seller binding on the one endpoint that calls it lives in the handler and not in the database
+
+Severity:  MINOR (no live break, and the handler holds it) -- recorded because the doctrine says the database holds what the database can hold, and here it does not
+Phase:     T26 - Phase 1, while fixing D-325
+Source:    `core.fn_cancel_line(p_order, p_reservation, p_actor, p_as_seller)` -- four arguments, no seller. Its siblings all take `p_seller` and scope on it, so the seller a caller PROVED a permission for and the seller the write LANDS on are the same by construction. This one derives the seller from the order and checks only that the actor holds SOME live relationship to it.
+Found by:  reading the fix through. With 0051's guard alone, an actor who is a live member of two stores could pass assertPermission for store A (via `X-Adulis-Seller: A`) and cancel a line in store B -- a permission checked against one seller, an action taken on another.
+Effect:    Bounded to accounts holding relationships with two or more sellers, and to `seller.orders:respond`. Not reachable by a stranger: that was D-325 and it is closed.
+Response:  MITIGATED, not eliminated. `orders.service.ts cancelLineAsSeller` now resolves the order against `req.ctx.sellerId` before calling the function, which is what the T26 ruling requires of the handler in any case.
+Action:    Adding `p_seller` would DROP and CREATE a signature that `core.fn_delete_account` calls from two merged migrations (0023, 0038), so it needs a migration that recreates those callers too. Worth doing, and worth doing deliberately rather than inside a BLOCKER fix.
+Verification: the sweep's `POST /v1/seller/orders/{id}/reservations/{rid}/cancel` row covers the stranger case at both layers. The two-seller case has no fixture yet, and that is the test that should arrive with the signature change.
+Ruling needed: none on the defect; a scheduling call on the signature.
+
+### D-355 - PATCH /v1/devices/{id} is @Public() and resolves no ownership at all, so a leaked device id repoints an account's push notifications
+
+Severity:  MAJOR if the id is obtainable. The id is a server-minted uuid returned only to the device that registered it, so exploitation needs a leak -- an access log, a shared URL, a proxy -- rather than a guess.
+Phase:     T26 - Phase 1, the sweep; excluded from the generated table with this entry as the stated reason
+Source:    apps/api/src/modules/auth/auth.controller.ts `@Patch('devices/:id') @Public()` -> auth.service.ts `patchDevice(trx, deviceId, body)`: `UPDATE core.device SET push_token = ..., notification_permission = ... WHERE id = $1`, with no account predicate and no session requirement. The service is not passed `req` at all, so it could not scope if it wanted to.
+Found by:  the class question asked of every id-taking handler -- "does anything happen before the ownership resolution?" -- answered here with "there is no ownership resolution"
+Effect:    Two things, and the second is the one that matters. (1) A 404-vs-200 split tells any caller whether a device id exists. (2) `core.device.push_token` is the delivery address for that device's notifications, and `core.account_device` binds devices to accounts AFTER registration -- so a PATCH against a bound device rewrites where a signed-in account's push notifications go, from an unauthenticated request.
+Response:  RECORDED. Not fixed in T26. The endpoint is @Public() deliberately: a device registers BEFORE any identity exists (C6, the pre-identity endpoints), and until an account claims it there is no owner to resolve against. Choosing the rule here is what the prime rule forbids.
+Action:    none here. The shape a fix probably takes: once a device carries an `account_id` or a live `core.account_device` row, the PATCH requires a session for that account; before that it stays public. That is a contract change to a pre-identity endpoint, so it is a ruling.
+Verification: `grep -n "patchDevice" apps/api/src/modules/auth/auth.service.ts` -- the UPDATE's WHERE clause is the id and nothing else; `grep -n "@Public" apps/api/src/modules/auth/auth.controller.ts` shows the route carrying it.
+Ruling needed: YES -- whether an unauthenticated caller may patch a device an account has since claimed, and what a claimed device's PATCH requires.
+
+### D-356 - POST /v1/cart/lines confirms that an UNPUBLISHED product's variant exists, and will add it to a cart
+
+Severity:  MINOR. The leak is one bit -- "this variant id exists, and it is this store's" -- and ordering it still fails: fn_create_order revalidates and getCart already renders the line unavailable.
+Phase:     T26 - Phase 1, the sweep. Adjacent to the class rather than in it: a buyer OWNS no variant, so there is no ownership resolution to put first. The resolution this endpoint skips is VISIBILITY.
+Source:    apps/api/src/modules/orders/orders.service.ts `addLine`: `SELECT seller_id FROM core.product_variant WHERE id = ${body.variant_id}` with no visibility, no status and no seller-status predicate. 404 when absent, 409 CART_SELLER_CONFLICT when it belongs to a different seller than the cart, 201 otherwise -- three distinguishable answers.
+Found by:  reading every id-taking handler for the sweep. chat.service.ts already answers this exact question correctly on its own anchor path: "a buyer's anchor must be a product the public catalogue would show them (PUBLISHED) -- anything else turns the anchor probe into an oracle over the seller's drafts and moderation-unpublished rows."
+Effect:    A buyer with a variant id learns whether it exists and which store holds it, whether or not the product is DRAFT, UNPUBLISHED or moderation-hidden, and whether the seller is ACTIVE. The comparable read in chat is guarded and this one is not; the inconsistency is the finding, more than the exposure.
+Response:  RECORDED. Not fixed in T26: adding `AND p.visibility = 'PUBLISHED'` changes what an existing endpoint accepts, and several suites add lines against fixture products whose visibility was never the point of the test. A small change with a test-fixture blast radius belongs in its own PR.
+Action:    none here. The predicate chat.service.ts already uses, applied to the cart's variant lookup.
+Verification: `grep -n "FROM core.product_variant WHERE id" apps/api/src/modules/orders/orders.service.ts`, compared with the `owned` query in chat.service.ts `postMessage`.
+Ruling needed: none -- the storefront contract already says an unpublished product is not visible.
+
+### D-357 - The API suite is not isolated between suites under its own default runner: one suite failed in one run of three and passed alone
+
+Severity:  MINOR (a harness reliability defect, not a product one) -- registered because it is the class that makes a green run unfalsifiable
+Phase:     T26 - Phase 1, running the gates
+Source:    `apps/api/jest.config.js` sets no `maxWorkers`, so `pnpm --filter @adulis/api test` runs suites in parallel against ONE database. Suites take fixed market codes and fixed ids and clean up in `afterAll`.
+Found by:  three consecutive full runs on a freshly reset database: 630/630, then 629/630 with `t12-d89-invite-claim.spec.ts` failing, then 630/630 again. That suite passes alone and under `--runInBand`, every time.
+Effect:    Two costs. (1) A failure cannot be read as a defect without a re-run, which is the state db-reset.mjs's own header warns about: "you cannot tell a defect from a deposit." (2) A suite that dies before its afterAll leaves rows that break the NEXT run of a DIFFERENT suite. Observed directly in this phase: T25's leftover fixtures -- market codes C01, C02, C03 and C06 in namespace `7d%` -- made `migration-06-07-catalogue-and-stock` and `c6-accounts` fail 43 tests, identically on HEAD and on the T26 branch, until `pnpm db:reset`.
+Response:  RECORDED. Not fixed in T26.
+Action:    none here. Either `--runInBand` in the `test` script (correct and slower), or per-worker namespacing of every fixture id from `JEST_WORKER_ID` (correct, faster, and a change to 44 files).
+Verification: the three runs above. `pnpm db:reset` between the second and the third changed nothing about which suite flaked.
+Ruling needed: none.
+
+### T26 Phase 1, the refutation pass. The order's instruction to the refuter was "find the third endpoint, not confirm the two", and it found two the author's sweep did not -- both because the author counted PATH parameters and an id is client-supplied wherever the client supplies it.
+
+### D-360 - POST /v1/handoffs/sync tells any account whether a stranger's order is past PAYMENT_CONFIRMED, in a 200 body
+
+Severity:  MAJOR. Same shape as D-320 and a narrower signal -- "this order exists and is being fulfilled" rather than "and is selling" -- but reachable by ANY authenticated account with no seller relationship and no courier role, on an endpoint whose whole purpose is offline batch submission.
+Phase:     T26 - Phase 1, the refutation pass; missed by the author's sweep because the object id is in the REQUEST BODY (`scans[].order_ref`) and the sweep's table enumerated path parameters
+Source:    apps/api/src/modules/handoff/handoff.service.ts `processScan`. The QR-token read -- `SELECT nonce, signing_key_version FROM core.order_qr_token WHERE order_id = ${scan.order_ref}`, with no buyer predicate -- ran BEFORE the buyer resolution at the end of the block. `core.order_qr_token` carries no RLS (the only ENABLE ROW LEVEL SECURITY in the schema is on `core."order"`, D-319) and `adulis_app` holds SELECT on all of it.
+Found by:  two requests differing only in `order_ref`, as an account with no relationship to the seller, the buyer or the order:
+             a stranger's order past PAYMENT_CONFIRMED -> 200 `{outcome: REJECTED_SIGNATURE}`
+             an id that does not exist                 -> 200 `{outcome: REJECTED_UNKNOWN_ORDER}`
+           A QR token exists only from PAYMENT_CONFIRMED (R20), so REJECTED_SIGNATURE is the disclosure. No nonce or signature is needed: any 64 hex characters produce it.
+Effect:    Order ids reach buyers and couriers. A competitor or a former courier can poll them and read, per order, whether payment has been confirmed and the goods are moving -- the fulfilment half of what D-320 gave them for the catalogue half. Nothing is written and no row crosses the tenant line, which is why every write-path check passed over it.
+Response:  FIXED in T26 Phase 1. The order and its buyer are resolved first; the token read now runs only for the order's own buyer.
+Action:    COURIER_CANNOT_SCAN is KEPT and NARROWED to the actor it names -- a live `core.seller_courier` of the order's seller, who already has the order in their own list and learns nothing from being told why their scan was refused. Every other non-buyer now receives REJECTED_UNKNOWN_ORDER, byte-identical to a nonexistent order. That narrowing is a judgement about who deserves the message and a ruling is invited on it; the alternative -- removing the message entirely -- costs a courier a correct explanation for a mistake they will make.
+Verification: the `POST /v1/handoffs/sync {order_ref}` row of `t26-ownership-before-rules.e2e.spec.ts`, which needed a SECOND seeded order past PAYMENT_CONFIRMED to discriminate at all: against B's PAYMENT_SUBMITTED order both branches answered REJECTED_UNKNOWN_ORDER and the case passed while proving nothing. That near-miss is recorded here because it is the failure mode of every test in this class.
+Ruling needed: which actors may be told COURIER_CANNOT_SCAN rather than "no such order".
+
+### D-361 - A COMPANY seller could name ANOTHER store's natural person as its representative, and borrow that person's identity verification
+
+Severity:  MAJOR, and it is not an oracle: a committed cross-tenant read-through of identity evidence, on the gate identity verification exists to hold
+Phase:     T26 - Phase 1, the refutation pass; the second body-supplied id the path-parameter sweep did not reach
+Source:    apps/api/src/modules/onboarding/onboarding.service.ts `patchCompanyDetails` wrote `body.representative_person_id` straight into `core.seller_company_detail` with no resolution of any kind. `core.fn_seller_attestation_person` (0018) returns exactly that column for a COMPANY seller, and `core.fn_evaluate_eligibility` then asks `verification.has_attestation(v_person)`.
+Found by:  as seller A (COMPANY), with seller B's `core.person` id: `PATCH /v1/seller/company-details` -> 200 `{updated: true}`, and A's attestation person is now B's. With an id that does not exist -> 409 VALIDATION_FAILED `{reason: SELLER_NOT_COMPANY}`, because the handler mapped EVERY 23503 to the composite-FK's meaning -- so the same endpoint was also an existence probe over `core.person`.
+Effect:    A company seller whose market sets `id_verification_requirement` to MANDATORY_ALL or MANDATORY_WITHOUT_AUDIENCE could satisfy IDENTITY_ATTESTATION_REQUIRED on a natural person it has no relationship to, and become eligible without anyone having verified anybody at that store. The seeded market uses OPTIONAL, which is why nothing has noticed.
+Response:  FIXED in T26 Phase 1. The representative is resolved BEFORE the write: it must be a `core.person` this ACCOUNT already holds through a seller it owns, and anything else answers 404 -- the same answer for a person that does not exist and one this account may not name.
+Action:    THE UNDERLYING GAP IS NOT FIXED AND MUST NOT BE INVENTED HERE. Nothing in the product creates a `core.person` row for a company's representative: `createSeller` mints one only for an INDIVIDUAL seller, and the operator attestation path explicitly refuses to ("an operator attesting about a person who does not exist is a mistake, not a signup"). The body schema makes `representative_person_id` REQUIRED, and the console asks a seller to TYPE a uuid into a form field. So a company whose owner holds no individual store still cannot complete this endpoint -- correctly, now, instead of by naming a stranger.
+Verification: the `PATCH /v1/seller/company-details {representative_person_id}` row of the sweep; against the pre-T26 handler the foreign-person branch returns 200 and the nonexistent one 409. `apps/api/test/c1-onboarding.e2e.spec.ts` was updated in the same commit: it minted a fresh person and named it, which passed only because nothing resolved the field.
+Ruling needed: YES -- where a company representative's `core.person` row comes from, and who may attest about it.
+
+### D-362 - fn_cancel_ownership_transfer's guard has fn_cancel_line's NULL hole, spelled NOT IN
+
+Severity:  MINOR (LATENT, not live: `p_actor` is `req.ctx?.accountId` on an authenticated route and the pipeline refuses before a handler runs without one). Registered because the class is the point, not the instance.
+Phase:     T26 - Phase 1, the refutation pass -- and it refutes a claim made in this very phase
+Source:    db/migrations/0034_seller_ownership_transfer.sql:291 -- `IF NOT FOUND OR p_actor NOT IN (v_t.from_account_id, v_t.to_account_id)`. Both list columns are NOT NULL so the list side is total; `NULL NOT IN (a, b)` is NULL, `false OR NULL` is NULL, and the guard does not fire.
+Found by:  an adversarial read of EVERY `IF NOT FOUND OR` guard in db/migrations, after 0051's header claimed to have closed "the NULL-actor twin before anybody finds it". It closed that twin inside `fn_cancel_line` and inferred, from a grep for `<> (SELECT`, that `fn_cancel_line` was the only member of the class. The grep was right about its own spelling and too narrow about the class.
+Effect:    None today. The value of the entry is the correction: D-325's Action named "an inequality against a subquery" as THE grep, and the class is wider than one spelling -- any comparison in a guard that can evaluate to NULL belongs to it. The audit that matters is over guard SHAPES, not over one operator.
+Response:  FIXED by `db/migrations/0052_ownership_transfer_guard_null_actor.sql`: two `IS DISTINCT FROM` comparisons in place of `NOT IN`. CREATE OR REPLACE, body otherwise byte-identical to 0034's.
+Action:    none further. Every other `IF NOT FOUND OR` guard in db/migrations (0012:411, 0014:285, 0014:293, 0019:49, 0023:76, 0023:164, 0023:341, 0028:143, 0038:34) is either already `IS DISTINCT FROM` or a NOT NULL column against a literal, and no `NOT IN (SELECT ...)` exists anywhere in the migrations.
+Verification: the `fn_cancel_ownership_transfer refuses a NULL actor` case in `t26-ownership-before-rules.e2e.spec.ts`, run inside a transaction that rolls back.
+Ruling needed: none.
+
+### D-363 - The T26 sweep's population was counted from PATH parameters, and the class is larger
+
+Severity:  MINOR as a defect; it is a correction to a claim this build order made, recorded because the claim was the deliverable
+Phase:     T26 - Phase 1, the refutation pass
+Source:    the sweep's own table in `apps/api/test/t26-ownership-before-rules.e2e.spec.ts` as first written: 53 routes, every one of them enumerated from `@Param` declarations in the controllers
+Found by:  the refuter's independent enumeration. 61 routes carry a path parameter; minus the 8 excluded by name (5 public `storefronts/{handle}`, 2 `availability-overrides/{date}`, 1 `devices/{id}`) = 53, which is arithmetically right and answers a narrower question than the one the order asked. A further 9 routes take an owned-object identifier ONLY in the body and appeared nowhere: `POST /v1/handoffs/sync`, `PATCH /v1/seller/company-details`, `POST /v1/cart/lines`, `POST /v1/orders`, `POST /v1/billing/mark-transferred`, `POST /v1/claims`, `POST /v1/conversations`, `POST /v1/seller/ownership-transfer`, `POST /v1/seller/identity-verification`. Eight more are in the table by their path id while their body id is never varied.
+Effect:    The two worst findings of this phase (D-360, D-361) were both in the nine. "We fixed the ones we found" is what T25 already said, and counting the wrong population is how a sweep says it again with a number attached.
+Response:  PARTLY FIXED. The population is 62, and the table now carries 55 cases -- the 53 path routes plus the two body-id routes that were defective. The remaining seven body-id routes were traced by hand and are clean: `POST /v1/cart/lines` is D-356 (recorded, adjacent); `POST /v1/orders`, `POST /v1/claims`, `POST /v1/conversations` and `POST /v1/billing/mark-transferred` resolve their ids against the caller before any rule; `POST /v1/seller/ownership-transfer` and `POST /v1/seller/identity-verification` are step-up-gated and scope inside their named functions.
+Action:    Add a case per body-supplied id, so the table's asserted count covers the whole class rather than the half that is easy to enumerate. Not done here because each needs a fixture that makes it discriminate -- the near-miss recorded in D-360 is what a case without one is worth.
+Verification: `grep -c "@Param(" apps/api/src/modules/*/*.controller.ts` against the table's `CASES.length`, which the suite asserts.
+Ruling needed: none.
+
+### D-364 - Two of the sweep's own cases proved nothing, and one of its controls asserted its own fixture
+
+Severity:  MINOR (test-quality), and it is the entry this phase would most like not to have written
+Phase:     T26 - Phase 1, the refutation pass
+Source:    `apps/api/test/t26-ownership-before-rules.e2e.spec.ts` as first written
+Found by:  the refuter reading the cases for whether they pass for the right reason. Three did not.
+             * `PATCH /v1/cart/lines/{id}` and `DELETE /v1/cart/lines/{id}`: the fixture gave BUYER_B a cart and BUYER_A none, so `resolveCart` returned null and both branches threw NOT_FOUND before `lineId` reached any statement. Both would have passed against `UPDATE core.cart_line ... WHERE id = ${lineId}` with no cart predicate at all.
+             * the D-325 positive control asserted `SELECT EXISTS (... core.seller WHERE id = B AND owner_account_id = B_OWNER)` -- a fact its own INSERT guarantees -- and never called `core.fn_cancel_line`. It would have passed identically if 0051's rewritten guard raised U0002 for the LEGITIMATE owner too, which is the one failure mode a rewritten guard most needs a control for.
+           A fourth, found by the author while fixing the first three: the `POST /v1/handoffs/sync` case as first written pointed at a PAYMENT_SUBMITTED order, which carries no QR token, so both branches answered REJECTED_UNKNOWN_ORDER and the case passed against the defective handler.
+Effect:    A green sweep that covers less than it claims is worse than no sweep, because the number in the report is what the next order will trust.
+Response:  FIXED in T26 Phase 1. BUYER_A has their own cart and line; the control calls the function on its own connection inside a transaction that rolls back and asserts the reservation reached CANCELLED_BY_SELLER; the handoff case points at a second seeded order past PAYMENT_CONFIRMED with its QR minted.
+Action:    none further. The general lesson is in the file: every case in this class must be checked to FAIL against the pre-fix code, and three of these were not.
+Verification: reverting each fix turns exactly the intended cases red -- 409 for the D-320 rows, REJECTED_SIGNATURE against REJECTED_UNKNOWN_ORDER for D-360, 200 against 409 for D-361.
+Ruling needed: none.
