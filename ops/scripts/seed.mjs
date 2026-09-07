@@ -239,11 +239,19 @@ try {
    *
    * THE MECHANISM IS NOT FAKED, and that is the whole design. These are the
    * REAL columns, read by the REAL `AND` in fn_recompute_seller_level, in the
-   * REAL per-market configuration row. Nothing here sets a level, and no
-   * function or job is modified: a seeded seller earns ESTABLISHED by
-   * satisfying both arms, and the nightly `level.recompute` is what notices.
-   * A "dummy ladder" that wrote a level into seller_level_state would leave
-   * fn_recompute_seller_level exactly as untested as it is today.
+   * REAL per-market configuration row, and no function or job is modified:
+   * `seed-ladder-due` earns ESTABLISHED by satisfying both arms, and the
+   * nightly `level.recompute` is what notices. A "dummy ladder" that only
+   * wrote levels into seller_level_state would leave fn_recompute_seller_level
+   * exactly as untested as it is today.
+   *
+   * ONE LEVEL IS PRE-SET AND THIS SENTENCE USED TO DENY IT. `seed-ladder-est`
+   * is written at ESTABLISHED directly, because a level the FUNCTION produced
+   * always carries `since = now()` (D-358) and no sweep history therefore
+   * leads to a stable ESTABLISHED row. The function AGREES with the row --
+   * three sweeps leave it alone -- but it did not produce it, and "nothing
+   * here sets a level" was false in the same file that does it. Corrected
+   * after review rather than defended.
    *
    * WHY THE THRESHOLDS HAD TO MOVE AND NOT JUST THE FIXTURE. Sixty days is
    * not seedable: `since` is the ladder's own clock and a fixture can backdate
@@ -819,6 +827,29 @@ try {
        ON CONFLICT (seller_id) DO NOTHING`,
       [id, level, sinceAgo],
     );
+    /*
+     * THE PUBLIC ROW HAS TO BE SET TOO, and forgetting it made the fixture
+     * fail at the one thing it exists for.
+     *
+     * `core.seller_public_stats.level` is what GET /v1/storefronts/{handle}
+     * serves, and it is advanced ONLY by trg_stats_on_level_event -- a trigger
+     * on the append-only EVENT log. A level written straight into
+     * seller_level_state fires nothing, so `seed-ladder-est` was ESTABLISHED
+     * in its own state row and NEW on its storefront: the badge named in this
+     * block's own list of screens the fixture makes renderable. Found by
+     * review, after the fixture was green.
+     *
+     * Migration 0010's comment -- "the stats surface can only ever show a
+     * level the append-only log records" -- holds for the application, which
+     * has no UPDATE grant here. This script connects as the migrate role and
+     * is writing a fixture; it says so rather than pretending the trigger did
+     * it.
+     */
+    await client.query(
+      `UPDATE core.seller_public_stats SET level = $2::core.trust_level
+        WHERE seller_id = $1`,
+      [id, level],
+    );
     await client.query(
       `INSERT INTO billing.subscription (id, seller_id, state, beta_started_at)
        VALUES (gen_random_uuid(), $1, 'BETA', now())
@@ -860,6 +891,19 @@ try {
        * order_clock_consistency's requirement rather than a nicety: the CHECK
        * refuses COMPLETED with a running clock. T25's first probe cohort was
        * refused by exactly this constraint and was refused correctly.
+       *
+       * WHAT INSERTING AT A FINAL STATE DOES NOT DO, stated because a reader
+       * will otherwise assume it did. Every state-machine and statistics
+       * trigger on core."order" and core.reservation fires on UPDATE --
+       * trg_guard_order_transition, trg_log_order_transition,
+       * trg_stats_on_order_completed, trg_stats_on_reservation,
+       * trg_derive_order_state. A row inserted at COMPLETED fires none of
+       * them. The transition log is hand-written below, as the trade fixture
+       * above already does; `seller_public_stats.orders_completed_count` and
+       * the rate columns are NOT, so these stores read two completed orders to
+       * fn_recompute_seller_level and zero to the storefront's counters. The
+       * ladder is what this fixture is for; the counters are D-328's problem
+       * and will be right when an order can actually complete.
        */
       await client.query(
         `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
@@ -974,9 +1018,11 @@ Seeded (idempotent -- reruns change nothing):
              the product moves an order to COMPLETED (D-328), so the count the
              ladder reads can only ever be zero for a seller who trades. The
              level-dependent SCREENS are now testable; the JOURNEY is not.
-             [!] A promotion here does not stick: the recompute resets the
-             tenure clock on every level change, so the run after the one that
-             promotes demotes again (D-358).
+             [!] The recompute resets the tenure clock on EVERY level change,
+             promotions included (D-358). At these thresholds and the job's
+             own nightly cron it does not bite -- 24 hours >= 1 day -- but at
+             the real 60 days a promoted seller is demoted the next night,
+             every time, forever. Two sweeps in a row here show it.
 
 Console dev loop (three terminals):
   1. pnpm dev:api            # OTP codes print here (dev SMS adapter)

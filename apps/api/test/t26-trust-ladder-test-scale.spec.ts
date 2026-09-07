@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { Pool } from 'pg';
 import { createJobHarness, type Harness } from './jobs-harness';
 import { levelRecompute } from '../src/jobs/e3-trust-stock';
@@ -240,14 +242,68 @@ describe('T26 Phase 2 -- a real promotion, at test scale', () => {
           SET level = CASE WHEN seller_id = '${SEED_LADDER[1]}'
                            THEN 'ESTABLISHED'::core.trust_level
                            ELSE 'NEW'::core.trust_level END,
-              since = now() - interval '3 days'
+              since = now() - interval '3 days',
+              -- The promotion the sweep performed left its evidence behind:
+              -- a snapshot of a tenure and an order count on a store whose
+              -- level is being reset. Cleared with the rest of it.
+              evidence_snapshot = NULL
         WHERE seller_id IN ('${SEED_LADDER.join("','")}')`,
+      /*
+       * THE PUBLIC ROW IS RESTORED EXPLICITLY, and leaving it out was a trap
+       * rather than an omission.
+       *
+       * `seller_public_stats.level` is advanced by trg_stats_on_level_event.
+       * The sweep promotes seed-ladder-due and D-358's next sweep demotes it,
+       * so the public row happened to round-trip -- which means the teardown
+       * was correct ONLY WHILE THE DEFECT IT PINS IS UNFIXED. On the day
+       * D-358 is ruled on, the promotion would stand and this suite would
+       * leave the seeded store reading ESTABLISHED to the storefront while
+       * its state row said NEW. Set from the state row instead of hoped for.
+       */
+      `UPDATE core.seller_public_stats ps
+          SET level = ls.level
+         FROM core.seller_level_state ls
+        WHERE ls.seller_id = ps.seller_id
+          AND ps.seller_id IN ('${SEED_LADDER.join("','")}')`,
     ]) {
       await admin.query(q);
     }
     await admin.query(`SET session_replication_role = origin`);
     await admin.end();
   }, 60_000);
+
+  /*
+   * D-359 said "the guard holds and is tested" while nothing tested it. This
+   * is the test, and it is the only thing standing between a one-day,
+   * two-order ladder and a real market: seed.mjs ENUMERATES the environments
+   * it may write a fixture into, so a NODE_ENV added later is refused by
+   * default rather than admitted by default.
+   */
+  describe('the thresholds cannot reach an environment that is not seedable', () => {
+    it.each(['production', 'staging', ''])(
+      'refuses NODE_ENV=%p and writes nothing',
+      (env) => {
+        const script = path.join(__dirname, '..', '..', '..', 'ops', 'scripts', 'seed.mjs');
+        let code = 0;
+        let stderr = '';
+        try {
+          execFileSync(process.execPath, [script], {
+            env: { ...process.env, NODE_ENV: env },
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+        } catch (e) {
+          const err = e as { status?: number; stderr?: string };
+          code = err.status ?? -1;
+          stderr = err.stderr ?? '';
+        }
+        expect(code).toBe(2);
+        expect(stderr).toContain('TEST-SCALE trust-ladder');
+        expect(stderr).toContain('activate-market.md');
+      },
+      30_000,
+    );
+  });
 
   describe('the configuration is the real one, lowered', () => {
     it('reads the two ruled columns and leaves every deferred one NULL', async () => {
@@ -282,7 +338,11 @@ describe('T26 Phase 2 -- a real promotion, at test scale', () => {
         failed: number;
       };
       expect(result.failed).toBe(0);
-      expect(result.recomputed).toBe(result.sellers);
+      // `recomputed === sellers` is the same statement as `failed === 0` --
+      // the job increments exactly one of the two per seller -- and both hold
+      // over an empty sweep. What is worth asserting is that the sweep saw
+      // this fixture at all, which an empty one would not.
+      expect(result.sellers).toBeGreaterThanOrEqual(3);
 
       // THE PROMOTION, decided by fn_recompute_seller_level and by nothing in
       // this file: tenure 3 days >= 1 day AND 2 completed orders >= 2.
@@ -314,8 +374,12 @@ describe('T26 Phase 2 -- a real promotion, at test scale', () => {
         `SELECT level::text AS level FROM core.seller_public_stats WHERE seller_id = $1`,
         [S_DUE],
       );
-      // Level flows to the public row from the EVENT (migration 0010), so
-      // this is a second, independent witness that a real event was written.
+      // Level flows to the public row from the EVENT (migration 0010). This
+      // witnesses trg_stats_on_level_event firing -- not a second proof that
+      // the event exists, which the previous test asserts directly, but the
+      // proof that the storefront sees what the ladder decided. The seed had
+      // to be corrected for exactly this: a level written without an event
+      // leaves the badge reading NEW.
       expect(r.rows[0]?.level).toBe('ESTABLISHED');
     });
   });
@@ -336,6 +400,16 @@ describe('T26 Phase 2 -- a real promotion, at test scale', () => {
    * At production scale that is a 61-day cycle in which a seller is
    * ESTABLISHED for exactly one nightly run. It is invisible today only
    * because D-328 means nobody ever reaches the promotion at all.
+   *
+   * THE CADENCE MATTERS AND THIS TEST DOES NOT REPRODUCE IT. The two sweeps
+   * below run milliseconds apart, so tenure is ~0.03s. Under the job's real
+   * cron (30 2 * * *) at the SEED's one-day threshold, tenure at the next run
+   * is ~24 hours and `interval '24 hours' >= interval '1 day'` is TRUE -- so
+   * at test scale, on a nightly cadence, the demotion does not fire. The
+   * defect is production's: at 60 days, one night after a promotion the
+   * tenure arm fails by 59. What this test pins is the MECHANISM -- that a
+   * promotion resets the clock the promotion is judged by -- not the seed's
+   * own timetable.
    *
    * 0028's column comment says "A demotion resets it, which is hysteresis" --
    * which is deliberate and right. The reset on PROMOTION is the part no

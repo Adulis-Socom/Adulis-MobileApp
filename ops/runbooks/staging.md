@@ -176,8 +176,15 @@ believe the deploy worked.
 ## Step 6 — the market
 
 `pnpm db:seed` is **not** how a real environment gets a market: it creates a fixture
-(`SEED`, two sellers, five orders) designed for the e2e harness, and a staging server that
+(`SEED`, five sellers, ten orders) designed for the e2e harness, and a staging server that
 carries seeded orders will eventually have someone reason from them.
+
+**Since T26 Phase 2 it also carries TEST-SCALE trust-ladder thresholds** -- one day and
+two completed orders, where ADU-VAL-01 S2 sets sixty days and fifty. On a real market
+those would promote every trading seller inside a week, lifting the NEW product cap and
+the transaction cap, and it would look like the ladder working rather than like a
+misconfiguration. The script refuses `NODE_ENV=staging` outright and exits 2; this
+paragraph exists for the reader who is about to override it. Register D-359.
 
 Create the market properly instead, following
 [`activate-market.md`](activate-market.md), which is the runbook that owns these columns

@@ -42,10 +42,20 @@
  *                                 every value added after it, which is how this
  *                                 defect class propagates.
  *
- *   ops/scripts/seed.mjs         refuses production. Staging IS seeded -- it
- *                                 carries no real seller, and a market that was
- *                                 never seeded is a staging server nobody can
- *                                 sign in to.
+ *   ops/scripts/seed.mjs         ENUMERATES what it may seed -- development and
+ *                                 test -- so staging is refused with production
+ *                                 and every environment added later. This entry
+ *                                 said the opposite ("Staging IS seeded") until
+ *                                 T26 Phase 2: T23 Phase 5 replaced the negated
+ *                                 guard and this copy was not moved with it,
+ *                                 which is the stale-copy failure the paragraph
+ *                                 above lectures about, one file down.
+ *                                 T26 made the drift dangerous rather than
+ *                                 merely wrong: the seeded market now carries
+ *                                 TEST-SCALE trust-ladder thresholds (one day,
+ *                                 two orders, against 60 and 50), and a reader
+ *                                 acting on the old sentence would put them on
+ *                                 a staging server. Register D-359.
  *
  *   ops/scripts/gates.mjs        keys off `development`; unaffected.
  *
