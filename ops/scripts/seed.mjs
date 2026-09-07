@@ -32,11 +32,17 @@ if (!CONNECTION) {
  * every value added to NODE_ENVS afterwards -- and T23 Phase 4 added one.
  *
  * STAGING IS REFUSED, AND NOT OUT OF CAUTION. This script writes a FIXTURE: a
- * market called SEED, two sellers, five orders in assorted states, and an
+ * market called SEED, five sellers, ten orders in assorted states, and an
  * account that can receive a code. It exists so the e2e harness has something
- * to assert against. A staging server carrying five seeded orders is a server
+ * to assert against. A staging server carrying ten seeded orders is a server
  * where somebody eventually reasons from one -- reconciles it, quotes it in a
  * bug report, or shows it to a person deciding whether the product works.
+ *
+ * SINCE T26 PHASE 2 THIS GUARD ALSO CARRIES THE LADDER (register D-359). The
+ * market it writes has TEST-SCALE trust thresholds -- one day and two orders,
+ * against ADU-VAL-01 S2's sixty and fifty -- and in a real market those would
+ * promote every trading seller inside a week while LOOKING like the ladder
+ * working. This enumeration is the whole of what stands between the two.
  *
  * A real environment gets its market from ops/runbooks/activate-market.md,
  * which is the runbook that owns those columns and explains each one, and
@@ -46,8 +52,8 @@ const SEEDABLE = ['development', 'test'];
 if (!SEEDABLE.includes(process.env.NODE_ENV ?? '')) {
   console.error(
     `FAIL  refusing to seed with NODE_ENV=${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}. ` +
-      `This script writes a FIXTURE -- a market, two sellers, five orders and an account that can ` +
-      `receive a code -- and only ${SEEDABLE.join(' and ')} may carry one.`,
+      `This script writes a FIXTURE -- a market, five sellers, ten orders, TEST-SCALE trust-ladder ` +
+      `thresholds and an account that can receive a code -- and only ${SEEDABLE.join(' and ')} may carry one.`,
   );
   console.error(
     '      A real environment gets its market from ops/runbooks/activate-market.md.',
@@ -94,6 +100,20 @@ const SELLER_SUB = '5eed0000-0000-4000-8000-000000000024';
 const ACCOUNT_SUB = '5eed0000-0000-4000-8000-000000000025';
 const PHONE_SUB = '+251900000003';
 const PHONE = '+251900000001';
+
+/*
+ * THE TRUST-LADDER TRIO (T26 Phase 2). One owner, three stores, one per
+ * REACHABLE level -- NEW, ESTABLISHED, and one standing at the threshold so
+ * the next `level.recompute` promotes it. TRUSTED is unreachable by design
+ * (its four thresholds are ADU-VAL-01 Group A and stay NULL), so there is no
+ * fourth store. The block that writes them, near the bottom of this file,
+ * carries the reasoning and the two registered defects it stands on.
+ */
+const ACCOUNT_LADDER = '5eed0000-0000-4000-8000-000000000041';
+const PHONE_LADDER = '+251900000004';
+const SELLER_LADDER_NEW = '5eed0000-0000-4000-8000-000000000042';
+const SELLER_LADDER_EST = '5eed0000-0000-4000-8000-000000000043';
+const SELLER_LADDER_DUE = '5eed0000-0000-4000-8000-000000000044';
 
 /*
  * THE TRADE FIXTURE (T10 Phase 5, C-4).
@@ -213,12 +233,42 @@ try {
   // consumer of it: before 0039 this INSERT was impossible to write
   // without inventing the ten deferred numbers (D-90 corrects D-61's count of
 // eight; 0039 drops NOT NULL on exactly ten).
+  /*
+   * TEST-SCALE THRESHOLDS (T26 Phase 2). One day and two orders, where
+   * ADU-VAL-01 S2 sets sixty days and fifty.
+   *
+   * THE MECHANISM IS NOT FAKED, and that is the whole design. These are the
+   * REAL columns, read by the REAL `AND` in fn_recompute_seller_level, in the
+   * REAL per-market configuration row. Nothing here sets a level, and no
+   * function or job is modified: a seeded seller earns ESTABLISHED by
+   * satisfying both arms, and the nightly `level.recompute` is what notices.
+   * A "dummy ladder" that wrote a level into seller_level_state would leave
+   * fn_recompute_seller_level exactly as untested as it is today.
+   *
+   * WHY THE THRESHOLDS HAD TO MOVE AND NOT JUST THE FIXTURE. Sixty days is
+   * not seedable: `since` is the ladder's own clock and a fixture can backdate
+   * it, but fifty COMPLETED orders on every level-dependent seller is fifty
+   * order rows each, and the fixture would then be the thing under test.
+   *
+   * NON-PRODUCTION ONLY, and the guard is already above: this script refuses
+   * any NODE_ENV but development and test, staging included, and a real
+   * market's row comes from ops/runbooks/activate-market.md. A one-day,
+   * two-order threshold in a production market would promote every seller in
+   * a week. Registered as D-359 with the launch gate named as where a check
+   * would go if this seed ever outlives its usefulness.
+   *
+   * WHERE NOT EXISTS, like every other row here: `pnpm db:seed` against a
+   * database that already carries a ladder_config row changes nothing, so a
+   * developer holding the old 60/50 row needs `pnpm db:reset` to pick these
+   * up. That is the seed's contract ("reruns change nothing"), not an
+   * oversight.
+   */
   await client.query(
     `INSERT INTO core.ladder_config (id, market_id,
        new_to_established_min_tenure, new_to_established_min_orders,
        new_level_product_cap, new_level_transaction_cap_minor)
      SELECT '5eed0000-0000-4000-8000-000000000007', $1,
-            interval '60 days', 50, 10, NULL
+            interval '1 day', 2, 10, NULL
      WHERE NOT EXISTS (SELECT 1 FROM core.ladder_config WHERE market_id = $1)`,
     [M],
   );
@@ -671,6 +721,226 @@ try {
     );
   }
 
+
+  /*
+   * ====================================================================
+   * THE TRUST LADDER FIXTURE (T26 Phase 2)
+   * ====================================================================
+   *
+   * WHAT THIS MAKES POSSIBLE, and it is narrower than it looks.
+   *
+   * Every level-dependent screen in the console -- SC-13's trust panel, the
+   * NEW product cap and its "10 of 10" counter, the badge on the storefront,
+   * the "this lifts when your store reaches Established" sentence -- has never
+   * been exercised against a seller that was not NEW, because no seller has
+   * ever left NEW. Three sellers, one per reachable level, make all of them
+   * exercisable, in the console, by hand, today.
+   *
+   * [!] IT DOES NOT MAKE A SELLER ABLE TO EARN A LEVEL. Register D-328:
+   * nothing in the product moves an order from HANDED_OFF to COMPLETED --
+   * the transition is ratified in migration 0011 and NO function, trigger,
+   * job or service performs it. `fn_recompute_seller_level` counts COMPLETED
+   * orders, so in a live test a seller still cannot advance the counter by
+   * trading. The COMPLETED orders below are WRITTEN AS ROWS, exactly as the
+   * five trade orders above are, and a seller working the product from a
+   * clean start would still be stuck at NEW forever. Lowering the thresholds
+   * changes nothing about that: two orders is as unreachable as fifty when
+   * the count can only ever be zero.
+   *
+   * So: the SCREENS become testable. The JOURNEY does not. Do not read a
+   * promotion here as evidence that the ladder works end to end.
+   *
+   * THE THREE SELLERS. TRUSTED is deliberately absent -- all four trusted_*
+   * thresholds are ADU-VAL-01 Group A and stay NULL, every gate is wrapped in
+   * coalesce(..., false), and so TRUSTED is unreachable under every input.
+   * That is the design, and a fourth seller pretending otherwise would be the
+   * "dummy ladder" this fixture exists not to be.
+   *
+   *   seed-ladder-new    NEW          tenure satisfied, ONE completed order.
+   *                                   One short of the two-order arm, so it
+   *                                   demonstrates that BOTH arms are
+   *                                   required rather than either.
+   *   seed-ladder-est    ESTABLISHED  promoted three days ago; both arms
+   *                                   still satisfied, so a recompute leaves
+   *                                   it where it is.
+   *   seed-ladder-due    NEW          both arms satisfied RIGHT NOW. The next
+   *                                   run of `level.recompute` promotes it,
+   *                                   and that is the promotion a test can
+   *                                   watch happen in a minute.
+   *
+   * ONE OWNER FOR ALL THREE, deliberately. The console dev loop signs in once
+   * and switches between a NEW store, an ESTABLISHED store and one about to
+   * promote -- which is the comparison every level-dependent screen needs and
+   * three separate sign-ins would make tedious. It does not disturb D-97's
+   * chooser test: that asserts about ACCOUNT, which still owns exactly one
+   * store.
+   *
+   * [!] READ D-358 BEFORE TRUSTING seed-ladder-due's promotion TO STICK. The
+   * recompute resets `since` on EVERY level change, promotions included, and
+   * tenure is measured from `since` -- so the run after the one that promotes
+   * finds tenure at zero, fails the tenure arm and demotes the seller back to
+   * NEW. Found by this fixture, on the day it first ran a real promotion.
+   * Nothing here works around it: the function is unchanged, and the
+   * oscillation is registered rather than papered over.
+   */
+  await client.query(
+    `INSERT INTO core.account (id, phone_e164, market_id, status, age_declared_over_18)
+     VALUES ($1,$2,$3,'ACTIVE', true) ON CONFLICT (id) DO NOTHING`,
+    [ACCOUNT_LADDER, PHONE_LADDER, M],
+  );
+
+  /*
+   * Each ladder seller gets one product and one variant, and its completed
+   * orders hang off that variant. The EXCLUDE constraint on core.reservation
+   * fences duplicate ACTIVE reservations only, so FULFILLED lines may share a
+   * variant -- which is why these need one variant each and the trade fixture
+   * above needs one per order.
+   */
+  const ladderSeller = async (id, handle, storeName, level, sinceAgo, orders) => {
+    await client.query(
+      `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
+                                store_name, handle, status)
+       VALUES ($1,$2,$3,'INDIVIDUAL',$4,$5,'ACTIVE')
+       ON CONFLICT (id) DO NOTHING`,
+      [id, M, ACCOUNT_LADDER, storeName, handle],
+    );
+    /*
+     * `since` IS THE LADDER'S OWN CLOCK, backdated here rather than faked:
+     * 0028's column comment says tenure is measured from the moment the
+     * seller entered the ladder at NEW, and a fixture that wants tenure has
+     * to move that moment. The LEVEL, by contrast, is only ever pre-set to
+     * what a recompute would already agree with -- seed-ladder-est is
+     * ESTABLISHED because it satisfies both arms, not so that a screen has
+     * something to render.
+     */
+    await client.query(
+      `INSERT INTO core.seller_level_state (seller_id, level, since, computed_at)
+       VALUES ($1,$2::core.trust_level, now() - $3::interval, now())
+       ON CONFLICT (seller_id) DO NOTHING`,
+      [id, level, sinceAgo],
+    );
+    await client.query(
+      `INSERT INTO billing.subscription (id, seller_id, state, beta_started_at)
+       VALUES (gen_random_uuid(), $1, 'BETA', now())
+       ON CONFLICT (seller_id) DO NOTHING`,
+      [id],
+    );
+    const productId = `5eed0000-0000-4000-8000-0000000000${orders.product}`;
+    const variantId = `5eed0000-0000-4000-8000-0000000000${orders.variant}`;
+    await client.query(
+      `INSERT INTO core.product (id, seller_id, market_id, name, description,
+                                 base_price_minor, base_price_currency, visibility,
+                                 published_at)
+       VALUES ($1,$2,$3,$4,'Seeded for the trust ladder fixture.',48000,'ETB',
+               'PUBLISHED', now() - interval '10 days')
+       ON CONFLICT (id) DO NOTHING`,
+      [productId, id, M, `${storeName} item`],
+    );
+    await client.query(
+      `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor,
+                                         price_currency, stock_count, variant_key)
+       VALUES ($1,$2,$3,48000,'ETB',0,'default')
+       ON CONFLICT (id) DO NOTHING`,
+      [variantId, productId, id],
+    );
+    // The ledger first: stock_count is not writable, so the opening balance is
+    // an event like every other change (see THE STOCK LEDGER above for why
+    // this is WHERE NOT EXISTS and not ON CONFLICT).
+    await client.query(
+      `INSERT INTO core.stock_event
+         (id, variant_id, seller_id, delta, reason, actor_account_id)
+       SELECT $1, $2, $3, 42, 'SELLER_SET', $4
+        WHERE NOT EXISTS (SELECT 1 FROM core.stock_event WHERE id = $1)`,
+      [`5eed0000-0000-4000-8000-0000000000${orders.opening}`, variantId, id, ACCOUNT_LADDER],
+    );
+
+    for (const [orderId, lineId, eventId, agoHours] of orders.rows) {
+      /*
+       * A COMPLETED order carries clock_stopped_at, and that is
+       * order_clock_consistency's requirement rather than a nicety: the CHECK
+       * refuses COMPLETED with a running clock. T25's first probe cohort was
+       * refused by exactly this constraint and was refused correctly.
+       */
+      await client.query(
+        `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
+                                   created_at, expires_at, clock_stopped_at,
+                                   total_minor, total_currency, display_currency,
+                                   seller_level_at_order)
+         VALUES ($1,$2,$3,$4,'COMPLETED',
+                 now() - $5::interval, now() - $5::interval + interval '48 hours',
+                 now() - $5::interval + interval '20 hours',
+                 96000,'ETB','ETB','NEW')
+         ON CONFLICT (id) DO NOTHING`,
+        [orderId, M, id, BUYER, agoHours],
+      );
+      await client.query(
+        `INSERT INTO core.reservation (id, order_id, variant_id, seller_id,
+                                       buyer_account_id, quantity, unit_price_minor,
+                                       unit_price_currency, state)
+         VALUES ($1,$2,$3,$4,$5,2,48000,'ETB','FULFILLED')
+         ON CONFLICT (id) DO NOTHING`,
+        [lineId, orderId, variantId, id, BUYER],
+      );
+      await client.query(
+        `INSERT INTO core.stock_event
+           (id, variant_id, seller_id, delta, reason, order_id, reservation_id,
+            actor_account_id)
+         SELECT $1, $2, $3, -2, 'ORDER_CREATED', $4, $5, $6
+          WHERE NOT EXISTS (SELECT 1 FROM core.stock_event WHERE id = $1)`,
+        [eventId, variantId, id, orderId, lineId, BUYER],
+      );
+      // The ratified path, written explicitly: the transition trigger fires on
+      // UPDATE and holds nothing for a row inserted at its final state.
+      for (const [from, to, offset] of [
+        ['CREATED', 'NOTIFIED', 1],
+        ['NOTIFIED', 'PAYMENT_SUBMITTED', 2],
+        ['PAYMENT_SUBMITTED', 'PAYMENT_CONFIRMED', 3],
+        ['PAYMENT_CONFIRMED', 'HANDED_OFF', 4],
+        ['HANDED_OFF', 'COMPLETED', 5],
+      ]) {
+        await client.query(
+          `INSERT INTO core.order_state_transition
+             (order_id, from_state, to_state, occurred_at)
+           SELECT $1, $2::core.order_state, $3::core.order_state,
+                  now() - $4::interval + ($5 * interval '1 hour')
+            WHERE NOT EXISTS (
+              SELECT 1 FROM core.order_state_transition
+               WHERE order_id = $1 AND from_state = $2::core.order_state
+                 AND to_state = $3::core.order_state)`,
+          [orderId, from, to, agoHours, offset],
+        );
+      }
+    }
+  };
+
+  await ladderSeller(
+    SELLER_LADDER_NEW, 'seed-ladder-new', 'Seed Ladder (new)', 'NEW', '3 days',
+    { product: '51', variant: '52', opening: '53',
+      rows: [['5eed0000-0000-4000-8000-000000000054',
+              '5eed0000-0000-4000-8000-000000000055',
+              '5eed0000-0000-4000-8000-000000000056', '60 hours']] },
+  );
+  await ladderSeller(
+    SELLER_LADDER_EST, 'seed-ladder-est', 'Seed Ladder (established)', 'ESTABLISHED', '3 days',
+    { product: '61', variant: '62', opening: '63',
+      rows: [['5eed0000-0000-4000-8000-000000000064',
+              '5eed0000-0000-4000-8000-000000000065',
+              '5eed0000-0000-4000-8000-000000000066', '60 hours'],
+             ['5eed0000-0000-4000-8000-000000000067',
+              '5eed0000-0000-4000-8000-000000000068',
+              '5eed0000-0000-4000-8000-000000000069', '50 hours']] },
+  );
+  await ladderSeller(
+    SELLER_LADDER_DUE, 'seed-ladder-due', 'Seed Ladder (due)', 'NEW', '3 days',
+    { product: '71', variant: '72', opening: '73',
+      rows: [['5eed0000-0000-4000-8000-000000000074',
+              '5eed0000-0000-4000-8000-000000000075',
+              '5eed0000-0000-4000-8000-000000000076', '60 hours'],
+             ['5eed0000-0000-4000-8000-000000000077',
+              '5eed0000-0000-4000-8000-000000000078',
+              '5eed0000-0000-4000-8000-000000000079', '50 hours']] },
+  );
+
   await client.query('COMMIT');
 } catch (e) {
   await client.query('ROLLBACK');
@@ -690,6 +960,23 @@ Seeded (idempotent -- reruns change nothing):
              (confirmation window), PAYMENT_CONFIRMED (clock stopped),
              COMPLETED (terminal), and PAYMENT_SUBMITTED with the
              confirmation deadline ALREADY PAST (D-167's regression state).
+
+  ladder     thresholds 1 day / 2 completed orders -- TEST SCALE, and this
+             script refuses every NODE_ENV but development and test. The real
+             values are 60 days / 50 (ADU-VAL-01 S2) and a real market's row
+             comes from ops/runbooks/activate-market.md.
+             ${PHONE_LADDER} owns three stores, one per reachable level:
+               ${SELLER_LADDER_NEW}  NEW          1 completed order
+               ${SELLER_LADDER_EST}  ESTABLISHED  2, promoted 3 days ago
+               ${SELLER_LADDER_DUE}  NEW          2, promotes on the next
+                                                            level.recompute
+             [!] THIS DOES NOT MAKE A SELLER ABLE TO EARN A LEVEL. Nothing in
+             the product moves an order to COMPLETED (D-328), so the count the
+             ladder reads can only ever be zero for a seller who trades. The
+             level-dependent SCREENS are now testable; the JOURNEY is not.
+             [!] A promotion here does not stick: the recompute resets the
+             tenure clock on every level change, so the run after the one that
+             promotes demotes again (D-358).
 
 Console dev loop (three terminals):
   1. pnpm dev:api            # OTP codes print here (dev SMS adapter)

@@ -307,7 +307,19 @@ show('after', c);
  * for: a count here is a transcription of what the seed defines, and the two
  * must move together or the seed has drifted from its own description.
  */
-const EXPECTED = { markets: 1, accounts: 3, sellers: 2, devices: 0, timing: 1, orders: 5, stock_drift: 0, active_markets: 1, global_budget: 1 };
+/*
+ * sellers: FIVE since T26 Phase 2, and accounts FOUR. The three added stores
+ * are the trust-ladder trio -- one NEW, one ESTABLISHED, one standing at the
+ * threshold -- on a single fourth owner account, so the console dev loop can
+ * switch between levels without three sign-ins.
+ *
+ * orders: TEN. The five extra are the trio's COMPLETED rows, and they are the
+ * count that pins the fixture's meaning: fn_recompute_seller_level counts
+ * COMPLETED orders and nothing else, so a seed that quietly stopped producing
+ * them would leave every level-dependent screen rendering NEW and every
+ * ladder assertion passing against a world with no ladder in it.
+ */
+const EXPECTED = { markets: 1, accounts: 4, sellers: 5, devices: 0, timing: 1, orders: 10, stock_drift: 0, active_markets: 1, global_budget: 1 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)
