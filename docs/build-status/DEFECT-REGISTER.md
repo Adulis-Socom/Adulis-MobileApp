@@ -4508,3 +4508,70 @@ Action:    Newest `ADU-DB-01_*` at the TOP of `docs/`, compared numerically so `
            It also prints the revision it read (`ADU-DB-01 v1.19 -- the appendices agree...`), so a run against the wrong document is visible in the output rather than inferred from a green.
 Verification: `node ops/scripts/gates.mjs --only docs-ascii,transcription,appendix,surface-markers` -- 4 of 4 PASS, the appendix gate reporting v1.19.
 Ruling needed: none.
+
+### D-305 - worker:install needs nothing beyond the five-line contract, and that is the finding
+
+Severity:  INFORMATIONAL (a negative result, recorded because the order predicted a positive one)
+Phase:     T24 - Phase 2
+Source:    ops/scripts/install-worker-schema.mjs, run against Render as adulis_migrate with rolsuper=f
+Found by:  Running it, for the first time anywhere
+Effect:    **Exit 0. Six tables in schema `jobs`, granted to `adulis_jobs`.** No privilege failure, and no grant beyond the S4.4b.1 contract.
+           WORK ORDER T24 S3 said "Expect a privilege finding. Every other component has produced one, and this is the first time this installer has met a non-superuser." It did not produce one, and a negative result that was predicted is worth as much as a positive one -- **the next reader should not go looking for a grant that is not needed.**
+           WHY IT PASSES, which is not luck. The installer does three things and the contract already covers all three: graphile-worker's own `create schema if not exists jobs` needs CREATE on the DATABASE (contract line 2); creating tables inside schema `jobs`, which `0001` gave to `adulis_jobs`, needs CREATE on that schema, which arrives because `adulis_migrate` INHERITS `adulis_jobs` (line 4's `inherit`); and `ALTER ... OWNER TO adulis_jobs` needs SET ROLE membership in the new owner, which arrives from the same line's `set`. **Both halves of the GUC are load-bearing here too, for the same two reasons they are load-bearing in `0001`.**
+Verification: `DATABASE_URL_MIGRATE=... node ops/scripts/install-worker-schema.mjs` -> `worker schema installed: 6 tables in schema jobs, granted to adulis_jobs`. Afterwards: schema `jobs` owned by `adulis_jobs`; all five graphile tables, the `jobs` view and three sequences owned by `adulis_jobs`; 45 table privileges held by `adulis_jobs` in that schema.
+Ruling needed: none.
+
+### D-306 - jobs.worker_heartbeat is owned by whoever ran the migration, which D-49 forbids -- and locally that is the superuser
+
+Severity:  MINOR (works today by explicit grant; the rule it breaks exists because of D-50)
+Phase:     T24 - Phase 2
+Source:    db/migrations/0026_worker_grants_heartbeat_and_job_functions.sql:141, `CREATE TABLE jobs.worker_heartbeat`
+Found by:  Reading ownership after `worker:install` on Render and comparing it to the local instance
+Effect:    Schema `jobs` is owned by `adulis_jobs`. **`jobs.worker_heartbeat` is not.**
+             LOCAL   owner = `adulis_bootstrap`  -- THE SUPERUSER
+             RENDER  owner = `adulis_migrate`    -- the migrator, non-superuser
+           S4.4a's companion rule (D-49) is explicit: **"every table is owned by its schema's owner, not by whoever ran the migration."** `0026` creates this one without an `ALTER ... OWNER TO`, so it lands on the executing role in both environments, and the two environments disagree about who that is.
+           IT WORKS ANYWAY, and that is why nobody saw it: `0026:154` grants `SELECT, INSERT, UPDATE ON jobs.worker_heartbeat TO adulis_jobs` explicitly, and Render confirms all three are held. The heartbeat job writes fine. **A rule enforced by an explicit grant instead of by ownership is a rule that holds until somebody adds a statement the grant does not cover.**
+           THE LOCAL CASE IS THE ONE THAT MATTERS. D-49's original finding was `analytics.event` bootstrap-owned inside a schema authorized to `adulis_migrate`, and D-50 was a `SECURITY DEFINER` function owned by a superuser lending superuser privileges. This is the same first half. No definer function currently attaches to `worker_heartbeat`, so the second half has not happened -- **but the reason it has not is that nobody has written one yet, not that anything prevents it.**
+Response:  REGISTERED, NOT PATCHED
+Action:    Not fixed here for the reason ADU-DB-01 v1.19 S4.4b states plainly: **a merged migration is never edited.** The correction is one `ALTER TABLE jobs.worker_heartbeat OWNER TO adulis_jobs` in a new migration, and it belongs with whatever else `0051` carries rather than alone in this order's Phase 2.
+           And there is a check-shaped version worth more than the fix: **Appendix C has no check for D-49.** Check 10 asserts the definer class; nothing asserts that every table is owned by its schema's owner. That query is one line and would have found this in Tier 2.
+Verification: `SELECT relname, pg_get_userbyid(relowner) FROM pg_class ... WHERE nspname='jobs'` on both instances; `information_schema.table_privileges` confirms adulis_jobs holds SELECT/INSERT/UPDATE.
+Ruling needed: none -- it is a migration and a check.
+
+### D-307 - The API test suite cannot run against a managed provider: its teardown needs a superuser
+
+Severity:  MAJOR (blocks Phase 2's 21-job probe on the deployed instance, and every other suite with it)
+Phase:     T24 - Phase 2
+Source:    apps/api/test/e2-e6.jobs.spec.ts:149 and :189, and the same pair in c1-onboarding, c2-catalogue and c3-orders
+Found by:  Running the T22 all-jobs probe against Render as adulis_migrate
+Effect:    ```
+           error: permission denied to set parameter "session_replication_role"
+           ```
+           `SET session_replication_role = replica` suppresses constraint triggers so fixture rows can be deleted without regard to foreign-key order. **It is superuser-only.** Four spec files use it in `afterAll`, and on a managed provider none of them can tear down.
+           **THE SUITE IS THEREFORE NOT RE-RUNNABLE THERE, WHICH IS WORSE THAN NOT RUNNING.** The first attempt left its fixture markets behind; the second failed in `beforeAll` with `duplicate key value violates unique constraint "market_pkey"` -- a confusing error two layers from its cause.
+           **AND THE DELETES GENUINELY NEED IT.** Running the extracted teardown by hand as `adulis_migrate`: **4 of 35 DELETE statements succeeded** and both fixture markets survived. The parameter is not defensive tidiness; the deletion order alone does not satisfy the constraints.
+           IT IS THE SAME SHAPE AS EVERY OTHER FINDING IN THIS FAMILY. `docker-compose.yml` and `ci.yml` both make the migrator a superuser, so this has been invisible for twenty-three orders -- and ADU-DB-01 v1.19 S4.4b.4 says exactly why: **"the environment every gate runs in makes the failing checks unreachable."** This is that sentence reaching the test harness rather than the schema.
+Response:  REPORTED, NOT WORKED AROUND
+Action:    **The 21-job probe was NOT run on the deployed instance**, and this order's report says so rather than substituting a weaker check that would have looked equivalent. WORK ORDER T24's closing instruction is "Stop and report on any privilege failure. Do not work around one", and inventing a superuser-free teardown mid-order is a change to how every fixture in this repository is cleaned up.
+           THE SHAPE OF THE FIX, for whoever takes it: fixtures deleted in dependency order need no `session_replication_role`, and the four suites that use it are deleting cross-schema graphs where the order is genuinely hard. The cheaper alternative is a per-suite schema or a transaction-wrapped suite that rolls back -- both are real changes to the harness, not a patch.
+           SEPARATELY AND NOT A PRIVILEGE ISSUE: the probe also exceeded jest's 5 s default running twenty-one jobs over a transatlantic link. `--testTimeout` covers that and it is latency, not permissions -- recorded so the two are not confused when someone reads the first failure.
+Verification: two runs against Render; `error: permission denied to set parameter "session_replication_role"`; 4/35 deletes succeeding without it; local `adulis_bootstrap` runs the same suite green.
+Ruling needed: YES -- how do fixtures get cleaned up on a host that will not grant superuser? It decides whether the API suite can ever run against a real provider, which is the only place these findings have ever surfaced.
+
+### D-308 - A job was enqueued, taken and PROVEN to have acted, on the deployed instance
+
+Severity:  INFORMATIONAL (the positive result Phase 2 asked for)
+Phase:     T24 - Phase 2
+Source:    A real graphile-worker process against Render, connected as adulis_jobs
+Found by:  WORK ORDER T24 S3 -- "confirm it did the thing rather than that it logged"
+Effect:    **The effect, not the log.** A task was enqueued through `makeWorkerUtils` **as `adulis_jobs`**, a real `run()` worker took it, and its statement wrote a row to `jobs.worker_heartbeat` -- the same table the real heartbeat job writes and `/healthz` reads.
+             before: 0 heartbeat rows
+             enqueued: 1 job waiting
+             Completed task 3 (prove_heartbeat, 102.00ms) with success
+             after: 1 heartbeat row, beat_at = 2026-09-04T22:57:42.862Z
+             queue drained: 0 jobs left
+           **Three separate things are proven and only the first is usually checked**: the enqueue succeeded as the runtime role; the worker CONNECTED and took the job as that role; and the job's own statement committed a row. The queue draining to zero is the fourth -- a job that fails retries twenty-five times and still logs "connected".
+           A FIRST ATTEMPT FAILED AND THE FAILURE IS WORTH KEEPING: `null value in column "worker_id"`. That is a NOT NULL violation, **not a permission denial** -- which is itself evidence that `adulis_jobs` could reach and write the table. The probe's own statement was wrong; the grant was not.
+Verification: `JOBS_URL=... MIGRATE_URL=... node provejob.mjs` -> `PASS  a job was enqueued as adulis_jobs, taken by a real worker, and its EFFECT is in the table.`
+Ruling needed: none.
