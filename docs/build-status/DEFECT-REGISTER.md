@@ -4446,3 +4446,65 @@ Action:    WHICH HALF OF THE GUC EACH FAILURE NEEDS -- four runs, same instance,
 Verification: four full runs against Render (adulis_probe_3), reset to virgin between each. Final state left migrated and verified: 50 rows in pgmigrations, 117 tables, `db:check` 16 PASS / 0 PENDING / 0 FAIL, schema owners confirmed by query. No credential in the repository, any commit, this register or the report.
            NOT TESTED: `pnpm worker:install`, the other half of render.yaml's preDeployCommand. D-297 flagged it as being on the same wall and it remains unrun.
 Ruling needed: D-297's rulings (a) and (b) are ANSWERED by measurement and can be closed: the principal is adulis_migrate, the membership comes from the GUC provided it creates the roles, and 0023 needs no reordering. What replaces them is smaller and concrete -- where does the five-step provisioning contract above live, given deploy.md and staging.md currently describe an order that would break it? D-297(c), the disqualification rule, and D-297(d), a non-superuser CI job, both stand unchanged.
+
+### D-301 - ADU-DB-01 v1.19 contradicts itself on the GUC, in the revision that withdraws the ruling
+
+Severity:  MINOR (documentation, in the section whose whole subject is a claim that was wrong)
+Phase:     T24 - Phase 1, found while transcribing
+Source:    ADU-DB-01 v1.19 S0.1 item D and S4.4b.1's table, against S4.4b's opening
+Found by:  Transcribing the supplied document verbatim rather than paraphrasing it
+Effect:    S0.1 item D says "v1.18's `'set'`-alone ruling is WITHDRAWN. Both halves are required and both bite inside `0001`", and S4.4b.1's four-run table shows `set` alone failing. **S4.4b's opening still prints the v1.18 ruling as live**: "`ALTER ROLE adulis_migrate SET createrole_self_grant = 'set'` is a PROVISIONING step", followed by the whole v1.18 block arguing `'set'` NOT `'set, inherit'`.
+           So the section that carries the corrected contract also carries the superseded one, four paragraphs apart, with no marker saying which governs. **A reader who opens S4.4b for the provisioning value finds `'set'` first.**
+           IT IS THE DOCUMENT'S OWN RECURRING SHAPE, in the revision written about exactly that. v1.11 announced an Appendix A withdrawal and left the block. v1.12 declared Appendix B reconciled and named none of the tables. v1.16's S0 carried a count for three revisions. This is the fourth instance of "a correction declared in the change table and not performed in the body", and v1.19's own S0.4 names the cause: **surgical editing preserves what it does not read.**
+Response:  TRANSCRIBED VERBATIM, NOT SILENTLY FIXED
+Action:    The installed `docs/ADU-DB-01_..._v1_19_ASCII.md` reproduces S4.4b exactly as supplied, contradiction included. A first draft of the transcription "helpfully" rewrote the block to say `'set, inherit'` -- which would have made the installed document disagree with the one the founder signed, in a section about privilege, in a way no gate could see. **Reverted before commit.**
+           THE THREE RUNBOOKS CARRY THE CORRECT VALUE, and that is where it matters: `deploy.md`, `staging.md` and `run-probe.md` each reproduce the five-line contract verbatim with `'set, inherit'`, which is what a deploy actually reads. The document's internal contradiction does not reach an operator.
+Verification: `grep -c "createrole_self_grant = 'set'"` in the installed document returns the v1.18 line at S4.4b; S0.1 D and S4.4b.1 both say both halves are required. All three runbooks carry `'set, inherit'`.
+Ruling needed: YES, and it is one line -- delete or mark the v1.18 block in S4.4b at the next revision. Recorded rather than applied because **editing a governing document to remove a contradiction is a document amendment, not a transcription**, and this order's Phase 1 is an installation.
+
+### D-302 - The spec router cites four superseded document versions
+
+Severity:  MINOR (D-02's class, and the skill is the first thing every order loads)
+Phase:     T24 - Phase 1
+Source:    `.claude/skills/adulis-spec-router/SKILL.md`, the "Governing sources" list
+Found by:  Loading it first, as WORK ORDER T24 S1 directs
+Effect:    The router's list is the first thing an agent reads, and four of its eleven entries name revisions that have been superseded for several orders:
+             Database        cites `ADU-DB-01_..._v1_6.md`     -- v1.19 governs from this order
+             API             cites `ADU-API-01_..._v1_3.md`    -- v1.11 governs
+             Auth            cites `ADU-AUTH-01_..._v2_0.md`   -- v2.8 governs
+             Build/operations cites `ADU-CON-02_..._v3_0.md`   -- v3.2 governs
+           Its own "Shared source protocol" says **"Do not substitute an older revision when a newer named revision is required"** -- and the list it supplies is the older revision, by name, four times. An agent following the skill faithfully reads the wrong file.
+           D-02 covers the outcome (the installed document wins) but not the cause: **nothing compares the skill's list to `docs/`.** That is the same shape as the GOVERNED list in `verify-docs-ascii.mjs` before T22 gave it a directory comparator.
+Response:  REGISTERED, NOT PATCHED IN THIS ORDER
+Action:    Not corrected here because the skills are not loaded in this session at all (D-303) and editing an unloaded skill on the strength of a stale citation is two changes with one review. The fix is small and has a known shape: the same family/newest-revision comparison `verify-docs-ascii.mjs` already performs, run over the skill's list.
+Ruling needed: none. It is work.
+
+### D-303 - The project's own skills are not loaded, because the session started one directory too high
+
+Severity:  MINOR (operational; it is the habit `CLAUDE.md` calls the most consequential in the repository)
+Phase:     T24 - Phase 1
+Source:    Session working directory `C:/Users/naods/Documents/Work`, one level above the clone
+Found by:  `Skill(adulis-spec-router)` returning "Unknown skill" while `.claude/skills/adulis-spec-router/SKILL.md` exists
+Effect:    Seventeen project skills live in `.claude/skills/` and NONE of them is registered. WORK ORDER T24 S1 names four by name -- `adulis-spec-router`, `adulis-migration-engineer`, `security-guidance`, `claude-md-management` -- and none can be invoked.
+           The root `CLAUDE.md` predicts this exactly: **"Started at the repository root you get this file and nothing else"**, and **"this is the single most consequential operational habit in the repository, it costs nothing, and it is invisible when it is skipped."** It was invisible for twenty-three orders.
+           IT IS WORSE THAN THE SKILLS BEING ABSENT, because the order's instruction to load them reads as satisfied by an agent that reads the files instead -- which is what happened here, deliberately and stated -- but would read as satisfied by an agent that skipped them silently.
+Response:  WORKED AROUND EXPLICITLY, AND SAID SO
+Action:    The skills were READ from `.claude/skills/` and followed as text. That is not the same as invoking them: a skill's `allowed-tools`/`disallowed-tools` frontmatter is not enforced when it is read rather than loaded, so `adulis-spec-router`'s `disallowed-tools: Edit Write Bash` did not bind this session.
+           The remedy is one line and belongs to the operator, not to a commit: **start the session in `adulis-platform/`, or in `apps/api` or `apps/console` for a workstream.** `/context` lists what actually loaded.
+Verification: `ls .claude/skills/` lists seventeen; `Skill(adulis-spec-router)` returns "Unknown skill".
+Ruling needed: none.
+
+### D-304 - The appendix gate pinned the document filename, so installing v1.19 turned it red
+
+Severity:  MINOR (fixed here) -- the gate, not the document
+Phase:     T24 - Phase 1
+Source:    ops/scripts/verify-appendix.mjs, `const DOC = path.join(root, 'docs', 'ADU-DB-01_..._v1_16_ASCII.md')`
+Found by:  Running the gate immediately after installing v1.19 and superseding v1.16
+Effect:    The gate read a LITERAL filename, so the moment the document it checks was superseded it failed with "docs/ADU-DB-01_..._v1_16_ASCII.md is missing. This gate reads the installed document."
+           **A gate reporting a defect in the document set when the only thing wrong was its own hardcoded filename.** It would have said the same on every future revision, and the tempting fix each time is to bump the literal -- which schedules the identical finding for v1.20.
+           SAME SHAPE, THIRD TIME. `verify-docs-ascii.mjs`'s GOVERNED list held two stale entries until T22 gave it a directory comparator. ADU-DB-01's own S0.4 names the cause in general terms: **a fact written in two places drifts at the next revision.** This is that fact written in `docs/` and in a gate.
+Response:  FIXED - the gate resolves the installed revision instead of naming it
+Action:    Newest `ADU-DB-01_*` at the TOP of `docs/`, compared numerically so `v1_10` beats `v1_9`. `docs/superseded/` is not searched, which is precisely what makes "newest on disk" mean "installed" -- the same rule `verify-docs-ascii.mjs` rule 2 already uses, now applied to the one gate that reads the document's body.
+           It also prints the revision it read (`ADU-DB-01 v1.19 -- the appendices agree...`), so a run against the wrong document is visible in the output rather than inferred from a green.
+Verification: `node ops/scripts/gates.mjs --only docs-ascii,transcription,appendix,surface-markers` -- 4 of 4 PASS, the appendix gate reporting v1.19.
+Ruling needed: none.

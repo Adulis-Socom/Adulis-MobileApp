@@ -58,7 +58,52 @@ psql "$PROVIDER_PROBE_URL" -v ON_ERROR_STOP=1 -f ops/provider-verify/probe.sql
 psql "$PROVIDER_ADMIN_URL" -c "DROP DATABASE adulis_probe;"
 ```
 
-Needs a superuser, or a role with `CREATEROLE` and `CREATE` on the database.
+**PRECONDITION -- CORRECTED (ADU-DB-01 v1.19 S4.4b.1).** The line that stood here said
+"a superuser, or a role with `CREATEROLE` and `CREATE` on the database", and **that is not
+sufficient on PostgreSQL 16+.** A managed role with exactly those attributes aborts this
+probe at capability 3.
+
+**The real requirement is that the role can `SET ROLE` to every `AUTHORIZATION` target.**
+PostgreSQL 16 split role membership into ADMIN, INHERIT and SET; `createrole_self_grant`
+defaults to empty, so a `CREATEROLE` role that creates a role gets `admin_option=t` but
+**`set_option=f`**. Provision it:
+
+```sql
+ALTER ROLE <the probing role> SET createrole_self_grant = 'set, inherit';
+```
+
+**`inherit` is this PROBE's requirement as well as the schema's, and the two reasons are
+different -- keep them apart.** Capability 4c does `RESET ROLE` and then verifies the
+access-log row **as the outer role**, which needs INHERIT and is an artefact of how the
+instrument checks itself. A *deploy* needs INHERIT for a different and real reason:
+creating the Appendix A enum types inside a schema owned by another role. Both are
+measured; neither is inferred.
+
+Beyond that, the role still needs `CREATEROLE` and `CREATE` on the database.
+
+### The five-line provisioning contract, verbatim (ADU-DB-01 v1.19 S4.4b.1)
+
+Carried here in full rather than referenced. It is five lines; a pointer to it is a second
+place to go stale, and this document has already been stale about `db:check`.
+
+```text
+1  owner creates adulis_migrate with LOGIN and CREATEROLE
+2  GRANT CREATE, CONNECT ON DATABASE <db> TO adulis_migrate
+3  GRANT CREATE ON SCHEMA public TO adulis_migrate
+4  ALTER ROLE adulis_migrate SET createrole_self_grant = 'set, inherit'
+5  do NOT create the other five roles -- 0001 must
+```
+
+> [!] **Line 5 is a prohibition. Do NOT pre-create the five roles; `0001` must.**
+> `createrole_self_grant` grants membership only in roles the role **itself creates**, and
+> `0001:60-62` guards creation with `IF NOT EXISTS`. Pre-provision them and the migrator
+> holds zero membership -- **the GUC stays set, stays visible in `SHOW`, and grants
+> nothing.**
+
+**This probe is not the deploy and does not use that contract.** It provisions its own
+`probe_` roles and needs only the corrected precondition above. The contract is reproduced
+because a reader who has just corrected the precondition is one step from provisioning a
+real environment, and line 5 is the step they will otherwise get wrong.
 **If the provider will not grant that much on a trial instance, that is itself a
 finding** — migration 1 creates roles and schemas, so an account that cannot do
 it here cannot run migration 1 there.
@@ -103,8 +148,8 @@ each with the tier that unblocks it.
 | Step | §18 requirement | Status at Tier 0 |
 |---|---|---|
 | **1** | The four `CREATE EXTENSION`s succeed | **Done.** Capability 1 below, and `pnpm db:verify-extensions` |
-| **2** | Migrations 1, 4 and 10 run — six roles, both isolated schemas owned by their roles, `REVOKE` holds, `SECURITY DEFINER` callable, RLS enforces | **Shape proven, migrations not run.** Capabilities 2–5 prove the instance *supports* every one of these. The migrations themselves are **Tier 1–2** and do not exist yet |
-| **3** | `pnpm db:check` = 15 passes | **Blocked — SPEC_VERSION_GAP.** ADU-DB-01 v1.6 Appendix C defines **14** checks, and its check 14 expects **105** tables where ADU-CON-02 v3.0 requires **107**. Check 15 (`grep -c "MATERIALIZED VIEW"` = 0, R16) exists only in the pending **v1.7**. `db/checks/` is empty and `pnpm db:check` prints `0 checks present (pre-v1.7)` |
+| **2** | Migrations 1, 4 and 10 run -- six roles, both isolated schemas owned by their roles, `REVOKE` holds, `SECURITY DEFINER` callable, RLS enforces | **DONE (T23).** Not three migrations but **all fifty**, executed as `adulis_migrate` with `rolsuper=f`. Ten schemas with the correct owners, 117 tables. See the provisioning contract above |
+| **3** | `pnpm db:check` passes | **DONE (T23).** **16 PASS, 0 PENDING, 0 FAIL** against the migrated Render instance. The blocker recorded here was stale on two counts: `db/checks/` is populated and `pnpm db:check` runs **sixteen** checks, not the `0 checks present (pre-v1.7)` this row claimed |
 | **4** | A manual backup restores to a second instance where check 14 = 107 | **Blocked** by steps 2 and 3. This is also the first run of the §20.1 restore drill — "a backup that has never been restored is a hope" |
 
 **Do not read a green step 1 as provider verification complete.** Steps 2–4 are
