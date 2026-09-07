@@ -545,7 +545,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
     await app?.close();
     await admin.query(`SET session_replication_role = replica`);
     for (const q of [
-      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${A_OWNER}','${BUYER_A}','${COURIER}')`,
+      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${A_OWNER}','${BUYER_A}','${COURIER}','${A_STAFF}')`,
       `DELETE FROM core.cart_line WHERE cart_id IN ('${B_CART}','${A_CART}')`,
       `DELETE FROM core.cart WHERE id IN ('${B_CART}','${A_CART}')`,
       `DELETE FROM core.seller_company_detail WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
@@ -574,14 +574,17 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `DELETE FROM core.product_image WHERE product_id='${B_PRODUCT}'`,
       `DELETE FROM core.product_variant WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.product WHERE seller_id='${SELLER_B}'`,
-      `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
+      // A_SOLO's row is the TRIGGER's, not this fixture's INSERT -- and
+      // deleting what you created means what your INSERT caused. The orphan
+      // sweep gate caught it.
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${A_SOLO}')`,
       `DELETE FROM core.seller_level_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.seller_level_state WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
       `DELETE FROM core.person WHERE id IN ('${B_PERSON}','${A_PERSON}')`,
       `DELETE FROM core.step_up_challenge WHERE account_id='${A_OWNER}'`,
       `DELETE FROM core.otp_challenge WHERE id='${OTP}'`,
-      `DELETE FROM core.session WHERE account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}')`,
+      `DELETE FROM core.session WHERE account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${A_STAFF}')`,
       `DELETE FROM core.device WHERE id IN ('${DEVICE_A}','${DEVICE_B}')`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.timing_config WHERE market_id='${M}'`,
