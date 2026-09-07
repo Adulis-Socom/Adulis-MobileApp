@@ -4575,3 +4575,26 @@ Effect:    **The effect, not the log.** A task was enqueued through `makeWorkerU
            A FIRST ATTEMPT FAILED AND THE FAILURE IS WORTH KEEPING: `null value in column "worker_id"`. That is a NOT NULL violation, **not a permission denial** -- which is itself evidence that `adulis_jobs` could reach and write the table. The probe's own statement was wrong; the grant was not.
 Verification: `JOBS_URL=... MIGRATE_URL=... node provejob.mjs` -> `PASS  a job was enqueued as adulis_jobs, taken by a real worker, and its EFFECT is in the table.`
 Ruling needed: none.
+
+### D-309 - The founder operator grant is seeded in non-production and executed on a managed provider
+
+Severity:  MAJOR (fixed here) -- D-294's chain, closed at both ends
+Phase:     T24 - Phase 3
+Source:    ops/scripts/seed.mjs had no operator grant; ops/runbooks/grant-founder-operator.md had never been executed anywhere
+Found by:  D-294 in T23, which found core.operator_grant empty in every environment that has ever existed, including this laptop's
+Effect:    THE CHAIN, AND IT IS SILENT AT EVERY LINK: no operator -> `verification.read_attestation` finds no grant and raises -> identity review cannot happen -> `IDENTITY_VERIFIED` is never satisfied -> one of the ten publication-readiness items never goes green -> **no seller can publish, ever.** Nothing errors, nothing logs, the other items pass, and the system behaves exactly as designed.
+Response:  FIXED, WITH TWO DIFFERENT ANSWERS FOR TWO DIFFERENT PLACES
+Action:    **NON-PRODUCTION SEEDS IT.** `seed.mjs` grants `ADMIN` to the already-seeded account -- which invents nothing, because that account is created two hundred lines above and is the one the console e2e signs in as. **A seed that cannot publish a seller is a seed that cannot test the product.**
+           `ADMIN` here and nowhere else: the runbook is emphatic that a real grant takes the NARROWEST role that does the job, because the access log records every decision against whatever role was held. A development fixture has no access log anyone reads and needs claim review and moderation too, so one row is honest where five would be noise.
+           **PRODUCTION STAYS HAND-RUN.** E4's ruling is untouched and is right: no account id exists until somebody signs up through the ordinary phone-OTP path, so a production grant would have to invent an account. `grant-founder-operator.md` still governs it.
+Verification: **The seed.** `NODE_ENV=test pnpm db:reset` -> PASS, and `core.operator_grant` on this laptop now holds one live `ADMIN` on `+251900000001` with `granted_by_account_id` NULL, which the schema permits for exactly this case: the first grant has nobody above it. **This machine had zero operators for twenty-three orders.**
+           **The runbook, on Render, as `adulis_migrate` with `rolsuper=f`.** Steps 1, 3 and 4 executed verbatim; the statement that worked is the runbook's own, unmodified:
+             INSERT INTO core.operator_grant (id, account_id, role, granted_by_account_id, reason)
+             VALUES (gen_random_uuid(), '<account id>', 'IDENTITY_REVIEWER', NULL, '...');
+           **AND THE GRANT WAS PROVEN TO DO SOMETHING**, which is the part an INSERT does not establish. Calling `verification.read_attestation` as `adulis_app`:
+             as the granted operator      -> returns; no raise
+             as an account with no grant  -> ERROR: no grant permits reading an identity attestation
+             adulis_app SELECTing the log -> ERROR: permission denied for table access_log
+           The first two are D-294's chain, closed and shown to fail closed. **The third is Appendix C check 10's invariant holding on a managed provider** -- `adulis_app` has no table privilege in `verification`, so the boundary is reachable only through the logging function, which until now had only ever been asserted under a superuser.
+           TWO SUBSTITUTIONS, STATED RATHER THAN GLOSSED. The account was inserted by hand because **no API is deployed to sign anyone in** -- that is Phase 4, and `grant-founder-operator.md` step 1 explicitly says to stop when the account does not exist rather than create one. So this run tests the runbook's STATEMENTS and the privilege model beneath them; it does not test step 1, and it is not a founder who signed in. And the market row needed `sms_primary_provider` before it would accept `otp_enabled = true` -- `market_otp_requires_route` refused it, which is the schema declining to describe a market that can issue an OTP it has no way to send.
+Ruling needed: none.
