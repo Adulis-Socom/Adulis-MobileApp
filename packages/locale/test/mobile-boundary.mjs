@@ -2,7 +2,7 @@
 /**
  * The mobile catalogue's isolation, checked from source (WO-001A, founder decision D2).
  *
- * 1. src/mobile.ts reaches ONLY the *.common.ts parts - never en.ts, am.ts or a console
+ * 1. src/mobile.ts reaches ONLY the shared parts (en.ts, am.ts) - never catalogue.ts or a console
  *    part. The boundary is the import graph, not bundler tree-shaking.
  * 2. No shared string uses software-subscription vocabulary. Marketplace words (price,
  *    payment, order, store, level, business) are deliberately absent from the list: they
@@ -15,7 +15,7 @@ import ts from 'typescript';
 import { entries, valueOf } from '../mt-keys-lib.mjs';
 
 const src = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
-const ALLOWED = new Set(['mobile.ts', 'en.common.ts', 'am.common.ts']);
+const ALLOWED = new Set(['mobile.ts', 'en.ts', 'am.ts']);
 const SUBSCRIPTION_VOCABULARY = /\b(subscri\w*|plans?|tiers?|billing|upgrades?)\b/i;
 
 const failures = [];
@@ -35,10 +35,10 @@ while (queue.length > 0) {
   }
 }
 for (const file of reached) {
-  if (!ALLOWED.has(file)) failures.push(`mobile.ts reaches ${file}, which is not a common part`);
+  if (!ALLOWED.has(file)) failures.push(`mobile.ts reaches ${file}, which is not a shared part`);
 }
 
-const common = readFileSync(path.join(src, 'en.common.ts'), 'utf8');
+const common = readFileSync(path.join(src, 'en.ts'), 'utf8');
 for (const { key } of entries(common)) {
   const value = valueOf(common, key) ?? '';
   if (SUBSCRIPTION_VOCABULARY.test(value)) {

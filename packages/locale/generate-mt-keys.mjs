@@ -18,7 +18,7 @@
  * as the class grows to -- terms acceptance, the seller agreement, the payout
  * authorisation are all coming.
  *
- * Generated from the en catalogue's key set (all parts en.ts composes) so the list cannot drift from the
+ * Generated from the en catalogue's key set (all parts catalogue.ts composes) so the list cannot drift from the
  * catalogue: run `node packages/locale/generate-mt-keys.mjs` after adding
  * keys. `pnpm verify:mt-keys` fails if it is stale.
  */

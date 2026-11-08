@@ -21,13 +21,16 @@ const KEY_RE = /^ {2}'([^']+)':/gm;
 
 /**
  * The source text of one language's whole catalogue. It is split by audience (WO-001A):
- * <lang>.ts only composes its parts, so the parts are read from <lang>.ts's own imports
- * (in import order) - a part added there can never be missed here.
+ * <lang>.ts holds the shared strings, <lang>.console.ts the console's, and catalogue.ts
+ * composes them - so the parts are read from catalogue.ts's own imports, in import order,
+ * and a part added there can never be missed here.
  */
 export function readCatalogue(localeDir, lang) {
   const read = (file) => readFileSync(path.join(localeDir, 'src', file), 'utf8');
-  const parts = [...read(`${lang}.ts`).matchAll(new RegExp(`from '\\./(${lang}\\.\\w+)'`, 'g'))];
-  if (parts.length === 0) throw new Error(`src/${lang}.ts imports no ${lang}.*.ts catalogue parts`);
+  const parts = [
+    ...read('catalogue.ts').matchAll(new RegExp(`from '\\./(${lang}(?:\\.\\w+)?)'`, 'g')),
+  ];
+  if (parts.length === 0) throw new Error(`src/catalogue.ts composes no ${lang} parts`);
   return parts.map((m) => read(`${m[1]}.ts`)).join('\n');
 }
 

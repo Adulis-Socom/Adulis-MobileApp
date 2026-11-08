@@ -1,2 +1,1 @@
-export { en, type MessageKey, type Catalogue } from './en';
-export { am } from './am';
+export { am, en, type Catalogue, type MessageKey } from './catalogue';

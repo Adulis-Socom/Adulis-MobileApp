@@ -1,6 +1,6 @@
-import type { CommonMessageKey } from '../src/en.common';
+import type { CommonMessageKey } from '../src/en';
 import type { ConsoleMessageKey } from '../src/en.console';
-import type { MessageKey } from '../src/en';
+import type { MessageKey } from '../src/catalogue';
 import { am, en, type MobileMessageKey } from '../src/mobile';
 
 /**

@@ -1,6 +1,5 @@
-import type { Catalogue, MessageKey } from '../src/en';
-import { en } from '../src/en';
-import { am } from '../src/am';
+import type { Catalogue, MessageKey } from '../src/catalogue';
+import { am, en } from '../src/catalogue';
 
 /**
  * TYPE-LEVEL TEST — ADU-CON-02 v3.0 section 9.
