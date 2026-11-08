@@ -52,6 +52,14 @@ identify the governing ADU document and read `.claude/reference/DOCUMENT_AUTHORI
   Repository structure is **ADU-REPO-01**.
 - **Read `docs/amendments/README.md` before `docs/`.** It states which version of each
   document governs and which amendments are live.
+- **The November 8 2026 reconciled system-design pack is the current system-design
+  authority** (founder decision, WO-001B): `docs/system-designs/2026-11-08/`, 34 complete
+  designs, indexed with versions in `docs/system-designs/README.md`. It outranks the older
+  repository specifications for design intent. The precedence and the recorded conflicts
+  (payment model, discovery scope, background engine, Courier audience and others) are in
+  `.claude/reference/DOCUMENT_AUTHORITY.md`. Where the pack disagrees with what is built,
+  the status is `SPEC_CONFLICT`: report it, and never change the implementation to match
+  either side without a work order.
 - **Never invent an answer to an open product, database, API, legal, security or
   infrastructure question.** Report the gap; do not fill it.
 - Where a later binding architecture record depends on an unreissued lower-level spec,
@@ -153,6 +161,8 @@ is how that gets caught.
   `packages/api-client/src/schema.d.ts`, any generated client.
 - **Do not introduce** Redis, brokers, Elasticsearch, microservices, BFFs, Kubernetes,
   JWT sessions, or an ORM write path without a reissued binding architecture decision.
+  The November pack's BullMQ-on-Valkey worker design is recorded conflict K-3, awaiting a
+  founder ruling. Until that ruling it authorises nothing.
 
 ## Collision surfaces (§6)
 

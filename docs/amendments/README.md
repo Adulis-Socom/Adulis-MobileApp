@@ -1,6 +1,18 @@
 # What governs, and where each part of it lives
 
-## Current versions — all installed
+## The current system-design authority: the November 8 2026 pack
+
+**The 34 reconciled system designs installed at
+[`docs/system-designs/2026-11-08/`](../system-designs/2026-11-08/) are the current
+system-design authority** (founder decision, WO-001B). The index with exact versions is
+[`docs/system-designs/README.md`](../system-designs/README.md). They outrank the
+repository specifications in the table below for design intent. The table still records
+which revision of each repository specification is installed and which gates parse it.
+Those documents describe what is built, and they stay where they are. The precedence
+and the recorded conflicts between the two (K-1 to K-7) are in
+[`.claude/reference/DOCUMENT_AUTHORITY.md`](../../.claude/reference/DOCUMENT_AUTHORITY.md).
+
+## Repository specifications: current versions, all installed
 
 | Document | Governs at | Where |
 |---|---|---|

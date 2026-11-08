@@ -5,9 +5,18 @@ Seller Companion and Courier foundation shells and the client infrastructure und
 product feature is built. What exists, why, and what is still open:
 `docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md` and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
 
-**Governing documents:** ADU-ARCH-01 v2.0 S2, S3 - ADU-API-01 v1.11 S4.1, S5.1, S12 -
-ADU-AUTH-01 v2.8 S5.2, S19 (v2.5 for the permission catalogue) - ADU-REPO-01 v1.3 S10.
-UX and product behaviour: the prototype (below).
+**System design (current authority, founder decision WO-001B):** ADU-MOB-02 v4.3 (its
+S232 is the post-October-13 reconciliation and wins inside the document) - ADU-AUTH-02
+v3.3 - ADU-ARCH-PLATFORM-01 v3.3 - ADULIS-KB v3.3, all in `docs/system-designs/2026-11-08/`
+(index: `docs/system-designs/README.md`). They outrank the documents in the next line for
+design intent. Precedence and conflicts: `.claude/reference/DOCUMENT_AUTHORITY.md`.
+
+**Implementation contract (what is built and gate-checked):** ADU-ARCH-01 v2.0 S2, S3 -
+ADU-API-01 v1.11 S4.1, S5.1, S12 - ADU-AUTH-01 v2.8 S5.2, S19 (v2.5 for the permission
+catalogue) - ADU-REPO-01 v1.3 S10. Where these disagree with the system design, the status
+is `SPEC_CONFLICT`: report it, and do not build either side.
+
+UX and presentation only: the prototype (below).
 
 > **This file CITES the specifications; it does not replace them** (ADU-REPO-01 v1.2 S6).
 > Where a rule is inlined below for practicality, **the citation beside it governs, and the
@@ -31,8 +40,10 @@ relationships (completion report, gap CG-1), so a release build offers Buyer onl
 development build unlocks all three shells for diagnostics (`src/modes/modes.ts`).
 
 The prototype's "the production Account model remains unresolved" (its Canonical Rules
-17.1-17.2) is about the Account model, not the shell. The founder decision above governs the
-shell, and it authorises no client-side creation of a Seller or Courier relationship.
+17.1-17.2) is stale. November reconciliation R-23 resolves it: one ordinary Account that can
+be a Buyer, own Sellers, hold Seller team roles and hold one Courier profile, with Operator
+a separate identity that is never a mobile mode. Nothing here authorises client-side
+creation of a Seller or Courier relationship.
 
 Credential: an opaque bearer token in native secure storage (Expo SecureStore) - never
 AsyncStorage, never a cookie, never decoded as a JWT. `audience = MOBILE`.
@@ -41,7 +52,8 @@ AsyncStorage, never a cookie, never decoded as a JWT. `audience = MOBILE`.
 
 > **No price, no tier name and no billing link may appear anywhere in the bundle.**
 >
-> ADU-PRD-01 S3 and ADU-API-01 S4.1: this is what keeps the apps outside Apple's
+> ADU-PRD-01 S3 and ADU-API-01 S4.1, reaffirmed by the November pack (R-19: Mobile has no
+> software-subscription purchase or billing surface): this is what keeps the apps outside Apple's
 > In-App Purchase and Google Play Billing requirements, both of which would take
 > 15-30% in card rails incompatible with manual ETB bank transfer.
 >
@@ -60,7 +72,10 @@ package root and its console parts carry the console's subscription, plan and bi
 the mobile export is built from the shared parts alone. `scripts/check-locale-imports.mjs`
 (inside `pnpm test`) fails on any other `@adulis/locale` specifier, deep paths included.
 A string the app needs that is not in the shared catalogue is a `packages/locale` change in
-its own PR, with both languages. After adding strings, scan the export
+its own PR, with both languages. **Amharic stays disabled for users until a human
+translation review** (November R-19): the current Amharic strings are machine-translated,
+and the foundation screen's language choice is a development diagnostic that must not reach
+a user release. After adding strings, scan the export
 (`pnpm --filter @adulis/mobile build`, then search `dist/`) for subscription copy.
 
 ## The rest, in brief
@@ -72,8 +87,10 @@ its own PR, with both languages. After adding strings, scan the export
   not say so yet.** Target: one account, one MOBILE session, Courier as a relationship -
   never the console cookie, a second account or a second login. ADU-API-01 v1.11 S4 still
   puts the Courier surface on `audience = CONSOLE`, and the C endpoints (S12.17) publish no
-  response schemas (gap CG-2). That is an approved future contract correction. Until it
-  lands, the Courier shell calls nothing and no type is hand-written to fill the gap.
+  response schemas (gap CG-2). That is an approved future contract correction, and
+  November R-20 fixes its direction: the contract is corrected to the design, never the
+  reverse (conflict K-4). Until it lands, the Courier shell calls nothing and no type is
+  hand-written to fill the gap.
 - **No step-up action is reachable from MOBILE**, on any screen, by any route.
 - **Version skew is real and binding.** Ethiopian buyers on low-end Android with metered
   data frequently do not auto-update, so several versions are live for months and the
@@ -128,9 +145,11 @@ read into or edit another `apps/*`; never edit `contracts/openapi.json`,
 `packages/api-client/src/schema.d.ts` or `db/migrations/**`; `packages/*` changes go in
 their own PR. Starting here is still valid for work that needs no workspace tooling.
 
-The prototype is the UX authority (screens, journeys, terminology), never the
-architecture: never port its React web components or its `src/demo-data`. Where it
-disagrees with these documents, record the conflict for the founder.
+The prototype is the UX and presentation reference (screens, journeys), below the November
+system designs and never the architecture. Never port its React web components or its
+`src/demo-data`, and never restore a prototype rule the pack has replaced. Buyer-facing
+terms are Product and Scene (R-01). Where the prototype disagrees with the designs or with
+these documents, record the conflict for the founder.
 
 ## Commands
 

@@ -23,13 +23,23 @@ Before acting:
 
 
 ## Governing sources
-- `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — primary.
-- `ADU-API-01_API_Contract_v1_3.md` — mobile-reachable endpoints.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — surface permissions.
+- **Current system design (founder decision WO-001B):** `ADU-MOB-02_v4.3.md` (S232 is its reconciliation) and `ADU-AUTH-02_v3.3.md`, in `docs/system-designs/2026-11-08/Sources/Markdown/`. They outrank the repository documents below for design intent (`DOCUMENT_AUTHORITY.md`).
+- `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — primary repository document.
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — mobile-reachable endpoints (the S12 `M` markers).
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` — authentication; v2.5 for the surface permissions.
 - `ADU-00_One_Page_Business_Model_v9_1.md` — one-app and core-commerce doctrine.
 - Founder decision (WO-001, recorded in `apps/mobile/CLAUDE.md`): one app with Buyer, Seller Companion and Courier as sibling modes. It widens the app, not the Companion: this skill's scope and invariants are unchanged.
 
 ## Phase-1 scope
+
+> **`SPEC_CONFLICT` K-1 — do not build the payment items in item 2.** The payment evidence
+> viewer, `Confirm Payment Received` and `Payment Not Received` come from the repository's
+> manual-transfer model. The November pack makes Chapa gateway checkout and provider/backend
+> verification the payment authority, and says no Seller role confirms payment (R-12;
+> FIN-01 v3.3; KB v3.3). Until the founder rules, report the conflict instead of building
+> either version. The rest of this scope still needs checking against ADU-MOB-02 v4.3
+> before it is built.
+
 Only these seller-mobile surfaces are required:
 1. Notifications / notification centre with deep links.
 2. Order detail: reservation/order info, payment evidence viewer, `Confirm Payment Received`, `Payment Not Received`, `Can't Fulfil`, mark ready, handoff status/QR.

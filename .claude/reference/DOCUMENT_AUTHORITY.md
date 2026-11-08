@@ -2,7 +2,33 @@
 
 Use exact filenames when locating source documents. Do not infer a newer revision from an older one.
 
-## Current supplied baseline
+## Precedence (founder decision, WO-001B, 9 November 2026)
+
+1. **The founder's current explicit decisions**, including the accepted WO-001 / WO-001A decisions.
+2. **The November 8 2026 reconciled system-design pack**: `docs/system-designs/2026-11-08/`, 34 complete designs, indexed with exact versions in `docs/system-designs/README.md`. In each of the 24 updated designs, the final "Post-October-13 reconciliation - current authority" section wins over earlier passages of that design for the topics it lists.
+3. **The pack's November reconciliation and open-decision reports**: `Reports/POST_OCT13_RECONCILIATION_2026-11-08.md` (R-01 to R-23), `CORRECTION_SUMMARY_2026-11-08.md`, `OPEN_DECISIONS_AND_RELEASE_GATES.md`, `AMENDMENT_REPORT.md`.
+4. **The approved prototype** (`AdulisCommercePlatformPrototype`, `dev` @ `f448d06`), for UX and presentation only. It never restores a rule the pack has replaced, such as its stale 0.5% surcharge or its "Account model unresolved" line (R-22, R-23).
+5. **Older October and repository documentation**: the repository specification set listed below.
+
+**What position 5 means for the repository specification set.** Those documents stay installed and are not moved. Several are parsed by gates (`verify:permission-doc`, `verify:transcription`, `appendix`, `deferred-values`, `surface-markers`, `docs-ascii`). ADU-DB-01 v1.19, ADU-API-01 v1.11 and `contracts/openapi.json` describe what is **built**, and they remain the executable contract for it. They no longer decide design intent where the pack speaks.
+
+**Where the pack and the built system or repository specification disagree, the status is `SPEC_CONFLICT`.** Report it and stop that part of the work. Never change backend, database, API or client behaviour to match either side without a founder work order. The pack itself classes these gaps as implementation-contract corrections (R-20, R-21), and they are made by work order, not in passing.
+
+## Known conflicts: November pack vs repository (recorded WO-001B; founder ruling or work order required)
+
+Found while installing the pack, not by a full audit. The contract readiness audit owns the complete comparison. Absence from this list is not evidence of agreement.
+
+| # | November pack (current design) | Repository / built system | Status |
+|---|---|---|---|
+| K-1 | **Payment.** Chapa gateway checkout; provider/backend verification is the canonical payment authority; no fallback to manual bank-transfer confirmation; no Seller role confirms payment (KB v3.3, FIN-01 v3.3, ORDER-01 v3.3, R-12) | PRD v8.5 puts a buyer payment gateway out of V1 scope and has the buyer pay the seller directly; the backend and console implement seller payment confirmation; the `adulis-seller-companion` skill's Phase-1 scope includes `Confirm Payment Received` | `SPEC_CONFLICT` |
+| K-2 | **Discovery.** Scene-only For You feed with algorithmic ranking, Following, Nearby, Discounts, Locally Made (MOB-02 v4.3, REC-01 v3.2, R-03) | PRD v8.5 lists marketplace discovery and ranking as V3, out of V1 scope | `SPEC_CONFLICT` |
+| K-3 | **Background execution.** BullMQ on Valkey is the sole ordinary engine, with "no Graphile Worker"; Valkey for rebuildable cache and rate coordination (ARCH-PLATFORM-01 v3.3, DEPLOY-01 v3.2, EVT-01 v3.2) | `graphile-worker` in PostgreSQL (`apps/api`); `STACK_BASELINE.md` and root `CLAUDE.md` reject Redis without a reissued binding architecture decision | `SPEC_CONFLICT`. Do not add Valkey or BullMQ, and do not remove graphile-worker |
+| K-4 | **Courier audience.** One ordinary MOBILE session, Courier as a verified relationship (AUTH-02 v3.3, MOB-02 v4.3, R-20) | ADU-API-01 v1.11 S4 puts the Courier surface on `audience = CONSOLE`; the S12.17 Courier endpoints publish no response schemas | Contract correction owed (R-20). Mobile calls no Courier endpoint until it lands |
+| K-5 | **Mode eligibility and client types.** Bootstrap exposes authoritative relationship/capability data for mode availability; the generated client exports path types (R-21) | No such bootstrap field; `@adulis/api-client` exports no generated path types (WO-001 gaps CG-1, CG-3) | Contract correction owed (R-21) |
+| K-6 | **Same subject, different lineage.** AUTH-02 v3.3, CONSOLE-02 v4.3, CSP-01 v1.1, WEB-02 v4.2, DPIA-01 v1.1 | AUTH-01 v2.8/v2.5, CON-02 v3.2, SEC-01 v1.0, WEB-01 v1.0, DPIA-01 v1.0 | The pack governs design intent (position 2). Neither document states that it supersedes the other, and DPIA-01 is the same ID on two separate lineages. The repository copies stay installed for their gates |
+| K-7 | **Encoding.** The designs are UTF-8 with non-ASCII typography | Amendment A3.5: ADU specifications are ASCII | Installed verbatim; reported by `verify:docs-ascii` as carried debt, not enforced. Founder decides whether ASCII copies are owed |
+
+## Repository specification set (position 5 above)
 
 - `ADU-00_One_Page_Business_Model_v9_1.md` — current business constitution; supersedes v9.0.
 - `ADU-PROJ-01_Project_Documentation_v9_0.md` — current supplied project baseline.
@@ -27,6 +53,8 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-PD-01_Adulis_V1_Product_Description_v1_0.md` — descriptive only; never overrides binding documents.
 
 ## Authority by question
+
+**For design intent, read the November pack's design for the domain first** (index: `docs/system-designs/README.md`). The list below names the repository document for each question. Read it for what the built system implements and what the gates check. Where it disagrees with the pack, the status is `SPEC_CONFLICT` (see above).
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
 2. **Database enforcement:** `ADU-DB-01 v1.19` governs.

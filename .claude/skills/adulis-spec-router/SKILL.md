@@ -25,16 +25,23 @@ Before acting:
 
 ## Governing sources
 
+**Current system-design authority (founder decision WO-001B):** the November 8 2026 pack in
+`docs/system-designs/2026-11-08/Sources/Markdown/`. Its 34 designs and their versions are
+indexed in `docs/system-designs/README.md`. Read the design for the domain first. The
+precedence and the known conflicts (K-1 to K-7) are in `DOCUMENT_AUTHORITY.md`.
+
+Repository specifications (position 5: what is built and gate-checked):
+
 - Business: `ADU-00_One_Page_Business_Model_v9_1.md`
 - Project: `ADU-PROJ-01_Project_Documentation_v9_0.md`
 - Product: `ADU-PRD-01_Product_Requirements_v8_5.md`
 - Seller surfaces: `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md`
-- Database: `ADU-DB-01_Database_and_Data_Model_v1_6.md`
-- API: `ADU-API-01_API_Contract_v1_3.md`
-- Auth: `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md`
+- Database: `ADU-DB-01_Database_and_Data_Model_v1_19_ASCII.md`
+- API: `ADU-API-01_API_Contract_v1_11_ASCII.md`
+- Auth: `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` (v2.5 for the permission catalogue, matrix and seed)
 - Browser security: `ADU-SEC-01_Content_Security_Policy_v1_0.md`
 - Public web: `ADU-WEB-01_Public_Website_Specification_v1_0.md`
-- Build/operations: `ADU-CON-02_Seller_Console_System_Design_v3_0.md`
+- Build/operations: `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md`
 - Descriptive only: `ADU-PD-01_Adulis_V1_Product_Description_v1_0.md`
 
 ## Routing procedure
@@ -43,13 +50,14 @@ Before acting:
 2. Classify each decision: product behaviour, database enforcement, wire/API, identity/access, seller-surface placement, browser security, public website, infrastructure/operations, or descriptive.
 3. Read the governing source for each class.
 4. Search for `INVARIANT`, `RULING`, `open item`, `pending`, `reissue`, and the feature name.
-5. Compare newer architecture/operations rulings to the current dependent binding spec.
+5. Compare newer architecture/operations rulings to the current dependent binding spec, and compare the November design to the repository specification. A disagreement between those two is `SPEC_CONFLICT`.
 6. Return exactly one status per decision: `CLEAR`, `CLEAR_WITH_CONSTRAINTS`, `SPEC_VERSION_GAP`, `SPEC_CONFLICT`, `OPEN_DECISION`, `OUT_OF_SCOPE`, or `MISSING_SOURCE`.
 7. For non-CLEAR statuses, do not implement that decision.
 
 ## Non-negotiable interpretation rules
 
 - Never use ADU-PD-01 to override a binding source.
+- Never use the prototype to override the November pack. The prototype is UX and presentation only.
 - Never resurrect Telegram; ARCH v2.0 removed it.
 - Never resurrect the Omnivo name in current code/copy except historical references.
 - Do not convert ADU-CON-02 v3.0 pending write-backs into silent edits to DB/API/AUTH/SEC/PRD.
