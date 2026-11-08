@@ -1,8 +1,9 @@
 # `apps/mobile` — the Adulis mobile app
 
-**Foundation only (WO-001).** An Expo SDK 58 app with Buyer, Seller Companion and Courier
-foundation shells and the client infrastructure under them. No product feature is built.
-What exists, why, and what is still open: `docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md`.
+**Foundation only (WO-001, WO-001A).** An Expo SDK 58 app, `com.adulis.app`, with Buyer,
+Seller Companion and Courier foundation shells and the client infrastructure under them. No
+product feature is built. What exists, why, and what is still open:
+`docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md` and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
 
 **Governing documents:** ADU-ARCH-01 v2.0 S2, S3 - ADU-API-01 v1.11 S4.1, S5.1, S12 -
 ADU-AUTH-01 v2.8 S5.2, S19 (v2.5 for the permission catalogue) - ADU-REPO-01 v1.3 S10.
@@ -54,23 +55,25 @@ AsyncStorage, never a cookie, never decoded as a JWT. `audience = MOBILE`.
 > `slots` rather than server-composed prose - the error contract is where a price leaks
 > if it leaks.
 
-**This rule currently blocks `@adulis/locale`.** Its catalogue is one object holding the
-console's subscription, plan and payment copy, and Metro bundles the whole object. Do not
-import it at runtime until the package offers a mobile-safe export (conflict C-1). Scan the
-export (`pnpm --filter @adulis/mobile build`, then search `dist/`) after any change that
-adds strings to the bundle.
+**Strings come from `@adulis/locale/mobile` ONLY** (founder decision D2, WO-001A). The
+package root and its console parts carry the console's subscription, plan and billing copy;
+the mobile export is built from the shared parts alone. `scripts/check-locale-imports.mjs`
+(inside `pnpm test`) fails on any other `@adulis/locale` specifier, deep paths included.
+A string the app needs that is not in the shared catalogue is a `packages/locale` change in
+its own PR, with both languages. After adding strings, scan the export
+(`pnpm --filter @adulis/mobile build`, then search `dist/`) for subscription copy.
 
 ## The rest, in brief
 
 - **The Companion reaches only the endpoints marked M** in ADU-API-01 S12 - twelve
   permissions carry `{MOBILE, CONSOLE}`, the other thirty are console-only. It is
   enforced by `core.permission.surfaces` in the database, not by this app.
-- **Courier Mode has no mobile contract yet (conflict C-2).** ADU-API-01 v1.11 S4 puts the
-  Courier surface on a cookie session with `audience = CONSOLE` and lists only buyer groups
-  plus M endpoints for MOBILE; the C endpoints (S12.17) also publish no response schemas
-  (gap CG-2). Until the contract is reissued or the founder rules, the Courier shell calls
-  nothing: never send a courier request over a MOBILE session on assumption, and never
-  hand-write a type to fill the gap.
+- **Courier is a MOBILE-authenticated mode (founder decision D3), but the contract does
+  not say so yet.** Target: one account, one MOBILE session, Courier as a relationship -
+  never the console cookie, a second account or a second login. ADU-API-01 v1.11 S4 still
+  puts the Courier surface on `audience = CONSOLE`, and the C endpoints (S12.17) publish no
+  response schemas (gap CG-2). That is an approved future contract correction. Until it
+  lands, the Courier shell calls nothing and no type is hand-written to fill the gap.
 - **No step-up action is reachable from MOBILE**, on any screen, by any route.
 - **Version skew is real and binding.** Ethiopian buyers on low-end Android with metered
   data frequently do not auto-update, so several versions are live for months and the
@@ -87,8 +90,8 @@ adds strings to the bundle.
   competing specification, and no DTO is written to match prototype behaviour. The origin
   is one public variable, `EXPO_PUBLIC_API_BASE_URL` (`.env.example`); nothing secret is
   ever `EXPO_PUBLIC_*`.
-- May import `@adulis/api-client`, `@adulis/tokens`, `@adulis/config` (and `@adulis/locale`
-  once C-1 is resolved) - and nothing under `apps/`.
+- May import `@adulis/api-client`, `@adulis/tokens`, `@adulis/config` and
+  `@adulis/locale/mobile` (never the locale root) - and nothing under `apps/`.
 
 ## Architecture
 
@@ -132,12 +135,23 @@ disagrees with these documents, record the conflict for the founder.
 ## Commands
 
 ```
-pnpm --filter @adulis/mobile dev        # Metro; open in Expo Go or a dev build
-pnpm --filter @adulis/mobile test       # jest-expo
+pnpm --filter @adulis/mobile android    # expo run:android: prebuild (CNG), Gradle, install com.adulis.app, Metro
+pnpm --filter @adulis/mobile dev        # Metro only, for the already-installed app (JS changes)
+pnpm --filter @adulis/mobile test       # locale-import guard, then jest-expo
 pnpm --filter @adulis/mobile typecheck
 pnpm --filter @adulis/mobile build      # expo export (android + ios bundles) into dist/
 ```
 
-On the Android emulator, `adb reverse tcp:8081 tcp:8081` and open `exp://127.0.0.1:8081`;
-the host's LAN address may be firewalled. Smoke flow: `.maestro/foundation-smoke.yaml`.
-The Android applicationId is OPEN (founder decision), so there is no native build yet.
+App identity (founder decision D1): Android `com.adulis.app`, iOS `com.adulis.app`, Expo
+project `@naod61s-team/adulis`. The development build is a plain debug build -
+`expo-dev-client` is not needed for the emulator workflow. `android/` and `ios/` are
+regenerated by `expo run:*` / `expo prebuild` and never committed; rebuild natively only
+after a native dependency or config-plugin change.
+
+On Android 17 the debug build asks for "nearby devices" (`ACCESS_LOCAL_NETWORK`) at launch:
+allow it - Android blocks a debug build's Metro traffic without it; release builds never ask.
+Smoke flow: `.maestro/foundation-smoke.yaml` (launches `com.adulis.app`, grants only that).
+
+On Windows, a native build needs the checkout at a SHORT path on an NTFS drive: React Native
+codegen and CMake/Ninja fail on Windows path limits from a deep path (see
+`docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`, Native build).

@@ -1,3 +1,4 @@
+import { am } from '@adulis/locale/mobile';
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import * as SecureStore from 'expo-secure-store';
 
@@ -19,7 +20,7 @@ const devGlobal = globalThis as unknown as { __DEV__: boolean };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useUiStore.setState({ activeMode: null, themePreference: 'system' });
+  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en' });
 });
 
 it('reaches every mode shell and switches between them without re-authenticating', async () => {
@@ -94,4 +95,12 @@ it('switches the theme preference from the foundation root', async () => {
   expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked();
   expect(screen.getByRole('radio', { name: 'System' })).not.toBeChecked();
   expect(useUiStore.getState().themePreference).toBe('dark');
+});
+
+it('renders the real Amharic catalogue when Amharic is selected', async () => {
+  await renderRouter(APP_DIR);
+
+  await fireEvent.press(await screen.findByRole('radio', { name: 'Amharic' }));
+  expect(screen.getByText(am['health.degraded'])).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: am['common.retry'] })).toBeOnTheScreen();
 });

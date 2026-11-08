@@ -1,33 +1,26 @@
-# WO-001 foundation smoke: root loads, every mode shell is reachable, and switching modes
-# keeps the one session (no sign-in surface, session line unchanged).
+# Foundation smoke (WO-001, WO-001A) against the Adulis development build, com.adulis.app:
+# root loads, every mode shell is reachable, switching keeps the one session (no sign-in
+# surface, session line unchanged), back navigation works, and Amharic renders from the
+# real mobile catalogue.
 #
-# Runs inside Expo Go (host.exp.exponent) because the Adulis Android applicationId is OPEN
-# pending a founder decision. When it is decided, point appId at the development build and
-# replace the Expo Go steps (clearState, openLink, onboarding dismissal) with launchApp.
-#
-# Prerequisites: `pnpm --filter @adulis/mobile dev` running, and
-# `adb reverse tcp:8081 tcp:8081` so the device reaches Metro on its own loopback.
-#
-# Every run starts from a clean Expo Go (clearState): with a previous run's project still in
-# its state, the next link lands on the launcher. A clean Expo Go always shows its one-time
-# developer-menu onboarding on first open, so the flow dismisses it.
-appId: host.exp.exponent
+# Prerequisites: the debug build installed (`pnpm --filter @adulis/mobile android`) and
+# Metro serving on 8081.
+# clearState makes each run independent: no stored session, no leftover locale or mode.
+# ACCESS_LOCAL_NETWORK is the ONE grant: Android 17 blocks a debug build's traffic to Metro
+# without it. Only React Native's debug manifest declares it and only debug code asks for it,
+# so release builds never prompt. Any other permission dialog would still fail this flow.
+appId: com.adulis.app
 name: Foundation smoke
 tags:
   - foundation
 ---
-- clearState
-- openLink: exp://127.0.0.1:8081
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
 - extendedWaitUntil:
-    visible: Continue
-    timeout: 90000
-- tapOn: Continue
-- runFlow:
-    when:
-      visible: Go home
-    commands:
-      - tapOn: Close
-- assertVisible: Adulis mobile foundation
+    visible: Adulis mobile foundation
+    timeout: 120000
 - assertVisible: 'Session: signed out'
 - tapOn: Open Buyer
 - assertVisible: Buyer foundation ready
@@ -43,3 +36,7 @@ tags:
 - assertVisible: 'Session: signed out'
 - tapOn: Back to foundation
 - assertVisible: Adulis mobile foundation
+- tapOn: Amharic
+- assertVisible: 'አንዳንድ ሲስተሞች አይገኙም። እየተመለከትነው ነው።'
+- tapOn: English
+- assertVisible: 'Some systems are unavailable. We are looking into it.'

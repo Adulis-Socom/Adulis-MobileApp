@@ -184,6 +184,9 @@ importers:
       '@adulis/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@adulis/locale':
+        specifier: workspace:*
+        version: link:../../packages/locale
       '@adulis/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens

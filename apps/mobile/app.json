@@ -10,7 +10,11 @@
       "ios"
     ],
     "android": {
+      "package": "com.adulis.app",
       "predictiveBackGestureEnabled": false
+    },
+    "ios": {
+      "bundleIdentifier": "com.adulis.app"
     },
     "plugins": [
       "expo-router",
