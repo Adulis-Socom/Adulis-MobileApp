@@ -22,6 +22,7 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { readCatalogue } from '../../packages/locale/mt-keys-lib.mjs';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -31,8 +32,9 @@ const catalogue = await readFile(
   path.join(root, 'apps', 'api', 'src', 'common', 'errors', 'error-catalogue.ts'),
   'utf8',
 );
-const en = await readFile(path.join(root, 'packages', 'locale', 'src', 'en.ts'), 'utf8');
-const am = await readFile(path.join(root, 'packages', 'locale', 'src', 'am.ts'), 'utf8');
+// The catalogue is split by audience (WO-001A); the package's text reader joins its parts.
+const en = readCatalogue(path.join(root, 'packages', 'locale'), 'en');
+const am = readCatalogue(path.join(root, 'packages', 'locale'), 'am');
 
 const codes = [...catalogue.matchAll(/^\s*([A-Z_]+): \{ group: '(\w+)'/gm)].map(
   ([, code, group]) => ({ code, key: `error.${group}.${code.toLowerCase()}` }),
@@ -45,8 +47,8 @@ if (codes.length === 0) {
 
 const missing = [];
 for (const { code, key } of codes) {
-  if (!en.includes(`'${key}'`)) missing.push(`${code}: '${key}' absent from en.ts`);
-  if (!am.includes(`'${key}'`)) missing.push(`${code}: '${key}' absent from am.ts`);
+  if (!en.includes(`'${key}'`)) missing.push(`${code}: '${key}' absent from the en catalogue`);
+  if (!am.includes(`'${key}'`)) missing.push(`${code}: '${key}' absent from the am catalogue`);
 }
 
 if (missing.length > 0) {

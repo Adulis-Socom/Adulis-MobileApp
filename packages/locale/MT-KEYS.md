@@ -29,7 +29,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 
 769 keys:
 
-- `app.title`
 - `health.ok`
 - `health.degraded`
 - `common.retry`
@@ -74,7 +73,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `error.handoff.courier_cannot_scan`
 - `error.seller.publication_blocked`
 - `error.seller.eligibility_not_satisfied`
-- `error.seller.tier_limit_reached`
 - `error.seller.level_limit_reached`
 - `error.seller.handle_taken`
 - `error.seller.fulfilment_method_required`
@@ -111,7 +109,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `sms.otp.step_up.payout_change`
 - `sms.otp.step_up.reissue_instructions`
 - `sms.otp.step_up.team_change`
-- `sms.otp.step_up.subscription_change`
 - `sms.otp.step_up.seller_deletion`
 - `sms.otp.step_up.revoke_all_sessions`
 - `sms.otp.step_up.identity_change`
@@ -121,7 +118,6 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `deletion.blocker.orders_awaiting_handoff`
 - `deletion.blocker.refunds_unresolved`
 - `deletion.blocker.open_claims`
-- `deletion.blocker.subscription_past_due`
 - `deletion.blocker.buyer_orders_in_payment`
 - `ownership_transfer.no_eligible_admin`
 - `ownership_transfer.blocker.payout_change_pending`
@@ -133,6 +129,10 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `deletion.effect.reservations_released`
 - `chat.bot.escalated`
 - `notification.chat.escalated`
+- `app.title`
+- `error.seller.tier_limit_reached`
+- `sms.otp.step_up.subscription_change`
+- `deletion.blocker.subscription_past_due`
 - `console.a11y.skip_to_content`
 - `console.a11y.loading`
 - `console.a11y.primary_nav`

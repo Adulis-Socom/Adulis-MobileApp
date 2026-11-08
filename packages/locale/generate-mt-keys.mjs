@@ -18,19 +18,19 @@
  * as the class grows to -- terms acceptance, the seller agreement, the payout
  * authorisation are all coming.
  *
- * Generated from en.ts's key set so the list cannot drift from the
+ * Generated from the en catalogue's key set (all parts en.ts composes) so the list cannot drift from the
  * catalogue: run `node packages/locale/generate-mt-keys.mjs` after adding
  * keys. `pnpm verify:mt-keys` fails if it is stale.
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { markedHumanRequired } from './mt-keys-lib.mjs';
+import { entries, markedHumanRequired, readCatalogue } from './mt-keys-lib.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const en = await readFile(path.join(here, 'src', 'en.ts'), 'utf8');
-const am = await readFile(path.join(here, 'src', 'am.ts'), 'utf8');
-const keys = [...en.matchAll(/^ {2}'([^']+)':/gm)].map((m) => m[1]);
+const en = readCatalogue(here, 'en');
+const am = readCatalogue(here, 'am');
+const keys = entries(en).map((e) => e.key);
 
 // One reader for both this file and the gate (mt-keys-lib.mjs).
 const humanRequired = new Set(markedHumanRequired(am));
@@ -54,10 +54,10 @@ const out = [
   '',
   '## Machine-translated placeholders',
   '',
-  "Every key below is AWAITING THE HUMAN TRANSLATION PASS. Most carry a",
+  'Every key below is AWAITING THE HUMAN TRANSLATION PASS. Most carry a',
   "machine-translation placeholder in `am.ts`; C-3's keys carry the English",
   "untranslated, because unverifiable text in a seller's own language is worse",
-  "than text they can see is untranslated (D-144). Neither is a translation.",
+  'than text they can see is untranslated (D-144). Neither is a translation.',
   'The placeholders satisfy the completeness gate (a missing key is a compile',
   'error) and nothing else. `AM_ENABLED` stays off until BOTH lists are',
   'clear.',

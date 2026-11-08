@@ -14,8 +14,22 @@
  *     gate failed a byte-identical string while accusing it of being a
  *     machine translation.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const KEY_RE = /^ {2}'([^']+)':/gm;
+
+/**
+ * The source text of one language's whole catalogue. It is split by audience (WO-001A):
+ * <lang>.ts only composes its parts, so the parts are read from <lang>.ts's own imports
+ * (in import order) - a part added there can never be missed here.
+ */
+export function readCatalogue(localeDir, lang) {
+  const read = (file) => readFileSync(path.join(localeDir, 'src', file), 'utf8');
+  const parts = [...read(`${lang}.ts`).matchAll(new RegExp(`from '\\./(${lang}\\.\\w+)'`, 'g'))];
+  if (parts.length === 0) throw new Error(`src/${lang}.ts imports no ${lang}.*.ts catalogue parts`);
+  return parts.map((m) => read(`${m[1]}.ts`)).join('\n');
+}
 
 /** Every key in a catalogue, in file order, with the span of its entry. */
 export function entries(source) {
@@ -23,8 +37,12 @@ export function entries(source) {
   return keys.map((m, i) => {
     const start = m.index ?? 0;
     const rawEnd = i + 1 < keys.length ? (keys[i + 1].index ?? source.length) : source.length;
-    // Trim the trailing comment block: it belongs to the NEXT key, not this one.
     const lines = source.slice(start, rawEnd).split('\n');
+    // An entry ends at its object's closing brace: in concatenated parts, the next
+    // file's header must not become part of the previous file's last value.
+    const close = lines.findIndex((l) => l.startsWith('}'));
+    if (close > 0) lines.length = close;
+    // Trim the trailing comment block: it belongs to the NEXT key, not this one.
     let last = lines.length;
     while (last > 0) {
       const l = lines[last - 1].trim();

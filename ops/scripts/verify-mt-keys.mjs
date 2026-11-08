@@ -18,7 +18,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { markedHumanRequired, valueOf } from '../../packages/locale/mt-keys-lib.mjs';
+import { markedHumanRequired, readCatalogue, valueOf } from '../../packages/locale/mt-keys-lib.mjs';
 
 /**
  * ADU-RUL-03 S4's INVARIANT, transcribed: a machine-translated placeholder is
@@ -59,14 +59,14 @@ if (before !== after) {
 }
 
 // ---- 2. the class is exactly what the ruling names -------------------------
-const en = readFileSync(path.join(localeDir, 'src', 'en.ts'), 'utf8');
-const am = readFileSync(path.join(localeDir, 'src', 'am.ts'), 'utf8');
+const en = readCatalogue(localeDir, 'en');
+const am = readCatalogue(localeDir, 'am');
 const marked = markedHumanRequired(am);
 
 for (const key of HUMAN_REQUIRED) {
   if (!marked.includes(key)) {
     fail(
-      `${key} is HUMAN-REQUIRED (ADU-RUL-03 S4) and carries no marker in am.ts. ` +
+      `${key} is HUMAN-REQUIRED (ADU-RUL-03 S4) and carries no marker in the am catalogue. ` +
         'Removing the marker is how a machine translation reaches a string a person is bound by.',
     );
   }
@@ -88,7 +88,7 @@ for (const key of HUMAN_REQUIRED) {
 for (const key of marked) {
   if (!HUMAN_REQUIRED.includes(key)) {
     fail(
-      `${key} is marked HUMAN-REQUIRED in am.ts but is not in this gate's list. ` +
+      `${key} is marked HUMAN-REQUIRED in the am catalogue but is not in this gate's list. ` +
         'Add it here, with the ruling that put it in the class.',
     );
   }
