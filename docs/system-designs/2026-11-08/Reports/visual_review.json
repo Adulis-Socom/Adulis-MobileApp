@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "method": "Rendered cover + last two pages of every updated PDF into four contact sheets; inspected at readable scale. Also inspected full-size cover/final pages for MOB, KB, SCN, AUTH, FUL and WEB.",
+  "updated_documents_reviewed": 24,
+  "representative_full_size": [
+    "MOB",
+    "KB",
+    "SCN",
+    "AUTH",
+    "FUL",
+    "WEB"
+  ],
+  "findings": "No clipping, overlap, missing glyphs, broken tables, footer/header collision or unreadable amendment pages observed."
+}

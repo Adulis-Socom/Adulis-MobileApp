@@ -1,0 +1,42 @@
+{
+  "revision": "8 November 2026",
+  "status": "PASS",
+  "counts": {
+    "documents": 34,
+    "updated": 24,
+    "unchanged": 10,
+    "pdf": 34,
+    "markdown": 34,
+    "json": 34
+  },
+  "semantic_checks": {
+    "KB_zero_surcharge": true,
+    "KB_account": true,
+    "AUTH_three_context": true,
+    "MOB_app_id": true,
+    "MOB_three_modes": true,
+    "SCN_zero_tag": true,
+    "SCN_private": true,
+    "FUL_eligibility": true,
+    "MKT_locale": true,
+    "FIN_zero": true,
+    "WEB_fee_guard": true
+  },
+  "contract_validator": "PASS",
+  "handoff_validator": "PASS",
+  "visual_review": {
+    "status": "PASS",
+    "method": "Rendered cover + last two pages of every updated PDF into four contact sheets; inspected at readable scale. Also inspected full-size cover/final pages for MOB, KB, SCN, AUTH, FUL and WEB.",
+    "updated_documents_reviewed": 24,
+    "representative_full_size": [
+      "MOB",
+      "KB",
+      "SCN",
+      "AUTH",
+      "FUL",
+      "WEB"
+    ],
+    "findings": "No clipping, overlap, missing glyphs, broken tables, footer/header collision or unreadable amendment pages observed."
+  },
+  "errors": []
+}

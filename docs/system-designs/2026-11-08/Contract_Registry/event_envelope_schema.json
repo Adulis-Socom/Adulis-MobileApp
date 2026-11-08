@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "aggregate_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregate_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "logical_effect_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "actor_type": {
+              "const": "ANONYMOUS_PUBLIC"
+            },
+            "anonymous_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "actor_type",
+            "anonymous_ref"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actor_type": {
+              "const": "ORDINARY_ACCOUNT"
+            },
+            "ordinary_account_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seller_context_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "actor_type",
+            "ordinary_account_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actor_type": {
+              "const": "OPERATOR_ACCOUNT"
+            },
+            "operator_account_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seller_context_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "actor_type",
+            "operator_account_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actor_type": {
+              "const": "SYSTEM"
+            },
+            "trusted_service_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "actor_type",
+            "trusted_service_ref"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "enum": [
+        "GLOBAL",
+        "MARKET"
+      ]
+    },
+    "market_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "originating_market_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_type",
+    "aggregate_id",
+    "aggregate_revision",
+    "logical_effect_id",
+    "actor",
+    "correlation_id",
+    "scope",
+    "payload"
+  ],
+  "additionalProperties": false
+}

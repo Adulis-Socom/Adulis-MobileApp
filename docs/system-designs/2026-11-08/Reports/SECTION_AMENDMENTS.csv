@@ -1,0 +1,25 @@
+key,code,version,section_number,section_title,status
+ANL,ADU-ANL-01,3.3,88,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+ARCH,ADU-ARCH-PLATFORM-01,3.3,66,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+AUTH,ADU-AUTH-02,3.3,159,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+CATINV,ADU-CATINV-01,3.3,167,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+CHAT,ADU-CHAT-01,3.3,26,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+CHATBOT,ADU-CHATBOT-01,3.3,100,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+CONSOLE,ADU-CONSOLE-02,4.3,205,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+DEPLOY,ADU-DEPLOY-01,3.2,186,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+FIN,ADU-FIN-01,3.3,135,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+FUL,ADU-FUL-01,3.3,83,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+MKT,ADU-MKT-01,3.3,141,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+MOB,ADU-MOB-02,4.3,232,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+MOD,ADU-MOD-01,3.3,72,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+NOTIF,ADU-NOTIF-01,3.3,319,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+ORDER,ADU-ORDER-01,3.3,140,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+PRV,ADU-PRV-01,3.3,83,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+REC,ADU-REC-01,3.2,102,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+REV,ADU-REV-01,3.3,61,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+SCN,ADU-SCN-01,3.2,79,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+SRC,ADU-SRC-01,3.2,40,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+STOREFRONT,ADU-STOREFRONT-02,4.2,206,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+TRUST,ADU-TRUST-01,3.3,112,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+WEB,ADU-WEB-02,4.2,110,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION
+KB,ADU-KB,3.3,63,Post-October-13 reconciliation — current authority,NORMATIVE POST-OCT13 RECONCILIATION

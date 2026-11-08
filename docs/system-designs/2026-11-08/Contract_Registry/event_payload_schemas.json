@@ -1,0 +1,6159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:adulis:current-event-payloads:2026-10-13",
+  "$defs": {
+    "account__created__v1": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deletion_request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effective_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "account__deletion_requested__v1": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deletion_request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effective_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "account__deleted__v1": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deletion_request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effective_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "session__revoked__v1": {
+      "type": "object",
+      "properties": {
+        "ordinary_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revoked_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "ordinary_account_id",
+        "session_ref"
+      ],
+      "additionalProperties": false
+    },
+    "seller__created__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__eligibility_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__social_verification_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__social_connection__verified__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__social_connection__revoked__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__eligibility__evaluated__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__eligibility__satisfied__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__readiness__changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "seller__onboarding__completed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "social_connection_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "product__created__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id"
+      ],
+      "additionalProperties": false
+    },
+    "product__updated__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id"
+      ],
+      "additionalProperties": false
+    },
+    "product__published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id"
+      ],
+      "additionalProperties": false
+    },
+    "product__withdrawn__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id"
+      ],
+      "additionalProperties": false
+    },
+    "variant__updated__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "variant_id"
+      ],
+      "additionalProperties": false
+    },
+    "product_post__updated__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "product_post_id"
+      ],
+      "additionalProperties": false
+    },
+    "product_post__published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "product_post_id"
+      ],
+      "additionalProperties": false
+    },
+    "product_post__unpublished__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "catalogue_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "product_post_id"
+      ],
+      "additionalProperties": false
+    },
+    "inventory__changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stock_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stock_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projection_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "availability_bucket": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "stock_revision"
+      ],
+      "additionalProperties": false
+    },
+    "inventory__stock_confirmed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stock_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stock_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projection_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "availability_bucket": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "stock_revision",
+        "confirmed_at"
+      ],
+      "additionalProperties": false
+    },
+    "inventory__public_stock_projection_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stock_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stock_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projection_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "availability_bucket": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "product_id",
+        "stock_revision",
+        "projection_revision"
+      ],
+      "additionalProperties": false
+    },
+    "scene_post__published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "current_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "scene_post_id",
+        "published_revision"
+      ],
+      "additionalProperties": false
+    },
+    "scene_post__revised__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "current_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "scene_post_id",
+        "published_revision"
+      ],
+      "additionalProperties": false
+    },
+    "scene_post__visibility_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "current_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "scene_post_id",
+        "published_revision",
+        "previous_visibility",
+        "current_visibility",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "scene_post__archived__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "current_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "scene_post_id",
+        "published_revision"
+      ],
+      "additionalProperties": false
+    },
+    "scene_post__deleted__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_post_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "current_visibility": {
+          "enum": [
+            "PUBLIC",
+            "PRIVATE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "scene_post_id",
+        "published_revision"
+      ],
+      "additionalProperties": false
+    },
+    "checkout__allocation_created__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allocation_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "release_decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_effect_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "attempt_id",
+        "attempt_generation",
+        "allocation_id"
+      ],
+      "additionalProperties": false
+    },
+    "checkout__allocation_released__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allocation_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "release_decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release_effect_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "attempt_id",
+        "attempt_generation",
+        "allocation_id",
+        "allocation_revision",
+        "release_decision_id",
+        "release_evidence_ref",
+        "release_effect_id"
+      ],
+      "additionalProperties": false
+    },
+    "payment__attempt_created__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "charge_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "attempt_id"
+      ],
+      "additionalProperties": false
+    },
+    "payment__verified__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "charge_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "attempt_id",
+        "charge_id",
+        "verification_ref",
+        "amount_minor",
+        "currency",
+        "verified_at"
+      ],
+      "additionalProperties": false
+    },
+    "payment__failed__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "charge_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "attempt_id"
+      ],
+      "additionalProperties": false
+    },
+    "refund__status_changed__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refund_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "obligation_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "refund_id",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "order__paid__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paid_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_handoff_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "seller_id",
+        "buyer_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "order__ready__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paid_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_handoff_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "seller_id",
+        "buyer_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "order__completed__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paid_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_handoff_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "seller_id",
+        "buyer_account_id",
+        "final_handoff_id",
+        "completed_at"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__created__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__delegate_created__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage",
+        "authorization_id",
+        "generation"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__delegate_revoked__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage",
+        "authorization_id",
+        "generation"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__qr_issued__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__otp_requested__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__otp_sent__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage",
+        "transport_result_ref"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__verification_failed__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage",
+        "failure_category"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__manual_review_requested__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__verified__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage",
+        "fulfilment_mode",
+        "verification_method",
+        "recipient_class",
+        "generation",
+        "verified_at"
+      ],
+      "additionalProperties": false
+    },
+    "handoff__revoked__v1": {
+      "type": "object",
+      "properties": {
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "enum": [
+            "PICKUP",
+            "DELIVERY"
+          ]
+        },
+        "fulfilment_mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_method": {
+          "enum": [
+            "QR",
+            "OTP",
+            "MANUAL"
+          ]
+        },
+        "recipient_class": {
+          "enum": [
+            "BUYER",
+            "DELEGATE",
+            "COURIER"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presenter_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipient_courier_assignment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_result_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "handoff_id",
+        "order_id",
+        "stage"
+      ],
+      "additionalProperties": false
+    },
+    "courier__relationship__approved__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "courier_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "courier__terms__updated__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "courier_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__request__created__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__offer__accepted__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id",
+        "offer_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__assigned__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id",
+        "assignment_id",
+        "courier_account_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__started__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__completed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id"
+      ],
+      "additionalProperties": false
+    },
+    "delivery__cancelled__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assignment_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "courier_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationship_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seller_id",
+        "order_id"
+      ],
+      "additionalProperties": false
+    },
+    "location__pickup__captured__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "const": "PICKUP"
+        },
+        "checkpoint_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "captured_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "handoff_id",
+        "stage",
+        "checkpoint_ref"
+      ],
+      "additionalProperties": false
+    },
+    "location__delivery__captured__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "handoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "const": "DELIVERY"
+        },
+        "checkpoint_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "captured_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "order_id",
+        "handoff_id",
+        "stage",
+        "checkpoint_ref"
+      ],
+      "additionalProperties": false
+    },
+    "claim__opened__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "claim__evidence_attached__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "claim__evidence_requested__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "claim__state_changed__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "claim__decision_recorded__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id",
+        "incident_id",
+        "decision_id",
+        "decision_version",
+        "seller_fault",
+        "severity",
+        "remedy_status",
+        "resolution_classification"
+      ],
+      "additionalProperties": false
+    },
+    "claim__decision_corrected__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id",
+        "incident_id",
+        "decision_id",
+        "decision_version",
+        "supersedes_decision_id",
+        "correction_ref",
+        "seller_fault",
+        "severity",
+        "remedy_status",
+        "resolution_classification"
+      ],
+      "additionalProperties": false
+    },
+    "claim__remedy_requested__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "const": "REQUESTED"
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id",
+        "incident_id",
+        "decision_id",
+        "decision_version",
+        "remedy_status",
+        "amount_minor",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "claim__remedy_completed__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "const": "COMPLETED"
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id",
+        "incident_id",
+        "decision_id",
+        "decision_version",
+        "remedy_status",
+        "finance_completion_ref",
+        "verified_completion_at"
+      ],
+      "additionalProperties": false
+    },
+    "claim__resolved__v1": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_line_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incident_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supersedes_decision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_fault": {
+          "type": "boolean"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remedy_responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy_status": {
+          "enum": [
+            "REQUESTED",
+            "PENDING",
+            "COMPLETED",
+            "REFUSED",
+            "OVERDUE",
+            null
+          ]
+        },
+        "amount_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finance_completion_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_completion_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_classification": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claim_id",
+        "order_id",
+        "seller_id",
+        "resolution_classification",
+        "remedy_status"
+      ],
+      "additionalProperties": false
+    },
+    "review__eligibility_changed__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "enum": [
+            "UNAVAILABLE",
+            "AVAILABLE",
+            "CONSUMED",
+            "REVOKED"
+          ]
+        },
+        "current_state": {
+          "enum": [
+            "UNAVAILABLE",
+            "AVAILABLE",
+            "CONSUMED",
+            "REVOKED"
+          ]
+        },
+        "previous_eligibility_basis": {
+          "enum": [
+            "FINAL_HANDOFF",
+            "VERIFIED_ORDER_FAILURE",
+            null
+          ]
+        },
+        "eligibility_basis": {
+          "enum": [
+            "FINAL_HANDOFF",
+            "VERIFIED_ORDER_FAILURE",
+            null
+          ]
+        },
+        "eligibility_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "safe_remedy_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_handoff_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "order_id",
+        "seller_id",
+        "buyer_account_id",
+        "previous_state",
+        "current_state",
+        "previous_eligibility_basis",
+        "eligibility_basis",
+        "eligibility_revision",
+        "source_ref",
+        "source_version"
+      ],
+      "additionalProperties": false
+    },
+    "review__published__v1": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grant_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_state": {
+          "enum": [
+            "UNAVAILABLE",
+            "AVAILABLE",
+            "CONSUMED",
+            "REVOKED"
+          ]
+        },
+        "current_state": {
+          "enum": [
+            "UNAVAILABLE",
+            "AVAILABLE",
+            "CONSUMED",
+            "REVOKED"
+          ]
+        },
+        "previous_eligibility_basis": {
+          "enum": [
+            "FINAL_HANDOFF",
+            "VERIFIED_ORDER_FAILURE",
+            null
+          ]
+        },
+        "eligibility_basis": {
+          "enum": [
+            "FINAL_HANDOFF",
+            "VERIFIED_ORDER_FAILURE",
+            null
+          ]
+        },
+        "eligibility_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "safe_remedy_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_handoff_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "order_id",
+        "seller_id",
+        "buyer_account_id",
+        "review_id"
+      ],
+      "additionalProperties": false
+    },
+    "trust__level_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_level": {
+          "enum": [
+            "NEW",
+            "REBUILDING",
+            "ESTABLISHED",
+            "TRUSTED"
+          ]
+        },
+        "current_level": {
+          "enum": [
+            "NEW",
+            "REBUILDING",
+            "ESTABLISHED",
+            "TRUSTED"
+          ]
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evaluation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id",
+        "previous_level",
+        "current_level",
+        "policy_version"
+      ],
+      "additionalProperties": false
+    },
+    "moderation__enforcement_changed__v1": {
+      "type": "object",
+      "properties": {
+        "enforcement_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforcement_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "enforcement_ref",
+        "resource_type",
+        "resource_ref",
+        "enforcement_revision"
+      ],
+      "additionalProperties": false
+    },
+    "collection__item_added__v1": {
+      "type": "object",
+      "properties": {
+        "collection_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "item_type": {
+          "enum": [
+            "PRODUCT_POST",
+            "SCENE_POST"
+          ]
+        },
+        "item_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "membership_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "collection_id",
+        "buyer_account_id",
+        "item_type",
+        "item_ref"
+      ],
+      "additionalProperties": false
+    },
+    "collection__item_removed__v1": {
+      "type": "object",
+      "properties": {
+        "collection_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer_account_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "item_type": {
+          "enum": [
+            "PRODUCT_POST",
+            "SCENE_POST"
+          ]
+        },
+        "item_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "membership_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "collection_id",
+        "buyer_account_id",
+        "item_type",
+        "item_ref"
+      ],
+      "additionalProperties": false
+    },
+    "notification__created__v1": {
+      "type": "object",
+      "properties": {
+        "notification_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipient_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "recipient_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "notification_id",
+        "recipient_type",
+        "recipient_ref"
+      ],
+      "additionalProperties": false
+    },
+    "notification__delivery_recorded__v1": {
+      "type": "object",
+      "properties": {
+        "notification_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipient_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "recipient_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "delivery_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "notification_id",
+        "recipient_type",
+        "recipient_ref",
+        "delivery_ref",
+        "delivery_status"
+      ],
+      "additionalProperties": false
+    },
+    "media__image_uploaded__v1": {
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "technical_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "processing_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "asset_id",
+        "purpose",
+        "owner_ref"
+      ],
+      "additionalProperties": false
+    },
+    "media__image_ready__v1": {
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "technical_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "processing_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "asset_id",
+        "purpose",
+        "owner_ref"
+      ],
+      "additionalProperties": false
+    },
+    "media__image_failed__v1": {
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "technical_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "processing_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_category": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "asset_id",
+        "purpose",
+        "owner_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__lifecycle_requested__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__lifecycle_confirmed__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__lifecycle_blocked__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__lifecycle_processing_started__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__domain_task_completed__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__hold_created__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__hold_released__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__lifecycle_completed__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__export_ready__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__incident_awareness_recorded__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "privacy__incident_assessment_updated__v1": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_type": {
+          "enum": [
+            "ORDINARY_ACCOUNT",
+            "SELLER",
+            "COURIER_RELATIONSHIP",
+            "OPERATOR_ACCOUNT"
+          ]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incident_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_awareness_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "request_id",
+        "subject_type",
+        "subject_ref"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__knowledge_version_published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__localization_completeness_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__feedback_submitted__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__feedback_triaged__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__intent_version_published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__template_version_published__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__kill_switch_changed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__escalation_created__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "chatbot__bot_turn_completed__v1": {
+      "type": "object",
+      "properties": {
+        "seller_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feedback_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "escalation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bot_turn_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "seller_id"
+      ],
+      "additionalProperties": false
+    },
+    "market__config_published__v1": {
+      "type": "object",
+      "properties": {
+        "market_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locale_pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_routing_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "market_id",
+        "config_version"
+      ],
+      "additionalProperties": false
+    },
+    "market__activation_changed__v1": {
+      "type": "object",
+      "properties": {
+        "market_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locale_pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_routing_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "market_id",
+        "config_version"
+      ],
+      "additionalProperties": false
+    },
+    "market__locale_pack_changed__v1": {
+      "type": "object",
+      "properties": {
+        "market_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locale_pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_routing_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "market_id",
+        "config_version"
+      ],
+      "additionalProperties": false
+    },
+    "market__provider_routing_changed__v1": {
+      "type": "object",
+      "properties": {
+        "market_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previous_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locale_pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_routing_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "market_id",
+        "config_version"
+      ],
+      "additionalProperties": false
+    },
+    "handoff_delegate_invitation__intent_v1": {
+      "type": "object",
+      "properties": {
+        "authorization_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "const": "DELIVERY"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "protected_contact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contact_purpose_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "suppression_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "authorization_id",
+        "order_id",
+        "stage",
+        "generation",
+        "protected_contact_ref",
+        "contact_purpose_ref",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

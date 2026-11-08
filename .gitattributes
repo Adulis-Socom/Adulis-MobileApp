@@ -3,6 +3,10 @@
 *.png binary
 *.zip binary
 
+# The installed system-design pack stays byte-identical to its own SHA256SUMS.txt
+# (three of its CSVs are CRLF); eol=lf above would rewrite them on commit.
+docs/system-designs/2026-11-08/** -text
+
 # ADU-REPO-01 S5.1 - the seams are generated. Marking them keeps a review honest:
 # a diff on either file should only ever appear in a commit CI made, and
 # linguist-generated collapses it by default so it is not mistaken for authored work.

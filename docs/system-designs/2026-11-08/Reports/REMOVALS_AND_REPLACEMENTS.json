@@ -1,0 +1,35 @@
+{
+  "revision_date": "8 November 2026",
+  "replacements": [
+    {
+      "id": "D-01",
+      "stale": "Prototype says current 0.5% Adulis Buyer surcharge",
+      "replacement": "Launch Adulis surcharge = 0 bps / amount zero; provider fee separate and permission-gated."
+    },
+    {
+      "id": "D-02",
+      "stale": "Prototype says final production Account model unresolved",
+      "replacement": "One ordinary Account with Buyer/Seller/Courier relationships; one Mobile app/session; Operator separate."
+    },
+    {
+      "id": "D-03",
+      "stale": "Prototype allows zero-tag Scene publication",
+      "replacement": "Initial publication requires >=1 eligible same-Seller Product and >=1 available tagged Product."
+    },
+    {
+      "id": "D-04",
+      "stale": "Older visible Shoppable Post / Product Post labels",
+      "replacement": "Buyer-facing Product / Scene labels; stable internal canonical names may remain."
+    },
+    {
+      "id": "D-05",
+      "stale": "Theme Lab candidates could be interpreted as production theme",
+      "replacement": "Theme Lab is evaluation-only; semantic production theme, final palette open."
+    },
+    {
+      "id": "D-06",
+      "stale": "Executable API contract places Courier on CONSOLE",
+      "replacement": "System design remains Courier as MOBILE context; executable contract must be reissued."
+    }
+  ]
+}

@@ -1,0 +1,1777 @@
+[
+  {
+    "event_type": "claim.opened",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.evidence_attached",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.evidence_requested",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.state_changed",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.remedy_requested",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.resolved",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.remedy_requested",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.resolved",
+    "key": "CLAIM",
+    "section": 89
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "CLAIM",
+    "section": 111
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "CLAIM",
+    "section": 111
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "CLAIM",
+    "section": 111
+  },
+  {
+    "event_type": "refund.status_changed",
+    "key": "CLAIM",
+    "section": 111
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "account.created",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "SRC",
+    "section": 17
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "account.created",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "NOTIF",
+    "section": 6
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "NOTIF",
+    "section": 111
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "NOTIF",
+    "section": 301
+  },
+  {
+    "event_type": "payment.verified",
+    "key": "ANL",
+    "section": 8
+  },
+  {
+    "event_type": "order.completed",
+    "key": "ANL",
+    "section": 8
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "ANL",
+    "section": 8
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "SCN",
+    "section": 44
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "SCN",
+    "section": 44
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "SCN",
+    "section": 44
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "SCN",
+    "section": 44
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "SCN",
+    "section": 44
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "account.created",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "SCN",
+    "section": 48
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "REC",
+    "section": 56
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "account.created",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "REC",
+    "section": 57
+  },
+  {
+    "event_type": "market.config_published",
+    "key": "MKT",
+    "section": 105
+  },
+  {
+    "event_type": "market.activation_changed",
+    "key": "MKT",
+    "section": 105
+  },
+  {
+    "event_type": "market.locale_pack_changed",
+    "key": "MKT",
+    "section": 105
+  },
+  {
+    "event_type": "market.provider_routing_changed",
+    "key": "MKT",
+    "section": 105
+  },
+  {
+    "event_type": "chatbot.knowledge_version_published",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.localization_completeness_changed",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.feedback_submitted",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.feedback_triaged",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.intent_version_published",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.template_version_published",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.kill_switch_changed",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.escalation_created",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "chatbot.bot_turn_completed",
+    "key": "CHATBOT",
+    "section": 73
+  },
+  {
+    "event_type": "seller.created",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.social_connection.verified",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.social_connection.revoked",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.eligibility.evaluated",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.eligibility.satisfied",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.readiness.changed",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "seller.onboarding.completed",
+    "key": "ONB",
+    "section": 141
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "KB",
+    "section": 33
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "KB",
+    "section": 33
+  },
+  {
+    "event_type": "product.updated",
+    "key": "CATINV",
+    "section": 20
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "CATINV",
+    "section": 21
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "CATINV",
+    "section": 21
+  },
+  {
+    "event_type": "product.created",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.updated",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.published",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.withdrawn",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "variant.updated",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.created",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.updated",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.published",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product.withdrawn",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "variant.updated",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "product_post.updated",
+    "key": "CATINV",
+    "section": 93
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "CATINV",
+    "section": 94
+  },
+  {
+    "event_type": "inventory.stock_confirmed",
+    "key": "CATINV",
+    "section": 94
+  },
+  {
+    "event_type": "inventory.public_stock_projection_changed",
+    "key": "CATINV",
+    "section": 94
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "CATINV",
+    "section": 131
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "CATINV",
+    "section": 131
+  },
+  {
+    "event_type": "order.completed",
+    "key": "ARCH",
+    "section": 11
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "ARCH",
+    "section": 20
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "ARCH",
+    "section": 24
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "ARCH",
+    "section": 24
+  },
+  {
+    "event_type": "order.completed",
+    "key": "ARCH",
+    "section": 56
+  },
+  {
+    "event_type": "order.completed",
+    "key": "ARCH",
+    "section": 61
+  },
+  {
+    "event_type": "payment.verified",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "order.completed",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "review.published",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "refund.status_changed",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "moderation.enforcement_changed",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "trust.level_changed",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "TRUST",
+    "section": 66
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "ORDER",
+    "section": 103
+  },
+  {
+    "event_type": "account.created",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "session.revoked",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "seller.created",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "seller.eligibility_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "seller.social_verification_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "product_post.published",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "product_post.unpublished",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "scene_post.revised",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "scene_post.archived",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "scene_post.deleted",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "checkout.allocation_created",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "checkout.allocation_released",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "order.paid",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "payment.attempt_created",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "payment.verified",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "payment.failed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "refund.status_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "delivery.assigned",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "delivery.started",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "delivery.completed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "delivery.cancelled",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "handoff.verification_failed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "review.published",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "claim.opened",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "claim.resolved",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "trust.level_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "moderation.enforcement_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "moderation.enforcement_changed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "notification.created",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "notification.delivery_recorded",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "media.image_uploaded",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "media.image_ready",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "media.image_failed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "collection.item_added",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "collection.item_removed",
+    "key": "EVT",
+    "section": 7
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 8
+  },
+  {
+    "event_type": "review.published",
+    "key": "EVT",
+    "section": 8
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 8
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 10
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 13
+  },
+  {
+    "event_type": "review.published",
+    "key": "EVT",
+    "section": 22
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "EVT",
+    "section": 23
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "EVT",
+    "section": 23
+  },
+  {
+    "event_type": "account.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "account.deleted",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "session.revoked",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.eligibility_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.social_verification_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.social_connection.verified",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.social_connection.revoked",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.eligibility.evaluated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.eligibility.satisfied",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.readiness.changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "seller.onboarding.completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product.updated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product.published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product.withdrawn",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "variant.updated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product_post.updated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product_post.published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "product_post.unpublished",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "inventory.stock_confirmed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "inventory.public_stock_projection_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "scene_post.revised",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "scene_post.archived",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "scene_post.deleted",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "checkout.allocation_created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "checkout.allocation_released",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "payment.attempt_created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "payment.verified",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "payment.failed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "refund.status_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "order.paid",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "order.ready",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.delegate_created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.delegate_revoked",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.qr_issued",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.otp_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.otp_sent",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.verification_failed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.manual_review_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.revoked",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "courier.relationship.approved",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "courier.terms.updated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.request.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.offer.accepted",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.assigned",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.started",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "delivery.cancelled",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "location.pickup.captured",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "location.delivery.captured",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.opened",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.evidence_attached",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.evidence_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.state_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.remedy_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "claim.resolved",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "review.published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "trust.level_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "moderation.enforcement_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "collection.item_added",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "collection.item_removed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "notification.created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "notification.delivery_recorded",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "media.image_uploaded",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "media.image_ready",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "media.image_failed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.lifecycle_requested",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.lifecycle_confirmed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.lifecycle_blocked",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.lifecycle_processing_started",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.domain_task_completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.hold_created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.hold_released",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.lifecycle_completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.export_ready",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.incident_awareness_recorded",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "privacy.incident_assessment_updated",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.knowledge_version_published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.localization_completeness_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.feedback_submitted",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.feedback_triaged",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.intent_version_published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.template_version_published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.kill_switch_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.escalation_created",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "chatbot.bot_turn_completed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "market.config_published",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "market.activation_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "market.locale_pack_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "market.provider_routing_changed",
+    "key": "EVT",
+    "section": 35
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 36
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 37
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 37
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 40
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 41
+  },
+  {
+    "event_type": "order.completed",
+    "key": "EVT",
+    "section": 42
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "account.created",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "EVT",
+    "section": 50
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "account.created",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "MOD",
+    "section": 49
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "FUL",
+    "section": 34
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "FUL",
+    "section": 36
+  },
+  {
+    "event_type": "courier.relationship.approved",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "courier.terms.updated",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.request.created",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.offer.accepted",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.assigned",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "location.pickup.captured",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.started",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "location.delivery.captured",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.completed",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.cancelled",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "delivery.started",
+    "key": "FUL",
+    "section": 57
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "FUL",
+    "section": 60
+  },
+  {
+    "event_type": "privacy.lifecycle_requested",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.lifecycle_confirmed",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.lifecycle_blocked",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.lifecycle_processing_started",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.domain_task_completed",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.hold_created",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.hold_released",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.lifecycle_completed",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.export_ready",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.incident_awareness_recorded",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "privacy.incident_assessment_updated",
+    "key": "PRV",
+    "section": 59
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "HND",
+    "section": 35
+  },
+  {
+    "event_type": "handoff.created",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.delegate_created",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.delegate_revoked",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.qr_issued",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.otp_requested",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.otp_sent",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.verification_failed",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.manual_review_requested",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.revoked",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.otp_sent",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "notification.delivery_recorded",
+    "key": "HND",
+    "section": 41
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "HND",
+    "section": 53
+  },
+  {
+    "event_type": "order.completed",
+    "key": "HND",
+    "section": 53
+  },
+  {
+    "event_type": "order.completed",
+    "key": "HND",
+    "section": 59
+  },
+  {
+    "event_type": "account.deleted",
+    "key": "WEB",
+    "section": 39
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "payment.verified",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "claim.decision_corrected",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "claim.remedy_completed",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "order.completed",
+    "key": "REV",
+    "section": 29
+  },
+  {
+    "event_type": "scene_post.published",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "scene_post.visibility_changed",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "inventory.changed",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "account.created",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "account.deletion_requested",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "claim.decision_recorded",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "handoff.verified",
+    "key": "DEPLOY",
+    "section": 68
+  },
+  {
+    "event_type": "review.eligibility_changed",
+    "key": "DEPLOY",
+    "section": 68
+  }
+]

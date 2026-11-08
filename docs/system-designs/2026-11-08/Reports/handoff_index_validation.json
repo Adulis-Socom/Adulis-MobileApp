@@ -1,0 +1,179 @@
+{
+  "status": "PASS",
+  "check_type": "STATIC FIELD/INDEX/FK CONSISTENCY ONLY",
+  "indexes": [
+    {
+      "index": "delivery_recipient_one_active_order",
+      "table": "core.delivery_recipient_authorization",
+      "columns": [
+        "order_id"
+      ],
+      "predicate": "WHERE status = 'ACTIVE'",
+      "status": "PASS"
+    },
+    {
+      "index": "delivery_recipient_order_status_lookup",
+      "table": "core.delivery_recipient_authorization",
+      "columns": [
+        "order_id",
+        "status"
+      ],
+      "predicate": "",
+      "status": "PASS"
+    },
+    {
+      "index": "handoff_order_stage_lookup",
+      "table": "core.handoff",
+      "columns": [
+        "order_id",
+        "stage"
+      ],
+      "predicate": "",
+      "status": "PASS"
+    },
+    {
+      "index": "handoff_presenter_assignment_status_lookup",
+      "table": "core.handoff",
+      "columns": [
+        "presenter_courier_assignment_id",
+        "status"
+      ],
+      "predicate": "WHERE presenter_courier_assignment_id IS NOT NULL",
+      "status": "PASS"
+    },
+    {
+      "index": "handoff_recipient_assignment_status_lookup",
+      "table": "core.handoff",
+      "columns": [
+        "recipient_courier_assignment_id",
+        "status"
+      ],
+      "predicate": "WHERE recipient_courier_assignment_id IS NOT NULL",
+      "status": "PASS"
+    },
+    {
+      "index": "handoff_credential_expiry_status_lookup",
+      "table": "core.handoff_credential",
+      "columns": [
+        "expires_at",
+        "status"
+      ],
+      "predicate": "",
+      "status": "PASS"
+    },
+    {
+      "index": "handoff_one_active_credential_type",
+      "table": "core.handoff_credential",
+      "columns": [
+        "handoff_id",
+        "type"
+      ],
+      "predicate": "WHERE status = 'ACTIVE'",
+      "status": "PASS"
+    }
+  ],
+  "tables": {
+    "accounts.account": [
+      "id"
+    ],
+    "operators.operator_account": [
+      "id"
+    ],
+    "core.seller": [
+      "id"
+    ],
+    "core.seller_order": [
+      "buyer_account_id",
+      "id"
+    ],
+    "fulfilment.delivery_assignment": [
+      "id",
+      "order_id"
+    ],
+    "core.delivery_recipient_authorization": [
+      "accepted_ordinary_account_id",
+      "buyer_account_id",
+      "created_at",
+      "id",
+      "order_id",
+      "phone_verified_at",
+      "recipient_name",
+      "recipient_phone_e164",
+      "revoked_at",
+      "status",
+      "used_at"
+    ],
+    "core.handoff": [
+      "buyer_account_id",
+      "delegated_recipient_authorization_id",
+      "fulfilment_mode",
+      "id",
+      "intended_recipient_type",
+      "market_id",
+      "meeting_started_at",
+      "order_id",
+      "policy_version",
+      "presenter_courier_assignment_id",
+      "presenter_ordinary_account_id",
+      "presenter_principal_type",
+      "presenter_seller_id",
+      "public_ref",
+      "recipient_courier_assignment_id",
+      "stage",
+      "status",
+      "verification_method",
+      "verified_at"
+    ],
+    "core.handoff_credential": [
+      "attempt_count",
+      "credential_digest",
+      "expires_at",
+      "generation",
+      "handoff_id",
+      "id",
+      "issued_at",
+      "key_id",
+      "max_attempts",
+      "presenter_binding_ref",
+      "purpose",
+      "recipient_binding_ref",
+      "status",
+      "token_id",
+      "type",
+      "used_at"
+    ],
+    "core.handoff_evidence": [
+      "approval_reference",
+      "credential_id",
+      "decided_by_operator_account_id",
+      "handoff_id",
+      "id",
+      "market_id",
+      "method",
+      "operator_case_id",
+      "order_id",
+      "policy_version",
+      "presenter_courier_assignment_id",
+      "presenter_ordinary_account_id",
+      "presenter_seller_id",
+      "reason_code",
+      "recipient_buyer_account_id",
+      "recipient_class",
+      "recipient_courier_assignment_id",
+      "recipient_delegate_authorization_id",
+      "request_id",
+      "reviewer_reference",
+      "verified_at"
+    ]
+  },
+  "postgresql17_available": false,
+  "available_commands": {
+    "psql": null,
+    "postgres": null,
+    "initdb": null,
+    "docker": null
+  },
+  "sql_execution": "NOT EXECUTED",
+  "negative_inserts": "NOT EXECUTED",
+  "limits": "No PostgreSQL 17 server/CLI available. Not a migration, query-plan, concurrency or owner-authorization test."
+}

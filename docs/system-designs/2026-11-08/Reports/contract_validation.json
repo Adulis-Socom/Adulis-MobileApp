@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "documents_scanned": 34,
+  "domain_events": 102,
+  "job_intents": 1,
+  "checks": [
+    {
+      "seed_codes": 68,
+      "grants": 197,
+      "normative_references": 109
+    },
+    {
+      "check": "Auth seed and all Seller references",
+      "status": "PASS"
+    },
+    {
+      "check": "Registry uniqueness and resolvable schemas/producers",
+      "status": "PASS"
+    },
+    {
+      "check": "Current domain references and subscriptions",
+      "status": "PASS"
+    },
+    {
+      "check": "PICKUP/DELIVERY filters",
+      "status": "PASS"
+    },
+    {
+      "check": "Closed parser negative fixtures",
+      "status": "PASS"
+    },
+    {
+      "check": "Claim correction and verified-remedy fixtures",
+      "status": "PASS"
+    },
+    {
+      "check": "Eligibility reversal/replay/out-of-order model",
+      "status": "PASS"
+    },
+    {
+      "check": "Recipient job-intent separation and suppression model",
+      "status": "PASS"
+    }
+  ],
+  "limits": "Restricted-schema shape/static checks and synthetic in-memory specification models only; no application, PostgreSQL migration, provider, BullMQ, browser or security integration test."
+}
