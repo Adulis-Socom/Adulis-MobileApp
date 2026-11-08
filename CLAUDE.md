@@ -15,7 +15,7 @@ code: it changes in the same PR as any decision that changes it.
 > ```
 > cd apps/api        && claude   # backend + database + migrations
 > cd apps/console    && claude   # seller console PWA
-> cd apps/mobile     && claude
+> cd apps/mobile     && claude   # or the Adulis-Mobile-Workspace parent - apps/mobile/CLAUDE.md
 > cd apps/storefront && claude   # after the subtree import — ops/runbooks/
 > ```
 >
@@ -74,7 +74,7 @@ in `core.session_audience`, never a deployment and never a directory.
 |---|---|---|
 | `apps/api/` · `db/` | Backend and database | CEO |
 | `apps/console/` | Seller console PWA | CEO |
-| `apps/mobile/` | Mobile app — buyer plus seller lite, **one app, two modes** | unstaffed |
+| `apps/mobile/` | Mobile app — Buyer, Seller Companion and Courier modes, **one app** | unstaffed |
 | `apps/storefront/` | Storefront website | unstaffed |
 
 > **One owner, since T7 S0 (register D-94).** The COO/CTO has left; `.github/CODEOWNERS`

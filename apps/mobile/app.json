@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Adulis",
+    "slug": "adulis",
+    "scheme": "adulis",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-image"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f1b64f7b-6725-4415-9466-d7fa7756fdbd"
+      }
+    },
+    "owner": "naod61s-team"
+  }
+}

@@ -1,0 +1,45 @@
+# WO-001 foundation smoke: root loads, every mode shell is reachable, and switching modes
+# keeps the one session (no sign-in surface, session line unchanged).
+#
+# Runs inside Expo Go (host.exp.exponent) because the Adulis Android applicationId is OPEN
+# pending a founder decision. When it is decided, point appId at the development build and
+# replace the Expo Go steps (clearState, openLink, onboarding dismissal) with launchApp.
+#
+# Prerequisites: `pnpm --filter @adulis/mobile dev` running, and
+# `adb reverse tcp:8081 tcp:8081` so the device reaches Metro on its own loopback.
+#
+# Every run starts from a clean Expo Go (clearState): with a previous run's project still in
+# its state, the next link lands on the launcher. A clean Expo Go always shows its one-time
+# developer-menu onboarding on first open, so the flow dismisses it.
+appId: host.exp.exponent
+name: Foundation smoke
+tags:
+  - foundation
+---
+- clearState
+- openLink: exp://127.0.0.1:8081
+- extendedWaitUntil:
+    visible: Continue
+    timeout: 90000
+- tapOn: Continue
+- runFlow:
+    when:
+      visible: Go home
+    commands:
+      - tapOn: Close
+- assertVisible: Adulis mobile foundation
+- assertVisible: 'Session: signed out'
+- tapOn: Open Buyer
+- assertVisible: Buyer foundation ready
+- assertVisible: 'Active mode: Buyer'
+- assertVisible: 'Session: signed out'
+- tapOn: Switch to Seller Companion
+- assertVisible: Seller Companion foundation ready
+- assertVisible: 'Active mode: Seller Companion'
+- assertVisible: 'Session: signed out'
+- tapOn: Switch to Courier
+- assertVisible: Courier foundation ready
+- assertVisible: 'Active mode: Courier'
+- assertVisible: 'Session: signed out'
+- tapOn: Back to foundation
+- assertVisible: Adulis mobile foundation

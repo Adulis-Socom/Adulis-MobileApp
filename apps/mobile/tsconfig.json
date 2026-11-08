@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "Repo strictness first (ADU-CON-02 S3.1, never relaxed), then Expo's bundler/JSX settings on top. `types` is explicit so CI typechecks without the generated, git-ignored expo-env.d.ts.",
+  "extends": ["@adulis/config/tsconfig.base.json", "expo/tsconfig.base"],
+  "compilerOptions": {
+    "types": ["expo/types", "jest"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

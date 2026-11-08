@@ -26,14 +26,15 @@ Before acting:
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — primary.
 - `ADU-API-01_API_Contract_v1_3.md` — mobile-reachable endpoints.
 - `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — surface permissions.
-- `ADU-00_One_Page_Business_Model_v9_1.md` — one app/two modes and core-commerce doctrine.
+- `ADU-00_One_Page_Business_Model_v9_1.md` — one-app and core-commerce doctrine.
+- Founder decision (WO-001, recorded in `apps/mobile/CLAUDE.md`): one app with Buyer, Seller Companion and Courier as sibling modes. It widens the app, not the Companion: this skill's scope and invariants are unchanged.
 
 ## Phase-1 scope
 Only these seller-mobile surfaces are required:
 1. Notifications / notification centre with deep links.
 2. Order detail: reservation/order info, payment evidence viewer, `Confirm Payment Received`, `Payment Not Received`, `Can't Fulfil`, mark ready, handoff status/QR.
 3. Inbox: buyer conversations, manual replies, order context.
-4. Buyer <-> Seller mode switcher.
+4. Mode switcher across the account's available modes (Buyer, Seller Companion, Courier). Switching never re-authenticates and never shows a mode the backend has not asserted.
 
 Phase-2 candidates (dashboard/basic analytics/reviews/preferences) are evidence-gated; do not build them automatically just because PWA has them.
 
