@@ -72,11 +72,11 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > **WO-DISC-001 (`0054`) pins four more by name** -- `core.scene_post`,
 > `core.scene_post_revision`, `core.scene_post_product`, `core.scene_post_transition`
 > (ADU-SCN-01 v3.2 S46). `pnpm db:check` now prints **120 tables: manifest 109 + 11
-> body-over-manifest.** No ADU-DB-01 revision lists them yet, so **`pnpm verify:appendix`
-> is RED** on Appendix B's `core` row (94 live against the printed 90) until the founder
-> installs the revision that adds them. That is the gate doing its job: do not edit the
-> installed document or the gate to turn it green
-> (`docs/discovery/WO-DISC-001-SCENE-DOMAIN-FOUNDATION.md`, section 22).
+> body-over-manifest.** **ADU-DB-01 v1.20** (WO-DISC-001A, founder-authorised) folds them
+> into Appendix B -- `core` 94, 120 tables, 71 enum types -- so `pnpm verify:appendix` is
+> green again. Between WO-DISC-001 and v1.20 the gate was red on exactly this row, which is
+> the gate doing its job: a schema change is followed by a document reissue, never by
+> editing the installed document or the gate.
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
