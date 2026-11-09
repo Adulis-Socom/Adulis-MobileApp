@@ -348,7 +348,12 @@ Neither needs a mobile-side cast; both are recorded for a contract revision.
 
 ## 24. Commits
 
-Filled in by the commit that follows this record.
+| Commit | Content |
+|---|---|
+| `11b4ef9` feat(locale): add the mobile sign-in and bootstrap strings (WO-003) | `packages/locale` only, for its own packages PR, which the mobile change needs first |
+| `e8449bf` feat(mobile): add device registration, bootstrap, version gate and Buyer sign-in | API client, device storage, bootstrap, auth routes, session, components, `apps/mobile/CLAUDE.md`, the existing tests moved to `src/testing` |
+| `3fab39b` test(mobile): cover Buyer sign-in, session handling and the API client | the new tests and the Maestro flows |
+| `61f4b19` docs(mobile): record WO-003 completion | this record (this table added in the next commit) |
 
 ## 25. Next recommended work order
 
