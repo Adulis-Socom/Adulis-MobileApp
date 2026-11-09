@@ -1,0 +1,44 @@
+# Buyer sign-in (WO-003A): a link straight to code entry is not a code request. Opened while
+# the app runs and again from a cold start, adulis://auth/verify?phone=... lands on phone
+# entry and never offers "Send a new code", so a link cannot make the app text a number
+# (returnTo handling is asserted in src/auth/auth-flow.test.tsx). Check afterwards that
+# apps/api/.dev-sms.log gained no line for +DIGITS.
+#
+# Prerequisites as for buyer-auth-request.yaml.
+#
+#   maestro test -e DIGITS=251911000999 .maestro/buyer-auth-verify-link.yaml
+appId: com.adulis.app
+name: Buyer sign-in - a Verify link opens Sign in
+tags:
+  - buyer
+  - auth
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: Scenes from Sellers will appear here in a coming update.
+    timeout: 120000
+
+# While the app runs.
+- openLink: adulis://auth/verify?phone=%2B${DIGITS}&returnTo=%2Fsaved
+- extendedWaitUntil:
+    visible: Enter your phone number. We will send you a code by SMS.
+    timeout: 20000
+- assertNotVisible: Six-digit code
+- assertNotVisible: Send a new code
+- takeScreenshot: link-01-running
+
+# From a cold start.
+- stopApp
+- openLink: adulis://auth/verify?phone=%2B${DIGITS}&returnTo=%2Fsaved
+- extendedWaitUntil:
+    visible: Enter your phone number. We will send you a code by SMS.
+    timeout: 120000
+- assertNotVisible: Six-digit code
+- assertNotVisible: Send a new code
+- takeScreenshot: link-02-cold
+
+# The Buyer can still start properly from here: the request itself is the normal flow.
+- assertVisible: Send code

@@ -1,0 +1,25 @@
+# Buyer sign-in (WO-003A): leaving code entry ends the code flow, however it is left. Starts
+# where buyer-auth-request.yaml ended (on "Enter code" for +DIGITS). A link to Saved leaves
+# Verify without passing Sign in; a Verify link for that same phone then opens Sign in, so it
+# cannot reach "Send a new code".
+#
+#   maestro test -e PHONE=+251911000402 .maestro/buyer-auth-request.yaml
+#   maestro test -e DIGITS=251911000402 .maestro/buyer-auth-leave-verify.yaml
+appId: com.adulis.app
+name: Buyer sign-in - leaving Verify ends the code flow
+tags:
+  - buyer
+  - auth
+---
+- assertVisible: Six-digit code
+- openLink: adulis://saved
+- extendedWaitUntil:
+    visible: Sign in to save.
+    timeout: 20000
+- openLink: adulis://auth/verify?phone=%2B${DIGITS}
+- extendedWaitUntil:
+    visible: Enter your phone number. We will send you a code by SMS.
+    timeout: 20000
+- assertNotVisible: Six-digit code
+- assertNotVisible: Send a new code
+- takeScreenshot: leave-01-link-after-leaving
