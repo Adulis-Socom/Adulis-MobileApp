@@ -671,6 +671,15 @@ describe('C1 — onboarding and verification', () => {
   });
 
   describe('availability and overrides', () => {
+    // The next 11 September (Enkutatash) still ahead of today. The list reads from
+    // CURRENT_DATE, so a fixed date fails once it passes -- 2026-09-11 did (overnight
+    // register OVN-020). The next one is always inside the 24-month bound.
+    const OVERRIDE_DATE = (() => {
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      return `${Date.UTC(year, 8, 11) > now.getTime() ? year : year + 1}-09-11`;
+    })();
+
     it('PUT the weekly pattern; zero windows is also valid', async () => {
       await request(app.getHttpServer())
         .put('/v1/seller/availability')
@@ -735,14 +744,14 @@ describe('C1 — onboarding and verification', () => {
 
     it('PUT an override — idempotent by path, NO idempotency key demanded', async () => {
       await request(app.getHttpServer())
-        .put('/v1/seller/availability-overrides/2026-09-11')
+        .put(`/v1/seller/availability-overrides/${OVERRIDE_DATE}`)
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', sellerId)
         .send({ note: 'Enkutatash' })
         .expect(200);
       await request(app.getHttpServer())
-        .put('/v1/seller/availability-overrides/2026-09-11')
+        .put(`/v1/seller/availability-overrides/${OVERRIDE_DATE}`)
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', sellerId)
@@ -766,15 +775,15 @@ describe('C1 — onboarding and verification', () => {
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', sellerId)
         .expect(200);
-      expect(r.body.data[0].date).toBe('2026-09-11');
+      expect(r.body.data[0].date).toBe(OVERRIDE_DATE);
       await request(app.getHttpServer())
-        .delete('/v1/seller/availability-overrides/2026-09-11')
+        .delete(`/v1/seller/availability-overrides/${OVERRIDE_DATE}`)
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', sellerId)
         .expect(204);
       await request(app.getHttpServer())
-        .delete('/v1/seller/availability-overrides/2026-09-11')
+        .delete(`/v1/seller/availability-overrides/${OVERRIDE_DATE}`)
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', sellerId)
