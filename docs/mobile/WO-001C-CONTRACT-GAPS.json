@@ -974,7 +974,18 @@
       "blocks": [
         "DOES NOT BLOCK WO-002 BUYER"
       ],
-      "confidence": "verified"
+      "confidence": "verified",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "RESOLVED",
+        "commits": [
+          "672252a30f36d4b709266e89b5b5e7ccb9f0619c",
+          "f05287363ae0e252653e1db7b8f92a0517adaf9f"
+        ],
+        "evidence": "POST /v1/auth/logout (MOBILE and CONSOLE; clears the console cookie), typed in the contract; the console signs out through it.",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md"
+      }
     },
     {
       "id": "ID-3",
@@ -1076,7 +1087,19 @@
         "BLOCKS COURIER",
         "DOES NOT BLOCK WO-002 BUYER"
       ],
-      "confidence": "verified"
+      "confidence": "verified",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "PARTIALLY_RESOLVED",
+        "commits": [
+          "f05287363ae0e252653e1db7b8f92a0517adaf9f",
+          "e8dce441f89e0e56a459850687542ce565a1d6c4"
+        ],
+        "evidence": "GET /v1/bootstrap account_context {buyer, seller_companion, courier}, server-derived for a MOBILE session, Cache-Control private, no-store. Tests: apps/api/test/wo-api-001a-auth-security.e2e.spec.ts (account_context).",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md",
+        "remaining": "courier.available is fail-closed false until WO-API-001B defines Courier MOBILE authorisation (ID-3, ID-4). Team role arrays and per-Seller capability lists are not projected; SC-2 permission reconciliation is open. Mobile does not consume it yet."
+      }
     },
     {
       "id": "ID-8",
@@ -1422,7 +1445,17 @@
       ],
       "confidence": "verified (code and the c6 test that equates the listed id with the cookie)",
       "release_gate": true,
-      "severity": "HIGH - one compromised session or one console XSS yields every live credential on the account, persistently; a replayed listed CONSOLE id works from any HTTP client and counts as a known device for the new-device payout lock (financial.service.ts:346). Bounded by: same account only; SMS step-up still guards payout, ownership and revoke-all."
+      "severity": "HIGH - one compromised session or one console XSS yields every live credential on the account, persistently; a replayed listed CONSOLE id works from any HTTP client and counts as a known device for the new-device payout lock (financial.service.ts:346). Bounded by: same account only; SMS step-up still guards payout, ownership and revoke-all.",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "RESOLVED",
+        "commits": [
+          "672252a30f36d4b709266e89b5b5e7ccb9f0619c"
+        ],
+        "evidence": "Migration 0053 adds core.session.token_hash (SHA-256 of a 32-byte random credential); SessionService authenticates by hash; core.session.id is a public id and no longer authenticates; GET /v1/auth/sessions lists public ids only and no device_id; one-time global sign-out. Tests: apps/api/test/wo-api-001a-auth-security.e2e.spec.ts (SEC-1, migration 0053).",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md"
+      }
     },
     {
       "id": "SEC-2",
@@ -1442,7 +1475,17 @@
       ],
       "confidence": "verified (code reading)",
       "release_gate": true,
-      "severity": "MEDIUM (LOW until a push provider is bound: NullPushAdapter today) - unauthenticated write to another account's device push token and permission; device ids are client-chosen, sent in X-Adulis-Device on every request and listed by GET /v1/auth/sessions."
+      "severity": "MEDIUM (LOW until a push provider is bound: NullPushAdapter today) - unauthenticated write to another account's device push token and permission; device ids are client-chosen, sent in X-Adulis-Device on every request and listed by GET /v1/auth/sessions.",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "RESOLVED",
+        "commits": [
+          "672252a30f36d4b709266e89b5b5e7ccb9f0619c"
+        ],
+        "evidence": "PATCH /v1/devices/{id} is authenticated and bound to the calling session device on the caller's account; other ids answer 404 alike. Tests: apps/api/test/wo-api-001a-auth-security.e2e.spec.ts (SEC-2), c6.",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md"
+      }
     },
     {
       "id": "SEC-3",
@@ -1463,7 +1506,17 @@
         "DOES NOT BLOCK WO-002 BUYER"
       ],
       "confidence": "verified (code reading; found by the WO-001C security review)",
-      "release_gate": true
+      "release_gate": true,
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "RESOLVED",
+        "commits": [
+          "672252a30f36d4b709266e89b5b5e7ccb9f0619c"
+        ],
+        "evidence": "OTP verify stores only {credential_withheld, session_id}; an identical replay answers OTP_EXPIRED with no credential; 0053 deletes pre-existing verify records. Tests: apps/api/test/wo-api-001a-auth-security.e2e.spec.ts (SEC-3, migration 0053).",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md"
+      }
     },
     {
       "id": "SEC-4",
@@ -1483,7 +1536,17 @@
         "DOES NOT BLOCK WO-002 BUYER"
       ],
       "confidence": "verified (code reading; found by the WO-001C security review)",
-      "release_gate": true
+      "release_gate": true,
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "RESOLVED",
+        "commits": [
+          "672252a30f36d4b709266e89b5b5e7ccb9f0619c"
+        ],
+        "evidence": "POST /v1/auth/logout and DELETE on the own id revoke the calling session without step-up; another session is CONSOLE-only with a consumed REVOKE_ALL_SESSIONS step-up (target-bound when named); MOBILE gets 403; revoke-others refuses a target-bound proof. Tests: apps/api/test/wo-api-001a-auth-security.e2e.spec.ts (SEC-4), c6.",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md"
+      }
     },
     {
       "id": "API-1",
@@ -1506,7 +1569,19 @@
         "BLOCKS PAYMENT/CHECKOUT ONLY"
       ],
       "confidence": "verified",
-      "wo002_condition": "WO-002 must not build a typed OTP sign-in screen or any data screen until the auth/session slice of this gap closes; hand-written DTOs are forbidden."
+      "wo002_condition": "WO-002 must not build a typed OTP sign-in screen or any data screen until the auth/session slice of this gap closes; hand-written DTOs are forbidden.",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "PARTIALLY_RESOLVED",
+        "commits": [
+          "f05287363ae0e252653e1db7b8f92a0517adaf9f",
+          "5e36f732677b16db2c56d0c357fbb6258bb49c18"
+        ],
+        "evidence": "Schemas for bootstrap, OTP request/resend/verify, logout, session list, revoke one, revoke others, device register and device update (13 of 136 operations now carry a schema); typed in packages/api-client and pinned by test/auth.test-d.ts.",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md",
+        "remaining": "123 operations remain schema-less, including step-up, recovery, remembered-devices and every commerce, Companion and Courier operation."
+      }
     },
     {
       "id": "API-2",
@@ -1525,7 +1600,18 @@
       "blocks": [
         "DOES NOT BLOCK WO-002 BUYER"
       ],
-      "confidence": "verified"
+      "confidence": "verified",
+      "resolution": {
+        "work_order": "WO-API-001A",
+        "date": "2026-11-09",
+        "status": "PARTIALLY_RESOLVED",
+        "commits": [
+          "f05287363ae0e252653e1db7b8f92a0517adaf9f"
+        ],
+        "evidence": "bearerFormat is opaque (was JWT); a cookie scheme exists; the touched operations declare security and their real headers.",
+        "record": "docs/mobile/WO-API-001A-AUTH-SECURITY.md",
+        "remaining": "Other operations declare no security or header parameters."
+      }
     },
     {
       "id": "API-3",
@@ -1755,6 +1841,26 @@
       ],
       "confidence": "verified",
       "release_gate": true
+    }
+  ],
+  "resolution_log": [
+    {
+      "work_order": "WO-API-001A",
+      "date": "2026-11-09",
+      "branch": "mobile/wo-api-001a-auth-security",
+      "note": "Resolution objects are appended by later work orders. The audited fields and statuses above them are unchanged and still describe the 2026-11-09 audit baseline.",
+      "resolved": [
+        "SEC-1",
+        "SEC-2",
+        "SEC-3",
+        "SEC-4",
+        "ID-2"
+      ],
+      "partially_resolved": [
+        "ID-7",
+        "API-1",
+        "API-2"
+      ]
     }
   ]
 }
