@@ -11,7 +11,14 @@ against `origin` before branching.
 
 ## 2. Branch
 
-`mobile/wo-002-buyer-shell`. Commits are listed in section 15.
+`mobile/wo-002-buyer-shell`.
+
+| Commit | Content |
+|---|---|
+| `c2d7333` feat(locale): add the Buyer shell strings | `packages/locale` only, for its own packages PR, which the mobile change needs first |
+| `c5063eb` feat(mobile): build the Buyer application shell and navigation | routes, components, session sign-out, release gates, dependencies, `apps/mobile/CLAUDE.md`, the rewritten navigation test |
+| `501f297` test(mobile): validate the Buyer shell navigation, gates and sign-out | the new tests and both Maestro flows |
+| `907dedb` docs(mobile): record WO-002 completion | this record (this table added in the next commit) |
 
 ## 3. Buyer route structure
 
