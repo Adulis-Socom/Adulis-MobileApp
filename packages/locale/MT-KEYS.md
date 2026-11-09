@@ -27,7 +27,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-769 keys:
+805 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -129,6 +129,42 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `deletion.effect.reservations_released`
 - `chat.bot.escalated`
 - `notification.chat.escalated`
+- `common.loading`
+- `buyer.wordmark`
+- `buyer.tab.home`
+- `buyer.tab.shop`
+- `buyer.tab.saved`
+- `buyer.tab.orders`
+- `buyer.tab.you`
+- `buyer.home.channels`
+- `buyer.home.channel.for_you`
+- `buyer.home.channel.following`
+- `buyer.home.channel.nearby`
+- `buyer.home.channel.discounts`
+- `buyer.home.channel.locally_made`
+- `buyer.home.for_you.coming`
+- `buyer.home.following.coming`
+- `buyer.home.nearby.coming`
+- `buyer.home.discounts.coming`
+- `buyer.home.locally_made.coming`
+- `buyer.search`
+- `buyer.search.coming`
+- `buyer.notifications`
+- `buyer.notifications.coming`
+- `buyer.notifications.signed_out`
+- `buyer.shop.coming`
+- `buyer.saved.coming`
+- `buyer.saved.signed_out`
+- `buyer.orders.coming`
+- `buyer.orders.signed_out`
+- `buyer.you.signed_out`
+- `buyer.sign_in.coming`
+- `buyer.you.appearance`
+- `buyer.you.appearance.system`
+- `buyer.you.appearance.light`
+- `buyer.you.appearance.dark`
+- `buyer.you.account`
+- `buyer.you.more_coming`
 - `app.title`
 - `error.seller.tier_limit_reached`
 - `sms.otp.step_up.subscription_change`

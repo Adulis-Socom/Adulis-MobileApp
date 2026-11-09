@@ -193,6 +193,49 @@ export const enCommon = {
   // behind it, so it lives here rather than in nlu.answer_template.
   'chat.bot.escalated': 'Your question has been passed to the seller. They will reply here.',
   'notification.chat.escalated': 'A buyer question needs your reply.',
+
+  'common.loading': 'Loading',
+
+  // Buyer shell (WO-002; ADU-MOB-02 v4.3 S11). Structure only: every "coming
+  // update" line stands where a domain arrives later, and never claims the
+  // Buyer has nothing (no "You have no orders" before Orders can be read).
+  'buyer.wordmark': 'Adulis',
+  'buyer.tab.home': 'Home',
+  'buyer.tab.shop': 'Shop',
+  'buyer.tab.saved': 'Saved',
+  'buyer.tab.orders': 'Orders',
+  'buyer.tab.you': 'You',
+  'buyer.home.channels': 'Home channels',
+  'buyer.home.channel.for_you': 'For You',
+  'buyer.home.channel.following': 'Following',
+  'buyer.home.channel.nearby': 'Nearby',
+  'buyer.home.channel.discounts': 'Discounts',
+  // Market-configured wording later (MOB-02 S11); this is the default label.
+  'buyer.home.channel.locally_made': 'Locally Made',
+  'buyer.home.for_you.coming': 'Scenes from Sellers will appear here in a coming update.',
+  'buyer.home.following.coming': 'Scenes from Sellers you follow will appear here in a coming update.',
+  'buyer.home.nearby.coming': 'Discovery near you will appear here in a coming update.',
+  'buyer.home.discounts.coming': 'Current offers will appear here in a coming update.',
+  'buyer.home.locally_made.coming': 'Locally made Products will appear here in a coming update.',
+  'buyer.search': 'Search',
+  'buyer.search.coming': 'Search for Products, Sellers and Scenes arrives in a coming update.',
+  'buyer.notifications': 'Notifications',
+  'buyer.notifications.coming': 'Your notifications will appear here in a coming update.',
+  'buyer.notifications.signed_out': 'Sign in to see notifications.',
+  'buyer.shop.coming': 'Shopping by category arrives in a coming update.',
+  'buyer.saved.coming': 'Your saved Products and Scenes will appear here in a coming update.',
+  'buyer.saved.signed_out': 'Sign in to save.',
+  'buyer.orders.coming': 'Your orders will appear here in a coming update.',
+  'buyer.orders.signed_out': 'Sign in to start ordering and track your orders.',
+  'buyer.you.signed_out': 'Sign in to see your profile.',
+  'buyer.sign_in.coming': 'Signing in arrives in a coming update.',
+  'buyer.you.appearance': 'Appearance',
+  'buyer.you.appearance.system': 'System',
+  'buyer.you.appearance.light': 'Light',
+  'buyer.you.appearance.dark': 'Dark',
+  'buyer.you.account': 'Account',
+  'buyer.you.more_coming':
+    'Profile, purchases, notification settings, privacy, help and account deletion arrive in a coming update.',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;
