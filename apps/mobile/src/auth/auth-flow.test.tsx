@@ -60,7 +60,7 @@ async function enterCode(code = SIGN_IN_CODE) {
 describe('first launch', () => {
   it('registers the install, keyed by a new persistent device id, before bootstrap', async () => {
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
     const [register] = api.callsTo('POST /v1/devices');
     const deviceId = memory.get('adulis.device.id');
     expect(deviceId).toMatch(UUID);
@@ -81,7 +81,7 @@ describe('first launch', () => {
     const earlier = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
     resetSecureStore({ 'adulis.device.id': earlier, 'adulis.device.registered': earlier });
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
     expect(api.callsTo('POST /v1/devices')).toHaveLength(0);
     expect(api.callsTo('GET /v1/bootstrap')[0]?.headers['X-Adulis-Device']).toBe(earlier);
     expect(memory.get('adulis.device.id')).toBe(earlier);
@@ -112,7 +112,7 @@ describe('device registration idempotency', () => {
     const pending = '019a6b2e-5f3c-7a1b-8c2d-3e4f5a6b7c8d';
     resetSecureStore({ 'adulis.device.id': deviceId, [REGISTRATION_KEY]: pending });
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
     const [register] = api.callsTo('POST /v1/devices');
     expect(keyOf(register)).toBe(pending);
     expect(register?.body?.id).toBe(deviceId); // the device id never changed
@@ -495,7 +495,7 @@ describe('client version', () => {
     api.on('GET /v1/bootstrap', () => ({ status: 200, body: bootstrapBody({ client_status: 'UPGRADE_RECOMMENDED' }) }));
     await renderRouter(APP_DIR);
     expect(await screen.findByText(en['app.upgrade.recommended'])).toBeOnTheScreen();
-    expect(screen.getByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['app.upgrade.dismiss'] }));
     expect(screen.queryByText(en['app.upgrade.recommended'])).not.toBeOnTheScreen();
   });
@@ -534,7 +534,7 @@ describe('account_context and release builds', () => {
       expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
       expect(screen.queryByText(/Seller|Courier|Developer diagnostics/)).not.toBeOnTheScreen();
       await act(() => router.push('/seller'));
-      expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     } finally {
       devGlobal.__DEV__ = dev;
     }

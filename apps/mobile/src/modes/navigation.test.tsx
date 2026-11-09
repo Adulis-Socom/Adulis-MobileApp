@@ -55,7 +55,7 @@ describe('development builds', () => {
     expect(useUiStore.getState().activeMode).toBe('courier');
 
     await fireEvent.press(screen.getByRole('button', { name: 'Switch to Buyer' }));
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(router.getPathname()).toBe('/home/for-you');
     expect(useUiStore.getState().activeMode).toBe('buyer');
 
@@ -74,7 +74,7 @@ describe('development builds', () => {
     expect(useUiStore.getState().locale).toBe('am');
 
     await renderRouter(APP_DIR, { initialUrl: '/home/for-you' });
-    expect(await screen.findByText(am['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(am['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(screen.getByRole('tab', { name: am['buyer.home.channel.for_you'] })).toBeOnTheScreen();
   });
 });
@@ -93,7 +93,7 @@ describe('release builds', () => {
   it.each(['/dev', '/seller', '/courier', '/_sitemap'])('never render %s; it lands on Buyer Home', async (path) => {
     await asRelease(async () => {
       const router = await renderRouter(APP_DIR, { initialUrl: path });
-      expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(router.getPathname()).toBe('/home/for-you');
       expect(screen.queryByText('Developer diagnostics')).not.toBeOnTheScreen();
       expect(screen.queryByText(/foundation ready/)).not.toBeOnTheScreen();
@@ -105,7 +105,7 @@ describe('release builds', () => {
     useUiStore.setState({ activeMode: 'seller' }); // e.g. left over from an earlier account
     await asRelease(async () => {
       const router = await renderRouter(APP_DIR, { initialUrl: '/seller' });
-      expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(router.getPathname()).toBe('/home/for-you');
       expect(screen.queryByText('Seller Companion foundation ready')).not.toBeOnTheScreen();
     });
@@ -115,8 +115,8 @@ describe('release builds', () => {
     useUiStore.setState({ locale: 'am' });
     await asRelease(async () => {
       await renderRouter(APP_DIR);
-      expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
-      expect(screen.queryByText(am['buyer.home.for_you.coming'])).not.toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen.queryByText(am['buyer.for_you.empty'])).not.toBeOnTheScreen();
       expect(screen.getByRole('tab', { name: en['buyer.home.channel.for_you'] })).toBeOnTheScreen();
     });
   });

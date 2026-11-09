@@ -21,7 +21,7 @@ tags:
     permissions:
       android.permission.ACCESS_LOCAL_NETWORK: allow
 - extendedWaitUntil:
-    visible: Scenes from Sellers will appear here in a coming update.
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
     timeout: 120000
 - tapOn: You
 - tapOn: Developer diagnostics

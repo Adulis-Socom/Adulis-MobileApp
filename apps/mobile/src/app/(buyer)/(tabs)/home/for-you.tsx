@@ -1,5 +1,5 @@
-import { ChannelScreen } from '../../../../buyer/ChannelScreen';
+import { ForYouFeed } from '../../../../buyer/ForYouFeed';
 
 export default function ForYou() {
-  return <ChannelScreen channel="for-you" />;
+  return <ForYouFeed />;
 }

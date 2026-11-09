@@ -6,6 +6,7 @@ import type { MobileMessageKey } from '@adulis/locale/mobile';
  * default. Each `name` is a route file under app/(buyer)/(tabs)/home/.
  */
 export const CHANNELS = [
+  // For You renders the real feed (WO-004A); its `coming` line is no longer shown.
   { name: 'for-you', label: 'buyer.home.channel.for_you', coming: 'buyer.home.for_you.coming' },
   { name: 'following', label: 'buyer.home.channel.following', coming: 'buyer.home.following.coming' },
   { name: 'nearby', label: 'buyer.home.channel.nearby', coming: 'buyer.home.nearby.coming' },

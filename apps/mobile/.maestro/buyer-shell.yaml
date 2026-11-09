@@ -20,7 +20,7 @@ tags:
     permissions:
       android.permission.ACCESS_LOCAL_NETWORK: allow
 - extendedWaitUntil:
-    visible: Scenes from Sellers will appear here in a coming update.
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
     timeout: 120000
 - assertVisible: Adulis
 - assertVisible: For You
@@ -34,7 +34,7 @@ tags:
 - tapOn: Nearby
 - assertVisible: Discovery near you will appear here in a coming update.
 - back
-- assertVisible: Scenes from Sellers will appear here in a coming update.
+- assertVisible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
 - tapOn: Discounts
 - assertVisible: Current offers will appear here in a coming update.
 - scrollUntilVisible:

@@ -32,6 +32,8 @@ type DeviceRef = Json<paths['/v1/devices']['post']['responses'][201]>;
 type OtpRequestBody = Json<paths['/v1/auth/otp/request']['post']['requestBody']>;
 export type OtpVerifyBody = Json<paths['/v1/auth/otp/verify']['post']['requestBody']>;
 export type OtpVerified = Json<paths['/v1/auth/otp/verify']['post']['responses'][200]>;
+export type FypPage = Json<paths['/v1/fyp']['get']['responses'][200]>;
+export type FypUnit = FypPage['items'][number];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -100,6 +102,8 @@ type Call = {
   idempotencyKey?: string;
   /** Send the current bearer (default). An explicit string sends that one instead. */
   bearer?: boolean | string;
+  /** Query parameters; an undefined value is left out. */
+  query?: Record<string, string | undefined>;
   ok: number;
 };
 
@@ -129,7 +133,10 @@ export function createApiClient(deps: ApiDeps) {
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
     // Outside the try: a misconfigured origin is a build error, not "offline".
-    const url = `${apiOrigin()}${path}`;
+    const params = new URLSearchParams();
+    for (const [name, value] of Object.entries(init.query ?? {})) if (value !== undefined) params.set(name, value);
+    const search = params.toString();
+    const url = `${apiOrigin()}${path}${search ? `?${search}` : ''}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let res: Response;
@@ -169,6 +176,19 @@ export function createApiClient(deps: ApiDeps) {
   return {
     /** GET /v1/bootstrap: with the bearer when signed in, which also proves the session live. */
     bootstrap: () => call<Bootstrap>('GET', '/v1/bootstrap', { ok: 200 }),
+
+    /**
+     * GET /v1/fyp. Without a cursor the server starts a new feed session; with one it
+     * continues that session. The subject is the server's (bearer, else this device): no
+     * account, target or Market is ever sent.
+     */
+    fyp: (cursor: string | null, asGuest: boolean) =>
+      call<FypPage>('GET', '/v1/fyp', {
+        query: { cursor: cursor ?? undefined },
+        // A guest feed's request stays a guest's even if a sign-in lands mid-flight.
+        bearer: asGuest ? false : true,
+        ok: 200,
+      }),
 
     /** POST /v1/devices. The key is the registration intent's own UUIDv7, never the device id. */
     registerDevice: (id: string, idempotencyKey: string) => {

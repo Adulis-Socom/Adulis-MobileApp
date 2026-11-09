@@ -44,7 +44,7 @@ beforeEach(() => {
 describe('Buyer shell', () => {
   it('opens on Home, For You, with exactly the five Buyer tabs', async () => {
     const r = await renderRouter(APP_DIR);
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
     expect(useUiStore.getState().activeMode).toBe('buyer');
 
@@ -53,7 +53,8 @@ describe('Buyer shell', () => {
     // Every selectable control, minus the Home header's two buttons and its channels, is
     // exactly the five Buyer tabs in order: no Seller Companion or Courier tab exists.
     const label = (el: { props: Record<string, unknown> }) => el.props['aria-label'] ?? el.props.accessibilityLabel;
-    const others: unknown[] = [en['buyer.search'], en['buyer.notifications'], ...CHANNEL_LABELS];
+    // The empty For You panel's own Refresh (WO-004A) is a panel control, not a tab.
+    const others: unknown[] = [en['buyer.search'], en['buyer.notifications'], ...CHANNEL_LABELS, en['buyer.for_you.refresh']];
     const primary = screen
       .getAllByRole(Platform.OS === 'ios' ? 'button' : 'tab')
       .filter((el) => !others.includes(label(el)));
@@ -63,7 +64,7 @@ describe('Buyer shell', () => {
 
   it('exposes all five Home channels, For You selected by default', async () => {
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
     expect(screen.getByLabelText(en['buyer.home.channels'])).toHaveProp('accessibilityRole', 'tablist');
     for (const name of CHANNEL_LABELS) expect(tab(name)).toBeOnTheScreen();
     expect(tab(en['buyer.home.channel.for_you'])).toBeSelected();
@@ -72,7 +73,7 @@ describe('Buyer shell', () => {
 
   it('switches Home channels by route, and Back returns to For You', async () => {
     const r = await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(tab(en['buyer.home.channel.nearby']));
     expect(await screen.findByText(en['buyer.home.nearby.coming'])).toBeOnTheScreen();
@@ -85,7 +86,7 @@ describe('Buyer shell', () => {
     expect(r.getPathname()).toBe('/home/locally-made');
 
     await act(() => router.back());
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
   });
 
@@ -96,13 +97,13 @@ describe('Buyer shell', () => {
     expect(tab(en['buyer.home.channel.discounts'])).toBeSelected();
 
     await act(() => router.back());
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
   });
 
   it('opens For You for a link to /home', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/home' });
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(tab(en['buyer.home.channel.for_you'])).toBeSelected();
     expect(r.getPathname()).toBe('/home/for-you');
   });
@@ -117,20 +118,20 @@ describe('Buyer shell', () => {
     expect(r.getPathname()).toBe(path);
     await act(() => router.back());
     // The pop transition keeps the revealed screen hidden from queries until it completes.
-    expect(await screen.findByText(en['buyer.home.for_you.coming'], {}, { timeout: 5000 })).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'], {}, { timeout: 5000 })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
     expect(bottomTab(en['buyer.tab.home'])).toBeOnTheScreen();
   });
 
   it('sends an unknown path to Buyer Home', async () => {
     const r = await renderRouter(APP_DIR, { initialUrl: '/no/such/place' });
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
   });
 
   it('keeps each tab where it was, and Back from a tab returns to Home', async () => {
     const r = await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
     await fireEvent.press(tab(en['buyer.home.channel.following']));
     await screen.findByText(en['buyer.home.following.coming']);
 
@@ -152,7 +153,7 @@ describe('Buyer shell', () => {
 
   it('opens Search and Notifications over the tabs, and Back returns to Home', async () => {
     const r = await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.search'] }));
     expect(await screen.findByText(en['buyer.search.coming'])).toBeOnTheScreen();
@@ -160,7 +161,7 @@ describe('Buyer shell', () => {
     // No input field and no results until marketplace search exists.
     expect(screen.queryByRole('search')).not.toBeOnTheScreen();
     await act(() => router.back());
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.notifications'] }));
     expect(await screen.findByText(en['buyer.notifications.signed_out'])).toBeOnTheScreen();
@@ -171,7 +172,7 @@ describe('Buyer shell', () => {
 describe('guest and signed-in destinations', () => {
   it('a guest sees why Saved, Orders and You need an Account, and a Sign in that opens nothing by itself', async () => {
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(bottomTab(en['buyer.tab.saved']));
     expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
@@ -191,7 +192,7 @@ describe('guest and signed-in destinations', () => {
   it('a signed-in Buyer sees placeholders, not sign-in prompts, across tab switches', async () => {
     signedIn();
     await renderRouter(APP_DIR);
-    await screen.findByText(en['buyer.home.for_you.coming']);
+    await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(bottomTab(en['buyer.tab.saved']));
     expect(await screen.findByText(en['buyer.saved.coming'])).toBeOnTheScreen();

@@ -1,0 +1,71 @@
+# Buyer For You (WO-004A) against the real local API, as a guest: the feed loads real Scenes
+# (Seller, photo, caption, tagged Products), scrolling loads the next page through
+# next_cursor until the end of the feed, pull-to-refresh starts a new session, and the card
+# reads in Dark mode. No engagement control is drawn on a card.
+#
+# Needs at least 11 published Scenes (one more than a page) in the device's Market, the
+# newest captioned "... (12)" and the oldest "... (1)": the development-only fixtures in
+# docs/mobile/WO-004A-BUYER-FOR-YOU-FEED.md (Seller -> Product -> stock -> Scene -> publish
+# through the Seller API), removed afterwards.
+#
+# Prerequisites: the debug build installed; Metro on 8081 started with
+# EXPO_PUBLIC_API_BASE_URL=http://localhost:3000; the API on 3000 (NODE_ENV=development);
+# `adb reverse` for 8081, 3000 and the media origin's port (9100 for local MinIO).
+#
+#   maestro test .maestro/buyer-for-you.yaml
+appId: com.adulis.app
+name: Buyer For You feed
+tags:
+  - buyer
+  - for-you
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- assertVisible: '.*\(12\)'
+- assertNotVisible: Scenes from Sellers will appear here in a coming update.
+- assertNotVisible: Like
+- assertNotVisible: Save
+- assertNotVisible: Share
+- assertNotVisible: Follow
+- assertNotVisible: Explore the Scene
+- takeScreenshot: fyp-01-guest-feed
+
+# Twelve Scenes at ten per page: the end of the feed appears only after the second page.
+- scrollUntilVisible:
+    element: You have reached the end of this feed. Pull down to refresh.
+    direction: DOWN
+    timeout: 120000
+- assertVisible: '.*\(1\)'
+- takeScreenshot: fyp-02-end-of-feed
+
+# Pull-to-refresh at the top starts a new feed session (the server's newest Scene first).
+- scrollUntilVisible:
+    element: '.*\(12\)'
+    direction: UP
+    timeout: 120000
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+    duration: 800
+- extendedWaitUntil:
+    visible: '.*\(12\)'
+    timeout: 30000
+- takeScreenshot: fyp-03-after-refresh
+
+# Dark mode: the card's roles follow the theme.
+- tapOn: You
+- tapOn: Dark
+- tapOn: Home
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 10000
+- takeScreenshot: fyp-04-dark
+- tapOn: You
+- tapOn: System
+- tapOn: Home
+- assertVisible: For You Scenes

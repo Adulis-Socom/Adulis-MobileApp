@@ -15,7 +15,9 @@ export const SIGN_IN_CODE = '123456';
 
 export interface Recorded {
   method: string;
+  /** The path without its query string; routes match on this. */
   path: string;
+  query: Record<string, string>;
   headers: Record<string, string>;
   body: Record<string, unknown> | undefined;
 }
@@ -53,6 +55,37 @@ export function bootstrapBody(overrides: Partial<Bootstrap> = {}): Bootstrap {
   };
 }
 
+export type FypPage = S['FypPageDto'];
+export type FypUnit = S['ScenePostFeedUnitDto'];
+
+/** A Scene unit shaped exactly like the contract's; `n` makes it distinct. */
+export function fypUnit(n: number, overrides: Partial<FypUnit> = {}): FypUnit {
+  return {
+    type: 'SCENE_POST',
+    impression_id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
+    position: n,
+    candidate_source: 'RECENT',
+    public_ref: `scene-ref-${String(n).padStart(12, '0')}`,
+    revision_version: 1,
+    published_at: '2026-11-09T12:00:00.000Z',
+    caption: `Scene caption ${n}`,
+    caption_truncated: false,
+    image: { thumb_key: `scenes/${n}/thumb.webp`, card_key: `scenes/${n}/card.webp` },
+    seller: { handle: `seller-${n}`, store_name: `Store ${n}` },
+    products: [{ position: 1, slug: `item-${n}`, name: `Item ${n}`, available: true }],
+    ...overrides,
+  };
+}
+
+export function fypPage(items: FypUnit[], next_cursor: string | null = null, feed_session_id = 'feed-session-1'): FypPage {
+  return {
+    feed_session_id: items.length ? feed_session_id : null,
+    algorithm_version: 'technical-baseline-recent-v1',
+    items,
+    next_cursor,
+  };
+}
+
 export const SIGNED_IN_CONTEXT: NonNullable<Bootstrap['account_context']> = {
   buyer: { available: true },
   seller_companion: { available: false },
@@ -86,6 +119,8 @@ const defaults: Record<string, Handler> = {
         }
       : problem(401, 'OTP_INVALID', 'auth'),
   'POST /v1/auth/logout': () => ({ status: 204 }),
+  // An empty feed unless a test serves Scenes: no runtime fixture ever reaches the app.
+  'GET /v1/fyp': () => ({ status: 200, body: fypPage([]) }),
 };
 
 export function installFakeApi() {
@@ -93,10 +128,12 @@ export function installFakeApi() {
   const handlers: Record<string, Handler> = { ...defaults };
   const fetchMock = jest.fn(async (url: string, init: RequestInit = {}): Promise<Response> => {
     const method = init.method ?? 'GET';
-    const path = url.startsWith(ORIGIN) ? url.slice(ORIGIN.length) : url;
+    const full = url.startsWith(ORIGIN) ? url.slice(ORIGIN.length) : url;
+    const [path = full, search = ''] = full.split('?');
     const call: Recorded = {
       method,
       path,
+      query: Object.fromEntries(new URLSearchParams(search)),
       headers: { ...(init.headers as Record<string, string>) },
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined,
     };
