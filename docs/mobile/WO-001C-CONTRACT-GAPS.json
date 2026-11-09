@@ -1,0 +1,1760 @@
+{
+  "work_order": "WO-001C",
+  "date": "2026-11-09",
+  "base": "mobile/wo-001b-foundation-design-sync @ b4b18e3e58b3dd2ac808eb77c519470930db7fcf",
+  "design_authority": "docs/system-designs/2026-11-08/ (November 8 2026 pack)",
+  "statuses": [
+    "ALIGNED",
+    "PARTIALLY_ALIGNED",
+    "LEGACY_SPEC_DRIFT",
+    "CONTRACT_DRIFT",
+    "MISSING_SCHEMA",
+    "MISSING_ENDPOINT",
+    "IMPLEMENTATION_GAP",
+    "FOUNDER_DECISION_REQUIRED",
+    "OPEN_DESIGN_DECISION"
+  ],
+  "blocking_values": [
+    "BLOCKS WO-002 BUYER",
+    "DOES NOT BLOCK WO-002 BUYER",
+    "BLOCKS SELLER COMPANION",
+    "BLOCKS COURIER",
+    "BLOCKS PAYMENT/CHECKOUT ONLY",
+    "BLOCKS INFRASTRUCTURE MIGRATION ONLY"
+  ],
+  "notes": "Paths are relative to the repository root. Design citations name the November document, its section and a short quote. 'release_gate': true marks a gap that must close before any production mobile release even though it does not block WO-002 development. Optional fields: 'release_gate', 'severity' (security gaps) and 'wo002_condition' (API-1).",
+  "gaps": [
+    {
+      "id": "PAY-1",
+      "conflict": "K-1",
+      "area": "Payment authority",
+      "november_requirement": "FIN-01 v3.3 S128 'FIN-INV-07 No Seller manual payment confirmation'; ORDER-01 v3.3 S135 'ORDER-INV-05: Seller never confirms Buyer payment manually.'",
+      "current_behavior": "core.fn_confirm_payment (0021:26-68) sets PAYMENT_CONFIRMED and mints the handoff QR; fn_reject_payment (0021:77, 0042:98) returns the order to NOTIFIED. The legal-transition table has one entry into PAYMENT_CONFIRMED: 'seller confirms' (0011:272). Routes POST /v1/seller/orders/{id}/payment/confirm|reject (orders.controller.ts:207,220) gated by seller.payment:confirm, seeded MOBILE+CONSOLE for OWNER/ADMIN/SALES_SUPPORT (0006:112,169-171). Console PaymentDecisions.tsx; stats trigger 0012:565-586.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0006,0011,0012,0021,0042",
+        "apps/api/src/modules/orders/*",
+        "apps/console/src/features/trade/PaymentDecisions.tsx",
+        "packages/locale/src/en.console.ts",
+        "contracts/openapi.json (regenerated)"
+      ],
+      "future_correction": "Retire both routes, both functions, the permission and its grants. PAID is set only by the provider-verified Finance-to-Order transaction (WO-PAY-001). Add read-only seller.payments:read.",
+      "migration_risk": "HIGH - the only path into the paid state; QR mint, handoff, stats and obligations hang off it.",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-2",
+      "conflict": "K-1",
+      "area": "Payment instructions",
+      "november_requirement": "FIN-01 v3.3 S129 'removes the previous direct bank-transfer instruction system ... manual receiving-account snapshot/reissue workflow'.",
+      "current_behavior": "core.order_payout_snapshot (0012:181), financial.render_payment_instructions (0012:286), fn_reissue_instructions (0022:186-227), step-up action REISSUE_INSTRUCTIONS (0001:172-175). GET /v1/orders/{id}/payment-instructions decrypts the seller account number (financial.service.ts:48-68); POST /v1/seller/orders/{id}/reissue-instructions.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0001,0012,0022",
+        "apps/api/src/modules/financial/*",
+        "apps/console/src/features/trade/OrderDetail.tsx",
+        "packages/locale/src/en.ts:162"
+      ],
+      "future_correction": "Drop the snapshot, render and reissue machinery and both routes; Buyer gets payment-attempt and payment-status routes (FIN-01 S70).",
+      "migration_risk": "MEDIUM - self-contained, but fn_create_order writes the snapshot (PAY-4).",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-3",
+      "conflict": "K-1",
+      "area": "Payment evidence",
+      "november_requirement": "ORDER-01 v3.3 S49 'There is no Seller action to confirm receipt of payment and no Buyer payment-screenshot path.'",
+      "current_behavior": "financial.payment_evidence (0012:45), core.payment_submission (0012:115), POST /v1/orders/{id}/payment-evidence and GET /v1/seller/orders/{id}/payment-evidence (financial.controller.ts:41,57). commitEvidence moves the order with a raw UPDATE core.order SET state='PAYMENT_SUBMITTED' from the API (financial.service.ts:141), not through a named command (ORDER-01 S60).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0012",
+        "apps/api/src/modules/financial/*",
+        "apps/console/src/features/trade/PaymentEvidence.tsx",
+        "packages/locale/src/en.ts:83"
+      ],
+      "future_correction": "Remove upload and view paths and payment_submission; keep the framed-encryption and logged-read pattern for provider evidence (FIN-01 S43-45).",
+      "migration_risk": "MEDIUM - Claims attach this evidence (PAY-11); existing rows need a retention decision.",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-4",
+      "conflict": "K-1",
+      "area": "Seller bank credentials",
+      "november_requirement": "FIN-01 v3.3 S32 'Do not collect or store full Seller bank credentials merely because the legacy system once did.'",
+      "current_behavior": "core.payout_details (0012:135) and financial.payout_credential (0012:66) hold the full account; readiness gate PAYOUT_DETAILS (0018:355-359); fn_create_order refuses without an active payout (0028:256-260); /v1/seller/payout*; job payout.activate_due.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0012,0018,0022,0028,0047",
+        "apps/api/src/modules/financial/*",
+        "apps/api/src/jobs/e5-transport-ledger.ts",
+        "apps/console/src/features/admin/Payout.tsx"
+      ],
+      "future_correction": "SellerProviderAccount (FIN-01 S33): provider reference plus masked destination; readiness gate becomes provider onboarding; order creation stops needing a payout snapshot; reuse the step-up/delay/audit pattern.",
+      "migration_risk": "HIGH - order creation and seller readiness depend on it; existing ciphertext needs a purge plan.",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-5",
+      "conflict": "K-1",
+      "area": "Order state model",
+      "november_requirement": "ORDER-01 v3.3 S57 'Payment state is independent from operational Order readiness.'; S58 fulfilment dimension (PREPARING ... DELIVERED); S59 derived Order state.",
+      "current_behavior": "One enum core.order_state (0001:208-211): CREATED, NOTIFIED, PAYMENT_SUBMITTED, PAYMENT_CONFIRMED, HANDED_OFF, COMPLETED, CANCELLED_BY_BUYER, CANCELLED_BY_SELLER, EXPIRED_UNCLAIMED; 17 legal transitions (0011:267-283); reservation_state with 6. It mixes payment, fulfilment and cancellation; no PREPARING, CHARGE_VERIFIED_ORDER_PROCESSING, PAID_BUT_UNFULFILLABLE or RECONCILING.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0001,0011 and every state-writing function",
+        "apps/api/src/modules/orders/order-buckets.ts",
+        "orders, handoff, claims, deletion and obligations services",
+        "apps/console trade screens"
+      ],
+      "future_correction": "Separate payment, fulfilment, allocation and cancellation dimensions; re-seed the legal tables; one projection returns the derived state and allowed_actions. Replace the enum, do not extend it.",
+      "migration_risk": "HIGH - the most-referenced state in the codebase (23 migrations, 11 API files).",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-6",
+      "conflict": "K-1",
+      "area": "Pre-payment hold",
+      "november_requirement": "ORDER-01 v3.3 S51 'Local deadline schedules reconciliation/cancellation enquiry, not a declaration of unpaid finality.'; KB v3.3 S55 supersedes the old pre-payment timer model.",
+      "current_behavior": "fn_create_order takes stock and sets expires_at = now() + reservation_window ('48h', 0002:287); order.expire_sweep releases on the timer alone (e1-clock.ts:37-92); morning payment reminder (e2-notification.ts:274-297).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0002,0012,0028,0042",
+        "apps/api/src/jobs/e1-clock.ts",
+        "apps/api/src/jobs/e2-notification.ts",
+        "apps/api/src/jobs/registry.ts"
+      ],
+      "future_correction": "Checkout allocation bound to one payment attempt, released only by the ORDER-01 S35/S46 predicate. The checkout-attempt window duration was not found in ORDER-01 or FIN-01: confirm it with the founder before WO-PAY-001.",
+      "migration_risk": "HIGH - governs stock correctness.",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-7",
+      "conflict": "K-1",
+      "area": "Payment-confirmation obligation and stats",
+      "november_requirement": "MOB-02 v4.3 S146 'Seller does not accept the purchase and does not confirm money receipt.'",
+      "current_behavior": "Obligation kind payment_awaiting_confirmation (obligations.controller.ts:68,101-137); fn_confirmation_window_lapse opens an SLA_BREACH claim (0014:278-316); job order.close_confirmation_window; storefront publishes confirmation_rate and missed_confirmation_windows (storefront.controller.ts:109-111).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "apps/api/src/modules/obligations/*",
+        "db/migrations/0010,0014",
+        "apps/api/src/modules/storefront/storefront.controller.ts",
+        "apps/api/src/jobs/e1-clock.ts",
+        "packages/locale/src/en.ts:141-145"
+      ],
+      "future_correction": "Replace with paid-order prepare/mark-ready obligations and a PAYMENT_STATUS_EXCEPTION trigger (CLAIM-01 S13); drop the two public payment stats.",
+      "migration_risk": "MEDIUM - the stats are public.",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-8",
+      "conflict": "K-1",
+      "area": "Refunds",
+      "november_requirement": "ORDER-01 v3.3 S135 'ORDER-INV-16: Refund completion is provider/Finance verified, not Seller-reported.'",
+      "current_behavior": "core.refund (0011:529-536), fn_report_refund and fn_acknowledge_refund (0021:308-352); POST /v1/seller/orders/{id}/refunds and POST /v1/orders/{id}/refunds/{rid}/acknowledge.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0011,0021",
+        "apps/api/src/modules/orders/*"
+      ],
+      "future_correction": "RefundRequest (FIN-01 S52) with provider reconciliation.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-9",
+      "conflict": "K-1",
+      "area": "Provider payment model",
+      "november_requirement": "FIN-01 v3.3 S17-18 PaymentAttempt, ExternalCharge 'UNIQUE(provider, environment, merchant_ref, provider_transaction_id)', PaymentProviderEvent; S70-73 routes.",
+      "current_behavior": "Absent: no surcharge, chapa, webhook, escrow or payment-attempt anywhere in db/migrations, apps/api or contracts/openapi.json; no commercial snapshot.",
+      "status": "MISSING_ENDPOINT",
+      "affected_files": [
+        "new Payments module and migrations",
+        "contracts/openapi.json (regenerated)"
+      ],
+      "future_correction": "FIN-01 S130 phases 0-4 behind a provider-neutral adapter; also MISSING_SCHEMA for the tables.",
+      "migration_risk": "HIGH - greenfield, but interlocks with PAY-5 and PAY-6.",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-10",
+      "conflict": "K-1",
+      "area": "Evidence retention",
+      "november_requirement": "FIN-01 v3.3 S45 'one ambiguous shared actor ID for ordinary and Operator identities is forbidden.'; S50 'Do not claim deletion if object removal failed.'",
+      "current_behavior": "financial.purge_payment_evidence (0026:200-224) and the hourly job select only rows with validated_at IS NOT NULL, and nothing writes validated_at (only 0012:53 declares it), so screenshots are never purged. financial.access_log has one actor_account_id (0012:87-96).",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "db/migrations/0012,0026",
+        "apps/api/src/jobs/e4-retention.ts"
+      ],
+      "future_correction": "Re-base retention on provider evidence provenance; typed actor; decide the purge of legacy screenshots.",
+      "migration_risk": "MEDIUM - a privacy exposure if real data is ever loaded.",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified",
+      "release_gate": true
+    },
+    {
+      "id": "PAY-11",
+      "conflict": "K-1",
+      "area": "Claims evidence",
+      "november_requirement": "CLAIM-01 v3.2 S27 'Screenshots or Seller statements may be party evidence, never paid authority'; S15 AWAITING_PROVIDER_RECONCILIATION.",
+      "current_behavior": "Claim enums carry PAYMENT_EVIDENCE, BANK_RECORD, AWAITING_BANK_TRACE, PAYMENT_FRAUD (0001:226-247); fn_claim_attach_evidence retains screenshots (0014:185-190); the only SYSTEM SLA_BREACH source is the confirmation lapse (0014:308), while the console labels it as a handoff miss (en.console.ts:623).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0001,0014",
+        "apps/api/src/modules/claims/*",
+        "apps/console/src/features/trust/*",
+        "packages/locale/src/en.console.ts"
+      ],
+      "future_correction": "Re-seed claim triggers and states to CLAIM-01 S13/S15; attach PaymentAttempt and ProviderEvent references.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-12",
+      "conflict": "K-1",
+      "area": "Handoff entry",
+      "november_requirement": "HND-01 v3.2 S5 'Handoff begins only after operational Order PAID and stock are jointly committed'.",
+      "current_behavior": "The QR token is minted inside fn_confirm_payment (0021:63); courier assignment and custody are allowed only in PAYMENT_CONFIRMED (orders.service.ts:459-461); EXPIRED_UNCLAIMED -> HANDED_OFF is a legal 'late-sync recovery' (0011:275; 0013:199-210).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0011,0013,0016,0021",
+        "apps/api/src/modules/handoff/*",
+        "apps/api/src/modules/orders/orders.service.ts"
+      ],
+      "future_correction": "Mint handoff credentials at the joint PAID and stock commit; remove the expired-to-handed-off transition (reachability inferred, not tested).",
+      "migration_risk": "HIGH - custody evidence.",
+      "blocks": [
+        "BLOCKS COURIER",
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-13",
+      "conflict": "K-1",
+      "area": "Cart model",
+      "november_requirement": "MOB-02 v4.3 S31 'Multi-cart preserves seller-specific Orders'; S1 'seller-specific Cart/Checkout/Orders'.",
+      "current_behavior": "One cart per buyer and one seller per cart: POST /v1/cart/lines returns '409 CART_SELLER_CONFLICT on a second seller' (contracts/openapi.json summary).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "apps/api/src/modules/orders/*",
+        "db/migrations (cart, cart_line)"
+      ],
+      "future_correction": "Multi-cart with one Seller Order per seller under one coordinated checkout, in WO-PAY-001.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-14",
+      "conflict": "K-1",
+      "area": "No custody",
+      "november_requirement": "FIN-01 v3.3 S28 'No internal Seller balance for purchase proceeds is introduced by this design.'",
+      "current_behavior": "ledger.v_adulis_balance (0016:274-277) and the hourly ledger.assert_zero job fail on any non-zero Adulis balance; no wallet or escrow tables.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "Keep; settlement facts go in their own table.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-15",
+      "conflict": "K-1",
+      "area": "Zero launch surcharge",
+      "november_requirement": "FIN-01 v3.3 S22 'surcharge_rate_bps = 0 and surcharge_minor = 0'.",
+      "current_behavior": "No surcharge or commission exists anywhere, so none is charged, but there is no zero-valued commercial snapshot or policy version either.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "future commercial snapshot"
+      ],
+      "future_correction": "Add the FIN-01 S23 snapshot columns when checkout is built.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "BLOCKS PAYMENT/CHECKOUT ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-16",
+      "conflict": "K-1",
+      "area": "Idempotency",
+      "november_requirement": "ORDER-01 v3.3 S62 'The key is scoped to actor + command + resource + request hash.'",
+      "current_behavior": "core.idempotency_record UNIQUE(key, actor_kind, actor_id, endpoint) plus request_hash (0017:32-44); runIdempotent on every payment POST.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "Reuse for payment attempts and refunds; provider-event dedupe is its own key.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-17",
+      "conflict": "K-1",
+      "area": "Transition guard",
+      "november_requirement": "ORDER-01 v3.3 S60 'Allowed transitions are server-side domain rules backed by database invariants where practical.'",
+      "current_behavior": "Fail-closed legal tables writable only by the migration role (0011:238-327); append-only order_state_transition (0011:336-371); immutable captured price.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "Re-seed the contents (PAY-5); add request and payment/handoff/refund references (ORDER-01 S27).",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "PAY-18",
+      "conflict": "K-1",
+      "area": "Financial boundary",
+      "november_requirement": "FIN-01 v3.3 S45 'success cannot silently bypass its access record.'",
+      "current_behavior": "Separate financial schema and owner role; SECURITY DEFINER reads write the access log in the same transaction (0012:230-282); key material outside PostgreSQL.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "db/migrations/0012"
+      ],
+      "future_correction": "Reuse for provider evidence; add actor typing (PAY-10).",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-1",
+      "conflict": "K-2",
+      "area": "Scene domain",
+      "november_requirement": "SCN-01 v3.2 S27 'Minimum valid Product tag count for public publication is ONE'; S29 last available tagged Product loss 'keeps publication_state=PUBLISHED and changes visibility PUBLIC -> PRIVATE'; S45 routes.",
+      "current_behavior": "Absent from db/migrations, apps/api and the contract. Closest: core.social_post / product_social_post (0007:307-345), an external social link attached to Products, and POST /v1/post-links/resolve. Report targets lack SCENE (0001:251-253).",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations (new)",
+        "apps/api (new content module)",
+        "contracts/openapi.json"
+      ],
+      "future_correction": "scene_post, revision, product tag, hotspot and transition tables (SCN-01 S46); PRIVATE/PUBLIC re-evaluation; Scene routes; SCENE report target. Reserve the word 'post' first: the build already uses it for external links.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-2",
+      "conflict": "K-2",
+      "area": "For You and ranking",
+      "november_requirement": "REC-01 v3.2 S11 'GET /v1/fyp?cursor=<opaque>&limit=<bounded>'; S89 batch events.",
+      "current_behavior": "No feed route; /v1/events accepts two client events (analytics.controller.ts:54-60); 0016:428-431 records 'No ranking table ... there is nowhere to put them'; PRD v8.5 S2 puts ranking in V3.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0016 (comment invariant)",
+        "apps/api/src/modules/analytics",
+        "docs/ADU-PRD-01_Product_Requirements_v8_5.md"
+      ],
+      "future_correction": "Retire the PRD V3 boundary, then build REC-01 feed sessions, impressions and batch events.",
+      "migration_risk": "MEDIUM - reverses a documented invariant.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-3",
+      "conflict": "K-2",
+      "area": "Follow and Following",
+      "november_requirement": "MOB-02 v4.3 S138 'Following is a launch Home tab for followed-Seller discovery'.",
+      "current_behavior": "core.follow exists (0016:400-416) with only a follower-count reader; no follow or unfollow route even though legacy API-01 v1.11 S12.8 specified one.",
+      "status": "MISSING_ENDPOINT",
+      "affected_files": [
+        "apps/api (new)",
+        "contracts/openapi.json"
+      ],
+      "future_correction": "Follow and unfollow routes; Following as Scenes from followed Sellers (needs DSC-1).",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-4",
+      "conflict": "K-2",
+      "area": "Nearby, Discounts, Locally Made",
+      "november_requirement": "REC-01 v3.2 S100 'Nearby, Discounts and Locally Made use exact canonical location/offer/locally-made facts'.",
+      "current_behavior": "No seller location (0005:30-62), no buyer discovery area, one price_minor per variant and no offer price (0007:169-180), no locally-made attribute. CATINV-01 defines no offer or locally-made fact either.",
+      "status": "OPEN_DESIGN_DECISION",
+      "affected_files": [
+        "CATINV/MKT designs",
+        "db/migrations",
+        "apps/api/src/modules/bootstrap"
+      ],
+      "future_correction": "The founder has ruled the channels in; their owning facts still need design: offer price (and its order-snapshot effect), locally-made, seller location, buyer area, and channel enablement in bootstrap.",
+      "migration_risk": "HIGH for Discounts - price truth and order snapshots.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-5",
+      "conflict": "K-2",
+      "area": "Seller Stories",
+      "november_requirement": "R-04 'production storage, API, event, media-retention, notification and analytics contracts remain OPEN'.",
+      "current_behavior": "Absent.",
+      "status": "OPEN_DESIGN_DECISION",
+      "affected_files": [],
+      "future_correction": "Design work order before any build.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-6",
+      "conflict": "K-2",
+      "area": "Scene engagement",
+      "november_requirement": "R-05 'Like belongs to the Scene only and no public Like count is shown ... Hide this Scene and Report.'",
+      "current_behavior": "No Like, Save, Hide or Not Interested storage or routes; report targets exclude SCENE (reports.controller.ts:38). The pack defines no entity or API for Like/Hide; MOB-02 S51 leaves Not Interested scope to backend policy.",
+      "status": "OPEN_DESIGN_DECISION",
+      "affected_files": [
+        "SCN/REC/ANL designs",
+        "db/migrations",
+        "apps/api/src/modules/reports"
+      ],
+      "future_correction": "Design Like/Hide/Not Interested storage and events; add SCENE as a report target. Share is UI-only once Scene URLs exist.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-7",
+      "conflict": "K-2",
+      "area": "Collections and Saves",
+      "november_requirement": "SRC-01 v3.2 S18 'Target types are PRODUCT_POST and SCENE_POST'; /v1/collections*.",
+      "current_behavior": "Absent (the only 'collection' table is billing.collection_record).",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations",
+        "apps/api (new)"
+      ],
+      "future_correction": "Typed membership per SRC-01 S19.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-8",
+      "conflict": "K-2",
+      "area": "Marketplace search",
+      "november_requirement": "SRC-01 v3.2 S4 Marketplace Search 'multi-Seller | Product Posts, Sellers, Scene Posts'.",
+      "current_behavior": "Per-storefront ILIKE search only (storefront.controller.ts:200-224; PRD v8.5 S7.5 'scope is one seller, always'); seller lookup exists.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "apps/api/src/modules/storefront/storefront.controller.ts",
+        "db/migrations (indexes)"
+      ],
+      "future_correction": "GET /v1/search with typed result kinds; trigram indexes already exist.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-9",
+      "conflict": "K-2",
+      "area": "Product engagement",
+      "november_requirement": "R-07 'Save, Share, Reviews, Ask Seller, Order and More/Report. Product has no Like'.",
+      "current_behavior": "Ask Seller (POST /v1/conversations with product context) and Report Product exist; no Like (correct); Save missing (DSC-7); Reviews partial (DSC-12).",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/modules/chat",
+        "apps/api/src/modules/reports",
+        "apps/api/src/modules/reviews"
+      ],
+      "future_correction": "Through DSC-7 and DSC-12.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-10",
+      "conflict": "none (defect)",
+      "area": "Public storefront reads",
+      "november_requirement": "R-09 'Products show the catalogue with available first'; R-06 current price plus 'Currently unavailable'.",
+      "current_behavior": "fn_unpublish_product sets only visibility='UNPUBLISHED' (0020:33-36), but the storefront list, detail, search and link-resolve queries filter on published_at IS NOT NULL (storefront.controller.ts:141,168,216,296), so unpublished Products stay public. They also read base_price_minor, which 0007:139-141 documents as a seed value no storefront render reads. No availability field or ordering.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/api/src/modules/storefront/storefront.controller.ts"
+      ],
+      "future_correction": "Filter on visibility='PUBLISHED', price from variants, add availability and available-first ordering. Small backend fix; not made here (no backend changes in WO-001C).",
+      "migration_risk": "LOW - query changes only.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code reading; not executed)",
+      "release_gate": true
+    },
+    {
+      "id": "DSC-11",
+      "conflict": "K-2",
+      "area": "Seller profile tabs",
+      "november_requirement": "R-09 'share Scenes / Products / Reviews / About and open on Scenes'.",
+      "current_behavior": "Storefront header returns name, handle, description, status, Trust stats and availability; not category, member since, fulfilment methods or social accounts; no location; no Scenes tab possible; Reviews uses seller_rating (aligned).",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/modules/storefront/storefront.controller.ts"
+      ],
+      "future_correction": "Extend the header DTO; add a Scenes read for the storefront.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-12",
+      "conflict": "K-2",
+      "area": "Reviews",
+      "november_requirement": "REV-01 v3.3 S16 'No unverified fallback.'; S28 review-eligibility and Product reviews reads; R-08 'edit updates instead of duplicating'.",
+      "current_behavior": "Cancelled and expired orders can be reviewed and unverified reviews publish with badge UNVERIFIED (reviews.controller.ts:35,71; 0014:69-71); no eligibility read, edit, own-review read or public Product reviews; no VERIFIED_ORDER_FAILURE basis (0001:222-224); item ratings take a client product_id. Two separate ratings: aligned.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "apps/api/src/modules/reviews/*",
+        "db/migrations/0014",
+        "apps/api/src/modules/storefront/storefront.controller.ts"
+      ],
+      "future_correction": "Grant/eligibility resolver, edit path, failure basis, order-line item ratings, Product reviews read.",
+      "migration_risk": "HIGH - existing unverified reviews breach the new rule.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-13",
+      "conflict": "K-2",
+      "area": "Trust ladder",
+      "november_requirement": "TRUST-01 v3.3 S9 levels NEW, REBUILDING, ESTABLISHED, TRUSTED; S11 'Trust never limits Product or item listing count'; S58 timely remedy does not auto-drop the level.",
+      "current_behavior": "Enum NEW/ESTABLISHED/TRUSTED (0001:192); NEW capped at 10 Products (0028:64, 0050:80-88); 'an upheld claim ALWAYS demotes, unconditionally' (0028:331).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0001,0002,0028,0050",
+        "apps/api/src/jobs/e3-trust-stock.ts"
+      ],
+      "future_correction": "Add REBUILDING, drop the listing cap, add the Handoff arm and the remedy-aware claim consequence.",
+      "migration_risk": "HIGH - enum, publication limits and level history.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-14",
+      "conflict": "K-2",
+      "area": "Popularity is not Trust",
+      "november_requirement": "TRUST-01 v3.3 S7 'Social audience size, external popularity ... are not Trust evidence.'",
+      "current_behavior": "seller_public_stats holds level and reliability only (0010:155-175); follower count only in private analytics.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "Keep Like and follower counts out of public stats.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-15",
+      "conflict": "K-2",
+      "area": "Notifications model",
+      "november_requirement": "NOTIF-01 v3.3 S40 'context_kind # BUYER | SELLER | COURIER | OPERATOR'; S45 'Ordinary preferences belong to the stable Account'; S130 /v1/notification-preferences.",
+      "current_behavior": "core.notification has no context column (0016:449-461), scope inferred from template keys; no Courier context; preferences are Seller-only (0024:51); the contract marks seller_id and cursor required on GET /v1/notifications while the code treats them as optional.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/modules/notifications/*",
+        "db/migrations/0016,0024",
+        "contracts/openapi.json"
+      ],
+      "future_correction": "context_kind, Account-level preferences, typed deep links, correct optional parameters.",
+      "migration_risk": "MEDIUM - existing rows need a context backfill.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS COURIER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-16",
+      "conflict": "K-2",
+      "area": "Purchased Products and Buy Again",
+      "november_requirement": "R-10 'one entry per Product using the latest purchase ... Buy Again opens the current Product'.",
+      "current_behavior": "No projection; order lines return variant_id, product_name and variant_key but no product id or slug (orders.service.ts:270-274), so the client cannot open the Product. listOrders maps line_count from a column it never selects (orders.service.ts:223-224,239).",
+      "status": "MISSING_ENDPOINT",
+      "affected_files": [
+        "apps/api/src/modules/orders/orders.service.ts"
+      ],
+      "future_correction": "Purchased-products read, or a Product reference on order lines; fix line_count.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-17",
+      "conflict": "K-2",
+      "area": "Buyer account controls",
+      "november_requirement": "R-11 'Edit Profile, saved discovery area, Appearance, notification preferences, Privacy & Security, Help & Support, Delete Account and Sign Out.'",
+      "current_behavior": "Sessions, revoke and deletion preview/confirm exist; no buyer profile data (0003:84-88), no profile route, no discovery area, no buyer preferences; Appearance is client-only.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "db/migrations/0003",
+        "apps/api (new)"
+      ],
+      "future_correction": "Profile fields and routes, discovery area, buyer preferences.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-18",
+      "conflict": "K-2",
+      "area": "Terminology and mobile strings",
+      "november_requirement": "R-01 'Buyer-facing copy uses Product and Scene'.",
+      "current_behavior": "API and DB say product (consistent); 'post' means an external social link in the build; the mobile catalogue (100 keys) has no Home, tab, Product or Scene vocabulary; the foundation hardcodes English labels (apps/mobile/src/modes/ModeShell.tsx:30,34).",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "packages/locale/src/en.ts",
+        "packages/locale/src/am.ts",
+        "apps/mobile/src/modes/ModeShell.tsx"
+      ],
+      "future_correction": "A separate packages/locale PR with Buyer navigation and channel keys in both languages before or alongside WO-002.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DSC-19",
+      "conflict": "K-2",
+      "area": "Buyer navigation structure",
+      "november_requirement": "MOB-02 v4.3 S11 'Buyer bottom navigation: Home | Shop | Saved | Orders | You.'; S13 route tree for the five Home channels.",
+      "current_behavior": "Specified in the design and identical in the prototype (MobileBuyer.tsx:112-117); bootstrap supplies market, locales and flags.",
+      "status": "ALIGNED",
+      "affected_files": [
+        "apps/mobile/src/app/buyer/*"
+      ],
+      "future_correction": "None; this is WO-002's input.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-1",
+      "conflict": "K-3",
+      "area": "Background engine",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S23 'BullMQ is the sole ordinary execution technology. No Graphile Worker, Kafka, RabbitMQ or Temporal'.",
+      "current_behavior": "graphile-worker ^0.17.3 (apps/api/package.json:28) runs 22 cron tasks (runtime.ts); STACK_BASELINE and root CLAUDE.md reject Redis; ADU-CON-02 S3.6 and ADU-DB-01 S24 specify graphile.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "apps/api/package.json",
+        "pnpm-lock.yaml",
+        "apps/api/src/jobs/runtime.ts",
+        "apps/api/src/jobs/context.ts",
+        "apps/api/src/worker.ts",
+        ".claude/reference/STACK_BASELINE.md"
+      ],
+      "future_correction": "Founder rules: adopt BullMQ/Valkey and reissue CON-02/DB-01 S24; keep graphile by written exception; or keep graphile until a measured trigger.",
+      "migration_risk": "MEDIUM - job bodies are engine-agnostic; tooling and governed docs are not.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS INFRASTRUCTURE MIGRATION ONLY"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-2",
+      "conflict": "K-3",
+      "area": "Durable intent",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S39 'Valkey / BullMQ unavailable | PostgreSQL truth and required outbox/job intent remain'.",
+      "current_behavior": "Intent is written to domain tables in the business transaction (core.notification QUEUED rows, order.expires_at); nothing calls graphile add_job outside a test; jobs poll.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None for durability: PostgreSQL holds intent in both models.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-3",
+      "conflict": "K-3",
+      "area": "Generic outbox",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S23 'Business changes and required event_outbox and/or job_intent commit in the same PostgreSQL transaction.'; EVT-01 v3.2 S10, S14.",
+      "current_behavior": "No event_outbox, event_delivery, job_intent, relay or dead-letter table; each domain has its own queue table.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations (new)",
+        "apps/api (new eventing module)"
+      ],
+      "future_correction": "Needed whichever engine wins if the November eventing model is adopted; after WRK-1.",
+      "migration_risk": "HIGH - a new cross-domain contract touching every producer.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS PAYMENT/CHECKOUT ONLY"
+      ],
+      "confidence": "verified (schema absent); checkout dependency inferred"
+    },
+    {
+      "id": "WRK-4",
+      "conflict": "K-3",
+      "area": "Scheduling",
+      "november_requirement": "EVT-01 v3.2 S27 'Per-entity deadlines use delayed jobs; recurring jobs scan due canonical rows in bounded pages.'",
+      "current_behavior": "Bounded recurring scans only (LIMIT 500, one-minute granularity); no delayed per-entity jobs.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/jobs/e1-clock.ts",
+        "apps/api/src/jobs/runtime.ts"
+      ],
+      "future_correction": "Delayed jobs only if BullMQ is adopted; sweeps stay as repair.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS PAYMENT/CHECKOUT ONLY"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-5",
+      "conflict": "K-3",
+      "area": "Delivery semantics",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S23 'Delivery is at-least-once; workers re-read current canonical scope/state'.",
+      "current_behavior": "Every job idempotent (DB-01 S24); compare-and-set and SKIP LOCKED claims; state re-read at send time.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-6",
+      "conflict": "K-3",
+      "area": "Retries and dead letters",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S38 'Retries have bounded backoff/jitter, classified transient/permanent outcomes'.",
+      "current_behavior": "Graphile retries the whole cron task; a per-row failure is terminal (e2-notification.ts:142-145), including RETRYABLE push outcomes (e2:236-238); no dead-letter store.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/api/src/jobs/e2-notification.ts",
+        "apps/api/src/jobs/push.adapter.ts"
+      ],
+      "future_correction": "Classified per-row retry with next_attempt_at (NOTIF-01 S41) and dead letters; engine-independent.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS SELLER COMPANION"
+      ],
+      "confidence": "verified (code); blocking inferred"
+    },
+    {
+      "id": "WRK-7",
+      "conflict": "K-3",
+      "area": "Worker observability",
+      "november_requirement": "OBS-01 v3.2 S24 'event_outbox and job_intent pending age | Per class oldest age/count'.",
+      "current_behavior": "Heartbeat row read by /healthz; per-job logs; no queue-age or backlog metrics.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/jobs/runtime.ts",
+        "apps/api/src/health.controller.ts"
+      ],
+      "future_correction": "Oldest-QUEUED-age metrics on the domain queue tables now; queue metrics if the engine changes.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-8",
+      "conflict": "K-3",
+      "area": "Rate limiting",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S32 'Shared rate coordination may use Valkey'; AUTH-02 v3.3 S134 may degrade to database-backed behaviour, never fail open.",
+      "current_behavior": "PostgreSQL fixed-window buckets (rate-limit.service.ts:55-65; core.rate_limit_bucket).",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "apps/api/src/common/rate-limit/rate-limit.service.ts"
+      ],
+      "future_correction": "None required: Valkey is optional and the PostgreSQL limiter is the design's own fail-closed fallback.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-9",
+      "conflict": "K-3",
+      "area": "Cache",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S32 'Valkey caches only rebuildable non-authoritative data'.",
+      "current_behavior": "No server cache exists.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None until measured.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-10",
+      "conflict": "K-3",
+      "area": "Deployment topology",
+      "november_requirement": "DEPLOY-01 v3.2 S50 separate managed instances for BullMQ/coordination and for disposable cache; S51 'Queue Valkey uses noeviction'.",
+      "current_behavior": "ops/render.yaml: one PostgreSQL, api, worker, console, no Key Value service; never applied (render.yaml:4).",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "ops/render.yaml",
+        "ops/scripts/verify-render-yaml.mjs",
+        ".env.example",
+        ".github/workflows/ci.yml"
+      ],
+      "future_correction": "If BullMQ is chosen: two Frankfurt Key Value instances on the private network, URL secrets for api and worker, runbooks (DEPLOY-01 S152).",
+      "migration_risk": "MEDIUM operationally (one more stateful dependency); LOW today (blueprint unapplied).",
+      "blocks": [
+        "BLOCKS INFRASTRUCTURE MIGRATION ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-11",
+      "conflict": "K-3",
+      "area": "Gates and tests bound to Graphile",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 S53 real-infrastructure tests include Valkey/BullMQ crash gaps.",
+      "current_behavior": "Gate worker-schema is position 10 of 29 (gates.mjs:284; positions are cited by ADU-RUL-03); render-yaml gate; install-worker-schema.mjs, check-environment.mjs, db-reset.mjs; the jobs schema (0001, 0026); verify-appendix counts ten schemas; worker-runtime.spec.ts asserts 22 tasks.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "ops/scripts/gates.mjs",
+        "ops/scripts/install-worker-schema.mjs",
+        "ops/scripts/check-environment.mjs",
+        "ops/scripts/db-reset.mjs",
+        "ops/scripts/verify-appendix.mjs",
+        "apps/api/test/worker-runtime.spec.ts"
+      ],
+      "future_correction": "Replace the gate in place (never delete: positions are cited); rewrite the runtime spec against the chosen engine; dropping the jobs schema needs a new migration.",
+      "migration_risk": "HIGH for governed-document renumbering if a gate is removed; otherwise LOW.",
+      "blocks": [
+        "BLOCKS INFRASTRUCTURE MIGRATION ONLY",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "WRK-12",
+      "conflict": "K-3",
+      "area": "Push and SMS delivery",
+      "november_requirement": "NOTIF-01 v3.3 S62 'adapter-backed Expo Push Service transport initially'; S41 notification_delivery with next_attempt_at.",
+      "current_behavior": "The worker binds FakeSmsAdapter and NullPushAdapter unconditionally (apps/api/src/jobs/runtime.ts:75-76), unlike its storage adapters, which switch on configuration; push returns NO_PROVIDER and falls back to IN_APP. push.adapter.ts:9-11 names FCM and APNs as decided providers, against NOTIF-01's Expo Push. One core.notification row, no delivery/attempt tables.",
+      "status": "OPEN_DESIGN_DECISION",
+      "affected_files": [
+        "apps/api/src/jobs/runtime.ts",
+        "apps/api/src/jobs/push.adapter.ts",
+        "apps/api/src/jobs/e2-notification.ts",
+        "db/migrations (new)"
+      ],
+      "future_correction": "Founder picks Expo Push or direct FCM/APNs; wire real worker SMS and push adapters; add delivery/attempt schema with retries (also MISSING_SCHEMA). Independent of the engine choice.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS SELLER COMPANION"
+      ],
+      "confidence": "verified",
+      "release_gate": true
+    },
+    {
+      "id": "ID-1",
+      "conflict": "K-5",
+      "area": "MOBILE sign-in and bearer session",
+      "november_requirement": "MOB-02 v4.3 S74 'Credential: Authorization: Bearer <opaque-token> ... Keychain / Keystore via Expo SecureStore'.",
+      "current_behavior": "otp/request takes audience MOBILE; verify returns the token in the body (auth.controller.ts:255-277); the guard maps carrier to audience (auth.guard.ts:160-164,193-196); 30-day sliding MOBILE session; covered by c6-accounts.e2e.spec.ts:404-421. Required order: POST /v1/devices, GET /v1/bootstrap (stamps the market), otp/request, otp/verify. The app already stores the token in SecureStore.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None; WO-002 follows the devices, bootstrap, request, verify order.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code and existing test; not executed)"
+    },
+    {
+      "id": "ID-2",
+      "conflict": "K-5",
+      "area": "Logout",
+      "november_requirement": "AUTH-02 v3.3 S118 'POST /v1/auth/logout' (route names follow the generated contract, S119).",
+      "current_behavior": "No logout route; the only self-revoke is DELETE /v1/auth/sessions/{id}, which works only because the id is the token (SEC-1).",
+      "status": "MISSING_ENDPOINT",
+      "affected_files": [
+        "apps/api/src/modules/auth/auth.controller.ts",
+        "apps/api/src/modules/auth/auth.service.ts"
+      ],
+      "future_correction": "A logout command revoking the calling session, for MOBILE and CONSOLE.",
+      "migration_risk": "LOW - additive.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-3",
+      "conflict": "K-4",
+      "area": "Courier audience",
+      "november_requirement": "R-20 'Courier uses audience=MOBILE with backend-verified Courier relationship/capability, exact resource scope and permission surface.'",
+      "current_behavior": "Legacy ADU-API-01 v1.11 S4 'Courier | Cookie, audience = CONSOLE' (line 473) and AUTH-01 v2.5 'COURIER_WEB is collapsed into CONSOLE'; the e2e courier session is CONSOLE (c5-handoff.e2e.spec.ts:170-173); the Courier UI lives in the console (apps/console/src/courier). The code checks no audience: courier routes carry only @ActorRole('COURIER') (handoff.controller.ts:109-136), so a MOBILE bearer reaches them by omission, limited by RLS.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "docs/ADU-API-01_API_Contract_v1_11_ASCII.md",
+        "apps/api/src/modules/handoff/handoff.controller.ts",
+        "apps/api/src/common/auth/auth.guard.ts",
+        "apps/console/src/courier/*",
+        "apps/api/test/c5-handoff.e2e.spec.ts"
+      ],
+      "future_correction": "Courier routes require a MOBILE session plus the ID-4 authorisation; decide whether the console Courier screen retires or both audiences run during transition.",
+      "migration_risk": "MEDIUM - breaks the console Courier screen and the c5 tests.",
+      "blocks": [
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code reading)"
+    },
+    {
+      "id": "ID-4",
+      "conflict": "K-4",
+      "area": "Courier authorisation",
+      "november_requirement": "AUTH-02 v3.3 S101 'Courier actions require eligible Courier profile + applicable Seller-Courier relationship + assignment state + resource scope.'",
+      "current_behavior": "Only RLS policy courier_assigned_orders (SELECT only, no audience or relationship term; 0011:598-607); custody-accept gated by RLS visibility alone (handoff.service.ts:297-299); no courier permission code in the DB or in AUTH-02 Appendix B; verify-surface-markers skips routes without a permission, so the C rows are never checked.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "apps/api/src/modules/handoff/*",
+        "db/migrations (new)",
+        "ops/scripts/verify-surface-markers.mjs"
+      ],
+      "future_correction": "Founder chooses (a) a fn_courier_authorize(account, order, audience) database function or (b) Courier permission codes with surfaces {MOBILE} supplied by the design. Never a grant to all MOBILE users.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-5",
+      "conflict": "K-4",
+      "area": "Courier model",
+      "november_requirement": "FUL-01 v3.3 S11 verification_status UNVERIFIED/PENDING/VERIFIED/SUSPENDED/BLOCKED; availability_status AVAILABLE/BUSY/UNAVAILABLE.",
+      "current_behavior": "core.seller_courier(seller_id, account_id, invited_at, revoked_at) (0005:169-179) plus invites (0029); no Courier profile, verification, availability, relationship status, offer or acceptance; seller-forced assignment (handoff.service.ts:368-393); one-active-delivery not enforced (non-unique index 0011:575-576). COURIER is an actor role, not a team role.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations (new)",
+        "apps/api/src/modules/couriers/*",
+        "apps/api/src/modules/handoff/handoff.service.ts"
+      ],
+      "future_correction": "A fulfilment work order: Courier profile, relationship status, offers and acceptance, partial unique index for one active delivery; map existing rows to APPROVED.",
+      "migration_risk": "HIGH",
+      "blocks": [
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-6",
+      "conflict": "K-4",
+      "area": "Courier contract",
+      "november_requirement": "AUTH-02 v3.3 S122 'generated TypeScript clients are consumed by Mobile'.",
+      "current_behavior": "Courier paths, /v1/handoffs/sync and /v1/seller/couriers have no schemas; custody-accept is 201 in the contract but returns 200 (handoff.controller.ts:133; c5 test expects 200); GET /v1/seller/couriers returns invites, not relationships.",
+      "status": "CONTRACT_DRIFT",
+      "affected_files": [
+        "apps/api/src/modules/handoff/*",
+        "apps/api/src/modules/couriers/couriers.controller.ts",
+        "contracts/openapi.json (regenerated)"
+      ],
+      "future_correction": "DTOs for list, detail and sync; @HttpCode(200) on custody-accept; return relationships.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-7",
+      "conflict": "K-5",
+      "area": "Mode eligibility",
+      "november_requirement": "AUTH-02 v3.3 S120 'GET /v1/bootstrap returns mode/capability/relationship summaries appropriate to MOBILE ... team memberships include role arrays'; R-21.",
+      "current_behavior": "roles[] is computed only at verify and frozen in the idempotent replay (auth.service.ts:346-366); BUYER is never emitted (nothing inserts buyer_profile); TEAM includes suspended members; bootstrap and /v1/auth/sessions carry no account data; /v1/seller/list returns owners and active team only, scalar role, no Courier. The app correctly ships Buyer only (apps/mobile/src/modes/modes.ts).",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "apps/api/src/modules/bootstrap/*",
+        "contracts/openapi.json (regenerated)"
+      ],
+      "future_correction": "Additive bootstrap field account_context (MOBILE bearer only, no-store), proposed in WO-001C-CONTRACT-READINESS.md S7; Courier availability needs a founder rule until ID-5 exists.",
+      "migration_risk": "LOW - additive.",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-8",
+      "conflict": "K-5",
+      "area": "Eligibility reads reachable from MOBILE",
+      "november_requirement": "MOB-02 v4.3 S84 'relationship summaries needed to expose Seller/Courier mode entry points'.",
+      "current_behavior": "Bootstrap is public and still authenticates a presented bearer; /v1/auth/sessions and /v1/seller/list have no audience gate.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-9",
+      "conflict": "none",
+      "area": "Operator identity",
+      "november_requirement": "AUTH-02 v3.3 S32 'Privileged Operator sessions are distinct and cannot be manufactured by changing audience on an ordinary session row'.",
+      "current_behavior": "core.operator_grant on an ordinary core.account (0005:461-489: 'There is no operator login, no operator account table'); audience enum MOBILE|CONSOLE; legacy AUTH-01 v2.8 matches the build.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations",
+        "apps/api/src/common/auth/auth.guard.ts"
+      ],
+      "future_correction": "AUTH-02 S125 Operator separation.",
+      "migration_risk": "HIGH - re-provisioning privileged access.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-10",
+      "conflict": "none",
+      "area": "Owner derived",
+      "november_requirement": "R-12 'Owner (derived, never assignable)'.",
+      "current_behavior": "CHECK team_member_is_never_owner (0005:149); owner from seller.owner_account_id; the team API excludes OWNER.",
+      "status": "ALIGNED",
+      "affected_files": [],
+      "future_correction": "None.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-11",
+      "conflict": "none",
+      "area": "Multi-role membership",
+      "november_requirement": "AUTH-02 v3.3 S67 'Do not store one scalar seller_role on Account or membership. Use a membership-to-role assignment relation'.",
+      "current_behavior": "role core.team_role NOT NULL per membership (0005:115); fn_has_permission and grantSet evaluate one role.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations",
+        "fn_has_permission",
+        "apps/api/src/common/auth/grant-set.ts",
+        "apps/api/src/modules/team/*"
+      ],
+      "future_correction": "Role-assignment table, union evaluation, at-least-one-role constraint; backfill one row per membership.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS SELLER COMPANION"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ID-12",
+      "conflict": "none",
+      "area": "One team membership per Account",
+      "november_requirement": "MOB-02 v4.3 S142 'MVP allows at most ONE non-terminal Seller TEAM membership per ordinary Account'.",
+      "current_behavior": "Uniqueness is per (seller_id, account_id) where not revoked (0005:123-124), so an account can join many Sellers.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "db/migrations",
+        "apps/api/src/modules/team/*"
+      ],
+      "future_correction": "Partial unique index on account_id for non-revoked memberships (suspended still counts).",
+      "migration_risk": "MEDIUM - resolve existing multi-membership accounts first.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-1",
+      "conflict": "K-1",
+      "area": "Companion payment surface",
+      "november_requirement": "FIN-01 v3.3 S129 removes 'Seller payment acceptance/rejection'; MOB-02 v4.3 S146 'Seller does not accept the purchase and does not confirm money receipt.'",
+      "current_behavior": "seller.payment:confirm and seller.payment_evidence:read are two of the twelve MOBILE permissions (0006:111-112); together with PAY-1 they make every Companion paid-order action (Mark Ready, QR) depend on the stale confirmation.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0006",
+        "apps/api/src/modules/orders/*",
+        "apps/api/src/modules/financial/*"
+      ],
+      "future_correction": "Retire both MOBILE grants with PAY-1; the Companion shows read-only payment status.",
+      "migration_risk": "HIGH (with PAY-1)",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-2",
+      "conflict": "K-6",
+      "area": "Permission catalogue",
+      "november_requirement": "AUTH-02 v3.3 S82 'The responsibility-derived v3.0 executable seed has 68 unique Seller permission codes and 197 role grants.' (Contract_Registry/seller_permissions.json)",
+      "current_behavior": "Seed 0006 asserts 42 codes, 139 grants, 12 MOBILE; only 10 codes are shared with the v3.0 catalogue. Role totals: built OWNER 42 / ADMIN 40 / SALES_SUPPORT 19 / INVENTORY 16 / ANALYST 10 / CAMPAIGN_MANAGER 12; November 68 / 66 / 13 / 23 / 7 / 20. verify-permission-doc and verify-surface-markers check against the legacy AUTH-01 v2.5 and API-01 v1.11 only.",
+      "status": "CONTRACT_DRIFT",
+      "affected_files": [
+        "db/migrations/0006",
+        "docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql",
+        "ops/scripts/verify-permission-doc.mjs",
+        "ops/scripts/verify-surface-markers.mjs",
+        "about 60 permission call sites",
+        "allowed_actions keys (a client contract)"
+      ],
+      "future_correction": "A reconciliation work order maps old codes to new, writes per-code surfaces (AUTH-02 Appendix D gives them per group only) and re-points both gates at AUTH-02 v3.3.",
+      "migration_risk": "HIGH - an authorisation re-seed.",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-3",
+      "conflict": "K-6",
+      "area": "SALES_SUPPORT fulfilment powers",
+      "november_requirement": "AUTH-02 v3.3 S88 SALES_SUPPORT 'cannot prepare goods, Mark Ready, request Courier service, perform Seller pickup'; MOB-02 v4.3 S151 no Pickup credential from support permission.",
+      "current_behavior": "SALES_SUPPORT holds order_ready:update, handoff:read (QR), orders:respond, handoff:custody_transfer and couriers:manage (0006:159,162,224,228,232).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0006"
+      ],
+      "future_correction": "Drop these grants in the SC-2 re-seed.",
+      "migration_risk": "MEDIUM - narrows live grants; only OWNER is reachable at MVP (0006:89-92).",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-4",
+      "conflict": "K-4",
+      "area": "Courier request from the Companion",
+      "november_requirement": "R-15 'Seller request/offer never equals assignment; Courier acceptance atomically rechecks eligibility/capacity. Mark Ready precedes offer.'; AUTH-02 v3.3 S94.",
+      "current_behavior": "Direct assignment (handoff.service.ts:367-393) checks only that the relationship is not revoked; seller.couriers:manage and seller.handoff:custody_transfer are CONSOLE-only (0006:128-129); seller.orders:courier_request does not exist; no offer route.",
+      "status": "MISSING_ENDPOINT",
+      "affected_files": [
+        "apps/api/src/modules/handoff/*",
+        "db/migrations/0006,0011",
+        "contracts/openapi.json"
+      ],
+      "future_correction": "A MOBILE-reachable courier request/offer after Ready, with acceptance on the Courier side; retire direct assignment.",
+      "migration_risk": "HIGH",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-5",
+      "conflict": "K-4",
+      "area": "Pickup credential",
+      "november_requirement": "MOB-02 v4.3 S109 'QR credentials are server-minted, short-lived, single-use, Order-bound, handoff-type-bound and actor/assignment-bound'.",
+      "current_behavior": "One long-lived token per order with no purpose or expiry (0011:516-522), issued from PAYMENT_CONFIRMED and cached for offline display (handoff.service.ts:53-58, against MOB-02 S115).",
+      "status": "CONTRACT_DRIFT",
+      "affected_files": [
+        "db/migrations/0011,0013",
+        "apps/api/src/modules/handoff/*"
+      ],
+      "future_correction": "Separate PICKUP and DELIVERY credentials issued after Ready plus assignment.",
+      "migration_risk": "HIGH",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS COURIER",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-6",
+      "conflict": "none",
+      "area": "Urgent stock on mobile",
+      "november_requirement": "MOB-02 v4.3 S153 'Urgent stock is current, role-permitted Companion work'.",
+      "current_behavior": "stock:read and stock:write are CONSOLE-only (0006:118-119); the routes exist.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0006"
+      ],
+      "future_correction": "Scoped MOBILE inventory write/confirm (no bulk), in the SC-2 re-seed.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-7",
+      "conflict": "none",
+      "area": "Claim summary on mobile",
+      "november_requirement": "MOB-02 v4.3 S140 'SALES_SUPPORT handles ... Claim alerts/summary/deadlines'.",
+      "current_behavior": "claims:read is CONSOLE-only (0006:131).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "db/migrations/0006",
+        "apps/api/src/modules/claims/*"
+      ],
+      "future_correction": "MOBILE claim-summary read for support roles.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "inferred (the summary may travel in the notification)"
+    },
+    {
+      "id": "SC-8",
+      "conflict": "K-1",
+      "area": "Prepare step",
+      "november_requirement": "ORDER-01 v3.3 S58 'PREPARING | Seller is preparing paid items.'",
+      "current_behavior": "No PREPARING value (0001:208-211); no prepare permission or route.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "db/migrations/0001,0011",
+        "apps/api/src/modules/orders/*"
+      ],
+      "future_correction": "Fulfilment dimension and prepare command (with PAY-5).",
+      "migration_risk": "HIGH",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-9",
+      "conflict": "none",
+      "area": "Can't Fulfil on the Companion",
+      "november_requirement": "ORDER-01 v3.3 S78 a paid Order 'starts a provider refund path ... it does not ask the Seller to send money manually.'",
+      "current_behavior": "POST /v1/seller/orders/{id}/reservations/{rid}/cancel takes no reason; a paid line follows fn_report_refund (0051:102-107); no November design lists Can't Fulfil as a Companion action.",
+      "status": "OPEN_DESIGN_DECISION",
+      "affected_files": [
+        "db/migrations/0051",
+        "apps/api/src/modules/orders/*"
+      ],
+      "future_correction": "Founder decides whether Can't Fulfil belongs on the Companion and for which roles; paid orders route to the provider refund path.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-10",
+      "conflict": "none",
+      "area": "MOBILE grants ahead of MVP scope",
+      "november_requirement": "MOB-02 v4.3 S226 'Based on beta evidence: basic dashboard, Reviews, notification preferences'.",
+      "current_behavior": "Reviews, basic analytics and notification preferences are MOBILE now; reviews and analytics granted to all six roles; orders:read to ANALYST and CAMPAIGN_MANAGER.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "db/migrations/0006"
+      ],
+      "future_correction": "Re-seed with November role sets; the mobile UI keeps these out of Phase 1.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-11",
+      "conflict": "K-5",
+      "area": "Companion contract",
+      "november_requirement": "R-21 'Mobile must not hand-write duplicate DTOs to compensate for missing schemas or exports.'",
+      "current_behavior": "None of the 26 seller, chat or notification operations has a 2xx schema (part of API-1); GET /v1/conversations/{id}/messages is not M-marked in API-01 S12 although the database lets MOBILE reach it.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "contracts/openapi.json (regenerated)",
+        "docs/ADU-API-01_API_Contract_v1_11_ASCII.md"
+      ],
+      "future_correction": "Response schemas for every Companion route (with API-1); correct the S12 marker.",
+      "migration_risk": "LOW - additive.",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SC-12",
+      "conflict": "K-1",
+      "area": "Companion guidance",
+      "november_requirement": "MOB-02 v4.3 S224 Companion scope: preparation, Mark Ready, eligible Courier assignment, Pickup display, Inbox, urgent stock, Claim alerts/summary.",
+      "current_behavior": "Before WO-001C the skill's description and its 'Confirm Payment Received' hard invariant were outside the K-1 banner. WO-001C corrected the description, banner, invariant and eval 5. Phase 1 itself still omits Prepare, Courier offer, urgent stock, Claim summary and the credential split, and still lists Can't Fulfil. The review then found the same stale posture in adulis-financial-boundary (description, product-posture bullet, eval 2) and api-engineer eval 1; WO-001C corrected those too.",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        ".claude/skills/adulis-seller-companion/SKILL.md",
+        ".claude/skills/adulis-seller-companion/EVALS.md",
+        ".claude/EVAL_CHECKLIST.md",
+        ".claude/skills/adulis-financial-boundary/SKILL.md",
+        ".claude/skills/adulis-financial-boundary/EVALS.md",
+        ".claude/skills/adulis-api-engineer/EVALS.md"
+      ],
+      "future_correction": "Rewrite Phase 1 from MOB-02 S224 in the Seller Companion work order.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "SEC-1",
+      "conflict": "none (defect)",
+      "area": "Session credential exposure",
+      "november_requirement": "AUTH-02 v3.3 S31 'The client holds an opaque credential; PostgreSQL stores the hash and canonical session state.'",
+      "current_behavior": "core.session.id is the credential (authenticate() looks up WHERE s.id = token, session.service.ts; minting returns token: sessionId, auth.service.ts:343) and is stored in plain form. GET /v1/auth/sessions returns s.id (and device_id) for every live session of the account (auth.service.ts:373-390), so any session can read the bearer tokens and cookie values of the account's other sessions, including a MOBILE session obtaining a CONSOLE session id. This defeats the httpOnly cookie and the MOBILE/CONSOLE surface boundary within one account.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "db/migrations (new)",
+        "apps/api/src/common/auth/session.service.ts",
+        "apps/api/src/modules/auth/auth.service.ts",
+        "apps/api/src/modules/auth/auth.controller.ts",
+        "apps/console/src/auth/session.tsx"
+      ],
+      "future_correction": "token_hash column plus a separate public session id; look up by hash; /sessions and DELETE use the public id; reissue all sessions (global sign-out). First item of WO-API-001.",
+      "migration_risk": "HIGH - forces a global sign-out; console revoke-by-id changes.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code and the c6 test that equates the listed id with the cookie)",
+      "release_gate": true,
+      "severity": "HIGH - one compromised session or one console XSS yields every live credential on the account, persistently; a replayed listed CONSOLE id works from any HTTP client and counts as a known device for the new-device payout lock (financial.service.ts:346). Bounded by: same account only; SMS step-up still guards payout, ownership and revoke-all."
+    },
+    {
+      "id": "SEC-2",
+      "conflict": "none (defect)",
+      "area": "Unauthenticated device update",
+      "november_requirement": "AUTH-02 v3.3 S31 (device and session state are canonical server state); NOTIF-01 v3.3 S62 push token belongs to the registered device.",
+      "current_behavior": "PATCH /v1/devices/:id is @Public (auth.controller.ts:369-378) and updates push_token and notification_permission WHERE id = :id with no ownership check (auth.service.ts:560-580); device ids are also listed by GET /v1/auth/sessions (SEC-1). Anyone holding a device id can redirect that device's push notifications.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/api/src/modules/auth/auth.controller.ts",
+        "apps/api/src/modules/auth/auth.service.ts"
+      ],
+      "future_correction": "Bind the update to a device credential or to the authenticated session's device.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code reading)",
+      "release_gate": true,
+      "severity": "MEDIUM (LOW until a push provider is bound: NullPushAdapter today) - unauthenticated write to another account's device push token and permission; device ids are client-chosen, sent in X-Adulis-Device on every request and listed by GET /v1/auth/sessions."
+    },
+    {
+      "id": "SEC-3",
+      "conflict": "none (defect)",
+      "area": "Credentials in the idempotency store",
+      "november_requirement": "AUTH-02 v3.3 S31 'The client holds an opaque credential; PostgreSQL stores the hash and canonical session state.'",
+      "current_behavior": "otp/verify records session_token and the raw device_cookie_token in core.idempotency_record.response_body for the replay window (auth.controller.ts:237-248) and re-serves them on an identical replay (auth.controller.ts:224-227). The remembered-device secret is otherwise stored only as a sha256 hash (auth.service.ts:296-313), which this undoes. Live session ids also sit in core.payout_change_log.session_id and revoked_by_session_id columns.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/api/src/modules/auth/auth.controller.ts",
+        "apps/api/src/common/idempotency/*",
+        "db/migrations/0012"
+      ],
+      "future_correction": "Replay returns a non-secret marker (or re-mints) instead of storing raw tokens; with SEC-1, session ids stop being credentials so the log columns become harmless. Fix together with SEC-1.",
+      "migration_risk": "LOW",
+      "severity": "MEDIUM - plaintext credentials at rest for 24h in a general-purpose table.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code reading; found by the WO-001C security review)",
+      "release_gate": true
+    },
+    {
+      "id": "SEC-4",
+      "conflict": "none (defect)",
+      "area": "Revoke-all step-up bypass",
+      "november_requirement": "AUTH-02 v3.3 step-up catalogue: revoking all other sessions is a step-up action, CONSOLE only.",
+      "current_behavior": "POST /v1/auth/sessions/revoke-others requires CONSOLE and step-up (auth.service.ts:443-466), but DELETE /v1/auth/sessions/{id} (revokeSession, auth.service.ts:421-436) checks only account ownership, no audience and no step-up. Any session, MOBILE included, can list the account's sessions (SEC-1) and delete each one: revoke-all without step-up, e.g. signing the owner out of the console everywhere from a stolen phone.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/api/src/modules/auth/auth.service.ts",
+        "apps/api/src/modules/auth/auth.controller.ts"
+      ],
+      "future_correction": "Decide the rule for single-session revoke from MOBILE (own session only, or same audience only); keep cross-session revoke behind the step-up path. Fix with SEC-1 in WO-API-001 slice A.",
+      "migration_risk": "LOW",
+      "severity": "LOW to MEDIUM - availability and account-control impact, no data disclosure.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (code reading; found by the WO-001C security review)",
+      "release_gate": true
+    },
+    {
+      "id": "API-1",
+      "conflict": "K-5",
+      "area": "Contract schemas",
+      "november_requirement": "R-21 'Mobile must not hand-write duplicate DTOs to compensate for missing schemas or exports.'; AUTH-02 v3.3 S122.",
+      "current_behavior": "contracts/openapi.json: 135 operations, of which 131 carry no schema at all; the 4 that do are GET /v1/bootstrap, GET /v1/seller/products, POST /v1/seller/products/{id}/images and PUT /v1/seller/products/{id}/images/order; components hold only BootstrapResponseDto and BootstrapMarketDto (register D-98: Swagger decorators carry no bodies). Includes auth otp request/verify, devices (push_token accepted at auth.schemas.ts:81 but undeclared), sessions, orders, courier, seller and notifications.",
+      "status": "MISSING_SCHEMA",
+      "affected_files": [
+        "apps/api/src/modules/**/*.controller.ts (Swagger decorators)",
+        "contracts/openapi.json (regenerated)",
+        "packages/api-client/src/schema.d.ts (regenerated)"
+      ],
+      "future_correction": "Annotate request and response DTOs in apps/api and regenerate; auth, devices, sessions and bootstrap first (they gate any typed sign-in).",
+      "migration_risk": "LOW - additive documentation, no wire change.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS SELLER COMPANION",
+        "BLOCKS COURIER",
+        "BLOCKS PAYMENT/CHECKOUT ONLY"
+      ],
+      "confidence": "verified",
+      "wo002_condition": "WO-002 must not build a typed OTP sign-in screen or any data screen until the auth/session slice of this gap closes; hand-written DTOs are forbidden."
+    },
+    {
+      "id": "API-2",
+      "conflict": "none",
+      "area": "Contract security description",
+      "november_requirement": "AUTH-02 v3.3 S43 'Do not add JWT complexity merely for convention.'; MOB-02 v4.3 S74 opaque bearer.",
+      "current_behavior": "addBearerAuth() emits bearerFormat 'JWT' (apps/api/src/generate-openapi.ts:53) for an opaque uuid token; no operation declares security; required headers Idempotency-Key, X-Adulis-Device and X-Adulis-Client are not declared.",
+      "status": "CONTRACT_DRIFT",
+      "affected_files": [
+        "apps/api/src/generate-openapi.ts",
+        "controller decorators",
+        "contracts/openapi.json (regenerated)"
+      ],
+      "future_correction": "Opaque bearer and cookie schemes, per-operation security, header parameters.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "API-3",
+      "conflict": "K-5",
+      "area": "Generated client export",
+      "november_requirement": "R-21 'The shared generated API-client seam must export generated OpenAPI path/types.'",
+      "current_behavior": "Before WO-001C: schema.d.ts was generated and CI-current (contract-current gate regenerates contract and client; generate:check passes) but packages/api-client/src/index.ts exported none of it and its comments said it did not exist. WO-001C re-exports paths, components and operations (type-only) with a type test; apps/mobile type-imports it cleanly.",
+      "status": "ALIGNED",
+      "affected_files": [
+        "packages/api-client/src/index.ts",
+        "packages/api-client/test/exports.test-d.ts",
+        "packages/api-client/tsconfig.test.json",
+        "packages/api-client/package.json",
+        "packages/api-client/README.md"
+      ],
+      "future_correction": "None. Repaired in WO-001C, in its own commit so it can ship as its own packages PR.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified (test run, mutation-checked)"
+    },
+    {
+      "id": "ARCH-1",
+      "conflict": "K-8",
+      "area": "Persistence toolkit",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 ADR-03 'PostgreSQL + Drizzle canonical transactional persistence'.",
+      "current_behavior": "Kysely 0.28 for typed queries and hand-authored SQL migrations via node-pg-migrate; STACK_BASELINE and root CLAUDE.md reject ORM write paths without a reissued decision.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "apps/api/package.json",
+        "apps/api/src/common/db/*",
+        "db/migrations/*",
+        ".claude/reference/STACK_BASELINE.md"
+      ],
+      "future_correction": "Founder rules whether Drizzle is binding or the Kysely/raw-SQL build is accepted as an equivalent; a swap would touch every query and the migration toolchain.",
+      "migration_risk": "HIGH if adopted.",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS INFRASTRUCTURE MIGRATION ONLY"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "ARCH-2",
+      "conflict": "K-8",
+      "area": "HTTP adapter",
+      "november_requirement": "ARCH-PLATFORM-01 v3.3 'the shared NestJS/Fastify modular monolith'; Appendix C names @fastify/helmet and @nestjs/throttler.",
+      "current_behavior": "@nestjs/platform-express 11.2.3; no throttler (the PostgreSQL limiter instead).",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "apps/api/package.json",
+        "apps/api/src/main.ts",
+        "apps/api/src/configure-app.ts"
+      ],
+      "future_correction": "Founder rules; low urgency.",
+      "migration_risk": "MEDIUM if adopted (middleware and cookie handling).",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER",
+        "BLOCKS INFRASTRUCTURE MIGRATION ONLY"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-1",
+      "conflict": "K-6",
+      "area": "AUTH-02 v3.3 vs AUTH-01",
+      "november_requirement": "AUTH-02 v3.3 is current design authority.",
+      "current_behavior": "AUTH-01 v2.5 is parsed by verify:permission-doc; v2.6 by verify:transcription; v2.8, v2.6 and v2.5 are ASCII-governed; the v2.4 seed SQL is parsed by verify:permission-doc, verify:surface-markers and apps/api/test/permission-matrix.spec.ts; about 84 files cite AUTH-01.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "docs/ADU-AUTH-01_*",
+        "docs/amendments/ADU-AUTH-01_v2_4_permission_seed.sql",
+        "ops/scripts/verify-permission-doc.mjs",
+        "ops/scripts/verify-transcription.mjs",
+        "ops/scripts/verify-surface-markers.mjs"
+      ],
+      "future_correction": "Not retirable until SC-2 re-points the gates at the AUTH-02 v3.0 catalogue; then a consolidated reissue (or the gates read Contract_Registry/seller_permissions.json) and AUTH-01 moves to superseded/.",
+      "migration_risk": "MEDIUM",
+      "blocks": [
+        "BLOCKS SELLER COMPANION",
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-2",
+      "conflict": "K-6",
+      "area": "CONSOLE-02 v4.3 vs CON-02 v3.2",
+      "november_requirement": "CONSOLE-02 v4.3 is the current Seller Console design.",
+      "current_behavior": "CON-02 v3.2 is ASCII-governed only (no gate parses it) but is the build and operations doctrine cited in about 90 files (jobs, tsconfig, migrations); CONSOLE-02 is a console product design and does not replace CON-02's build doctrine.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "docs/ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md",
+        "ops/scripts/verify-docs-ascii.mjs"
+      ],
+      "future_correction": "Founder decides whether CON-02 stays as the build-doctrine record (and is reissued against the November ARCH/DEPLOY) or is retired; its console-design content is superseded by CONSOLE-02.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-3",
+      "conflict": "K-6",
+      "area": "CSP-01 v1.1 vs SEC-01 v1.0",
+      "november_requirement": "CSP-01 v1.1 is current.",
+      "current_behavior": "No gate reads SEC-01; 9 files cite it in comments.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "docs/ADU-SEC-01_Content_Security_Policy_v1_0.md"
+      ],
+      "future_correction": "Retirable to superseded/ after a citation sweep and a check that the console CSP rules match CSP-01; no reissue needed.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-4",
+      "conflict": "K-6",
+      "area": "WEB-02 v4.2 vs WEB-01 v1.0",
+      "november_requirement": "WEB-02 v4.2 is current.",
+      "current_behavior": "No gate reads WEB-01; 5 files cite it.",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "docs/ADU-WEB-01_Public_Website_Specification_v1_0.md"
+      ],
+      "future_correction": "Retirable to superseded/ after a citation sweep; no reissue needed.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-5",
+      "conflict": "K-6",
+      "area": "DPIA-01 on two lineages",
+      "november_requirement": "The pack's DPIA-01 v1.1 (v1.0 reviewed 8 October 2026, 'supersedes none').",
+      "current_behavior": "docs/ADU-DPIA-01 v1.0 is a separate 24 August 2026 draft; no gate reads it; two skills cite it.",
+      "status": "FOUNDER_DECISION_REQUIRED",
+      "affected_files": [
+        "docs/ADU-DPIA-01_Data_Protection_Impact_Assessment_v1_0.md",
+        ".claude/skills/adulis-backend-security-review/SKILL.md",
+        ".claude/skills/adulis-financial-boundary/SKILL.md"
+      ],
+      "future_correction": "Founder (with legal review) confirms the October lineage carries the August draft's items, then the August copy is retired; a consolidated legal reissue is likely.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-6",
+      "conflict": "K-7",
+      "area": "Encoding rule",
+      "november_requirement": "Founder ruling WO-001C: the pack is UTF-8 design authority; no ASCII duplicates.",
+      "current_behavior": "A3.5 is stated in root CLAUDE.md, docs/amendments/README.md, verify-docs-ascii.mjs and its gates.mjs title. The gate enforces only its GOVERNED list (all legacy executable specs), but its recursive walk lists the 34 pack designs as 'pre-A3.5 debt ... they become GOVERNED as each is reissued', which is now false. WO-001C scoped the rule in root CLAUDE.md and the pack index (documentation only).",
+      "status": "PARTIALLY_ALIGNED",
+      "affected_files": [
+        "CLAUDE.md",
+        "docs/system-designs/README.md",
+        "ops/scripts/verify-docs-ascii.mjs",
+        "ops/scripts/gates.mjs"
+      ],
+      "future_correction": "Tooling follow-up: skip docs/system-designs/** in the debt walk with a one-line explanation, and add a gate that runs sha256sum -c --ignore-missing on the installed pack. That strengthens validation; not done here because it changes a gate.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "DOC-7",
+      "conflict": "K-1, K-2",
+      "area": "Legacy PRD scope",
+      "november_requirement": "Founder rulings WO-001C (provider-authoritative payment; launch discovery channels).",
+      "current_behavior": "docs/ADU-PRD-01 v8.5 still puts the buyer payment gateway and discovery/ranking out of V1 scope and makes the seller the payment verifier (S10.1); DOCUMENT_AUTHORITY.md's authority-by-question list still names PRD v8.5 for product behaviour (with the November-first preamble).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "docs/ADU-PRD-01_Product_Requirements_v8_5.md",
+        ".claude/reference/DOCUMENT_AUTHORITY.md"
+      ],
+      "future_correction": "Founder decides whether PRD-01 is reissued against the November pack or retired as a product authority; until then it is evidence of what was built.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "MOB-1",
+      "conflict": "K-1",
+      "area": "Foundation sample string",
+      "november_requirement": "MOB-02 v4.3 S146 (no seller payment confirmation).",
+      "current_behavior": "apps/mobile/src/app/index.tsx:92 renders obligation.payment_awaiting_confirmation.consequence as a catalogue sample (chosen in WO-001A).",
+      "status": "LEGACY_SPEC_DRIFT",
+      "affected_files": [
+        "apps/mobile/src/app/index.tsx",
+        "apps/mobile/src/modes/navigation.test.tsx"
+      ],
+      "future_correction": "WO-002 swaps it for a neutral catalogue key (app code is outside WO-001C's safe-change list).",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified"
+    },
+    {
+      "id": "MOB-2",
+      "conflict": "none",
+      "area": "Amharic user gate",
+      "november_requirement": "R-19 'Amharic remains disabled for users until a human translation/review pass is complete.'",
+      "current_behavior": "The foundation screen's language choice is visible in every build, including release.",
+      "status": "IMPLEMENTATION_GAP",
+      "affected_files": [
+        "apps/mobile/src/app/index.tsx"
+      ],
+      "future_correction": "WO-002 gates the Amharic choice to development builds (or a backend flag) until the human review lands.",
+      "migration_risk": "LOW",
+      "blocks": [
+        "DOES NOT BLOCK WO-002 BUYER"
+      ],
+      "confidence": "verified",
+      "release_gate": true
+    }
+  ]
+}
