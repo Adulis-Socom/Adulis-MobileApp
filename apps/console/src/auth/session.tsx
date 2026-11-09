@@ -174,9 +174,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signedOut: () => setSession(null),
       signOut: async () => {
         // Revoke server-side, then drop local state whatever happened: a
-        // failed revoke must not leave the seller looking signed in.
+        // failed revoke must not leave the seller looking signed in. Logout
+        // (WO-API-001A) also clears the HttpOnly cookie JavaScript cannot.
         try {
-          if (session) await api<void>(`/auth/sessions/${session.id}`, { method: 'DELETE' });
+          if (session) await api<void>('/auth/logout', { method: 'POST' });
         } finally {
           setSession(null);
           setIdleWarningAt(null);

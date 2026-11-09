@@ -28,6 +28,14 @@ export const hostCookie = (name: string, value: string, maxAgeSeconds: number): 
   `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Strict`;
 
 /**
+ * Expires a __Host- cookie now: logout, or a refused session cookie. Same
+ * attributes, so the browser matches it. JavaScript cannot remove an HttpOnly
+ * cookie, so the server is the only party that can.
+ */
+export const clearedHostCookie = (name: string): string =>
+  `${name}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Strict`;
+
+/**
  * The same cookie with no Max-Age: the browser keeps it for the session and
  * forgets it on restart. Used where there is no configured lifetime to state
  * honestly -- a cookie that lasts one session is still a cookie the browser

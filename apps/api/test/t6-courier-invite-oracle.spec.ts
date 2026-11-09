@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { FakeSmsAdapter, SMS_ADAPTER } from '../src/modules/auth/sms.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T6 / G1.8 -- inviting a courier tells you nothing about the number.
@@ -59,7 +60,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
   let app: INestApplication;
   let admin: Pool;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const invite = (phone: string, key: string) =>
     request(app.getHttpServer())
       .post('/v1/seller/couriers')
@@ -114,6 +115,7 @@ describe('T6 / G1.8 -- the courier invite is not a registration oracle', () => {
        VALUES ($1,$2,'CONSOLE',$3, now() + interval '12 hours')`,
       [OWNER_S, OWNER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status)

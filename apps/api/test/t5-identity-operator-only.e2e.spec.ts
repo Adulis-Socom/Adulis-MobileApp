@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T5 / G1.1 -- identity verification is operator-only.
@@ -56,7 +57,7 @@ describe('T5 / G1.1 -- identity verification is operator-only', () => {
   let admin: Pool;
   let challengeSeq = 0;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () =>
     `77777777-5555-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
 
@@ -155,6 +156,7 @@ describe('T5 / G1.1 -- identity verification is operator-only', () => {
         SELLER_ACC, OP_IDENT, OP_ADMIN, OP_SUPPORT, OP_REVOKED, DEVICE,
       ],
     );
+    await armFixtureSessions(admin, [SELLER_S, IDENT_S, ADMIN_S, SUPPORT_S, REVOKED_S]);
     await admin.query(
       `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash,
          expires_at, consumed_at, step_up_action)

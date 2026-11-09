@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T6 / G1.3 -- closure survives a deletion block.
@@ -63,7 +64,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
   let app: INestApplication;
   let admin: Pool;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const asOwner = (method: 'post' | 'delete' | 'get', path: string) =>
     request(app.getHttpServer())[method](path)
       .set('Cookie', cookie(OWNER_S))
@@ -126,6 +127,7 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
        VALUES ($1,$2,'CONSOLE',$3, now() + interval '12 hours')`,
       [OWNER_S, OWNER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status)

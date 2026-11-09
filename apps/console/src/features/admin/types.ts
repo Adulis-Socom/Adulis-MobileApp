@@ -116,7 +116,7 @@ export interface SessionRow {
   readonly last_activity_at: string;
   readonly approx_location: string | null;
   readonly expires_at: string;
-  readonly device_id: string | null;
+  // No device_id since WO-API-001A: a browser's device id is its cookie value.
   readonly device_platform: string | null;
   readonly remembered_label: string | null;
   readonly remembered: boolean;

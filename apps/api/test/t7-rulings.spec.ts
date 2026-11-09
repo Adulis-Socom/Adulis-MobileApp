@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T7 Phase 1 -- the two rulings whose behavior is new surface area.
@@ -52,7 +53,7 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
   let admin: Pool;
 
   const http = () => request(app.getHttpServer());
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });
@@ -93,6 +94,7 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
         ($2,$4,'MOBILE',$5, now() + interval '12 hours')`,
       [OWNER_S, BUYER_S, OWNER, BUYER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, BUYER_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status) VALUES
@@ -176,7 +178,7 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
     const post = (body: Record<string, unknown>) =>
       http()
         .post(`/v1/conversations/${conversationId}/messages`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', randomUUID())
         .send(body);
@@ -184,7 +186,7 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
     it('opening a conversation takes no anchor any more', async () => {
       const open = await http()
         .post('/v1/conversations')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', randomUUID())
         .send({ seller_id: SELLER })
@@ -215,7 +217,7 @@ describe('T7 Phase 1 -- the message anchor and the person row', () => {
     it('the messages GET returns each message with its own anchor', async () => {
       const list = await http()
         .get(`/v1/conversations/${conversationId}/messages`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const anchors = (list.body.data as Array<{ product_id?: string }>)

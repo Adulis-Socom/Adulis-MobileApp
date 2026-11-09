@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C3 — cart, orders and payment decisions: the concurrency-critical group's
@@ -71,13 +72,13 @@ describe('C3 — cart, orders and payment', () => {
   let app: INestApplication;
   let admin: Pool;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () => randomUUID();
 
   const buyerPost = (path: string) =>
     request(app.getHttpServer())
       .post(path)
-      .set('Authorization', `Bearer ${BUYER_S}`)
+      .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
       .set('X-Adulis-Device', DEVICE)
       .set('Idempotency-Key', key());
   const sellerGet = (path: string, token = OWNER_S) =>
@@ -109,7 +110,7 @@ describe('C3 — cart, orders and payment', () => {
     await buyerPost('/v1/cart/lines').send({ variant_id: variant, quantity: 1 }).expect(201);
     const cart = await request(app.getHttpServer())
       .get('/v1/cart')
-      .set('Authorization', `Bearer ${BUYER_S}`)
+      .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
       .set('X-Adulis-Device', DEVICE)
       .expect(200);
     const r = await buyerPost('/v1/orders')
@@ -247,6 +248,7 @@ describe('C3 — cart, orders and payment', () => {
       [OWNER_S, BUYER_S, STRANGER_S, ANALYST_S, OWNER, BUYER, STRANGER, ANALYST, DEVICE,
        OWNER_MOBILE_S, INV_S, INV, STRANGER_CON_S],
     );
+    await armFixtureSessions(admin, [OWNER_S, BUYER_S, STRANGER_S, ANALYST_S, OWNER_MOBILE_S, INV_S, STRANGER_CON_S]);
 
     const moduleRef = await Test.createTestingModule({ imports: [C3AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -305,7 +307,7 @@ describe('C3 — cart, orders and payment', () => {
     it('the cart view carries live price and availability per line', async () => {
       const r = await request(app.getHttpServer())
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       expect(r.body.lines).toHaveLength(1);
@@ -314,7 +316,7 @@ describe('C3 — cart, orders and payment', () => {
       // clean the line for later tests
       await request(app.getHttpServer())
         .delete(`/v1/cart/lines/${r.body.lines[0].id}`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(204);
     });
@@ -325,7 +327,7 @@ describe('C3 — cart, orders and payment', () => {
       await buyerPost('/v1/cart/lines').send({ variant_id: VARIANT, quantity: 1 }).expect(201);
       const cart = await request(app.getHttpServer())
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const r = await buyerPost('/v1/orders')
@@ -344,7 +346,7 @@ describe('C3 — cart, orders and payment', () => {
     it('the matching expectation creates the order: card, absolute expiry, stock held', async () => {
       const cart = await request(app.getHttpServer())
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const r = await buyerPost('/v1/orders')
@@ -366,12 +368,12 @@ describe('C3 — cart, orders and payment', () => {
     it('404 for a stranger reading the order card', async () => {
       const orders = await request(app.getHttpServer())
         .get('/v1/orders')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       const id = orders.body.data[0].id;
       await request(app.getHttpServer())
         .get(`/v1/orders/${id}`)
-        .set('Authorization', `Bearer ${STRANGER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(STRANGER_S)}`)
         .expect(404);
     });
   });
@@ -471,7 +473,7 @@ describe('C3 — cart, orders and payment', () => {
       await sellerPost(`/v1/seller/orders/${o}/payment/confirm`).send({}).expect(200);
       const card = await request(app.getHttpServer())
         .get(`/v1/orders/${o}`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       const rid = card.body.lines[0].id;
 
@@ -502,7 +504,7 @@ describe('C3 — cart, orders and payment', () => {
         const o = await createOrder(VF);
         const card = await request(app.getHttpServer())
           .get(`/v1/orders/${o}`)
-          .set('Authorization', `Bearer ${BUYER_S}`)
+          .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
           .expect(200);
         await buyerPost(`/v1/orders/${o}/reservations/${card.body.lines[0].id}/cancel`)
           .send({})
@@ -520,7 +522,7 @@ describe('C3 — cart, orders and payment', () => {
       await buyerPost('/v1/cart/lines').send({ variant_id: VF, quantity: 1 }).expect(201);
       const cart = await request(app.getHttpServer())
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const r = await buyerPost('/v1/orders')
@@ -632,7 +634,7 @@ describe('C3 — cart, orders and payment', () => {
       const o = await mkOrder(VARIANT_MO, 'PAYMENT_CONFIRMED');
       const mobile = await request(app.getHttpServer())
         .get(`/v1/seller/orders/${o}`)
-        .set('Authorization', `Bearer ${OWNER_MOBILE_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOBILE_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
       // MOBILE-reachable stays; CONSOLE-only goes.
@@ -807,7 +809,7 @@ describe('C3 — cart, orders and payment', () => {
     it('MOBILE is 403 (store:read is CONSOLE-only); a CONSOLE stranger is 404', async () => {
       await request(app.getHttpServer())
         .get('/v1/seller/obligations')
-        .set('Authorization', `Bearer ${OWNER_MOBILE_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOBILE_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       // A CONSOLE stranger passes the surface gate and fails the relationship

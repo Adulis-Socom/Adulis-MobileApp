@@ -12,6 +12,7 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from '../src/modules/catalogue/post-link.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C2 — catalogue, media and stock: the per-group gate. Media never
@@ -47,7 +48,7 @@ describe('C2 — catalogue, media and stock', () => {
   let productId = '';
   let variantId = '';
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () =>
     `77777777-6666-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
   const write = (method: 'post' | 'put' | 'patch' | 'delete', path: string, token = OWNER_S) => {
@@ -167,6 +168,7 @@ describe('C2 — catalogue, media and stock', () => {
         ($3,$6,'CONSOLE',$7, now()+interval '12 hours')`,
       [OWNER_S, ANALYST_S, STRANGER_S, OWNER, ANALYST, STRANGER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, ANALYST_S, STRANGER_S]);
 
     const moduleRef = await Test.createTestingModule({ imports: [C2AppModule] })
       .overrideProvider(MEDIA_STORAGE_ADAPTER)

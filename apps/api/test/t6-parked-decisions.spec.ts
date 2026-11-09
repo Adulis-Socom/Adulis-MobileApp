@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { FakeSmsAdapter, SMS_ADAPTER } from '../src/modules/auth/sms.adapter';
 import { codeHash } from '../src/modules/auth/otp.service';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T6 Phase C -- the five decisions the register RECORDED and nothing
@@ -74,7 +75,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
   let admin: Pool;
 
   const http = () => request(app.getHttpServer());
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });
     await admin.query(
@@ -120,6 +121,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
         ($3,$5,'MOBILE',$6, now() + interval '12 hours')`,
       [OWNER_CON_S, OWNER_MOB_S, STRANGER_MOB_S, SELLER_OWNER, STRANGER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_CON_S, OWNER_MOB_S, STRANGER_MOB_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status)
@@ -237,7 +239,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       expect(surfaces.rows[0]?.surfaces?.sort()).toEqual(['CONSOLE', 'MOBILE']);
       const fromMobile = await http()
         .post(`/v1/seller/orders/${ORDER}/ready`)
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .set('Idempotency-Key', randomUUID())
         .send({})
@@ -282,7 +284,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
 
       const probe = await http()
         .get(`/v1/orders/${ORDER}`)
-        .set('Authorization', `Bearer ${STRANGER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(STRANGER_MOB_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(404);
 
@@ -298,7 +300,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       // code: two responses that differ would rebuild the oracle.
       const fiction = await http()
         .get(`/v1/orders/${randomUUID()}`)
-        .set('Authorization', `Bearer ${STRANGER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(STRANGER_MOB_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(404);
       expect(fiction.body.code).toBe(probe.body.code);
@@ -423,7 +425,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       // this row. Authorization doctrine belongs to ADU-AUTH-01.
       const requestRefused = await http()
         .post('/v1/auth/step-up/request')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('Idempotency-Key', randomUUID())
         .send({ action: 'REVOKE_ALL_SESSIONS' })
         .expect(403);
@@ -434,7 +436,7 @@ describe('T6 Phase C -- the recorded decisions, now defended', () => {
       // same outcome, more taps, no invariant broken.
       const revokeRefused = await http()
         .post('/v1/auth/sessions/revoke-others')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .send({ step_up_challenge_id: randomUUID() })
         .expect(403);
       expect(revokeRefused.body.code).toBe('PERMISSION_DENIED');

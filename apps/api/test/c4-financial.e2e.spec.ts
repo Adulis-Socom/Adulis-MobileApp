@@ -11,6 +11,7 @@ import {
 } from '../src/modules/financial/financial-storage.adapter';
 import { payoutActivateDue } from '../src/jobs/e5-transport-ledger';
 import { createJobHarness } from './jobs-harness';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C4 — the financial boundary, end to end: the payout write path with every
@@ -59,7 +60,7 @@ describe('C4 — the financial boundary', () => {
   let admin: Pool;
   let orderId = '';
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () => randomUUID();
   const freshStepUp = async (action: string): Promise<string> => {
     const id = randomUUID();
@@ -82,7 +83,7 @@ describe('C4 — the financial boundary', () => {
   const buyerPost = (path: string) =>
     request(app.getHttpServer())
       .post(path)
-      .set('Authorization', `Bearer ${BUYER_S}`)
+      .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
       .set('X-Adulis-Device', DEVICE)
       .set('Idempotency-Key', key());
 
@@ -166,6 +167,7 @@ describe('C4 — the financial boundary', () => {
       [OWNER_S, BUYER_S, STRANGER_S, DEVICE, OWNER, BUYER, STRANGER,
        OWNER_NEWDEV_S, NEW_DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, BUYER_S, STRANGER_S, OWNER_NEWDEV_S]);
     await admin.query(
       `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash, expires_at, consumed_at, step_up_action)
        VALUES ($1,'STEP_UP','+251911221001', decode('00','hex'), now()+interval '1 hour', now(), 'PAYOUT_CHANGE')`,
@@ -773,7 +775,7 @@ describe('C4 — the financial boundary', () => {
       await buyerPost('/v1/cart/lines').send({ variant_id: VARIANT, quantity: 1 }).expect(201);
       const cart = await request(app.getHttpServer())
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const order = await buyerPost('/v1/orders')
@@ -786,7 +788,7 @@ describe('C4 — the financial boundary', () => {
 
       const r = await request(app.getHttpServer())
         .get(`/v1/orders/${orderId}/payment-instructions`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       expect(r.body.account_number).toBe(ACCOUNT_NUMBER);
       expect(r.body.account_name).toBe('Naod Solomon');
@@ -801,7 +803,7 @@ describe('C4 — the financial boundary', () => {
       // function raises U0002 and the wire says not-found. Register D-30.
       const r = await request(app.getHttpServer())
         .get(`/v1/orders/${orderId}/payment-instructions`)
-        .set('Authorization', `Bearer ${STRANGER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(STRANGER_S)}`)
         .expect(404);
       expect(r.body.code).toBe('NOT_FOUND');
     });

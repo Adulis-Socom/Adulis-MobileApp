@@ -72,6 +72,11 @@ export const revokeOthersBody = z.object({
   step_up_challenge_id: z.uuid(),
 });
 
+/** DELETE /v1/auth/sessions/{id}: the step-up is needed only for ANOTHER session (SEC-4). */
+export const revokeSessionBody = z.object({
+  step_up_challenge_id: z.uuid().optional(),
+});
+
 export const deviceRegisterBody = z.object({
   id: z.uuid(),
   platform: z.enum(['ANDROID', 'IOS']),

@@ -11,6 +11,7 @@ import { RateLimitService } from '../src/common/rate-limit/rate-limit.service';
 import type { LocalizedRequest } from '../src/common/http/locale.middleware';
 import type { Database } from '../src/common/db/database.types';
 import type { Response } from 'express';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * The Tier 3 pipeline, end to end — every stage exercised through the SAME
@@ -143,6 +144,7 @@ describe('the Tier 3 request pipeline, end to end', () => {
       [MOBILE_SESSION, CONSOLE_SESSION, REVOKED_SESSION, IDLE_SESSION, DEVICE, OWNER,
        STRANGER_SESSION, STRANGER],
     );
+    await armFixtureSessions(admin, [MOBILE_SESSION, CONSOLE_SESSION, REVOKED_SESSION, IDLE_SESSION, STRANGER_SESSION]);
     await admin.query(`UPDATE core.session SET revoked_at = now() WHERE id = $1`, [
       REVOKED_SESSION,
     ]);
@@ -182,8 +184,8 @@ describe('the Tier 3 request pipeline, end to end', () => {
     await admin.end();
   });
 
-  const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
-  const cookie = (token: string) => ({ Cookie: `__Host-adulis_session=${token}` });
+  const bearer = (token: string) => ({ Authorization: `Bearer ${sessionToken(token)}` });
+  const cookie = (token: string) => ({ Cookie: `__Host-adulis_session=${sessionToken(token)}` });
 
   describe('anonymous surface', () => {
     it('serves /v1/bootstrap with server_time, market and echoed headers', async () => {
@@ -254,7 +256,8 @@ describe('the Tier 3 request pipeline, end to end', () => {
     it('garbage tokens are refused without touching the database', async () => {
       await request(app.getHttpServer())
         .get('/v1/probe/context')
-        .set(bearer('not-a-uuid'))
+        // Raw on purpose: sessionToken() would give it the credential's shape.
+        .set('Authorization', 'Bearer not-a-uuid')
         .expect(401);
     });
   });

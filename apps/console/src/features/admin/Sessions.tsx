@@ -7,7 +7,8 @@
  * for, both derived from the one list.
  *
  * THREE ACTIONS, AND THEY ARE DISTINCT: DELETE /v1/auth/sessions/{id} ends one
- * session (NO step-up); POST .../revoke-others ends all others (step-up
+ * other session (step-up REVOKE_ALL_SESSIONS bound to that id, since
+ * WO-API-001A SEC-4); POST .../revoke-others ends all others (step-up
  * REVOKE_ALL_SESSIONS, challengeRequired); and DELETE
  * /v1/auth/remembered-devices/{id} (T15 Phase 4) FORGETS a device ALONE --
  * the session stays live, it just loses R17's extended lifetime. Removing the
@@ -51,12 +52,23 @@ export function Sessions() {
     void load();
   }, [load]);
 
+  // Ending ANOTHER session is account control since WO-API-001A (SEC-4): the
+  // API demands a REVOKE_ALL_SESSIONS step-up bound to this session id.
   const revokeOne = async (id: string) => {
     setBusy(true);
     setProblem(null);
     try {
-      await api(`/auth/sessions/${id}`, { method: 'DELETE' });
-      void load();
+      const r = await guard(
+        'REVOKE_ALL_SESSIONS',
+        id,
+        (challengeId) =>
+          api(`/auth/sessions/${id}`, {
+            method: 'DELETE',
+            body: { step_up_challenge_id: challengeId },
+          }),
+        { challengeRequired: true },
+      );
+      if (r !== null) void load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e);
     } finally {
@@ -67,8 +79,8 @@ export function Sessions() {
   /**
    * Forget a remembered device ALONE (T15 Phase 4): the session stays live and
    * signed in; it simply stops being remembered, so its next renewal gets the
-   * ordinary lifetime instead of R17's seven days. No step-up -- like a single
-   * sign-out, this reduces standing access rather than extending it.
+   * ordinary lifetime instead of R17's seven days. No step-up: it reduces
+   * standing access rather than extending it, and ends no session.
    */
   const forgetDevice = async (accountDeviceId: string) => {
     setBusy(true);

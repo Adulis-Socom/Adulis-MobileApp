@@ -10,6 +10,7 @@ import {
   FakeFinancialStorageAdapter,
   FINANCIAL_STORAGE_ADAPTER,
 } from '../src/modules/financial/financial-storage.adapter';
+import { armFixtureSessions, sessionToken } from '../test/session-fixture';
 
 /**
  * Phase D — the three API-level loads of ADU-CON-02-A1 section 6:
@@ -68,7 +69,7 @@ describe('Phase D — API loads (A1 section 6)', () => {
   const buyers: Buyer[] = [];
 
   const http = () => request(app.getHttpServer());
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 2 });
@@ -181,6 +182,7 @@ describe('Phase D — API loads (A1 section 6)', () => {
          FROM unnest($1::uuid[], $2::uuid[], $3::uuid[]) AS t(s, a, d)`,
       [sessionIds, accountIds, deviceIds],
     );
+    await armFixtureSessions(admin, sessionIds);
     await admin.query(
       `INSERT INTO core.cart (id, device_id, buyer_account_id, seller_id, market_id)
        SELECT c, d, a, $4, $5
@@ -200,6 +202,7 @@ describe('Phase D — API loads (A1 section 6)', () => {
         ($2,$4,'CONSOLE',NULL, now()+interval '12 hours')`,
       [OWNER_S, COURIER_S, OWNER, COURIER_ACC],
     );
+    await armFixtureSessions(admin, [OWNER_S, COURIER_S]);
     await admin.query(
       `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state,
          total_minor, total_currency, display_currency, expires_at, clock_stopped_at) VALUES
@@ -307,7 +310,7 @@ describe('Phase D — API loads (A1 section 6)', () => {
           const s = Date.now();
           const r = await http()
             .post('/v1/orders')
-            .set('Authorization', `Bearer ${b.session}`)
+            .set('Authorization', `Bearer ${sessionToken(b.session)}`)
             .set('X-Adulis-Device', b.device)
             .set('Idempotency-Key', randomUUID())
             .send({
@@ -413,7 +416,7 @@ describe('Phase D — API loads (A1 section 6)', () => {
         if (i % 2 === 0) {
           const r = await http()
             .get('/v1/orders')
-            .set('Authorization', `Bearer ${buyer.session}`)
+            .set('Authorization', `Bearer ${sessionToken(buyer.session)}`)
             .set('X-Adulis-Device', buyer.device)
             .expect(200);
           // The buyer's list is exactly their one wave-1 order — a leaked

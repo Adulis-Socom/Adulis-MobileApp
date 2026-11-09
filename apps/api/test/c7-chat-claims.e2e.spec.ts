@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C7 — chat (12.7), claims (12.4, X15), reviews (12.4, 12.11, S12): R10's
@@ -61,10 +62,10 @@ describe('C7 — chat, claims, reviews', () => {
 
   const key = () => randomUUID();
   const http = () => request(app.getHttpServer());
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const buyerReq = (method: 'post' | 'get', path: string, token = BUYER_S) => {
     const r = http()[method](path)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${sessionToken(token)}`)
       .set('X-Adulis-Device', DEVICE);
     if (method === 'post') r.set('Idempotency-Key', key());
     return r;
@@ -196,6 +197,7 @@ describe('C7 — chat, claims, reviews', () => {
         ($5,$9,'CONSOLE',NULL, now()+interval '12 hours')`,
       [OWNER_S, OWNER_MOB_S, BUYER_S, STRANGER_S, OWNER2_S, OWNER, BUYER, STRANGER, OWNER2, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, OWNER_MOB_S, BUYER_S, STRANGER_S, OWNER2_S]);
     await admin.query(`SET session_replication_role = DEFAULT`);
 
     const moduleRef = await Test.createTestingModule({ imports: [C7AppModule] }).compile();
@@ -432,7 +434,7 @@ describe('C7 — chat, claims, reviews', () => {
     it('the remedy is the seller choice, console-only; MOBILE gets 403', async () => {
       const mobile = await http()
         .post(`/v1/seller/claims/${claimId}/remedy`)
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .set('Idempotency-Key', key())
         .send({ remedy: 'REFUND' })

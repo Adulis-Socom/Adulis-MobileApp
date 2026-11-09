@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T6-B / G1.6 -- ownership transfer, with AMENDMENT A1.
@@ -60,7 +61,7 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
   let app: INestApplication;
   let admin: Pool;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const as = (session: string, method: 'get' | 'post' | 'delete', path: string) =>
     request(app.getHttpServer())[method](path)
       .set('Cookie', cookie(session))
@@ -178,6 +179,7 @@ describe('T6-B / G1.6 -- ownership transfer has a policy', () => {
         ($3,$6,'CONSOLE',$7, now() + interval '12 hours')`,
       [OWNER_S, RECIPIENT_S, ANALYST_S, OWNER, RECIPIENT, ANALYST, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, RECIPIENT_S, ANALYST_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status)

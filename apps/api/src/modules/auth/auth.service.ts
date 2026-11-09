@@ -4,6 +4,7 @@ import { sql, type Transaction } from 'kysely';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { mintSessionToken } from '../../common/auth/session.service';
 import { OtpService } from './otp.service';
 import type { SmsMessage } from './sms.adapter';
 
@@ -11,16 +12,21 @@ import type { SmsMessage } from './sms.adapter';
  * C6 — identity and session (ADU-API-01 section 12.2; ADU-AUTH-01 v2.4
  * sections 3-5, 8-10).
  *
- * The session token is the core.session row's id — opaque and stateful in
- * both presentations (S5.1); revocation is a row update the next request
- * reads. Nothing here computes an entitlement or a lifetime rule: the
+ * The session credential is a random token whose SHA-256 is stored on the
+ * core.session row (WO-API-001A, SEC-1); the row id is the PUBLIC session id
+ * and authenticates nothing. Opaque and stateful in both presentations
+ * (S5.1); revocation is a row update the next request reads. Nothing here
+ * computes an entitlement or a lifetime rule: the
  * lifetimes come from core.timing_config, the new-device notification is a
  * database trigger (D5), and step-up assertion lives in
  * core.fn_assert_step_up.
  */
 
 export interface MintedSession {
+  /** The secret credential. Returned once; never stored, logged or replayed. */
   readonly token: string;
+  /** The public session id (what GET /v1/auth/sessions lists). */
+  readonly sessionId: string;
   readonly accountId: string;
   readonly audience: 'MOBILE' | 'CONSOLE';
   readonly roles: string[];
@@ -317,12 +323,14 @@ export class AuthService {
       }
     }
 
+    // Two independent values (ruling A): a public id and a secret credential.
     const sessionId = randomUUID();
+    const credential = mintSessionToken();
     const minted = await sql<{ expires_at: Date }>`
       INSERT INTO core.session
-        (id, account_id, audience, device_id, account_device_id,
+        (id, token_hash, account_id, audience, device_id, account_device_id,
          expires_at, created_from_otp_id)
-      SELECT ${sessionId}, ${accountId},
+      SELECT ${sessionId}, ${credential.hash}, ${accountId},
              ${audience}::core.session_audience, ${body.device_id},
              ${accountDeviceId},
              now() + CASE
@@ -340,7 +348,8 @@ export class AuthService {
     if (!row) throw new AdulisException('INTERNAL');
 
     return {
-      token: sessionId,
+      token: credential.token,
+      sessionId,
       accountId,
       audience,
       roles: await this.rolesOf(trx, accountId),
@@ -365,14 +374,20 @@ export class AuthService {
     return r.rows.map((x) => x.role).sort();
   }
 
-  /** GET /v1/auth/sessions — device, first seen, last activity, location. */
+  /**
+   * GET /v1/auth/sessions — device platform, first seen, last activity,
+   * location. NON-SECRET COLUMNS ONLY, named one by one (WO-API-001A §9):
+   * s.id is the public id, never token_hash. device_id is withheld too: for a
+   * browser it is the __Host-adulis_browser cookie value, which the new-device
+   * payout lock treats as a known device.
+   */
   async listSessions(trx: Transaction<Database>, req: AuthedRequest): Promise<unknown> {
     const accountId = req.ctx?.accountId as string;
     const current = req.auth?.sessionId;
     const r = await sql<Record<string, unknown>>`
       SELECT s.id, s.audience, s.first_seen_at, s.last_activity_at,
              s.approx_location, s.expires_at,
-             s.device_id, d.platform AS device_platform,
+             d.platform AS device_platform,
              ad.label AS remembered_label,
              -- The remembered device the console un-remembers (item 8). NULL
              -- unless this session is bound to a LIVE (unrevoked) one; a
@@ -417,21 +432,65 @@ export class AuthService {
     }
   }
 
-  /** DELETE /v1/auth/sessions/{id} — own sessions only; others are 404. */
+  /** POST /v1/auth/logout — ordinary sign-out: the calling session only, no step-up. */
+  async logout(trx: Transaction<Database>, req: AuthedRequest): Promise<void> {
+    const own = req.auth?.sessionId as string;
+    await sql`
+      UPDATE core.session SET revoked_at = now(), revoked_by_session_id = ${own}
+       WHERE id = ${own} AND revoked_at IS NULL`.execute(trx);
+  }
+
+  /**
+   * DELETE /v1/auth/sessions/{id} (WO-API-001A, SEC-4; founder ruling C).
+   *
+   *   - the CALLING session: ordinary sign-out, no step-up, any audience;
+   *   - ANOTHER of the account's sessions: privileged account control. CONSOLE
+   *     only (step-up is console-only, ADU-AUTH-01 9.1) and it consumes a
+   *     REVOKE_ALL_SESSIONS step-up, the control revoke-others already
+   *     demands. Revoking one is a subset of revoking all, so the same proof
+   *     covers it. A challenge bound to a target must name THIS session.
+   *     One-use, so a loop of deletes costs one SMS step-up per session and
+   *     is never a cheaper revoke-all;
+   *   - anything else, including another account's session: 404 (S19).
+   */
   async revokeSession(
     trx: Transaction<Database>,
     req: AuthedRequest,
     sessionId: string,
+    stepUpChallengeId: string | null,
   ): Promise<void> {
     const accountId = req.ctx?.accountId as string;
-    const r = await sql`
-      UPDATE core.session
-         SET revoked_at = now(), revoked_by_session_id = ${req.auth?.sessionId ?? null}
+    const own = req.auth?.sessionId as string;
+    const target = await sql<{ id: string }>`
+      SELECT id FROM core.session
        WHERE id = ${sessionId} AND account_id = ${accountId}
-         AND revoked_at IS NULL`.execute(trx);
-    if (Number(r.numAffectedRows ?? 0) === 0) {
-      throw new AdulisException('NOT_FOUND');
+         AND revoked_at IS NULL
+         FOR UPDATE`.execute(trx);
+    if (!first(target.rows)) throw new AdulisException('NOT_FOUND');
+
+    // Postgres renders uuids lower-case; the path may arrive in any case.
+    if (sessionId.toLowerCase() !== own) {
+      if (req.ctx?.audience !== 'CONSOLE') {
+        throw new AdulisException('PERMISSION_DENIED');
+      }
+      if (stepUpChallengeId) {
+        const bound = await sql<{ target_ref: string | null }>`
+          SELECT target_ref FROM core.step_up_challenge
+           WHERE id = ${stepUpChallengeId} AND account_id = ${accountId}`.execute(trx);
+        const ref = first(bound.rows)?.target_ref ?? null;
+        if (ref !== null && ref !== sessionId.toLowerCase()) {
+          throw new AdulisException('STEP_UP_REQUIRED');
+        }
+      }
+      // A null challenge raises U0004 -> STEP_UP_REQUIRED.
+      await sql`
+        SELECT core.fn_assert_step_up(
+          ${stepUpChallengeId}, ${accountId}, 'REVOKE_ALL_SESSIONS')`.execute(trx);
     }
+
+    await sql`
+      UPDATE core.session SET revoked_at = now(), revoked_by_session_id = ${own}
+       WHERE id = ${sessionId}::uuid`.execute(trx);
   }
 
   /**
@@ -449,6 +508,12 @@ export class AuthService {
     if (req.ctx?.audience !== 'CONSOLE') {
       throw new AdulisException('PERMISSION_DENIED');
     }
+    // A proof bound to ONE session (DELETE /v1/auth/sessions/{id}) never
+    // authorises revoking them all.
+    const bound = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM core.step_up_challenge
+       WHERE id = ${stepUpChallengeId} AND target_ref IS NOT NULL`.execute(trx);
+    if ((first(bound.rows)?.n ?? 0) > 0) throw new AdulisException('STEP_UP_REQUIRED');
     await sql`
       SELECT core.fn_assert_step_up(
         ${stepUpChallengeId}, ${accountId}, 'REVOKE_ALL_SESSIONS')`.execute(trx);
@@ -558,15 +623,22 @@ export class AuthService {
     return { id: body.id };
   }
 
-  /** PATCH /v1/devices/{id} — push token, permission result. */
+  /**
+   * PATCH /v1/devices/{id} — push token, permission result (WO-API-001A,
+   * SEC-2; founder ruling D). Only the CALLING session's own device, bound to
+   * the caller's account: knowing a device id authorises nothing (AUTH-02
+   * v3.3 S39). Every other id answers 404, whether or not it exists.
+   */
   async patchDevice(
     trx: Transaction<Database>,
+    req: AuthedRequest,
     deviceId: string,
     body: {
       push_token?: string | null | undefined;
       notification_permission?: 'GRANTED' | 'DENIED' | 'NOT_ASKED' | undefined;
     },
   ): Promise<unknown> {
+    if (deviceId.toLowerCase() !== req.auth?.deviceId) throw new AdulisException('NOT_FOUND');
     const r = await sql<{ id: string }>`
       UPDATE core.device
          SET push_token = CASE WHEN ${body.push_token !== undefined}
@@ -575,7 +647,7 @@ export class AuthService {
                ${body.notification_permission ?? null}::core.notification_permission,
                notification_permission),
              last_seen_at = now()
-       WHERE id = ${deviceId}
+       WHERE id = ${deviceId} AND account_id = ${req.ctx?.accountId ?? null}
        RETURNING id`.execute(trx);
     if (!first(r.rows)) throw new AdulisException('NOT_FOUND');
     return { id: deviceId };

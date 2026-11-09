@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { qrSignature } from '../src/modules/handoff/handoff.service';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C5 — handoff and courier: R20 and R25 at both ends of the handoff, the
@@ -40,7 +41,7 @@ describe('C5 — handoff and courier', () => {
   let orderId2 = '';
   let qr: { order_ref: string; nonce: string; signing_key_version: number; signature: string };
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () => randomUUID();
   const sellerPost = (path: string) =>
     request(app.getHttpServer())
@@ -52,7 +53,7 @@ describe('C5 — handoff and courier', () => {
   const buyerPost = (path: string) =>
     request(app.getHttpServer())
       .post(path)
-      .set('Authorization', `Bearer ${BUYER_S}`)
+      .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
       .set('X-Adulis-Device', DEVICE)
       .set('Idempotency-Key', key());
   const courierReq = (method: 'get' | 'post', path: string) => {
@@ -65,7 +66,7 @@ describe('C5 — handoff and courier', () => {
     await buyerPost('/v1/cart/lines').send({ variant_id: variant, quantity: 1 }).expect(201);
     const cart = await request(app.getHttpServer())
       .get('/v1/cart')
-      .set('Authorization', `Bearer ${BUYER_S}`)
+      .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
       .set('X-Adulis-Device', DEVICE)
       .expect(200);
     const r = await buyerPost('/v1/orders')
@@ -173,6 +174,7 @@ describe('C5 — handoff and courier', () => {
         ($3,$6,'CONSOLE',$7, now()+interval '12 hours', now()-interval '3 days')`,
       [OWNER_S, BUYER_S, COURIER_S, OWNER, BUYER, COURIER, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, BUYER_S, COURIER_S]);
 
     const moduleRef = await Test.createTestingModule({ imports: [C5AppModule] }).compile();
     app = moduleRef.createNestApplication();

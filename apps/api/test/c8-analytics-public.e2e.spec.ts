@@ -9,6 +9,7 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from '../src/modules/catalogue/post-link.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C8 — analytics (12.13), notifications (12.14), reports (12.15), client
@@ -49,7 +50,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
 
   const key = () => randomUUID();
   const http = () => request(app.getHttpServer());
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 1 });
@@ -157,6 +158,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         ($4,$7,'CONSOLE',NULL, now()+interval '12 hours')`,
       [OWNER_S, OWNER_MOB_S, BUYER_S, OWNER2_S, OWNER, BUYER, OWNER2, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, OWNER_MOB_S, BUYER_S, OWNER2_S]);
     // Notification fixtures: one buyer-class unlinked row, one seller-class
     // (database-enqueued, unsuppressible) row for the owner.
     await admin.query(
@@ -286,7 +288,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('overview serves every tier, resolved numbers only', async () => {
       const r = await http()
         .get('/v1/seller/analytics/overview')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
       expect(r.body).toMatchObject({ products_published: 1, completed_handoffs: 37 });
@@ -314,7 +316,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('full is CONSOLE-only by permission surface', async () => {
       const r = await http()
         .get('/v1/seller/analytics/full')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
@@ -385,7 +387,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('the allow-list of two: a listed name lands, an unknown one is 422', async () => {
       await http()
         .post('/v1/events')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ event_name: 'NotificationOpened' })
@@ -398,7 +400,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(row.rows[0].n).toBe(1);
       const refused = await http()
         .post('/v1/events')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ event_name: 'AnythingElse' })
@@ -411,11 +413,11 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('the list is scoped like chat: no default, and the two lives never interleave', async () => {
       await http()
         .get('/v1/notifications')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(400);
       const buyer = await http()
         .get('/v1/notifications?as=buyer')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       expect(buyer.body.data.map((n: { id: string }) => n.id)).toContain(NOTIF_BUYER);
       const seller = await http()
@@ -483,7 +485,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(sellerIds).not.toContain(NOTIF_BUYER);
       const buyer = await http()
         .get('/v1/notifications?as=buyer')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       expect(buyer.body.data.map((n: { id: string }) => n.id)).toContain(NOTIF_BUYER);
     });
@@ -497,7 +499,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .expect(404);
       const read = await http()
         .post(`/v1/notifications/${NOTIF_BUYER}/read`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .expect(200);
@@ -546,7 +548,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
     it('a report routes to the moderation queue and appears under mine', async () => {
       const r = await http()
         .post('/v1/reports')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         // D-44: the wire spells it the way the frozen enum does. 'STORE'
@@ -564,7 +566,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(queued.rows[0]).toMatchObject({ kind: 'REPORT', target_kind: 'STOREFRONT' });
       const mine = await http()
         .get('/v1/reports/mine')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .expect(200);
       expect(mine.body.data.map((x: { id: string }) => x.id)).toContain(r.body.report_id);
       expect(mine.body.data[0].resolved_at).toBeNull();

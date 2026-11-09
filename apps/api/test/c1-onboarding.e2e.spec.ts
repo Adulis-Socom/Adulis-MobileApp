@@ -8,6 +8,7 @@ import {
   FakeSocialPlatformAdapter,
   SOCIAL_PLATFORM_ADAPTER,
 } from '../src/modules/onboarding/social-platform.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C1 — onboarding and verification, the per-group gate: every endpoint's
@@ -48,7 +49,7 @@ describe('C1 — onboarding and verification', () => {
   let admin: Pool;
   let sellerId = '';
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
   const key = () =>
     `66666666-5555-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
 
@@ -117,6 +118,7 @@ describe('C1 — onboarding and verification', () => {
         ($8,$5,'MOBILE',$4, now()+interval '30 days')`,
       [OWNER_S, ANALYST_S, STRANGER_S, DEVICE, OWNER, ANALYST, STRANGER, OWNER_MOBILE_S],
     );
+    await armFixtureSessions(admin, [OWNER_S, ANALYST_S, STRANGER_S, OWNER_MOBILE_S]);
     // step-up fixtures (the OTP row satisfies the challenge FK)
     await admin.query(
       `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash, expires_at, consumed_at, step_up_action)
@@ -402,6 +404,7 @@ describe('C1 — onboarding and verification', () => {
            VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')`,
           [freshSession, ANALYST, DEVICE],
         );
+        await armFixtureSessions(admin, [freshSession]);
         const r = await request(app.getHttpServer())
           .get('/v1/seller/list')
           .set('Cookie', cookie(freshSession))
@@ -438,6 +441,7 @@ describe('C1 — onboarding and verification', () => {
                                           expires_at = now()+interval '12 hours'`,
           [ANALYST_S, ANALYST, DEVICE],
         );
+        await armFixtureSessions(admin, [ANALYST_S]);
       }
     });
 
@@ -470,7 +474,7 @@ describe('C1 — onboarding and verification', () => {
     it('403 for a MOBILE session — store:read is CONSOLE-only (surface gate, in the database)', async () => {
       const r = await request(app.getHttpServer())
         .get('/v1/seller/readiness')
-        .set('Authorization', `Bearer ${OWNER_MOBILE_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOBILE_S)}`)
         .set('X-Adulis-Seller', sellerId)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');

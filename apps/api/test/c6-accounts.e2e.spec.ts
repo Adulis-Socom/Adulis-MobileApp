@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { FakeSmsAdapter, SMS_ADAPTER } from '../src/modules/auth/sms.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * C6 — identity/session (12.2), team/subscription/deletion (12.12), web
@@ -86,7 +87,7 @@ const browserCookie = async (): Promise<string> => {
   webDevices.push(id);
   return `__Host-adulis_browser=${id}`;
 };
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   const codeFor = (phone: string): string => {
     const m = sms.lastTo(phone);
@@ -112,6 +113,7 @@ const browserCookie = async (): Promise<string> => {
        VALUES ($1,$2,$3::core.session_audience,$4, now() + interval '1 day')`,
       [id, account, audience, DEVICE],
     );
+    await armFixtureSessions(admin, [id]);
     return id;
   };
 
@@ -281,6 +283,7 @@ const browserCookie = async (): Promise<string> => {
       [OWNER_S, OWNER_MOB_S, OWNER_S2, BUYER_S, MEMBER1_S, OWNER, BUYER,
        MEMBER1, OWNER2, DEVICE, MEMBER1_CON_S, OWNER2_S, COURIER_S, COURIER_ACC],
     );
+    await armFixtureSessions(admin, [OWNER_S, OWNER_MOB_S, OWNER_S2, BUYER_S, MEMBER1_S, MEMBER1_CON_S, OWNER2_S, COURIER_S]);
     // The step-up fixture challenges hang off one consumed OTP row.
     await admin.query(
       `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash,
@@ -381,7 +384,7 @@ const browserCookie = async (): Promise<string> => {
     let deviceId = '';
     let mobileToken = '';
 
-    it('registers a device anonymously, then patches it', async () => {
+    it('registers a device anonymously; an anonymous patch is refused (SEC-2)', async () => {
       deviceId = randomUUID();
       await http()
         .post('/v1/devices')
@@ -393,9 +396,9 @@ const browserCookie = async (): Promise<string> => {
       await http()
         .patch(`/v1/devices/${deviceId}`)
         .send({ notification_permission: 'GRANTED' })
-        .expect(200);
+        .expect(401);
       const r = await admin.query(`SELECT notification_permission FROM core.device WHERE id=$1`, [deviceId]);
-      expect(r.rows[0].notification_permission).toBe('GRANTED');
+      expect(r.rows[0].notification_permission).toBe('NOT_ASKED');
     });
 
     it('request -> SMS -> verify creates the account, binds the device, mints MOBILE bearer', async () => {
@@ -427,11 +430,18 @@ const browserCookie = async (): Promise<string> => {
       );
       expect(acc.rows[0].age_declared_over_18).toBe(true);
       expect(acc.rows[0].account_id).toBe(acc.rows[0].id);
-      // The minted session authenticates.
+      // The minted session authenticates, and patches its own device.
       await http()
         .get('/v1/auth/sessions')
-        .set('Authorization', `Bearer ${mobileToken}`)
+        .set('Authorization', `Bearer ${sessionToken(mobileToken)}`)
         .expect(200);
+      await http()
+        .patch(`/v1/devices/${deviceId}`)
+        .set('Authorization', `Bearer ${sessionToken(mobileToken)}`)
+        .send({ notification_permission: 'GRANTED' })
+        .expect(200);
+      const d = await admin.query(`SELECT notification_permission FROM core.device WHERE id=$1`, [deviceId]);
+      expect(d.rows[0].notification_permission).toBe('GRANTED');
     });
 
     it('an idempotent replay of the request sends NO second SMS (X11)', async () => {
@@ -599,10 +609,11 @@ const browserCookie = async (): Promise<string> => {
       expect(sessionCookie).toContain('SameSite=Strict');
       expect(deviceCookie).toBeTruthy();
       // Remembered lifetime: 7 days, not 12 hours.
+      // The cookie carries the credential, found by its hash (SEC-1).
       const token = (sessionCookie as string).split(';')[0]?.split('=')[1] as string;
       const row = await admin.query(
         `SELECT account_device_id, expires_at > now() + interval '13 hours' AS long
-           FROM core.session WHERE id=$1`,
+           FROM core.session WHERE token_hash = sha256(convert_to($1, 'UTF8'))`,
         [token],
       );
       expect(row.rows[0].account_device_id).toBeTruthy();
@@ -632,7 +643,7 @@ const browserCookie = async (): Promise<string> => {
   });
 
   describe('sessions and step-up (AUTH 8-9)', () => {
-    it('lists own sessions with a current flag; revokes one; a stranger id is 404', async () => {
+    it('lists own sessions with a current flag; revokes another with step-up; a stranger id is 404', async () => {
       const list = await http()
         .get('/v1/auth/sessions')
         .set('Cookie', cookie(OWNER_S))
@@ -644,10 +655,18 @@ const browserCookie = async (): Promise<string> => {
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
         .expect(404);
+      // Another session is account control since WO-API-001A (SEC-4).
+      const bare = await http()
+        .delete(`/v1/auth/sessions/${OWNER_S2}`)
+        .set('Cookie', cookie(OWNER_S))
+        .set('Origin', CONSOLE_ORIGIN)
+        .expect(403);
+      expect(bare.body.code).toBe('STEP_UP_REQUIRED');
       await http()
         .delete(`/v1/auth/sessions/${OWNER_S2}`)
         .set('Cookie', cookie(OWNER_S))
         .set('Origin', CONSOLE_ORIGIN)
+        .send({ step_up_challenge_id: await freshStepUp(OWNER, 'REVOKE_ALL_SESSIONS') })
         .expect(204);
       await http()
         .get('/v1/auth/sessions')
@@ -670,6 +689,7 @@ const browserCookie = async (): Promise<string> => {
          VALUES ($1, $2, 'CONSOLE', $3, $4, now() + interval '7 days')`,
         [REM, OWNER, DEVICE, AD],
       );
+      await armFixtureSessions(admin, [REM]);
 
       // DISTINGUISHABLE from a live session: the row reports remembered, its
       // label, and the id of the device to forget.
@@ -712,7 +732,7 @@ const browserCookie = async (): Promise<string> => {
     it('step-up request 403s on MOBILE (9.1); on console the SMS names the action (4.4)', async () => {
       await http()
         .post('/v1/auth/step-up/request')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ action: 'REVOKE_ALL_SESSIONS' })
@@ -746,7 +766,7 @@ const browserCookie = async (): Promise<string> => {
       expect(revoke.body.revoked).toBeGreaterThan(0);
       await http()
         .get('/v1/auth/sessions')
-        .set('Authorization', `Bearer ${OWNER_MOB_S}`)
+        .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
         .expect(401);
       // Single use: the same challenge cannot authorise a second action.
       const again = await http()
@@ -765,7 +785,7 @@ const browserCookie = async (): Promise<string> => {
     it('MOBILE cannot reach the team group even as the Owner (staff:admin is CONSOLE-only)', async () => {
       const r = await http()
         .get('/v1/seller/team')
-        .set('Authorization', `Bearer ${await mintSession(OWNER, 'MOBILE')}`)
+        .set('Authorization', `Bearer ${sessionToken(await mintSession(OWNER, 'MOBILE'))}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
@@ -819,7 +839,7 @@ const browserCookie = async (): Promise<string> => {
     it('an ANALYST reads orders until revocation; the NEXT request is refused (R28)', async () => {
       await http()
         .get('/v1/seller/orders')
-        .set('Authorization', `Bearer ${MEMBER1_S}`)
+        .set('Authorization', `Bearer ${sessionToken(MEMBER1_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
       await http()
@@ -831,7 +851,7 @@ const browserCookie = async (): Promise<string> => {
         .expect(204);
       const r = await http()
         .get('/v1/seller/orders')
-        .set('Authorization', `Bearer ${MEMBER1_S}`)
+        .set('Authorization', `Bearer ${sessionToken(MEMBER1_S)}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
@@ -841,19 +861,19 @@ const browserCookie = async (): Promise<string> => {
       // An order to assign: buyer cart -> order through the API.
       await http()
         .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ variant_id: VARIANT, quantity: 1 })
         .expect(201);
       const cart = await http()
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const order = await http()
         .post('/v1/orders')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
@@ -896,7 +916,7 @@ const browserCookie = async (): Promise<string> => {
       // Settle the line so it never blocks the closure/deletion tests.
       await http()
         .post(`/v1/orders/${order.body.id}/cancel`)
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .expect(200);
@@ -919,7 +939,7 @@ const browserCookie = async (): Promise<string> => {
     it('a MOBILE session receives 403 — never a redirect', async () => {
       const r = await http()
         .get('/v1/billing/subscription')
-        .set('Authorization', `Bearer ${await mintSession(OWNER, 'MOBILE')}`)
+        .set('Authorization', `Bearer ${sessionToken(await mintSession(OWNER, 'MOBILE'))}`)
         .set('X-Adulis-Seller', SELLER)
         .expect(403);
       expect(r.body.code).toBe('PERMISSION_DENIED');
@@ -990,19 +1010,19 @@ const browserCookie = async (): Promise<string> => {
 
       await http()
         .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ variant_id: VARIANT, quantity: 1 })
         .expect(201);
       const cart = await http()
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .expect(200);
       const refused = await http()
         .post('/v1/orders')
-        .set('Authorization', `Bearer ${BUYER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
@@ -1160,19 +1180,19 @@ const browserCookie = async (): Promise<string> => {
       // An order that will be RELEASED by deletion (still pre-payment).
       await http()
         .post('/v1/cart/lines')
-        .set('Authorization', `Bearer ${bearer}`)
+        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
         .set('X-Adulis-Device', d)
         .set('Idempotency-Key', key())
         .send({ variant_id: VARIANT, quantity: 1 })
         .expect(201);
       const cart = await http()
         .get('/v1/cart')
-        .set('Authorization', `Bearer ${bearer}`)
+        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
         .set('X-Adulis-Device', d)
         .expect(200);
       const order = await http()
         .post('/v1/orders')
-        .set('Authorization', `Bearer ${bearer}`)
+        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
         .set('X-Adulis-Device', d)
         .set('Idempotency-Key', key())
         .send({ cart_id: cart.body.cart_id, expected: [{ variant_id: VARIANT, unit_price_minor: 50000 }] })
@@ -1197,6 +1217,7 @@ const browserCookie = async (): Promise<string> => {
       const ticket = verified.body.ticket as string;
       await http()
         .get('/v1/orders')
+        // The ticket itself, raw: it must never work as a bearer.
         .set('Authorization', `Bearer ${ticket}`)
         .expect(401);
 
@@ -1244,7 +1265,7 @@ const browserCookie = async (): Promise<string> => {
       // tombstoned — and the number is free for a brand-new account.
       await http()
         .get('/v1/orders')
-        .set('Authorization', `Bearer ${bearer}`)
+        .set('Authorization', `Bearer ${sessionToken(bearer)}`)
         .expect(401);
       const released = await admin.query(
         `SELECT r.state FROM core.reservation r WHERE r.order_id=$1`,

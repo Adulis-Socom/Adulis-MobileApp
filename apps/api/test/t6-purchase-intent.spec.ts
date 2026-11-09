@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { createJobHarness, type Harness } from './jobs-harness';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T6 / G1.7 -- the subscription lifecycle.
@@ -57,7 +58,7 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
   let admin: Pool;
   let jobs: Harness;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   const stepUp = async (account: string): Promise<string> => {
     const otp = randomUUID();
@@ -140,6 +141,7 @@ describe('T6 / G1.7 -- the intent expires, the rate is locked, the record closes
               ($2,$4,'CONSOLE',$5, now() + interval '12 hours')`,
       [OWNER_S, OWNER2_S, OWNER, OWNER2, DEVICE],
     );
+    await armFixtureSessions(admin, [OWNER_S, OWNER2_S]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type,
                                 store_name, handle, status) VALUES

@@ -18,13 +18,14 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
 import { resolveKey } from '../../common/crypto/aead';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
-import { AuthService } from './auth.service';
+import { AuthService, type MintedSession } from './auth.service';
 import { OtpService } from './otp.service';
 import { OtpDeliveryService, type IssuedOtp } from './otp-delivery.service';
 import {
   BROWSER_DEVICE_COOKIE,
   REMEMBERED_DEVICE_COOKIE,
   SESSION_COOKIE,
+  clearedHostCookie,
   hostCookie,
   readCookie,
   requestingDevice,
@@ -37,6 +38,7 @@ import {
   otpVerifyBody,
   recoveryBody,
   revokeOthersBody,
+  revokeSessionBody,
   stepUpRequestBody,
   stepUpVerifyBody,
 } from './auth.schemas';
@@ -48,6 +50,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
+
 
 @Controller()
 export class AuthController {
@@ -159,16 +162,30 @@ export class AuthController {
   }
 
   /**
-   * Manual idempotency, because the CONSOLE credential leaves as a cookie:
-   * the stored body carries the token internally, and BOTH the fresh path
-   * and a replay set the cookie and strip the token from what a console
-   * caller can read (S5.1 — a token JavaScript can read is a token XSS can
-   * steal). MOBILE receives it in the body for native secure storage.
+   * Manual idempotency, because the credential must never be stored
+   * (WO-API-001A, SEC-3; founder ruling E). The idempotency record holds a
+   * NON-SECRET completion marker only: the public session id and the fact
+   * that the credential was withheld. No bearer token, no cookie value, no
+   * remembered-device secret.
+   *
+   * RETRY SEMANTICS: an identical replay of a COMPLETED verify does not
+   * return a credential. It answers OTP_EXPIRED ("this code is no longer
+   * valid ... request a new one"), which is true: the code was consumed. The
+   * client starts a fresh sign-in. The session the lost response minted stays
+   * listed in GET /v1/auth/sessions until it expires or is revoked. A replay
+   * of a FAILED verify re-executes, because failures record nothing. Same
+   * key with a different body is still 409 IDEMPOTENCY_KEY_REUSED.
+   *
+   * The CONSOLE credential leaves as a cookie and never in the body (S5.1 —
+   * a token JavaScript can read is a token XSS can steal). MOBILE receives it
+   * in the body for native secure storage.
    */
   @Post('auth/otp/verify')
   @Public()
   @HttpCode(200)
-  @ApiOperation({ summary: 'Creates buyer identity on first use (S6.1).' })
+  @ApiOperation({
+    summary: 'Creates buyer identity on first use (S6.1). A replay after success answers OTP_EXPIRED.',
+  })
   async otpVerify(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -224,72 +241,86 @@ export class AuthController {
     const replay = await this.idempotency.check(key, actor, endpoint, requestHash);
     if (replay) {
       res.setHeader('X-Adulis-Idempotent-Replay', 'true');
-      return this.presentSession(res, replay.body as Record<string, unknown>);
+      throw new AdulisException('OTP_EXPIRED');
     }
 
     const deviceCookie = readCookie(req.headers.cookie, REMEMBERED_DEVICE_COOKIE);
-    const stored = await this.tx.run(req, async (trx) => {
-      const minted = await this.auth.verifySignIn(
+    const minted = await this.tx.run(req, async (trx) => {
+      const session = await this.auth.verifySignIn(
         trx,
         { ...body, device_id: effectiveDeviceId, deviceChannel },
         deviceCookie,
       );
-      const record: Record<string, unknown> = {
-        session_token: minted.token,
-        audience: minted.audience,
-        account_id: minted.accountId,
-        roles: minted.roles,
-        expires_at: minted.expiresAt,
-        device_cookie_token: minted.deviceCookieToken,
-      };
       await this.idempotency.record(trx, key, actor, endpoint, requestHash, {
         status: 200,
-        body: record,
+        body: { credential_withheld: true, session_id: session.sessionId },
       });
-      return record;
+      return session;
     });
-    return this.presentSession(res, stored);
+    return this.presentSession(res, minted);
   }
 
   /** Cookie for the console, body token for mobile — never both. */
-  private presentSession(res: Response, stored: Record<string, unknown>): unknown {
-    const token = stored['session_token'] as string;
-    const audience = stored['audience'] as string;
-    const expiresAt = new Date(stored['expires_at'] as string | Date);
+  private presentSession(res: Response, minted: MintedSession): Record<string, unknown> {
     const out: Record<string, unknown> = {
-      account_id: stored['account_id'],
-      roles: stored['roles'],
-      expires_at: stored['expires_at'],
-      audience,
+      account_id: minted.accountId,
+      roles: minted.roles,
+      expires_at: minted.expiresAt.toISOString(),
+      audience: minted.audience,
     };
-    if (audience === 'CONSOLE') {
-      const maxAge = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-      const cookies = [hostCookie(SESSION_COOKIE, token, maxAge)];
-      const deviceToken = stored['device_cookie_token'] as string | null;
-      if (deviceToken) {
-        cookies.push(hostCookie(REMEMBERED_DEVICE_COOKIE, deviceToken, 7 * 24 * 3600));
+    if (minted.audience === 'CONSOLE') {
+      const maxAge = Math.max(1, Math.floor((minted.expiresAt.getTime() - Date.now()) / 1000));
+      const cookies = [hostCookie(SESSION_COOKIE, minted.token, maxAge)];
+      if (minted.deviceCookieToken) {
+        cookies.push(hostCookie(REMEMBERED_DEVICE_COOKIE, minted.deviceCookieToken, 7 * 24 * 3600));
       }
       res.setHeader('Set-Cookie', cookies);
     } else {
-      out['token'] = token;
+      out['token'] = minted.token;
     }
     return out;
   }
 
+  /**
+   * Ordinary sign-out (founder ruling C; AUTH-02 v3.3 S118): revokes the
+   * calling session only, never another, and needs no step-up. A CONSOLE
+   * caller's session cookie is cleared; the remembered-device cookie is not,
+   * because forgetting a device is its own act. A retry after success answers
+   * 401: the credential is already dead, which is the outcome asked for.
+   */
+  @Post('auth/logout')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Sign out: revokes the calling session only. No step-up.' })
+  async logout(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.tx.run(req as LocalizedRequest, (trx) => this.auth.logout(trx, req));
+    if (req.auth?.audience === 'CONSOLE') {
+      res.setHeader('Set-Cookie', clearedHostCookie(SESSION_COOKIE));
+    }
+  }
+
   @Get('auth/sessions')
-  @ApiOperation({ summary: 'Device, first seen, last activity, location (S8.2).' })
+  @ApiOperation({ summary: 'Device, first seen, last activity, location (S8.2). Public ids only.' })
   async sessions(@Req() req: AuthedRequest): Promise<unknown> {
     return this.tx.run(req as LocalizedRequest, (trx) => this.auth.listSessions(trx, req));
   }
 
   @Delete('auth/sessions/:id')
   @HttpCode(204)
+  @ApiOperation({
+    summary:
+      'Revoke one session. Own session: no step-up. Another session: CONSOLE only, with a ' +
+      'REVOKE_ALL_SESSIONS step-up (SEC-4).',
+  })
   async revokeSession(@Req() req: AuthedRequest, @Param('id') id: string): Promise<void> {
     if (!UUID_RE.test(id)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'id' } });
     }
+    const body = revokeSessionBody.parse(req.body ?? {});
     await this.tx.run(req as LocalizedRequest, (trx) =>
-      this.auth.revokeSession(trx, req, id),
+      this.auth.revokeSession(trx, req, id, body.step_up_challenge_id ?? null),
     );
   }
 
@@ -366,15 +397,16 @@ export class AuthController {
     );
   }
 
+  /** Authenticated since WO-API-001A (SEC-2): the calling session's own device only. */
   @Patch('devices/:id')
-  @Public()
   @HttpCode(200)
-  async patchDevice(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
+  @ApiOperation({ summary: "Push token and permission for the calling session's own device; other ids 404." })
+  async patchDevice(@Req() req: AuthedRequest, @Param('id') id: string): Promise<unknown> {
     if (!UUID_RE.test(id)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'id' } });
     }
     const body = devicePatchBody.parse(req.body);
-    return this.tx.run(req, (trx) => this.auth.patchDevice(trx, id, body));
+    return this.tx.run(req as LocalizedRequest, (trx) => this.auth.patchDevice(trx, req, id, body));
   }
 
   @Post('auth/recovery')

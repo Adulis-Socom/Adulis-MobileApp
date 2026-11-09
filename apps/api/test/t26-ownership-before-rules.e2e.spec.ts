@@ -13,6 +13,7 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from '../src/modules/catalogue/post-link.adapter';
+import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
  * T26 Phase 1 -- OWNERSHIP IS RESOLVED BEFORE ANY BUSINESS RULE IS EVALUATED.
@@ -167,7 +168,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
   let app: INestApplication;
   let admin: Pool;
 
-  const cookie = (t: string) => `__Host-adulis_session=${t}`;
+  const cookie = (t: string) => `__Host-adulis_session=${sessionToken(t)}`;
 
   const send = async (
     c: Case,
@@ -181,9 +182,9 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
         .set('Origin', CONSOLE_ORIGIN)
         .set('X-Adulis-Seller', SELLER_A);
     } else if (c.actor === 'BUYER_A') {
-      r = r.set('Authorization', `Bearer ${BUYER_A_S}`).set('X-Adulis-Device', DEVICE_A);
+      r = r.set('Authorization', `Bearer ${sessionToken(BUYER_A_S)}`).set('X-Adulis-Device', DEVICE_A);
     } else {
-      r = r.set('Authorization', `Bearer ${COURIER_S}`).set('X-Adulis-Device', DEVICE_A);
+      r = r.set('Authorization', `Bearer ${sessionToken(COURIER_S)}`).set('X-Adulis-Device', DEVICE_A);
     }
     if (c.method === 'post') r = r.set('Idempotency-Key', randomUUID());
     const body = c.body ? (c.body(ids) as Record<string, unknown>) : undefined;
@@ -301,6 +302,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
         A_OWNER, B_OWNER, BUYER_A, BUYER_B, COURIER, DEVICE_A, DEVICE_B,
       ],
     );
+    await armFixtureSessions(admin, [A_OWNER_S, B_OWNER_S, BUYER_A_S, BUYER_B_S, COURIER_S]);
 
     // ---- seller B's catalogue -------------------------------------------
     await admin.query(
@@ -503,6 +505,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
        VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours')`,
       [A_STAFF_S, A_STAFF, DEVICE_A],
     );
+    await armFixtureSessions(admin, [A_STAFF_S]);
     await admin.query(`UPDATE core.seller SET person_id = $1 WHERE id = $2`, [
       B_PERSON,
       SELLER_B,
@@ -876,7 +879,7 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
        */
       const r = await request(app.getHttpServer())
         .post('/v1/handoffs/sync')
-        .set('Authorization', `Bearer ${COURIER_S}`)
+        .set('Authorization', `Bearer ${sessionToken(COURIER_S)}`)
         .set('X-Adulis-Device', DEVICE_A)
         .set('Idempotency-Key', randomUUID())
         .send({

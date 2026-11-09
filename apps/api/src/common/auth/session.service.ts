@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely } from 'kysely';
 import { APP_DATABASE } from '../db/database.module';
@@ -9,7 +10,7 @@ import { AdulisException } from '../errors/adulis-exception';
  *
  * INVARIANT — revocation takes effect server-side immediately, not at next
  * token refresh (ADU-AUTH-01 S8.2). The session row is read on EVERY
- * authenticated request: one indexed primary-key lookup, budgeted in
+ * authenticated request: one unique-index lookup on token_hash, budgeted in
  * ADU-CON-02 section 17, and the price of the invariant. No stateless token
  * whose validity outlives its row.
  *
@@ -26,7 +27,28 @@ import { AdulisException } from '../errors/adulis-exception';
  * that assertion plus four controls that are not the session length.
  */
 
+/**
+ * THE CREDENTIAL IS NOT THE SESSION ID (WO-API-001A, SEC-1; ADU-AUTH-02 v3.3
+ * S31). core.session.id is the public identifier a session list may show;
+ * the credential is 32 random bytes, base64url (43 characters), returned once
+ * at sign-in and stored only as its SHA-256 in core.session.token_hash.
+ *
+ * No application-side comparison exists to make constant-time: the lookup is
+ * an index equality on the hash, so its timing can at most reveal hash
+ * prefixes, which do not help find a preimage of a 256-bit secret.
+ */
+export const SESSION_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+
+export const hashSessionToken = (token: string): Buffer =>
+  createHash('sha256').update(token, 'utf8').digest();
+
+export function mintSessionToken(): { token: string; hash: Buffer } {
+  const token = randomBytes(32).toString('base64url');
+  return { token, hash: hashSessionToken(token) };
+}
+
 export interface SessionContext {
+  /** The PUBLIC session id: safe to list, log and audit; never a credential. */
   readonly sessionId: string;
   readonly accountId: string;
   readonly audience: 'MOBILE' | 'CONSOLE';
@@ -72,9 +94,9 @@ export class SessionService {
    * distinguishes further is an enumeration oracle.
    */
   async authenticate(token: string): Promise<SessionContext> {
-    // A token that is not even a uuid cannot be a session id; refusing it
-    // here keeps garbage out of the query plan and the log.
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+    // Not the credential's shape: refused before hashing. This includes every
+    // pre-0053 credential, which was a uuid (the session id itself).
+    if (!SESSION_TOKEN_RE.test(token)) {
       throw new AdulisException('SESSION_EXPIRED');
     }
 
@@ -97,7 +119,7 @@ export class SessionService {
         JOIN core.account a ON a.id = s.account_id
         LEFT JOIN core.timing_config tc
           ON tc.market_id = a.market_id AND tc.effective @> now()
-       WHERE s.id = ${token}`.execute(this.db);
+       WHERE s.token_hash = ${hashSessionToken(token)}`.execute(this.db);
 
     const row = result.rows[0];
     if (!row) throw new AdulisException('SESSION_EXPIRED');

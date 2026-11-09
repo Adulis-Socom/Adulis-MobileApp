@@ -5,11 +5,11 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import type { RequestContext } from '../db/request-context';
 import { AdulisException } from '../errors/adulis-exception';
 import { SessionService, type SessionContext } from './session.service';
-import { SESSION_COOKIE, readCookie } from '../http/cookies';
+import { SESSION_COOKIE, clearedHostCookie, readCookie } from '../http/cookies';
 
 /**
  * The authenticate + seller-context stages of the section 5 pipeline, as a
@@ -173,7 +173,7 @@ export class AuthGuard implements CanActivate {
         req.ctx = { accountId: null, actorRole: '', sellerId: null };
         return true;
       }
-      const session = await this.sessions.authenticate(token);
+      const session = await this.authenticate(context, token, bearer === null);
       const carrier = bearer !== null ? 'MOBILE' : 'CONSOLE';
       if (session.audience !== carrier) {
         throw new AdulisException('AUDIENCE_NOT_PERMITTED');
@@ -185,7 +185,7 @@ export class AuthGuard implements CanActivate {
 
     if (!token) throw new AdulisException('SESSION_EXPIRED');
 
-    const session = await this.sessions.authenticate(token);
+    const session = await this.authenticate(context, token, bearer === null);
 
     // The carrier must match the surface the session was minted for. A
     // mismatch is not an expiry — it is a presentation the surface may not
@@ -227,5 +227,35 @@ export class AuthGuard implements CanActivate {
     req.auth = session;
     req.ctx = { accountId: session.accountId, actorRole, sellerId, audience: session.audience };
     return true;
+  }
+
+  /**
+   * A REFUSED SESSION COOKIE IS CLEARED (WO-API-001A). Public routes refuse a
+   * presented-but-dead credential, and JavaScript cannot delete an HttpOnly
+   * cookie, so without this a browser holding a revoked or expired cookie --
+   * every console after migration 0053's global sign-out -- could not reach
+   * bootstrap or sign-in until the cookie's Max-Age ran out. Only a definite
+   * refusal clears it; a database error leaves the cookie alone.
+   */
+  private async authenticate(
+    context: ExecutionContext,
+    token: string,
+    fromCookie: boolean,
+  ): Promise<SessionContext> {
+    try {
+      return await this.sessions.authenticate(token);
+    } catch (e) {
+      if (
+        fromCookie &&
+        e instanceof AdulisException &&
+        (e.code === 'SESSION_EXPIRED' || e.code === 'SESSION_REVOKED')
+      ) {
+        context.switchToHttp().getResponse<Response>().setHeader(
+          'Set-Cookie',
+          clearedHostCookie(SESSION_COOKIE),
+        );
+      }
+      throw e;
+    }
   }
 }
