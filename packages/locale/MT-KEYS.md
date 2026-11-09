@@ -8,8 +8,9 @@ cannot attest, in a language they read, to a sentence nobody has checked --
 and an attestation whose wording was never verified is not evidence of
 anything. A human translator writes these, or they stay English.
 
-2 key(s):
+3 key(s):
 
+- `auth.age.declaration`
 - `console.signin.age_declaration`
 - `console.signin.age_refused`
 
@@ -27,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-805 keys:
+826 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -158,13 +159,34 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.orders.coming`
 - `buyer.orders.signed_out`
 - `buyer.you.signed_out`
-- `buyer.sign_in.coming`
+- `auth.sign_in`
 - `buyer.you.appearance`
 - `buyer.you.appearance.system`
 - `buyer.you.appearance.light`
 - `buyer.you.appearance.dark`
 - `buyer.you.account`
 - `buyer.you.more_coming`
+- `common.offline`
+- `common.timeout`
+- `auth.sign_in.intro`
+- `auth.phone.label`
+- `auth.phone.hint`
+- `auth.phone.invalid`
+- `auth.send_code`
+- `auth.verify.title`
+- `auth.verify.sent_to`
+- `auth.code.label`
+- `auth.code.invalid`
+- `auth.verify`
+- `auth.resend`
+- `auth.code.resent`
+- `auth.change_number`
+- `auth.signed_in`
+- `app.upgrade.required.title`
+- `app.upgrade.required.body`
+- `app.upgrade.recommended`
+- `app.upgrade.dismiss`
+- `app.upgrade.check_again`
 - `app.title`
 - `error.seller.tier_limit_reached`
 - `sms.otp.step_up.subscription_change`

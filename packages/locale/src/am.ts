@@ -194,7 +194,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.orders.coming': 'ትዕዛዞችዎ በሚቀጥለው ዝማኔ እዚህ ይታያሉ።',
   'buyer.orders.signed_out': 'ማዘዝ ለመጀመር እና ትዕዛዞችዎን ለመከታተል ይግቡ።',
   'buyer.you.signed_out': 'መገለጫዎን ለማየት ይግቡ።',
-  'buyer.sign_in.coming': 'መግባት በሚቀጥለው ዝማኔ ይመጣል።',
+  'auth.sign_in': 'ይግቡ',
   'buyer.you.appearance': 'ገጽታ',
   'buyer.you.appearance.system': 'ሲስተም',
   'buyer.you.appearance.light': 'ብሩህ',
@@ -202,4 +202,30 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.you.account': 'መለያ',
   'buyer.you.more_coming':
     'መገለጫ፣ ግዢዎች፣ የማሳወቂያ ቅንብሮች፣ ግላዊነት፣ እገዛ እና መለያ መሰረዝ በሚቀጥለው ዝማኔ ይመጣሉ።',
+
+  // WO-003 sign-in and bootstrap: machine-translation placeholders awaiting the human pass,
+  // except the age declaration, which a person must translate (HUMAN-REQUIRED).
+  'common.offline': 'ከመስመር ውጭ ነዎት። ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ።',
+  'common.timeout': 'ግንኙነቱ ጊዜው አልፎበታል። ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ።',
+  'auth.sign_in.intro': 'ስልክ ቁጥርዎን ያስገቡ። ኮድ በኤስኤምኤስ እንልክልዎታለን።',
+  'auth.phone.label': 'ስልክ ቁጥር',
+  'auth.phone.hint': 'የአገር ኮዱን ያካትቱ፣ ለምሳሌ +251 911 234 567።',
+  'auth.phone.invalid': 'ስልክ ቁጥርዎን ከአገር ኮዱ ጋር ያስገቡ፣ ለምሳሌ +251 911 234 567።',
+  'auth.send_code': 'ኮድ ላክ',
+  'auth.verify.title': 'ኮድ ያስገቡ',
+  'auth.verify.sent_to': 'ባለ ስድስት አሃዝ ኮድ በኤስኤምኤስ ወደ {phone} ልከናል።',
+  'auth.code.label': 'ባለ ስድስት አሃዝ ኮድ',
+  'auth.code.invalid': 'ከኤስኤምኤሱ የተገኙትን ስድስት አሃዞች ያስገቡ።',
+  'auth.verify': 'አረጋግጥ',
+  'auth.resend': 'አዲስ ኮድ ላክ',
+  'auth.code.resent': 'አዲስ ኮድ በመንገድ ላይ ነው። የቀድሞው ኮድ ከአሁን በኋላ አይሰራም።',
+  'auth.change_number': 'ቁጥር ቀይር',
+  'auth.age.declaration': 'I confirm that I am 18 years of age or older.', // HUMAN-REQUIRED
+  'auth.signed_in': 'ገብተዋል።',
+  'app.upgrade.required.title': 'ማዘመን ያስፈልጋል',
+  'app.upgrade.required.body':
+    'ይህ የAdulis ስሪት ከአሁን በኋላ አይደገፍም። ለመቀጠል Adulisን ከመተግበሪያ መደብርዎ ያዘምኑ።',
+  'app.upgrade.recommended': 'አዲስ የAdulis ስሪት ይገኛል። ሲችሉ ከመተግበሪያ መደብርዎ ያዘምኑ።',
+  'app.upgrade.dismiss': 'ዝጋ',
+  'app.upgrade.check_again': 'እንደገና አረጋግጥ',
 };

@@ -28,7 +28,12 @@ import { markedHumanRequired, readCatalogue, valueOf } from '../../packages/loca
  * stops them. Terms acceptance, the seller agreement and the payout
  * authorisation join this list as they land.
  */
-const HUMAN_REQUIRED = ['console.signin.age_declaration', 'console.signin.age_refused'];
+const HUMAN_REQUIRED = [
+  'console.signin.age_declaration',
+  'console.signin.age_refused',
+  // WO-003: the mobile sign-in's over-18 declaration, the same attestation.
+  'auth.age.declaration',
+];
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const localeDir = path.join(root, 'packages', 'locale');

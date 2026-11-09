@@ -228,7 +228,7 @@ export const enCommon = {
   'buyer.orders.coming': 'Your orders will appear here in a coming update.',
   'buyer.orders.signed_out': 'Sign in to start ordering and track your orders.',
   'buyer.you.signed_out': 'Sign in to see your profile.',
-  'buyer.sign_in.coming': 'Signing in arrives in a coming update.',
+  'auth.sign_in': 'Sign in',
   'buyer.you.appearance': 'Appearance',
   'buyer.you.appearance.system': 'System',
   'buyer.you.appearance.light': 'Light',
@@ -236,6 +236,34 @@ export const enCommon = {
   'buyer.you.account': 'Account',
   'buyer.you.more_coming':
     'Profile, purchases, notification settings, privacy, help and account deletion arrive in a coming update.',
+
+  // Mobile sign-in, bootstrap and connectivity (WO-003; ADU-AUTH-02 v3.3, ADU-MOB-02 v4.3
+  // S70-S76, S85). Server errors render from their own error.* keys and slots.
+  'common.offline': 'You are offline. Check your connection and try again.',
+  'common.timeout': 'The connection timed out. Check your connection and try again.',
+  'auth.sign_in.intro': 'Enter your phone number. We will send you a code by SMS.',
+  'auth.phone.label': 'Phone number',
+  'auth.phone.hint': 'Include the country code, for example +251 911 234 567.',
+  'auth.phone.invalid': 'Enter your phone number with the country code, for example +251 911 234 567.',
+  'auth.send_code': 'Send code',
+  'auth.verify.title': 'Enter code',
+  'auth.verify.sent_to': 'We sent a six-digit code by SMS to {phone}.',
+  'auth.code.label': 'Six-digit code',
+  'auth.code.invalid': 'Enter the six digits from the SMS.',
+  'auth.verify': 'Verify',
+  'auth.resend': 'Send a new code',
+  'auth.code.resent': 'A new code is on its way. The previous code no longer works.',
+  'auth.change_number': 'Change number',
+  // A statement the person is bound by: the console's wording exactly
+  // (console.signin.age_declaration), and HUMAN-REQUIRED in am.ts (ADU-RUL-03 S4).
+  'auth.age.declaration': 'I confirm that I am 18 years of age or older.',
+  'auth.signed_in': 'You are signed in.',
+  'app.upgrade.required.title': 'Update required',
+  'app.upgrade.required.body':
+    'This version of Adulis is no longer supported. Update Adulis from your app store to continue.',
+  'app.upgrade.recommended': 'A newer version of Adulis is available. Update from your app store when you can.',
+  'app.upgrade.dismiss': 'Dismiss',
+  'app.upgrade.check_again': 'Check again',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;
