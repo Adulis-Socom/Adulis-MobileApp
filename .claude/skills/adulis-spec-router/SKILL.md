@@ -36,7 +36,7 @@ Repository specifications (position 5: what is built and gate-checked):
 - Project: `ADU-PROJ-01_Project_Documentation_v9_0.md`
 - Product: `ADU-PRD-01_Product_Requirements_v8_5.md`
 - Seller surfaces: `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md`
-- Database: `ADU-DB-01_Database_and_Data_Model_v1_20_ASCII.md`
+- Database: `ADU-DB-01_Database_and_Data_Model_v1_21_ASCII.md`
 - API: `ADU-API-01_API_Contract_v1_11_ASCII.md`
 - Auth: `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` (v2.5 for the permission catalogue, matrix and seed)
 - Browser security: `ADU-SEC-01_Content_Security_Policy_v1_0.md`

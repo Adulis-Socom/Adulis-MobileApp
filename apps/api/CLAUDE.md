@@ -78,6 +78,11 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > the gate doing its job: a schema change is followed by a document reissue, never by
 > editing the installed document or the gate.
 >
+> **WO-DISC-002 (`0055`) pins three more** -- `core.fyp_algorithm_version`,
+> `core.fyp_session`, `core.fyp_impression` (ADU-REC-01 v3.2). `pnpm db:check` prints **123
+> tables: manifest 109 + 14 body-over-manifest**, and **ADU-DB-01 v1.21** carries them
+> (`core` 97, 123 tables, 71 enum types).
+>
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
 > **114** names here" -- v1.13's count, carried forward when the headline was updated. The
