@@ -30,8 +30,10 @@ S5.1's own guarantee. v1.1 corrects it.
   are always in the field, and the oldest cannot be assumed updated.
 - `packages/api-client/src/schema.d.ts` is generated *from this file*, and is the only
   route by which a client learns a shape.
-- **If a type is missing from `@adulis/api-client`, the endpoint does not exist yet.**
-  The answer is the Prism mock (`pnpm mock:api`), never a reach into `apps/api/`.
+- **If a type is missing from `@adulis/api-client`, the contract does not define it yet.**
+  Most operations exist without request or response schemas (register D-98). The answer
+  is a contract change in `apps/api`, never a hand-written type in a client and never a
+  client reaching into `apps/api/`.
 
 ## The mock
 

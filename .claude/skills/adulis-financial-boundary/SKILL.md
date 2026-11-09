@@ -1,7 +1,7 @@
 ---
 name: adulis-financial-boundary
 description: >-
-  Implements and reviews Adulis financial isolated-boundary code: payout ciphertext, payment evidence, access logs, evidence streaming, ledger records, retention, and seller payment confirmation. Use whenever code can disclose or mutate bank-related or payment-evidence data.
+  Implements and reviews Adulis financial isolated-boundary code: payout ciphertext, payment evidence, access logs, evidence streaming, ledger records, retention, and the legacy seller payment confirmation (stale since WO-001C, K-1: block new work on it). Use whenever code can disclose or mutate bank-related or payment-evidence data.
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
@@ -32,10 +32,13 @@ Before acting:
 - `ADU-DPIA-01_Data_Protection_Impact_Assessment_v1_0.md` — privacy risk context, not legal sign-off.
 
 ## Non-negotiable product posture
+
+> Since WO-001C (K-1, founder ruling) payment is provider/backend verified. The no-custody and no-escrow bullets still hold. The evidence and Seller-confirmation machinery is legacy drift until WO-PAY-001 (gaps PAY-1 and PAY-3 in `docs/mobile/WO-001C-CONTRACT-GAPS.json`): keep its boundary controls while it exists, and build nothing new on it.
+
 - Adulis does not hold buyer money before licence/partner authority.
 - No escrow, wallet, or Adulis-held seller balance in V1.
 - Adulis never asserts payment is genuine.
-- Buyer submits evidence; seller checks the seller's own bank/payment account and confirms receipt.
+- ~~Buyer submits evidence; seller checks the seller's own bank/payment account and confirms receipt.~~ **Stale (K-1):** the Seller never establishes PAID.
 - Financial records remain append-only where specified; V1 ledger proves Adulis balance remains zero.
 
 ## Boundary controls

@@ -21,12 +21,13 @@
  * more — which is what `resolveApiBaseUrl` in `@adulis/api-client` enforces from
  * the other end.
  *
- * INERT TODAY, AND LOUDLY SO. There is no producer until Tier 3, so the gate
- * exits 0 with an explanation when the contract is absent. Failing on a file
- * nobody can currently generate would teach everyone to skip the check — the same
- * reasoning that keeps the pre-A3.5 documents out of verify-docs-ascii's
- * enforced set. The day the producer lands, this fires without anyone
- * remembering to add it.
+ * LIVE SINCE TIER 3. The producer exists (`apps/api/src/generate-openapi.ts`),
+ * the contract is committed, and the `contract-current` gate keeps it current.
+ * The SKIP branch below survives only for a checkout with no contract at all; it
+ * exits 0 rather than failing on a file nobody generated (its printed message still
+ * predates Tier 3 -- recorded in docs/mobile/WO-001C-CONTRACT-READINESS.md, not changed),
+ * the same reasoning that keeps the pre-A3.5 documents out of
+ * verify-docs-ascii's enforced set.
  */
 
 import { readFile } from 'node:fs/promises';

@@ -1,7 +1,7 @@
 ---
 name: adulis-seller-companion
 description: >-
-  Implements and guards the Adulis Seller Companion inside the single mobile app. Use for seller-mode notifications, order detail, payment evidence/confirmation, inbox, mode switching, and any proposal to add seller functionality to mobile.
+  Implements and guards the Adulis Seller Companion inside the single mobile app. Use for seller-mode notifications, order detail, inbox, mode switching, any proposal to add seller functionality to mobile, and any proposal to build seller payment confirmation (stale since WO-001C: block it).
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
@@ -32,13 +32,17 @@ Before acting:
 
 ## Phase-1 scope
 
-> **`SPEC_CONFLICT` K-1 — do not build the payment items in item 2.** The payment evidence
-> viewer, `Confirm Payment Received` and `Payment Not Received` come from the repository's
-> manual-transfer model. The November pack makes Chapa gateway checkout and provider/backend
-> verification the payment authority, and says no Seller role confirms payment (R-12;
-> FIN-01 v3.3; KB v3.3). Until the founder rules, report the conflict instead of building
-> either version. The rest of this scope still needs checking against ADU-MOB-02 v4.3
-> before it is built.
+> **K-1, payment — founder direction ruled at WO-001C: do not build the payment items in
+> item 2 or the payment invariant below.** Payment authority is provider/backend verified,
+> and the Seller never establishes PAID by confirming payment (FIN-01 v3.3 S129, MOB-02
+> v4.3 S146, R-12). The payment evidence viewer, `Confirm Payment Received` and `Payment
+> Not Received` are the built manual-transfer model, now legacy drift. They stay in the
+> backend until WO-PAY-001 migrates it, and nothing new is built on them. Today they are
+> also the only route into `PAYMENT_CONFIRMED`, so Mark Ready and the handoff QR sit
+> behind them. The rest of this scope also differs from ADU-MOB-02 v4.3 S224 (Prepare,
+> Courier offer, urgent stock, Claim summary, Pickup credential, and role sets narrower
+> than the built ones): see gaps SC-1 to SC-12 in `docs/mobile/WO-001C-CONTRACT-GAPS.json`
+> (narrative: `WO-001C-CONTRACT-READINESS.md` S8) before building any of it.
 
 Only these seller-mobile surfaces are required:
 1. Notifications / notification centre with deep links.
@@ -50,7 +54,7 @@ Phase-2 candidates (dashboard/basic analytics/reviews/preferences) are evidence-
 
 ## Hard invariants
 - There is no `Accept Reservation` action. Reservation never waits for seller acceptance.
-- Payment action label is `Confirm Payment Received`, not `Accept Payment`; show the instruction to verify in the seller's own bank/payment account.
+- ~~Payment action label is `Confirm Payment Received`~~ **Stale (K-1, WO-001C):** the Seller does not confirm payment, so no seller payment action is built under any label.
 - Companion is additive; Buyer Mode loses no capability.
 - No payout changes, reissued payment instructions, team changes, subscription purchase, seller deletion, session revocation, identity/verification changes, ownership changes, or account-control phone changes are reachable from mobile.
 - No price, tier name, `upgrade`, `manage subscription`, purchase link, billing CTA, or billing deep link appears anywhere in the mobile bundle.

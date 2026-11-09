@@ -9,7 +9,7 @@ system-design authority** (founder decision, WO-001B). The index with exact vers
 repository specifications in the table below for design intent. The table still records
 which revision of each repository specification is installed and which gates parse it.
 Those documents describe what is built, and they stay where they are. The precedence
-and the recorded conflicts between the two (K-1 to K-7) are in
+and the recorded conflicts between the two (K-1 to K-8) are in
 [`.claude/reference/DOCUMENT_AUTHORITY.md`](../../.claude/reference/DOCUMENT_AUTHORITY.md).
 
 ## Repository specifications: current versions, all installed
@@ -99,7 +99,7 @@ document's, and two of them ratified what the migrations already did.**
 | **A3.2** | The release index is **`UNIQUE (reservation_id, reason)`**, plus a **`CHECK` requiring the anchor** — a partial unique index does not constrain rows whose indexed column is NULL, so a release with a null `reservation_id` escapes it entirely | **Migration 09.** Recorded in 0008's §4 so the deferral cannot be lost |
 | **A3.3** | **The standing gate raises `U0001`, not `U0002`.** Three cases, not two: never a member → 404; ever a member, not in good standing → 403 | [`0009_amendment_a3_standing_gate.sql`](../../db/migrations/0009_amendment_a3_standing_gate.sql) |
 | **A3.4** | The four elided function bodies are **owed by v1.11** — correct not to build them | Logged, not lost |
-| **A3.5** | **ADU specifications are ASCII.** §16.6's prose exemption is withdrawn | `pnpm verify:docs-ascii` |
+| **A3.5** | **ADU specifications are ASCII.** §16.6's prose exemption is withdrawn. **Scope (founder decision, WO-001C):** binds the legacy executable specifications; the November system-design pack is UTF-8 design authority whose integrity check is its `SHA256SUMS.txt` | `pnpm verify:docs-ascii` |
 
 **A3.3 landed as a new migration rather than an edit, and that is a departure
 from what A3.6 asked for.** A3.6 says *"apply A3.3 in migration 05a, before

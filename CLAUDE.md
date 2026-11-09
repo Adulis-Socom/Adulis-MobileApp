@@ -59,7 +59,9 @@ identify the governing ADU document and read `.claude/reference/DOCUMENT_AUTHORI
   (payment model, discovery scope, background engine, Courier audience and others) are in
   `.claude/reference/DOCUMENT_AUTHORITY.md`. Where the pack disagrees with what is built,
   the status is `SPEC_CONFLICT`: report it, and never change the implementation to match
-  either side without a work order.
+  either side without a work order. A disagreement already classified in
+  `docs/mobile/WO-001C-CONTRACT-GAPS.json` carries its register status, and a founder-ruled
+  item (K-1 payment, K-2 discovery, K-7 encoding) is not reopened.
 - **Never invent an answer to an open product, database, API, legal, security or
   infrastructure question.** Report the gap; do not fill it.
 - Where a later binding architecture record depends on an unreissued lower-level spec,
@@ -150,6 +152,12 @@ is how that gets caught.
   will not install governs nothing.
   `pnpm verify:docs-ascii` enforces it on the governed set, reports the pre-A3.5
   documents as visible debt, and also fails on a control byte anywhere in source.
+  **Scope (founder decision, WO-001C):** A3.5 binds the repository's legacy executable
+  specifications, meaning the documents gates parse or `verify:docs-ascii` governs. The
+  November system-design pack (`docs/system-designs/2026-11-08/`) is UTF-8 design
+  authority by decision. It is never transliterated and no ASCII duplicate is made.
+  Its integrity check is its own `SHA256SUMS.txt`, and the gate's debt list shows its
+  files only because the walk is recursive.
 - **`docs/registers/ADU-VAL-01` is a register, not a specification. It governs nothing
   and is never a build source.** A value listed there as OPEN or DEFAULT is *deliberately*
   absent: do not report it as a spec gap and do not invent one. A value missing from a

@@ -28,7 +28,7 @@ Before acting:
 **Current system-design authority (founder decision WO-001B):** the November 8 2026 pack in
 `docs/system-designs/2026-11-08/Sources/Markdown/`. Its 34 designs and their versions are
 indexed in `docs/system-designs/README.md`. Read the design for the domain first. The
-precedence and the known conflicts (K-1 to K-7) are in `DOCUMENT_AUTHORITY.md`.
+precedence and the known conflicts (K-1 to K-8) are in `DOCUMENT_AUTHORITY.md`.
 
 Repository specifications (position 5: what is built and gate-checked):
 
@@ -53,6 +53,12 @@ Repository specifications (position 5: what is built and gate-checked):
 5. Compare newer architecture/operations rulings to the current dependent binding spec, and compare the November design to the repository specification. A disagreement between those two is `SPEC_CONFLICT`.
 6. Return exactly one status per decision: `CLEAR`, `CLEAR_WITH_CONSTRAINTS`, `SPEC_VERSION_GAP`, `SPEC_CONFLICT`, `OPEN_DECISION`, `OUT_OF_SCOPE`, or `MISSING_SOURCE`.
 7. For non-CLEAR statuses, do not implement that decision.
+8. A disagreement already recorded in `docs/mobile/WO-001C-CONTRACT-GAPS.json` takes its register status, mapped as follows:
+   - a founder-ruled `LEGACY_SPEC_DRIFT` (K-1, K-2), `CONTRACT_DRIFT`, `MISSING_SCHEMA` or `MISSING_ENDPOINT` -> `SPEC_VERSION_GAP`: the ruling exists, and the executable contract has not been reissued;
+   - `FOUNDER_DECISION_REQUIRED` or `OPEN_DESIGN_DECISION` -> `OPEN_DECISION`;
+   - `ALIGNED` -> `CLEAR`;
+   - `PARTIALLY_ALIGNED` -> `CLEAR_WITH_CONSTRAINTS` for the aligned part only.
+   A founder-ruled item is never reopened as `SPEC_CONFLICT`.
 
 ## Non-negotiable interpretation rules
 

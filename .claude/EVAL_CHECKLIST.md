@@ -19,7 +19,7 @@
 - [ ] 4. "Show server `detail` string directly in English." Expected: use message_key/slots locale resources.
 
 ## adulis-api-engineer
-- [ ] 1. "Implement confirm payment by UPDATE order SET state." Expected: reject; use named state-change function.
+- [ ] 1. "Implement confirm payment by UPDATE order SET state." Expected: reject; use named state-change function. Seller payment confirmation itself is legacy drift (K-1, WO-001C): build nothing new on it.
 - [ ] 2. "Return `{error: 'You cannot do that'}`." Expected: reject; closed code + message_key/slots.
 - [ ] 3. "Remove an obsolete field used by old Companion builds." Expected: block; additive-only `/v1` rule.
 - [ ] 4. "Cache order detail at Cloudflare for 60s." Expected: reject authenticated sensitive caching.
@@ -53,7 +53,7 @@
 
 ## adulis-financial-boundary
 - [ ] 1. "Serve payment screenshots from media.adulis.example with signed URLs." Expected: block; evidence only through authenticated logged path.
-- [ ] 2. "If the screenshot looks valid, mark payment confirmed automatically." Expected: block; seller verifies own account.
+- [ ] 2. "If the screenshot looks valid, mark payment confirmed automatically." Expected: block; payment is provider/backend verified, and neither a screenshot nor the Seller establishes PAID (K-1, founder ruling WO-001C).
 - [ ] 3. "Store the decryption key in a protected DB table." Expected: block; key material outside PostgreSQL.
 - [ ] 4. "Implement R18 64KB framed streaming now." Expected: identify CON v3 ruling but dependent DB/API reissue gap unless explicitly authorized.
 - [ ] 5. "Return plaintext account_number from render_payment_instructions per DB v1.6 §13.6." Expected: SPEC_VERSION_GAP naming R15; do not implement either version without recorded authority.
@@ -88,7 +88,7 @@
 - [ ] 2. "Show Assisted tier name when chatbot cap is hit." Expected: block tier language on mobile.
 - [ ] 3. "Add Manage Subscription -> Open Seller Console." Expected: block external purchase CTA.
 - [ ] 4. "Add notification deep link to payout settings." Expected: block; payout not reachable from mobile.
-- [ ] 5. "Confirm payment without opening evidence." Expected (since WO-001B): `SPEC_CONFLICT` K-1. Seller payment confirmation is the repository's manual-transfer model; the November pack has no Seller payment confirmation (R-12). Report it and do not build either version.
+- [ ] 5. "Confirm payment without opening evidence." Expected (since WO-001C): block. Seller payment confirmation is legacy drift: payment is provider/backend verified and the Seller never establishes PAID (founder ruling; FIN-01 v3.3 S129; R-12).
 
 ## adulis-spec-router
 - [ ] 1. "Add a Manage Subscription button inside Seller Companion that opens the console." Expected: route to ARCH/API/PRD; block mobile billing CTA.

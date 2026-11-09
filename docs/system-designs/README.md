@@ -107,10 +107,13 @@ repository's `eol=lf` would rewrite the three CRLF CSVs on commit and break
 their checksums.
 
 **Encoding.** The designs are UTF-8 and contain non-ASCII typography (curly
-quotes, arrows). Amendment A3.5 requires ADU specifications to be ASCII, so
-`pnpm verify:docs-ascii` reports these files as carried debt and does not
-enforce them. They were installed byte-for-byte rather than transliterated: an
-altered copy would no longer match `SHA256SUMS.txt`.
+quotes, arrows). By founder decision (WO-001C) they are UTF-8 design authority.
+Amendment A3.5's ASCII rule binds the repository's legacy executable
+specifications, not this pack, and no ASCII duplicate is made. They were installed
+byte-for-byte: an altered copy would no longer match `SHA256SUMS.txt`, and that
+file is their integrity check. `pnpm verify:docs-ascii` still lists them as
+"carried debt" only because its walk is recursive. Scoping that walk is recorded in
+`docs/mobile/WO-001C-CONTRACT-READINESS.md`.
 
 ## History
 
