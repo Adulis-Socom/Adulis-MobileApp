@@ -1,11 +1,11 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform } from 'react-native';
 
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered, type OtpVerifyBody } from '../../../api/client';
 import { failureMessage, fillSlots } from '../../../api/messages';
 import { useSession } from '../../../auth/session';
-import { isE164, isOtpCode, parseReturnTo } from '../../../auth/sign-in-flow';
+import { isOtpCode, parseReturnTo } from '../../../auth/sign-in-flow';
 import { AppText } from '../../../components/AppText';
 import { Button } from '../../../components/Button';
 import { Checkbox } from '../../../components/Checkbox';
@@ -35,7 +35,8 @@ export default function Verify() {
   const params = useLocalSearchParams<{ phone?: string; returnTo?: string }>();
   const returnTo = parseReturnTo(params.returnTo);
   const phone = typeof params.phone === 'string' ? params.phone : '';
-  const { session, api, deviceId, signIn } = useSession();
+  const navigation = useNavigation();
+  const { session, api, deviceId, signIn, otpPhone, setOtpPhone } = useSession();
   const [code, setCode] = useState('');
   const [needsAge, setNeedsAge] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -55,9 +56,22 @@ export default function Verify() {
   useEffect(() => {
     if (notice) AccessibilityInfo.announceForAccessibility(notice);
   }, [notice]);
+  // The code flow ends whenever this screen loses focus in the navigator (Back, a tab link, a
+  // notification, anything opened on top, sign-in); the app going to the background is not a
+  // blur, so reading the SMS keeps it. A navigation event, not an unmount cleanup, so a
+  // StrictMode remount keeps it. The navigator can emit blur after this screen's cleanup has
+  // run, so unsubscribing waits a microtask (the pattern the router documents for 'removed').
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => setOtpPhone(null));
+    return () => queueMicrotask(unsubscribe);
+  }, [navigation, setOtpPhone]);
 
-  if (!isE164(phone)) return <Redirect href={{ pathname: '/auth/sign-in', params: { returnTo } }} />;
   if (session.status === 'signedIn' && !completing.current) return <Redirect href={returnTo} />;
+  // Only for a code this app run asked for: a phone in a link (cold or not) is no proof, so a
+  // link alone never shows the form or reaches Send a new code. The form stays while signing in.
+  if (otpPhone !== phone && !completing.current) {
+    return <Redirect href={{ pathname: '/auth/sign-in', params: { returnTo } }} />;
+  }
 
   const verify = async () => {
     if (!isOtpCode(code)) {

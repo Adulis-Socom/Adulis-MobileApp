@@ -143,7 +143,8 @@ a user release. After adding strings, scan the export
   path that ends a session; offline never does. Idempotency keys belong to a user intent
   (kept across retries and double taps), not to an attempt.
 - `src/device/device-storage.ts` keeps the install id (UUID v4, SecureStore, created once)
-  and its registered flag; `POST /v1/devices` runs once per install, keyed by the id.
+  and its registered flag; `POST /v1/devices` runs once per install under its own persistent
+  UUIDv7 intent key (never the id: identity is not a retry key), removed once answered.
 - `src/auth/session.tsx` is the one session boundary: restore at startup, `signIn` (write
   the credential, then switch state - no restart), `clearSession` as the single local
   sign-out path (credential, whole query cache, active mode), and `signOut`, which clears
@@ -154,7 +155,8 @@ a user release. After adding strings, scan the export
   attempt; `UPGRADE_REQUIRED` replaces the navigator with `UpgradeRequired`.
   `UPGRADE_RECOMMENDED` is a dismissible Home notice. Sign-in is `(buyer)/auth/sign-in` and
   `auth/verify`, opened only by the user from a Sign in button, returning to an allowlisted
-  tab (`src/auth/sign-in-flow.ts`).
+  tab (`src/auth/sign-in-flow.ts`). Verify opens only for the phone this run successfully
+  requested a code for (`otpPhone` in the session, memory only); a link alone opens Sign in.
 - Amharic: `useT` renders English in a release build whatever the store holds
   (`amharicAvailable()` is `__DEV__`); the only language control is the dev diagnostics one.
 - `src/theme/theme.ts` is the one theme authority: semantic roles from `@adulis/tokens`,

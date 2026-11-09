@@ -34,6 +34,13 @@ type SessionContextValue = {
   deviceId: () => Promise<string>;
   /** Register this install with the server once (POST /v1/devices). True if it just did. */
   ensureDeviceRegistered: () => Promise<boolean>;
+  /**
+   * The phone this app run successfully asked a code for. Verify works only for it: a phone
+   * in a route parameter proves nothing, and a link must never make the app text a number.
+   * Memory only, so a cold start forgets it; never the code.
+   */
+  otpPhone: string | null;
+  setOtpPhone: (phone: string | null) => void;
   /** Persist a credential from a successful sign-in, then switch the app to signed in. */
   signIn: (token: string) => Promise<void>;
   /**
@@ -81,6 +88,7 @@ export function SessionProvider({
 }) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<SessionState>({ status: 'restoring' });
+  const [otpPhone, setOtpPhone] = useState<string | null>(null);
   // The client reads the bearer when it sends, so it never holds a stale one.
   const token = useRef<string | null>(null);
   token.current = session.status === 'signedIn' ? session.token : null;
@@ -167,6 +175,7 @@ export function SessionProvider({
       await storage.write(credential);
       token.current = credential;
       setSession({ status: 'signedIn', token: credential });
+      setOtpPhone(null); // the code flow is spent
     },
     [storage],
   );
@@ -190,8 +199,18 @@ export function SessionProvider({
   const getDeviceId = useCallback(() => deviceId, [deviceId]);
 
   const value = useMemo(
-    () => ({ session, api, deviceId: getDeviceId, ensureDeviceRegistered, signIn, clearSession, signOut }),
-    [session, api, getDeviceId, ensureDeviceRegistered, signIn, clearSession, signOut],
+    () => ({
+      session,
+      api,
+      deviceId: getDeviceId,
+      ensureDeviceRegistered,
+      otpPhone,
+      setOtpPhone,
+      signIn,
+      clearSession,
+      signOut,
+    }),
+    [session, api, getDeviceId, ensureDeviceRegistered, otpPhone, signIn, clearSession, signOut],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

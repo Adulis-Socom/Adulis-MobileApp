@@ -25,7 +25,7 @@ export default function SignIn() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const returnTo = parseReturnTo(params.returnTo);
-  const { session, api } = useSession();
+  const { session, api, setOtpPhone } = useSession();
   const boot = useBootstrap();
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +49,7 @@ export default function SignIn() {
       if (boot.data === undefined) await boot.refetch({ throwOnError: true });
       await api.requestOtp(cleaned, intent.current.key);
       intent.current = null;
+      setOtpPhone(cleaned);
       router.push({ pathname: '/auth/verify', params: { phone: cleaned, returnTo } });
     } catch (failure) {
       if (wasAnswered(failure)) intent.current = null;
