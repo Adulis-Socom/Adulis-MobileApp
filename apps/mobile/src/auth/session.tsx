@@ -10,8 +10,13 @@ import {
   type ReactNode,
 } from 'react';
 
-import { createApiClient, type ApiClient } from '../api/client';
-import { loadDeviceId, type DeviceStorage } from '../device/device-storage';
+import { createApiClient, wasAnswered, type ApiClient } from '../api/client';
+import {
+  endRegistrationIntent,
+  loadDeviceId,
+  loadRegistrationKey,
+  type DeviceStorage,
+} from '../device/device-storage';
 import { useUiStore } from '../state/ui-store';
 import type { SessionStorage } from './session-storage';
 
@@ -131,12 +136,29 @@ export function SessionProvider({
     [deviceId, forgetInMemory, storage],
   );
 
-  const ensureDeviceRegistered = useCallback(async () => {
-    const id = await deviceId;
-    if ((await deviceStorage.readRegistered().catch(() => null)) === id) return false;
-    await api.registerDevice(id);
-    await deviceStorage.writeRegistered(id).catch(() => undefined);
-    return true;
+  // One registration at a time: a refetch (Send code) joins the attempt in flight instead of
+  // racing it under the same key, where one answer would end the other's intent.
+  const registering = useRef<Promise<boolean> | null>(null);
+  const ensureDeviceRegistered = useCallback(() => {
+    registering.current ??= (async () => {
+      const id = await deviceId;
+      if ((await deviceStorage.readRegistered().catch(() => null)) === id) return false;
+      // The intent's own UUIDv7 key, kept across lost answers and restarts until it ends.
+      const key = await loadRegistrationKey(deviceStorage);
+      try {
+        await api.registerDevice(id, key);
+      } catch (failure) {
+        // A server answer ends the intent: retrying under its key would replay a stored refusal.
+        if (wasAnswered(failure)) await endRegistrationIntent(deviceStorage);
+        throw failure;
+      }
+      await deviceStorage.writeRegistered(id).catch(() => undefined);
+      await endRegistrationIntent(deviceStorage);
+      return true;
+    })().finally(() => {
+      registering.current = null;
+    });
+    return registering.current;
   }, [api, deviceId, deviceStorage]);
 
   const signIn = useCallback(

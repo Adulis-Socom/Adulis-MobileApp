@@ -4,8 +4,10 @@ import * as SecureStore from 'expo-secure-store';
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 
+import type { DeviceStorage } from '../device/device-storage';
 import { AppProviders } from '../providers/AppProviders';
 import { useUiStore } from '../state/ui-store';
+import { installFakeApi } from '../testing/fake-api';
 import { restoreSession, useSession } from './session';
 import { secureSessionStorage, type SessionStorage } from './session-storage';
 
@@ -108,6 +110,37 @@ describe('root providers', () => {
     expect(screen.getByText('signedOut')).toBeOnTheScreen();
     expect(queryClient.getQueryData(['server-state'])).toBeUndefined();
     expect(useUiStore.getState().activeMode).toBeNull();
+  });
+
+  it('runs one device registration at a time: concurrent callers share the attempt in flight', async () => {
+    const fake = installFakeApi();
+    const entries = new Map<string, string>();
+    const deviceStorage: DeviceStorage = {
+      readId: async () => entries.get('id') ?? null,
+      writeId: async (id) => void entries.set('id', id),
+      readRegistered: async () => entries.get('registered') ?? null,
+      writeRegistered: async (id) => void entries.set('registered', id),
+      readRegistrationKey: async () => entries.get('key') ?? null,
+      writeRegistrationKey: async (key) => void entries.set('key', key),
+      clearRegistrationKey: async () => void entries.delete('key'),
+    };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    await render(
+      <AppProviders queryClient={queryClient} sessionStorage={fakeStorage(null)} deviceStorage={deviceStorage}>
+        <SessionProbe />
+      </AppProviders>,
+    );
+    await screen.findByText('signedOut');
+
+    let results: boolean[] = [];
+    await act(async () => {
+      results = await Promise.all([api!.ensureDeviceRegistered(), api!.ensureDeviceRegistered()]);
+    });
+    expect(results).toEqual([true, true]);
+    expect(fake.callsTo('POST /v1/devices')).toHaveLength(1);
+    // Finished: the next call finds the install registered and sends nothing.
+    await expect(api!.ensureDeviceRegistered()).resolves.toBe(false);
+    expect(fake.callsTo('POST /v1/devices')).toHaveLength(1);
   });
 
   it('does not claim a sign-out when the credential could not be deleted', async () => {

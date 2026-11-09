@@ -170,10 +170,10 @@ export function createApiClient(deps: ApiDeps) {
     /** GET /v1/bootstrap: with the bearer when signed in, which also proves the session live. */
     bootstrap: () => call<Bootstrap>('GET', '/v1/bootstrap', { ok: 200 }),
 
-    /** POST /v1/devices: idempotent by id, so the id is also the registration's idempotency key. */
-    registerDevice: (id: string) => {
+    /** POST /v1/devices. The key is the registration intent's own UUIDv7, never the device id. */
+    registerDevice: (id: string, idempotencyKey: string) => {
       const body: DeviceRegisterBody = { id, platform: Platform.OS === 'ios' ? 'IOS' : 'ANDROID' };
-      return call<DeviceRef>('POST', '/v1/devices', { body, idempotencyKey: id, bearer: false, ok: 201 });
+      return call<DeviceRef>('POST', '/v1/devices', { body, idempotencyKey, bearer: false, ok: 201 });
     },
 
     requestOtp: (phone: string, idempotencyKey: string) => {
