@@ -4,6 +4,10 @@ Status: complete, pushed, awaiting founder review. Branch `mobile/wo-003-buyer-a
 request, no merge, `main` untouched. No backend, migration, OpenAPI, payment, discovery,
 Seller Companion or Courier change. The next work order is not started.
 
+Corrected by WO-003A (`docs/mobile/WO-003A-AUTH-HARDENING.md`): the device registration key
+(section 5), Verify links (section 22) and a false statement about the verify idempotency
+record (section 22). Each correction is marked in place; nothing else is rewritten.
+
 ## 1. Baseline
 
 `mobile/wo-002-buyer-shell` at `6f6e48173e79d8bf55a6865ba1e602e7b481ac62`, verified against
@@ -80,6 +84,11 @@ creates. Success
 is recorded as `adulis.device.registered = <id>`; registration runs again only if that record
 is missing or names another id. Native check: one `core.device` row per install, platform
 `ANDROID`, market stamped, linked to the Account after sign-in, unchanged across relaunch.
+
+**WO-003A correction:** the install id is no longer the `Idempotency-Key`. Client keys are
+UUIDv7 (ADU-API-01 S8), so registration now has its own persistent UUIDv7 intent key
+(`adulis.device.registration_key`), kept until the server confirms and then removed. The
+install id itself is unchanged. See WO-003A section 5.
 
 ## 6. Bootstrap
 
@@ -326,12 +335,16 @@ Findings and what was done:
   crash reporting added later must not capture route params.
 - `/auth/verify` opened by a deep link skips the request step, so Send a new code would send
   an SMS to the number in the link (server rate limits apply). Founder decision whether verify
-  should require an in-app request first.
+  should require an in-app request first. **Resolved by WO-003A:** Verify now opens only for a
+  phone this app run successfully requested a code for; any other link opens Sign in.
 - If the server purges a device row (retention) the install's local "registered" record still
   says registered and the install never registers again (see D-118). Server-side or a later
   client recovery; not in WO-003.
-- Backend, for the founder: ADU-API-01 S8 stores "the response" for a replay; for
-  `/v1/auth/otp/verify` that means the bearer sits in idempotency records for 24 h.
+- **Corrected by WO-003A.** This item used to say that the bearer sits in idempotency records
+  for 24 h after `/v1/auth/otp/verify`. That was false: since WO-API-001A SEC-3 a completed
+  verify records only `{ "credential_withheld": true, "session_id": "<public session id>" }`,
+  and a replay answers `401 OTP_EXPIRED` with no credential. WO-003A section 7 re-verified this
+  against a real sign-in. No backend question remains here.
 - The "You are signed in" announcement runs just before the screen changes; Android may cut it
   short. A TalkBack pass on hardware should confirm.
 
