@@ -51,6 +51,11 @@ export class RateLimitService {
     kind: RateLimitSubjectKind,
     subjectId: string,
     rule: RateLimitRule,
+    // Inside a handler transaction, pass it: counting on a second pool
+    // connection while the transaction holds one can exhaust the pool under
+    // a burst (WO-DISC-002 security review). A 429 then rolls back only the
+    // increment that crossed the limit, so the limit still holds.
+    db: Kysely<Database> = this.db,
   ): Promise<void> {
     const r = await sql<{ count: number; window_start: Date }>`
       INSERT INTO core.rate_limit_bucket
@@ -62,7 +67,7 @@ export class RateLimitService {
         1)
       ON CONFLICT (subject_kind, subject_id, bucket_key, window_start)
       DO UPDATE SET count = core.rate_limit_bucket.count + 1
-      RETURNING count, window_start`.execute(this.db);
+      RETURNING count, window_start`.execute(db);
 
     const row = r.rows[0];
     if (!row) return;

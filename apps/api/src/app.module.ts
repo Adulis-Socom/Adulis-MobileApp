@@ -67,6 +67,8 @@ import { StorefrontController } from './modules/storefront/storefront.controller
 import { ObligationsController } from './modules/obligations/obligations.controller';
 import { ScenesController } from './modules/scenes/scenes.controller';
 import { ScenesService } from './modules/scenes/scenes.service';
+import { FypController } from './modules/fyp/fyp.controller';
+import { FypService } from './modules/fyp/fyp.service';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -88,7 +90,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController, FypController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -100,6 +102,7 @@ export const LOGGER = Symbol('LOGGER');
     { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new NullSocialPlatformAdapter() },
     CatalogueService,
     ScenesService,
+    FypService,
     OrdersService,
     FinancialService,
     HandoffService,
