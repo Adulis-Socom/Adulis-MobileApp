@@ -1,0 +1,79 @@
+# Buyer shell (WO-002) against the Adulis build, com.adulis.app, as a guest: the app opens
+# on Home / For You; all five Home channels and all five Buyer tabs are reachable; Back
+# returns from a channel to For You and from a tab to Home; Search and Notifications open
+# over the tabs; Saved, Orders, You and Notifications explain why they need an Account;
+# Appearance switches; no Seller Companion or Courier entry appears in the Buyer shell.
+#
+# Screenshots land in Maestro's output directory: review them for clipping, at the default
+# text size and again after `adb shell settings put system font_scale 1.3`.
+#
+# Prerequisites: the debug build installed and Metro serving on 8081 (`adb reverse
+# tcp:8081 tcp:8081`). ACCESS_LOCAL_NETWORK is the one grant, as in foundation-smoke.yaml:
+# Android 17 blocks a debug build's Metro traffic without it; release builds never ask.
+appId: com.adulis.app
+name: Buyer shell
+tags:
+  - buyer
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: Scenes from Sellers will appear here in a coming update.
+    timeout: 120000
+- assertVisible: Adulis
+- assertVisible: For You
+- assertNotVisible: Seller Companion
+- assertNotVisible: Courier
+- takeScreenshot: buyer-01-home-for-you
+
+# Home channels: switch, and Back returns to For You.
+- tapOn: Following
+- assertVisible: Scenes from Sellers you follow will appear here in a coming update.
+- tapOn: Nearby
+- assertVisible: Discovery near you will appear here in a coming update.
+- back
+- assertVisible: Scenes from Sellers will appear here in a coming update.
+- tapOn: Discounts
+- assertVisible: Current offers will appear here in a coming update.
+- scrollUntilVisible:
+    element: Locally Made
+    direction: RIGHT
+- tapOn: Locally Made
+- assertVisible: Locally made Products will appear here in a coming update.
+- takeScreenshot: buyer-02-home-locally-made
+
+# Search and Notifications open over the tabs.
+- tapOn: Search
+- assertVisible: Search for Products, Sellers and Scenes arrives in a coming update.
+- takeScreenshot: buyer-03-search
+- back
+- tapOn: Notifications
+- assertVisible: Sign in to see notifications.
+- back
+- assertVisible: Locally made Products will appear here in a coming update.
+
+# The other four tabs, as a guest.
+- tapOn: Shop
+- assertVisible: Shopping by category arrives in a coming update.
+- tapOn: Saved
+- assertVisible: Sign in to save.
+- assertVisible: Signing in arrives in a coming update.
+- tapOn: Orders
+- assertVisible: Sign in to start ordering and track your orders.
+- takeScreenshot: buyer-04-orders-guest
+- tapOn: You
+- assertVisible: Sign in to see your profile.
+- assertVisible: Appearance
+- assertNotVisible: Sign out
+- assertNotVisible: Seller Companion
+- tapOn: Dark
+- assertVisible: ✓ Dark
+- takeScreenshot: buyer-05-you-dark
+- tapOn: System
+- assertVisible: ✓ System
+
+# Back from a tab returns to Home, on the channel it was left on.
+- back
+- assertVisible: Locally made Products will appear here in a coming update.

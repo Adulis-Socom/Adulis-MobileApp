@@ -1,7 +1,9 @@
-# Foundation smoke (WO-001, WO-001A) against the Adulis development build, com.adulis.app:
-# root loads, every mode shell is reachable, switching keeps the one session (no sign-in
-# surface, session line unchanged), back navigation works, and Amharic renders from the
-# real mobile catalogue.
+# Foundation smoke (WO-001, WO-001A; diagnostics moved to /dev in WO-002) against the Adulis
+# DEVELOPMENT build, com.adulis.app: the Buyer shell loads, You offers Developer diagnostics
+# (development builds only), every diagnostic mode shell is reachable from there, switching
+# keeps the one session (no sign-in surface, session line unchanged), and Amharic renders
+# from the real mobile catalogue. A release build has none of this; buyer-shell.yaml is the
+# product flow.
 #
 # Prerequisites: the debug build installed (`pnpm --filter @adulis/mobile android`) and
 # Metro serving on 8081.
@@ -19,14 +21,13 @@ tags:
     permissions:
       android.permission.ACCESS_LOCAL_NETWORK: allow
 - extendedWaitUntil:
-    visible: Adulis mobile foundation
+    visible: Scenes from Sellers will appear here in a coming update.
     timeout: 120000
+- tapOn: You
+- tapOn: Developer diagnostics
+- assertVisible: Development builds only. Not product UI.
 - assertVisible: 'Session: signed out'
-- tapOn: Open Buyer
-- assertVisible: Buyer foundation ready
-- assertVisible: 'Active mode: Buyer'
-- assertVisible: 'Session: signed out'
-- tapOn: Switch to Seller Companion
+- tapOn: Open Seller Companion
 - assertVisible: Seller Companion foundation ready
 - assertVisible: 'Active mode: Seller Companion'
 - assertVisible: 'Session: signed out'
@@ -34,8 +35,8 @@ tags:
 - assertVisible: Courier foundation ready
 - assertVisible: 'Active mode: Courier'
 - assertVisible: 'Session: signed out'
-- tapOn: Back to foundation
-- assertVisible: Adulis mobile foundation
+- tapOn: Back to diagnostics
+- assertVisible: Development builds only. Not product UI.
 - tapOn: Amharic
 - assertVisible: 'አንዳንድ ሲስተሞች አይገኙም። እየተመለከትነው ነው።'
 - tapOn: English
