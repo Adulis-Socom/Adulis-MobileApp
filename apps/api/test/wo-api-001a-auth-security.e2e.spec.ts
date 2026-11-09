@@ -483,6 +483,11 @@ describe('WO-API-001A -- session security and account context', () => {
       });
     });
 
+    it('is never cached by a shared cache', async () => {
+      const r = await http().get('/v1/bootstrap').set('Authorization', `Bearer ${sessionToken(OWNER_S)}`).expect(200);
+      expect(r.headers['cache-control']).toBe('private, no-store');
+    });
+
     it('ignores anything the client claims', async () => {
       const r = await http().get('/v1/bootstrap?mode=seller&courier=true')
         .set('Authorization', `Bearer ${sessionToken(BUYER_S)}`)

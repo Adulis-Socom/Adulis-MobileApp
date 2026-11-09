@@ -251,6 +251,10 @@ export class BootstrapController {
       }
     }
 
+    // An authenticated bootstrap carries Account data (account_context): never
+    // stored by an edge or shared cache (WO-001C S7 proposal; WO-API-001A).
+    if (req.auth) res.setHeader('Cache-Control', 'private, no-store');
+
     return {
       server_time: new Date().toISOString(),
       min_supported_client: MIN_SUPPORTED_CLIENT,
