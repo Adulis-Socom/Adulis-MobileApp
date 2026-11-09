@@ -3,18 +3,22 @@
  * ADU-REPO-01 §5.1.
  *
  * `src/schema.d.ts` is GENERATED from `contracts/openapi.json` by
- * `pnpm --filter @adulis/api-client generate`. It does not exist yet, because
- * nothing publishes the contract yet: `apps/api` carries no `@nestjs/swagger` and
- * `.github/workflows/ci.yml` gates the OpenAPI publish on Tier 3.
+ * `pnpm --filter @adulis/api-client generate`, and CI is its only author: the
+ * `contract-current` gate regenerates both files and fails on any difference.
+ * This module re-exports the generated `paths`, `components` and `operations`
+ * types, and nothing else.
  *
- * **Until it lands, this module deliberately exports no request type.** A DTO
- * hand-written here would be exactly the duplicate the seam exists to prevent —
- * and it would be a duplicate with authority, because every client would import
- * it believing it came from the contract.
+ * **Most operations carry no request or response schema yet** (the API's Swagger
+ * decorators carry no bodies -- register D-98), so their generated body types are
+ * empty. That is a contract gap, closed in `apps/api`. **Never hand-write a DTO
+ * here to fill it**: it would be exactly the duplicate the seam exists to prevent,
+ * and a duplicate with authority, because every client would import it believing
+ * it came from the contract.
  *
- * If a type you need is missing, **the endpoint does not exist yet.** The answer
- * is the contract (the mock serves it), never a reach into `apps/api/` (rule 2).
+ * If a type you need is missing, **the contract does not define it yet.** The
+ * answer is the contract, never a reach into `apps/api/` (rule 2).
  */
+export type { components, operations, paths } from './schema';
 
 /** Where `pnpm mock:api` serves the contract. Matches ADU-REPO-01 §9.4. */
 export const MOCK_API_BASE_URL = 'http://127.0.0.1:4010';

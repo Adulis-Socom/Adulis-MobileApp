@@ -2,21 +2,26 @@
 
 Generated from `contracts/openapi.json`. **Never hand-author a type here.**
 
-## Status: created, not yet generated
+## Status: generated, exported, mostly schema-less
 
-`src/schema.d.ts` does not exist, because **nothing publishes the contract yet**:
+`src/schema.d.ts` is generated from the committed contract, and the `contract-current`
+gate (`ops/scripts/gates.mjs`) regenerates both files and fails on any difference. The
+package entry re-exports the generated **`paths`, `components` and `operations`**
+types, so a client imports them from `@adulis/api-client` and never from the `.d.ts`:
 
-- `apps/api` carries no `@nestjs/swagger` and no OpenAPI entrypoint;
-- `.github/workflows/ci.yml` gates the OpenAPI publish on **Tier 3**;
-- `apps/api/src/main.ts` sets **no global `/v1` prefix**, and ADU-API-01 writes every
-  route as `/v1/...` — the prefix must reach the contract's own `paths` keys, because
-  Prism ignores a prefix carried only in `servers[].url` and would 404 on every route.
+```ts
+import type { components, paths } from '@adulis/api-client';
+type Bootstrap = paths['/v1/bootstrap']['get']['responses'][200]['content']['application/json'];
+```
 
-The package exists ahead of that on purpose. ADU-REPO-01 §11: *"until
-`packages/api-client` exists, a new front-end developer's only route to a type is across
-a boundary, and the first thing they do will be the thing rule 2 forbids."*
+`pnpm --filter @adulis/api-client test` type-checks that the export resolves.
 
-## When the contract lands
+**Most operations still carry no request or response schema**: the API's Swagger
+decorators carry no bodies (register D-98). The generated types give their paths and
+parameters, and their bodies are empty. Closing that gap is backend contract work in
+`apps/api`. It is never a hand-written type here.
+
+## Regenerating
 
 ```bash
 pnpm --filter @adulis/api generate:openapi     # writes contracts/openapi.json

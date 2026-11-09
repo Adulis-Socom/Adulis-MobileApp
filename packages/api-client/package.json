@@ -12,7 +12,7 @@
     "generate": "openapi-typescript ../../contracts/openapi.json --alphabetize --output ./src/schema.d.ts",
     "generate:check": "openapi-typescript ../../contracts/openapi.json --alphabetize --output ./src/schema.d.ts --check",
     "build": "echo \"@adulis/api-client: consumed as TypeScript source\"",
-    "test": "echo \"@adulis/api-client: no runtime tests — the contract test is typecheck\"",
+    "test": "tsc --noEmit -p tsconfig.test.json && echo \"@adulis/api-client: generated types reachable from the entry\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
