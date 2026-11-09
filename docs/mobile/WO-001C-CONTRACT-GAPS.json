@@ -1861,6 +1861,24 @@
         "API-1",
         "API-2"
       ]
+    },
+    {
+      "work_order": "WO-DISC-001",
+      "date": "2026-11-10",
+      "branch": "discovery/wo-disc-001-scene-foundation",
+      "note": "DSC-1 (Scene domain, MISSING_SCHEMA) now has its persistence, publication and visibility foundation: migration 0054 (core.scene_post, scene_post_revision, scene_post_product, scene_post_transition; the availability view; COMMIT-time re-evaluation; the central public view) and the Seller and public Scene routes. The audited DSC-1 entry above is unchanged and still describes the 2026-11-09 baseline. What DSC-1 still lacks is listed in open_items; the full record is docs/discovery/WO-DISC-001-SCENE-DOMAIN-FOUNDATION.md.",
+      "resolved": [],
+      "partially_resolved": [
+        "DSC-1"
+      ],
+      "open_items": [
+        "Hotspot storage (needs a versioned MediaPresentation; additive table later)",
+        "Archive, restore and lifecycle deletion commands (ARCHIVED is in the vocabulary; the design has no delete permission)",
+        "SCENE report target and Scene moderation enforcement (see DSC-6 and the report-target gap)",
+        "Slug history, storefront Scene list, Scene search and the For You feed (later work orders)",
+        "The seller.scene_posts:* permission family (temporary mapping: seller.media:write AND seller.broadcasts:send)",
+        "ADU-DB-01 Appendix B rows for the four tables (verify:appendix red until the revision is installed)"
+      ]
     }
   ]
 }
