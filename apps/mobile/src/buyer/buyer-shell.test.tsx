@@ -5,15 +5,13 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
+import { GOOD_TOKEN, installFakeApi } from '../testing/fake-api';
+import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 // The real route tree under src/app, booted through the real root layout and providers.
 const APP_DIR = 'src/app';
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => null),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(async () => undefined),
-}));
+jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
 
 // The first walk through the real tree transforms expo-router on a cold cache (always, in CI).
 jest.setTimeout(60_000);
@@ -31,11 +29,16 @@ const CHANNEL_LABELS = [
 // on Android and role="button" with aria-selected on iOS (the platform jest-expo renders).
 const tab = (name: string) => screen.getByRole('tab', { name });
 const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name });
-const signedIn = () => jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce('opaque-token');
+const signedIn = () => resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
+const tokenReads = () => jest.mocked(SecureStore.getItemAsync).mock.calls.filter(([key]) => key === TOKEN_KEY);
+const tokenWrites = () => jest.mocked(SecureStore.setItemAsync).mock.calls.filter(([key]) => key === TOKEN_KEY);
+let api: ReturnType<typeof installFakeApi>;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en' });
+  resetSecureStore();
+  api = installFakeApi();
+  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false });
 });
 
 describe('Buyer shell', () => {
@@ -104,11 +107,17 @@ describe('Buyer shell', () => {
     expect(r.getPathname()).toBe('/home/for-you');
   });
 
-  it.each(['/search', '/notifications'])('opens %s cold with the tabs under it, so Back returns Home', async (path) => {
+  it.each([
+    ['/search', en['buyer.search.coming']],
+    ['/notifications', en['buyer.notifications.signed_out']],
+  ])('opens %s cold with the tabs under it, so Back returns Home', async (path, content) => {
     const r = await renderRouter(APP_DIR, { initialUrl: path });
+    // Startup (device registration, bootstrap) finishes before the screen is there to leave.
+    expect(await screen.findByText(content)).toBeOnTheScreen();
     expect(r.getPathname()).toBe(path);
     await act(() => router.back());
-    expect(await screen.findByText(en['buyer.home.for_you.coming'])).toBeOnTheScreen();
+    // The pop transition keeps the revealed screen hidden from queries until it completes.
+    expect(await screen.findByText(en['buyer.home.for_you.coming'], {}, { timeout: 5000 })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
     expect(bottomTab(en['buyer.tab.home'])).toBeOnTheScreen();
   });
@@ -160,7 +169,7 @@ describe('Buyer shell', () => {
 });
 
 describe('guest and signed-in destinations', () => {
-  it('a guest sees why Saved, Orders and You need an Account, with no sign-in prompt fired', async () => {
+  it('a guest sees why Saved, Orders and You need an Account, and a Sign in that opens nothing by itself', async () => {
     await renderRouter(APP_DIR);
     await screen.findByText(en['buyer.home.for_you.coming']);
 
@@ -170,12 +179,13 @@ describe('guest and signed-in destinations', () => {
     expect(await screen.findByText(en['buyer.orders.signed_out'])).toBeOnTheScreen();
     await fireEvent.press(bottomTab(en['buyer.tab.you']));
     expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
-    expect(screen.getAllByText(en['buyer.sign_in.coming']).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: en['auth.sign_in'] })).toBeOnTheScreen();
 
-    // No Account was created and no credential was written or read again.
+    // Opening the tabs started nothing: no OTP, no Account, no credential written.
     expect(screen.queryByRole('button', { name: en['common.signOut'] })).not.toBeOnTheScreen();
-    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
-    expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
+    expect(api.callsTo('POST /v1/auth/otp/request')).toHaveLength(0);
+    expect(tokenWrites()).toHaveLength(0);
+    expect(tokenReads()).toHaveLength(1);
   });
 
   it('a signed-in Buyer sees placeholders, not sign-in prompts, across tab switches', async () => {
@@ -191,70 +201,40 @@ describe('guest and signed-in destinations', () => {
     await fireEvent.press(bottomTab(en['buyer.tab.you']));
     expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
     expect(useUiStore.getState().activeMode).toBe('buyer');
-    expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
+    expect(tokenReads()).toHaveLength(1);
   });
 
   it('Sign out forgets the session on the device and revokes it on the server', async () => {
-    const fetchMock = jest.fn(async () => ({ status: 204 }) as Response);
-    const savedFetch = globalThis.fetch;
-    const savedOrigin = process.env.EXPO_PUBLIC_API_BASE_URL;
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
-    try {
-      signedIn();
-      await renderRouter(APP_DIR, { initialUrl: '/account' });
-      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    signedIn();
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://api.example.test/v1/auth/logout',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { Authorization: 'Bearer opaque-token' },
-          signal: expect.any(AbortSignal),
-        }),
-      );
-      expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
-      expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
-    } finally {
-      globalThis.fetch = savedFetch;
-      process.env.EXPO_PUBLIC_API_BASE_URL = savedOrigin;
-    }
+    const [logout] = api.callsTo('POST /v1/auth/logout');
+    expect(logout?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(TOKEN_KEY);
+    expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
   });
 
   it('Sign out forgets the session at once even when the server never answers', async () => {
-    const savedFetch = globalThis.fetch;
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    // A stalled network: the request never settles while the test runs.
-    globalThis.fetch = jest.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch;
-    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
-    try {
-      signedIn();
-      await renderRouter(APP_DIR, { initialUrl: '/account' });
-      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
-      expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
-      expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
-    } finally {
-      globalThis.fetch = savedFetch;
-      warn.mockRestore();
-    }
+    api.on('POST /v1/auth/logout', () => 'hang');
+    signedIn();
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(TOKEN_KEY);
+    expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
   });
 
   it('logs a failed revoke by its reason, never by the credential', async () => {
-    const savedFetch = globalThis.fetch;
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    globalThis.fetch = jest.fn(async () => {
-      throw new Error('Network request failed');
-    }) as unknown as typeof fetch;
-    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
+    api.on('POST /v1/auth/logout', () => 'offline');
     try {
       signedIn();
       await renderRouter(APP_DIR, { initialUrl: '/account' });
       await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
       await waitFor(() => expect(warn).toHaveBeenCalled());
-      expect(JSON.stringify(warn.mock.calls)).toContain('Network request failed');
-      expect(JSON.stringify(warn.mock.calls)).not.toContain('opaque-token');
+      expect(JSON.stringify(warn.mock.calls)).toContain('api offline');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(GOOD_TOKEN);
     } finally {
-      globalThis.fetch = savedFetch;
       warn.mockRestore();
     }
   });

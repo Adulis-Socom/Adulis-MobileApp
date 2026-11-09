@@ -31,7 +31,7 @@ export default function You() {
 
   return (
     <Screen title={t('buyer.tab.you')} edges={['top', 'left', 'right']}>
-      {signedIn ? null : <SignInRequired message={t('buyer.you.signed_out')} />}
+      {signedIn ? null : <SignInRequired message={t('buyer.you.signed_out')} returnTo="/account" />}
 
       <ChoiceGroup
         label={t('buyer.you.appearance')}

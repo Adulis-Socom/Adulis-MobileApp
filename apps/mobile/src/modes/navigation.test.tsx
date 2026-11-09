@@ -3,15 +3,13 @@ import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import * as SecureStore from 'expo-secure-store';
 
 import { useUiStore } from '../state/ui-store';
+import { GOOD_TOKEN, installFakeApi } from '../testing/fake-api';
+import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 // The real route tree under src/app, booted through the real root layout and providers.
 const APP_DIR = 'src/app';
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => null),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(),
-}));
+jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
 
 // The first walk through the real tree transforms expo-router on a cold cache (always, in CI).
 jest.setTimeout(60_000);
@@ -31,12 +29,14 @@ async function asRelease(body: () => Promise<void>) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en' });
+  resetSecureStore();
+  installFakeApi();
+  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false });
 });
 
 describe('development builds', () => {
   it('reach the diagnostics from You, and every mode shell from there, without re-authenticating', async () => {
-    jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce('opaque-token');
+    resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
     const router = await renderRouter(APP_DIR, { initialUrl: '/account' });
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Developer diagnostics' }));
@@ -60,9 +60,10 @@ describe('development builds', () => {
     expect(useUiStore.getState().activeMode).toBe('buyer');
 
     // One credential read at startup; no mode switch touched the session.
-    expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
-    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
-    expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
+    const tokenCalls = (fn: jest.Mock) => fn.mock.calls.filter(([key]) => key === TOKEN_KEY);
+    expect(tokenCalls(jest.mocked(SecureStore.getItemAsync))).toHaveLength(1);
+    expect(tokenCalls(jest.mocked(SecureStore.setItemAsync))).toHaveLength(0);
+    expect(tokenCalls(jest.mocked(SecureStore.deleteItemAsync))).toHaveLength(0);
   });
 
   it('keep Amharic as a QA language: the diagnostics switch it, and the Buyer shell renders it', async () => {

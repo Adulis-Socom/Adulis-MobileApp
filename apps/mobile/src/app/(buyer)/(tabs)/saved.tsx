@@ -16,7 +16,7 @@ export default function Saved() {
       {session.status === 'signedIn' ? (
         <Placeholder message={t('buyer.saved.coming')} />
       ) : (
-        <SignInRequired message={t('buyer.saved.signed_out')} />
+        <SignInRequired message={t('buyer.saved.signed_out')} returnTo="/saved" />
       )}
     </Screen>
   );

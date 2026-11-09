@@ -3,7 +3,9 @@ import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useRef, type ComponentProps } from 'react';
 import { Pressable, ScrollView, View, type ScrollViewInstance } from 'react-native';
 
+import { useBootstrap } from '../api/bootstrap';
 import { AppText } from '../components/AppText';
+import { useUiStore } from '../state/ui-store';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { CHANNELS } from './channels';
@@ -23,6 +25,9 @@ export function HomeHeader({ state, emitter, navigateToTab, insets }: TabBarProp
   const bar = useRef<ScrollViewInstance>(null);
   const offsets = useRef<number[]>([]);
   const selected = state.routes[state.index]?.name;
+  const recommended = useBootstrap().data?.client_status === 'UPGRADE_RECOMMENDED';
+  const noticeDismissed = useUiStore((s) => s.upgradeNoticeDismissed);
+  const dismissNotice = useUiStore((s) => s.dismissUpgradeNotice);
 
   // Keep the selected channel in view (a deep link to Locally Made on a narrow phone): when
   // the selection changes, and when the selected channel is first laid out, because on a
@@ -56,6 +61,33 @@ export function HomeHeader({ state, emitter, navigateToTab, insets }: TabBarProp
         {iconButton(t('buyer.search'), 'search-outline', '/search')}
         {iconButton(t('buyer.notifications'), 'notifications-outline', '/notifications')}
       </View>
+      {/* UPGRADE_RECOMMENDED (ADU-MOB-02 v4.3 S85): dismissible, never blocking. */}
+      {recommended && !noticeDismissed ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.space.sm,
+            marginHorizontal: theme.space.lg,
+            marginBottom: theme.space.sm,
+            padding: theme.space.sm,
+            borderRadius: theme.radius.md,
+            borderWidth: 1,
+            borderColor: theme.color.infoBorder,
+            backgroundColor: theme.color.infoBg,
+          }}
+        >
+          <AppText style={{ flex: 1 }}>{t('app.upgrade.recommended')}</AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('app.upgrade.dismiss')}
+            onPress={dismissNotice}
+            style={{ minWidth: theme.touchTarget, minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="close" size={theme.fontSize.xl} color={theme.color.text} importantForAccessibility="no" accessibilityElementsHidden />
+          </Pressable>
+        </View>
+      ) : null}
       {/* The tablist is a plain container, not one accessibility element, so each channel
           stays individually focusable for TalkBack and VoiceOver. */}
       <View accessibilityRole="tablist" accessibilityLabel={t('buyer.home.channels')}>

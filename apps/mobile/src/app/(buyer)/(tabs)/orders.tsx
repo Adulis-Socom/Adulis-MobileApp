@@ -16,7 +16,7 @@ export default function Orders() {
       {session.status === 'signedIn' ? (
         <Placeholder message={t('buyer.orders.coming')} />
       ) : (
-        <SignInRequired message={t('buyer.orders.signed_out')} />
+        <SignInRequired message={t('buyer.orders.signed_out')} returnTo="/orders" />
       )}
     </Screen>
   );

@@ -2,6 +2,7 @@ import { onlineManager } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState, useSyncExternalStore } from 'react';
 
+import { useAccountContext } from '../../api/bootstrap';
 import { apiOrigin } from '../../api/config';
 import { useSession } from '../../auth/session';
 import { AppText } from '../../components/AppText';
@@ -56,6 +57,7 @@ export default function DiagnosticsScreen() {
   const setLocale = useUiStore((state) => state.setLocale);
   const online = useSyncExternalStore(subscribeOnline, isOnline);
   const [probes, setProbes] = useState(runProbes);
+  const accountContext = useAccountContext();
 
   return (
     <Screen>
@@ -94,6 +96,13 @@ export default function DiagnosticsScreen() {
       <AppText>{t('health.ok')}</AppText>
 
       <AppText>Session: {session.status === 'signedIn' ? 'signed in' : 'signed out'}</AppText>
+      {/* As the server sent it (WO-003): observed only, never acted on in the Buyer shell. */}
+      <AppText>
+        account_context:{' '}
+        {accountContext
+          ? `seller_companion ${accountContext.seller_companion.available ? 'available' : 'unavailable'}, courier ${accountContext.courier.available ? 'available' : 'unavailable'}`
+          : 'none'}
+      </AppText>
       <AppText>Network: {online ? 'online' : 'offline'}</AppText>
       <AppText>API origin: {probes.api}</AppText>
       <AppText>SQLite: {probes.sqlite}</AppText>

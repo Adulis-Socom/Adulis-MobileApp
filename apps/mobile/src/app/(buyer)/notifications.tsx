@@ -16,7 +16,7 @@ export default function Notifications() {
       {session.status === 'signedIn' ? (
         <Placeholder message={t('buyer.notifications.coming')} />
       ) : (
-        <SignInRequired message={t('buyer.notifications.signed_out')} />
+        <SignInRequired message={t('buyer.notifications.signed_out')} returnTo="/notifications" />
       )}
     </Screen>
   );

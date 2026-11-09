@@ -1,11 +1,12 @@
 # `apps/mobile` — the Adulis mobile app
 
-**Buyer shell (WO-002) on the WO-001/WO-001A foundation.** An Expo SDK 58 app,
-`com.adulis.app`: the Buyer application shell (five tabs, Home channels, guest and signed-in
-states, all structure and no domain data), with the Seller Companion and Courier shells kept
-as development-only diagnostics. No product domain is built. What exists, why, and what is
-still open: `docs/mobile/WO-002-BUYER-SHELL.md`, `docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md`
-and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
+**Buyer sign-in (WO-003) on the Buyer shell (WO-002) and the WO-001/WO-001A foundation.**
+An Expo SDK 58 app, `com.adulis.app`: device registration, bootstrap and the version gate,
+phone + OTP sign-in, session restore and sign-out, inside the Buyer application shell (five
+tabs, Home channels, all structure and no domain data), with the Seller Companion and Courier
+shells kept as development-only diagnostics. No product domain is built. What exists, why,
+and what is still open: `docs/mobile/WO-003-BUYER-AUTH.md`, `docs/mobile/WO-002-BUYER-SHELL.md`,
+`docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md` and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
 
 **System design (current authority, founder decision WO-001B):** ADU-MOB-02 v4.3 (its
 S232 is the post-October-13 reconciliation and wins inside the document) - ADU-AUTH-02
@@ -37,9 +38,11 @@ this for Buyer and Seller Companion ("one account, two modes", one MOBILE sessio
 Courier it does not yet: see the Courier line below (conflict C-2).
 
 **The client never manufactures eligibility.** `availableModes` is backend truth and
-`activeMode` is UI state. The contract has no source yet for an account's Seller or Courier
-relationships (completion report, gap CG-1), so a release build offers Buyer only and a
-development build unlocks all three shells for diagnostics (`src/modes/modes.ts`).
+`activeMode` is UI state. Since WO-API-001A the server sends it as `account_context` on an
+authenticated `GET /v1/bootstrap` (`useAccountContext()` in `src/api/bootstrap.ts`); the app
+only observes it. A release build still offers Buyer only (WO-003: no mode switcher, no
+Seller or Courier entry) and a development build unlocks all three shells for diagnostics
+(`src/modes/modes.ts`).
 
 The prototype's "the production Account model remains unresolved" (its Canonical Rules
 17.1-17.2) is stale. November reconciliation R-23 resolves it: one ordinary Account that can
@@ -132,11 +135,26 @@ a user release. After adding strings, scan the export
 - Server state lives in TanStack Query (`src/api/query-client.ts`). Zustand
   (`src/state/ui-store.ts`) holds UI state only: active mode, theme preference. Never
   Orders, stock, payment, Trust, permissions or eligibility.
-- `src/auth/session.tsx` is the one session boundary: hydration at startup, `clearSession`
-  as the single local sign-out path (credential, query cache, active mode), and `signOut`,
-  which clears the device at once and revokes the session server-side alongside
-  (`POST /v1/auth/logout`, typed against the contract in `src/api/auth.ts`, 10 s abort):
-  the device never waits on the network to forget a credential.
+- `src/api/client.ts` is the one HTTP boundary: typed against `@adulis/api-client`, every
+  request carries `X-Adulis-Client` and `X-Adulis-Device`, a 10 s timeout, and failures
+  classified as offline / timeout / problem / unexpected (`ApiError`). Problems render through
+  their catalogue `title_key` and slots (`src/api/messages.ts`), never server English. A
+  `SESSION_EXPIRED`/`SESSION_REVOKED` 401 on a request that carried the bearer is the one
+  path that ends a session; offline never does. Idempotency keys belong to a user intent
+  (kept across retries and double taps), not to an attempt.
+- `src/device/device-storage.ts` keeps the install id (UUID v4, SecureStore, created once)
+  and its registered flag; `POST /v1/devices` runs once per install, keyed by the id.
+- `src/auth/session.tsx` is the one session boundary: restore at startup, `signIn` (write
+  the credential, then switch state - no restart), `clearSession` as the single local
+  sign-out path (credential, whole query cache, active mode), and `signOut`, which clears
+  the device at once and revokes server-side alongside: the device never waits on the
+  network to forget a credential. The bearer lives only in SecureStore - never Zustand,
+  SQLite, logs or diagnostics.
+- Startup (`src/app/_layout.tsx`) waits only for the restore and the first bootstrap
+  attempt; `UPGRADE_REQUIRED` replaces the navigator with `UpgradeRequired`.
+  `UPGRADE_RECOMMENDED` is a dismissible Home notice. Sign-in is `(buyer)/auth/sign-in` and
+  `auth/verify`, opened only by the user from a Sign in button, returning to an allowlisted
+  tab (`src/auth/sign-in-flow.ts`).
 - Amharic: `useT` renders English in a release build whatever the store holds
   (`amharicAvailable()` is `__DEV__`); the only language control is the dev diagnostics one.
 - `src/theme/theme.ts` is the one theme authority: semantic roles from `@adulis/tokens`,
