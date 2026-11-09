@@ -50,7 +50,9 @@ async function generate(): Promise<void> {
   const config = new DocumentBuilder()
     .setTitle('Adulis API')
     .setVersion('1')
-    .addBearerAuth()
+    // Opaque random credentials, not JWTs (AUTH-02 v3.3 S43; register API-2).
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'opaque' }, 'bearer')
+    .addCookieAuth('__Host-adulis_session', { type: 'apiKey', in: 'cookie' }, 'cookie')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

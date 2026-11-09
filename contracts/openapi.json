@@ -1,13 +1,102 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sign out: revokes the calling session only. No step-up.",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/v1/auth/otp/request": {
       "post": {
         "operationId": "AuthController_otpRequest",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpRequestBodyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Idempotency-keyed; a replay sends no SMS (X11).",
@@ -19,10 +108,57 @@
     "/v1/auth/otp/resend": {
       "post": {
         "operationId": "AuthController_otpResend",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpRequestBodyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Not idempotency-keyed; backoff 30s-60s-120s (4.3).",
@@ -34,13 +170,50 @@
     "/v1/auth/otp/verify": {
       "post": {
         "operationId": "AuthController_otpVerify",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpVerifyBodyDto"
+              }
+            }
           }
         },
-        "summary": "Creates buyer identity on first use (S6.1).",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpVerifyResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Creates buyer identity on first use (S6.1). A replay after success answers OTP_EXPIRED.",
         "tags": [
           "Auth"
         ]
@@ -91,10 +264,35 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Device, first seen, last activity, location (S8.2).",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Device, first seen, last activity, location (S8.2). Public ids only.",
         "tags": [
           "Auth"
         ]
@@ -104,11 +302,46 @@
       "post": {
         "operationId": "AuthController_revokeOthers",
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeOthersBodyDto"
+              }
+            }
           }
         },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOthersResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Step-up REVOKE_ALL_SESSIONS; revocation is immediate.",
         "tags": [
           "Auth"
@@ -128,11 +361,40 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeSessionBodyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke one session. Own session: no step-up. Another session: CONSOLE only, with a REVOKE_ALL_SESSIONS step-up (SEC-4).",
         "tags": [
           "Auth"
         ]
@@ -684,10 +946,47 @@
     "/v1/devices": {
       "post": {
         "operationId": "AuthController_registerDevice",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRegisterBodyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRefDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Anonymous, app-generated id; binds at identity creation (S11.1).",
@@ -709,11 +1008,47 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": ""
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePatchBodyDto"
+              }
+            }
           }
         },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRefDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Push token and permission for the calling session's own device; other ids 404.",
         "tags": [
           "Auth"
         ]
@@ -3095,8 +3430,13 @@
     "securitySchemes": {
       "bearer": {
         "scheme": "bearer",
-        "bearerFormat": "JWT",
+        "bearerFormat": "opaque",
         "type": "http"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-adulis_session"
       }
     },
     "schemas": {
@@ -3120,6 +3460,51 @@
           "code",
           "display_currency",
           "timezone"
+        ]
+      },
+      "ModeAvailabilityDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "AccountContextDto": {
+        "type": "object",
+        "properties": {
+          "buyer": {
+            "description": "Inherent to an active ordinary Account (R-23). No Buyer role or profile is consulted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModeAvailabilityDto"
+              }
+            ]
+          },
+          "seller_companion": {
+            "description": "True when the Account owns a non-deleted Seller or holds an unsuspended, unrevoked team membership of one (the D-97 relationship GET /v1/seller/list returns), AND that role holds at least one permission whose surfaces include MOBILE. GET /v1/seller/list names the Sellers.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModeAvailabilityDto"
+              }
+            ]
+          },
+          "courier": {
+            "description": "Always false until WO-API-001B defines Courier MOBILE authorisation (fail closed). A seller_courier relationship alone does not make Courier mode available.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModeAvailabilityDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "buyer",
+          "seller_companion",
+          "courier"
         ]
       },
       "BootstrapResponseDto": {
@@ -3175,6 +3560,16 @@
               "production"
             ],
             "description": "Which server answered. The console draws its environment banner from this."
+          },
+          "account_context": {
+            "nullable": true,
+            "description": "Present when the request carries a valid MOBILE session (Authorization: Bearer); null for an anonymous request or a CONSOLE session.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountContextDto"
+              }
+            ]
           }
         },
         "required": [
@@ -3185,8 +3580,411 @@
           "locales",
           "feature_flags",
           "media_public_origin",
-          "environment"
+          "environment",
+          "account_context"
         ]
+      },
+      "ProblemItemDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message_key": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "message_key"
+        ]
+      },
+      "ProblemDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "number"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "OTP_INVALID",
+              "OTP_EXPIRED",
+              "OTP_ATTEMPTS_EXCEEDED",
+              "OTP_PURPOSE_NOT_PERMITTED",
+              "AGE_DECLARATION_REQUIRED",
+              "SESSION_EXPIRED",
+              "SESSION_REVOKED",
+              "AUDIENCE_NOT_PERMITTED",
+              "RECOVERY_REQUIRED",
+              "STEP_UP_REQUIRED",
+              "STEP_UP_EXPIRED",
+              "STEP_UP_ACTION_MISMATCH",
+              "PERMISSION_DENIED",
+              "OWNER_ONLY",
+              "CART_EMPTY",
+              "CART_SELLER_CONFLICT",
+              "CART_REVALIDATION_FAILED",
+              "INSUFFICIENT_STOCK",
+              "SOLD_OUT",
+              "PRICE_CHANGED",
+              "NO_LONGER_PUBLISHED",
+              "VARIANT_WITHDRAWN",
+              "SELLER_UNAVAILABLE",
+              "TRANSACTION_CAP_EXCEEDED",
+              "ILLEGAL_TRANSITION",
+              "ORDER_NOT_PAYABLE",
+              "ORDER_ALREADY_TERMINAL",
+              "DUPLICATE_RESERVATION",
+              "BUYER_COOLDOWN_ACTIVE",
+              "ORDER_NOT_READYABLE",
+              "EVIDENCE_REQUIRED",
+              "EVIDENCE_TOO_LARGE",
+              "PAYMENT_ALREADY_DECIDED",
+              "NOT_ORDER_BUYER",
+              "SCAN_SIGNATURE_INVALID",
+              "SCAN_PREDATES_TOKEN",
+              "SCAN_NOT_ORDER_BUYER",
+              "COURIER_CANNOT_SCAN",
+              "PUBLICATION_BLOCKED",
+              "ELIGIBILITY_NOT_SATISFIED",
+              "TIER_LIMIT_REACHED",
+              "LEVEL_LIMIT_REACHED",
+              "HANDLE_TAKEN",
+              "FULFILMENT_METHOD_REQUIRED",
+              "PRODUCT_HAS_ACTIVE_ORDERS",
+              "VARIANT_HAS_ACTIVE_ORDERS",
+              "PAYOUT_LOCKED",
+              "PAYOUT_CHANGE_PENDING",
+              "PAYOUT_PERMISSION_DENIED",
+              "DELETION_BLOCKED",
+              "DELETION_OWNER_ONLY",
+              "VALIDATION_FAILED",
+              "IDEMPOTENCY_KEY_MISSING",
+              "IDEMPOTENCY_KEY_REUSED",
+              "RATE_LIMITED",
+              "CLIENT_UPGRADE_REQUIRED",
+              "PAYLOAD_TOO_LARGE",
+              "SELLER_CONTEXT_REQUIRED",
+              "SCOPE_PARAMETER_REQUIRED",
+              "NOT_FOUND",
+              "GONE",
+              "INTERNAL"
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "slots": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProblemItemDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title_key",
+          "status",
+          "code",
+          "request_id",
+          "retryable"
+        ]
+      },
+      "OtpRequestBodyDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{7,14}$",
+            "example": "+251911000000"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "SIGN_IN"
+            ]
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "MOBILE",
+              "CONSOLE"
+            ],
+            "description": "Stamped on the challenge at request; verify refuses an audience field (S5.2)."
+          }
+        },
+        "required": [
+          "phone",
+          "purpose",
+          "audience"
+        ]
+      },
+      "EmptyResponseDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OtpVerifyBodyDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{7,14}$"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$"
+          },
+          "device_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "MOBILE only: the app-generated id registered by POST /v1/devices. A browser sends none."
+          },
+          "age_declared_over_18": {
+            "type": "boolean",
+            "description": "Required the first time a phone signs in (identity creation)."
+          },
+          "remember_device": {
+            "type": "boolean",
+            "description": "CONSOLE only (R17)."
+          }
+        },
+        "required": [
+          "phone",
+          "code"
+        ]
+      },
+      "OtpVerifyResponseDto": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "MOBILE",
+              "CONSOLE"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "description": "A rendering hint only (S5). Mode availability is GET /v1/bootstrap account_context.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "BUYER",
+                "COURIER",
+                "SELLER",
+                "TEAM"
+              ]
+            }
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "MOBILE only: the session credential, sent as Authorization: Bearer. Returned once and never stored by the server; keep it in platform secure storage. Absent for CONSOLE, whose credential is the __Host-adulis_session cookie."
+          }
+        },
+        "required": [
+          "account_id",
+          "audience",
+          "roles",
+          "expires_at"
+        ]
+      },
+      "SessionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Public session id. Not a credential."
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "MOBILE",
+              "CONSOLE"
+            ]
+          },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approx_location": {
+            "type": "string",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "device_platform": {
+            "type": "string",
+            "enum": [
+              "ANDROID",
+              "IOS",
+              "WEB"
+            ],
+            "nullable": true
+          },
+          "remembered_label": {
+            "type": "string",
+            "nullable": true
+          },
+          "remembered_device_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The remembered device DELETE /v1/auth/remembered-devices/{id} forgets."
+          },
+          "remembered": {
+            "type": "boolean"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "True for the session making this request."
+          }
+        },
+        "required": [
+          "id",
+          "audience",
+          "first_seen_at",
+          "last_activity_at",
+          "approx_location",
+          "expires_at",
+          "device_platform",
+          "remembered_label",
+          "remembered_device_id",
+          "remembered",
+          "current"
+        ]
+      },
+      "SessionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDto"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "RevokeSessionBodyDto": {
+        "type": "object",
+        "properties": {
+          "step_up_challenge_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required to revoke ANOTHER session (CONSOLE only): a satisfied REVOKE_ALL_SESSIONS step-up, consumed. Not needed to revoke the calling session."
+          }
+        }
+      },
+      "RevokeOthersBodyDto": {
+        "type": "object",
+        "properties": {
+          "step_up_challenge_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A satisfied REVOKE_ALL_SESSIONS step-up."
+          }
+        },
+        "required": [
+          "step_up_challenge_id"
+        ]
+      },
+      "RevokeOthersResponseDto": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "revoked"
+        ]
+      },
+      "DeviceRegisterBodyDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "App-generated, keystore-persisted."
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ANDROID",
+              "IOS"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "platform"
+        ]
+      },
+      "DeviceRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "DevicePatchBodyDto": {
+        "type": "object",
+        "properties": {
+          "push_token": {
+            "type": "string",
+            "maxLength": 4096,
+            "nullable": true
+          },
+          "notification_permission": {
+            "type": "string",
+            "enum": [
+              "GRANTED",
+              "DENIED",
+              "NOT_ASKED"
+            ]
+          }
+        }
       }
     }
   }

@@ -21,6 +21,41 @@ export class BootstrapMarketDto {
   timezone!: string;
 }
 
+export class ModeAvailabilityDto {
+  @ApiProperty() available!: boolean;
+}
+
+/**
+ * Which Mobile modes the signed-in Account may enter (WO-API-001A; R-18,
+ * R-21; founder ruling F). DERIVED BY THE SERVER from canonical relationships
+ * on every bootstrap; nothing a client sends can set it. Availability is not
+ * authorisation: every request is still checked on its own.
+ */
+export class AccountContextDto {
+  @ApiProperty({
+    type: ModeAvailabilityDto,
+    description: 'Inherent to an active ordinary Account (R-23). No Buyer role or profile is consulted.',
+  })
+  buyer!: ModeAvailabilityDto;
+
+  @ApiProperty({
+    type: ModeAvailabilityDto,
+    description:
+      'True when the Account owns a non-deleted Seller or holds an unsuspended, unrevoked team ' +
+      'membership of one (the D-97 relationship GET /v1/seller/list returns), AND that role holds ' +
+      'at least one permission whose surfaces include MOBILE. GET /v1/seller/list names the Sellers.',
+  })
+  seller_companion!: ModeAvailabilityDto;
+
+  @ApiProperty({
+    type: ModeAvailabilityDto,
+    description:
+      'Always false until WO-API-001B defines Courier MOBILE authorisation (fail closed). A ' +
+      'seller_courier relationship alone does not make Courier mode available.',
+  })
+  courier!: ModeAvailabilityDto;
+}
+
 export class BootstrapResponseDto {
   @ApiProperty({ format: 'date-time', description: 'The A5 clock-offset reference.' })
   server_time!: string;
@@ -65,4 +100,13 @@ export class BootstrapResponseDto {
     description: 'Which server answered. The console draws its environment banner from this.',
   })
   environment!: NodeEnv;
+
+  @ApiProperty({
+    type: AccountContextDto,
+    nullable: true,
+    description:
+      'Present when the request carries a valid MOBILE session (Authorization: Bearer); null for ' +
+      'an anonymous request or a CONSOLE session.',
+  })
+  account_context!: AccountContextDto | null;
 }

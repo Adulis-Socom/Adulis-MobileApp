@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out: revokes the calling session only. No step-up. */
+        post: operations["AuthController_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/otp/request": {
         parameters: {
             query?: never;
@@ -47,7 +64,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates buyer identity on first use (S6.1). */
+        /** Creates buyer identity on first use (S6.1). A replay after success answers OTP_EXPIRED. */
         post: operations["AuthController_otpVerify"];
         delete?: never;
         options?: never;
@@ -96,7 +113,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Device, first seen, last activity, location (S8.2). */
+        /** Device, first seen, last activity, location (S8.2). Public ids only. */
         get: operations["AuthController_sessions"];
         put?: never;
         post?: never;
@@ -116,6 +133,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Revoke one session. Own session: no step-up. Another session: CONSOLE only, with a REVOKE_ALL_SESSIONS step-up (SEC-4). */
         delete: operations["AuthController_revokeSession"];
         options?: never;
         head?: never;
@@ -573,6 +591,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Push token and permission for the calling session's own device; other ids 404. */
         patch: operations["AuthController_patchDevice"];
         trace?: never;
     };
@@ -1920,6 +1939,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountContextDto: {
+            /** @description Inherent to an active ordinary Account (R-23). No Buyer role or profile is consulted. */
+            buyer: components["schemas"]["ModeAvailabilityDto"];
+            /** @description Always false until WO-API-001B defines Courier MOBILE authorisation (fail closed). A seller_courier relationship alone does not make Courier mode available. */
+            courier: components["schemas"]["ModeAvailabilityDto"];
+            /** @description True when the Account owns a non-deleted Seller or holds an unsuspended, unrevoked team membership of one (the D-97 relationship GET /v1/seller/list returns), AND that role holds at least one permission whose surfaces include MOBILE. GET /v1/seller/list names the Sellers. */
+            seller_companion: components["schemas"]["ModeAvailabilityDto"];
+        };
         BootstrapMarketDto: {
             /** @example ET */
             code: string;
@@ -1929,6 +1956,8 @@ export interface components {
             timezone: string;
         };
         BootstrapResponseDto: {
+            /** @description Present when the request carries a valid MOBILE session (Authorization: Bearer); null for an anonymous request or a CONSOLE session. */
+            account_context: components["schemas"]["AccountContextDto"] | null;
             /** @enum {string} */
             client_status: "OK" | "UPGRADE_RECOMMENDED" | "UPGRADE_REQUIRED";
             /**
@@ -1960,6 +1989,131 @@ export interface components {
              */
             server_time: string;
         };
+        DevicePatchBodyDto: {
+            /** @enum {string} */
+            notification_permission?: "GRANTED" | "DENIED" | "NOT_ASKED";
+            push_token?: string | null;
+        };
+        DeviceRefDto: {
+            /** Format: uuid */
+            id: string;
+        };
+        DeviceRegisterBodyDto: {
+            /**
+             * Format: uuid
+             * @description App-generated, keystore-persisted.
+             */
+            id: string;
+            /** @enum {string} */
+            platform: "ANDROID" | "IOS";
+        };
+        EmptyResponseDto: Record<string, never>;
+        ModeAvailabilityDto: {
+            available: boolean;
+        };
+        OtpRequestBodyDto: {
+            /**
+             * @description Stamped on the challenge at request; verify refuses an audience field (S5.2).
+             * @enum {string}
+             */
+            audience: "MOBILE" | "CONSOLE";
+            /** @example +251911000000 */
+            phone: string;
+            /** @enum {string} */
+            purpose: "SIGN_IN";
+        };
+        OtpVerifyBodyDto: {
+            /** @description Required the first time a phone signs in (identity creation). */
+            age_declared_over_18?: boolean;
+            code: string;
+            /**
+             * Format: uuid
+             * @description MOBILE only: the app-generated id registered by POST /v1/devices. A browser sends none.
+             */
+            device_id?: string;
+            phone: string;
+            /** @description CONSOLE only (R17). */
+            remember_device?: boolean;
+        };
+        OtpVerifyResponseDto: {
+            /** Format: uuid */
+            account_id: string;
+            /** @enum {string} */
+            audience: "MOBILE" | "CONSOLE";
+            /** Format: date-time */
+            expires_at: string;
+            /** @description A rendering hint only (S5). Mode availability is GET /v1/bootstrap account_context. */
+            roles: ("BUYER" | "COURIER" | "SELLER" | "TEAM")[];
+            /** @description MOBILE only: the session credential, sent as Authorization: Bearer. Returned once and never stored by the server; keep it in platform secure storage. Absent for CONSOLE, whose credential is the __Host-adulis_session cookie. */
+            token?: string;
+        };
+        ProblemDto: {
+            /** @enum {string} */
+            code: "OTP_INVALID" | "OTP_EXPIRED" | "OTP_ATTEMPTS_EXCEEDED" | "OTP_PURPOSE_NOT_PERMITTED" | "AGE_DECLARATION_REQUIRED" | "SESSION_EXPIRED" | "SESSION_REVOKED" | "AUDIENCE_NOT_PERMITTED" | "RECOVERY_REQUIRED" | "STEP_UP_REQUIRED" | "STEP_UP_EXPIRED" | "STEP_UP_ACTION_MISMATCH" | "PERMISSION_DENIED" | "OWNER_ONLY" | "CART_EMPTY" | "CART_SELLER_CONFLICT" | "CART_REVALIDATION_FAILED" | "INSUFFICIENT_STOCK" | "SOLD_OUT" | "PRICE_CHANGED" | "NO_LONGER_PUBLISHED" | "VARIANT_WITHDRAWN" | "SELLER_UNAVAILABLE" | "TRANSACTION_CAP_EXCEEDED" | "ILLEGAL_TRANSITION" | "ORDER_NOT_PAYABLE" | "ORDER_ALREADY_TERMINAL" | "DUPLICATE_RESERVATION" | "BUYER_COOLDOWN_ACTIVE" | "ORDER_NOT_READYABLE" | "EVIDENCE_REQUIRED" | "EVIDENCE_TOO_LARGE" | "PAYMENT_ALREADY_DECIDED" | "NOT_ORDER_BUYER" | "SCAN_SIGNATURE_INVALID" | "SCAN_PREDATES_TOKEN" | "SCAN_NOT_ORDER_BUYER" | "COURIER_CANNOT_SCAN" | "PUBLICATION_BLOCKED" | "ELIGIBILITY_NOT_SATISFIED" | "TIER_LIMIT_REACHED" | "LEVEL_LIMIT_REACHED" | "HANDLE_TAKEN" | "FULFILMENT_METHOD_REQUIRED" | "PRODUCT_HAS_ACTIVE_ORDERS" | "VARIANT_HAS_ACTIVE_ORDERS" | "PAYOUT_LOCKED" | "PAYOUT_CHANGE_PENDING" | "PAYOUT_PERMISSION_DENIED" | "DELETION_BLOCKED" | "DELETION_OWNER_ONLY" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_MISSING" | "IDEMPOTENCY_KEY_REUSED" | "RATE_LIMITED" | "CLIENT_UPGRADE_REQUIRED" | "PAYLOAD_TOO_LARGE" | "SELLER_CONTEXT_REQUIRED" | "SCOPE_PARAMETER_REQUIRED" | "NOT_FOUND" | "GONE" | "INTERNAL";
+            items?: components["schemas"]["ProblemItemDto"][];
+            request_id: string;
+            retryable: boolean;
+            slots?: {
+                [key: string]: unknown;
+            };
+            status: number;
+            title_key: string;
+            type: string;
+        };
+        ProblemItemDto: {
+            code: string;
+            message_key: string;
+            slots?: {
+                [key: string]: unknown;
+            };
+        };
+        RevokeOthersBodyDto: {
+            /**
+             * Format: uuid
+             * @description A satisfied REVOKE_ALL_SESSIONS step-up.
+             */
+            step_up_challenge_id: string;
+        };
+        RevokeOthersResponseDto: {
+            revoked: number;
+        };
+        RevokeSessionBodyDto: {
+            /**
+             * Format: uuid
+             * @description Required to revoke ANOTHER session (CONSOLE only): a satisfied REVOKE_ALL_SESSIONS step-up, consumed. Not needed to revoke the calling session.
+             */
+            step_up_challenge_id?: string;
+        };
+        SessionDto: {
+            approx_location: string | null;
+            /** @enum {string} */
+            audience: "MOBILE" | "CONSOLE";
+            /** @description True for the session making this request. */
+            current: boolean;
+            /** @enum {string|null} */
+            device_platform: "ANDROID" | "IOS" | "WEB" | null;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            first_seen_at: string;
+            /**
+             * Format: uuid
+             * @description Public session id. Not a credential.
+             */
+            id: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            remembered: boolean;
+            /**
+             * Format: uuid
+             * @description The remembered device DELETE /v1/auth/remembered-devices/{id} forgets.
+             */
+            remembered_device_id: string | null;
+            remembered_label: string | null;
+        };
+        SessionListResponseDto: {
+            data: components["schemas"]["SessionDto"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -1969,7 +2123,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    AuthController_otpRequest: {
+    AuthController_logout: {
         parameters: {
             query?: never;
             header?: never;
@@ -1978,45 +2132,129 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            202: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    AuthController_otpRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpRequestBodyDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     AuthController_otpResend: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpRequestBodyDto"];
+            };
+        };
         responses: {
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EmptyResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     AuthController_otpVerify: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpVerifyBodyDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OtpVerifyResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -2069,7 +2307,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SessionListResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -2082,13 +2331,26 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevokeSessionBodyDto"];
+            };
+        };
         responses: {
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -2099,13 +2361,28 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeOthersBodyDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RevokeOthersResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -2618,17 +2895,34 @@ export interface operations {
     AuthController_registerDevice: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRegisterBodyDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeviceRefDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -2641,13 +2935,28 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePatchBodyDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeviceRefDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

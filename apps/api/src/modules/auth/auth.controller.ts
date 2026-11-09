@@ -9,7 +9,18 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiCookieAuth,
+  ApiDefaultResponse,
+  ApiExtraModels,
+  ApiHeader,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { IdempotencyService, hashRequest } from '../../common/idempotency/idempotency';
@@ -18,7 +29,21 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
 import { resolveKey } from '../../common/crypto/aead';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
+import { PROBLEM_RESPONSE, ProblemDto } from '../../common/errors/problem.dto';
 import { AuthService, type MintedSession } from './auth.service';
+import {
+  DevicePatchBodyDto,
+  DeviceRefDto,
+  DeviceRegisterBodyDto,
+  EmptyResponseDto,
+  OtpRequestBodyDto,
+  OtpVerifyBodyDto,
+  OtpVerifyResponseDto,
+  RevokeOthersBodyDto,
+  RevokeOthersResponseDto,
+  RevokeSessionBodyDto,
+  SessionListResponseDto,
+} from './auth.dto';
 import { OtpService } from './otp.service';
 import { OtpDeliveryService, type IssuedOtp } from './otp-delivery.service';
 import {
@@ -51,8 +76,25 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const hashKey = (): string =>
   resolveKey(process.env['IDENTITY_HASH_KEY_V1'], 'RATE_LIMIT').toString('hex');
 
+const IDEMPOTENCY_KEY_HEADER = {
+  name: 'Idempotency-Key',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+} as const;
+const DEVICE_HEADER = {
+  name: 'X-Adulis-Device',
+  required: false,
+  description: 'App clients: the registered device id. Browsers are identified by cookie instead.',
+  schema: { type: 'string', format: 'uuid' },
+} as const;
+const CLIENT_HEADER = {
+  name: 'X-Adulis-Client',
+  required: false,
+  description: '<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.',
+} as const;
 
 @Controller()
+@ApiExtraModels(ProblemDto)
 export class AuthController {
   constructor(
     private readonly tx: HandlerTransaction,
@@ -71,6 +113,12 @@ export class AuthController {
   @Public()
   @HttpCode(202)
   @ApiOperation({ summary: 'Idempotency-keyed; a replay sends no SMS (X11).' })
+  @ApiHeader(IDEMPOTENCY_KEY_HEADER)
+  @ApiHeader(DEVICE_HEADER)
+  @ApiHeader(CLIENT_HEADER)
+  @ApiBody({ type: OtpRequestBodyDto })
+  @ApiResponse({ status: 202, type: EmptyResponseDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async otpRequest(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -133,6 +181,11 @@ export class AuthController {
   @Public()
   @HttpCode(202)
   @ApiOperation({ summary: 'Not idempotency-keyed; backoff 30s-60s-120s (4.3).' })
+  @ApiHeader(DEVICE_HEADER)
+  @ApiHeader(CLIENT_HEADER)
+  @ApiBody({ type: OtpRequestBodyDto })
+  @ApiResponse({ status: 202, type: EmptyResponseDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async otpResend(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = otpResendBody.parse(req.body);
     let issued: IssuedOtp | null = null;
@@ -186,6 +239,10 @@ export class AuthController {
   @ApiOperation({
     summary: 'Creates buyer identity on first use (S6.1). A replay after success answers OTP_EXPIRED.',
   })
+  @ApiHeader(IDEMPOTENCY_KEY_HEADER)
+  @ApiBody({ type: OtpVerifyBodyDto })
+  @ApiOkResponse({ type: OtpVerifyResponseDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async otpVerify(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -261,8 +318,8 @@ export class AuthController {
   }
 
   /** Cookie for the console, body token for mobile — never both. */
-  private presentSession(res: Response, minted: MintedSession): Record<string, unknown> {
-    const out: Record<string, unknown> = {
+  private presentSession(res: Response, minted: MintedSession): OtpVerifyResponseDto {
+    const out: OtpVerifyResponseDto = {
       account_id: minted.accountId,
       roles: minted.roles,
       expires_at: minted.expiresAt.toISOString(),
@@ -276,7 +333,7 @@ export class AuthController {
       }
       res.setHeader('Set-Cookie', cookies);
     } else {
-      out['token'] = minted.token;
+      out.token = minted.token;
     }
     return out;
   }
@@ -291,6 +348,10 @@ export class AuthController {
   @Post('auth/logout')
   @HttpCode(204)
   @ApiOperation({ summary: 'Sign out: revokes the calling session only. No step-up.' })
+  @ApiBearerAuth('bearer')
+  @ApiCookieAuth('cookie')
+  @ApiNoContentResponse()
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async logout(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -303,6 +364,10 @@ export class AuthController {
 
   @Get('auth/sessions')
   @ApiOperation({ summary: 'Device, first seen, last activity, location (S8.2). Public ids only.' })
+  @ApiBearerAuth('bearer')
+  @ApiCookieAuth('cookie')
+  @ApiOkResponse({ type: SessionListResponseDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async sessions(@Req() req: AuthedRequest): Promise<unknown> {
     return this.tx.run(req as LocalizedRequest, (trx) => this.auth.listSessions(trx, req));
   }
@@ -314,6 +379,11 @@ export class AuthController {
       'Revoke one session. Own session: no step-up. Another session: CONSOLE only, with a ' +
       'REVOKE_ALL_SESSIONS step-up (SEC-4).',
   })
+  @ApiBearerAuth('bearer')
+  @ApiCookieAuth('cookie')
+  @ApiBody({ type: RevokeSessionBodyDto, required: false })
+  @ApiNoContentResponse()
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async revokeSession(@Req() req: AuthedRequest, @Param('id') id: string): Promise<void> {
     if (!UUID_RE.test(id)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'id' } });
@@ -339,6 +409,11 @@ export class AuthController {
   @Post('auth/sessions/revoke-others')
   @HttpCode(200)
   @ApiOperation({ summary: 'Step-up REVOKE_ALL_SESSIONS; revocation is immediate.' })
+  @ApiBearerAuth('bearer')
+  @ApiCookieAuth('cookie')
+  @ApiBody({ type: RevokeOthersBodyDto })
+  @ApiOkResponse({ type: RevokeOthersResponseDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async revokeOthers(@Req() req: AuthedRequest): Promise<unknown> {
     const body = revokeOthersBody.parse(req.body);
     return this.tx.run(req as LocalizedRequest, (trx) =>
@@ -387,6 +462,10 @@ export class AuthController {
   @Public()
   @HttpCode(201)
   @ApiOperation({ summary: 'Anonymous, app-generated id; binds at identity creation (S11.1).' })
+  @ApiHeader(IDEMPOTENCY_KEY_HEADER)
+  @ApiBody({ type: DeviceRegisterBodyDto })
+  @ApiResponse({ status: 201, type: DeviceRefDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async registerDevice(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -401,6 +480,11 @@ export class AuthController {
   @Patch('devices/:id')
   @HttpCode(200)
   @ApiOperation({ summary: "Push token and permission for the calling session's own device; other ids 404." })
+  @ApiBearerAuth('bearer')
+  @ApiCookieAuth('cookie')
+  @ApiBody({ type: DevicePatchBodyDto })
+  @ApiOkResponse({ type: DeviceRefDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async patchDevice(@Req() req: AuthedRequest, @Param('id') id: string): Promise<unknown> {
     if (!UUID_RE.test(id)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'id' } });

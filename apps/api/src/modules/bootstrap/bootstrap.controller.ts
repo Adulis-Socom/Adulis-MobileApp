@@ -5,6 +5,7 @@ import { ApiOkResponse, ApiOperation } from '@nestjs/swagger';
 import { sql, type Kysely } from 'kysely';
 import { APP_DATABASE } from '../../common/db/database.module';
 import type { Database } from '../../common/db/database.types';
+import { withRequestContext, type RequestContext } from '../../common/db/request-context';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { BootstrapResponseDto } from './bootstrap.dto';
@@ -61,6 +62,12 @@ export interface BootstrapResponse {
    * unrecognised are already impossible by the time this runs.
    */
   environment: NodeEnv;
+  /** Mobile mode availability, server-derived (WO-API-001A). See AccountContextDto. */
+  account_context: {
+    buyer: { available: boolean };
+    seller_companion: { available: boolean };
+    courier: { available: boolean };
+  } | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -261,6 +268,43 @@ export class BootstrapController {
       // src pointing at a host that is not there.
       media_public_origin: process.env['R2_MEDIA_PUBLIC_ORIGIN'] ?? '',
       environment: nodeEnv(),
+      account_context:
+        req.auth?.audience === 'MOBILE' && req.ctx ? await this.accountContext(req.ctx) : null,
+    };
+  }
+
+  /**
+   * Mode availability from canonical relationships (founder ruling F). The
+   * guard has already proved the session live and the Account ACTIVE, which
+   * is all Buyer mode needs. Seller Companion reuses the D-97 relationship
+   * rule (onboarding.service listSellers) and the permission seed's MOBILE
+   * surface, the same tables fn_has_permission reads. Courier fails closed
+   * until WO-API-001B rules its MOBILE authorisation.
+   */
+  private async accountContext(ctx: RequestContext): Promise<BootstrapResponse['account_context']> {
+    const r = await withRequestContext(this.db, ctx, (trx) =>
+      sql<{ seller_companion: boolean }>`
+        SELECT EXISTS (
+          SELECT 1
+            FROM (SELECT 'OWNER'::core.team_role AS role
+                    FROM core.seller s
+                   WHERE s.owner_account_id = ${ctx.accountId} AND s.status <> 'DELETED'
+                  UNION ALL
+                  SELECT tm.role
+                    FROM core.seller_team_member tm
+                    JOIN core.seller s ON s.id = tm.seller_id
+                   WHERE tm.account_id = ${ctx.accountId}
+                     AND tm.suspended_at IS NULL AND tm.revoked_at IS NULL
+                     AND s.status <> 'DELETED') rel
+            JOIN core.role_permission rp ON rp.role = rel.role
+            JOIN core.permission p ON p.code = rp.permission_code
+           WHERE 'MOBILE' = ANY (p.surfaces)
+        ) AS seller_companion`.execute(trx),
+    );
+    return {
+      buyer: { available: true },
+      seller_companion: { available: r.rows[0]?.seller_companion === true },
+      courier: { available: false },
     };
   }
 }
