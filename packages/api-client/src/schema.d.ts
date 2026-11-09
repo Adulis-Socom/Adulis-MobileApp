@@ -612,6 +612,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/fyp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** For You: Scene units only, ranked by the active algorithm version. Without ?cursor= a new feed session starts; with it the session continues. A bad cursor is 400 VALIDATION_FAILED with slots.reason CURSOR_INVALID; an ended session (expired, version retired, Market changed) slots.reason CURSOR_EXPIRED: start a new session. */
+        get: operations["FypController_feed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/handoffs/sync": {
         parameters: {
             query?: never;
@@ -2116,6 +2133,32 @@ export interface components {
             platform: "ANDROID" | "IOS";
         };
         EmptyResponseDto: Record<string, never>;
+        FypImageDto: {
+            /** @description The feed-card derivative. No full-resolution key in a feed unit. */
+            card_key: string;
+            /** @description Object key; resolve against bootstrap media_public_origin. */
+            thumb_key: string;
+        };
+        FypPageDto: {
+            /** @description The immutable algorithm version that ranked this page. Null when none may serve. */
+            algorithm_version: string | null;
+            /**
+             * Format: uuid
+             * @description The feed session (S52). Null when nothing was served (no session was created).
+             */
+            feed_session_id: string | null;
+            items: components["schemas"]["ScenePostFeedUnitDto"][];
+            /** @description Opaque continuation; send back unchanged as ?cursor=. Null: the session has no more. */
+            next_cursor: string | null;
+        };
+        FypUnitProductDto: {
+            /** @description False: the tag stays, marked currently unavailable. */
+            available: boolean;
+            name: string;
+            position: number;
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
+        };
         ModeAvailabilityDto: {
             available: boolean;
         };
@@ -2224,6 +2267,35 @@ export interface components {
              * @description Required to revoke ANOTHER session (CONSOLE only): a satisfied REVOKE_ALL_SESSIONS step-up, consumed. Not needed to revoke the calling session.
              */
             step_up_challenge_id?: string;
+        };
+        ScenePostFeedUnitDto: {
+            /** @enum {string} */
+            candidate_source: "ONBOARDING_INTEREST" | "CATEGORY_AFFINITY" | "SELLER_AFFINITY" | "FOLLOWING" | "RECENT" | "TRENDING" | "NEW_SELLER" | "NEW_CONTENT" | "EXPLORATION";
+            /** @description The caption, or a bounded excerpt of it (caption_truncated). */
+            caption: string;
+            caption_truncated: boolean;
+            image: components["schemas"]["FypImageDto"];
+            /**
+             * Format: uuid
+             * @description The served-impression identity (S55): send it with the telemetry of this unit.
+             */
+            impression_id: string;
+            /** @description Position in the feed session. */
+            position: number;
+            /** @description Current public tag summaries in presentation order, read at response time. */
+            products: components["schemas"]["FypUnitProductDto"][];
+            /** @description Stable public reference: /v1/scene-posts/{public_ref}. */
+            public_ref: string;
+            /** Format: date-time */
+            published_at: string;
+            /** @description The exact served revision. */
+            revision_version: number;
+            seller: components["schemas"]["PublicSceneSellerDto"];
+            /**
+             * @description The only unit type. Clients skip any unit type they do not know.
+             * @enum {string}
+             */
+            type: "SCENE_POST";
         };
         ScenePostImageDto: {
             card_key: string;
@@ -3225,6 +3297,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    FypController_feed: {
+        parameters: {
+            query?: {
+                /** @description The next_cursor of the previous page, unchanged. */
+                cursor?: string;
+                /** @description Units per page; clamped to the algorithm version bound. */
+                limit?: number;
+            };
+            header?: {
+                /** @description App guests: the registered device id (required without a bearer). Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FypPageDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

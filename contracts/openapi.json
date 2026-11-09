@@ -1069,6 +1069,70 @@
         ]
       }
     },
+    "/v1/fyp": {
+      "get": {
+        "operationId": "FypController_feed",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The next_cursor of the previous page, unchanged.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Units per page; clamped to the algorithm version bound.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App guests: the registered device id (required without a bearer). Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FypPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "For You: Scene units only, ranked by the active algorithm version. Without ?cursor= a new feed session starts; with it the session continues. A bad cursor is 400 VALIDATION_FAILED with slots.reason CURSOR_INVALID; an ended session (expired, version retired, Market changed) slots.reason CURSOR_EXPIRED: start a new session.",
+        "tags": [
+          "Fyp"
+        ]
+      }
+    },
     "/v1/handoffs/sync": {
       "post": {
         "operationId": "HandoffController_sync",
@@ -4961,6 +5025,165 @@
           "image",
           "seller",
           "products"
+        ]
+      },
+      "FypImageDto": {
+        "type": "object",
+        "properties": {
+          "thumb_key": {
+            "type": "string",
+            "description": "Object key; resolve against bootstrap media_public_origin."
+          },
+          "card_key": {
+            "type": "string",
+            "description": "The feed-card derivative. No full-resolution key in a feed unit."
+          }
+        },
+        "required": [
+          "thumb_key",
+          "card_key"
+        ]
+      },
+      "FypUnitProductDto": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: the tag stays, marked currently unavailable."
+          }
+        },
+        "required": [
+          "position",
+          "slug",
+          "name",
+          "available"
+        ]
+      },
+      "ScenePostFeedUnitDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "SCENE_POST"
+            ],
+            "description": "The only unit type. Clients skip any unit type they do not know."
+          },
+          "impression_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The served-impression identity (S55): send it with the telemetry of this unit."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Position in the feed session."
+          },
+          "candidate_source": {
+            "type": "string",
+            "enum": [
+              "ONBOARDING_INTEREST",
+              "CATEGORY_AFFINITY",
+              "SELLER_AFFINITY",
+              "FOLLOWING",
+              "RECENT",
+              "TRENDING",
+              "NEW_SELLER",
+              "NEW_CONTENT",
+              "EXPLORATION"
+            ]
+          },
+          "public_ref": {
+            "type": "string",
+            "description": "Stable public reference: /v1/scene-posts/{public_ref}."
+          },
+          "revision_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The exact served revision."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "caption": {
+            "type": "string",
+            "description": "The caption, or a bounded excerpt of it (caption_truncated)."
+          },
+          "caption_truncated": {
+            "type": "boolean"
+          },
+          "image": {
+            "$ref": "#/components/schemas/FypImageDto"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/PublicSceneSellerDto"
+          },
+          "products": {
+            "description": "Current public tag summaries in presentation order, read at response time.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FypUnitProductDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "impression_id",
+          "position",
+          "candidate_source",
+          "public_ref",
+          "revision_version",
+          "published_at",
+          "caption",
+          "caption_truncated",
+          "image",
+          "seller",
+          "products"
+        ]
+      },
+      "FypPageDto": {
+        "type": "object",
+        "properties": {
+          "feed_session_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The feed session (S52). Null when nothing was served (no session was created)."
+          },
+          "algorithm_version": {
+            "type": "string",
+            "nullable": true,
+            "description": "The immutable algorithm version that ranked this page. Null when none may serve."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenePostFeedUnitDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque continuation; send back unchanged as ?cursor=. Null: the session has no more."
+          }
+        },
+        "required": [
+          "feed_session_id",
+          "algorithm_version",
+          "items",
+          "next_cursor"
         ]
       }
     }
