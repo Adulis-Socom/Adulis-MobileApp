@@ -59,7 +59,7 @@ tags:
 - assertVisible: Shopping by category arrives in a coming update.
 - tapOn: Saved
 - assertVisible: Sign in to save.
-- assertVisible: Signing in arrives in a coming update.
+- assertVisible: Sign in
 - tapOn: Orders
 - assertVisible: Sign in to start ordering and track your orders.
 - takeScreenshot: buyer-04-orders-guest

@@ -1,0 +1,68 @@
+# Buyer sign-in (WO-003), part 2 of 2. Starts where buyer-auth-request.yaml ended, on
+# "Enter code", with OTP the code the development API logged for that phone.
+#
+# A wrong code is refused; the right one signs in, the age declaration appearing only if
+# the server asks for it (a new Account); the Buyer lands back on Saved, signed in, with no
+# restart. A cold relaunch restores the session; Sign out returns the device to guest.
+#
+#   maestro test -e OTP=123456 .maestro/buyer-auth-verify.yaml
+appId: com.adulis.app
+name: Buyer sign-in - verify, restore, sign out
+tags:
+  - buyer
+  - auth
+---
+- tapOn: Six-digit code
+- inputText: '000000'
+- hideKeyboard
+- tapOn: Verify
+- extendedWaitUntil:
+    visible: The code you entered is not correct.
+    timeout: 20000
+- takeScreenshot: auth-04-wrong-code
+
+- tapOn: Six-digit code
+- eraseText: 6
+- inputText: ${OTP}
+- hideKeyboard
+- tapOn: Verify
+
+# A new Account: the server asks for the age declaration; the same code is sent again with it.
+- runFlow:
+    when:
+      visible: I confirm that I am 18 years of age or older.
+    commands:
+      - takeScreenshot: auth-05-age-declaration
+      - tapOn: I confirm that I am 18 years of age or older.
+      - tapOn: Verify
+
+- extendedWaitUntil:
+    visible: Your saved Products and Scenes will appear here in a coming update.
+    timeout: 20000
+- assertNotVisible: Sign in to save.
+- takeScreenshot: auth-06-saved-signed-in
+- tapOn: You
+- assertVisible: Sign out
+- assertNotVisible: Seller Companion
+- assertNotVisible: Courier
+
+# A cold relaunch restores the session from the device.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: Scenes from Sellers will appear here in a coming update.
+    timeout: 120000
+- tapOn: You
+- assertVisible: Sign out
+- takeScreenshot: auth-07-restored
+
+# Sign out: the device forgets the session at once; protected tabs return to guest.
+- tapOn: Sign out
+- extendedWaitUntil:
+    visible: Sign in to see your profile.
+    timeout: 10000
+- tapOn: Saved
+- assertVisible: Sign in to save.
+- assertVisible: Sign in
+- takeScreenshot: auth-08-signed-out

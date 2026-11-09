@@ -1,0 +1,53 @@
+# Buyer sign-in (WO-003), part 1 of 2: a fresh install opens as a guest, a protected tab
+# offers Sign in (nothing is requested until the Buyer taps it), the phone is validated
+# and the code is requested. Ends on "Enter code".
+#
+# Part 2 (buyer-auth-verify.yaml) needs the code that was sent. In development the API
+# writes it to apps/api/.dev-sms.log instead of sending an SMS (D-106, NODE_ENV=development
+# only); read the newest line for PHONE and pass it as OTP.
+#
+# Prerequisites: the debug build installed; Metro on 8081 started with
+# EXPO_PUBLIC_API_BASE_URL=http://localhost:3000; the API on 3000 with NODE_ENV=development;
+# `adb reverse tcp:8081 tcp:8081` and `adb reverse tcp:3000 tcp:3000`.
+#
+#   maestro test -e PHONE=+251911000123 .maestro/buyer-auth-request.yaml
+appId: com.adulis.app
+name: Buyer sign-in - request a code
+tags:
+  - buyer
+  - auth
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: Scenes from Sellers will appear here in a coming update.
+    timeout: 120000
+
+# A protected tab explains itself and offers Sign in; opening it requested nothing.
+- tapOn: Saved
+- assertVisible: Sign in to save.
+- takeScreenshot: auth-01-saved-guest
+- tapOn: Sign in
+
+# Phone entry: an invalid number is refused inline, without a request.
+- assertVisible: Enter your phone number. We will send you a code by SMS.
+- tapOn: Phone number
+- inputText: '0911'
+- hideKeyboard
+- tapOn: Send code
+- assertVisible: Enter your phone number with the country code, for example +251 911 234 567.
+- takeScreenshot: auth-02-phone-invalid
+- tapOn: Phone number
+- eraseText: 10
+- inputText: ${PHONE}
+- hideKeyboard
+- tapOn: Send code
+
+- extendedWaitUntil:
+    visible: Six-digit code
+    timeout: 20000
+- assertVisible: Change number
+- assertVisible: Send a new code
+- takeScreenshot: auth-03-enter-code
