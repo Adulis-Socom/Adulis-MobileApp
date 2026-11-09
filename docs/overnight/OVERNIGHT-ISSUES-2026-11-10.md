@@ -10,30 +10,95 @@
   - WO-DISC-002
   - WO-004A
 
-## Morning Summary
+## Morning Summary (founder, read this first)
 
-### Work-order status
-- WO-DISC-001A: COMPLETE (ADU-DB-01 v1.20 installed, `verify:appendix` green, WO-DISC-001 formally closed, API suite 698/698)
-- WO-DISC-002: COMPLETE (`GET /v1/fyp` on the RECENT technical baseline; production gated on founder approval, OVN-030; security review fixed, OVN-038 to OVN-044)
-- WO-004A: IN PROGRESS
+**Batch status: PARTIALLY COMPLETE - MORNING REVIEW REQUIRED.** All three work orders were delivered,
+validated and pushed. What keeps the batch from "complete" is not unfinished work: an open
+Critical security issue that predates the batch (OVN-045), and three High decisions that are yours
+and gate production For You (OVN-027, OVN-030, OVN-032).
 
-### Highest-priority findings
-- (filled in as the batch runs)
+### What completed?
+- **WO-DISC-001A**: ADU-DB-01 v1.20 installed (Appendix B: 120 tables, `core` 94); `verify:appendix`
+  green with the gate unchanged; the c1-onboarding date test fixed (test only); WO-DISC-001 formally
+  closed. Branch `discovery/wo-disc-001a-db-governance` @ `1d232ae`.
+- **WO-DISC-002**: `GET /v1/fyp`, Scene units only, from the public gate re-read at response time;
+  server-derived subject (Account or registered device) and Market; immutable algorithm versions;
+  feed sessions; served impressions; opaque, secret-bound, expiring cursor with exact replay;
+  migration 0055; ADU-DB-01 v1.21 (123 tables, `core` 97); OpenAPI and client regenerated.
+  Only the RECENT source is real; the eight others are logged (OVN-025 to OVN-029), not simulated.
+  Branch `discovery/wo-disc-002-for-you-api` @ `967cd2d`.
+- **WO-004A**: Buyer Home For You shows the real feed (FlashList, Expo Image, infinite query,
+  pull-to-refresh as a new session, every state honest, no engagement controls, other channels
+  untouched). Native validation on the Android emulator against the real local API passed (guest
+  feed, next page, refresh, sign-in, signed-in feed, Dark, 1.3 text, auth/shell regression).
+  Branch `mobile/wo-004a-for-you-feed` (HEAD in the branch register below).
 
-### Founder decisions required
-- (filled in as the batch runs)
+### What did not complete?
+- Nothing in scope. Deliberately not built: qualified-impression telemetry, engagement actions,
+  Scene Explore, Trust badge, a session retention purge, any personalised source.
 
-### Security issues
-- (filled in as the batch runs)
+### What is blocked?
+- **Production For You** serves nothing until you approve an algorithm version (OVN-030) and the
+  retention period is set (OVN-032). Personalised sources wait for DPIA R-04/R-05 (OVN-027).
+- Nothing blocks development or review.
 
-### Governance/contract blockers
-- OVN-001 ADU-DB-01 Appendix B behind the database after migration 0054: RESOLVED by ADU-DB-01 v1.20
+### What needs founder decisions?
+1. **OVN-030** - May the RECENT-only technical baseline serve the pilot? (Approve
+   `technical-baseline-recent-v1` for production, or wait for a tuned version.) Recommended:
+   approve RECENT-only for the pilot; it is honest, non-personalised and deterministic.
+2. **OVN-032** - Retention for feed sessions and served impressions (DPIA PA-06, legal). Guest rows
+   already go with the device and Account rows at account deletion.
+3. **OVN-027 / OVN-029** - DPIA acceptance before any affinity source; an exploration / new-Seller
+   policy.
+4. **OVN-035** - Confirm the registered device as the guest recommendation subject (ANL-01 asks
+   for a separate anonymous id; a known device id lets anyone start sessions as that guest).
+5. **OVN-055** - How long loaded For You cards may stay on screen after the app returns from the
+   background (MOB-02 "according to configuration"). Recommended: the server session TTL.
+6. Smaller: OVN-031 Seller-run threshold, OVN-033/OVN-051 the card's action list (REC-01 S13 vs
+   R-05), OVN-048 the feed photo ratio, OVN-036 who mints a re-exposure impression id.
 
-### Existing baseline defects encountered
-- OVN-020 `c1-onboarding` hard-coded date (2026-09-11), reproduced at `40a4dce`: RESOLVED by a test-only fix
+### Were any High/Critical findings discovered? Were they fixed?
+- **OVN-038 CRITICAL - FIXED.** /v1/fyp counted its rate limit on a second pool connection inside
+  its transaction; about ten concurrent requests could hang the API. Fixed and regression-tested.
+- **OVN-039 HIGH - FIXED.** Guest writes were not bounded (letter-case device ids, unlimited
+  continuations).
+- **OVN-045 CRITICAL - OPEN (pre-existing, Auth).** The same pool-starvation pattern exists on the
+  anonymous OTP request, the deletion-OTP request, the step-up request and one Courier route.
+  Not changed overnight because the fix touches OTP rate-limit semantics that the T8 enumeration
+  suite guards; it needs an Auth work order. This is the one item to schedule first.
+- OVN-001 HIGH (Appendix B) - fixed by v1.20. OVN-027, OVN-030, OVN-032 HIGH - your decisions.
 
-### Recommended first action in the morning
-- (filled in at the end)
+### What gates/tests are red?
+- None on the final branch: `pnpm test` (API 762/762, mobile 135/135, all packages), typecheck,
+  lint, build, every verify gate, `db:check` 16/16, `db:determinism`, Expo Doctor 20/20, the 26-gate
+  battery, Maestro flows.
+
+### Which failures are baseline?
+- OVN-020 (c1-onboarding date) - fixed in WO-DISC-001A.
+- OVN-047 - a pre-existing T8 flake: a second full API run on one database within the hour can
+  collide on random phone suffixes (passes alone).
+
+### What branches were pushed?
+- `discovery/wo-disc-001a-db-governance` @ `1d232ae`
+- `discovery/wo-disc-002-for-you-api` @ `967cd2d`
+- `mobile/wo-004a-for-you-feed` (stacked on the two above)
+- No PR, no merge; `origin/main` untouched at `01302cf`.
+
+### What should the founder review first?
+1. OVN-045 (open Critical, Auth) - schedule the fix.
+2. The For You production decisions: OVN-030, OVN-032, OVN-035.
+3. `docs/discovery/WO-DISC-002-FOR-YOU-API.md` sections 1-4 and 6, then
+   `docs/mobile/WO-004A-BUYER-FOR-YOU-FEED.md` sections 3 and 10.
+
+### What should the next work order be?
+- **An Auth hardening work order for OVN-045** (count rate limits inside the handler transaction or
+  before it, keep T8 green, add a pool acquire timeout), then the For You telemetry work order
+  (qualified impressions per ANL-01, once OVN-036 is decided).
+
+### Environment notes
+- All testing used the disposable database `adulis_gates`; the developer database `adulis` was
+  never touched and does not have migration 0055 (`pnpm db:migrate` before using it, OVN-053).
+- Native fixtures (two Sellers, twelve Scenes, MinIO images) were removed after the run.
 
 ## Issue Register
 
@@ -89,6 +154,18 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 | OVN-037 | WO-DISC-002 | LOW | GOVERNANCE | DEFERRED | First affinity/feature table | REC-01 S45 wants weights/affinity; ADU-DB-01 S19 and check 6 forbid score/rank/weight/affinity columns in feed migrations. Today's configuration is opaque jsonb and check 6 passes on 0055 | check-06; REC-01 S45 | None needed tonight | Yes, when personalisation lands | Governance ruling with the first affinity table |
 | OVN-047 | repository | LOW | TEST_FLAKE | OPEN | None | `t8-market-from-device` 'a known and an unknown phone are indistinguishable' draws random 3-digit phone suffixes and never clears the `deletion-otp-request` bucket (3/hour/phone), so a second full API run on the same database within the hour can collide: 429 for one phone only | WO-DISC-002 validation: second API run 761/762; the spec alone right after: 10/10; no deletion or auth code changed on this branch | Recorded | No | Clear `deletion-otp-request` in that suite's cleanup |
 | OVN-046 | WO-DISC-002 | LOW | ENVIRONMENT | RESOLVED | None | The staged `git mv` of v1.20 rode into the migration commit (the OVN-024 slip again: a staged rename joins whichever commit comes next) | `git show --stat` of the first, unpushed commit | Reset the four unpushed commits to `1d232ae` and recommitted with the rename in the docs commit; nothing had been pushed | No | Stage renames only with the commit that owns them |
+| OVN-048 | WO-004A | LOW | OPEN_DESIGN_DECISION | FOUNDER_REVIEW_REQUIRED | None (presentation) | MEDIA-01 gives the FYP derivative 'a known aspect ratio' but no number; the card uses a fixed 4:5 frame with cover fit | MEDIA-01 :386-388; `SceneCard.tsx` PHOTO_ASPECT | Fixed frame, one constant | Yes: the FYP derivative ratio | Set it with the Media derivative spec |
+| OVN-049 | WO-004A | LOW | TEST_INFRA | RESOLVED | (was: mobile tests) | FlashList 2 ships ESM that jest-expo does not transform, and needs its own Jest viewport; renderRouter runs modern fake timers, so real-timer waits never fire | Route error boundary in the shell tests; a hung test | Added `@shopify/flash-list` to transformIgnorePatterns and its jestSetup; tests advance fake timers | No | Done |
+| OVN-050 | WO-004A | LOW | ENVIRONMENT | RESOLVED | None | No WebP encoder on this machine and Scene uploads require image/webp; native fixtures used a minimal solid-colour lossless (VP8L) writer kept in the session scratchpad, so lossy photo decoding was not exercised on device | Native run: fixture photos rendered as solid colours | Recorded | No | Use real photos when a fixture kit exists |
+| OVN-051 | WO-004A | MEDIUM | CONTRACT_GAP | DEFERRED | Engagement on the feed card | The prototype card shows Follow, More, Like, Save, Share, Reviews and Explore the Scene; none has a backend, so the production card draws none and does not navigate | Prototype ShoppablePostUnit; WO-004A S3.10/S3.12 | No fake controls; recorded | Yes (with OVN-033) | Add each control with its endpoint |
+| OVN-052 | WO-004A | INFO | ENVIRONMENT | RESOLVED | None | Native validation reused the 9 November debug APK: its native dependencies and app.json are identical to this branch, so Metro served this branch's JavaScript (no 15-minute native rebuild) | Dependency and app.json diff: identical | Recorded | No | Rebuild natively when a native dependency changes |
+| OVN-053 | WO-004A | INFO | ENVIRONMENT | OPEN | Running this branch's API on the developer database | The developer database `adulis` does not have migration 0055 (all batch testing used the disposable `adulis_gates`) | `core.fyp_algorithm_version` absent in `adulis` | Untouched by design | No | `pnpm db:migrate` before running the API from these branches |
+| OVN-054 | WO-004A | LOW | TEST_INFRA | RESOLVED | (was: Maestro flows) | Six Maestro flows used the For You placeholder sentence as their startup marker | `.maestro/*.yaml` | They accept the feed label or the empty sentence; new `buyer-for-you.yaml`; `foundation-smoke.yaml` (Expo Go) updated, not re-run | No | Done |
+| OVN-055 | WO-004A | MEDIUM | SECURITY | FOUNDER_REVIEW_REQUIRED | None tonight (WO-004A S3.16 allows already-rendered content) | Loaded cards never expire on the device: a Scene that turns PRIVATE stays on screen until the Buyer refreshes, and an ended server session used to leave its cards up. PART FIXED: when the server ends the session (CURSOR_EXPIRED/INVALID) the cards are now removed and a full-screen Refresh shown. OPEN: how long loaded content may stay after the app returns from the background (MOB-02 :1919 'according to configuration'; :1915 'do not show restricted content merely because it remains in in-memory FYP state'); no number exists | Mobile security review; e2e 'drops the ended session's cards' | Ended-session cards removed; interval not invented | Yes: the foreground refresh interval | Refresh on foreground when older than the server session TTL (3600 s today) |
+| OVN-056 | WO-004A | LOW | SECURITY | RESOLVED | (was: refresh integrity) | After a refresh, a remount within 5 minutes (navigator replacement on UPGRADE_REQUIRED, an error-boundary retry) revived the pre-refresh cache entry and could continue the old session's cursor | Mobile security review | `gcTime: 0` on the feed query: an unshown feed is dropped, a remount starts a new session | No | Done |
+| OVN-057 | WO-004A | LOW | SECURITY | RESOLVED | (was: image origin) | `mediaUrl` accepted userinfo in the media origin (`https://media.adulis.et@evil.example`), so a misconfigured or compromised bootstrap could point photos at another host | Mobile security review | The authority may not contain `@` or a backslash; two refusal tests added | No | Done |
+| OVN-058 | WO-004A | INFO | SECURITY | RESOLVED | None | A guest-keyed feed request in flight when sign-in lands could carry the new bearer (the server refuses the guest cursor for an Account, so no exposure) | Mobile security review | Guest-keyed requests send no bearer | No | Done |
+| OVN-059 | WO-004A | INFO | SECURITY | OPEN | Production deployment | The cursor (session, offset, continuation secret) travels in the `/v1/fyp` query string by contract; the API logs only the path, but a proxy or CDN access log would record it | ADU-API contract; `handler-transaction.ts` logs `req.path` | Recorded | No | Strip query strings from edge/proxy logs for /v1/fyp |
 | OVN-022 | WO-DISC-001 | LOW | TECH_DEBT | RESOLVED | None | The committed Kysely types predated migrations 0040, 0043 and 0046 | WO-DISC-001 S18 | Regenerated in WO-DISC-001 (`fcc56f3`) | No | Regenerate after every migration |
 
 ## Test / Gate Register
@@ -113,21 +190,45 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 | WO-DISC-002 | mobile, console, api-client, config, locale, tokens tests; mobile typecheck | PASS | PASS |  |
 | WO-DISC-002 | `pnpm verify:orphan-sweep` | PASS | PASS | after the full suite |
 | WO-DISC-002 | `gates.mjs --only` battery (26 gates) | 26/26 exit 0 | PASS | one at a time |
+| WO-004A | `pnpm test` (final stacked branch) | PASS: API 762/762, mobile 135/135, every package | API 762, mobile 101 | fresh disposable DB |
+| WO-004A | mobile typecheck / test / build / lint | PASS (135/135) | PASS (101/101) | +34 tests; re-run after the review fixes |
+| WO-004A | api-client / locale tests; `verify:mt-keys`; `verify:error-locale` | PASS | PASS | MT-KEYS.md regenerated (840 + 3 HUMAN-REQUIRED) |
+| WO-004A | `pnpm typecheck` / `lint` / `build`; `verify:deps` / `contract` / `appendix` / `docs` | PASS | PASS |  |
+| WO-004A | `pnpm db:check` / `db:determinism` | 16/16 / PASS | 16/16 / PASS |  |
+| WO-004A | API Scene + FYP suites (disc-001, disc-002, fyp unit) | 100/100 | n/a | the backend this branch carries |
+| WO-004A | `pnpm verify:orphan-sweep` | PASS | PASS | after the full suite |
+| WO-004A | `npx expo-doctor` | 20/20 | n/a |  |
+| WO-004A | Maestro on Android emulator + real local API | PASS: buyer-for-you, buyer-auth-request + verify, verify-link, request + leave-verify, buyer-shell | n/a | before the review fixes; those are covered by jest |
+| WO-004A | mobile bundle scan for subscription copy | clean (only library identifiers such as `subscribeToStore`) | clean |  |
 
 ## Branch / Commit Register
 
 | Work Order | Branch | Start SHA | End SHA | Commits | Pushed |
 |---|---|---|---|---|---|
 | WO-DISC-001A | `discovery/wo-disc-001a-db-governance` | `8706a6f` | `1d232ae` (pushed, equal to origin) | `6cfd683` v1.20 reissue; `810b598` c1 date test; docs commit | |
+| WO-DISC-002 | `discovery/wo-disc-002-for-you-api` | `1d232ae` | `967cd2d` (pushed, equal to origin) | `741dcc9` migration 0055; `035fbd6` /v1/fyp; `ae8569c` contract; `3e846f6` ADU-DB-01 v1.21; `967cd2d` record + register | yes |
+| WO-004A | `mobile/wo-004a-for-you-feed` | `967cd2d` | see `git log` (the docs commit holding this line) | `330c39b` locale; `24c21bb` mobile feed; docs commit (record + register) | yes |
 
 ## Deferred Decisions
 
-- OVN-002, OVN-003, OVN-004, OVN-005, OVN-007, OVN-010, OVN-014, OVN-018 (see the register).
+- Carried: OVN-002, OVN-003, OVN-004, OVN-005, OVN-007, OVN-010, OVN-014, OVN-018.
+- This batch, FOUNDER_REVIEW_REQUIRED: OVN-027, OVN-029, OVN-030, OVN-031, OVN-032, OVN-035,
+  OVN-048, OVN-055. Deferred with a work order: OVN-025, OVN-026, OVN-028, OVN-033, OVN-034,
+  OVN-036, OVN-037, OVN-051.
 
 ## Deferred Defects
 
 - OVN-011, OVN-012 (Catalogue).
+- OVN-045 (CRITICAL, Auth: rate limit on a second pool connection), OVN-040 (device registration
+  unthrottled), OVN-042 (app guest devices purged while active), OVN-047 (T8 flake).
+- OVN-059 (strip the /v1/fyp query string from edge logs).
 
 ## Morning Review Checklist
 
-- (filled in at the end)
+- [ ] Schedule the Auth fix for OVN-045.
+- [ ] Decide OVN-030 (production algorithm version) and OVN-032 (retention); confirm OVN-035.
+- [ ] Decide OVN-055 (foreground refresh interval for loaded cards).
+- [ ] Review `docs/discovery/WO-DISC-001A-DB-GOVERNANCE-SYNC.md`,
+      `docs/discovery/WO-DISC-002-FOR-YOU-API.md`, `docs/mobile/WO-004A-BUYER-FOR-YOU-FEED.md`.
+- [ ] Run `pnpm db:migrate` on the developer database before using these branches (OVN-053).
+- [ ] Decide merge order: the three branches are stacked (001A, then 002, then 004A).
