@@ -79,6 +79,12 @@ const BODY_OVER_MANIFEST = [
   'core.scene_post_revision',
   'core.scene_post_product',
   'core.scene_post_transition',
+  // WORK ORDER WO-DISC-002: ADU-REC-01 v3.2 S45/S52/S55/S71-S72/S75 require the
+  // algorithm versions, feed sessions and served impressions to persist.
+  // Migration 0055 adds the three; ADU-DB-01 v1.21 carries their Appendix B rows.
+  'core.fyp_algorithm_version',
+  'core.fyp_session',
+  'core.fyp_impression',
 ];
 
 export default {

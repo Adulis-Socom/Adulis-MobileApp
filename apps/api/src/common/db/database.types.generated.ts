@@ -599,6 +599,43 @@ export interface CoreFollow {
   state: Generated<CoreFollowState>;
 }
 
+export interface CoreFypAlgorithmVersion {
+  activated_at: Timestamp | null;
+  config: Json;
+  created_at: Generated<Timestamp>;
+  description: string;
+  id: string;
+  production_approved: Generated<boolean>;
+  schema_version: number;
+  status: Generated<string>;
+}
+
+export interface CoreFypImpression {
+  algorithm_version: string;
+  candidate_source: string;
+  id: Generated<string>;
+  position: number;
+  revision_id: string;
+  scene_post_id: string;
+  served_at: Generated<Timestamp>;
+  session_id: string;
+}
+
+export interface CoreFypSession {
+  account_id: string | null;
+  algorithm_version: string;
+  created_at: Generated<Timestamp>;
+  cursor_secret_hash: Buffer;
+  device_id: string | null;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  last_served_at: Timestamp | null;
+  market_id: string;
+  seed: Int8;
+  served_count: Generated<number>;
+  subject_kind: string;
+}
+
 export interface CoreHandoffScan {
   corrected_at: Timestamp | null;
   counts_toward_level: Generated<boolean>;
@@ -1725,6 +1762,9 @@ export interface DB {
   "core.eligibility_config": CoreEligibilityConfig;
   "core.evidence_export": CoreEvidenceExport;
   "core.follow": CoreFollow;
+  "core.fyp_algorithm_version": CoreFypAlgorithmVersion;
+  "core.fyp_impression": CoreFypImpression;
+  "core.fyp_session": CoreFypSession;
   "core.handoff_scan": CoreHandoffScan;
   "core.idempotency_record": CoreIdempotencyRecord;
   "core.identity_config": CoreIdentityConfig;
