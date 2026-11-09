@@ -71,6 +71,14 @@ const BODY_OVER_MANIFEST = [
   // pinned BY NAME so any other stray table still fails.
   'core.otp_delivery_attempt',
   'core.platform_otp_budget',
+  // WORK ORDER WO-DISC-001 (register DSC-1): ADU-SCN-01 v3.2 S46 DEFINES the
+  // Scene root, revision, Product-tag and transition tables and no ADU-DB-01
+  // revision lists them yet. Migration 0054 adds the four; Appendix B owes the
+  // rows. Same mechanism as D-40/D-59/D-68/D-70/D-176, pinned BY NAME.
+  'core.scene_post',
+  'core.scene_post_revision',
+  'core.scene_post_product',
+  'core.scene_post_transition',
 ];
 
 export default {

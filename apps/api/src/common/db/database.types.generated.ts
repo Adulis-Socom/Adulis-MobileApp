@@ -52,7 +52,7 @@ export type CoreClaimTrigger = "GOODS_NOT_RECEIVED" | "NOT_AS_DESCRIBED" | "REFU
 
 export type CoreConfirmationTier = "CONFIRMED_BY_BUYER" | "UNCONFIRMED" | "VERIFIED_HANDOFF";
 
-export type CoreDevicePlatform = "ANDROID" | "IOS";
+export type CoreDevicePlatform = "ANDROID" | "IOS" | "WEB";
 
 export type CoreEligibilityOutcome = "NOT_SATISFIED" | "SATISFIED";
 
@@ -70,6 +70,8 @@ export type CoreIdVerificationRequirement = "MANDATORY_ALL" | "MANDATORY_WITHOUT
 
 export type CoreLevelChangeSource = "COMPUTED" | "MODERATION";
 
+export type CoreMarketActivationState = "ACTIVE" | "BLOCKED" | "COMPLIANCE_REVIEW" | "SENDER_PENDING" | "SUSPENDED" | "TESTING" | "UNREVIEWED";
+
 export type CoreMarketPhase = "PHASE_1" | "PHASE_2";
 
 export type CoreMediaClass = "HOT" | "INFREQUENT";
@@ -85,6 +87,8 @@ export type CoreNotificationState = "DELIVERED" | "FAILED" | "QUEUED" | "SENT" |
 export type CoreOperatorRole = "ADMIN" | "CLAIM_REVIEWER" | "IDENTITY_REVIEWER" | "MODERATOR" | "SUPPORT";
 
 export type CoreOrderState = "CANCELLED_BY_BUYER" | "CANCELLED_BY_SELLER" | "COMPLETED" | "CREATED" | "EXPIRED_UNCLAIMED" | "HANDED_OFF" | "NOTIFIED" | "PAYMENT_CONFIRMED" | "PAYMENT_SUBMITTED";
+
+export type CoreOtpDeliveryStatus = "ACCEPTED" | "DEFINITIVE_NOT_SENT" | "DELIVERED" | "DELIVERY_UNKNOWN" | "FAILED_FINAL" | "PENDING";
 
 export type CoreOtpPurpose = "ACCOUNT_DELETION" | "RECOVERY" | "SIGN_IN" | "STEP_UP";
 
@@ -114,7 +118,13 @@ export type CoreSellerEntityType = "COMPANY" | "INDIVIDUAL";
 
 export type CoreSellerStatus = "ACTIVE" | "BILLING_SUSPENDED" | "CLOSING" | "DELETED" | "DRAFT" | "SAFETY_SUSPENDED";
 
+export type CoreSenderRegistrationStatus = "APPROVED" | "NOT_REQUIRED" | "PENDING" | "REJECTED";
+
 export type CoreSessionAudience = "CONSOLE" | "MOBILE";
+
+export type CoreSmsProvider = "AFROMESSAGE" | "INFOBIP" | "SMSETHIOPIA" | "TWILIO";
+
+export type CoreSmsSenderMode = "ALPHANUMERIC_SENDER" | "OTHER_APPROVED_SENDER" | "PHONE_NUMBER_SENDER" | "PROVIDER_MANAGED_SENDER";
 
 export type CoreSocialPostStatus = "LIVE" | "UNAVAILABLE" | "UNKNOWN";
 
@@ -718,6 +728,11 @@ export interface CoreLocalePack {
 }
 
 export interface CoreMarket {
+  /**
+   * ADU-AUTH-01 v2.6 S9.2. Only ACTIVE issues new OTP (S9). NOTE: this sits beside is_live, which v2.6 never mentions and which bootstrap uses to choose a device's market -- two overlapping truths about one market, registered as D-183 and NOT collapsed here.
+   */
+  activation_state: Generated<CoreMarketActivationState>;
+  buyer_registration_enabled: Generated<boolean>;
   code: string;
   created_at: Generated<Timestamp>;
   default_locale: string;
@@ -728,11 +743,27 @@ export interface CoreMarket {
    */
   display_timezone: string;
   id: string;
-  is_live: Generated<boolean>;
+  otp_daily_hard_limit: number | null;
+  otp_daily_soft_limit: number | null;
+  otp_enabled: Generated<boolean>;
   /**
    * INVARIANT (section 5.1) - phase is a column on the market, never a global flag. A mature home market may be PHASE_2 while a new market opens PHASE_1.
    */
   phase: CoreMarketPhase;
+  registration_enabled: Generated<boolean>;
+  seller_registration_enabled: Generated<boolean>;
+  sender_id: string | null;
+  sender_mode: CoreSmsSenderMode | null;
+  sender_registration_status: Generated<CoreSenderRegistrationStatus>;
+  /**
+   * TEXT: S9.1 names the field and enumerates no values (register D-181).
+   */
+  sms_compliance_status: string | null;
+  /**
+   * NULL means "no fallback route", which is Ethiopia's state today: S7.1 makes SMSEthiopia a CANDIDATE, not a route, until S7.2's acceptance checklist passes. S7.1's four-state provider lifecycle has no schema home and needs none yet (register D-182).
+   */
+  sms_fallback_provider: CoreSmsProvider | null;
+  sms_primary_provider: CoreSmsProvider | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -898,6 +929,10 @@ export interface CoreOrderStateTransitionLegal {
 export interface CoreOtpChallenge {
   attempt_count: Generated<number>;
   /**
+   * ADU-AUTH-01 v2.6 S5.2/R39 - persisted at challenge creation. INVARIANT: a MOBILE challenge mints a MOBILE session only; a CONSOLE challenge mints a CONSOLE session only. NULL means a challenge created before this column existed (register D-180).
+   */
+  audience: CoreSessionAudience | null;
+  /**
    * ADU-AUTH-01 section 4.1 - hash only, never plaintext, compared in constant time. A timing oracle on a 6-digit code is a real one.
    */
   code_hash: Buffer;
@@ -905,12 +940,43 @@ export interface CoreOtpChallenge {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
   id: string;
+  /**
+   * ADU-RUL-06 S2. The market that GOVERNED CREATION: the device's market on every anonymous path, the account's only for authenticated step-up. Verification never resolves a market; the budget counter attributes spend through this column (D-193). NULL only on rows issued before 0044 -- the service treats an unstamped row as expired, and a challenge lives five minutes, so the transitional window closes itself.
+   */
+  market_id: string | null;
+  /**
+   * ADU-RUL-06 S2 -- "every parameter the challenge needs is stamped with it". The attempt budget that governs THIS challenge, copied from the governing market's timing_config at creation. Comparing attempt_count against a live timing lookup was D-203's oracle: the lookup resolved the ACCOUNT's market, and the number of OTP_INVALID answers before OTP_ATTEMPTS_EXCEEDED is a number an unauthenticated caller can count. The TTL needs no column of its own -- expires_at has always been the stamped form of it.
+   */
+  max_attempts: number | null;
   phone_e164: string;
   purpose: CoreOtpPurpose;
   /**
    * NULL, or which section 6.5 action this authorises. core.step_up_action carries EIGHT values, one per step-up permission of ADU-AUTH-01 v2.4 section 16.3. It carried six through v1.9, so seller.identity:manage and seller.ownership:transfer - the two most dangerous actions in the system - were the two whose challenge could not be recorded. Closed by A1.2, absorbed into v1.10; the one-to-one correspondence is asserted in migration 05b and again by test.
    */
   step_up_action: CoreStepUpAction | null;
+  /**
+   * ADU-RUL-06 S5 (D-204.1). When a provider ACCEPTED transport of this code, set by the delivery service inside a transaction that also expires every other transported-live sibling for the (phone, purpose) pair, serialized by a per-(phone, purpose) advisory lock so two concurrent acceptances cannot zero each other out (Phase A adversarial pass). NULL means minted but not yet on its way: not verifiable, and superseding nothing, so a failed resend leaves the PREVIOUS code live. This is a security fact on the challenge, NOT a read of otp_delivery_status -- S12.2 forbids deriving validity from transport status, and this is the challenge's own record that it became the live code. Pre-0045 rows have it NULL; the service treats a SIGN_IN/STEP_UP challenge issued after 0045 as unverifiable until set, and the one-TTL transitional window closes itself.
+   */
+  transported_at: Timestamp | null;
+}
+
+export interface CoreOtpDeliveryAttempt {
+  accepted_at: Timestamp | null;
+  /**
+   * Per challenge, from 1. NOT the OTP attempt budget -- that is core.otp_challenge.attempt_count, and conflating a transport retry with a burned verification attempt is the S5.5/S5.7 confusion in column form.
+   */
+  attempt_no: number;
+  created_at: Generated<Timestamp>;
+  /**
+   * TEXT, not an enum: S12.1 names this field and enumerates no values. The send CLASSIFICATIONS of S5.6 (ACCEPTED / DEFINITIVE_NOT_SENT / DELIVERY_UNKNOWN) are carried by `status`; what belongs here is the provider-specific reason each adapter documents (S5.6, last line). Register D-181.
+   */
+  failure_class: string | null;
+  finalized_at: Timestamp | null;
+  id: Generated<string>;
+  otp_challenge_id: string;
+  provider: CoreSmsProvider;
+  provider_message_id: string | null;
+  status: Generated<CoreOtpDeliveryStatus>;
 }
 
 export interface CorePaymentInstructionReissue {
@@ -983,6 +1049,13 @@ export interface CorePhoneReuseBlock {
   id: Generated<string>;
   market_id: string;
   phone_hash: Buffer;
+}
+
+export interface CorePlatformOtpBudget {
+  id: Generated<boolean>;
+  otp_global_daily_hard_limit: number;
+  otp_global_daily_soft_limit: number;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface CoreProduct {
@@ -1143,6 +1216,64 @@ export interface CoreReviewItemRating {
 export interface CoreRolePermission {
   permission_code: string;
   role: CoreTeamRole;
+}
+
+export interface CoreScenePost {
+  created_at: Generated<Timestamp>;
+  current_published_revision_id: string | null;
+  edit_version: Generated<number>;
+  id: Generated<string>;
+  lifecycle_version: Generated<number>;
+  market_id: string;
+  public_ref: Generated<string>;
+  publication_state: Generated<string>;
+  published_at: Timestamp | null;
+  seller_id: string;
+  updated_at: Generated<Timestamp>;
+  visibility: Generated<string>;
+  visibility_changed_at: Timestamp | null;
+  visibility_reason: string | null;
+  working_revision_id: string | null;
+}
+
+export interface CoreScenePostProduct {
+  created_at: Generated<Timestamp>;
+  position: number;
+  product_id: string;
+  revision_id: string;
+  seller_id: string;
+}
+
+export interface CoreScenePostRevision {
+  author_account_id: string;
+  caption: string | null;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  image_card_key: string | null;
+  image_full_key: string | null;
+  image_thumb_key: string | null;
+  published_at: Timestamp | null;
+  published_by_account_id: string | null;
+  scene_post_id: string;
+  seller_id: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  version: number;
+}
+
+export interface CoreScenePostTransition {
+  actor_account_id: string | null;
+  decided_at: Generated<Timestamp>;
+  from_publication_state: string;
+  from_visibility: string;
+  id: Generated<string>;
+  lifecycle_version: number;
+  reason: string | null;
+  revision_id: string | null;
+  scene_post_id: string;
+  seller_id: string;
+  to_publication_state: string;
+  to_visibility: string;
 }
 
 export interface CoreSeller {
@@ -1339,6 +1470,10 @@ export interface CoreSession {
   last_activity_at: Generated<Timestamp>;
   revoked_at: Timestamp | null;
   revoked_by_session_id: string | null;
+  /**
+   * SHA-256 of the session credential (WO-API-001A, ADU-AUTH-02 v3.3 S31). The credential is minted by the API, returned once, and never stored. core.session.id is the public identifier and does not authenticate. The default is a random hash with no known preimage, so a row written without an explicit hash can never authenticate.
+   */
+  token_hash: Generated<Buffer>;
 }
 
 export interface CoreSocialPost {
@@ -1424,6 +1559,31 @@ export interface CoreVariantAttributeValue {
   value_option_id: string | null;
   value_text: string | null;
   variant_id: string;
+}
+
+export interface CoreVScenePostPublic {
+  caption: string | null;
+  id: string | null;
+  image_card_key: string | null;
+  image_full_key: string | null;
+  image_thumb_key: string | null;
+  market_id: string | null;
+  public_ref: string | null;
+  published_at: Timestamp | null;
+  revision_id: string | null;
+  revision_version: number | null;
+  seller_handle: string | null;
+  seller_id: string | null;
+  seller_store_name: string | null;
+}
+
+export interface CoreVSceneProductAvailability {
+  available: boolean | null;
+  in_stock: boolean | null;
+  market_id: string | null;
+  product_id: string | null;
+  published: boolean | null;
+  seller_id: string | null;
 }
 
 export interface CoreVStockConfidence {
@@ -1588,6 +1748,7 @@ export interface DB {
   "core.order_state_transition": CoreOrderStateTransition;
   "core.order_state_transition_legal": CoreOrderStateTransitionLegal;
   "core.otp_challenge": CoreOtpChallenge;
+  "core.otp_delivery_attempt": CoreOtpDeliveryAttempt;
   "core.payment_instruction_reissue": CorePaymentInstructionReissue;
   "core.payment_submission": CorePaymentSubmission;
   "core.payout_change_log": CorePayoutChangeLog;
@@ -1595,6 +1756,7 @@ export interface DB {
   "core.permission": CorePermission;
   "core.person": CorePerson;
   "core.phone_reuse_block": CorePhoneReuseBlock;
+  "core.platform_otp_budget": CorePlatformOtpBudget;
   "core.product": CoreProduct;
   "core.product_attribute_value": CoreProductAttributeValue;
   "core.product_image": CoreProductImage;
@@ -1609,6 +1771,10 @@ export interface DB {
   "core.review": CoreReview;
   "core.review_item_rating": CoreReviewItemRating;
   "core.role_permission": CoreRolePermission;
+  "core.scene_post": CoreScenePost;
+  "core.scene_post_product": CoreScenePostProduct;
+  "core.scene_post_revision": CoreScenePostRevision;
+  "core.scene_post_transition": CoreScenePostTransition;
   "core.seller": CoreSeller;
   "core.seller_activity": CoreSellerActivity;
   "core.seller_availability": CoreSellerAvailability;
@@ -1629,6 +1795,8 @@ export interface DB {
   "core.step_up_challenge": CoreStepUpChallenge;
   "core.stock_event": CoreStockEvent;
   "core.timing_config": CoreTimingConfig;
+  "core.v_scene_post_public": CoreVScenePostPublic;
+  "core.v_scene_product_availability": CoreVSceneProductAvailability;
   "core.v_stock_confidence": CoreVStockConfidence;
   "core.variant_attribute_value": CoreVariantAttributeValue;
   "ledger.entry": LedgerEntry;

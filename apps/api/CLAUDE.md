@@ -43,7 +43,7 @@ a NestJS service is an invariant a second endpoint can bypass.
 
 | | | Asserted by |
 |---|---|---|
-| Tables | **116** | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
+| Tables | **120** (116 + the four Scene tables of `0054`) | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
 | Enum types | **71** types | Appendix C **check 16**, against `pg_type` both directions |
 | Append-only tables | **22**, each with both the trigger and the `REVOKE` | Appendix C **check 5** |
 | Permissions / grants | **42 / 139**, 8 step-up, 12 mobile-reachable | `pnpm verify:permission-doc`, 252 cells both directions |
@@ -68,6 +68,15 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > The first five are folded into v1.14's Appendix B and flagged there. **The last two are
 > not** -- check 14's own comment says v1.14 owes those two Appendix B rows -- so the
 > count agrees while the enumeration does not yet. Say seven, not five.
+>
+> **WO-DISC-001 (`0054`) pins four more by name** -- `core.scene_post`,
+> `core.scene_post_revision`, `core.scene_post_product`, `core.scene_post_transition`
+> (ADU-SCN-01 v3.2 S46). `pnpm db:check` now prints **120 tables: manifest 109 + 11
+> body-over-manifest.** No ADU-DB-01 revision lists them yet, so **`pnpm verify:appendix`
+> is RED** on Appendix B's `core` row (94 live against the printed 90) until the founder
+> installs the revision that adds them. That is the gate doing its job: do not edit the
+> installed document or the gate to turn it green
+> (`docs/discovery/WO-DISC-001-SCENE-DOMAIN-FOUNDATION.md`, section 22).
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
