@@ -1457,6 +1457,48 @@
         ]
       }
     },
+    "/v1/scene-posts/{publicRef}": {
+      "get": {
+        "operationId": "ScenesController_publicDetail",
+        "parameters": [
+          {
+            "name": "publicRef",
+            "required": true,
+            "in": "path",
+            "description": "The Scene public_ref (22 characters).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicScenePostDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A public Scene, only while every public gate passes now. PRIVATE, draft and unknown are the same 404.",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
@@ -3013,6 +3055,416 @@
         ]
       }
     },
+    "/v1/seller/scene-posts": {
+      "post": {
+        "operationId": "ScenesController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScenePostBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerScenePostDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "Create a private DRAFT Scene. Seller and Market are server-derived.",
+        "tags": [
+          "Scenes"
+        ]
+      },
+      "get": {
+        "operationId": "ScenesController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerScenePostPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "The Seller's own Scenes, any state, cursor-paginated.",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
+    "/v1/seller/scene-posts/{id}": {
+      "get": {
+        "operationId": "ScenesController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The Scene id (management only).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ETag carries edit_version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerScenePostDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "Management view: state, Private reason, restoration, revisions, tag availability.",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
+    "/v1/seller/scene-posts/{id}/draft": {
+      "patch": {
+        "operationId": "ScenesController_patchDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The Scene id (management only).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The Scene edit_version as an ETag, e.g. \"3\". A newer edit answers 409 VALIDATION_FAILED with slots.reason STALE_REVISION.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchScenePostDraftBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerScenePostDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes.",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
+    "/v1/seller/scene-posts/{id}/image-uploads": {
+      "post": {
+        "operationId": "ScenesController_imageUploads",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The Scene id (management only).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenePostImageUploadResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft.",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
+    "/v1/seller/scene-posts/{id}/publish": {
+      "post": {
+        "operationId": "ScenesController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The Scene id (management only).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The Scene edit_version as an ETag, e.g. \"3\". A newer edit answers 409 VALIDATION_FAILED with slots.reason STALE_REVISION.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerScenePostDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
+        "summary": "Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...).",
+        "tags": [
+          "Scenes"
+        ]
+      }
+    },
     "/v1/seller/social-accounts": {
       "get": {
         "operationId": "OnboardingController_getSocialAccounts",
@@ -3985,6 +4437,531 @@
             ]
           }
         }
+      },
+      "CreateScenePostBodyDto": {
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "product_ids": {
+            "maxItems": 40,
+            "description": "Products of the same Seller, in presentation order.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "ScenePostImageDto": {
+        "type": "object",
+        "properties": {
+          "thumb_key": {
+            "type": "string",
+            "description": "Object key; resolve against bootstrap media_public_origin."
+          },
+          "card_key": {
+            "type": "string"
+          },
+          "full_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thumb_key",
+          "card_key",
+          "full_key"
+        ]
+      },
+      "ScenePostTagDto": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean",
+            "description": "The Product is public commerce (PUBLISHED)."
+          },
+          "in_stock": {
+            "type": "boolean",
+            "description": "At least one ACTIVE Variant has sellable stock."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "published AND in_stock: counts toward Scene visibility."
+          }
+        },
+        "required": [
+          "product_id",
+          "position",
+          "name",
+          "published",
+          "in_stock",
+          "available"
+        ]
+      },
+      "ScenePostRevisionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "WORKING",
+              "PUBLISHED"
+            ]
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "image": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScenePostImageDto"
+              }
+            ]
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenePostTagDto"
+            }
+          },
+          "tagged_product_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_tagged_product_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "caption",
+          "image",
+          "published_at",
+          "products",
+          "tagged_product_count",
+          "available_tagged_product_count"
+        ]
+      },
+      "SellerScenePostDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "public_ref": {
+            "type": "string",
+            "description": "Stable public reference: /v1/scene-posts/{public_ref}."
+          },
+          "publication_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED",
+              "ARCHIVED"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          },
+          "visibility_reason": {
+            "type": "string",
+            "enum": [
+              "ALL_TAGGED_PRODUCTS_UNAVAILABLE",
+              "ALL_TAGGED_PRODUCTS_OUT_OF_STOCK"
+            ],
+            "nullable": true,
+            "description": "Why a published Scene is PRIVATE. Management only; never public."
+          },
+          "restores_automatically": {
+            "type": "boolean",
+            "description": "True when PRIVATE only for availability: it returns to PUBLIC by itself as soon as one tagged Product is available."
+          },
+          "effective_public": {
+            "type": "boolean",
+            "description": "Whether a Buyer can open it right now (every public gate)."
+          },
+          "edit_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Send as If-Match to edit or publish."
+          },
+          "lifecycle_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "visibility_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "published_revision": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScenePostRevisionDto"
+              }
+            ]
+          },
+          "working_revision": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScenePostRevisionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "public_ref",
+          "publication_state",
+          "visibility",
+          "visibility_reason",
+          "restores_automatically",
+          "effective_public",
+          "edit_version",
+          "lifecycle_version",
+          "published_at",
+          "visibility_changed_at",
+          "created_at",
+          "updated_at",
+          "published_revision",
+          "working_revision"
+        ]
+      },
+      "SellerScenePostSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "public_ref": {
+            "type": "string"
+          },
+          "publication_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED",
+              "ARCHIVED"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          },
+          "visibility_reason": {
+            "type": "string",
+            "enum": [
+              "ALL_TAGGED_PRODUCTS_UNAVAILABLE",
+              "ALL_TAGGED_PRODUCTS_OUT_OF_STOCK"
+            ],
+            "nullable": true
+          },
+          "edit_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true,
+            "description": "Working caption, else published."
+          },
+          "card_image_key": {
+            "type": "string",
+            "nullable": true
+          },
+          "tagged_product_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Tags of the published revision."
+          },
+          "available_tagged_product_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "public_ref",
+          "publication_state",
+          "visibility",
+          "visibility_reason",
+          "edit_version",
+          "caption",
+          "card_image_key",
+          "tagged_product_count",
+          "available_tagged_product_count",
+          "published_at",
+          "updated_at"
+        ]
+      },
+      "SellerScenePostPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellerScenePostSummaryDto"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "data",
+          "has_more",
+          "next_cursor"
+        ]
+      },
+      "PatchScenePostDraftBodyDto": {
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "product_ids": {
+            "maxItems": 40,
+            "description": "Replaces every tag of the working revision, in presentation order.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "image": {
+            "nullable": true,
+            "description": "Keys from POST .../image-uploads, after the bytes were PUT.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScenePostImageDto"
+              }
+            ]
+          }
+        }
+      },
+      "SignedUploadDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived presigned PUT; never stored."
+          },
+          "key": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "url",
+          "key",
+          "expires_at"
+        ]
+      },
+      "ScenePostImageUploadsDto": {
+        "type": "object",
+        "properties": {
+          "thumb": {
+            "$ref": "#/components/schemas/SignedUploadDto"
+          },
+          "card": {
+            "$ref": "#/components/schemas/SignedUploadDto"
+          },
+          "full": {
+            "$ref": "#/components/schemas/SignedUploadDto"
+          }
+        },
+        "required": [
+          "thumb",
+          "card",
+          "full"
+        ]
+      },
+      "ScenePostImageUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "uploads": {
+            "$ref": "#/components/schemas/ScenePostImageUploadsDto"
+          }
+        },
+        "required": [
+          "uploads"
+        ]
+      },
+      "PublicSceneSellerDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "handle",
+          "store_name"
+        ]
+      },
+      "PublicSceneProductDto": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "base_price_currency": {
+            "type": "string"
+          },
+          "image_key": {
+            "type": "string",
+            "nullable": true
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action."
+          }
+        },
+        "required": [
+          "position",
+          "slug",
+          "name",
+          "base_price_minor",
+          "base_price_currency",
+          "image_key",
+          "available"
+        ]
+      },
+      "PublicScenePostDto": {
+        "type": "object",
+        "properties": {
+          "public_ref": {
+            "type": "string"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "caption": {
+            "type": "string"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ScenePostImageDto"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/PublicSceneSellerDto"
+          },
+          "products": {
+            "description": "Public tagged Products in presentation order; at least one is available.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicSceneProductDto"
+            }
+          }
+        },
+        "required": [
+          "public_ref",
+          "published_at",
+          "revision_version",
+          "caption",
+          "image",
+          "seller",
+          "products"
+        ]
       }
     }
   }

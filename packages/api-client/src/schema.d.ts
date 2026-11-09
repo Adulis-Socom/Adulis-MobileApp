@@ -881,6 +881,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/scene-posts/{publicRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A public Scene, only while every public gate passes now. PRIVATE, draft and unknown are the same 404. */
+        get: operations["ScenesController_publicDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller": {
         parameters: {
             query?: never;
@@ -1696,6 +1713,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/seller/scene-posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Seller's own Scenes, any state, cursor-paginated. */
+        get: operations["ScenesController_list"];
+        put?: never;
+        /** Create a private DRAFT Scene. Seller and Market are server-derived. */
+        post: operations["ScenesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/scene-posts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Management view: state, Private reason, restoration, revisions, tag availability. */
+        get: operations["ScenesController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/scene-posts/{id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes. */
+        patch: operations["ScenesController_patchDraft"];
+        trace?: never;
+    };
+    "/v1/seller/scene-posts/{id}/image-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft. */
+        post: operations["ScenesController_imageUploads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/seller/scene-posts/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...). */
+        post: operations["ScenesController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller/social-accounts": {
         parameters: {
             query?: never;
@@ -1989,6 +2092,11 @@ export interface components {
              */
             server_time: string;
         };
+        CreateScenePostBodyDto: {
+            caption?: string;
+            /** @description Products of the same Seller, in presentation order. */
+            product_ids?: string[];
+        };
         DevicePatchBodyDto: {
             /** @enum {string} */
             notification_permission?: "GRANTED" | "DENIED" | "NOT_ASKED";
@@ -2047,6 +2155,13 @@ export interface components {
             /** @description MOBILE only: the session credential, sent as Authorization: Bearer. Returned once and never stored by the server; keep it in platform secure storage. Absent for CONSOLE, whose credential is the __Host-adulis_session cookie. */
             token?: string;
         };
+        PatchScenePostDraftBodyDto: {
+            caption?: string | null;
+            /** @description Keys from POST .../image-uploads, after the bytes were PUT. */
+            image?: components["schemas"]["ScenePostImageDto"] | null;
+            /** @description Replaces every tag of the working revision, in presentation order. */
+            product_ids?: string[];
+        };
         ProblemDto: {
             /** @enum {string} */
             code: "OTP_INVALID" | "OTP_EXPIRED" | "OTP_ATTEMPTS_EXCEEDED" | "OTP_PURPOSE_NOT_PERMITTED" | "AGE_DECLARATION_REQUIRED" | "SESSION_EXPIRED" | "SESSION_REVOKED" | "AUDIENCE_NOT_PERMITTED" | "RECOVERY_REQUIRED" | "STEP_UP_REQUIRED" | "STEP_UP_EXPIRED" | "STEP_UP_ACTION_MISMATCH" | "PERMISSION_DENIED" | "OWNER_ONLY" | "CART_EMPTY" | "CART_SELLER_CONFLICT" | "CART_REVALIDATION_FAILED" | "INSUFFICIENT_STOCK" | "SOLD_OUT" | "PRICE_CHANGED" | "NO_LONGER_PUBLISHED" | "VARIANT_WITHDRAWN" | "SELLER_UNAVAILABLE" | "TRANSACTION_CAP_EXCEEDED" | "ILLEGAL_TRANSITION" | "ORDER_NOT_PAYABLE" | "ORDER_ALREADY_TERMINAL" | "DUPLICATE_RESERVATION" | "BUYER_COOLDOWN_ACTIVE" | "ORDER_NOT_READYABLE" | "EVIDENCE_REQUIRED" | "EVIDENCE_TOO_LARGE" | "PAYMENT_ALREADY_DECIDED" | "NOT_ORDER_BUYER" | "SCAN_SIGNATURE_INVALID" | "SCAN_PREDATES_TOKEN" | "SCAN_NOT_ORDER_BUYER" | "COURIER_CANNOT_SCAN" | "PUBLICATION_BLOCKED" | "ELIGIBILITY_NOT_SATISFIED" | "TIER_LIMIT_REACHED" | "LEVEL_LIMIT_REACHED" | "HANDLE_TAKEN" | "FULFILMENT_METHOD_REQUIRED" | "PRODUCT_HAS_ACTIVE_ORDERS" | "VARIANT_HAS_ACTIVE_ORDERS" | "PAYOUT_LOCKED" | "PAYOUT_CHANGE_PENDING" | "PAYOUT_PERMISSION_DENIED" | "DELETION_BLOCKED" | "DELETION_OWNER_ONLY" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_MISSING" | "IDEMPOTENCY_KEY_REUSED" | "RATE_LIMITED" | "CLIENT_UPGRADE_REQUIRED" | "PAYLOAD_TOO_LARGE" | "SELLER_CONTEXT_REQUIRED" | "SCOPE_PARAMETER_REQUIRED" | "NOT_FOUND" | "GONE" | "INTERNAL";
@@ -2067,6 +2182,32 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        PublicScenePostDto: {
+            caption: string;
+            image: components["schemas"]["ScenePostImageDto"];
+            /** @description Public tagged Products in presentation order; at least one is available. */
+            products: components["schemas"]["PublicSceneProductDto"][];
+            public_ref: string;
+            /** Format: date-time */
+            published_at: string;
+            revision_version: number;
+            seller: components["schemas"]["PublicSceneSellerDto"];
+        };
+        PublicSceneProductDto: {
+            /** @description False: show "Currently unavailable" and no purchase action. */
+            available: boolean;
+            base_price_currency: string;
+            base_price_minor: number;
+            image_key: string | null;
+            name: string;
+            position: number;
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
+        };
+        PublicSceneSellerDto: {
+            handle: string;
+            store_name: string;
+        };
         RevokeOthersBodyDto: {
             /**
              * Format: uuid
@@ -2083,6 +2224,106 @@ export interface components {
              * @description Required to revoke ANOTHER session (CONSOLE only): a satisfied REVOKE_ALL_SESSIONS step-up, consumed. Not needed to revoke the calling session.
              */
             step_up_challenge_id?: string;
+        };
+        ScenePostImageDto: {
+            card_key: string;
+            full_key: string;
+            /** @description Object key; resolve against bootstrap media_public_origin. */
+            thumb_key: string;
+        };
+        ScenePostImageUploadResponseDto: {
+            uploads: components["schemas"]["ScenePostImageUploadsDto"];
+        };
+        ScenePostImageUploadsDto: {
+            card: components["schemas"]["SignedUploadDto"];
+            full: components["schemas"]["SignedUploadDto"];
+            thumb: components["schemas"]["SignedUploadDto"];
+        };
+        ScenePostRevisionDto: {
+            available_tagged_product_count: number;
+            caption: string | null;
+            /** Format: uuid */
+            id: string;
+            image: components["schemas"]["ScenePostImageDto"] | null;
+            products: components["schemas"]["ScenePostTagDto"][];
+            /** Format: date-time */
+            published_at: string | null;
+            /** @enum {string} */
+            status: "WORKING" | "PUBLISHED";
+            tagged_product_count: number;
+            version: number;
+        };
+        ScenePostTagDto: {
+            /** @description published AND in_stock: counts toward Scene visibility. */
+            available: boolean;
+            /** @description At least one ACTIVE Variant has sellable stock. */
+            in_stock: boolean;
+            name: string;
+            position: number;
+            /** Format: uuid */
+            product_id: string;
+            /** @description The Product is public commerce (PUBLISHED). */
+            published: boolean;
+        };
+        SellerScenePostDto: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description Send as If-Match to edit or publish. */
+            edit_version: number;
+            /** @description Whether a Buyer can open it right now (every public gate). */
+            effective_public: boolean;
+            /** Format: uuid */
+            id: string;
+            lifecycle_version: number;
+            /** @description Stable public reference: /v1/scene-posts/{public_ref}. */
+            public_ref: string;
+            /** @enum {string} */
+            publication_state: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** Format: date-time */
+            published_at: string | null;
+            published_revision: components["schemas"]["ScenePostRevisionDto"] | null;
+            /** @description True when PRIVATE only for availability: it returns to PUBLIC by itself as soon as one tagged Product is available. */
+            restores_automatically: boolean;
+            /** Format: date-time */
+            updated_at: string;
+            /** @enum {string} */
+            visibility: "PUBLIC" | "PRIVATE";
+            /** Format: date-time */
+            visibility_changed_at: string | null;
+            /**
+             * @description Why a published Scene is PRIVATE. Management only; never public.
+             * @enum {string|null}
+             */
+            visibility_reason: "ALL_TAGGED_PRODUCTS_UNAVAILABLE" | "ALL_TAGGED_PRODUCTS_OUT_OF_STOCK" | null;
+            working_revision: components["schemas"]["ScenePostRevisionDto"] | null;
+        };
+        SellerScenePostPageDto: {
+            data: components["schemas"]["SellerScenePostSummaryDto"][];
+            has_more: boolean;
+            /** Format: uuid */
+            next_cursor: string | null;
+        };
+        SellerScenePostSummaryDto: {
+            available_tagged_product_count: number;
+            /** @description Working caption, else published. */
+            caption: string | null;
+            card_image_key: string | null;
+            edit_version: number;
+            /** Format: uuid */
+            id: string;
+            public_ref: string;
+            /** @enum {string} */
+            publication_state: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** Format: date-time */
+            published_at: string | null;
+            /** @description Tags of the published revision. */
+            tagged_product_count: number;
+            /** Format: date-time */
+            updated_at: string;
+            /** @enum {string} */
+            visibility: "PUBLIC" | "PRIVATE";
+            /** @enum {string|null} */
+            visibility_reason: "ALL_TAGGED_PRODUCTS_UNAVAILABLE" | "ALL_TAGGED_PRODUCTS_OUT_OF_STOCK" | null;
         };
         SessionDto: {
             approx_location: string | null;
@@ -2113,6 +2354,16 @@ export interface components {
         };
         SessionListResponseDto: {
             data: components["schemas"]["SessionDto"][];
+        };
+        SignedUploadDto: {
+            /** Format: date-time */
+            expires_at: string;
+            key: string;
+            /**
+             * Format: uri
+             * @description Short-lived presigned PUT; never stored.
+             */
+            url: string;
         };
     };
     responses: never;
@@ -3290,6 +3541,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ScenesController_publicDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The Scene public_ref (22 characters). */
+                publicRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -4512,6 +4794,223 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ScenesController_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerScenePostPageDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    ScenesController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScenePostBodyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    ScenesController_detail: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path: {
+                /** @description The Scene id (management only). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ETag carries edit_version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    ScenesController_patchDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The Scene edit_version as an ETag, e.g. "3". A newer edit answers 409 VALIDATION_FAILED with slots.reason STALE_REVISION. */
+                "If-Match": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path: {
+                /** @description The Scene id (management only). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchScenePostDraftBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    ScenesController_imageUploads: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path: {
+                /** @description The Scene id (management only). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenePostImageUploadResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    ScenesController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description The Scene edit_version as an ETag, e.g. "3". A newer edit answers 409 VALIDATION_FAILED with slots.reason STALE_REVISION. */
+                "If-Match": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
+            path: {
+                /** @description The Scene id (management only). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

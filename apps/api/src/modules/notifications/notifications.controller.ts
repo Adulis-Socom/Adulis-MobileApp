@@ -62,6 +62,8 @@ export class NotificationsController {
    * list and never SC-30. One fragment, interpolated into both arms:
    * inclusion in the seller arm IS exclusion in the buyer arm, by
    * construction rather than by parallel maintenance.
+   * SCENE_BECAME_PRIVATE / SCENE_BECAME_PUBLIC (0054, WO-DISC-001) are written
+   * unlinked to the owner the same way, so they are listed here too.
    */
   private readonly sellerClassTemplate = sql<boolean>`(
        n.template_key = 'NEW_DEVICE_SIGNIN'
@@ -69,7 +71,8 @@ export class NotificationsController {
     OR n.template_key LIKE 'OWNERSHIP_TRANSFER%'
     OR n.template_key = 'STOCK_CONFIDENCE_NUDGE'
     OR n.template_key = 'TRIAL_ENDING'
-    OR n.template_key = 'notification.chat.escalated')`;
+    OR n.template_key = 'notification.chat.escalated'
+    OR n.template_key LIKE 'SCENE_BECAME_%')`;
 
   @Get('notifications')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.' })

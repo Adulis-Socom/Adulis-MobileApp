@@ -35,10 +35,10 @@ import type {
  *  - publish/unpublish are the named database functions, nothing else.
  */
 
-const IMAGE_CAPS = {
+export const IMAGE_CAPS = {
   // Derivative byte caps. No document rules the numbers; generous bounds
   // that a phone-resized WebP sits far under, recorded here rather than
-  // invisible.
+  // invisible. Scene images use the same caps (modules/scenes).
   thumb: 256 * 1024,
   card: 1024 * 1024,
   full: 5 * 1024 * 1024,

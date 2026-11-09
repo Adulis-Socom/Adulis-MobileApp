@@ -65,6 +65,8 @@ import { NotificationsController } from './modules/notifications/notifications.c
 import { ReportsController } from './modules/reports/reports.controller';
 import { StorefrontController } from './modules/storefront/storefront.controller';
 import { ObligationsController } from './modules/obligations/obligations.controller';
+import { ScenesController } from './modules/scenes/scenes.controller';
+import { ScenesService } from './modules/scenes/scenes.service';
 import { createLogger } from './common/logging';
 
 /** Injection token for the process-wide pino logger. */
@@ -86,7 +88,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,
@@ -97,6 +99,7 @@ export const LOGGER = Symbol('LOGGER');
     // Production binds real adapters here by environment when they exist.
     { provide: SOCIAL_PLATFORM_ADAPTER, useValue: new NullSocialPlatformAdapter() },
     CatalogueService,
+    ScenesService,
     OrdersService,
     FinancialService,
     HandoffService,
