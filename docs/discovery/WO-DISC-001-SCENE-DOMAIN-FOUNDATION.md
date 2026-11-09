@@ -1,5 +1,11 @@
 # WO-DISC-001 - Scene and discovery domain foundation
 
+> **Addendum, 10 November 2026 (WO-DISC-001A).** This work order ended BLOCKED on G-1 (ADU-DB-01
+> Appendix B behind migration 0054). WO-DISC-001A installed ADU-DB-01 v1.20, `verify:appendix` is
+> green with the gate unchanged, and WO-DISC-001 is formally closed: **COMPLETE -- READY FOR
+> FOR-YOU / DISCOVERY API.** See `docs/discovery/WO-DISC-001A-DB-GOVERNANCE-SYNC.md`. The record
+> below is the original and is not rewritten.
+
 Status: complete on its branch, pushed, awaiting founder review. Branch
 `discovery/wo-disc-001-scene-foundation`. No pull request, no merge, `main` untouched. No
 For You ranking, feed session, Following, Nearby, Discounts, Locally Made, search, Story,
