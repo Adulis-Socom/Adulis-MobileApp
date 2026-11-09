@@ -1,9 +1,11 @@
 # `apps/mobile` — the Adulis mobile app
 
-**Foundation only (WO-001, WO-001A).** An Expo SDK 58 app, `com.adulis.app`, with Buyer,
-Seller Companion and Courier foundation shells and the client infrastructure under them. No
-product feature is built. What exists, why, and what is still open:
-`docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md` and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
+**Buyer shell (WO-002) on the WO-001/WO-001A foundation.** An Expo SDK 58 app,
+`com.adulis.app`: the Buyer application shell (five tabs, Home channels, guest and signed-in
+states, all structure and no domain data), with the Seller Companion and Courier shells kept
+as development-only diagnostics. No product domain is built. What exists, why, and what is
+still open: `docs/mobile/WO-002-BUYER-SHELL.md`, `docs/mobile/WO-001-MOBILE-FOUNDATION-COMPLETION.md`
+and `docs/mobile/WO-001A-FOUNDATION-CLOSURE.md`.
 
 **System design (current authority, founder decision WO-001B):** ADU-MOB-02 v4.3 (its
 S232 is the post-October-13 reconciliation and wins inside the document) - ADU-AUTH-02
@@ -112,14 +114,31 @@ a user release. After adding strings, scan the export
 
 ## Architecture
 
-- `src/app/` - Expo Router routes only: the foundation root and one directory per mode,
-  each behind `ModeLayout` (availability guard; sets `activeMode` on entry, clears it on
-  exit - `clearSession` is the only other writer).
+- `src/app/` - Expo Router routes only (ADU-MOB-02 v4.3 S13). `index` redirects to Buyer
+  Home. `(buyer)/` is a Stack (Buyer mode activation) holding `(tabs)/` - JS `Tabs`, exactly
+  `home | shop | saved | orders | account` (label "You") - plus screens that open over the
+  tabs (`search`, `notifications`; later Product, Scene, Seller, Checkout). `(tabs)/home/` is
+  a second `Tabs` navigator for the five channels, drawn at the top by `src/buyer/HomeHeader`;
+  each channel is a route (`/home/nearby`). `dev/` (foundation diagnostics, Amharic QA) and
+  `seller/`, `courier/` (diagnostic shells behind `ModeLayout`) exist in development builds
+  only; a release build redirects them, and `+not-found`, to Buyer Home. `activeMode` is set
+  on entering a mode and cleared on leaving; `clearSession` is the only other writer.
+- `src/buyer/` holds the Buyer shell's own components (Home header, channel list, channel
+  panel, sign-in-required state); `src/components/` the shared ones (`Screen`, `Placeholder`,
+  `ErrorState`, `Loading`, ...). Placeholders never claim the Buyer has nothing before a
+  domain can be read, and never offer an action that does not work.
+- Icons: `@expo/vector-icons` (Ionicons) over `expo-font`, both SDK-pinned JS packages - no
+  native rebuild. `NativeTabs`' Android icons would need `expo-symbols`, a native module.
 - Server state lives in TanStack Query (`src/api/query-client.ts`). Zustand
   (`src/state/ui-store.ts`) holds UI state only: active mode, theme preference. Never
   Orders, stock, payment, Trust, permissions or eligibility.
-- `src/auth/session.tsx` is the one session boundary: hydration at startup, and
-  `clearSession` as the single sign-out path (credential, query cache, active mode).
+- `src/auth/session.tsx` is the one session boundary: hydration at startup, `clearSession`
+  as the single local sign-out path (credential, query cache, active mode), and `signOut`,
+  which clears the device at once and revokes the session server-side alongside
+  (`POST /v1/auth/logout`, typed against the contract in `src/api/auth.ts`, 10 s abort):
+  the device never waits on the network to forget a credential.
+- Amharic: `useT` renders English in a release build whatever the store holds
+  (`amharicAvailable()` is `__DEV__`); the only language control is the dev diagnostics one.
 - `src/theme/theme.ts` is the one theme authority: semantic roles from `@adulis/tokens`,
   Light / Dark / System, and the only place token lengths become dp. Never a colour literal
   in a screen; the brand palette is not final and must change in one place.

@@ -1,4 +1,5 @@
 import { colorModes, font, radius, space, touchTarget, type ColorMode } from '@adulis/tokens';
+import { DarkTheme, DefaultTheme, type Theme as NavigationTheme } from 'expo-router';
 import { useColorScheme } from 'react-native';
 
 import { useUiStore, type ThemePreference } from '../state/ui-store';
@@ -53,4 +54,23 @@ export function resolveColorMode(
 export function useTheme(): Theme {
   const preference = useUiStore((state) => state.themePreference);
   return themes[resolveColorMode(preference, useColorScheme())];
+}
+
+/**
+ * The same semantic roles, in the shape navigators read for their own chrome (tab bars,
+ * stack headers, screen backgrounds), so no navigator falls back to its built-in palette.
+ */
+export function navigationTheme(theme: Theme): NavigationTheme {
+  const base = theme.mode === 'dark' ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    colors: {
+      primary: theme.color.accent,
+      background: theme.color.bg,
+      card: theme.color.surface,
+      text: theme.color.text,
+      border: theme.color.border,
+      notification: theme.color.accent,
+    },
+  };
 }

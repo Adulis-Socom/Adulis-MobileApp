@@ -1,11 +1,19 @@
 export const MODES = ['buyer', 'seller', 'courier'] as const;
 export type Mode = (typeof MODES)[number];
 
+// Diagnostic labels (development builds only); product UI names modes through the catalogue.
 export const MODE_LABEL: Record<Mode, string> = {
   buyer: 'Buyer',
   seller: 'Seller Companion',
   courier: 'Courier',
 };
+
+/** Where each mode starts. Buyer is the app's own entry; the others are diagnostic shells. */
+export const MODE_HOME = {
+  buyer: '/home/for-you',
+  seller: '/seller',
+  courier: '/courier',
+} as const satisfies Record<Mode, string>;
 
 /**
  * The shells this account may open. AVAILABLE modes are backend truth; the ACTIVE mode

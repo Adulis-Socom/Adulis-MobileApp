@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { revokeCurrentSession } from '../api/auth';
 import { useUiStore } from '../state/ui-store';
 import type { SessionStorage } from './session-storage';
 
@@ -20,8 +21,16 @@ export type SessionState =
 
 type SessionContextValue = {
   session: SessionState;
-  /** THE sign-out boundary: credential, server cache and mode, in one place. */
+  /**
+   * THE local sign-out boundary: credential, server cache and mode, in one place. Alone it
+   * forgets the session on this device only (e.g. after a 401).
+   */
   clearSession: () => Promise<void>;
+  /**
+   * Sign out: clearSession, with the server revoke (WO-API-001A) running alongside. Rejects
+   * only if the device could not forget the credential.
+   */
+  signOut: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -71,7 +80,26 @@ export function SessionProvider({
     setSession({ status: 'signedOut' });
   }, [storage, queryClient]);
 
-  const value = useMemo(() => ({ session, clearSession }), [session, clearSession]);
+  const signOut = useCallback(async () => {
+    // The revoke runs alongside, never in front: the device forgets the credential at once
+    // even on a stalled network, and a credential left on the device because the local
+    // delete failed is still dead on the server. The revoke gives up after its timeout.
+    if (session.status === 'signedIn') {
+      revokeCurrentSession(session.token).catch((error: unknown) => {
+        // Offline or a server error: the server session expires or is revoked later.
+        console.warn(
+          '[session] server sign-out failed; this device has forgotten the session:',
+          error instanceof Error ? error.message : 'unknown error',
+        );
+      });
+    }
+    await clearSession();
+  }, [session, clearSession]);
+
+  const value = useMemo(
+    () => ({ session, clearSession, signOut }),
+    [session, clearSession, signOut],
+  );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

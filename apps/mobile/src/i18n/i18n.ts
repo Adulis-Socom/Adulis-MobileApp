@@ -14,7 +14,18 @@ export function translate(locale: Locale, key: MobileMessageKey): string {
   return catalogues[locale][key];
 }
 
+/**
+ * AMHARIC IS A DEVELOPMENT-ONLY LANGUAGE until the human translation review (November
+ * R-19): its strings are machine-translated placeholders (packages/locale/MT-KEYS.md). A
+ * release build renders English whatever the store holds, so no path - a leftover setting,
+ * a future control - can show a user unreviewed Amharic. Development builds keep it for QA.
+ */
+export function amharicAvailable(): boolean {
+  return __DEV__;
+}
+
 export function useT(): (key: MobileMessageKey) => string {
-  const locale = useUiStore((state) => state.locale);
+  const selected = useUiStore((state) => state.locale);
+  const locale = amharicAvailable() ? selected : 'en';
   return (key) => translate(locale, key);
 }

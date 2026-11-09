@@ -1,9 +1,11 @@
 import { ActivityIndicator, View } from 'react-native';
 
+import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 
 export function Loading() {
   const theme = useTheme();
+  const t = useT();
   return (
     <View
       style={{
@@ -13,7 +15,7 @@ export function Loading() {
         backgroundColor: theme.color.bg,
       }}
     >
-      <ActivityIndicator color={theme.color.accent} accessibilityLabel="Loading" />
+      <ActivityIndicator color={theme.color.accent} accessibilityLabel={t('common.loading')} />
     </View>
   );
 }

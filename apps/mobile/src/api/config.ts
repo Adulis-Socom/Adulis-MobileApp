@@ -12,5 +12,10 @@ export function apiOrigin(): string {
   if (!configured?.trim()) {
     throw new Error('EXPO_PUBLIC_API_BASE_URL is not configured (see apps/mobile/.env.example)');
   }
-  return resolveApiBaseUrl(configured);
+  const origin = resolveApiBaseUrl(configured);
+  // The bearer travels to this origin: a release build never sends it over plain HTTP.
+  if (!__DEV__ && !origin.startsWith('https://')) {
+    throw new Error('EXPO_PUBLIC_API_BASE_URL must be https:// in a release build');
+  }
+  return origin;
 }

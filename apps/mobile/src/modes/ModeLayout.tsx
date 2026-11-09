@@ -5,11 +5,10 @@ import { useUiStore } from '../state/ui-store';
 import { useAvailableModes, type Mode } from './modes';
 
 /**
- * Every route of a mode passes through here: a mode the account does not have never
- * renders. Entering a mode sets `activeMode` and leaving clears it; the only other writer
- * is clearSession.
+ * Entering a mode sets `activeMode` and leaving clears it; the only other writer is
+ * clearSession. Returns whether the account has the mode at all.
  */
-export function ModeLayout({ mode }: { mode: Mode }) {
+export function useModeActivation(mode: Mode): boolean {
   const allowed = useAvailableModes().includes(mode);
   const setActiveMode = useUiStore((state) => state.setActiveMode);
 
@@ -22,5 +21,13 @@ export function ModeLayout({ mode }: { mode: Mode }) {
     };
   }, [allowed, mode, setActiveMode]);
 
-  return allowed ? <Slot /> : <Redirect href="/" />;
+  return allowed;
+}
+
+/**
+ * The guard for the Seller Companion and Courier diagnostic shells: a mode the account
+ * does not have never renders. (Buyer has its own navigator: app/(buyer)/_layout.tsx.)
+ */
+export function ModeLayout({ mode }: { mode: Mode }) {
+  return useModeActivation(mode) ? <Slot /> : <Redirect href="/" />;
 }

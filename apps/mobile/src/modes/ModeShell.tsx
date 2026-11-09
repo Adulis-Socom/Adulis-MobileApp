@@ -5,9 +5,12 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { useUiStore } from '../state/ui-store';
-import { MODE_LABEL, useAvailableModes, type Mode } from './modes';
+import { MODE_HOME, MODE_LABEL, useAvailableModes, type Mode } from './modes';
 
-/** Foundation diagnostic shell for one mode. Not a product screen; feature WOs replace it. */
+/**
+ * Foundation diagnostic shell for the Seller Companion and Courier modes (development
+ * builds only). Not a product screen; their feature work orders replace it.
+ */
 export function ModeShell({ mode }: { mode: Mode }) {
   const router = useRouter();
   const available = useAvailableModes();
@@ -28,10 +31,10 @@ export function ModeShell({ mode }: { mode: Mode }) {
           <Button
             key={other}
             label={`Switch to ${MODE_LABEL[other]}`}
-            onPress={() => router.replace(`/${other}`)}
+            onPress={() => router.replace(MODE_HOME[other])}
           />
         ))}
-      <Button label="Back to foundation" onPress={() => router.dismissTo('/')} />
+      <Button label="Back to diagnostics" onPress={() => router.dismissTo('/dev')} />
     </Screen>
   );
 }
