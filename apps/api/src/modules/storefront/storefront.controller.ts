@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import {
@@ -155,11 +155,16 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle')
-  // The answer depends on the requester's Market (and is read now): never shared-cached.
-  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Header, stats, trust level, availability — one round trip (S3.1).' })
-  async storefront(@Req() req: LocalizedRequest, @Param('handle') handle: string): Promise<unknown> {
+  async storefront(
+    @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param('handle') handle: string,
+  ): Promise<unknown> {
+    // The answer depends on the requester's Market and is read now: never shared-cached, its
+    // 404 included (set before anything can throw).
+    res.setHeader('Cache-Control', 'no-store');
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
       const stats = await sql<Record<string, unknown>>`
@@ -184,8 +189,6 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/products')
-  // The answer depends on the requester's Market (and is read now): never shared-cached.
-  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({
     summary:
@@ -196,8 +199,12 @@ export class StorefrontController {
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async products(
     @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
   ): Promise<StorefrontProductListDto> {
+    // The answer depends on the requester's Market and is read now: never shared-cached, its
+    // 404 included (set before anything can throw).
+    res.setHeader('Cache-Control', 'no-store');
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
       const r = await sql<ProductSummaryRow & { display_order: number; image_key: string | null }>`
@@ -257,17 +264,48 @@ export class StorefrontController {
     // rule fn_create_order and core.v_scene_product_availability already apply.
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
+      // The Product, its span, its availability and its options with theirs come from ONE
+      // statement, so they share one snapshot: an option is never available while its Product
+      // is not, and the span always describes the options listed (OVN-074).
       const p = await sql<
-        ProductSummaryRow & { description: string | null; category_id: string | null }
+        ProductSummaryRow & {
+          description: string | null;
+          category_id: string | null;
+          variants: Array<{
+            id: string;
+            variant_key: string;
+            price_minor: string;
+            price_currency: string;
+            stock_count: number;
+            stock_confirmed_at: string | null;
+            status: string;
+            available: boolean;
+          }>;
+        }
       >`
         SELECT p.id, p.slug, p.name, p.description, p.base_price_minor,
                p.base_price_currency, p.category_id,
                pp.price_min_minor, pp.price_max_minor, pp.price_currency,
-               ${productAvailable} AS available
+               ${productAvailable} AS available,
+               vv.variants
           FROM core.product p
           JOIN core.seller s ON s.id = p.seller_id
           JOIN core.market m ON m.id = p.market_id
          CROSS JOIN ${publicPrice}
+         CROSS JOIN LATERAL (
+           SELECT coalesce(json_agg(json_build_object(
+                    'id', v.id,
+                    'variant_key', v.variant_key,
+                    'price_minor', v.price_minor::text,
+                    'price_currency', v.price_currency,
+                    'stock_count', v.stock_count,
+                    'stock_confirmed_at',
+                      to_char(v.stock_confirmed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                    'status', v.status,
+                    'available', ${productTrades} AND ${variantSellable}
+                  ) ORDER BY v.variant_key), '[]'::json) AS variants
+             FROM core.product_variant v
+            WHERE v.product_id = p.id AND v.status = 'ACTIVE') vv
          WHERE p.slug = ${slug} AND p.seller_id = ${seller.id}
            AND p.visibility = 'PUBLISHED'`.execute(trx);
       const product = first(p.rows);
@@ -276,27 +314,6 @@ export class StorefrontController {
       // slug addresses the product on the wire and the uuid joins it in
       // the database, which is exactly the split doctrine 5 asks for.
       const productId = product.id;
-      // Per-Variant sellability from the same projection as the Product's `available`, so an
-      // option is never available while its Product is not (OVN-074).
-      const variants = await sql<{
-        id: string;
-        variant_key: string;
-        price_minor: string;
-        price_currency: string;
-        stock_count: number;
-        stock_confirmed_at: Date | null;
-        status: string;
-        available: boolean;
-      }>`
-        SELECT v.id, v.variant_key, v.price_minor, v.price_currency,
-               v.stock_count, v.stock_confirmed_at, v.status,
-               (${productTrades} AND ${variantSellable}) AS available
-          FROM core.product_variant v
-          JOIN core.product p ON p.id = v.product_id
-          JOIN core.seller s ON s.id = p.seller_id
-          JOIN core.market m ON m.id = p.market_id
-         WHERE v.product_id = ${productId} AND v.status = 'ACTIVE'
-         ORDER BY v.variant_key`.execute(trx);
       // Codes stay for compatibility; the governed label references (OVN-075) ride beside
       // them. A label key is a locale catalogue key, never prose (0007): a client shows an
       // attribute only when its catalogue holds the key, so a code is never Buyer copy.
@@ -338,11 +355,7 @@ export class StorefrontController {
         description: product.description,
         category_id: product.category_id,
         seller: { handle: seller.handle, store_name: seller.store_name },
-        variants: variants.rows.map((v) => ({
-          ...v,
-          price_minor: minorUnits(v.price_minor),
-          stock_confirmed_at: v.stock_confirmed_at ? v.stock_confirmed_at.toISOString() : null,
-        })),
+        variants: product.variants.map((v) => ({ ...v, price_minor: minorUnits(v.price_minor) })),
         attributes: attributes.rows,
         images: images.rows,
       };
@@ -350,8 +363,6 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/search')
-  // The answer depends on the requester's Market (and is read now): never shared-cached.
-  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({
     summary:
@@ -363,9 +374,13 @@ export class StorefrontController {
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async search(
     @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
     @Query('q') q?: string,
   ): Promise<StorefrontSearchResultListDto> {
+    // The answer depends on the requester's Market and is read now: never shared-cached, its
+    // 404 included (set before anything can throw).
+    res.setHeader('Cache-Control', 'no-store');
     if (!q || q.length > 200) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'q' } });
     }
@@ -390,15 +405,17 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/reviews')
-  // The answer depends on the requester's Market (and is read now): never shared-cached.
-  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Badge per review (S12); anonymised rows carry no buyer.' })
   async reviews(
     @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
     @Query('cursor') cursor?: string,
   ): Promise<unknown> {
+    // The answer depends on the requester's Market and is read now: never shared-cached, its
+    // 404 included (set before anything can throw).
+    res.setHeader('Cache-Control', 'no-store');
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
       const limit = 25;
@@ -420,11 +437,16 @@ export class StorefrontController {
   }
 
   @Get('sellers/lookup')
-  // The answer depends on the requester's Market (and is read now): never shared-cached.
-  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Returns sellers only, capped, never suggests (S7.6).' })
-  async lookup(@Req() req: LocalizedRequest, @Query('q') q?: string): Promise<unknown> {
+  async lookup(
+    @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Query('q') q?: string,
+  ): Promise<unknown> {
+    // The answer depends on the requester's Market and is read now: never shared-cached, its
+    // 404 included (set before anything can throw).
+    res.setHeader('Cache-Control', 'no-store');
     if (!q || q.length > 100) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'q' } });
     }

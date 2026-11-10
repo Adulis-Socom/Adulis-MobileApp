@@ -18,11 +18,15 @@ import { AdulisException } from '../../common/errors/adulis-exception';
  * priced in another currency, fn_create_order refuses such a cart ("no fx source"), and two
  * currencies never merge into one number range. No ACTIVE Variant is also null -- never the seed.
  *
- * SELLABLE is fn_create_order's gates as they apply to one Variant before a cart exists: the
- * Product PUBLISHED, its Seller ACTIVE, its Market ACTIVE (DB-01 :3092), the Variant ACTIVE, in
- * stock (`stock_count` is derived from StockEvents and already net of orders' holds) and priced
- * in the Market's currency. No low-stock threshold exists, so none is applied (CATINV-01 :488).
- * A restriction is today an UNPUBLISHED Product (no MOD-01 enforcement projection exists).
+ * SELLABLE is fn_create_order's per-line purchasability (the rule the Scene domain's
+ * v_scene_product_availability already uses) plus the Seller and Market gates a Buyer can see:
+ * the Product PUBLISHED, its Seller ACTIVE, its Market ACTIVE (DB-01 :3092), the Variant
+ * ACTIVE, in stock (`stock_count` is derived from StockEvents and already net of orders' holds)
+ * and priced in the Market's currency. No low-stock threshold exists, so none is applied
+ * (CATINV-01 :488). A restriction is today an UNPUBLISHED Product (no MOD-01 enforcement
+ * projection exists). NOT reflected, and still refused at checkout: the Seller-level order
+ * gates fn_create_order applies to a whole cart (ACTIVE payout details, a timing configuration
+ * in force, the NEW-level order cap) -- registered for a Catalogue/Checkout decision.
  */
 
 /** The Product may trade now: published, its Seller ACTIVE, its Market ACTIVE. */

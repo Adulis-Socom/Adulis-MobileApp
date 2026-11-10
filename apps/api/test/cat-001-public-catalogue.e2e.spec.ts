@@ -553,7 +553,17 @@ describe('WO-CAT-001 -- public Catalogue read integrity', () => {
       ]) {
         const r = await get(path, DEV.a).expect(200);
         expect(r.headers['cache-control']).toBe('no-store');
+        // The neutral 404 depends on the requester too: it is not cacheable either.
+        if (path.includes('urban-style')) {
+          const gone = await get(path).expect(404);
+          expect(gone.headers['cache-control']).toBe('no-store');
+        }
       }
+    });
+
+    it('a device whose Market is not ACTIVE has no Market evidence: unique handles resolve, ambiguous ones stay 404', async () => {
+      await get('/v1/storefronts/only-here/products/unique-mat', DEV.c).expect(200);
+      await get('/v1/storefronts/urban-style/products/single-lantern', DEV.c).expect(404);
     });
   });
 

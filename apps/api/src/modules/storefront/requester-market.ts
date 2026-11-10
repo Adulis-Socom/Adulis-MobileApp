@@ -13,15 +13,20 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
  * Market, else the registered device's (`core.device.market_id`, set at its first bootstrap).
  * The device header only picks a row; it cannot choose the Market that row holds.
  *
+ * Only an ACTIVE Market counts, as for the feed: a device or Account stamped in a Market that is
+ * no longer ACTIVE has no Market evidence rather than a permanent 404 (bootstrap never re-stamps).
+ *
  * Null means the request carries no Market evidence (an anonymous browser with no registered
  * device, an unregistered device, a device not yet bootstrapped). No document says how such a
  * request picks a Market (STOREFRONT-02 has one host and `/s/:handle`), so callers resolve a
  * handle for it only when exactly one ACTIVE Market has that handle, and otherwise answer the
  * neutral 404: never the first matching row.
  *
- * NOT ACCESS CONTROL. Everything these reads return is public; the Market keeps an honest
- * client inside its own Market and keeps an ambiguous handle from resolving to the wrong
- * Seller. A client that sends another device's id sees that device's Market's public content.
+ * NOT ACCESS CONTROL, and never an authorization or commerce input. Everything these reads
+ * return is public; the Market keeps an honest client inside its own Market and keeps an
+ * ambiguous handle from resolving to the wrong Seller. Dropping the device header gives the
+ * no-evidence view; another device's id gives that Market's public content. A future
+ * Market-restricted rule (category, price, compliance) must not use this as its gate.
  */
 export async function requesterMarket(
   trx: Transaction<Database>,
@@ -29,13 +34,19 @@ export async function requesterMarket(
 ): Promise<string | null> {
   const accountId = req.ctx?.accountId ?? null;
   if (accountId) {
-    const r = await sql<{ market_id: string }>`
-      SELECT market_id FROM core.account WHERE id = ${accountId}`.execute(trx);
+    const r = await sql<{ market_id: string | null }>`
+      SELECT m.id AS market_id
+        FROM core.account a
+        LEFT JOIN core.market m ON m.id = a.market_id AND m.activation_state = 'ACTIVE'
+       WHERE a.id = ${accountId}`.execute(trx);
     return r.rows[0]?.market_id ?? null;
   }
   const device = requestingDevice(req.headers);
   if (!device) return null;
   const r = await sql<{ market_id: string | null }>`
-    SELECT market_id FROM core.device WHERE id = ${device}`.execute(trx);
+    SELECT m.id AS market_id
+      FROM core.device d
+      LEFT JOIN core.market m ON m.id = d.market_id AND m.activation_state = 'ACTIVE'
+     WHERE d.id = ${device}`.execute(trx);
   return r.rows[0]?.market_id ?? null;
 }
