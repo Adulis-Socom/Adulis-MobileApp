@@ -98,9 +98,6 @@ interface Page {
 }
 
 describe('WO-DISC-002 -- For You API', () => {
-  // The setup builds the app and many fixtures through the API (seven published Scenes here),
-  // which can exceed Jest's 5 s hook default under parallel workers (ON-20261111-011).
-  jest.setTimeout(30_000);
   let app: INestApplication;
   let admin: Pool;
   let appRole: Pool;
