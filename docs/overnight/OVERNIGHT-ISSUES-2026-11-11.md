@@ -405,3 +405,345 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** None.
 - **Founder decision required:** No
 - **Recommended resolution:** Done.
+
+### ON-20261111-023
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** DESIGN_CONFLICT
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** ADU-MOB-02 names the Buyer Seller route (buyer)/seller/[sellerRef]; /seller is already the Seller Companion shell, and no Seller reference exists beyond the handle.
+- **Expected:** One unambiguous Buyer route to a Seller.
+- **Actual:** Implemented as /sellers/[handle] (plural, like /scenes/[ref]); the public web is /s/:handle (STOREFRONT-02).
+- **Reproduction:** n/a
+- **Evidence:** MOB-02:202; apps/mobile/src/modes/modes.ts (Companion /seller); app/(buyer)/sellers/[handle].tsx
+- **Root cause:** Route naming not reconciled across Mobile modes and the web.
+- **Fix and commit:** Plural route; recorded.
+- **Verification:** seller-profile tests and Maestro flows (deep link adulis://sellers/fixture-weaves).
+- **Remaining risk:** A rename later needs link compatibility.
+- **Founder decision required:** Yes (with OVN-080)
+- **Recommended resolution:** Decide the cross-surface Seller URL together with the Scene/Product scheme (OVN-080).
+
+### ON-20261111-024
+
+- **Work order:** WO-006
+- **Severity:** MEDIUM
+- **Type:** BUG
+- **Status:** RESOLVED
+- **Summary:** GET /v1/storefronts/{handle}/reviews cast the raw cursor in SQL: a malformed cursor was a 500, the cursor kept only milliseconds, and reviews sharing a published_at were skipped at a page boundary.
+- **Expected:** Invalid cursors are 400; pages neither skip nor repeat.
+- **Actual:** 500 INTERNAL (22007 unmapped); rows lost at ties and inside the truncated millisecond.
+- **Reproduction:** ?cursor=not-a-date -> 500; two reviews written in one transaction share published_at.
+- **Evidence:** storefront.controller.ts reviews (before bf21f9e)
+- **Root cause:** Unvalidated cast; non-unique sort key; JS Date truncation.
+- **Fix and commit:** Validated opaque keyset cursor (published_at at microseconds, id); optional limit (bf21f9e).
+- **Verification:** wo-006 e2e: 400 CURSOR_INVALID; one-row pages walk across a timestamp tie returning every review once.
+- **Remaining risk:** Old ISO cursors are refused (no in-repo consumer).
+- **Founder decision required:** No
+- **Recommended resolution:** Done; release note in the handoff.
+
+### ON-20261111-025
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** SPEC_CONFLICT
+- **Status:** OPEN
+- **Summary:** TRUST-01 defines four public Trust levels (NEW, REBUILDING, ESTABLISHED, TRUSTED); core.trust_level has three (no REBUILDING).
+- **Expected:** Schema and design agree.
+- **Actual:** The profile shows the three the database holds; REBUILDING cannot occur.
+- **Reproduction:** n/a
+- **Evidence:** 0001:192; TRUST-01 S9 :110-115
+- **Root cause:** Design revision after the enum.
+- **Fix and commit:** None (Trust domain).
+- **Verification:** n/a
+- **Remaining risk:** None until the Trust domain adds the level (the app would need a catalogue label).
+- **Founder decision required:** No
+- **Recommended resolution:** Trust work order: add REBUILDING with its label key.
+
+### ON-20261111-026
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** DESIGN_GAP
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** MOB-02 R-09 says the Products tab is 'the catalogue with available first'; the API keeps the Seller's display order.
+- **Expected:** Available Products first.
+- **Actual:** Seller display order (display_order, created_at, slug); unavailable Products are labelled in words.
+- **Reproduction:** n/a
+- **Evidence:** MOB-02 R-09 :2373; storefront.controller.ts products
+- **Root cause:** Ordering by a live, changing flag makes keyset pages shift between requests.
+- **Fix and commit:** Not implemented (deliberate).
+- **Verification:** n/a
+- **Remaining risk:** Unavailable Products may sit above available ones if the Seller ordered them so.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Confirm Seller order, or approve available-first with a snapshot-stable cursor (or a server-side partition: available pages, then unavailable).
+
+### ON-20261111-027
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Reliability rates (cancellation, confirmation, scan completion) are not shown: the API exposes no denominators or freshness, and TRUST-01 S57 forbids a zero rate reading as perfect (INSUFFICIENT_EVIDENCE).
+- **Expected:** Rates with sample context, or INSUFFICIENT_EVIDENCE.
+- **Actual:** Rates are decimal text with no sample size; the app shows only the Trust level and completed handoffs.
+- **Reproduction:** GET /v1/storefronts/{handle}: stats.cancellation_rate '0.0000' with no denominator.
+- **Evidence:** TRUST-01 S57 :440, S68 :557-565; seller_public_stats
+- **Root cause:** Trust public projection not built.
+- **Fix and commit:** Rates withheld in the UI (documented).
+- **Verification:** seller-profile test asserts no rate text.
+- **Remaining risk:** None (nothing misleading shown).
+- **Founder decision required:** No
+- **Recommended resolution:** Trust work order: public reliability projection with sample sizes.
+
+### ON-20261111-028
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** About is partial against R-09: no category label (no taxonomy/labels), no neighbourhood/operating area or collection point (no structured location), no social accounts, no opening hours (only open now).
+- **Expected:** R-09 About fields where public policy permits.
+- **Actual:** Description, Trust level, open/closed now, fulfilment methods, member since.
+- **Reproduction:** n/a
+- **Evidence:** MOB-02 R-09; STOREFRONT-02 :514, :528-547; StorefrontDto
+- **Root cause:** No public contract or data for the missing fields.
+- **Fix and commit:** Only genuine fields shown.
+- **Verification:** seller-profile About test.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Add the fields with their governing data (taxonomy, structured location, verified social accounts) in their own work orders.
+
+### ON-20261111-029
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** REV-01 S32 lets moderation restrict or remove a review from public view; no such state exists, so every review is public.
+- **Expected:** A moderated review is excluded and aggregates reconciled.
+- **Actual:** All reviews listed and counted.
+- **Reproduction:** n/a
+- **Evidence:** 0014 core.review (no visibility column); REV-01 S32 :291
+- **Root cause:** Moderation projection not built.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** A review an operator wants removed stays public.
+- **Founder decision required:** No
+- **Recommended resolution:** Add the moderation state, filter it in reviews and the summary.
+
+### ON-20261111-030
+
+- **Work order:** WO-006
+- **Severity:** INFO
+- **Type:** SCOPE
+- **Status:** OPEN
+- **Summary:** R-09 header actions Follow and Message (and Share) are not built.
+- **Expected:** Per R-09 later.
+- **Actual:** Absent (no fake buttons).
+- **Reproduction:** n/a
+- **Evidence:** MOB-02 R-09; work order exclusions
+- **Root cause:** Out of this batch's scope (Follow, Chat).
+- **Fix and commit:** None.
+- **Verification:** seller-profile test asserts no such buttons.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Build with the Follow and Chat work orders.
+
+### ON-20261111-031
+
+- **Work order:** WO-006
+- **Severity:** MEDIUM
+- **Type:** ANALYTICS
+- **Status:** RESOLVED
+- **Summary:** storefront_viewed was recorded on every storefront header read, including the profile's re-reads on return, pull and background return (review M1; the OVN-073 pattern for Seller views).
+- **Expected:** Openings and technical re-reads distinguished (founder principle OVN-073).
+- **Actual:** Scene -> back -> Scene -> back added a Seller view each time.
+- **Reproduction:** Open the profile, return from a Scene: two events.
+- **Evidence:** storefront.controller.ts storefront() emit; SellerProfile.tsx focus re-read
+- **Root cause:** The revalidate flag existed only on the Product read.
+- **Fix and commit:** GET /v1/storefronts/{handle} takes revalidate=true and then records nothing; the app sends it on every re-read (1ed877d, 1124125).
+- **Verification:** wo-006 e2e: one opening + two revalidations = +1 event; mobile: re-reads carry revalidate=true.
+- **Remaining risk:** Like product_viewed, not de-duplicated across openings.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-032
+
+- **Work order:** WO-006
+- **Severity:** HIGH
+- **Type:** SECURITY/ROBUSTNESS
+- **Status:** RESOLVED
+- **Summary:** A list cursor could pass the shape check and still make Postgres refuse it -- an impossible date V8 rolls over (2026-02-30), year 0000, or an int beyond int4 -- giving an unauthenticated 500 on the Scenes, Products and Reviews lists.
+- **Expected:** Every malformed cursor is 400 CURSOR_INVALID.
+- **Actual:** 500 INTERNAL (22008/22003 unmapped) and an error log per request.
+- **Reproduction:** GET /v1/storefronts/x/scenes?cursor=<b64 of ["2026-02-30T00:00:00.000000Z","AAAAAAAAAAAAAAAAAAAAAA"]>.
+- **Evidence:** review H1; cursor.ts (before 1ed877d)
+- **Root cause:** Date.parse accepts impossible dates; ints checked only as safe integers.
+- **Fix and commit:** Timestamps must round-trip unchanged (and not year 0); ints bounded to int4 (1ed877d).
+- **Verification:** wo-006 e2e crafted cursors on all three lists: 400; native curl: 400.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-033
+
+- **Work order:** WO-006
+- **Severity:** MEDIUM
+- **Type:** SPEC_CONFLICT
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** REV-01 v3.3 admits public reviews only on a verified evidence basis (FINAL_HANDOFF or VERIFIED_ORDER_FAILURE; 'no unverified fallback'), while the built schema derives an UNVERIFIED badge and the existing public reviews endpoint lists and counts such reviews.
+- **Expected:** One rule for which reviews are public.
+- **Actual:** UNVERIFIED reviews are public, labelled 'Unverified', and counted in the Seller-service mean; badge_counts are the stored tiers, not REV-01's bases.
+- **Reproduction:** Any review whose order has no confirmation and no upheld claim.
+- **Evidence:** REV-01 :23-31; 0014 fn_review_derive_badge; storefront.controller.ts reviews and summary
+- **Root cause:** The schema follows the older DB-01 badge ladder; the November pack changed the rule.
+- **Fix and commit:** None (SPEC_CONFLICT: report, do not resolve in code). The comment no longer overclaims (1ed877d).
+- **Verification:** n/a
+- **Remaining risk:** Buyers see unverified opinions in the Seller summary.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Rule whether UNVERIFIED reviews stay public (labelled) or are excluded from list and mean until the Reviews domain implements REV-01's eligibility resolver.
+
+### ON-20261111-034
+
+- **Work order:** WO-006
+- **Severity:** MEDIUM
+- **Type:** BUG
+- **Status:** RESOLVED
+- **Summary:** Back on the Seller Profile only the header was re-read: a Scene that went PRIVATE while open stayed in the grid, and a list pull left the header's summary stale.
+- **Expected:** Return re-reads what is visible; header and list agree.
+- **Actual:** Stale tile until a pull or the background interval.
+- **Reproduction:** Open a Scene from the profile; make it PRIVATE; Back.
+- **Evidence:** review M3
+- **Root cause:** Focus re-read wired to the header only.
+- **Fix and commit:** Each list tab re-reads on return; a list pull also re-reads the header (1124125).
+- **Verification:** seller-profile tests: return drops the PRIVATE Scene; pull re-reads header as revalidation.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-035
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** PRESENTATION
+- **Status:** RESOLVED
+- **Summary:** The review mean was rounded twice (server 2 decimals, app 1), so 4.249 showed 4.3.
+- **Expected:** One rounding.
+- **Actual:** Double rounding.
+- **Reproduction:** Mean 4.249.
+- **Evidence:** review Low
+- **Root cause:** Both sides rounded.
+- **Fix and commit:** Server rounds once to 1 decimal; app shows it as is (1ed877d, 1124125).
+- **Verification:** wo-006 e2e: 5, 4, 4 -> 4.3.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-036
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** PRESENTATION
+- **Status:** RESOLVED
+- **Summary:** 'Member since' formatted a UTC date in the device time zone (a day early west of UTC).
+- **Expected:** The UTC date as is.
+- **Actual:** Off by one west of UTC.
+- **Reproduction:** Device in a negative UTC offset.
+- **Evidence:** review Low
+- **Root cause:** No timeZone option.
+- **Fix and commit:** timeZone: 'UTC' (1124125).
+- **Verification:** Typecheck and tests.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-037
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** PRIVACY_NOTE
+- **Status:** OPEN
+- **Summary:** The Seller products cursor carries the last Product's created_at to the microsecond (readable after base64 decoding).
+- **Expected:** Doctrine 5 keeps internal UUIDs (time-ordered) out of URLs; creation time itself is a similar, weaker disclosure.
+- **Actual:** Creation time of one listed Product per page is visible in the cursor.
+- **Reproduction:** Decode next_cursor.
+- **Evidence:** review Low; storefront.controller.ts products
+- **Root cause:** The established order (display_order, created_at) needs created_at as its key.
+- **Fix and commit:** Not changed.
+- **Verification:** n/a
+- **Remaining risk:** Low: a Product's listing time, not an identifier.
+- **Founder decision required:** Yes (note)
+- **Recommended resolution:** Accept, or sign/encrypt cursors if creation times are considered sensitive.
+
+### ON-20261111-038
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** ACCESSIBILITY
+- **Status:** RESOLVED
+- **Summary:** Tab labels used adjustsFontSizeToFit, shrinking text at large font scales.
+- **Expected:** Labels honour the user's text size.
+- **Actual:** Shrunk labels.
+- **Reproduction:** Font scale 1.3.
+- **Evidence:** review Low
+- **Root cause:** First draft.
+- **Fix and commit:** Labels wrap instead (1124125).
+- **Verification:** Native dark + 1.3 run passed.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-039
+
+- **Work order:** WO-006
+- **Severity:** INFO
+- **Type:** PERFORMANCE
+- **Status:** OPEN
+- **Summary:** Switching Seller Profile tabs refetches the tab and loses its scroll position (each tab unmounts; gcTime 0 by design for public reads).
+- **Expected:** Acceptable for now; could keep tabs mounted.
+- **Actual:** One request per switch.
+- **Reproduction:** Switch Products -> Reviews -> Products.
+- **Evidence:** review Low
+- **Root cause:** Freshness-first cache policy.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Extra requests on metered data.
+- **Founder decision required:** No
+- **Recommended resolution:** Keep tabs mounted (or a short gcTime) if usage shows frequent switching.
+
+### ON-20261111-040
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** TEST_GAP
+- **Status:** PARTIALLY RESOLVED
+- **Summary:** Review found weak tests: a vacuous products tiebreak, no crafted cursors, no rounding case, no draft exclusion, a mobile 'paged' reviews test that never paged, untested pull/dedup/later-page 404.
+- **Expected:** Tests that fail on regression.
+- **Actual:** Several gaps.
+- **Reproduction:** n/a
+- **Evidence:** review item 7
+- **Root cause:** First draft.
+- **Fix and commit:** Added: one-statement products insert (slug tiebreak), crafted cursors, 5-4-4 rounding, draft exclusion, view counting, return/pull re-reads (1ed877d, 1124125).
+- **Verification:** wo-006 e2e 20/20; seller-profile 15/15.
+- **Remaining risk:** Mobile: de-dup across pages and a 404 on a later page remain untested (covered by the hook's logic only).
+- **Founder decision required:** No
+- **Recommended resolution:** Add hook-level tests for usePublicList.
+
+### ON-20261111-041
+
+- **Work order:** WO-006
+- **Severity:** LOW
+- **Type:** TEST_FLAKE (carried OVN-047)
+- **Status:** OPEN
+- **Summary:** In parallel full API runs, auth suites intermittently get 429 instead of 202 on POST /v1/auth/otp/request (c6, t8, wo-api-001a, wo-sec-001 in run 1; t12-d89 in run 2 of the WO-006 battery).
+- **Expected:** Each suite's OTP requests stay within its own budget.
+- **Actual:** WO-006 battery: run 1 872/876, run 2 875/876; every failure an OTP 429 (e.g. wo-sec-001:302 expected 202 x14, got 429). The same five suites in band: 86/86.
+- **Reproduction:** pnpm --filter @adulis/api test (parallel workers); intermittent, different suites each run.
+- **Evidence:** scratchpad v006/api-test.log, v006/pnpm-test.log; register OVN-047
+- **Root cause:** Known: t13 lowers the platform-wide OTP ceiling while other auth suites run in parallel workers (OVN-047, re-diagnosed on 10 Nov). Shared platform budget, not product code; WO-006 changed no auth code.
+- **Fix and commit:** Not fixed in this batch (auth test infrastructure).
+- **Verification:** Failing suites pass alone (86/86).
+- **Remaining risk:** Red full runs that hide a real auth regression.
+- **Founder decision required:** No
+- **Recommended resolution:** Run t13 in its own serial project, or give it a private Market/platform budget in tests.
