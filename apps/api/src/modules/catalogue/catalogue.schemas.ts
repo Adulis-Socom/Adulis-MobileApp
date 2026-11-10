@@ -48,7 +48,9 @@ export const createVariantBody = z.object({
 export const patchVariantBody = z
   .object({
     price_minor: z.number().int().min(0).optional(),
-    status: z.string().trim().max(40).optional(),
+    // The two statuses the platform reads (fn_create_order sells only ACTIVE). Free text let a
+    // Seller write any value, and WITHDRAWN here skipped DELETE's live-order guard.
+    status: z.enum(['ACTIVE', 'WITHDRAWN']).optional(),
     attributes: z.array(attributeValue).max(40).optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'empty patch' });

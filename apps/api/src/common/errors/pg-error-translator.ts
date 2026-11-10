@@ -359,6 +359,12 @@ export function translatePgError(e: PgError): AdulisException | null {
           slots: { reason: 'ONE_ANCHOR_ONLY' },
         });
       }
+      // OVN-088 (0056 fn_guard_market_currency): a price outside the Market currency.
+      if (e.message.includes('is not the Market currency')) {
+        return new AdulisException('VALIDATION_FAILED', {
+          slots: { path: e.message.startsWith('base_price_currency') ? 'base_price_currency' : 'price_currency' },
+        });
+      }
       return null;
 
     case '23503':

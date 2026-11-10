@@ -60,6 +60,7 @@ export class CatalogueService {
     body: CreateProductBody,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:write');
+    await this.assertMarketCurrency(trx, req, body.base_price_currency, 'base_price_currency');
     const id = randomUUID();
     await sql`
       INSERT INTO core.product
@@ -230,6 +231,26 @@ export class CatalogueService {
     };
   }
 
+  /**
+   * OVN-088: prices are in the Seller's Market currency (MKT-01 S334, CATINV-01 S364); there
+   * is no conversion. The database holds the rule too (0056 fn_guard_market_currency); this
+   * check names the field before the write.
+   */
+  private async assertMarketCurrency(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+    currency: string,
+    path: string,
+  ): Promise<void> {
+    const r = await sql<{ display_currency: string }>`
+      SELECT m.display_currency FROM core.seller s JOIN core.market m ON m.id = s.market_id
+       WHERE s.id = ${req.ctx?.sellerId}`.execute(trx);
+    const market = r.rows[0]?.display_currency;
+    if (market !== undefined && currency !== market) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path } });
+    }
+  }
+
   async patchProduct(
     trx: Transaction<Database>,
     req: AuthedRequest,
@@ -379,6 +400,7 @@ export class CatalogueService {
       SELECT id FROM core.product
        WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
     if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+    await this.assertMarketCurrency(trx, req, body.price_currency, 'price_currency');
     const id = randomUUID();
     await sql`
       INSERT INTO core.product_variant
@@ -398,6 +420,8 @@ export class CatalogueService {
     body: PatchVariantBody,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.products:write');
+    // Withdrawing by PATCH meets the same live-order guard as DELETE.
+    if (body.status === 'WITHDRAWN') await this.assertNoLiveReservation(trx, req, variantId);
     const r = await sql<{ id: string }>`
       UPDATE core.product_variant
          SET price_minor = coalesce(${body.price_minor ?? null}, price_minor),
@@ -421,6 +445,21 @@ export class CatalogueService {
     // OWNERSHIP FIRST -- the variant twin of D-320, identical in shape and
     // found in the same pass. See deleteProduct above for why the order of
     // these two statements is the rule and the 409 is not.
+    await this.assertNoLiveReservation(trx, req, variantId);
+    const r = await sql<{ id: string }>`
+      UPDATE core.product_variant SET status = 'WITHDRAWN'
+       WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}
+       RETURNING id`.execute(trx);
+    if (!r.rows[0]) throw new AdulisException('NOT_FOUND');
+    return { withdrawn: true };
+  }
+
+  /** Ownership first (404 for a foreign Variant), then no ACTIVE reservation may hold it (409). */
+  private async assertNoLiveReservation(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+    variantId: string,
+  ): Promise<void> {
     const owner = await sql<{ id: string }>`
       SELECT id FROM core.product_variant
        WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
@@ -434,12 +473,6 @@ export class CatalogueService {
     if ((live.rows[0]?.n ?? 0) > 0) {
       throw new AdulisException('VARIANT_HAS_ACTIVE_ORDERS');
     }
-    const r = await sql<{ id: string }>`
-      UPDATE core.product_variant SET status = 'WITHDRAWN'
-       WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}
-       RETURNING id`.execute(trx);
-    if (!r.rows[0]) throw new AdulisException('NOT_FOUND');
-    return { withdrawn: true };
   }
 
   // ------------------------------------------------------------------- media
