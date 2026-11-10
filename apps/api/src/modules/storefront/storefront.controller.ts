@@ -226,6 +226,13 @@ export class StorefrontController {
   })
   @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
   @ApiParam({ name: 'slug', description: 'The Product slug within that Seller.' })
+  @ApiQuery({
+    name: 'revalidate',
+    required: false,
+    enum: ['true'],
+    description:
+      'true: a technical re-read of a Product already on screen (a pull, a return from the background), not a new opening; the server then records no product_viewed (founder ruling OVN-073). It can only withhold the event, never create one. Omit it for an opening.',
+  })
   @ApiOkResponse({ type: StorefrontProductDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async product(
@@ -233,6 +240,7 @@ export class StorefrontController {
     @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
     @Param('slug') slug: string,
+    @Query('revalidate') revalidate?: string,
   ): Promise<StorefrontProductDto> {
     // Price, stock and availability are read per delivery; nothing may cache them.
     res.setHeader('Cache-Control', 'no-store');
@@ -313,9 +321,16 @@ export class StorefrontController {
         SELECT position, thumb_key, card_key, full_key
           FROM core.product_image WHERE product_id = ${productId}
          ORDER BY position`.execute(trx);
-      await this.emit(trx, 'product_viewed', seller.market_id, seller.id, {
-        product_id: productId,
-      });
+      // product_viewed counts Product OPENINGS (OVN-073, founder-approved principle): a read
+      // the client declares a technical revalidation records nothing. The declaration can
+      // only lower the count, so trusting it adds no forgery the plain GET did not already
+      // allow; it is not a de-duplicated unique-visit measure (that needs ANL-01's gated
+      // product_post_opened, its client_event_id and a privacy basis -- DPIA PA-23).
+      if (revalidate !== 'true') {
+        await this.emit(trx, 'product_viewed', seller.market_id, seller.id, {
+          product_id: productId,
+        });
+      }
       return {
         // `available` is the projection's: a CLOSING or BILLING_SUSPENDED storefront stays
         // visible (VISIBLE_STATES) but sells nothing, as fn_create_order requires.

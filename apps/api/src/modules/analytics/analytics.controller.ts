@@ -74,7 +74,10 @@ export class AnalyticsController {
   constructor(private readonly tx: HandlerTransaction) {}
 
   @Get('seller/analytics/overview')
-  @ApiOperation({ summary: 'Essential counts over a date window. Every tier, including Free and Beta.' })
+  @ApiOperation({
+    summary:
+      'Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted.',
+  })
   async overview(
     @Req() req: AuthedRequest,
     @Query('from') from?: string,
@@ -99,8 +102,10 @@ export class AnalyticsController {
                  ELSE (${win.to}::date + interval '1 day')::timestamptz END AS hi
         )
         SELECT
+          -- CURRENTLY published (OVN-085): publication is visibility, not published_at,
+          -- which fn_unpublish_product keeps as the first-publication record (OVN-011).
           (SELECT count(*)::int FROM core.product p
-            WHERE p.seller_id = ${sellerId} AND p.published_at IS NOT NULL)
+            WHERE p.seller_id = ${sellerId} AND p.visibility = 'PUBLISHED')
             AS products_published,
           (SELECT count(*)::int FROM core."order" o, win
             WHERE o.seller_id = ${sellerId}
@@ -125,7 +130,10 @@ export class AnalyticsController {
   }
 
   @Get('seller/analytics/full')
-  @ApiOperation({ summary: 'Views, reservations, conversion, funnel over a window — entitlement-gated.' })
+  @ApiOperation({
+    summary:
+      'Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.',
+  })
   async full(
     @Req() req: AuthedRequest,
     @Query('from') from?: string,
