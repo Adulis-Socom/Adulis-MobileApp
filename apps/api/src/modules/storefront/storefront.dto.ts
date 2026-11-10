@@ -232,8 +232,8 @@ export class ShopProductSellerDto {
 
 export class ShopProductDto extends PublicProductSummaryDto {
   @ApiProperty({ type: ShopProductSellerDto }) seller!: ShopProductSellerDto;
-  @ApiProperty({ type: String, nullable: true, description: 'First image thumbnail key (a bounded derivative, for grids).' })
-  thumb_key!: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'First image card key (as the Seller Profile grid); resolve against bootstrap media_public_origin.' })
+  image_key!: string | null;
 }
 
 /** GET /v1/shop/products: the requester Market's public Products, newest first publication. */

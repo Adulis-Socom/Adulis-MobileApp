@@ -24,8 +24,8 @@ const MA = id(1);
 const MB = id(2);
 const MC = id(3);
 const OWN = (n: number) => id(0x10 + n);
-const SEL = { a1: id(0x20), a2: id(0x21), a3: id(0x22), b1: id(0x23), c1: id(0x24) };
-const DEV = { a: id(0x30), b: id(0x31), noMarket: id(0x32), session: id(0x33) };
+const SEL = { a1: id(0x20), a2: id(0x21), a3: id(0x22), b1: id(0x23), c1: id(0x24), a4: id(0x25) };
+const DEV = { a: id(0x30), b: id(0x31), noMarket: id(0x32), session: id(0x33), c: id(0x34) };
 const BUYER_B = id(0x40);
 const SESSION_B = id(0x41);
 
@@ -41,7 +41,7 @@ type ShopItem = {
   price_currency: string | null;
   available: boolean;
   seller: { handle: string; store_name: string };
-  thumb_key: string | null;
+  image_key: string | null;
 };
 
 describe('WO-007 -- Shop products', () => {
@@ -65,6 +65,7 @@ describe('WO-007 -- Shop products', () => {
     [7, SEL.a3, MA, 'A3 draft seller', 'PUBLISHED', 20, [[7000, 4]]],
     [8, SEL.b1, MB, 'B1 lamp', 'PUBLISHED', 15, [[8000, 4]]],
     [9, SEL.c1, MC, 'C1 cup', 'PUBLISHED', 25, [[9000, 4]]],
+    [10, SEL.a4, MA, 'A4 safety suspended', 'PUBLISHED', 35, [[9500, 4]]],
   ];
 
   beforeAll(async () => {
@@ -83,6 +84,7 @@ describe('WO-007 -- Shop products', () => {
       [SEL.a3, MA, 'shop-a3', 'DRAFT'],
       [SEL.b1, MB, 'shop-b1', 'ACTIVE'],
       [SEL.c1, MC, 'shop-c1', 'ACTIVE'],
+      [SEL.a4, MA, 'shop-a4', 'SAFETY_SUSPENDED'],
     ];
     for (const [i, [sid, mid, handle, status]] of sellers.entries()) {
       await admin.query(`INSERT INTO core.account (id, phone_e164, market_id, status) VALUES ($1,$2,$3,'ACTIVE')`, [
@@ -123,8 +125,8 @@ describe('WO-007 -- Shop products', () => {
       [id(0x104)],
     );
     await admin.query(
-      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$5), ($2,'ANDROID',$6), ($3,'ANDROID',NULL), ($4,'ANDROID',$5)`,
-      [DEV.a, DEV.b, DEV.noMarket, DEV.session, MA, MB],
+      `INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$5), ($2,'ANDROID',$6), ($3,'ANDROID',NULL), ($4,'ANDROID',$5), ($7,'ANDROID',$8)`,
+      [DEV.a, DEV.b, DEV.noMarket, DEV.session, MA, MB, DEV.c, MC],
     );
     await admin.query(`INSERT INTO core.account (id, phone_e164, market_id, status) VALUES ($1,'+251911707099',$2,'ACTIVE')`, [
       BUYER_B,
@@ -178,7 +180,7 @@ describe('WO-007 -- Shop products', () => {
       price_currency: 'ETB',
       available: true,
       seller: { handle: 'shop-a1', store_name: 'Store shop-a1' },
-      thumb_key: 'products/x/thumb.webp',
+      image_key: 'products/x/card.webp',
     });
     // Price span over ACTIVE Variants in stock or not; availability separate.
     expect(byName['A1 second']).toMatchObject({ price_min_minor: 2000, price_max_minor: 2500, available: true });
@@ -190,12 +192,15 @@ describe('WO-007 -- Shop products', () => {
 
   it('excludes unpublished Products, non-public Sellers, other Markets and inactive Markets', async () => {
     const all = names(((await shop(DEV.a).expect(200)).body.data as ShopItem[]));
-    for (const excluded of ['A1 hidden', 'A3 draft seller', 'B1 lamp', 'C1 cup']) expect(all).not.toContain(excluded);
+    for (const excluded of ['A1 hidden', 'A3 draft seller', 'A4 safety suspended', 'B1 lamp', 'C1 cup']) {
+      expect(all).not.toContain(excluded);
+    }
     expect(names((await shop(DEV.b).expect(200)).body.data)).toEqual(['B1 lamp']);
   });
 
   it('with no Market evidence the answer is an empty page, never another Market', async () => {
-    for (const device of [undefined, DEV.noMarket]) {
+    // No device, a device with no Market, a device in a SUSPENDED Market.
+    for (const device of [undefined, DEV.noMarket, DEV.c]) {
       const r = await shop(device).expect(200);
       expect(r.body).toEqual({ data: [], next_cursor: null });
     }
@@ -227,6 +232,33 @@ describe('WO-007 -- Shop products', () => {
     await shop(DEV.a, '?limit=51').expect(400);
   });
 
+  it('Products published at the same instant page by id, one per page, with no repeat or gap', async () => {
+    // One statement: now() is the transaction time, so all three share published_at exactly.
+    await admin.query(
+      `INSERT INTO core.product (id, seller_id, market_id, name, base_price_minor, base_price_currency, visibility, published_at)
+       SELECT x.id::uuid, $1, $2, x.name, 1, 'ETB', 'PUBLISHED', now() - interval '45 minutes'
+         FROM (VALUES ($3, 'Tie 0'), ($4, 'Tie 1'), ($5, 'Tie 2')) AS x(id, name)`,
+      [SEL.a1, MA, id(0x110), id(0x111), id(0x112)],
+    );
+    try {
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const r: request.Response = await shop(DEV.a, `?limit=1${cursor ? `&cursor=${cursor}` : ''}`).expect(200);
+        seen.push(...names(r.body.data));
+        cursor = r.body.next_cursor;
+        pages++;
+      } while (cursor && pages < 20);
+      expect(seen).toEqual(['A1 newest', 'A2 closing', 'A1 sold out', 'Tie 2', 'Tie 1', 'Tie 0', 'A1 second', 'A1 oldest']);
+    } finally {
+      await admin.query(
+        `UPDATE core.product SET visibility = 'UNPUBLISHED', unpublished_reason = 'SELLER' WHERE id = ANY($1::uuid[])`,
+        [[id(0x110), id(0x111), id(0x112)]],
+      );
+    }
+  });
+
   it('an unpublished Product leaves the next read; a stock change shows on it', async () => {
     await admin.query(`UPDATE core.product SET visibility = 'UNPUBLISHED', unpublished_reason = 'SELLER' WHERE id = $1`, [id(0x104)]);
     await admin.query(
@@ -253,9 +285,13 @@ describe('WO-007 -- Shop products', () => {
       await c.query('SET LOCAL enable_seqscan = off');
       const plan = await c.query<{ 'QUERY PLAN': unknown }>(
         `EXPLAIN (FORMAT JSON) SELECT p.id FROM core.product p
+           JOIN core.seller s ON s.id = p.seller_id
+           JOIN core.market m ON m.id = p.market_id
           WHERE p.market_id = $1 AND p.visibility = 'PUBLISHED' AND p.published_at IS NOT NULL
+            AND s.status::text = ANY($2) AND m.activation_state = 'ACTIVE'
+            AND (p.published_at, p.id) < ($3::timestamptz, $4::uuid)
           ORDER BY p.published_at DESC, p.id DESC LIMIT 31`,
-        [MA],
+        [MA, ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'], '2026-11-11T00:00:00.000000Z', id(0x104)],
       );
       expect(JSON.stringify(plan.rows[0])).toContain('idx_product_shop');
       await c.query('ROLLBACK');

@@ -582,14 +582,14 @@ export class StorefrontController {
       const market = await requesterMarket(trx, req);
       if (market === null) return { data: [], next_cursor: null };
       const r = await sql<
-        ProductSummaryRow & { seller_handle: string; seller_store_name: string; thumb_key: string | null; published_key: string }
+        ProductSummaryRow & { seller_handle: string; seller_store_name: string; image_key: string | null; published_key: string }
       >`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                pp.price_min_minor, pp.price_max_minor, pp.price_currency,
                ${productAvailable} AS available,
                s.handle AS seller_handle, s.store_name AS seller_store_name,
-               (SELECT i.thumb_key FROM core.product_image i
-                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS thumb_key,
+               (SELECT i.card_key FROM core.product_image i
+                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
                to_char(p.published_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS published_key
           FROM core.product p
           JOIN core.seller s ON s.id = p.seller_id
@@ -609,7 +609,7 @@ export class StorefrontController {
         data: page.map((row) => ({
           ...summary(row),
           seller: { handle: row.seller_handle, store_name: row.seller_store_name },
-          thumb_key: row.thumb_key,
+          image_key: row.image_key,
         })),
         // The Product id is already in every row, so the cursor discloses nothing new.
         next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.id]) : null,
