@@ -240,4 +240,50 @@ describe('the filter (one envelope, nothing leaks)', () => {
     expect(status).toBe(503);
     expect(body['retryable']).toBe(true);
   });
+
+  it('a pool acquire timeout is 503 with Retry-After, logged without internals (WO-SEC-001)', () => {
+    const log = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), fatal: jest.fn() };
+    const headers: Record<string, string> = {};
+    let status = 0;
+    let body: Record<string, unknown> = {};
+    const res = {
+      setHeader: (k: string, v: string) => {
+        headers[k] = v;
+      },
+      status(s: number) {
+        status = s;
+        return this;
+      },
+      contentType() {
+        return this;
+      },
+      json(b: Record<string, unknown>) {
+        body = b;
+        return this;
+      },
+    } as unknown as Response;
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => res,
+        getRequest: () => ({
+          requestId: '01POOL',
+          method: 'GET',
+          path: '/v1/seller/orders/0b5e6a1c-0000-4000-8000-000000000001/qr',
+          route: { path: '/v1/seller/orders/:id/qr' },
+        }),
+      }),
+    };
+    new ProblemDetailsFilter(log as never).catch(
+      new Error('timeout exceeded when trying to connect'),
+      host as never,
+    );
+    expect(status).toBe(503);
+    expect(headers['Retry-After']).toBe('5');
+    expect(body).toMatchObject({ code: 'INTERNAL', retryable: true, request_id: '01POOL' });
+    expect(JSON.stringify(body)).not.toMatch(/timeout|connect|postgres/i);
+    expect(log.error).toHaveBeenCalledWith(
+      { requestId: '01POOL', method: 'GET', route: '/v1/seller/orders/:id/qr', errorCode: 'INTERNAL' },
+      'database pool acquire timeout',
+    );
+  });
 });

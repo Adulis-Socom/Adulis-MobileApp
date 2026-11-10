@@ -31,8 +31,60 @@ export interface PoolConfig {
 export const APP_POOL_MAX = 10;
 export const FINANCIAL_POOL_MAX = 4;
 
+/**
+ * How long a caller waits for a pooled connection before failing (OVN-045,
+ * defence in depth). pg's default is to wait forever, so an accidental nested
+ * acquisition -- a transaction holding one connection while asking for a
+ * second -- HANGS the API under a burst instead of failing. With a bound, a
+ * starved pool answers 503 + Retry-After (ProblemDetailsFilter) and recovers.
+ *
+ * A TECHNICAL OPERATIONAL SAFEGUARD, NOT A PRODUCT RULE. No governing
+ * document sets a value (ADU-CON-02 v3.2 S17 budgets connections, not
+ * waits; ADU-OBS-01 v3.2 S22 asks that pool wait be MONITORED, and the 503
+ * log line is that signal), so the default is a conservative 5 s and
+ * DB_POOL_ACQUIRE_TIMEOUT_MS overrides it. It bounds opening a new
+ * connection too. Whole milliseconds, 100 to 60000: 0 would mean "wait
+ * forever" to pg, the hang this exists to prevent, so it is refused at boot
+ * rather than honoured (the TRUSTED_PROXY_HOPS precedent).
+ */
+export const POOL_ACQUIRE_TIMEOUT_DEFAULT_MS = 5000;
+
+export function poolAcquireTimeoutMs(
+  raw: string | undefined = process.env['DB_POOL_ACQUIRE_TIMEOUT_MS'],
+): number {
+  if (raw === undefined || raw === '') return POOL_ACQUIRE_TIMEOUT_DEFAULT_MS;
+  const ms = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!(ms >= 100 && ms <= 60_000)) {
+    throw new Error(
+      `DB_POOL_ACQUIRE_TIMEOUT_MS is '${raw}', which is not whole milliseconds ` +
+        'from 100 to 60000. Leave it unset for the 5000 ms default; 0 is refused ' +
+        'because pg reads it as "wait forever".',
+    );
+  }
+  return ms;
+}
+
+/**
+ * pg-pool 3.x's words for "no connection within connectionTimeoutMillis"
+ * (a full pool), and pg's for a new connection that did not open in time.
+ * Neither carries a code; wo-sec-001's real-pool test pins the first, so a
+ * driver upgrade that rewords it fails a test instead of serving 500s.
+ */
+const ACQUIRE_TIMEOUT_MESSAGES: ReadonlySet<string> = new Set([
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+]);
+
+export function isPoolAcquireTimeout(e: unknown): boolean {
+  return e instanceof Error && ACQUIRE_TIMEOUT_MESSAGES.has(e.message);
+}
+
 export function createAppPool(connectionString: string): Pool {
-  return new Pool({ connectionString, max: APP_POOL_MAX });
+  return new Pool({
+    connectionString,
+    max: APP_POOL_MAX,
+    connectionTimeoutMillis: poolAcquireTimeoutMs(),
+  });
 }
 
 /**
@@ -42,7 +94,13 @@ export function createAppPool(connectionString: string): Pool {
  * migration 10.
  */
 export function createFinancialPool(connectionString: string): Pool {
-  return new Pool({ connectionString, max: FINANCIAL_POOL_MAX });
+  // The same bound: no handler nests this pool today (WO-SEC-001 audit), and
+  // a stuck evidence read should fail in bounded time, not queue forever.
+  return new Pool({
+    connectionString,
+    max: FINANCIAL_POOL_MAX,
+    connectionTimeoutMillis: poolAcquireTimeoutMs(),
+  });
 }
 
 export function createDatabase(pool: Pool): Kysely<Database> {

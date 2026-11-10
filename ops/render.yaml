@@ -135,6 +135,14 @@ services:
       - key: TRUSTED_PROXY_HOPS
         value: 1
 
+      # -- POOL ACQUIRE BOUND (WO-SEC-001, OVN-045) -------------------------
+      # How long a request waits for a pooled connection before answering
+      # 503 + Retry-After. A technical safeguard, not a product rule: without
+      # it pg waits forever, and a starved pool hangs the service. 100-60000;
+      # 0 is refused at boot because pg reads it as "wait forever".
+      - key: DB_POOL_ACQUIRE_TIMEOUT_MS
+        value: 5000
+
       # -- THE CONSOLE ORIGIN -------------------------------------------------
       # Exact, never a wildcard: the session cookie is sent with
       # credentials: 'include', and this exact-match Origin check is one of the

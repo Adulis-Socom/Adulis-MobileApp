@@ -10,6 +10,7 @@ import type { Logger } from 'pino';
 import { AdulisException, type ProblemEnvelope } from './adulis-exception';
 import { messageKeyFor, typeUriFor } from './error-catalogue';
 import { isPgError, isPrivilegeDefect, translatePgError } from './pg-error-translator';
+import { isPoolAcquireTimeout } from '../db/database';
 
 /**
  * The last stage of the section 5 pipeline: everything thrown anywhere
@@ -31,7 +32,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const req = http.getRequest<Request & { requestId?: string }>();
     const requestId = req.requestId ?? 'unassigned';
 
-    const adulis = this.toAdulisException(exception, requestId);
+    const adulis = this.toAdulisException(exception, requestId, req);
 
     const envelope: ProblemEnvelope = {
       type: typeUriFor(adulis.code),
@@ -51,7 +52,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     res.status(adulis.status).contentType('application/problem+json').json(envelope);
   }
 
-  private toAdulisException(exception: unknown, requestId: string): AdulisException {
+  private toAdulisException(
+    exception: unknown,
+    requestId: string,
+    req: Pick<Request, 'method' | 'route'>,
+  ): AdulisException {
     if (exception instanceof AdulisException) {
       return exception;
     }
@@ -107,6 +112,31 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         `unmapped database refusal [${exception.code}] ${exception.constraint ?? ''}`,
       );
       return new AdulisException('INTERNAL');
+    }
+
+    // No pooled connection came free within DB_POOL_ACQUIRE_TIMEOUT_MS
+    // (OVN-045's defence in depth). Planned-for unavailability like the
+    // codes above -- 503, Retry-After, retryable -- logged as its own line so
+    // a starving pool is visible before it is an outage. Request id, method
+    // and route template only -- no OTP, phone, ticket or bearer -- and
+    // pg's message is never served.
+    if (isPoolAcquireTimeout(exception)) {
+      this.log.error(
+        {
+          requestId,
+          method: req.method,
+          // The route TEMPLATE, never the raw path: a future path parameter
+          // must not be able to carry anything into this line.
+          route: (req.route as { path?: string } | undefined)?.path ?? '(unrouted)',
+          errorCode: 'INTERNAL',
+        },
+        'database pool acquire timeout',
+      );
+      return new AdulisException('INTERNAL', {
+        status: 503,
+        retryable: true,
+        slots: { retry_after_seconds: 5 },
+      });
     }
 
     // Express's body-parser speaks before any handler: the 256 KB limit
