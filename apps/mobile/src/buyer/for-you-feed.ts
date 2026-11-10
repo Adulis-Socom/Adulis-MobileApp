@@ -44,6 +44,45 @@ export function needsForegroundRevalidation(args: {
 }
 
 /**
+ * Applies the policy above to one screen: when the app comes back from a background stay
+ * and what the screen shows has gone unchecked for the interval, `onStale` runs (the
+ * screen withholds what it shows and asks again). `oldestShown` is read at that moment:
+ * the arrival of the oldest server answer on screen, or undefined when nothing is shown.
+ * The For You feed, the Scene Explorer and the Product read all use this one listener.
+ */
+export function useForegroundRevalidation(oldestShown: () => number | undefined, onStale: () => void): void {
+  const latest = useRef({ oldestShown, onStale });
+  useLayoutEffect(() => {
+    latest.current = { oldestShown, onStale };
+  });
+  useEffect(() => {
+    // 'background', not merely 'inactive': an iOS control-centre pull is not a background
+    // interval. The first background event of a stay is the one that counts.
+    let backgroundedAt: number | null = null;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        backgroundedAt ??= Date.now();
+        return;
+      }
+      if (state !== 'active' || backgroundedAt === null) return;
+      const since = backgroundedAt;
+      backgroundedAt = null;
+      if (
+        needsForegroundRevalidation({
+          backgroundedAt: since,
+          now: Date.now(),
+          oldestReceivedAt: latest.current.oldestShown(),
+          thresholdMs: FOREGROUND_REVALIDATE_AFTER_MS,
+        })
+      ) {
+        latest.current.onStale();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+}
+
+/**
  * The Buyer For You feed (WO-004A): GET /v1/fyp through TanStack Query, never Zustand.
  *
  * - The key names the subject the server will rank for (guest device or signed-in
@@ -182,31 +221,10 @@ export function useForYouFeed() {
     void refetch();
   }, [refetch]);
 
-  useEffect(() => {
-    // 'background', not merely 'inactive': an iOS control-centre pull is not a background
-    // interval. The first background event of a stay is the one that counts.
-    let backgroundedAt: number | null = null;
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background') {
-        backgroundedAt ??= Date.now();
-        return;
-      }
-      if (state !== 'active' || backgroundedAt === null) return;
-      const since = backgroundedAt;
-      backgroundedAt = null;
-      if (
-        needsForegroundRevalidation({
-          backgroundedAt: since,
-          now: Date.now(),
-          oldestReceivedAt: shown.current.oldest,
-          thresholdMs: FOREGROUND_REVALIDATE_AFTER_MS,
-        })
-      ) {
-        setFeed((f) => ({ generation: f.generation + 1, withhold: true }));
-      }
-    });
-    return () => subscription.remove();
-  }, []);
+  useForegroundRevalidation(
+    () => shown.current.oldest,
+    () => setFeed((f) => ({ generation: f.generation + 1, withhold: true })),
+  );
 
   /** Called as the list nears its end: one request at a time, and never into an error. */
   const loadMore = useCallback(() => {
