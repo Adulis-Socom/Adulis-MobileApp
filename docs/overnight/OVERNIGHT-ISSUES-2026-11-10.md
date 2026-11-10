@@ -9,6 +9,8 @@
   - WO-DISC-001A
   - WO-DISC-002
   - WO-004A
+- Follow-up (10 November, day): WO-SEC-001, rate-limit pool hardening, from WO-004A's
+  HEAD `ce40823`; record `docs/security/WO-SEC-001-RATE-LIMIT-POOL-HARDENING.md`.
 
 ## Morning Summary (founder, read this first)
 
@@ -62,10 +64,13 @@ and gate production For You (OVN-027, OVN-030, OVN-032).
   its transaction; about ten concurrent requests could hang the API. Fixed and regression-tested.
 - **OVN-039 HIGH - FIXED.** Guest writes were not bounded (letter-case device ids, unlimited
   continuations).
-- **OVN-045 CRITICAL - OPEN (pre-existing, Auth).** The same pool-starvation pattern exists on the
-  anonymous OTP request, the deletion-OTP request, the step-up request and one Courier route.
+- **OVN-045 CRITICAL - RESOLVED by WO-SEC-001** (was OPEN at the end of the batch). The same
+  pool-starvation pattern existed on the anonymous OTP request, the deletion-OTP request, the
+  step-up request and one Courier route (and, the audit found, account recovery).
   Not changed overnight because the fix touches OTP rate-limit semantics that the T8 enumeration
-  suite guards; it needs an Auth work order. This is the one item to schedule first.
+  suite guards; it needed an Auth work order. WO-SEC-001 fixed it with the semantics unchanged,
+  plus two more instances of the class (OVN-060 CRITICAL, OVN-061 HIGH) and a pool acquire
+  timeout.
 - OVN-001 HIGH (Appendix B) - fixed by v1.20. OVN-027, OVN-030, OVN-032 HIGH - your decisions.
 
 ### What gates/tests are red?
@@ -85,7 +90,7 @@ and gate production For You (OVN-027, OVN-030, OVN-032).
 - No PR, no merge; `origin/main` untouched at `01302cf`.
 
 ### What should the founder review first?
-1. OVN-045 (open Critical, Auth) - schedule the fix.
+1. OVN-045 - RESOLVED by WO-SEC-001; review `docs/security/WO-SEC-001-RATE-LIMIT-POOL-HARDENING.md`.
 2. The For You production decisions: OVN-030, OVN-032, OVN-035.
 3. `docs/discovery/WO-DISC-002-FOR-YOU-API.md` sections 1-4 and 6, then
    `docs/mobile/WO-004A-BUYER-FOR-YOU-FEED.md` sections 3 and 10.
@@ -150,9 +155,9 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 | OVN-042 | WO-DISC-002 | MEDIUM | BUG | OPEN | Guest For You (and guest carts) after media_retention | Pre-existing: app guest devices never refresh `last_seen_at` (only web bootstrap, binding and the authenticated PATCH do), so `device.purge_unbound` deletes an active guest's device media_retention after registration; For You then answers 400 X-Adulis-Device and the app registers only once | Security review; `bootstrap.controller.ts` app branch; `e4-retention.ts` | Recorded (Device domain, not changed here) | No | Refresh last_seen_at on app bootstrap, or re-register on 400 |
 | OVN-043 | WO-DISC-002 | LOW | BUG | RESOLVED | (was: deleted-account consistency) | A session could be created for an account whose deletion committed between authentication and the session insert | Security review | Subject read requires `status = 'ACTIVE'` and takes `FOR KEY SHARE`, which serialises with `fn_delete_account`'s `FOR UPDATE` | No | Done |
 | OVN-044 | WO-DISC-002 | LOW | SECURITY | RESOLVED | (was: owner page latency) | The session row was locked before the subject and secret checks, so anyone holding a `feed_session_id` could hold the owner's lock with garbage cursors | Security review | Verify on a plain read, then lock and re-read served_count | No | Done |
-| OVN-045 | WO-DISC-002 (review follow-up) | CRITICAL | SECURITY | OPEN | API availability under a burst; not For You | Pre-existing, the OVN-038 class on routes For You does not own: the rate limiter is counted on a second app-pool connection inside a handler transaction at the ANONYMOUS OTP request and deletion-OTP request, and at the step-up request and one Courier route. About ten concurrent requests can hold every pooled connection while each waits for another (no acquire timeout), hanging the API | `auth.controller.ts` (OTP request, step-up), `deletion.controller.ts` (deletion OTP request), `couriers.controller.ts`; pool `max: 10`, no `connectionTimeoutMillis` | Recorded, NOT changed: moving the count into the transaction makes a request that fails after counting stop counting, which on the OTP paths could create the known/unknown-phone asymmetry the T8 suite guards. `consume` now accepts the transaction, so the change is small once the Auth owner rules on it | No (engineering) | Auth fix work order: count inside the transaction or before it, keep T8 green, and add a pool acquire timeout |
+| OVN-045 | WO-DISC-002 (review follow-up) | CRITICAL | SECURITY | RESOLVED | (was: API availability under a burst) | The rate limiter was counted on a second app-pool connection inside a handler transaction at FIVE routes: the anonymous `POST /v1/auth/otp/request` and `POST /v1/deletion/otp/request`, `POST /v1/auth/step-up/request`, `POST /v1/seller/couriers`, and `POST /v1/auth/recovery` (found by the WO-SEC-001 audit). Ten concurrent requests could hold all ten pooled connections while each waited for another, with no acquire timeout: the API hung | WO-SEC-001 burst suite (`test/wo-sec-001-pool-starvation.e2e.spec.ts`), 14 concurrent requests per route on the real 10-connection pool: old route code 14 x 503 on every route; fixed 14 x 202 (courier 10 x 201 + 4 x 429), `/healthz` served mid-burst. Static guard reports the five sites on the old tree, none now | WO-SEC-001: every count moved to a `beforeTransaction` step of `runIdempotent` (after the replay check, before the transaction, nothing held), so the counting semantics are unchanged (replay burns nothing; a refused or failed request keeps its count; courier authorizes before counting); thresholds unchanged; pool acquire timeout `DB_POOL_ACQUIRE_TIMEOUT_MS` (5000 ms) on the app and financial pools -> 503 + Retry-After; static guard spec | No | Done |
 | OVN-037 | WO-DISC-002 | LOW | GOVERNANCE | DEFERRED | First affinity/feature table | REC-01 S45 wants weights/affinity; ADU-DB-01 S19 and check 6 forbid score/rank/weight/affinity columns in feed migrations. Today's configuration is opaque jsonb and check 6 passes on 0055 | check-06; REC-01 S45 | None needed tonight | Yes, when personalisation lands | Governance ruling with the first affinity table |
-| OVN-047 | repository | LOW | TEST_FLAKE | OPEN | None | `t8-market-from-device` 'a known and an unknown phone are indistinguishable' draws random 3-digit phone suffixes and never clears the `deletion-otp-request` bucket (3/hour/phone), so a second full API run on the same database within the hour can collide: 429 for one phone only | WO-DISC-002 validation: second API run 761/762; the spec alone right after: 10/10; no deletion or auth code changed on this branch | Recorded | No | Clear `deletion-otp-request` in that suite's cleanup |
+| OVN-047 | repository | LOW | TEST_FLAKE | OPEN | None | RE-DIAGNOSED by WO-SEC-001: the T8 'a known and an unknown phone are indistinguishable' failure (`202:` vs `429:RATE_LIMITED`) is NOT the `deletion-otp-request` bucket (a 3-digit random phone would need three collisions within the hour). `t13-delivery-layer` 'the GLOBAL ceiling binds...' sets the PLATFORM-WIDE daily OTP hard limit to 1 for a moment; any anonymous OTP request in a parallel worker during that moment is RATE_LIMITED | Reproduced on the disposable DB: T8's test alone 3/3 green; with a t13-style toggle beside it 4/4 red with the recorded signature; `otp_global_daily_hard_limit` restored to 5000. The same moment failed `t8-device-bootstrap` once in WO-SEC-001's final validation (a non-t13 worker logged the global soft limit crossed with market spend 0); alone 14/14 twice | NOT fixed: WO-SEC-001 authorised a test-cleanup fix only for the bucket diagnosis, which is wrong | No | t13 should change the platform row inside the transaction it asserts in and roll back, so no other connection sees it |
 | OVN-046 | WO-DISC-002 | LOW | ENVIRONMENT | RESOLVED | None | The staged `git mv` of v1.20 rode into the migration commit (the OVN-024 slip again: a staged rename joins whichever commit comes next) | `git show --stat` of the first, unpushed commit | Reset the four unpushed commits to `1d232ae` and recommitted with the rename in the docs commit; nothing had been pushed | No | Stage renames only with the commit that owns them |
 | OVN-048 | WO-004A | LOW | OPEN_DESIGN_DECISION | FOUNDER_REVIEW_REQUIRED | None (presentation) | MEDIA-01 gives the FYP derivative 'a known aspect ratio' but no number; the card uses a fixed 4:5 frame with cover fit | MEDIA-01 :386-388; `SceneCard.tsx` PHOTO_ASPECT | Fixed frame, one constant | Yes: the FYP derivative ratio | Set it with the Media derivative spec |
 | OVN-049 | WO-004A | LOW | TEST_INFRA | RESOLVED | (was: mobile tests) | FlashList 2 ships ESM that jest-expo does not transform, and needs its own Jest viewport; renderRouter runs modern fake timers, so real-timer waits never fire | Route error boundary in the shell tests; a hung test | Added `@shopify/flash-list` to transformIgnorePatterns and its jestSetup; tests advance fake timers | No | Done |
@@ -166,6 +171,12 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 | OVN-057 | WO-004A | LOW | SECURITY | RESOLVED | (was: image origin) | `mediaUrl` accepted userinfo in the media origin (`https://media.adulis.et@evil.example`), so a misconfigured or compromised bootstrap could point photos at another host | Mobile security review | The authority may not contain `@` or a backslash; two refusal tests added | No | Done |
 | OVN-058 | WO-004A | INFO | SECURITY | RESOLVED | None | A guest-keyed feed request in flight when sign-in lands could carry the new bearer (the server refuses the guest cursor for an Account, so no exposure) | Mobile security review | Guest-keyed requests send no bearer | No | Done |
 | OVN-059 | WO-004A | INFO | SECURITY | OPEN | Production deployment | The cursor (session, offset, continuation secret) travels in the `/v1/fyp` query string by contract; the API logs only the path, but a proxy or CDN access log would record it | ADU-API contract; `handler-transaction.ts` logs `req.path` | Recorded | No | Strip query strings from edge/proxy logs for /v1/fyp |
+| OVN-060 | WO-SEC-001 | CRITICAL | SECURITY | RESOLVED | (was: API availability; OTP brute-force budget under load) | Same class as OVN-045, not a limiter call: `OtpService.burnAttempt` wrote the wrong-guess counter on a second app-pool connection from inside the verify transaction of the ANONYMOUS `POST /v1/auth/otp/verify` and `/v1/deletion/otp/verify`, and of `/v1/auth/step-up/verify`. Ten concurrent wrong guesses could hang the API; with only an acquire timeout, the starved guesses failed with 503 and were never counted (free guesses) | WO-SEC-001 audit + burst suite: old code 14 wrong sign-in guesses -> 14 x 503, none counted; fixed -> 4 x OTP_INVALID + 10 x OTP_ATTEMPTS_EXCEEDED style outcomes with the attempt count at most 5 (it IS the number of compares), right code dead afterwards; step-up exactly 5. With the row lock removed the same burst compared 12 codes (the assertion catches it); a verify against a held challenge answers 429 at once with nothing compared | The challenge is read FOR UPDATE NOWAIT (anonymous sign-in / deletion; step-up waits behind its own lock) and a wrong guess is counted in the comparing transaction, which commits before the refusal is served (`RefuseAfterCommit`): no second connection, never more compares than the budget (ADU-AUTH-02 v3.3 S17), no queueing on the lock. A first draft that counted after the rollback was rejected by both reviews before commit; the replacement was re-reviewed: closed | No | Done |
+| OVN-061 | WO-SEC-001 | HIGH | SECURITY | RESOLVED | (was: API availability) | Same class: `HandoffService.processScan` retried a lost nonce race (23505) by recursing INSIDE its own transaction callback, holding one connection while acquiring another; ten or more concurrent duplicate scans from a Buyer with a real order and QR could hang the API (`POST /v1/handoffs/sync`) | Found by the WO-SEC-001 static guard; c5-handoff green after the fix | The retry moved outside the transaction (`processScan` around `processScanOnce`): one retry, only for `handoff_scan_nonce_key`; any other unique violation rethrows | No | Done |
+| OVN-062 | WO-SEC-001 | LOW | TEST_FLAKE | OPEN | None | T8 (before each test), t12 and c6 purge `otp-request` (c6 also `deletion-otp-request`, `step-up-request`, `auth-recovery`) BY BUCKET KEY, mid-run, in parallel workers, so any suite asserting a seeded count on those buckets races them | WO-SEC-001: its `otp-request` threshold test failed 2 of 3 combined runs until it ran last and retried only on a purge the bucket itself shows; 5/5 green afterwards | Worked around inside the WO-SEC-001 suite; the other suites not changed | No | Purge only the suite's own subjects (keyed hashes), as the courier bucket already is |
+| OVN-063 | WO-SEC-001 | INFO | TECH_DEBT | OPEN | None | The worker process's own pool (`jobs/runtime.ts`, max 12 for concurrency 10) has no acquisition bound; no nested use was found in `src/jobs` | WO-SEC-001 audit | Recorded; out of the app/financial scope | No | Apply `DB_POOL_ACQUIRE_TIMEOUT_MS` there when the worker is next touched |
+| OVN-064 | WO-SEC-001 | INFO | SECURITY | OPEN | None | Operational hardening beyond WO-SEC-001: the acquire bound does not cover LOCK waits (courier per-(seller, phone) lock, step-up and OTP challenge FOR UPDATE); `Retry-After: 5` on the 503 is fixed (clients retry together); under pool starvation, transport can fail after commit, spending a user's OTP request budget without an SMS | WO-SEC-001 reviews (INFO) | Recorded; lock holders always make progress, so the waits are bounded in practice | No | Consider `lock_timeout` / `statement_timeout` and a jittered Retry-After in an operations work order |
+| OVN-065 | WO-SEC-001 | LOW | SECURITY | OPEN | None | Pre-existing (Auth): after no live challenge is found, or a wrong guess at the live one, the code is also compared against other recent challenges to answer OTP_EXPIRED; those compares are not counted and the query also matches challenges not yet transported, so a minted-but-unsent code can be probed through OTP_EXPIRED vs OTP_INVALID until it goes live | WO-SEC-001 security re-review | Recorded: OTP semantics (4.2), outside a connection-use work order | No | Compare only `transported_at IS NOT NULL AND expires_at <= now()` (codes a person could have held, now dead) |
 | OVN-022 | WO-DISC-001 | LOW | TECH_DEBT | RESOLVED | None | The committed Kysely types predated migrations 0040, 0043 and 0046 | WO-DISC-001 S18 | Regenerated in WO-DISC-001 (`fcc56f3`) | No | Regenerate after every migration |
 
 ## Test / Gate Register
@@ -200,6 +211,14 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 | WO-004A | `npx expo-doctor` | 20/20 | n/a |  |
 | WO-004A | Maestro on Android emulator + real local API | PASS: buyer-for-you, buyer-auth-request + verify, verify-link, request + leave-verify, buyer-shell | n/a | before the review fixes; those are covered by jest |
 | WO-004A | mobile bundle scan for subscription copy | clean (only library identifiers such as `subscribeToStore`) | clean |  |
+| WO-SEC-001 | `pnpm --filter @adulis/api test`, run 1 / run 2 | 802/802 / 801/802 (t8-device-bootstrap: OVN-047's t13 ceiling moment, attributed; alone 14/14 x2) | 762/762 at WO-004A | fresh disposable DB; +40 tests |
+| WO-SEC-001 | critical auth / T8 / courier / handoff / FYP / `src/common` suites, twice | 213/213, 213/213 | n/a | includes t13, c6, wo-api-001a |
+| WO-SEC-001 | `test/wo-sec-001-pool-starvation` (real pool, 14-request bursts) | 19/19; old route code: 14 x 503 on every burst | n/a | before/after recorded in the WO record S14 |
+| WO-SEC-001 | T8 `t8-market-from-device` alone, twice | 10/10, 10/10 | 10/10 | known/unknown indistinguishable green throughout |
+| WO-SEC-001 | `pnpm test` (all packages) | PASS: API 802/802, mobile 135/135 | API 762, mobile 135 | |
+| WO-SEC-001 | `pnpm typecheck` / `lint` / `build`; `verify:contract` / `appendix` / `deps` / `docs` / `render-yaml` / `mt-keys` / `error-locale` | PASS | PASS | no OpenAPI change, no migration |
+| WO-SEC-001 | `pnpm db:check` / `db:determinism`; `verify:orphan-sweep` (twice) | 16/16 / PASS; PASS | 16/16 / PASS | |
+| WO-SEC-001 | mobile typecheck / test / build; api-client tests | PASS (135/135) | PASS | stacked branch carries WO-004A |
 
 ## Branch / Commit Register
 
@@ -207,7 +226,8 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 |---|---|---|---|---|---|
 | WO-DISC-001A | `discovery/wo-disc-001a-db-governance` | `8706a6f` | `1d232ae` (pushed, equal to origin) | `6cfd683` v1.20 reissue; `810b598` c1 date test; docs commit | |
 | WO-DISC-002 | `discovery/wo-disc-002-for-you-api` | `1d232ae` | `967cd2d` (pushed, equal to origin) | `741dcc9` migration 0055; `035fbd6` /v1/fyp; `ae8569c` contract; `3e846f6` ADU-DB-01 v1.21; `967cd2d` record + register | yes |
-| WO-004A | `mobile/wo-004a-for-you-feed` | `967cd2d` | see `git log` (the docs commit holding this line) | `330c39b` locale; `24c21bb` mobile feed; docs commit (record + register) | yes |
+| WO-004A | `mobile/wo-004a-for-you-feed` | `967cd2d` | `ce40823` (pushed) | `330c39b` locale; `24c21bb` mobile feed; docs commit (record + register) | yes |
+| WO-SEC-001 | `security/wo-sec-001-rate-limit-pool-hardening` | `ce40823` | see `git log` (the docs commit holding this line) | `6dfaf29` pool acquire bound; `e827980` nested-acquisition fix; `cac3f7a` regression tests and static guard; docs commit (record + register) | yes |
 
 ## Deferred Decisions
 
@@ -219,13 +239,15 @@ section 22 (G-1 to G-20, related items consolidated); OVN-020 to OVN-022 are oth
 ## Deferred Defects
 
 - OVN-011, OVN-012 (Catalogue).
-- OVN-045 (CRITICAL, Auth: rate limit on a second pool connection), OVN-040 (device registration
-  unthrottled), OVN-042 (app guest devices purged while active), OVN-047 (T8 flake).
+- OVN-040 (device registration unthrottled), OVN-042 (app guest devices purged while active),
+  OVN-047 (T8 flake, re-diagnosed: t13 lowers the platform OTP ceiling), OVN-062 (shared-bucket
+  purges in tests), OVN-063 (worker pool bound), OVN-064 (lock waits, Retry-After, transport under
+  starvation), OVN-065 (uncounted recent-code compares, Auth). OVN-045 resolved by WO-SEC-001.
 - OVN-059 (strip the /v1/fyp query string from edge logs).
 
 ## Morning Review Checklist
 
-- [ ] Schedule the Auth fix for OVN-045.
+- [x] Schedule the Auth fix for OVN-045 -- done: WO-SEC-001 (`security/wo-sec-001-rate-limit-pool-hardening`).
 - [ ] Decide OVN-030 (production algorithm version) and OVN-032 (retention); confirm OVN-035.
 - [ ] Decide OVN-055 (foreground refresh interval for loaded cards).
 - [ ] Review `docs/discovery/WO-DISC-001A-DB-GOVERNANCE-SYNC.md`,
