@@ -377,6 +377,10 @@ describe('C2 — catalogue, media and stock', () => {
       );
       const r = await write('delete', `/v1/seller/variants/${variantId}`).expect(409);
       expect(r.body.code).toBe('VARIANT_HAS_ACTIVE_ORDERS');
+      // WO-CAT-001A: withdrawing by PATCH meets the same guard; free-text statuses are refused.
+      const viaPatch = await write('patch', `/v1/seller/variants/${variantId}`).send({ status: 'WITHDRAWN' }).expect(409);
+      expect(viaPatch.body.code).toBe('VARIANT_HAS_ACTIVE_ORDERS');
+      await write('patch', `/v1/seller/variants/${variantId}`).send({ status: 'PAUSED' }).expect(400);
       const p = await write('delete', `/v1/seller/products/${productId}`).expect(409);
       expect(p.body.code).toBe('PRODUCT_HAS_ACTIVE_ORDERS');
     });

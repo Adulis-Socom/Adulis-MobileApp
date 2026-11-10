@@ -237,11 +237,26 @@ describe('WO-CAT-001 -- public Catalogue read integrity', () => {
       [V.unique, P.unique, SELLER.u, '8000', 'ETB', 'One', 1],
     ];
     for (const [vid, pid, sid, price, cur, key, n] of variants) {
-      await admin.query(
-        `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor, price_currency, variant_key)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [vid, pid, sid, price, cur, key],
-      );
+      const insert = (db: Pick<Pool, 'query'>) =>
+        db.query(
+          `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor, price_currency, variant_key)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [vid, pid, sid, price, cur, key],
+        );
+      if (cur === 'ETB') {
+        await insert(admin);
+      } else {
+        // A LEGACY row: since 0056 (OVN-088) no write may price a Variant outside its Market's
+        // currency, so this one is inserted with triggers off, as data from before the guard.
+        const legacy = await admin.connect();
+        try {
+          await legacy.query(`SET session_replication_role = replica`);
+          await insert(legacy);
+        } finally {
+          await legacy.query(`SET session_replication_role = DEFAULT`);
+          legacy.release();
+        }
+      }
       if (n > 0) await stock(vid, sid, n);
     }
     // Inactive Variants keep their positive stored stock.
