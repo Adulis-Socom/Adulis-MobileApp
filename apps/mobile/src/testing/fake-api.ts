@@ -337,7 +337,7 @@ export function shopProduct(slug: string, name: string, handle = 'seller-1', ove
     price_currency: 'ETB',
     available: true,
     seller: { handle, store_name: `Store ${handle}` },
-    thumb_key: `products/${slug}/thumb.webp`,
+    image_key: `products/${slug}/card.webp`,
     ...overrides,
   };
 }

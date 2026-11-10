@@ -348,6 +348,7 @@ export function ProductTile({
             source={{ uri }}
             contentFit="cover"
             cachePolicy="disk"
+            testID="product-photo"
             style={{
               width: '100%',
               aspectRatio: 1,
@@ -384,7 +385,7 @@ export function ProductTile({
           onPress={() =>
             router.push({ pathname: '/sellers/[handle]', params: { handle: seller.handle } })
           }
-          style={{ minHeight: 44, justifyContent: 'center' }}
+          style={{ minHeight: theme.touchTarget, justifyContent: 'center' }}
           testID="product-tile-seller"
         >
           <AppText

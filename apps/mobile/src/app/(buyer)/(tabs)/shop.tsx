@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useBootstrap } from '../../../api/bootstrap';
 import type { ShopProduct } from '../../../api/client';
 import { useSession } from '../../../auth/session';
 import { usePublicList } from '../../../buyer/public-list';
@@ -28,9 +29,12 @@ export default function Shop() {
   const t = useT();
   const theme = useTheme();
   const { api } = useSession();
+  // A new install's device (the guest's Market) is registered by the first bootstrap; reading
+  // before it settles gets an empty page that would read as "no Products".
+  const bootstrapSettled = !useBootstrap().isPending;
   const list = usePublicList({
     resource: ['shop-products'],
-    read: (cursor) => api.shopProducts(cursor),
+    read: bootstrapSettled ? (cursor) => api.shopProducts(cursor) : null,
     items: (page) => page.data,
     keyOf,
   });
@@ -43,12 +47,8 @@ export default function Shop() {
         list={list}
         keyOf={keyOf}
         renderItem={({ item }) => (
-          // The grid uses the thumbnail derivative: never a full-size image (low data).
-          <ProductTile
-            product={{ ...item, image_key: item.thumb_key }}
-            handle={item.seller.handle}
-            seller={item.seller}
-          />
+          // The card derivative, as on the Seller Profile: never the full-size image.
+          <ProductTile product={item} handle={item.seller.handle} seller={item.seller} />
         )}
         numColumns={2}
         header={

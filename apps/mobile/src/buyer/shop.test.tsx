@@ -6,6 +6,7 @@ import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useUiStore } from '../state/ui-store';
 import {
   GOOD_TOKEN,
+  bootstrapBody,
   installFakeApi,
   problem,
   sellerScene,
@@ -59,13 +60,18 @@ describe('the Shop tab', () => {
         next_cursor: null,
       }),
     );
+    api.on('GET /v1/bootstrap', () => ok(bootstrapBody({ media_public_origin: 'https://media.example.test' })));
     await openShop();
     expect(screen.getByRole('header', { name: en['buyer.tab.shop'] })).toBeOnTheScreen();
     expect(await screen.findByLabelText(/^Basket, ETB\s900\.00 – ETB\s1,200\.00, Available$/)).toBeOnTheScreen();
     expect(screen.getByLabelText('Scarf, Currently unavailable')).toBeOnTheScreen();
     expect(screen.getByLabelText('View Store seller-2')).toBeOnTheScreen();
     expect(screen.getByText(en['buyer.list.end'])).toBeOnTheScreen();
-    // The thumbnail derivative, never the full image; no fake category, filter or sort control.
+    // The card derivative (as on the Seller Profile), never the full image.
+    expect(screen.getAllByTestId('product-photo')[0]?.props.source).toEqual([
+      expect.objectContaining({ uri: 'https://media.example.test/products/basket/card.webp' }),
+    ]);
+    // No fake category, filter or sort control, and no query the Buyer did not choose.
     expect(calls(SHOP)[0]?.query).toEqual({ limit: '30' });
     for (const control of ['Fashion', 'Cosmetics', 'Electronics', 'Sort', 'Filter', 'Add to cart']) {
       expect(screen.queryByText(control)).not.toBeOnTheScreen();
@@ -114,6 +120,18 @@ describe('the Shop tab', () => {
     await openShop();
     await fireEvent.press(await screen.findByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByText(en['buyer.shop.empty'])).toBeOnTheScreen();
+  });
+
+  it('a new install reads the Shop only after the first bootstrap (which registers the device, its Market)', async () => {
+    let release: (reply: Reply) => void = () => undefined;
+    api.on('GET /v1/bootstrap', () => new Promise<Reply>((resolve) => (release = resolve)));
+    serve(SHOP, ok({ data: [shopProduct('basket', 'Basket')], next_cursor: null }));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    await settle();
+    expect(calls(SHOP)).toHaveLength(0);
+    await act(async () => release(ok(bootstrapBody())));
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+    expect(calls(SHOP)).toHaveLength(1);
   });
 
   it('signed in, the Shop read presents the session (the Account Market)', async () => {
