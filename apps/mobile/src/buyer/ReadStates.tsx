@@ -10,6 +10,24 @@ import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useTheme } from '../theme/theme';
 import type { usePublicRead } from './public-read';
 
+/** The neutral "no longer available" screen with a way out (founder ruling OVN-081). */
+export function GoneState({ message }: { message: MobileMessageKey }) {
+  const t = useT();
+  const router = useRouter();
+  return (
+    <Screen centered edges={['bottom', 'left', 'right']}>
+      <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        {t(message)}
+      </AppText>
+      <Button
+        label={t('buyer.scene.go_back')}
+        // A cold launch into the screen may have nothing under it: go Home instead.
+        onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      />
+    </Screen>
+  );
+}
+
 /**
  * The states of a public read before its content can be shown (WO-005), or null when the
  * content can be. Gone comes first: after a 404 nothing earlier is shown, and the message
@@ -29,22 +47,8 @@ export function ReadStates({
 }) {
   const t = useT();
   const theme = useTheme();
-  const router = useRouter();
 
-  if (!valid || read.gone) {
-    return (
-      <Screen centered edges={['bottom', 'left', 'right']}>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
-          {t(gone)}
-        </AppText>
-        <Button
-          label={t('buyer.scene.go_back')}
-          // A cold launch into the screen may have nothing under it: go Home instead.
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
-      </Screen>
-    );
-  }
+  if (!valid || read.gone) return <GoneState message={gone} />;
   // Waiting for a connection: say so rather than spin. TanStack resumes it on reconnect.
   if (read.paused) {
     return (

@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Pressable, RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
@@ -71,6 +72,7 @@ function ProductContent({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const locale = useLocale();
+  const router = useRouter();
   const money = (minor: number, currency: string) => formatMinor(locale, minor, currency);
   // The server's span of the ACTIVE Variants' prices; null is "no current price", never the seed.
   const price = formatPriceSpan(locale, t, {
@@ -112,10 +114,18 @@ function ProductContent({
       >
         {availability(product.available)}
       </AppText>
-      <AppText style={{ color: theme.color.textSecondary }}>
-        {fillSlots(t('buyer.product.seller'), { store: product.seller.store_name }) ??
-          product.seller.store_name}
-      </AppText>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityHint={fillSlots(t('buyer.seller.view'), { store: product.seller.store_name }) ?? undefined}
+        onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: product.seller.handle } })}
+        style={{ minHeight: 44, justifyContent: 'center' }}
+        testID="product-seller"
+      >
+        <AppText style={{ color: theme.color.textSecondary }}>
+          {fillSlots(t('buyer.product.seller'), { store: product.seller.store_name }) ??
+            product.seller.store_name}
+        </AppText>
+      </Pressable>
 
       {product.description ? (
         <View style={{ gap: theme.space.xs }}>

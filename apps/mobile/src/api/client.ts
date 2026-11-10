@@ -37,6 +37,13 @@ export type FypUnit = FypPage['items'][number];
 export type PublicScene = Json<paths['/v1/scene-posts/{publicRef}']['get']['responses'][200]>;
 export type SceneProduct = PublicScene['products'][number];
 export type StorefrontProduct = Json<paths['/v1/storefronts/{handle}/products/{slug}']['get']['responses'][200]>;
+export type Storefront = Json<paths['/v1/storefronts/{handle}']['get']['responses'][200]>;
+export type SellerScenePage = Json<paths['/v1/storefronts/{handle}/scenes']['get']['responses'][200]>;
+export type SellerScene = SellerScenePage['data'][number];
+export type SellerProductPage = Json<paths['/v1/storefronts/{handle}/products']['get']['responses'][200]>;
+export type SellerProduct = SellerProductPage['data'][number];
+export type SellerReviewPage = Json<paths['/v1/storefronts/{handle}/reviews']['get']['responses'][200]>;
+export type SellerReview = SellerReviewPage['data'][number];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -222,6 +229,32 @@ export function createApiClient(deps: ApiDeps) {
         params: { handle, slug },
         query: { revalidate: revalidate ? 'true' : undefined },
         // The session when there is one, as for the Scene: one Market for feed, Scene and Product.
+        ok: 200,
+      }),
+
+    /**
+     * The Seller Profile reads (WO-006): GET /v1/storefronts/{handle} and its Scenes, Products
+     * and Reviews. Like the Scene and Product reads they present the session when one is held, so
+     * the server resolves the handle in the same Market as the feed.
+     */
+    storefront: (handle: string) =>
+      call<Storefront>('GET', '/v1/storefronts/{handle}', { params: { handle }, ok: 200 }),
+    sellerScenes: (handle: string, cursor: string | null) =>
+      call<SellerScenePage>('GET', '/v1/storefronts/{handle}/scenes', {
+        params: { handle },
+        query: { cursor: cursor ?? undefined, limit: '20' },
+        ok: 200,
+      }),
+    sellerProducts: (handle: string, cursor: string | null) =>
+      call<SellerProductPage>('GET', '/v1/storefronts/{handle}/products', {
+        params: { handle },
+        query: { cursor: cursor ?? undefined, limit: '30' },
+        ok: 200,
+      }),
+    sellerReviews: (handle: string, cursor: string | null) =>
+      call<SellerReviewPage>('GET', '/v1/storefronts/{handle}/reviews', {
+        params: { handle },
+        query: { cursor: cursor ?? undefined, limit: '25' },
         ok: 200,
       }),
 

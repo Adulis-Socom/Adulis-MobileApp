@@ -97,6 +97,7 @@ function SceneContent({
   const insets = useSafeAreaInsets();
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const store = scene.seller.store_name;
+  const router = useRouter();
 
   return (
     <ScrollView
@@ -112,10 +113,17 @@ function SceneContent({
         <RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />
       }
     >
-      <View accessible accessibilityLabel={fillSlots(t('buyer.scene.seller'), { store }) ?? store}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={fillSlots(t('buyer.scene.seller'), { store }) ?? store}
+        accessibilityHint={fillSlots(t('buyer.seller.view'), { store }) ?? undefined}
+        onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: scene.seller.handle } })}
+        style={{ minHeight: 44, justifyContent: 'center' }}
+        testID="scene-seller"
+      >
         <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{store}</AppText>
         <AppText style={{ color: theme.color.textSecondary }}>{`@${scene.seller.handle}`}</AppText>
-      </View>
+      </Pressable>
 
       <ScenePhoto
         uri={mediaUrl(mediaOrigin, scene.image.card_key)}

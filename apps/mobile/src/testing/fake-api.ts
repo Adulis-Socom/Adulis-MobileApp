@@ -247,3 +247,77 @@ export function installFakeApi() {
     },
   };
 }
+
+// ---------------------------------------------------------------- WO-006 Seller Profile
+export type Storefront = S['StorefrontDto'];
+export type SellerScene = S['SellerSceneDto'];
+export type SellerProduct = S['StorefrontProductListItemDto'];
+export type SellerReview = S['StorefrontReviewDto'];
+
+/** GET /v1/storefronts/{handle}, shaped exactly like the contract's. */
+export function storefront(handle: string, overrides: Partial<Storefront> = {}): Storefront {
+  return {
+    seller_id: '0b6f1a3e-9999-4999-8999-999999999999',
+    store_name: 'Store 1',
+    handle,
+    description: 'Baskets woven in Addis Ababa.',
+    status: 'ACTIVE',
+    member_since: '2026-03-01',
+    stats: {
+      level: 'ESTABLISHED',
+      completed_handoff_count: 12,
+      cancellation_rate: '0.0000',
+      confirmation_rate: null,
+      scan_completion_rate: null,
+      unresolved_claim_count: 0,
+      missed_confirmation_windows: 0,
+    },
+    availability: { is_open: true, reason: 'SCHEDULE', note: null },
+    review_summary: {
+      count: 3,
+      average_rating: 4,
+      badge_counts: { CLAIM_UPHELD: 0, VERIFIED_HANDOFF: 1, CONFIRMED_BY_BUYER: 0, UNVERIFIED: 2 },
+    },
+    fulfilment_methods: ['BUYER_COLLECTION'],
+    ...overrides,
+  };
+}
+
+export function sellerScene(n: number, overrides: Partial<SellerScene> = {}): SellerScene {
+  return {
+    public_ref: fypUnit(n).public_ref,
+    published_at: '2026-11-09T12:00:00.000Z',
+    caption: `Seller scene ${n}`,
+    caption_truncated: false,
+    image: { thumb_key: `scenes/${n}/thumb.webp`, card_key: `scenes/${n}/card.webp` },
+    ...overrides,
+  };
+}
+
+export function sellerProduct(slug: string, name: string, overrides: Partial<SellerProduct> = {}): SellerProduct {
+  return {
+    id: '0b6f1a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    slug,
+    name,
+    base_price_minor: 1,
+    base_price_currency: 'ETB',
+    price_min_minor: 50000,
+    price_max_minor: 50000,
+    price_currency: 'ETB',
+    available: true,
+    display_order: 0,
+    image_key: `products/${slug}/card.webp`,
+    ...overrides,
+  };
+}
+
+export function sellerReview(n: number, overrides: Partial<SellerReview> = {}): SellerReview {
+  return {
+    id: `0b6f1a3e-bbbb-4bbb-8bbb-${n.toString(16).padStart(12, '0')}`,
+    seller_rating: 5,
+    body: `Review ${n}`,
+    badge: 'VERIFIED_HANDOFF',
+    published_at: '2026-11-08T10:00:00.000Z',
+    ...overrides,
+  };
+}
