@@ -247,6 +247,10 @@ export const enCommon = {
   'buyer.scene.choose': 'Choose a Product to preview it.',
   'buyer.scene.product': '{position}. {name}, {price}',
   'buyer.scene.product_unavailable': '{position}. {name}, {price}, currently unavailable',
+  // A Product with no ACTIVE Variant has no price, and is unavailable.
+  'buyer.scene.product_no_price': '{position}. {name}, currently unavailable',
+  // The span of a Product's current Variant prices, lowest to highest.
+  'buyer.price.range': '{min} – {max}',
   'buyer.product.title': 'Product',
   'buyer.product.view': 'View Product',
   'buyer.product.loading': 'Loading the Product',

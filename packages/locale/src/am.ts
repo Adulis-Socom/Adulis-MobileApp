@@ -209,6 +209,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.scene.choose': 'ለቅድመ እይታ ምርት ይምረጡ።',
   'buyer.scene.product': '{position}. {name}፣ {price}',
   'buyer.scene.product_unavailable': '{position}. {name}፣ {price}፣ በአሁኑ ጊዜ አይገኝም',
+  'buyer.scene.product_no_price': '{position}. {name}፣ በአሁኑ ጊዜ አይገኝም',
+  'buyer.price.range': 'ከ{min} እስከ {max}',
   'buyer.product.title': 'ምርት',
   'buyer.product.view': 'ምርቱን ይመልከቱ',
   'buyer.product.loading': 'ምርቱ በመጫን ላይ',
