@@ -359,6 +359,40 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(r.body).not.toHaveProperty('events');
     });
 
+    it('products_published counts Products published NOW (OVN-085): unpublish, republish, restriction, Seller status', async () => {
+      const count = async () =>
+        (
+          await http()
+            .get('/v1/seller/analytics/overview')
+            .set('Authorization', `Bearer ${sessionToken(OWNER_MOB_S)}`)
+            .set('X-Adulis-Seller', SELLER)
+            .expect(200)
+        ).body.products_published as number;
+      // fn_unpublish_product's effect: visibility UNPUBLISHED, published_at kept.
+      const setVisibility = (visibility: string, reason: string | null) =>
+        admin.query(`UPDATE core.product SET visibility = $2, unpublished_reason = $3 WHERE id = $1`, [
+          PRODUCT,
+          visibility,
+          reason,
+        ]);
+      try {
+        expect(await count()).toBe(1);
+        await setVisibility('UNPUBLISHED', 'SELLER');
+        expect(await count()).toBe(0);
+        await setVisibility('PUBLISHED', null);
+        expect(await count()).toBe(1);
+        await setVisibility('UNPUBLISHED', 'MODERATION');
+        expect(await count()).toBe(0);
+        await setVisibility('PUBLISHED', null);
+        // A Seller status change does not unpublish anything: still one published Product.
+        await admin.query(`UPDATE core.seller SET status = 'CLOSING' WHERE id = $1`, [SELLER]);
+        expect(await count()).toBe(1);
+      } finally {
+        await setVisibility('PUBLISHED', null);
+        await admin.query(`UPDATE core.seller SET status = 'ACTIVE' WHERE id = $1`, [SELLER]);
+      }
+    });
+
     it('full resolves the entitlement at read time: BETA gets the Assisted set; no tier, no set', async () => {
       const r = await http()
         .get('/v1/seller/analytics/full')
