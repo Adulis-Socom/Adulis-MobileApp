@@ -1978,7 +1978,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Header, stats, trust level, availability — one round trip (S3.1). */
+        /** Header, stats, trust level, availability, review summary and fulfilment -- one round trip (S3.1; the Buyer Seller Profile header and About). */
         get: operations["StorefrontController_storefront"];
         put?: never;
         post?: never;
@@ -2029,8 +2029,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Badge per review (S12); anonymised rows carry no buyer. */
+        /** Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated. */
         get: operations["StorefrontController_reviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storefronts/{handle}/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Seller's public Scenes, newest first: only Scenes the canonical public gate (v_scene_post_public) admits now; a PRIVATE, draft or archived Scene is simply absent. Cursor-paginated. */
+        get: operations["StorefrontController_scenes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2308,6 +2325,20 @@ export interface components {
             handle: string;
             store_name: string;
         };
+        ReviewBadgeCountsDto: {
+            CLAIM_UPHELD: number;
+            CONFIRMED_BY_BUYER: number;
+            UNVERIFIED: number;
+            VERIFIED_HANDOFF: number;
+        };
+        ReviewSummaryDto: {
+            /** @description Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review. */
+            average_rating: number | null;
+            /** @description Counts by evidence basis (REV-01 S30). */
+            badge_counts: components["schemas"]["ReviewBadgeCountsDto"];
+            /** @description Seller-service reviews. */
+            count: number;
+        };
         RevokeOthersBodyDto: {
             /**
              * Format: uuid
@@ -2393,6 +2424,25 @@ export interface components {
             product_id: string;
             /** @description The Product is public commerce (PUBLISHED). */
             published: boolean;
+        };
+        SellerSceneDto: {
+            /** @description Caption excerpt (140 graphemes). */
+            caption: string;
+            caption_truncated: boolean;
+            image: components["schemas"]["SellerSceneImageDto"];
+            /** @description Scene route: /v1/scene-posts/{publicRef}. */
+            public_ref: string;
+            /** Format: date-time */
+            published_at: string;
+        };
+        SellerSceneImageDto: {
+            card_key: string;
+            thumb_key: string;
+        };
+        SellerSceneListDto: {
+            data: components["schemas"]["SellerSceneDto"][];
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
         };
         SellerScenePostDto: {
             /** Format: date-time */
@@ -2494,6 +2544,32 @@ export interface components {
              */
             url: string;
         };
+        StorefrontAvailabilityDto: {
+            /** @description Whether the Seller is open now (the server's derivation; never computed by a client). */
+            is_open: boolean;
+            note: string | null;
+            /** @description Reason code of the derivation. */
+            reason: string;
+        };
+        StorefrontDto: {
+            availability: components["schemas"]["StorefrontAvailabilityDto"] | null;
+            description: string | null;
+            /** @description Active fulfilment methods, as codes (render with catalogue labels). */
+            fulfilment_methods: ("BUYER_COLLECTION" | "SELLER_DELIVERY" | "COURIER_DELIVERY")[];
+            handle: string;
+            /** @description Date the Seller joined Adulis (YYYY-MM-DD, UTC). */
+            member_since: string;
+            review_summary: components["schemas"]["ReviewSummaryDto"];
+            /**
+             * Format: uuid
+             * @description Internal identity; the Seller is addressed by handle.
+             */
+            seller_id: string;
+            stats: components["schemas"]["StorefrontStatsDto"] | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "CLOSING" | "BILLING_SUSPENDED";
+            store_name: string;
+        };
         StorefrontProductAttributeDto: {
             /** @description Attribute definition code (machine identifier, not copy). */
             attribute: string;
@@ -2550,6 +2626,8 @@ export interface components {
         };
         StorefrontProductListDto: {
             data: components["schemas"]["StorefrontProductListItemDto"][];
+            /** @description Opaque; pass as `cursor` for the next page. Null: the end. */
+            next_cursor: string | null;
         };
         StorefrontProductListItemDto: {
             /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
@@ -2598,8 +2676,41 @@ export interface components {
             stock_count: number;
             variant_key: string;
         };
+        StorefrontReviewDto: {
+            /**
+             * @description Evidence basis (S12).
+             * @enum {string}
+             */
+            badge: "CLAIM_UPHELD" | "VERIFIED_HANDOFF" | "CONFIRMED_BY_BUYER" | "UNVERIFIED";
+            body: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            published_at: string;
+            /** @description Seller service, 1-5. */
+            seller_rating: number;
+        };
+        StorefrontReviewListDto: {
+            data: components["schemas"]["StorefrontReviewDto"][];
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
+        };
         StorefrontSearchResultListDto: {
             data: components["schemas"]["PublicProductSummaryDto"][];
+        };
+        StorefrontStatsDto: {
+            /** @description Decimal fraction as text, or null. No denominator is exposed: do not present as a percentage claim. */
+            cancellation_rate: string | null;
+            completed_handoff_count: number;
+            confirmation_rate: string | null;
+            /**
+             * @description Public Trust level (core.trust_level).
+             * @enum {string}
+             */
+            level: "NEW" | "ESTABLISHED" | "TRUSTED";
+            missed_confirmation_windows: number;
+            scan_completion_rate: string | null;
+            unresolved_claim_count: number;
         };
     };
     responses: never;
@@ -5525,6 +5636,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The Seller public handle. */
                 handle: string;
             };
             cookie?: never;
@@ -5535,13 +5647,29 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StorefrontDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     StorefrontController_products: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description next_cursor of the previous page (opaque). */
+                cursor?: string;
+                /** @description Page size, 1-100 (default 100). */
+                limit?: string;
+            };
             header?: never;
             path: {
                 /** @description The Seller public handle. */
@@ -5608,11 +5736,15 @@ export interface operations {
     };
     StorefrontController_reviews: {
         parameters: {
-            query: {
-                cursor: string;
+            query?: {
+                /** @description next_cursor of the previous page (opaque). */
+                cursor?: string;
+                /** @description Page size, 1-50 (default 25). */
+                limit?: string;
             };
             header?: never;
             path: {
+                /** @description The Seller public handle. */
                 handle: string;
             };
             cookie?: never;
@@ -5623,7 +5755,54 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StorefrontReviewListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    StorefrontController_scenes: {
+        parameters: {
+            query?: {
+                /** @description next_cursor of the previous page (opaque). */
+                cursor?: string;
+                /** @description Page size, 1-50 (default 20). */
+                limit?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The Seller public handle. */
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerSceneListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

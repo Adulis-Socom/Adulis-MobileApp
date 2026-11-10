@@ -3815,6 +3815,7 @@
             "name": "handle",
             "required": true,
             "in": "path",
+            "description": "The Seller public handle.",
             "schema": {
               "type": "string"
             }
@@ -3822,10 +3823,27 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Header, stats, trust level, availability — one round trip (S3.1).",
+        "summary": "Header, stats, trust level, availability, review summary and fulfilment -- one round trip (S3.1; the Buyer Seller Profile header and About).",
         "tags": [
           "Storefront"
         ]
@@ -3840,6 +3858,24 @@
             "required": true,
             "in": "path",
             "description": "The Seller public handle.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "next_cursor of the previous page (opaque).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1-100 (default 100).",
             "schema": {
               "type": "string"
             }
@@ -3944,14 +3980,25 @@
             "name": "handle",
             "required": true,
             "in": "path",
+            "description": "The Seller public handle.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page (opaque).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1-50 (default 25).",
             "schema": {
               "type": "string"
             }
@@ -3959,10 +4006,87 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontReviewListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Badge per review (S12); anonymised rows carry no buyer.",
+        "summary": "Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated.",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
+    "/v1/storefronts/{handle}/scenes": {
+      "get": {
+        "operationId": "StorefrontController_scenes",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "description": "The Seller public handle.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "next_cursor of the previous page (opaque).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1-50 (default 20).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerSceneListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The Seller's public Scenes, newest first: only Scenes the canonical public gate (v_scene_post_public) admits now; a PRIVATE, draft or archived Scene is simply absent. Cursor-paginated.",
         "tags": [
           "Storefront"
         ]
@@ -4588,6 +4712,200 @@
           }
         }
       },
+      "StorefrontStatsDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "ESTABLISHED",
+              "TRUSTED"
+            ],
+            "description": "Public Trust level (core.trust_level)."
+          },
+          "completed_handoff_count": {
+            "type": "integer"
+          },
+          "cancellation_rate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Decimal fraction as text, or null. No denominator is exposed: do not present as a percentage claim."
+          },
+          "confirmation_rate": {
+            "type": "string",
+            "nullable": true
+          },
+          "scan_completion_rate": {
+            "type": "string",
+            "nullable": true
+          },
+          "unresolved_claim_count": {
+            "type": "integer"
+          },
+          "missed_confirmation_windows": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level",
+          "completed_handoff_count",
+          "cancellation_rate",
+          "confirmation_rate",
+          "scan_completion_rate",
+          "unresolved_claim_count",
+          "missed_confirmation_windows"
+        ]
+      },
+      "StorefrontAvailabilityDto": {
+        "type": "object",
+        "properties": {
+          "is_open": {
+            "type": "boolean",
+            "description": "Whether the Seller is open now (the server's derivation; never computed by a client)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason code of the derivation."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "is_open",
+          "reason",
+          "note"
+        ]
+      },
+      "ReviewBadgeCountsDto": {
+        "type": "object",
+        "properties": {
+          "CLAIM_UPHELD": {
+            "type": "integer"
+          },
+          "VERIFIED_HANDOFF": {
+            "type": "integer"
+          },
+          "CONFIRMED_BY_BUYER": {
+            "type": "integer"
+          },
+          "UNVERIFIED": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "CLAIM_UPHELD",
+          "VERIFIED_HANDOFF",
+          "CONFIRMED_BY_BUYER",
+          "UNVERIFIED"
+        ]
+      },
+      "ReviewSummaryDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Seller-service reviews."
+          },
+          "average_rating": {
+            "type": "number",
+            "nullable": true,
+            "description": "Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review."
+          },
+          "badge_counts": {
+            "description": "Counts by evidence basis (REV-01 S30).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewBadgeCountsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "average_rating",
+          "badge_counts"
+        ]
+      },
+      "StorefrontDto": {
+        "type": "object",
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity; the Seller is addressed by handle."
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CLOSING",
+              "BILLING_SUSPENDED"
+            ]
+          },
+          "member_since": {
+            "type": "string",
+            "description": "Date the Seller joined Adulis (YYYY-MM-DD, UTC)."
+          },
+          "stats": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorefrontStatsDto"
+              }
+            ]
+          },
+          "availability": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorefrontAvailabilityDto"
+              }
+            ]
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewSummaryDto"
+          },
+          "fulfilment_methods": {
+            "type": "array",
+            "description": "Active fulfilment methods, as codes (render with catalogue labels).",
+            "items": {
+              "type": "string",
+              "enum": [
+                "BUYER_COLLECTION",
+                "SELLER_DELIVERY",
+                "COURIER_DELIVERY"
+              ]
+            }
+          }
+        },
+        "required": [
+          "seller_id",
+          "store_name",
+          "handle",
+          "description",
+          "status",
+          "member_since",
+          "stats",
+          "availability",
+          "review_summary",
+          "fulfilment_methods"
+        ]
+      },
       "StorefrontProductListItemDto": {
         "type": "object",
         "properties": {
@@ -4665,10 +4983,16 @@
             "items": {
               "$ref": "#/components/schemas/StorefrontProductListItemDto"
             }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; pass as `cursor` for the next page. Null: the end."
           }
         },
         "required": [
-          "data"
+          "data",
+          "next_cursor"
         ]
       },
       "StorefrontProductSellerDto": {
@@ -4969,6 +5293,131 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "SellerSceneImageDto": {
+        "type": "object",
+        "properties": {
+          "thumb_key": {
+            "type": "string"
+          },
+          "card_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thumb_key",
+          "card_key"
+        ]
+      },
+      "SellerSceneDto": {
+        "type": "object",
+        "properties": {
+          "public_ref": {
+            "type": "string",
+            "description": "Scene route: /v1/scene-posts/{publicRef}."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption excerpt (140 graphemes)."
+          },
+          "caption_truncated": {
+            "type": "boolean"
+          },
+          "image": {
+            "$ref": "#/components/schemas/SellerSceneImageDto"
+          }
+        },
+        "required": [
+          "public_ref",
+          "published_at",
+          "caption",
+          "caption_truncated",
+          "image"
+        ]
+      },
+      "SellerSceneListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellerSceneDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "StorefrontReviewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seller_rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Seller service, 1-5."
+          },
+          "body": {
+            "type": "string",
+            "nullable": true
+          },
+          "badge": {
+            "type": "string",
+            "enum": [
+              "CLAIM_UPHELD",
+              "VERIFIED_HANDOFF",
+              "CONFIRMED_BY_BUYER",
+              "UNVERIFIED"
+            ],
+            "description": "Evidence basis (S12)."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "seller_rating",
+          "body",
+          "badge",
+          "published_at"
+        ]
+      },
+      "StorefrontReviewListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontReviewDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
         ]
       },
       "PostLinkProductDto": {
