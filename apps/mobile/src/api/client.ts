@@ -204,11 +204,13 @@ export function createApiClient(deps: ApiDeps) {
 
     /**
      * GET /v1/scene-posts/{publicRef}: the Scene's current public representation, the
-     * Explorer's only authority (never a feed unit). Public, so it never carries the bearer:
-     * one answer for everyone, and a guest's and an Account's are the same request.
+     * Explorer's only authority (never a feed unit). Public, and Market-scoped since WO-CAT-001:
+     * it presents the session when there is one, as the feed does, so the server resolves the
+     * same Market for both (the Account's when signed in, else this device's). Never a token
+     * the guest state does not hold.
      */
     scene: (publicRef: string) =>
-      call<PublicScene>('GET', '/v1/scene-posts/{publicRef}', { params: { publicRef }, bearer: false, ok: 200 }),
+      call<PublicScene>('GET', '/v1/scene-posts/{publicRef}', { params: { publicRef }, ok: 200 }),
 
     /**
      * GET /v1/storefronts/{handle}/products/{slug}: the public Product, read now. `revalidate`
@@ -219,7 +221,7 @@ export function createApiClient(deps: ApiDeps) {
       call<StorefrontProduct>('GET', '/v1/storefronts/{handle}/products/{slug}', {
         params: { handle, slug },
         query: { revalidate: revalidate ? 'true' : undefined },
-        bearer: false,
+        // The session when there is one, as for the Scene: one Market for feed, Scene and Product.
         ok: 200,
       }),
 

@@ -156,7 +156,7 @@ describe('failure messages', () => {
     expect(failureMessage(t, new Error('anything'))).toBe(en['error.request.internal']);
   });
 
-  it('reads a Scene and a Product publicly: path values stay one segment, no bearer is sent (WO-005)', async () => {
+  it('reads a Scene and a Product: path values stay one segment; the session is presented when held (WO-CAT-001)', async () => {
     const fake = installFakeApi();
     const { api } = client(GOOD_TOKEN);
     fake.on('GET /v1/scene-posts/scene-ref-000000000001', () => ({ status: 200, body: publicScene(1) }));
@@ -166,7 +166,7 @@ describe('failure messages', () => {
     }));
     expect((await api.scene('scene-ref-000000000001')).public_ref).toBe('scene-ref-000000000001');
     expect((await api.product('seller-1', 'woven-basket')).slug).toBe('woven-basket');
-    for (const call of fake.calls) expect(call.headers.Authorization).toBeUndefined();
+    for (const call of fake.calls) expect(call.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
 
     // Whatever a value holds, it cannot add a segment or a query to the path.
     await failureOf(api.scene('../fyp?x=1'));

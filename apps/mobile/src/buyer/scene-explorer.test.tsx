@@ -185,7 +185,7 @@ describe('opening Explore the Scene (navigation)', () => {
     expect(sceneCalls()).toHaveLength(0);
   });
 
-  it('signed in, the Scene and Product reads still carry no bearer (one public answer)', async () => {
+  it('signed in, the Scene and Product reads present the session, as the feed does (one Market, WO-CAT-001)', async () => {
     resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
     serve(SCENE, ok(threeProducts));
     serve(BASKET, ok(storefrontProduct('woven-basket', 'Woven basket')));
@@ -194,13 +194,13 @@ describe('opening Explore the Scene (navigation)', () => {
     await fireEvent.press(row('Woven basket'));
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.product.view'] }));
     expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
-    expect(calls(SCENE)[0]?.headers.Authorization).toBeUndefined();
-    expect(calls(BASKET)[0]?.headers.Authorization).toBeUndefined();
+    expect(calls(SCENE)[0]?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
+    expect(calls(BASKET)[0]?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
   });
 });
 
 describe('signing in and out (lifecycle)', () => {
-  it('signing in and out does not disturb Scene navigation: the reads stay public', async () => {
+  it('signing in and out does not disturb Scene navigation; each read presents the state it was made in', async () => {
     serve(SCENE, ok(threeProducts));
     await openFromFeed();
     await explore();
@@ -228,8 +228,7 @@ describe('signing in and out (lifecycle)', () => {
     await explore();
     expect(await screen.findByText(READ_CAPTION)).toBeOnTheScreen();
 
-    expect(calls(SCENE)).toHaveLength(3);
-    for (const call of calls(SCENE)) expect(call.headers.Authorization).toBeUndefined();
+    expect(calls(SCENE).map((c) => c.headers.Authorization)).toEqual([undefined, `Bearer ${GOOD_TOKEN}`, undefined]);
   });
 });
 
@@ -434,8 +433,8 @@ describe('View Product (Product detail)', () => {
     await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/woven-basket' });
     expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
     const usd = formatMinor('en', 1000, 'USD');
-    expect(screen.queryByText(`${etb(40000)} – ${usd}`)).not.toBeOnTheScreen();
-    expect(screen.queryByText(`${usd} – ${etb(40000)}`)).not.toBeOnTheScreen();
+    // No range of any kind: a span worked out from the options would show "ETB 10.00 – ETB 400.00".
+    expect(screen.queryByText(/ – /)).not.toBeOnTheScreen();
     expect(screen.getByLabelText(`Birr, ${etb(40000)}, Available`)).toBeOnTheScreen();
     expect(screen.getByLabelText(`Dollar, ${usd}, Currently unavailable`)).toBeOnTheScreen();
     // Only the option row carries 40000: the Product line has no span.
