@@ -164,11 +164,23 @@ export function useForYouFeed() {
     };
   });
 
-  // An ended session's cards do not stand in for the new one while it loads.
+  // Nothing stands in for the new session unless real cards are on screen now: an ended
+  // session's cards, or (after a failure) cards that already went, must not come back as
+  // placeholders -- a query key cannot tell an older Query with the same key apart.
   const refresh = useCallback(
-    () => setFeed((f) => ({ generation: f.generation + 1, withhold: shown.current.ended })),
+    () =>
+      setFeed((f) => ({
+        generation: f.generation + 1,
+        withhold: shown.current.ended || shown.current.oldest === undefined,
+      })),
     [],
   );
+  // Retrying a failed first page shows no placeholder either, for the same reason.
+  const { refetch } = query;
+  const retry = useCallback(() => {
+    setFeed((f) => (f.withhold ? f : { ...f, withhold: true }));
+    void refetch();
+  }, [refetch]);
 
   useEffect(() => {
     // 'background', not merely 'inactive': an iOS control-centre pull is not a background
@@ -214,7 +226,7 @@ export function useForYouFeed() {
     paused: query.fetchStatus === 'paused',
     /** A pull-to-refresh is in flight: the old session's cards are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
-    retry: () => void query.refetch(),
+    retry,
     retryNextPage: () => void fetchNextPage(),
     loadMore,
     refresh,

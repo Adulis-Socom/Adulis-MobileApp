@@ -350,6 +350,26 @@ describe('returning from the background', () => {
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
   });
 
+  it('a Retry after a failed refresh never brings the old cards back', async () => {
+    const next = held();
+    let n = 0;
+    api.on(FEED, () => {
+      n += 1;
+      if (n === 1) return ok(fypPage([fypUnit(1)]));
+      return n === 2 ? problem(500, 'INTERNAL', 'request') : next.reply;
+    });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await pullToRefresh();
+    await screen.findByText(en['error.request.internal']);
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText(en['buyer.for_you.loading'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    await next.release(ok(fypPage([fypUnit(4)])));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
   it('a pull-to-refresh after a failed revalidation never brings the withheld cards back', async () => {
     const next = held();
     let n = 0;
