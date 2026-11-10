@@ -2,12 +2,13 @@ import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { formatMinor } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
 import {
   GOOD_TOKEN,
+  SIGN_IN_CODE,
   bootstrapBody,
   fypPage,
   fypUnit,
@@ -63,6 +64,7 @@ const settle = () => act(() => jest.advanceTimersByTimeAsync(1000));
 /** Pull the screen's own RefreshControl (the scroll view received it as a prop). */
 const pull = (testID: string) =>
   act(() => (screen.getByTestId(testID).props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
+const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name });
 const back = async () => {
   await act(() => router.back());
   await settle();
@@ -193,6 +195,40 @@ describe('opening Explore the Scene (navigation)', () => {
     expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
     expect(calls(SCENE)[0]?.headers.Authorization).toBeUndefined();
     expect(calls(BASKET)[0]?.headers.Authorization).toBeUndefined();
+  });
+});
+
+describe('signing in and out (lifecycle)', () => {
+  it('signing in and out does not disturb Scene navigation: the reads stay public', async () => {
+    serve(SCENE, ok(threeProducts));
+    await openFromFeed();
+    await explore();
+    await screen.findByText(READ_CAPTION);
+    await back();
+
+    await fireEvent.press(bottomTab(en['buyer.tab.orders']));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911234567');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await screen.findByText(en['buyer.orders.coming'], {}, { timeout: 5000 });
+    await fireEvent.press(bottomTab(en['buyer.tab.home']));
+    await screen.findByText('Store 1');
+    await explore();
+    expect(await screen.findByText(READ_CAPTION)).toBeOnTheScreen();
+    await back();
+
+    await fireEvent.press(bottomTab(en['buyer.tab.you']));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await fireEvent.press(bottomTab(en['buyer.tab.home']));
+    await screen.findByText('Store 1');
+    await explore();
+    expect(await screen.findByText(READ_CAPTION)).toBeOnTheScreen();
+
+    expect(calls(SCENE)).toHaveLength(3);
+    for (const call of calls(SCENE)) expect(call.headers.Authorization).toBeUndefined();
   });
 });
 
@@ -434,7 +470,9 @@ describe('privacy and lifecycle', () => {
   it('a revalidation shows the current Scene: a sold-out Product is relabelled', async () => {
     const soldOut = {
       ...threeProducts,
-      products: threeProducts.products.map((p) => (p.slug === 'woven-basket' ? { ...p, available: false } : p)),
+      products: threeProducts.products.map((p) =>
+        p.slug === 'woven-basket' ? { ...p, available: false, price_min_minor: 95000, price_max_minor: 95000 } : p,
+      ),
     };
     serve(SCENE, ok(threeProducts), ok(soldOut));
     await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
@@ -443,7 +481,8 @@ describe('privacy and lifecycle', () => {
     await pull('scene-explorer');
     await settle();
     expect(screen.getAllByText(en['buyer.product.unavailable'])).toHaveLength(2);
-    expect(row('Woven basket').props.accessibilityLabel).toMatch(/currently unavailable$/);
+    // The new price and the new availability, both from the new answer.
+    expect(row('Woven basket').props.accessibilityLabel).toBe(`1. Woven basket, ${etb(95000)}, currently unavailable`);
   });
 
   it('a failed revalidation shows the failure, never the previous answer', async () => {
