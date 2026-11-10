@@ -3845,6 +3845,7 @@
             "name": "handle",
             "required": true,
             "in": "path",
+            "description": "The Seller public handle.",
             "schema": {
               "type": "string"
             }
@@ -3853,6 +3854,7 @@
             "name": "slug",
             "required": true,
             "in": "path",
+            "description": "The Product slug within that Seller.",
             "schema": {
               "type": "string"
             }
@@ -3860,10 +3862,27 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontProductDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Structured attributes, variants, stock with confirmed_at.",
+        "summary": "Structured attributes, variants, stock with confirmed_at. Only a PUBLISHED Product of a visible Seller; anything else is the same 404.",
         "tags": [
           "Storefront"
         ]
@@ -4501,6 +4520,178 @@
             ]
           }
         }
+      },
+      "StorefrontProductSellerDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "handle",
+          "store_name"
+        ]
+      },
+      "StorefrontProductVariantDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Variant identity (future Cart lines); never a URL segment."
+          },
+          "variant_key": {
+            "type": "string"
+          },
+          "price_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "price_currency": {
+            "type": "string"
+          },
+          "stock_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stock_confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "Only ACTIVE Variants are listed."
+          }
+        },
+        "required": [
+          "id",
+          "variant_key",
+          "price_minor",
+          "price_currency",
+          "stock_count",
+          "stock_confirmed_at",
+          "status"
+        ]
+      },
+      "StorefrontProductAttributeDto": {
+        "type": "object",
+        "properties": {
+          "attribute": {
+            "type": "string",
+            "description": "Attribute definition code."
+          },
+          "value": {
+            "type": "string",
+            "nullable": true,
+            "description": "Option code, or the typed value as text."
+          }
+        },
+        "required": [
+          "attribute",
+          "value"
+        ]
+      },
+      "StorefrontProductImageDto": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "thumb_key": {
+            "type": "string",
+            "description": "Object key; resolve against bootstrap media_public_origin."
+          },
+          "card_key": {
+            "type": "string"
+          },
+          "full_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "thumb_key",
+          "card_key",
+          "full_key"
+        ]
+      },
+      "StorefrontProductDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity; the Product is addressed by handle + slug."
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "base_price_currency": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. Product PUBLISHED and an ACTIVE Variant in stock, read now."
+          },
+          "seller": {
+            "$ref": "#/components/schemas/StorefrontProductSellerDto"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductVariantDto"
+            }
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductAttributeDto"
+            }
+          },
+          "images": {
+            "description": "In presentation order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductImageDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "base_price_minor",
+          "base_price_currency",
+          "category_id",
+          "available",
+          "seller",
+          "variants",
+          "attributes",
+          "images"
+        ]
       },
       "CreateScenePostBodyDto": {
         "type": "object",

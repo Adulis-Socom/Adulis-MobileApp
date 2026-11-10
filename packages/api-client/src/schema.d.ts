@@ -2011,7 +2011,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Structured attributes, variants, stock with confirmed_at. */
+        /** Structured attributes, variants, stock with confirmed_at. Only a PUBLISHED Product of a visible Seller; anything else is the same 404. */
         get: operations["StorefrontController_product"];
         put?: never;
         post?: never;
@@ -2436,6 +2436,59 @@ export interface components {
              * @description Short-lived presigned PUT; never stored.
              */
             url: string;
+        };
+        StorefrontProductAttributeDto: {
+            /** @description Attribute definition code. */
+            attribute: string;
+            /** @description Option code, or the typed value as text. */
+            value: string | null;
+        };
+        StorefrontProductDto: {
+            attributes: components["schemas"]["StorefrontProductAttributeDto"][];
+            /** @description False: show "Currently unavailable" and no purchase action. Product PUBLISHED and an ACTIVE Variant in stock, read now. */
+            available: boolean;
+            base_price_currency: string;
+            base_price_minor: number;
+            /** Format: uuid */
+            category_id: string | null;
+            description: string | null;
+            /**
+             * Format: uuid
+             * @description Internal identity; the Product is addressed by handle + slug.
+             */
+            id: string;
+            /** @description In presentation order. */
+            images: components["schemas"]["StorefrontProductImageDto"][];
+            name: string;
+            seller: components["schemas"]["StorefrontProductSellerDto"];
+            slug: string;
+            variants: components["schemas"]["StorefrontProductVariantDto"][];
+        };
+        StorefrontProductImageDto: {
+            card_key: string;
+            full_key: string;
+            position: number;
+            /** @description Object key; resolve against bootstrap media_public_origin. */
+            thumb_key: string;
+        };
+        StorefrontProductSellerDto: {
+            handle: string;
+            store_name: string;
+        };
+        StorefrontProductVariantDto: {
+            /**
+             * Format: uuid
+             * @description Variant identity (future Cart lines); never a URL segment.
+             */
+            id: string;
+            price_currency: string;
+            price_minor: number;
+            /** @description Only ACTIVE Variants are listed. */
+            status: string;
+            /** Format: date-time */
+            stock_confirmed_at: string | null;
+            stock_count: number;
+            variant_key: string;
         };
     };
     responses: never;
@@ -5388,7 +5441,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The Seller public handle. */
                 handle: string;
+                /** @description The Product slug within that Seller. */
                 slug: string;
             };
             cookie?: never;
@@ -5399,7 +5454,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StorefrontProductDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
