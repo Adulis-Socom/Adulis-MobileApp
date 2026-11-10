@@ -15,6 +15,14 @@ export function translate(locale: Locale, key: MobileMessageKey): string {
 }
 
 /**
+ * True when a key the SERVER names (an attribute's label_key) is in the mobile catalogue.
+ * Both languages carry every key, so English decides. An unknown key is never shown.
+ */
+export function hasMessage(key: string | null): key is MobileMessageKey {
+  return key !== null && Object.prototype.hasOwnProperty.call(en, key);
+}
+
+/**
  * AMHARIC IS A DEVELOPMENT-ONLY LANGUAGE until the human translation review (November
  * R-19): its strings are machine-translated placeholders (packages/locale/MT-KEYS.md). A
  * release build renders English whatever the store holds, so no path - a leftover setting,

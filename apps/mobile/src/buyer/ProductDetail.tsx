@@ -8,29 +8,33 @@ import type { StorefrontProduct } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
-import { formatMinor, formatPriceSpan, useLocale, useT } from '../i18n/i18n';
+import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { isPathName, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
 
 /**
- * The bounded Product read (WO-005): GET /v1/storefronts/{handle}/products/{slug}, the
- * Product as published now. Name, photos, price, availability in words, the Seller, the
- * description, and the options (Variants) with their own prices.
+ * The bounded Product read (WO-005, WO-CAT-001): GET /v1/storefronts/{handle}/products/{slug},
+ * the Product as published now. Name, photos, the price span, availability in words, the
+ * Seller, the description, readable attributes, and the options (Variants) with their own
+ * prices and availability.
  *
+ * - The price span and every availability are the SERVER's (the public Catalogue
+ *   projection): nothing here derives them from prices or stock counts.
  * - NO PURCHASE, CART, SAVE, ASK SELLER, REVIEWS OR SHARE: none is in scope, so none is
  *   drawn. An unavailable Product says "Currently unavailable" and offers nothing more.
- * - Attributes are not shown: the read carries their codes, not catalogue labels, and a
- *   code is not Buyer copy (register: WO-005).
+ * - An attribute shows only when the catalogue can say it in words (OVN-075): a code is
+ *   never Buyer copy.
  * - Revalidated on opening, on returning from the background and on a pull; a 404 clears it.
+ *   Only the opening counts as a view (OVN-073).
  */
 export function ProductDetail({ handle, slug }: { handle: unknown; slug: unknown }) {
   const { api } = useSession();
   const valid = isPathName(handle) && isPathName(slug);
   const read = usePublicRead(
     ['product', valid ? handle : '', valid ? slug : ''],
-    valid ? () => api.product(handle, slug) : null,
+    valid ? (revalidation) => api.product(handle, slug, revalidation) : null,
   );
   if (read.value === undefined) {
     return (
@@ -68,13 +72,13 @@ function ProductContent({
   const insets = useSafeAreaInsets();
   const locale = useLocale();
   const money = (minor: number, currency: string) => formatMinor(locale, minor, currency);
-  // The Variants' prices (only ACTIVE ones are listed), never the base-price seed.
-  const prices = product.variants.map((v) => v.price_minor);
+  // The server's span of the ACTIVE Variants' prices; null is "no current price", never the seed.
   const price = formatPriceSpan(locale, t, {
-    min: prices.length ? Math.min(...prices) : null,
-    max: prices.length ? Math.max(...prices) : null,
-    currency: product.variants[0]?.price_currency ?? null,
+    min: product.price_min_minor,
+    max: product.price_max_minor,
+    currency: product.price_currency,
   });
+  const details = readableAttributes(product.attributes, t);
   const availability = (available: boolean) =>
     t(available ? 'buyer.product.available' : 'buyer.product.unavailable');
 
@@ -122,6 +126,19 @@ function ProductContent({
         </View>
       ) : null}
 
+      {details.length > 0 ? (
+        <View style={{ gap: theme.space.xs }}>
+          <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
+            {t('buyer.product.details')}
+          </AppText>
+          {details.map((d) => (
+            <AppText key={d.key}>
+              {fillSlots(t('buyer.product.attribute'), { name: d.name, value: d.value }) ?? d.value}
+            </AppText>
+          ))}
+        </View>
+      ) : null}
+
       {product.variants.length > 0 ? (
         <View style={{ gap: theme.space.xs }}>
           <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
@@ -129,9 +146,8 @@ function ProductContent({
           </AppText>
           {product.variants.map((v) => {
             const price = money(v.price_minor, v.price_currency);
-            // Only ACTIVE Variants are listed; an option is available when it is in stock AND
-            // the Product is (which also carries the Seller's gate): never more than the Product.
-            const optionAvailable = product.available && v.stock_count > 0;
+            // The server's per-option answer (OVN-074): never true while the Product is not.
+            const optionAvailable = v.available;
             const state = availability(optionAvailable);
             return (
               <View
@@ -168,6 +184,29 @@ function ProductContent({
       ) : null}
     </ScrollView>
   );
+}
+
+/**
+ * The attributes the catalogue can say in words (OVN-075). The name needs its label key in the
+ * catalogue. ENUM values need their option's label key; TEXT is the Seller's own words, shown as
+ * written. NUMBER and BOOLEAN are omitted: no governed copy exists for units or yes/no yet.
+ */
+export function readableAttributes(
+  attributes: StorefrontProduct['attributes'],
+  t: ReturnType<typeof useT>,
+): Array<{ key: string; name: string; value: string }> {
+  return attributes.flatMap((a) => {
+    if (!hasMessage(a.label_key)) return [];
+    const value =
+      a.data_type === 'ENUM'
+        ? hasMessage(a.value_label_key)
+          ? t(a.value_label_key)
+          : null
+        : a.data_type === 'TEXT'
+          ? a.value
+          : null;
+    return value ? [{ key: a.attribute, name: t(a.label_key), value }] : [];
+  });
 }
 
 /** The Product's photos in order, one page each, at their own proportions in a square frame. */

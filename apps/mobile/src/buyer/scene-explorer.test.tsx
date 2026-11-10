@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 
+import type { StorefrontProduct } from '../api/client';
 import { formatMinor } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
 import {
@@ -317,6 +318,8 @@ describe('View Product (Product detail)', () => {
       BASKET,
       ok(
         storefrontProduct('woven-basket', 'Woven basket', {
+          price_min_minor: 85000,
+          price_max_minor: 95000,
           variants: [
             {
               id: '0b6f1a3e-4444-4444-8444-444444444444',
@@ -326,6 +329,7 @@ describe('View Product (Product detail)', () => {
               stock_count: 0,
               stock_confirmed_at: null,
               status: 'ACTIVE',
+              available: false,
             },
             {
               id: '0b6f1a3e-5555-4555-8555-555555555555',
@@ -335,6 +339,7 @@ describe('View Product (Product detail)', () => {
               stock_count: 3,
               stock_confirmed_at: null,
               status: 'ACTIVE',
+              available: true,
             },
           ],
         }),
@@ -385,6 +390,7 @@ describe('View Product (Product detail)', () => {
               stock_count: 3,
               stock_confirmed_at: null,
               status: 'ACTIVE',
+              available: false,
             },
           ],
         }),
@@ -399,6 +405,108 @@ describe('View Product (Product detail)', () => {
     expect(screen.queryByText(en['buyer.product.available'])).not.toBeOnTheScreen();
     expect(screen.getByLabelText(`Default, ${etb(45050)}, Currently unavailable`)).toBeOnTheScreen();
     expectNoPurchaseOrEngagement();
+  });
+
+  it("price span and option availability are the server's, never derived from prices or stock (WO-CAT-001)", async () => {
+    const variant = (key: string, minor: number, currency: string, stock: number, available: boolean) => ({
+      id: `0b6f1a3e-7777-4777-8777-${minor.toString().padStart(12, '0')}`,
+      variant_key: key,
+      price_minor: minor,
+      price_currency: currency,
+      stock_count: stock,
+      stock_confirmed_at: null,
+      status: 'ACTIVE',
+      available,
+    });
+    serve(
+      BASKET,
+      ok(
+        storefrontProduct('woven-basket', 'Woven basket', {
+          // Mixed currencies: the server gives no current price, so none is shown although the
+          // options have prices; the in-stock Dollar option is not sellable, per the server.
+          price_min_minor: null,
+          price_max_minor: null,
+          price_currency: null,
+          variants: [variant('Birr', 40000, 'ETB', 2, true), variant('Dollar', 1000, 'USD', 2, false)],
+        }),
+      ),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/woven-basket' });
+    expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
+    const usd = formatMinor('en', 1000, 'USD');
+    expect(screen.queryByText(`${etb(40000)} – ${usd}`)).not.toBeOnTheScreen();
+    expect(screen.queryByText(`${usd} – ${etb(40000)}`)).not.toBeOnTheScreen();
+    expect(screen.getByLabelText(`Birr, ${etb(40000)}, Available`)).toBeOnTheScreen();
+    expect(screen.getByLabelText(`Dollar, ${usd}, Currently unavailable`)).toBeOnTheScreen();
+    // Only the option row carries 40000: the Product line has no span.
+    expect(screen.getAllByText(etb(40000))).toHaveLength(1);
+  });
+
+  it('only attributes the catalogue can say in words are shown; a code never is (OVN-075)', async () => {
+    type Attribute = StorefrontProduct['attributes'][number];
+    const attribute = (over: Partial<Attribute>): Attribute => ({
+      attribute: 'code',
+      label_key: 'attribute.unknown',
+      data_type: 'TEXT',
+      unit: null,
+      value: 'value',
+      value_label_key: null,
+      ...over,
+    });
+    serve(
+      BASKET,
+      ok(
+        storefrontProduct('woven-basket', 'Woven basket', {
+          attributes: [
+            // A key the mobile catalogue has (a stand-in: no attribute key is defined yet), TEXT.
+            attribute({ attribute: 'note', label_key: 'buyer.product.description', value: 'Hand-stitched rim' }),
+            // Unknown label key: omitted, and its codes never appear.
+            attribute({
+              attribute: 'colour_code',
+              label_key: 'attribute.colour',
+              data_type: 'ENUM',
+              value: 'brn',
+              value_label_key: 'attribute.colour.brn',
+            }),
+            // Known name, unknown option key: omitted.
+            attribute({
+              attribute: 'size_code',
+              label_key: 'buyer.product.options',
+              data_type: 'ENUM',
+              value: 'md',
+              value_label_key: 'attribute.size.md',
+            }),
+            // NUMBER and BOOLEAN have no governed copy yet: omitted.
+            attribute({ attribute: 'width', label_key: 'buyer.product.title', data_type: 'NUMBER', value: '40', unit: 'cm' }),
+            attribute({ attribute: 'handmade', label_key: 'buyer.product.seller', data_type: 'BOOLEAN', value: 'true' }),
+          ],
+        }),
+      ),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/woven-basket' });
+    expect(await screen.findByText(en['buyer.product.details'])).toBeOnTheScreen();
+    expect(screen.getByText(`${en['buyer.product.description']}: Hand-stitched rim`)).toBeOnTheScreen();
+    for (const code of ['brn', 'md', 'colour_code', 'size_code', 'attribute.colour', 'cm', 'true']) {
+      expect(screen.queryByText(code, { exact: false })).not.toBeOnTheScreen();
+    }
+    expect(screen.queryByText(`${en['buyer.product.title']}: 40`)).not.toBeOnTheScreen();
+  });
+
+  it('with no readable attribute there is no Product details section', async () => {
+    serve(BASKET, ok(storefrontProduct('woven-basket', 'Woven basket')));
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/woven-basket' });
+    expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.product.details'])).not.toBeOnTheScreen();
+  });
+
+  it('the opening is not a revalidation; a pull is, so only the opening counts as a view (OVN-073)', async () => {
+    serve(BASKET, ok(storefrontProduct('woven-basket', 'Woven basket')));
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/woven-basket' });
+    expect(await screen.findByText('About Woven basket')).toBeOnTheScreen();
+    expect(calls(BASKET).map((c) => c.query)).toEqual([{}]);
+    await pull('product-detail');
+    await settle();
+    expect(calls(BASKET).map((c) => c.query)).toEqual([{}, { revalidate: 'true' }]);
   });
 
   it('a Product that is no longer public says so, neutrally, with a way back', async () => {

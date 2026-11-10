@@ -210,10 +210,15 @@ export function createApiClient(deps: ApiDeps) {
     scene: (publicRef: string) =>
       call<PublicScene>('GET', '/v1/scene-posts/{publicRef}', { params: { publicRef }, bearer: false, ok: 200 }),
 
-    /** GET /v1/storefronts/{handle}/products/{slug}: the public Product, read now. */
-    product: (handle: string, slug: string) =>
+    /**
+     * GET /v1/storefronts/{handle}/products/{slug}: the public Product, read now. `revalidate`
+     * marks a technical re-read of a Product already on screen, which the server does not count
+     * as a view (OVN-073); an opening never sets it.
+     */
+    product: (handle: string, slug: string, revalidate = false) =>
       call<StorefrontProduct>('GET', '/v1/storefronts/{handle}/products/{slug}', {
         params: { handle, slug },
+        query: { revalidate: revalidate ? 'true' : undefined },
         bearer: false,
         ok: 200,
       }),

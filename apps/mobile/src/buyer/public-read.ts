@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { ApiError, isTransient } from '../api/client';
 import { useForegroundRevalidation } from './for-you-feed';
@@ -36,13 +36,24 @@ export function isGone(error: unknown): boolean {
  *   screen). Only a success shows content: a 404 is `gone` whatever was shown before, and
  *   any other failure is an error, never the previous answer standing in for the current one.
  *
- * `read` is null when the route parameters are malformed: nothing is requested.
+ * `read` is null when the route parameters are malformed: nothing is requested. It is told
+ * whether the request is a REVALIDATION: true once this screen has had an answer (a pull, a
+ * return from the background or from another screen, a new generation), false for the
+ * opening -- a screen opened again is a new mount and a new opening (OVN-073).
  */
-export function usePublicRead<T>(resource: readonly string[], read: (() => Promise<T>) | null) {
+export function usePublicRead<T>(
+  resource: readonly string[],
+  read: ((revalidation: boolean) => Promise<T>) | null,
+) {
   const [generation, setGeneration] = useState(0);
+  const answered = useRef(false);
   const query = useQuery({
     queryKey: [...resource, generation],
-    queryFn: async () => ({ value: await read!(), receivedAt: Date.now() }),
+    queryFn: async () => {
+      const value = await read!(answered.current);
+      answered.current = true;
+      return { value, receivedAt: Date.now() };
+    },
     enabled: read !== null,
     staleTime: Infinity,
     gcTime: 0,
