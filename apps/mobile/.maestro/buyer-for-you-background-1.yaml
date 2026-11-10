@@ -1,0 +1,30 @@
+# Buyer For You, returning from the background (WO-DISC-002A, ADU-MOB-02 S185) -- part 1 of 2.
+#
+# The guest feed shows the newest Scene, then the app goes to the background. Between this
+# flow and part 2, OUTSIDE Maestro: make that Scene PRIVATE on the backend (its only
+# available tagged Product sells out) and leave the app in the background for longer than
+# the development freshness interval (5 minutes, FOREGROUND_REVALIDATE_AFTER_MS). Part 2
+# then brings the app back and expects the Scene gone.
+#
+# Needs the WO-004A development fixtures (twelve Scenes, the newest captioned "... (12)").
+# Prerequisites as in buyer-for-you.yaml.
+#
+#   maestro test .maestro/buyer-for-you-background-1.yaml
+#   (make the Scene PRIVATE; wait at least 5 minutes)
+#   maestro test .maestro/buyer-for-you-background-2.yaml
+appId: com.adulis.app
+name: Buyer For You - background return (1/2)
+tags:
+  - buyer
+  - for-you
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- assertVisible: '.*\(12\)'
+- takeScreenshot: bg-01-before-background
+- pressKey: Home

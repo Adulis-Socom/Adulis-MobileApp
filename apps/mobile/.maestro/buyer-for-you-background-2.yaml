@@ -1,0 +1,33 @@
+# Buyer For You, returning from the background (WO-DISC-002A, ADU-MOB-02 S185) -- part 2 of 2.
+#
+# Run after part 1, once the newest Scene has gone PRIVATE on the backend and the app has
+# stayed in the background longer than the freshness interval. The app comes back to the
+# foreground WITHOUT a restart: the old cards are not trusted, a new feed session starts,
+# and the PRIVATE Scene is not reintroduced. The feed still pages and refreshes afterwards.
+#
+#   maestro test .maestro/buyer-for-you-background-2.yaml
+appId: com.adulis.app
+name: Buyer For You - background return (2/2)
+tags:
+  - buyer
+  - for-you
+---
+# Back to the foreground: the same process, not a cold start.
+- launchApp:
+    stopApp: false
+    clearState: false
+- extendedWaitUntil:
+    visible: '.*\(11\)'
+    timeout: 60000
+- assertNotVisible: '.*\(12\)'
+- takeScreenshot: bg-02-after-return
+# Pull-to-refresh still starts a new session, and the PRIVATE Scene stays out.
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+    duration: 800
+- extendedWaitUntil:
+    visible: '.*\(11\)'
+    timeout: 30000
+- assertNotVisible: '.*\(12\)'
+- takeScreenshot: bg-03-after-refresh
