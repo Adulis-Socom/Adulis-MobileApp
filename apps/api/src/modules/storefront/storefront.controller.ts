@@ -4,6 +4,7 @@ import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import {
   PostLinkProductListDto,
   SellerSceneListDto,
+  ShopProductListDto,
   StorefrontDto,
   StorefrontProductDto,
   StorefrontProductListDto,
@@ -544,6 +545,74 @@ export class StorefrontController {
           };
         }),
         next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.public_ref]) : null,
+      };
+    });
+  }
+
+  /**
+   * GET /v1/shop/products (WO-007): Market-wide public Product browsing for the Buyer Shop tab.
+   * Not Marketplace Search and not a ranking: one deterministic order, newest first publication
+   * (published_at, then id), labelled as such by the client. No personalisation, promotion or
+   * paid placement. The Market is the requester's, derived server-side (requesterMarket); with no
+   * Market evidence the answer is an empty page -- a Market-wide list cannot be chosen without one.
+   * PUBLISHED Products of publicly visible Sellers in an ACTIVE Market; an out-of-stock or
+   * otherwise unavailable Product stays listed with available=false.
+   */
+  @Get('shop/products')
+  @Public()
+  @ApiOperation({
+    summary:
+      "Market-wide public Products, newest first publication, keyset-paginated; the requester's Market only (empty without one). Not Search, not ranked.",
+  })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50 (default 30).' })
+  @ApiOkResponse({ type: ShopProductListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
+  async shopProducts(
+    @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limitRaw?: string,
+  ): Promise<ShopProductListDto> {
+    // The answer depends on the requester's Market and live stock: never shared-cached.
+    res.setHeader('Cache-Control', 'no-store');
+    const limit = pageLimit(limitRaw, 30, 50);
+    const after = decodeCursor(cursor, ['timestamp', 'uuid']);
+    return this.tx.run(req, async (trx) => {
+      const market = await requesterMarket(trx, req);
+      if (market === null) return { data: [], next_cursor: null };
+      const r = await sql<
+        ProductSummaryRow & { seller_handle: string; seller_store_name: string; thumb_key: string | null; published_key: string }
+      >`
+        SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
+               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+               ${productAvailable} AS available,
+               s.handle AS seller_handle, s.store_name AS seller_store_name,
+               (SELECT i.thumb_key FROM core.product_image i
+                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS thumb_key,
+               to_char(p.published_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS published_key
+          FROM core.product p
+          JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
+         CROSS JOIN ${publicPrice}
+         WHERE p.market_id = ${market}::uuid
+           AND p.visibility = 'PUBLISHED' AND p.published_at IS NOT NULL
+           AND s.status::text = ANY(${VISIBLE_STATES})
+           AND m.activation_state = 'ACTIVE'
+           AND (${after === null}
+                OR (p.published_at, p.id) < (${after?.[0] ?? null}::timestamptz, ${after?.[1] ?? null}::uuid))
+         ORDER BY p.published_at DESC, p.id DESC
+         LIMIT ${limit + 1}`.execute(trx);
+      const page = r.rows.slice(0, limit);
+      const last = page[page.length - 1];
+      return {
+        data: page.map((row) => ({
+          ...summary(row),
+          seller: { handle: row.seller_handle, store_name: row.seller_store_name },
+          thumb_key: row.thumb_key,
+        })),
+        // The Product id is already in every row, so the cursor discloses nothing new.
+        next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.id]) : null,
       };
     });
   }

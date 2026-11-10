@@ -222,3 +222,22 @@ export class StorefrontReviewListDto {
   @ApiProperty({ type: [StorefrontReviewDto] }) data!: StorefrontReviewDto[];
   @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
 }
+
+// ---------------------------------------------------------------- WO-007 Shop
+
+export class ShopProductSellerDto {
+  @ApiProperty({ description: 'Seller route: /v1/storefronts/{handle}.' }) handle!: string;
+  @ApiProperty() store_name!: string;
+}
+
+export class ShopProductDto extends PublicProductSummaryDto {
+  @ApiProperty({ type: ShopProductSellerDto }) seller!: ShopProductSellerDto;
+  @ApiProperty({ type: String, nullable: true, description: 'First image thumbnail key (a bounded derivative, for grids).' })
+  thumb_key!: string | null;
+}
+
+/** GET /v1/shop/products: the requester Market's public Products, newest first publication. */
+export class ShopProductListDto {
+  @ApiProperty({ type: [ShopProductDto] }) data!: ShopProductDto[];
+  @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
+}
