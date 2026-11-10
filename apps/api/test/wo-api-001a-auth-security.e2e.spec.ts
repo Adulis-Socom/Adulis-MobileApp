@@ -62,6 +62,9 @@ const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest();
 class WoApi001aModule {}
 
 describe('WO-API-001A -- session security and account context', () => {
+  // The setup builds the app and a large auth fixture set, which can exceed Jest's 5 s hook
+  // default under parallel workers (ON-20261111-011).
+  jest.setTimeout(30_000);
   let app: INestApplication;
   let admin: Pool;
   const signInPhones: string[] = [];
