@@ -316,10 +316,9 @@ export class ScenesService {
     // Public tags only: a Product that is not public commerce is omitted, an
     // out-of-stock one stays with available=false ("Currently unavailable").
     // Price and availability come from the public Catalogue projection (WO-CAT-001),
-    // the same fragments the Product read uses, so a tag and its Product agree. The
-    // Scene's own gate (v_scene_post_public) still reads v_scene_product_availability;
-    // the projection differs from it only for a Variant priced outside the Market's
-    // currency, which no cart can buy (registered).
+    // the same fragments the Product read uses, so a tag and its Product agree. Since
+    // migration 0056 the Scene's own gate (v_scene_product_availability) applies the same
+    // item-level rule, Market currency included (WO-CAT-001A).
     const products = await sql<{
       position: number;
       slug: string;

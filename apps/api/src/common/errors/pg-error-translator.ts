@@ -360,10 +360,11 @@ export function translatePgError(e: PgError): AdulisException | null {
         });
       }
       // OVN-088 (0056 fn_guard_market_currency): a price outside the Market currency.
-      if (e.message.includes('is not the Market currency')) {
-        return new AdulisException('VALIDATION_FAILED', {
-          slots: { path: e.message.startsWith('base_price_currency') ? 'base_price_currency' : 'price_currency' },
-        });
+      if (e.constraint === 'variant_price_in_market_currency') {
+        return new AdulisException('VALIDATION_FAILED', { slots: { path: 'price_currency' } });
+      }
+      if (e.constraint === 'product_seed_in_market_currency') {
+        return new AdulisException('VALIDATION_FAILED', { slots: { path: 'base_price_currency' } });
       }
       return null;
 

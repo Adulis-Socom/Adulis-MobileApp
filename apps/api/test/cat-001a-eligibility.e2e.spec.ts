@@ -93,12 +93,14 @@ describe('WO-CAT-001A -- Scene and Catalogue eligibility consistency', () => {
   const observe = async (name: string, market: string, seller: string, session: string) => {
     const { ref } = scenes.get(name)!;
     const read = (await server().get(`/v1/scene-posts/${ref}`)).status;
-    const feed = await server()
-      .get('/v1/fyp')
-      .set('X-Adulis-Client', 'android/1.0.0')
-      .set('X-Adulis-Device', await deviceIn(market))
-      .expect(200);
-    const inFeed = (feed.body.items as Array<{ public_ref: string }>).some((u) => u.public_ref === ref);
+    // For You serves only from core.v_scene_post_public (disc-002 proves the delivery); reading the
+    // gate itself keeps this suite independent of the shared ACTIVE algorithm version, which
+    // disc-002 switches while it runs in a parallel worker.
+    const gate = await admin.query(`SELECT 1 FROM core.v_scene_post_public WHERE public_ref = $1 AND market_id = $2`, [
+      ref,
+      market,
+    ]);
+    const inFeed = gate.rows.length === 1;
     const list = await asOwner(seller, session, server().get('/v1/seller/scene-posts')).expect(200);
     const mine = (list.body.data as Array<{ public_ref: string; visibility: string; visibility_reason: string | null }>).find(
       (s) => s.public_ref === ref,
@@ -221,6 +223,8 @@ describe('WO-CAT-001A -- Scene and Catalogue eligibility consistency', () => {
       [P1, P2, P3, PB],
     );
     await admin.query(`UPDATE core.product_variant SET status = 'ACTIVE' WHERE id IN ($1,$2,$3,$4) AND status <> 'ACTIVE'`, [V1, V2, V3, VB]);
+    // A failed D5 must not leave its legacy currency behind for the next case.
+    await admin.query(`UPDATE core.product_variant SET price_currency = 'ETB' WHERE id IN ($1,$2,$3,$4) AND price_currency <> 'ETB'`, [V1, V2, V3, VB]);
     for (const [v, s] of [
       [V1, SELLER_A],
       [V2, SELLER_A],
@@ -316,12 +320,8 @@ describe('WO-CAT-001A -- Scene and Catalogue eligibility consistency', () => {
       await admin.query(`UPDATE core.seller SET status = 'SAFETY_SUSPENDED' WHERE id = $1`, [SELLER_A]);
       // Hidden from every Buyer surface at once (the public gate), whatever its stored visibility.
       expect((await server().get(`/v1/scene-posts/${scenes.get('S')!.ref}`)).status).toBe(404);
-      const feed = await server()
-        .get('/v1/fyp')
-        .set('X-Adulis-Client', 'android/1.0.0')
-        .set('X-Adulis-Device', await deviceIn(M))
-        .expect(200);
-      expect((feed.body.items as Array<{ public_ref: string }>).map((u) => u.public_ref)).not.toContain(scenes.get('S')!.ref);
+      const gate = await admin.query(`SELECT 1 FROM core.v_scene_post_public WHERE public_ref = $1`, [scenes.get('S')!.ref]);
+      expect(gate.rows).toEqual([]);
       // Stock goes and comes back while suspended: PRIVATE, and no restoration past the gate.
       await setStock(V1, SELLER_A, 0);
       await setStock(V2, SELLER_A, 0);
@@ -443,6 +443,28 @@ describe('WO-CAT-001A -- Scene and Catalogue eligibility consistency', () => {
       await compare();
       await setStock(V1, SELLER_A, 0);
       await compare();
+      // The case the two rules used to disagree on: the only in-stock option of a Product is a
+      // legacy row priced outside the Market currency (inserted with triggers off, stock set).
+      const legacyVariant = randomUUID();
+      const legacy = await admin.connect();
+      try {
+        await legacy.query(`SET session_replication_role = replica`);
+        await legacy.query(
+          `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor, price_currency, variant_key, stock_count)
+           VALUES ($1, $2, $3, 500, 'USD', 'legacy-usd', 5)`,
+          [legacyVariant, P1, SELLER_A],
+        );
+      } finally {
+        await legacy.query(`SET session_replication_role = DEFAULT`);
+        legacy.release();
+      }
+      await compare();
+      const p1 = await admin.query<{ available: boolean; in_stock: boolean }>(
+        `SELECT available, in_stock FROM core.v_scene_product_availability WHERE product_id = $1`,
+        [P1],
+      );
+      expect(p1.rows[0]).toEqual({ available: false, in_stock: true });
+      await admin.query(`DELETE FROM core.product_variant WHERE id = $1`, [legacyVariant]);
       await admin.query(`UPDATE core.product_variant SET status = 'WITHDRAWN' WHERE id = $1`, [V3]);
       await compare();
       await admin.query(`UPDATE core.product SET visibility = 'UNPUBLISHED', unpublished_reason = 'SELLER' WHERE id = $1`, [P3]);

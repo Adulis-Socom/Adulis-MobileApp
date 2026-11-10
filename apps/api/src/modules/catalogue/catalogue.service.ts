@@ -460,9 +460,11 @@ export class CatalogueService {
     req: AuthedRequest,
     variantId: string,
   ): Promise<void> {
+    // FOR UPDATE: the check and the withdrawal that follows act on a locked row.
     const owner = await sql<{ id: string }>`
       SELECT id FROM core.product_variant
-       WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
+       WHERE id = ${variantId} AND seller_id = ${req.ctx?.sellerId}
+         FOR UPDATE`.execute(trx);
     if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
 
     const live = await sql<{ n: number }>`
