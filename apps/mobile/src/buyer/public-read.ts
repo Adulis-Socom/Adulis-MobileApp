@@ -58,11 +58,21 @@ export function usePublicRead<T>(resource: readonly string[], read: (() => Promi
   );
 
   const { refetch } = query;
-  // Stable (the observer's refetch is), so a focus effect can depend on it.
-  const revalidate = useCallback(() => void refetch(), [refetch]);
+  // Stable (the observer's refetch is), so a focus effect can depend on it. A request already
+  // in flight -- a withheld revalidation started while the screen was covered -- answers it.
+  const revalidate = useCallback(() => void refetch({ cancelRefetch: false }), [refetch]);
+  // Only the Buyer's own pull shows the pull spinner: a revalidation the screen starts by
+  // itself must not move the list (iOS offsets it for a programmatic refresh).
+  const [pulling, setPulling] = useState(false);
+  const pull = useCallback(() => {
+    setPulling(true);
+    void refetch({ cancelRefetch: false }).finally(() => setPulling(false));
+  }, [refetch]);
   return {
     /** Shown only when the latest answer was a success. */
     value: query.status === 'success' ? query.data.value : undefined,
+    /** When the shown answer arrived: a new one lets failed photos try again. */
+    receivedAt: query.status === 'success' ? query.data.receivedAt : undefined,
     status: query.status,
     error: query.error,
     gone: isGone(query.error),
@@ -70,5 +80,7 @@ export function usePublicRead<T>(resource: readonly string[], read: (() => Promi
     paused: query.fetchStatus === 'paused' && query.status !== 'success',
     revalidating: query.isRefetching,
     revalidate,
+    pulling,
+    pull,
   };
 }

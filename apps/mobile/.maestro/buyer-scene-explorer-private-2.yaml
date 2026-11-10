@@ -1,0 +1,22 @@
+# Explore the Scene (WO-005) - the Scene went PRIVATE while its Product was open (2/2).
+# Back from the Product, the Explorer reads the Scene again: one neutral message, nothing of
+# the Scene left on screen, and a way out. Run right after half 1 and the stock change.
+appId: com.adulis.app
+name: Buyer Explore the Scene - goes private (2/2)
+tags:
+  - buyer
+  - scene
+---
+- back
+- extendedWaitUntil:
+    visible: This Scene is no longer available.
+    timeout: 30000
+- assertNotVisible: Coffee tray and scarf, set for the ceremony.
+- assertNotVisible: '1\. Coffee tray.*'
+- assertNotVisible: '@fixture-weaves'
+- takeScreenshot: private-02-gone
+- tapOn: Go back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- takeScreenshot: private-03-back-home

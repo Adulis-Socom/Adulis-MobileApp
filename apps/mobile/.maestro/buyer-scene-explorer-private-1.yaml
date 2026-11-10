@@ -1,0 +1,35 @@
+# Explore the Scene (WO-005) - the Scene goes PRIVATE while one of its Products is open (1/2).
+# Opens the "Coffee tray and scarf..." Scene and its Coffee tray, then stops. Between the two
+# halves, set the tray's stock to 0 through the Seller API: the tray is that Scene's only
+# available tag, so the server makes the Scene PRIVATE. Half 2 comes back to the Explorer.
+# Fixtures and prerequisites: buyer-scene-explorer.yaml. PRIVATE_REF: that Scene's public_ref
+# (opened by link, with Home under it; the feed path is covered by buyer-scene-explorer.yaml).
+#
+#   maestro test -e PRIVATE_REF=<public_ref> .maestro/buyer-scene-explorer-private-1.yaml
+appId: com.adulis.app
+name: Buyer Explore the Scene - goes private (1/2)
+tags:
+  - buyer
+  - scene
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- stopApp
+- openLink: adulis://scenes/${PRIVATE_REF}
+- extendedWaitUntil:
+    visible: Coffee tray and scarf, set for the ceremony.
+    timeout: 120000
+- tapOn: '1\. Coffee tray.*'
+- scrollUntilVisible:
+    element: View Product
+    direction: DOWN
+- tapOn: View Product
+- extendedWaitUntil:
+    visible: Carved wood, for the coffee ceremony.
+    timeout: 30000
+- takeScreenshot: private-01-product-open

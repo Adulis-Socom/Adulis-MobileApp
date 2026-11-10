@@ -8,6 +8,7 @@ import { formatMinor } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
 import {
   GOOD_TOKEN,
+  bootstrapBody,
   fypPage,
   fypUnit,
   installFakeApi,
@@ -67,13 +68,17 @@ const back = async () => {
   await settle();
 };
 
-/** A Scene with three tagged Products in the server's order, the second sold out. */
+/**
+ * A Scene with three tagged Products in the server's order, the second sold out. Prices are
+ * the Variants' span; every base price is a different, never-shown seed (DB-01 C1).
+ */
+const price = (min: number, max = min) => ({ base_price_minor: 100, price_min_minor: min, price_max_minor: max });
 const threeProducts = publicScene(1, {
   caption: READ_CAPTION,
   products: [
-    sceneProduct(1, 'woven-basket', 'Woven basket'),
-    sceneProduct(2, 'cotton-scarf', 'Cotton scarf', { available: false, base_price_minor: 45050 }),
-    sceneProduct(3, 'clay-jebena', 'Clay jebena', { base_price_minor: 120000 }),
+    sceneProduct(1, 'woven-basket', 'Woven basket', price(90000, 120000)),
+    sceneProduct(2, 'cotton-scarf', 'Cotton scarf', { available: false, ...price(45050) }),
+    sceneProduct(3, 'clay-jebena', 'Clay jebena', price(120000)),
   ],
 });
 const row = (name: string) => screen.getByRole('radio', { name: new RegExp(`^\\d\\. ${name},`) });
@@ -144,6 +149,8 @@ describe('opening Explore the Scene (navigation)', () => {
     await fireEvent.press(button);
     expect(await screen.findByText(READ_CAPTION)).toBeOnTheScreen();
     await settle();
+    // Counting covered screens too: a second Explorer would sit, hidden, under the first.
+    expect(screen.queryAllByText(READ_CAPTION, { includeHiddenElements: true })).toHaveLength(1);
     expect(calls(SCENE)).toHaveLength(1);
   });
 
@@ -195,10 +202,13 @@ describe('the tagged Products (Product exploration, hotspots)', () => {
     await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
     await screen.findByText(READ_CAPTION);
     expect(screen.getAllByRole('radio').map((n) => n.props.accessibilityLabel)).toEqual([
-      `1. Woven basket, ${etb(80000)}`,
+      `1. Woven basket, ${etb(90000)} – ${etb(120000)}`,
       `2. Cotton scarf, ${etb(45050)}, currently unavailable`,
       `3. Clay jebena, ${etb(120000)}`,
     ]);
+    expect(screen.getByText(`${etb(90000)} – ${etb(120000)}`)).toBeOnTheScreen();
+    // The base price is a creation seed, never a price shown to a Buyer.
+    expect(screen.queryByText(etb(100))).not.toBeOnTheScreen();
     // Minor units become major units with the currency's own digits.
     expect(etb(45050)).toMatch(/450\.50/);
     expect(screen.getByText(en['buyer.product.unavailable'])).toBeOnTheScreen();
@@ -230,6 +240,30 @@ describe('the tagged Products (Product exploration, hotspots)', () => {
     expect(row('Clay jebena')).toBeChecked();
     expect(row('Cotton scarf')).not.toBeChecked();
     expect(screen.getAllByRole('button', { name: en['buyer.product.view'] })).toHaveLength(1);
+  });
+
+  it('a Product with no ACTIVE Variant shows no price, and says it is unavailable', async () => {
+    serve(
+      SCENE,
+      ok(
+        publicScene(1, {
+          caption: READ_CAPTION,
+          products: [
+            sceneProduct(1, 'woven-basket', 'Woven basket'),
+            sceneProduct(2, 'old-lamp', 'Old lamp', {
+              available: false,
+              price_min_minor: null,
+              price_max_minor: null,
+              price_currency: null,
+            }),
+          ],
+        }),
+      ),
+    );
+    await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
+    await screen.findByText(READ_CAPTION);
+    expect(row('Old lamp').props.accessibilityLabel).toBe('2. Old lamp, currently unavailable');
+    expect(screen.getAllByText(en['buyer.product.unavailable'])).toHaveLength(1);
   });
 
   it('a Scene with no listed Product says so', async () => {
@@ -279,7 +313,9 @@ describe('View Product (Product detail)', () => {
     expect(r.getPathname()).toBe('/product/seller-1/woven-basket');
     expect(calls(BASKET)).toHaveLength(1);
     expect(screen.getByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
-    expect(screen.getByText(etb(80000))).toBeOnTheScreen();
+    // The Variants' span, not the base-price seed (80000).
+    expect(screen.getByText(`${etb(85000)} – ${etb(95000)}`)).toBeOnTheScreen();
+    expect(screen.queryByText(etb(80000))).not.toBeOnTheScreen();
     // The Product, and its one in-stock option.
     expect(screen.getAllByText(en['buyer.product.available'])).toHaveLength(2);
     expect(screen.getByText('Sold by Store 1')).toBeOnTheScreen();
@@ -309,7 +345,8 @@ describe('View Product (Product detail)', () => {
               variant_key: 'Default',
               price_minor: 45050,
               price_currency: 'ETB',
-              stock_count: 0,
+              // In stock, but the Product is not available (a CLOSING Seller, say): neither is it.
+              stock_count: 3,
               stock_confirmed_at: null,
               status: 'ACTIVE',
             },
@@ -324,6 +361,7 @@ describe('View Product (Product detail)', () => {
     expect(await screen.findByText('About Cotton scarf')).toBeOnTheScreen();
     expect(screen.getAllByText(en['buyer.product.unavailable']).length).toBeGreaterThan(0);
     expect(screen.queryByText(en['buyer.product.available'])).not.toBeOnTheScreen();
+    expect(screen.getByLabelText(`Default, ${etb(45050)}, Currently unavailable`)).toBeOnTheScreen();
     expectNoPurchaseOrEngagement();
   });
 
@@ -417,6 +455,45 @@ describe('privacy and lifecycle', () => {
     expect(screen.queryByText(READ_CAPTION)).not.toBeOnTheScreen();
   });
 
+  it('only the Buyer pull shows the pull spinner; a revalidation on return does not', async () => {
+    const onReturn = held();
+    const onPull = held();
+    let n = 0;
+    api.on(SCENE, () => [ok(threeProducts), onReturn.reply, onPull.reply][Math.min(n++, 2)]!);
+    serve(BASKET, ok(storefrontProduct('woven-basket', 'Woven basket')));
+    await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
+    await screen.findByText(READ_CAPTION);
+    await fireEvent.press(row('Woven basket'));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.product.view'] }));
+    await screen.findByText('About Woven basket');
+    await back();
+    await screen.findByText(READ_CAPTION, {}, { timeout: 5000 });
+    const refreshing = () =>
+      (screen.getByTestId('scene-explorer').props.refreshControl as { props: { refreshing: boolean } }).props.refreshing;
+    expect(calls(SCENE)).toHaveLength(2);
+    expect(refreshing()).toBe(false);
+    await onReturn.release(ok(threeProducts));
+    await pull('scene-explorer');
+    expect(refreshing()).toBe(true);
+    await onPull.release(ok(threeProducts));
+    expect(refreshing()).toBe(false);
+  });
+
+  it('a photo that failed is tried again when a new answer arrives', async () => {
+    api.on('GET /v1/bootstrap', () => ok(bootstrapBody({ media_public_origin: 'https://media.example.test' })));
+    serve(SCENE, ok(threeProducts));
+    await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
+    await screen.findByText(READ_CAPTION);
+    const photo = await screen.findByTestId('scene-explorer-photo');
+    expect(photo.props.source).toMatchObject([{ uri: 'https://media.example.test/scenes/1/card.webp' }]);
+    await fireEvent(photo, 'error', { nativeEvent: { error: 'network' } });
+    expect(screen.getByText(en['buyer.scene.photo_unavailable'])).toBeOnTheScreen();
+    await pull('scene-explorer');
+    await settle();
+    expect(screen.getByTestId('scene-explorer-photo')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.scene.photo_unavailable'])).not.toBeOnTheScreen();
+  });
+
   it('offline on opening says so, then loads by itself when the connection returns', async () => {
     serve(SCENE, ok(threeProducts));
     try {
@@ -508,6 +585,36 @@ describe('returning from the background', () => {
     expect(screen.queryByText(READ_CAPTION)).not.toBeOnTheScreen();
     await next.release(gone());
     expect(await screen.findByText(en['buyer.scene.gone'])).toBeOnTheScreen();
+    expect(screen.queryByText(READ_CAPTION)).not.toBeOnTheScreen();
+  });
+
+  it('the selection survives the Explorer being withheld while a Product is open', async () => {
+    serve(SCENE, ok(threeProducts));
+    serve(BASKET, ok(storefrontProduct('woven-basket', 'Woven basket')));
+    await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
+    await screen.findByText(READ_CAPTION);
+    await fireEvent.press(row('Woven basket'));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.product.view'] }));
+    await screen.findByText('About Woven basket');
+    await away(6);
+    await settle();
+    await back();
+    expect(await screen.findByText(READ_CAPTION, {}, { timeout: 5000 })).toBeOnTheScreen();
+    expect(row('Woven basket')).toBeChecked();
+  });
+
+  it('an answer from before a withheld revalidation never lands in the new one', async () => {
+    const old = held();
+    let n = 0;
+    api.on(SCENE, () => [ok(threeProducts), old.reply, gone()][Math.min(n++, 2)]!);
+    await renderRouter(APP_DIR, { initialUrl: `/scenes/${REF}` });
+    await screen.findByText(READ_CAPTION);
+    await pull('scene-explorer'); // in flight, held
+    await away(6); // a new generation asks again, and hears 404
+    expect(await screen.findByText(en['buyer.scene.gone'])).toBeOnTheScreen();
+    await old.release(ok(threeProducts)); // the earlier request finally answers
+    await settle();
+    expect(screen.getByText(en['buyer.scene.gone'])).toBeOnTheScreen();
     expect(screen.queryByText(READ_CAPTION)).not.toBeOnTheScreen();
   });
 

@@ -141,9 +141,13 @@ export function createApiClient(deps: ApiDeps) {
     const params = new URLSearchParams();
     for (const [name, value] of Object.entries(init.query ?? {})) if (value !== undefined) params.set(name, value);
     const search = params.toString();
-    const resolved = path.replace(/\{(\w+)\}/g, (_match, name: string) =>
-      encodeURIComponent(init.params?.[name] ?? ''),
-    );
+    const resolved = path.replace(/\{(\w+)\}/g, (_match, name: string) => {
+      const value = init.params?.[name];
+      // encodeURIComponent keeps '.' and '..', which a URL parser resolves away: refuse them,
+      // and a missing value, here rather than trust every caller to have validated.
+      if (!value || value === '.' || value === '..') throw new Error(`invalid path parameter: ${name}`);
+      return encodeURIComponent(value);
+    });
     const url = `${apiOrigin()}${resolved}${search ? `?${search}` : ''}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

@@ -1,0 +1,147 @@
+# Explore the Scene (WO-005) against the real local API, as a guest: For You -> Explore the
+# Scene (the button, then the photo) -> the tagged Products -> View Product -> the Product,
+# and back, with the feed and the selection kept. No hotspot, no purchase or engagement
+# action anywhere.
+#
+# Needs the development-only WO-005 fixtures (docs/mobile/WO-005-SCENE-EXPLORER.md): Seller
+# "Fixture Weaves" (fixture-weaves) with Woven basket (Small 900.00 in stock, Large 1,200.00
+# sold out), Cotton scarf (sold out), Clay cup and Coffee tray; the newest Scene captioned
+# "Morning light on the new baskets..." tags basket, scarf, cup in that order.
+#
+# Prerequisites: the debug build installed; Metro on 8081 started with
+# EXPO_PUBLIC_API_BASE_URL=http://localhost:3000; the API on 3000 (NODE_ENV=development);
+# `adb reverse` for 8081, 3000 and 9100 (local MinIO).
+#
+#   maestro test .maestro/buyer-scene-explorer.yaml
+appId: com.adulis.app
+name: Buyer Explore the Scene
+tags:
+  - buyer
+  - scene
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- assertVisible: '.*Morning light on the new baskets.*'
+# The card is taller than the screen: its action sits under the photo and the tags.
+- scrollUntilVisible:
+    element: Explore the Scene
+    direction: DOWN
+- takeScreenshot: explore-01-feed
+
+# The labelled action opens the Explorer, which reads the Scene itself.
+- tapOn:
+    text: Explore the Scene
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- assertVisible: '@fixture-weaves'
+- assertVisible: '.*every piece here is from our own workshop\.'
+- assertVisible: Choose a Product to preview it.
+- assertVisible: '1\. Woven basket, .*1,000\.00'
+- assertVisible: '2\. Cotton scarf, .*450\.50, currently unavailable'
+- assertVisible: '3\. Clay cup, .*350\.00'
+- assertVisible: Currently unavailable
+- assertNotVisible: View Product
+- assertNotVisible: Add to cart
+- assertNotVisible: Buy now
+- assertNotVisible: Save
+- assertNotVisible: Share
+- assertNotVisible: Like
+- assertNotVisible: Reviews
+- takeScreenshot: explore-02-explorer
+
+# One selection at a time; the selected Product previews and offers View Product.
+- tapOn: '2\. Cotton scarf.*'
+- assertVisible:
+    text: '2\. Cotton scarf.*'
+    checked: true
+- assertVisible: View Product
+- takeScreenshot: explore-03-unavailable-selected
+- tapOn: '1\. Woven basket.*'
+- assertVisible:
+    text: '1\. Woven basket.*'
+    checked: true
+- assertVisible:
+    text: '2\. Cotton scarf.*'
+    checked: false
+- scrollUntilVisible:
+    element: View Product
+    direction: DOWN
+- takeScreenshot: explore-04-basket-selected
+
+# View Product opens the Product and orders nothing.
+- tapOn: View Product
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+- assertVisible: Woven basket
+- assertVisible: Hand-woven in Addis Ababa from dyed grass.
+- assertVisible: '.*1,000\.00'
+- takeScreenshot: explore-05-product
+- scrollUntilVisible:
+    element: 'Small, .*900\.00, Available'
+    direction: DOWN
+- assertVisible: 'Large, .*1,200\.00, Currently unavailable'
+- assertNotVisible: Add to cart
+- assertNotVisible: Buy now
+- assertNotVisible: Save
+- assertNotVisible: Share
+- takeScreenshot: explore-06-product-options
+
+# Back: the Explorer again, read again, the selection kept.
+- back
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- assertVisible:
+    text: '1\. Woven basket.*'
+    checked: true
+- takeScreenshot: explore-07-back-selection-kept
+
+# An unavailable Product opens, says so, and offers nothing to buy.
+- tapOn: '2\. Cotton scarf.*'
+- scrollUntilVisible:
+    element: View Product
+    direction: DOWN
+- tapOn: View Product
+- extendedWaitUntil:
+    visible: Shemma cotton with a woven border.
+    timeout: 30000
+- assertVisible: Currently unavailable
+- assertNotVisible: Available
+- assertNotVisible: Add to cart
+- takeScreenshot: explore-08-unavailable-product
+
+# Back twice: For You as it was.
+- back
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- assertVisible: '.*Morning light on the new baskets.*'
+- takeScreenshot: explore-09-feed-kept
+
+# The photo is a touch shortcut to the same Explorer.
+- scrollUntilVisible:
+    element: '.*Morning light on the new baskets.*'
+    direction: UP
+- tapOn:
+    id: scene-photo-explore
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- assertVisible: '.*every piece here is from our own workshop\.'
+- back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000

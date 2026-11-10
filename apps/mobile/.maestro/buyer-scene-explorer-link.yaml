@@ -1,0 +1,38 @@
+# Explore the Scene (WO-005) from a link: a cold launch at adulis://scenes/{public_ref} opens
+# the Explorer with Home under it; a malformed reference asks nothing and shows only the
+# neutral message. REF: the public_ref of the "Morning light on the new baskets..." Scene.
+#
+#   maestro test -e REF=<public_ref> .maestro/buyer-scene-explorer-link.yaml
+appId: com.adulis.app
+name: Buyer Explore the Scene - links
+tags:
+  - buyer
+  - scene
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- stopApp
+- openLink: adulis://scenes/${REF}
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 120000
+- assertVisible: '.*every piece here is from our own workshop\.'
+- takeScreenshot: link-01-cold-explorer
+- back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- openLink: adulis://scenes/not-a-scene-reference
+- extendedWaitUntil:
+    visible: This Scene is no longer available.
+    timeout: 30000
+- takeScreenshot: link-02-malformed
+- tapOn: Go back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000

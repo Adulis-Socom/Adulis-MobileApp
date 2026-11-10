@@ -1,13 +1,14 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
 import type { StorefrontProduct } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
-import { formatMinor, useLocale, useT } from '../i18n/i18n';
+import { formatMinor, formatPriceSpan, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { isPathName, usePublicRead } from './public-read';
@@ -44,25 +45,36 @@ export function ProductDetail({ handle, slug }: { handle: unknown; slug: unknown
   return (
     <ProductContent
       product={read.value}
-      revalidating={read.revalidating}
-      onRefresh={read.revalidate}
+      receivedAt={read.receivedAt ?? 0}
+      pulling={read.pulling}
+      onPull={read.pull}
     />
   );
 }
 
 function ProductContent({
   product,
-  revalidating,
-  onRefresh,
+  receivedAt,
+  pulling,
+  onPull,
 }: {
   product: StorefrontProduct;
-  revalidating: boolean;
-  onRefresh: () => void;
+  receivedAt: number;
+  pulling: boolean;
+  onPull: () => void;
 }) {
   const t = useT();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const locale = useLocale();
   const money = (minor: number, currency: string) => formatMinor(locale, minor, currency);
+  // The Variants' prices (only ACTIVE ones are listed), never the base-price seed.
+  const prices = product.variants.map((v) => v.price_minor);
+  const price = formatPriceSpan(locale, t, {
+    min: prices.length ? Math.min(...prices) : null,
+    max: prices.length ? Math.max(...prices) : null,
+    currency: product.variants[0]?.price_currency ?? null,
+  });
   const availability = (available: boolean) =>
     t(available ? 'buyer.product.available' : 'buyer.product.unavailable');
 
@@ -70,23 +82,24 @@ function ProductContent({
     <ScrollView
       testID="product-detail"
       style={{ backgroundColor: theme.color.bg }}
-      contentContainerStyle={{ padding: theme.space.md, gap: theme.space.md }}
+      // The end of the page clears the system navigation bar (edge-to-edge).
+      contentContainerStyle={{
+        padding: theme.space.md,
+        paddingBottom: theme.space.md + insets.bottom,
+        gap: theme.space.md,
+      }}
       refreshControl={
-        <RefreshControl
-          refreshing={revalidating}
-          onRefresh={onRefresh}
-          colors={[theme.color.accent]}
-        />
+        <RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />
       }
     >
-      <ProductPhotos product={product} />
+      <ProductPhotos product={product} attempt={receivedAt} />
 
       <AppText variant="heading" accessibilityRole="header">
         {product.name}
       </AppText>
-      <AppText style={{ fontWeight: theme.fontWeight.semibold }}>
-        {money(product.base_price_minor, product.base_price_currency)}
-      </AppText>
+      {price === null ? null : (
+        <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{price}</AppText>
+      )}
       <AppText
         style={{
           color: product.available ? theme.color.text : theme.color.textSecondary,
@@ -116,9 +129,10 @@ function ProductContent({
           </AppText>
           {product.variants.map((v) => {
             const price = money(v.price_minor, v.price_currency);
-            // Only ACTIVE Variants are listed and the Product is published (or this is a 404),
-            // so in stock is available: the same rule as the server's availability view.
-            const state = availability(v.stock_count > 0);
+            // Only ACTIVE Variants are listed; an option is available when it is in stock AND
+            // the Product is (which also carries the Seller's gate): never more than the Product.
+            const optionAvailable = product.available && v.stock_count > 0;
+            const state = availability(optionAvailable);
             return (
               <View
                 key={v.variant_key}
@@ -142,7 +156,7 @@ function ProductContent({
                 <AppText>{price}</AppText>
                 <AppText
                   style={{
-                    color: v.stock_count > 0 ? theme.color.text : theme.color.textSecondary,
+                    color: optionAvailable ? theme.color.text : theme.color.textSecondary,
                   }}
                 >
                   {state}
@@ -157,12 +171,14 @@ function ProductContent({
 }
 
 /** The Product's photos in order, one page each, at their own proportions in a square frame. */
-function ProductPhotos({ product }: { product: StorefrontProduct }) {
+function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attempt: number }) {
   const t = useT();
   const theme = useTheme();
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const width = useWindowDimensions().width - theme.space.md * 2;
-  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+  // Failures hold for this answer only: a new answer (`attempt`) tries the photos again.
+  const [failures, setFailures] = useState({ attempt, keys: new Set<string>() as ReadonlySet<string> });
+  const failed = failures.attempt === attempt ? failures.keys : new Set<string>();
   const photos = product.images
     .map((image) => ({ key: image.card_key, uri: mediaUrl(mediaOrigin, image.card_key) }))
     .filter((p): p is { key: string; uri: string } => p.uri !== null && !failed.has(p.key));
@@ -201,7 +217,12 @@ function ProductPhotos({ product }: { product: StorefrontProduct }) {
           }
           contentFit="contain"
           cachePolicy="disk"
-          onError={() => setFailed((f) => new Set(f).add(photo.key))}
+          onError={() =>
+            setFailures((f) => ({
+              attempt,
+              keys: new Set(f.attempt === attempt ? f.keys : []).add(photo.key),
+            }))
+          }
           style={{
             width,
             aspectRatio: 1,

@@ -44,3 +44,21 @@ export function formatMinor(locale: Locale, amountMinor: number, currency: strin
   const format = new Intl.NumberFormat(locale, { style: 'currency', currency });
   return format.format(amountMinor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2));
 }
+
+/**
+ * A Product's current price from its Variants' lowest and highest (price lives on the
+ * Variant): one amount when they agree, the span when they differ, null when there is no
+ * ACTIVE Variant to price. Never the Product's base price, which is a creation seed.
+ */
+export function formatPriceSpan(
+  locale: Locale,
+  t: (key: MobileMessageKey) => string,
+  span: { min: number | null; max: number | null; currency: string | null },
+): string | null {
+  const { min, max, currency } = span;
+  if (min === null || max === null || currency === null) return null;
+  if (min === max) return formatMinor(locale, min, currency);
+  return t('buyer.price.range')
+    .replace('{min}', formatMinor(locale, min, currency))
+    .replace('{max}', formatMinor(locale, max, currency));
+}

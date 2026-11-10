@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
 import type { PublicScene, SceneProduct } from '../api/client';
@@ -9,7 +10,7 @@ import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
-import { formatMinor, useLocale, useT } from '../i18n/i18n';
+import { formatPriceSpan, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { isPublicRef, usePublicRead } from './public-read';
@@ -17,6 +18,8 @@ import { ReadStates } from './ReadStates';
 
 /** Until the photo reports its own size: the feed's frame. */
 const DEFAULT_ASPECT = 4 / 5;
+/** The selected Product's photo beside View Product. */
+const PREVIEW_SIZE = 72;
 // A panorama or a strip still gets a usable frame; `contain` never crops or stretches it.
 const clampAspect = (aspect: number) => Math.min(2, Math.max(0.5, aspect));
 
@@ -42,6 +45,10 @@ export function SceneExplorer({ scenePostRef }: { scenePostRef: unknown }) {
     valid ? () => api.scene(scenePostRef) : null,
   );
 
+  // By slug, and held here rather than in the content: it survives the content being
+  // withheld or failing and coming back, goes if its Product does, and follows a reorder.
+  const [selected, setSelected] = useState<string | null>(null);
+
   // Coming back to this screen (from a Product) asks again; the first focus is the opening.
   const { revalidate } = read;
   const opened = useRef(false);
@@ -59,37 +66,50 @@ export function SceneExplorer({ scenePostRef }: { scenePostRef: unknown }) {
     );
   }
   return (
-    <SceneContent scene={read.value} revalidating={read.revalidating} onRefresh={revalidate} />
+    <SceneContent
+      scene={read.value}
+      receivedAt={read.receivedAt ?? 0}
+      pulling={read.pulling}
+      onPull={read.pull}
+      selected={selected}
+      onSelect={setSelected}
+    />
   );
 }
 
 function SceneContent({
   scene,
-  revalidating,
-  onRefresh,
+  receivedAt,
+  pulling,
+  onPull,
+  selected,
+  onSelect,
 }: {
   scene: PublicScene;
-  revalidating: boolean;
-  onRefresh: () => void;
+  receivedAt: number;
+  pulling: boolean;
+  onPull: () => void;
+  selected: string | null;
+  onSelect: (slug: string) => void;
 }) {
   const t = useT();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const mediaOrigin = useBootstrap().data?.media_public_origin;
-  // By slug: the selection survives a revalidation that reorders, and goes if its Product does.
-  const [selected, setSelected] = useState<string | null>(null);
   const store = scene.seller.store_name;
 
   return (
     <ScrollView
       testID="scene-explorer"
       style={{ backgroundColor: theme.color.bg }}
-      contentContainerStyle={{ padding: theme.space.md, gap: theme.space.md }}
+      // The end of the list clears the system navigation bar (edge-to-edge).
+      contentContainerStyle={{
+        padding: theme.space.md,
+        paddingBottom: theme.space.md + insets.bottom,
+        gap: theme.space.md,
+      }}
       refreshControl={
-        <RefreshControl
-          refreshing={revalidating}
-          onRefresh={onRefresh}
-          colors={[theme.color.accent]}
-        />
+        <RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />
       }
     >
       <View accessible accessibilityLabel={fillSlots(t('buyer.scene.seller'), { store }) ?? store}>
@@ -100,6 +120,7 @@ function SceneContent({
       <ScenePhoto
         uri={mediaUrl(mediaOrigin, scene.image.card_key)}
         label={fillSlots(t('buyer.scene.photo'), { store }) ?? store}
+        attempt={receivedAt}
       />
 
       <AppText>{scene.caption}</AppText>
@@ -131,7 +152,7 @@ function SceneContent({
                 handle={scene.seller.handle}
                 mediaOrigin={mediaOrigin}
                 selected={product.slug === selected}
-                onSelect={() => setSelected(product.slug)}
+                onSelect={() => onSelect(product.slug)}
               />
             ))}
           </View>
@@ -141,15 +162,18 @@ function SceneContent({
   );
 }
 
-/** The Scene photo at its own proportions: never cropped, never stretched. */
-function ScenePhoto({ uri, label }: { uri: string | null; label: string }) {
+/**
+ * The Scene photo at its own proportions: never cropped, never stretched. A failure holds
+ * for this URL and this answer only: a new answer (`attempt`) tries the photo again.
+ */
+function ScenePhoto({ uri, label, attempt }: { uri: string | null; label: string; attempt: number }) {
   const t = useT();
   const theme = useTheme();
-  // Keyed by the URL, so a revalidated Scene with a new photo starts over.
-  const [loaded, setLoaded] = useState<{ uri: string; aspect: number | null } | null>(null);
-  const state = loaded?.uri === uri ? loaded : null;
+  const [measured, setMeasured] = useState<{ uri: string; aspect: number } | null>(null);
+  const [failed, setFailed] = useState<{ uri: string; attempt: number } | null>(null);
+  const aspect = measured?.uri === uri ? measured.aspect : DEFAULT_ASPECT;
 
-  if (uri === null || (state !== null && state.aspect === null)) {
+  if (uri === null || (failed?.uri === uri && failed.attempt === attempt)) {
     return (
       <View
         style={{
@@ -177,7 +201,7 @@ function ScenePhoto({ uri, label }: { uri: string | null; label: string }) {
       // Public Scene media only: the one kind allowed on the normal disk cache (MOB-02).
       cachePolicy="disk"
       onLoad={(e) =>
-        setLoaded({
+        setMeasured({
           uri,
           aspect:
             e.source.width > 0 && e.source.height > 0
@@ -185,10 +209,10 @@ function ScenePhoto({ uri, label }: { uri: string | null; label: string }) {
               : DEFAULT_ASPECT,
         })
       }
-      onError={() => setLoaded({ uri, aspect: null })}
+      onError={() => setFailed({ uri, attempt })}
       style={{
         width: '100%',
-        aspectRatio: clampAspect(state?.aspect ?? DEFAULT_ASPECT),
+        aspectRatio: clampAspect(aspect),
         backgroundColor: theme.color.surfaceMuted,
         borderRadius: theme.radius.lg,
       }}
@@ -221,11 +245,20 @@ function ProductRow({
   const theme = useTheme();
   const locale = useLocale();
   const router = useRouter();
-  const price = formatMinor(locale, product.base_price_minor, product.base_price_currency);
-  const slots = { position: number, name: product.name, price };
+  const price = formatPriceSpan(locale, t, {
+    min: product.price_min_minor,
+    max: product.price_max_minor,
+    currency: product.price_currency,
+  });
   const label = fillSlots(
-    t(product.available ? 'buyer.scene.product' : 'buyer.scene.product_unavailable'),
-    slots,
+    t(
+      price === null
+        ? 'buyer.scene.product_no_price'
+        : product.available
+          ? 'buyer.scene.product'
+          : 'buyer.scene.product_unavailable',
+    ),
+    { position: number, name: product.name, price },
   );
   const uri = product.image_key ? mediaUrl(mediaOrigin, product.image_key) : null;
 
@@ -274,11 +307,13 @@ function ProductRow({
         </View>
         <View style={{ flex: 1 }}>
           <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{product.name}</AppText>
-          <AppText
-            style={{ color: product.available ? theme.color.text : theme.color.textSecondary }}
-          >
-            {price}
-          </AppText>
+          {price === null ? null : (
+            <AppText
+              style={{ color: product.available ? theme.color.text : theme.color.textSecondary }}
+            >
+              {price}
+            </AppText>
+          )}
           {product.available ? null : (
             <AppText
               style={{ color: theme.color.textSecondary, fontWeight: theme.fontWeight.semibold }}
@@ -290,8 +325,12 @@ function ProductRow({
       </Pressable>
 
       {selected ? (
+        // The preview sits beside its action, as in the prototype: a small photo, then View Product.
         <View
           style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
             padding: theme.space.sm,
             gap: theme.space.sm,
             borderTopWidth: 1,
@@ -304,22 +343,24 @@ function ProductRow({
               contentFit="contain"
               cachePolicy="disk"
               style={{
-                width: '100%',
-                aspectRatio: 1,
+                width: PREVIEW_SIZE,
+                height: PREVIEW_SIZE,
                 backgroundColor: theme.color.surfaceMuted,
                 borderRadius: theme.radius.md,
               }}
             />
           ) : null}
-          <Button
-            label={t('buyer.product.view')}
-            onPress={() =>
-              router.push({
-                pathname: '/product/[handle]/[slug]',
-                params: { handle, slug: product.slug },
-              })
-            }
-          />
+          <View style={{ flexGrow: 1 }}>
+            <Button
+              label={t('buyer.product.view')}
+              onPress={() =>
+                router.push({
+                  pathname: '/product/[handle]/[slug]',
+                  params: { handle, slug: product.slug },
+                })
+              }
+            />
+          </View>
         </View>
       ) : null}
     </View>

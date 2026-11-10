@@ -1,7 +1,8 @@
 # Buyer For You (WO-004A) against the real local API, as a guest: the feed loads real Scenes
 # (Seller, photo, caption, tagged Products), scrolling loads the next page through
 # next_cursor until the end of the feed, pull-to-refresh starts a new session, and the card
-# reads in Dark mode. No engagement control is drawn on a card.
+# reads in Dark mode. No engagement control is drawn on a card; its one action, Explore the
+# Scene (WO-005), is exercised by buyer-scene-explorer.yaml.
 #
 # Needs at least 11 published Scenes (one more than a page) in the device's Market, the
 # newest captioned "... (12)" and the oldest "... (1)": the development-only fixtures in
@@ -32,7 +33,7 @@ tags:
 - assertNotVisible: Save
 - assertNotVisible: Share
 - assertNotVisible: Follow
-- assertNotVisible: Explore the Scene
+# Explore the Scene is the card's one action since WO-005 (buyer-scene-explorer.yaml).
 - takeScreenshot: fyp-01-guest-feed
 
 # Twelve Scenes at ten per page: the end of the feed appears only after the second page.

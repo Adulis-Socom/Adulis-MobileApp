@@ -171,5 +171,12 @@ describe('failure messages', () => {
     // Whatever a value holds, it cannot add a segment or a query to the path.
     await failureOf(api.scene('../fyp?x=1'));
     expect(fake.calls.at(-1)?.path).toBe('/v1/scene-posts/..%2Ffyp%3Fx%3D1');
+    // A dot segment or an empty value is refused before any request is made.
+    const before = fake.calls.length;
+    for (const [handle, slug] of [['..', 'x'], ['.', 'x'], ['seller-1', ''], ['seller-1', '..']] as const) {
+      await expect(api.product(handle, slug)).rejects.toThrow('invalid path parameter');
+    }
+    await expect(api.scene('')).rejects.toThrow('invalid path parameter');
+    expect(fake.calls).toHaveLength(before);
   });
 });
