@@ -1,10 +1,12 @@
 import { en } from '@adulis/locale/mobile';
+import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Platform } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
   GOOD_TOKEN,
+  SIGN_IN_CODE,
   bootstrapBody,
   fypPage,
   fypUnit,
@@ -259,5 +261,177 @@ describe('For You feed', () => {
       expect(await screen.findByText(en[coming])).toBeOnTheScreen();
     }
     await waitFor(() => expect(feedCalls()).toHaveLength(1));
+  });
+});
+
+/**
+ * WO-DISC-002A: returning from the background (ADU-MOB-02 S185). AppState is driven by
+ * hand; renderRouter's fake timers make Date.now() follow the advanced clock. Development
+ * builds use the provisional 5-minute interval (FOREGROUND_REVALIDATE_AFTER_MS).
+ */
+describe('returning from the background', () => {
+  let listeners: ((state: AppStateStatus) => void)[] = [];
+  const goTo = (state: AppStateStatus) =>
+    act(() => {
+      for (const listener of [...listeners]) listener(state);
+    });
+  const minutes = (n: number) => act(() => jest.advanceTimersByTimeAsync(n * 60_000));
+  const away = async (n: number) => {
+    await goTo('background');
+    await minutes(n);
+    await goTo('active');
+  };
+  /** A reply the test releases when it chooses: a response that is still in flight. */
+  const held = () => {
+    let release: (reply: Reply) => void = () => undefined;
+    const reply = new Promise<Reply>((resolve) => {
+      release = resolve;
+    });
+    return { reply, release: (r: Reply) => act(async () => release(r)) };
+  };
+
+  beforeEach(() => {
+    listeners = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((type, listener) => {
+      if (type === 'change') listeners.push(listener as (state: AppStateStatus) => void);
+      return {
+        remove: () => {
+          listeners = listeners.filter((l) => l !== listener);
+        },
+      } as ReturnType<typeof AppState.addEventListener>;
+    });
+  });
+  afterEach(() => onlineManager.setOnline(true));
+
+  it('a short stay in the background keeps the feed and asks nothing', async () => {
+    serve(ok(fypPage([fypUnit(1)])), ok(fypPage([fypUnit(2)])));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await away(1);
+    expect(await settledCalls()).toHaveLength(1);
+    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+  });
+
+  it('after the freshness interval the old cards are withheld while a new session starts', async () => {
+    const next = held();
+    let n = 0;
+    api.on(FEED, () => (n++ === 0 ? ok(fypPage([fypUnit(1)], null, 'session-old')) : next.reply));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await away(6);
+    // Not shown as current while eligibility is re-read: a Scene may have gone PRIVATE.
+    expect(await screen.findByText(en['buyer.for_you.loading'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    await next.release(ok(fypPage([fypUnit(4)], null, 'session-new')));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    // The new session started with no cursor; the old one was never continued.
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, {}]);
+  });
+
+  it('a revalidation that fails shows the failure, never the old cards', async () => {
+    serve(ok(fypPage([fypUnit(1)])), problem(500, 'INTERNAL', 'request'));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await away(6);
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('an offline return says so, shows no old cards, and loads once the connection is back', async () => {
+    serve(ok(fypPage([fypUnit(1)])), ok(fypPage([fypUnit(4)])));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    // Awaited: an unawaited act here leaves its scope open and the next test never mounts.
+    await act(async () => onlineManager.setOnline(false));
+    await away(6);
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    expect(feedCalls()).toHaveLength(1); // paused, not spent
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+  });
+
+  it('rapid returns start one new session, not one per return', async () => {
+    const next = held();
+    let n = 0;
+    api.on(FEED, () => (n++ === 0 ? ok(fypPage([fypUnit(1)])) : next.reply));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await away(6);
+    await away(6);
+    await goTo('background');
+    await goTo('active');
+    expect(await settledCalls()).toHaveLength(2);
+    await next.release(ok(fypPage([fypUnit(4)])));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(await settledCalls()).toHaveLength(2);
+  });
+
+  it('a late page of the old session never lands in the new one', async () => {
+    const late = held();
+    let starts = 0;
+    api.on(FEED, (call) =>
+      call.query.cursor === 'old-cursor'
+        ? late.reply
+        : ok(starts++ === 0 ? fypPage([fypUnit(1)], 'old-cursor', 'session-old') : fypPage([fypUnit(4)], null, 'session-new')),
+    );
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    // The short feed asked for its next page by itself; that request is still in flight.
+    await waitFor(() => expect(feedCalls().map((c) => c.query)).toContainEqual({ cursor: 'old-cursor' }));
+    await away(6);
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    await late.release(ok(fypPage([fypUnit(2)])));
+    await settledCalls();
+    expect(screen.queryByText('Store 2')).not.toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('cards that arrived while the app was in the background are not revalidated', async () => {
+    const first = held();
+    let n = 0;
+    api.on(FEED, () => (n++ === 0 ? first.reply : ok(fypPage([fypUnit(4)]))));
+    await renderRouter(APP_DIR);
+    await goTo('background');
+    await first.release(ok(fypPage([fypUnit(1)])));
+    await minutes(6);
+    await goTo('active');
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    expect(await settledCalls()).toHaveLength(1);
+  });
+});
+
+describe('signing in', () => {
+  it('never shows the guest cards as the Account feed: a new Account session, with the bearer', async () => {
+    api.on(FEED, (call) =>
+      ok(
+        fypPage([
+          call.headers.Authorization
+            ? fypUnit(1, { seller: { handle: 'a', store_name: 'Account pick' } })
+            : fypUnit(2, { seller: { handle: 'g', store_name: 'Guest pick' } }),
+        ]),
+      ),
+    );
+    await renderRouter(APP_DIR);
+    expect(await screen.findByText('Guest pick')).toBeOnTheScreen();
+    expect(feedCalls().at(-1)?.headers.Authorization).toBeUndefined();
+
+    await fireEvent.press(bottomTab(en['buyer.tab.orders']));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911234567');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await screen.findByText(en['buyer.orders.coming']);
+
+    await fireEvent.press(bottomTab(en['buyer.tab.home']));
+    expect(await screen.findByText('Account pick')).toBeOnTheScreen();
+    expect(screen.queryByText('Guest pick')).not.toBeOnTheScreen();
+    const last = feedCalls().at(-1);
+    expect(last?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
+    expect(last?.query).toEqual({}); // a new session: no guest cursor carried over
+    // The credential never reaches a URL.
+    expect(feedCalls().every((c) => !JSON.stringify(c.query).includes(GOOD_TOKEN))).toBe(true);
   });
 });

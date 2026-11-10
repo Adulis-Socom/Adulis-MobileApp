@@ -30,6 +30,18 @@ export function ForYouFeed() {
     [mediaOrigin],
   );
 
+  // Nothing to show and the request waits for a connection (an offline return from the
+  // background, say): say so rather than spin. TanStack resumes it on reconnect.
+  if (feed.status === 'pending' && feed.paused) {
+    return (
+      <Centered>
+        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+          {t('common.offline')}
+        </AppText>
+      </Centered>
+    );
+  }
+
   if (feed.status === 'pending') {
     return (
       <Centered>

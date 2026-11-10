@@ -23,7 +23,8 @@ export interface Recorded {
 }
 
 export type Reply = { status: number; body?: unknown } | 'offline' | 'hang';
-type Handler = (call: Recorded) => Reply;
+// A promise lets a test hold a reply and release it later (a response that lands late).
+type Handler = (call: Recorded) => Reply | Promise<Reply>;
 
 export function problem(status: number, code: S['ProblemDto']['code'], group: string, slots?: Record<string, unknown>) {
   return {
@@ -139,7 +140,7 @@ export function installFakeApi() {
     };
     calls.push(call);
     const handler = handlers[`${method} ${path}`];
-    const reply: Reply = handler ? handler(call) : problem(404, 'NOT_FOUND', 'request');
+    const reply: Reply = handler ? await handler(call) : problem(404, 'NOT_FOUND', 'request');
     if (reply === 'offline') throw new TypeError('Network request failed');
     if (reply === 'hang') return new Promise<Response>(() => undefined);
     return { status: reply.status, json: async () => reply.body } as Response;

@@ -1,8 +1,46 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { ApiError, isTransient, type FypPage, type FypUnit } from '../api/client';
 import { useSession } from '../auth/session';
+
+/**
+ * FOREGROUND FRESHNESS (WO-DISC-002A, OVN-055). ADU-MOB-02 S185: "After a meaningful
+ * background interval, create/refetch the FYP session according to configuration rather
+ * than assuming old Scene Post eligibility remains current." No document sets the
+ * interval, so this one value is it, and it is not the server's feed-session lifetime
+ * (that ends a session; this decides when cards on screen stop being trusted):
+ *
+ * - development builds: 5 minutes, a PROVISIONAL technical value for testing;
+ * - release builds: 0 -- every return from the background revalidates -- the fail-closed
+ *   policy until the founder approves an interval (FYP_FOUNDER_DECISIONS OVN-055).
+ */
+export const freshnessIntervalMs = (developmentBuild: boolean): number =>
+  developmentBuild ? 5 * 60_000 : 0;
+export const FOREGROUND_REVALIDATE_AFTER_MS = freshnessIntervalMs(__DEV__);
+
+/** A page as cached: the server's page plus when it arrived (its eligibility check). */
+export type LoadedFypPage = FypPage & { readonly receivedAt: number };
+
+/**
+ * Whether the cards on screen must be revalidated on returning to the foreground: they
+ * were checked before the app went to the background, and it stayed there at least
+ * `thresholdMs`. Cards that arrived while backgrounded are as fresh as the background.
+ */
+export function needsForegroundRevalidation(args: {
+  backgroundedAt: number;
+  now: number;
+  oldestReceivedAt: number | undefined;
+  thresholdMs: number;
+}): boolean {
+  const { backgroundedAt, now, oldestReceivedAt, thresholdMs } = args;
+  return (
+    oldestReceivedAt !== undefined &&
+    oldestReceivedAt <= backgroundedAt &&
+    now - backgroundedAt >= thresholdMs
+  );
+}
 
 /**
  * The Buyer For You feed (WO-004A): GET /v1/fyp through TanStack Query, never Zustand.
@@ -18,8 +56,14 @@ import { useSession } from '../auth/session';
  * - Pull-to-refresh bumps the generation: the first request of the new key carries no
  *   cursor, so the server starts a new session. The previous cards stay visible until it
  *   answers; if it fails they go, so the old session is never continued after a refresh.
- * - feed_session_id, impression_id and algorithm_version stay in the cached pages, as
- *   served, for later telemetry. Nothing here mints one or reports an impression.
+ * - Returning from the background after FOREGROUND_REVALIDATE_AFTER_MS also starts a new
+ *   session, but WITHHOLDS the old cards meanwhile: a Scene may have gone PRIVATE while the
+ *   app slept (ADU-MOB-02 S185), so they are not shown as current. A failure or an offline
+ *   return then shows as such, never the old cards. One revalidation at a time; a late
+ *   answer for an old session lands in that session's key, never the new one.
+ * - feed_session_id, serve_id and algorithm_version stay in the cached pages, as served,
+ *   for later telemetry. Nothing here mints an id or reports an impression: a qualified
+ *   impression is a separate, later observation (ADU-ANL-01 S331).
  */
 export const forYouKey = (subject: 'guest' | 'account', generation: number) =>
   ['fyp', subject, generation] as const;
@@ -70,13 +114,16 @@ export function mediaUrl(origin: string | undefined, key: string): string | null
 export function useForYouFeed() {
   const { session, api, ensureDeviceRegistered } = useSession();
   const subject = session.status === 'signedIn' ? 'account' : 'guest';
-  const [generation, setGeneration] = useState(0);
+  // `withhold`: this generation was started because the old cards stopped being trusted,
+  // so they must not stand in while it loads.
+  const [feed, setFeed] = useState({ generation: 0, withhold: false });
 
   const query = useInfiniteQuery({
-    queryKey: forYouKey(subject, generation),
-    queryFn: async ({ pageParam }) => {
+    queryKey: forYouKey(subject, feed.generation),
+    queryFn: async ({ pageParam }): Promise<LoadedFypPage> => {
       await ensureDeviceRegistered();
-      return api.fyp(pageParam, subject === 'guest');
+      const page = await api.fyp(pageParam, subject === 'guest');
+      return { ...page, receivedAt: Date.now() };
     },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.next_cursor,
@@ -88,14 +135,52 @@ export function useForYouFeed() {
     refetchOnReconnect: false,
     // The network may retry; a server answer never does.
     retry: (failures, error) => isTransient(error) && failures < 2,
-    // A refresh keeps the same subject's cards on screen while the new session loads.
+    // A refresh keeps the same subject's cards on screen while the new session loads;
+    // a foreground revalidation does not.
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[1] === subject ? previous : undefined,
+      !feed.withhold && previousQuery?.queryKey[1] === subject ? previous : undefined,
   });
 
   const units = useMemo(() => feedUnits(query.data?.pages), [query.data]);
-  const refresh = useCallback(() => setGeneration((g) => g + 1), []);
+  const refresh = useCallback(() => setFeed((f) => ({ generation: f.generation + 1, withhold: false })), []);
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage } = query;
+
+  // Read by the AppState listener at the moment of return, not captured when it subscribed.
+  const shown = useRef({ oldest: undefined as number | undefined, live: false });
+  shown.current = {
+    oldest: query.data?.pages[0]?.receivedAt,
+    // Cards of THIS generation on screen. While a new session loads (or failed) there is
+    // nothing stale to revalidate, which is also what keeps rapid returns to one refresh.
+    live: query.data !== undefined && !isPlaceholderData,
+  };
+
+  useEffect(() => {
+    // 'background', not merely 'inactive': an iOS control-centre pull is not a background
+    // interval. The first background event of a stay is the one that counts.
+    let backgroundedAt: number | null = null;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        backgroundedAt ??= Date.now();
+        return;
+      }
+      if (state !== 'active' || backgroundedAt === null) return;
+      const since = backgroundedAt;
+      backgroundedAt = null;
+      const { oldest, live } = shown.current;
+      if (
+        live &&
+        needsForegroundRevalidation({
+          backgroundedAt: since,
+          now: Date.now(),
+          oldestReceivedAt: oldest,
+          thresholdMs: FOREGROUND_REVALIDATE_AFTER_MS,
+        })
+      ) {
+        setFeed((f) => ({ generation: f.generation + 1, withhold: true }));
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   /** Called as the list nears its end: one request at a time, and never into an error. */
   const loadMore = useCallback(() => {
@@ -111,6 +196,8 @@ export function useForYouFeed() {
     hasNextPage,
     isFetchingNextPage,
     isFetchNextPageError,
+    /** Nothing to show yet and the request waits for a connection (TanStack paused it). */
+    paused: query.fetchStatus === 'paused',
     /** A pull-to-refresh is in flight: the old session's cards are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
     retry: () => void query.refetch(),

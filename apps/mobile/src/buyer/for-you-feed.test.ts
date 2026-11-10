@@ -1,6 +1,33 @@
 import { ApiError, type FypPage } from '../api/client';
 import { fypPage, fypUnit } from '../testing/fake-api';
-import { feedSessionEnded, feedUnits, mediaUrl } from './for-you-feed';
+import {
+  FOREGROUND_REVALIDATE_AFTER_MS,
+  feedSessionEnded,
+  feedUnits,
+  freshnessIntervalMs,
+  mediaUrl,
+  needsForegroundRevalidation,
+} from './for-you-feed';
+
+describe('needsForegroundRevalidation (WO-DISC-002A, ADU-MOB-02 S185)', () => {
+  const at = 1_000_000;
+  const five = 5 * 60_000;
+  it.each([
+    ['cards checked before a long enough background', { now: at + five, oldestReceivedAt: at - 1, thresholdMs: five }, true],
+    ['a background shorter than the interval', { now: at + five - 1, oldestReceivedAt: at - 1, thresholdMs: five }, false],
+    ['cards that arrived while the app was backgrounded', { now: at + five, oldestReceivedAt: at + 1, thresholdMs: five }, false],
+    ['nothing loaded yet', { now: at + five, oldestReceivedAt: undefined, thresholdMs: five }, false],
+    ['the release policy: any return from the background', { now: at, oldestReceivedAt: at - 1, thresholdMs: 0 }, true],
+  ])('%s', (_label, args, expected) => {
+    expect(needsForegroundRevalidation({ backgroundedAt: at, ...args })).toBe(expected);
+  });
+
+  it('is 5 provisional minutes in development and 0 -- fail closed -- in a release build', () => {
+    expect(freshnessIntervalMs(true)).toBe(five);
+    expect(freshnessIntervalMs(false)).toBe(0);
+    expect(FOREGROUND_REVALIDATE_AFTER_MS).toBe(freshnessIntervalMs(__DEV__));
+  });
+});
 
 const problem = (code: string, slots?: Record<string, unknown>) =>
   new ApiError({
