@@ -4641,7 +4641,8 @@
           },
           "base_price_minor": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "The creation seed, not a price (DB-01 C1). The prices are variants[].price_minor."
           },
           "base_price_currency": {
             "type": "string"
@@ -4653,7 +4654,7 @@
           },
           "available": {
             "type": "boolean",
-            "description": "False: show \"Currently unavailable\" and no purchase action. Product PUBLISHED and an ACTIVE Variant in stock, read now."
+            "description": "False: show \"Currently unavailable\" and no purchase action. Product PUBLISHED, an ACTIVE Variant in stock and an ACTIVE Seller, read now."
           },
           "seller": {
             "$ref": "#/components/schemas/StorefrontProductSellerDto"
@@ -5153,10 +5154,28 @@
           },
           "base_price_minor": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "The Product's creation seed, not a price (DB-01 C1). Kept for compatibility; show price_min_minor..price_max_minor."
           },
           "base_price_currency": {
             "type": "string"
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (price lives on the Variant). Null: no ACTIVE Variant."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "Currency of the Variant prices."
           },
           "image_key": {
             "type": "string",
@@ -5173,6 +5192,9 @@
           "name",
           "base_price_minor",
           "base_price_currency",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
           "image_key",
           "available"
         ]

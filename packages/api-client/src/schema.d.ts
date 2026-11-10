@@ -2240,10 +2240,17 @@ export interface components {
             /** @description False: show "Currently unavailable" and no purchase action. */
             available: boolean;
             base_price_currency: string;
+            /** @description The Product's creation seed, not a price (DB-01 C1). Kept for compatibility; show price_min_minor..price_max_minor. */
             base_price_minor: number;
             image_key: string | null;
             name: string;
             position: number;
+            /** @description Currency of the Variant prices. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (price lives on the Variant). Null: no ACTIVE Variant. */
+            price_min_minor: number | null;
             /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
             slug: string;
         };
@@ -2445,9 +2452,10 @@ export interface components {
         };
         StorefrontProductDto: {
             attributes: components["schemas"]["StorefrontProductAttributeDto"][];
-            /** @description False: show "Currently unavailable" and no purchase action. Product PUBLISHED and an ACTIVE Variant in stock, read now. */
+            /** @description False: show "Currently unavailable" and no purchase action. Product PUBLISHED, an ACTIVE Variant in stock and an ACTIVE Seller, read now. */
             available: boolean;
             base_price_currency: string;
+            /** @description The creation seed, not a price (DB-01 C1). The prices are variants[].price_minor. */
             base_price_minor: number;
             /** Format: uuid */
             category_id: string | null;
