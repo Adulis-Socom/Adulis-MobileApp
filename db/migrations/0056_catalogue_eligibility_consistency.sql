@@ -40,16 +40,16 @@
 -- ---------------------------------------------------------------------------
 -- 1. The Scene availability derivation gains the Market-currency term (OVN-087)
 -- ---------------------------------------------------------------------------
--- Same columns, same order: CREATE OR REPLACE keeps every grant.
+-- Same columns, same order: CREATE OR REPLACE keeps every grant. `in_stock` keeps its meaning
+-- (an ACTIVE Variant has stock); only `available` gains the currency term, so a Seller's view
+-- can show "in stock, but not sellable" truthfully.
 CREATE OR REPLACE VIEW core.v_scene_product_availability AS
 SELECT p.id AS product_id,
        p.seller_id,
        p.market_id,
        (p.visibility = 'PUBLISHED') AS published,
        EXISTS (SELECT 1 FROM core.product_variant v
-                 JOIN core.market m ON m.id = p.market_id
-                WHERE v.product_id = p.id AND v.status = 'ACTIVE' AND v.stock_count > 0
-                  AND v.price_currency = m.display_currency)
+                WHERE v.product_id = p.id AND v.status = 'ACTIVE' AND v.stock_count > 0)
          AS in_stock,
        (p.visibility = 'PUBLISHED'
         AND EXISTS (SELECT 1 FROM core.product_variant v
@@ -110,8 +110,10 @@ CREATE CONSTRAINT TRIGGER trg_scene_reevaluate_market_activation
 -- ---------------------------------------------------------------------------
 -- 3. Currency integrity (OVN-088)
 -- ---------------------------------------------------------------------------
--- 23514 check_violation, message 'not the Market currency': the API maps it to
--- VALIDATION_FAILED on price_currency / base_price_currency (pg-error-translator).
+-- 23514 check_violation naming variant_price_in_market_currency or
+-- product_seed_in_market_currency: the API maps it to VALIDATION_FAILED on price_currency /
+-- base_price_currency (pg-error-translator). Known limit: the Market's currency is read
+-- unlocked, so a write racing an operator's currency change can commit in the old currency.
 CREATE FUNCTION core.fn_guard_market_currency() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = core AS $fn$
 DECLARE
@@ -123,13 +125,13 @@ BEGIN
      WHERE p.id = NEW.product_id;
     IF v_currency IS NOT NULL AND NEW.price_currency <> v_currency THEN
       RAISE EXCEPTION 'price_currency % is not the Market currency %', NEW.price_currency, v_currency
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'check_violation', CONSTRAINT = 'variant_price_in_market_currency';
     END IF;
   ELSE
     SELECT m.display_currency INTO v_currency FROM core.market m WHERE m.id = NEW.market_id;
     IF v_currency IS NOT NULL AND NEW.base_price_currency <> v_currency THEN
       RAISE EXCEPTION 'base_price_currency % is not the Market currency %', NEW.base_price_currency, v_currency
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'check_violation', CONSTRAINT = 'product_seed_in_market_currency';
     END IF;
   END IF;
   RETURN NEW;
@@ -155,6 +157,15 @@ REVOKE ALL ON FUNCTION core.fn_guard_market_currency() FROM PUBLIC;
 ALTER TABLE core.product
   ADD CONSTRAINT product_market_is_seller_market
   FOREIGN KEY (seller_id, market_id) REFERENCES core.seller (id, market_id);
+
+-- ---------------------------------------------------------------------------
+-- 5. Catch-up: re-evaluate every published Scene once under the new rule
+-- ---------------------------------------------------------------------------
+-- Public reads are already right (the gate evaluates at read time); this keeps the stored
+-- visibility, and so the Seller's view, right too. A no-op where nothing changed (the audit
+-- found no non-Market currency).
+SELECT core.fn_scene_post_reevaluate_products(
+  '{}'::uuid[], ARRAY(SELECT id FROM core.scene_post WHERE publication_state = 'PUBLISHED'));
 
 -- Down Migration
 
