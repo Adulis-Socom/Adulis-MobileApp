@@ -1,0 +1,18 @@
+# Explore the Scene (WO-005) - returning from the background (2/2). Past the interval the
+# Explorer withholds the Scene and reads it again; the Scene went PRIVATE meanwhile, so the
+# neutral message replaces it and nothing of the Scene is left on screen.
+appId: com.adulis.app
+name: Buyer Explore the Scene - background return (2/2)
+tags:
+  - buyer
+  - scene
+---
+- launchApp:
+    stopApp: false
+    clearState: false
+- extendedWaitUntil:
+    visible: This Scene is no longer available.
+    timeout: 60000
+- assertNotVisible: Coffee tray and scarf, set for the ceremony.
+- assertNotVisible: '1\. Coffee tray.*'
+- takeScreenshot: bg-02-explorer-gone

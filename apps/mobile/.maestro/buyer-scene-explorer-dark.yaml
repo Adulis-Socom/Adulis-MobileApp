@@ -14,7 +14,13 @@ tags:
 - extendedWaitUntil:
     visible: For You Scenes
     timeout: 120000
-- tapOn: You
+# The tab can take a moment after a font-scale change: retry until the You screen shows.
+- repeat:
+    while:
+      notVisible: Appearance
+    times: 5
+    commands:
+      - tapOn: You
 - tapOn: Dark
 - tapOn: Home
 - extendedWaitUntil:

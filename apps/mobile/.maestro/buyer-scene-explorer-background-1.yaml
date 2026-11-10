@@ -1,0 +1,29 @@
+# Explore the Scene (WO-005) - returning from the background (1/2), the WO-DISC-002A policy
+# reused. Opens the "Coffee tray and scarf..." Scene by link, selects the tray, and leaves
+# the app. Then: set the tray's stock to 0 through the Seller API (the Scene goes PRIVATE)
+# and stay away past the interval (development builds: 5 minutes; release: any return).
+# Half 2 comes back. PRIVATE_REF: that Scene's public_ref. Prerequisites:
+# buyer-scene-explorer.yaml.
+#
+#   maestro test -e PRIVATE_REF=<public_ref> .maestro/buyer-scene-explorer-background-1.yaml
+appId: com.adulis.app
+name: Buyer Explore the Scene - background return (1/2)
+tags:
+  - buyer
+  - scene
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- stopApp
+- openLink: adulis://scenes/${PRIVATE_REF}
+- extendedWaitUntil:
+    visible: Coffee tray and scarf, set for the ceremony.
+    timeout: 120000
+- tapOn: '1\. Coffee tray.*'
+- takeScreenshot: bg-01-explorer-before
+- pressKey: Home

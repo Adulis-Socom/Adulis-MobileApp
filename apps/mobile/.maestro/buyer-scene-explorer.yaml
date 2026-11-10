@@ -5,7 +5,8 @@
 #
 # Needs the development-only WO-005 fixtures (docs/mobile/WO-005-SCENE-EXPLORER.md): Seller
 # "Fixture Weaves" (fixture-weaves) with Woven basket (Small 900.00 in stock, Large 1,200.00
-# sold out), Cotton scarf (sold out), Clay cup and Coffee tray; the newest Scene captioned
+# sold out; its 1,000.00 base price is a seed and never shown), Cotton scarf 450.50 (sold
+# out), Clay cup 350.00 and Coffee tray; the newest Scene captioned
 # "Morning light on the new baskets..." tags basket, scarf, cup in that order.
 #
 # Prerequisites: the debug build installed; Metro on 8081 started with
@@ -43,7 +44,9 @@ tags:
 - assertVisible: '@fixture-weaves'
 - assertVisible: '.*every piece here is from our own workshop\.'
 - assertVisible: Choose a Product to preview it.
-- assertVisible: '1\. Woven basket, .*1,000\.00'
+# Prices are the Variants' span, never the base-price seed (1,000.00).
+- assertVisible: '1\. Woven basket, .*900\.00.*1,200\.00'
+- assertNotVisible: '.*1,000\.00.*'
 - assertVisible: '2\. Cotton scarf, .*450\.50, currently unavailable'
 - assertVisible: '3\. Clay cup, .*350\.00'
 - assertVisible: Currently unavailable
@@ -82,7 +85,8 @@ tags:
     timeout: 30000
 - assertVisible: Woven basket
 - assertVisible: Hand-woven in Addis Ababa from dyed grass.
-- assertVisible: '.*1,000\.00'
+- assertVisible: '.*900\.00.*1,200\.00'
+- assertNotVisible: '.*1,000\.00.*'
 - takeScreenshot: explore-05-product
 - scrollUntilVisible:
     element: 'Small, .*900\.00, Available'
