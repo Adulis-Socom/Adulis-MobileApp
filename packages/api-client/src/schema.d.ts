@@ -857,6 +857,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** A post link to the LIST of published Products it features (S7.5.1), priced like the list. Idempotency-Key required. */
         post: operations["StorefrontController_resolve"];
         delete?: never;
         options?: never;
@@ -939,7 +940,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Views, reservations, conversion, funnel over a window — entitlement-gated. */
+        /** Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors. */
         get: operations["AnalyticsController_full"];
         put?: never;
         post?: never;
@@ -956,7 +957,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Essential counts over a date window. Every tier, including Free and Beta. */
+        /** Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted. */
         get: operations["AnalyticsController_overview"];
         put?: never;
         post?: never;
@@ -1994,7 +1995,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Seller's display order is the default (S7.5); lean by design (S14). */
+        /** Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false. */
         get: operations["StorefrontController_products"];
         put?: never;
         post?: never;
@@ -2045,7 +2046,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Scope is one seller, always (S7.5). */
+        /** Scope is one seller, always (S7.5). Not Marketplace Search. Prices are the ACTIVE Variants' span, as on the list. */
         get: operations["StorefrontController_search"];
         put?: never;
         post?: never;
@@ -2205,6 +2206,33 @@ export interface components {
             /** @description Replaces every tag of the working revision, in presentation order. */
             product_ids?: string[];
         };
+        PostLinkProductDto: {
+            /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
+            available: boolean;
+            /** @description Currency of the seed. */
+            base_price_currency: string;
+            /** @description The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor. */
+            base_price_minor: number;
+            /**
+             * Format: uuid
+             * @description Internal identity (future Cart lines); never a URL segment.
+             */
+            id: string;
+            name: string;
+            /** @description ISO currency of the price span; null with it. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency). */
+            price_min_minor: number | null;
+            /** @description The owning Seller handle (the Product route). */
+            seller_handle: string;
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
+        };
+        PostLinkProductListDto: {
+            data: components["schemas"]["PostLinkProductDto"][];
+        };
         ProblemDto: {
             /** @enum {string} */
             code: "OTP_INVALID" | "OTP_EXPIRED" | "OTP_ATTEMPTS_EXCEEDED" | "OTP_PURPOSE_NOT_PERMITTED" | "AGE_DECLARATION_REQUIRED" | "SESSION_EXPIRED" | "SESSION_REVOKED" | "AUDIENCE_NOT_PERMITTED" | "RECOVERY_REQUIRED" | "STEP_UP_REQUIRED" | "STEP_UP_EXPIRED" | "STEP_UP_ACTION_MISMATCH" | "PERMISSION_DENIED" | "OWNER_ONLY" | "CART_EMPTY" | "CART_SELLER_CONFLICT" | "CART_REVALIDATION_FAILED" | "INSUFFICIENT_STOCK" | "SOLD_OUT" | "PRICE_CHANGED" | "NO_LONGER_PUBLISHED" | "VARIANT_WITHDRAWN" | "SELLER_UNAVAILABLE" | "TRANSACTION_CAP_EXCEEDED" | "ILLEGAL_TRANSITION" | "ORDER_NOT_PAYABLE" | "ORDER_ALREADY_TERMINAL" | "DUPLICATE_RESERVATION" | "BUYER_COOLDOWN_ACTIVE" | "ORDER_NOT_READYABLE" | "EVIDENCE_REQUIRED" | "EVIDENCE_TOO_LARGE" | "PAYMENT_ALREADY_DECIDED" | "NOT_ORDER_BUYER" | "SCAN_SIGNATURE_INVALID" | "SCAN_PREDATES_TOKEN" | "SCAN_NOT_ORDER_BUYER" | "COURIER_CANNOT_SCAN" | "PUBLICATION_BLOCKED" | "ELIGIBILITY_NOT_SATISFIED" | "TIER_LIMIT_REACHED" | "LEVEL_LIMIT_REACHED" | "HANDLE_TAKEN" | "FULFILMENT_METHOD_REQUIRED" | "PRODUCT_HAS_ACTIVE_ORDERS" | "VARIANT_HAS_ACTIVE_ORDERS" | "PAYOUT_LOCKED" | "PAYOUT_CHANGE_PENDING" | "PAYOUT_PERMISSION_DENIED" | "DELETION_BLOCKED" | "DELETION_OWNER_ONLY" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_MISSING" | "IDEMPOTENCY_KEY_REUSED" | "RATE_LIMITED" | "CLIENT_UPGRADE_REQUIRED" | "PAYLOAD_TOO_LARGE" | "SELLER_CONTEXT_REQUIRED" | "SCOPE_PARAMETER_REQUIRED" | "NOT_FOUND" | "GONE" | "INTERNAL";
@@ -2224,6 +2252,28 @@ export interface components {
             slots?: {
                 [key: string]: unknown;
             };
+        };
+        PublicProductSummaryDto: {
+            /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
+            available: boolean;
+            /** @description Currency of the seed. */
+            base_price_currency: string;
+            /** @description The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor. */
+            base_price_minor: number;
+            /**
+             * Format: uuid
+             * @description Internal identity (future Cart lines); never a URL segment.
+             */
+            id: string;
+            name: string;
+            /** @description ISO currency of the price span; null with it. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency). */
+            price_min_minor: number | null;
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
         };
         PublicScenePostDto: {
             caption: string;
@@ -2445,30 +2495,49 @@ export interface components {
             url: string;
         };
         StorefrontProductAttributeDto: {
-            /** @description Attribute definition code. */
+            /** @description Attribute definition code (machine identifier, not copy). */
             attribute: string;
-            /** @description Option code, or the typed value as text. */
+            /**
+             * @description Which typed value `value` carries.
+             * @enum {string}
+             */
+            data_type: "TEXT" | "NUMBER" | "ENUM" | "BOOLEAN";
+            /** @description Locale catalogue key of the attribute's display name. */
+            label_key: string;
+            /** @description Unit code for a NUMBER (machine identifier), else null. */
+            unit: string | null;
+            /** @description ENUM: the option code. TEXT: the Seller-authored text. NUMBER/BOOLEAN: the value as text. */
             value: string | null;
+            /** @description ENUM only: locale catalogue key of the option's display name. */
+            value_label_key: string | null;
         };
         StorefrontProductDto: {
             attributes: components["schemas"]["StorefrontProductAttributeDto"][];
-            /** @description False: show "Currently unavailable" and no purchase action. Product PUBLISHED, an ACTIVE Variant in stock and an ACTIVE Seller, read now. */
+            /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
             available: boolean;
+            /** @description Currency of the seed. */
             base_price_currency: string;
-            /** @description The creation seed, not a price (DB-01 C1). The prices are variants[].price_minor. */
+            /** @description The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor. */
             base_price_minor: number;
             /** Format: uuid */
             category_id: string | null;
             description: string | null;
             /**
              * Format: uuid
-             * @description Internal identity; the Product is addressed by handle + slug.
+             * @description Internal identity (future Cart lines); never a URL segment.
              */
             id: string;
             /** @description In presentation order. */
             images: components["schemas"]["StorefrontProductImageDto"][];
             name: string;
+            /** @description ISO currency of the price span; null with it. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency). */
+            price_min_minor: number | null;
             seller: components["schemas"]["StorefrontProductSellerDto"];
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
             slug: string;
             variants: components["schemas"]["StorefrontProductVariantDto"][];
         };
@@ -2479,11 +2548,42 @@ export interface components {
             /** @description Object key; resolve against bootstrap media_public_origin. */
             thumb_key: string;
         };
+        StorefrontProductListDto: {
+            data: components["schemas"]["StorefrontProductListItemDto"][];
+        };
+        StorefrontProductListItemDto: {
+            /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
+            available: boolean;
+            /** @description Currency of the seed. */
+            base_price_currency: string;
+            /** @description The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor. */
+            base_price_minor: number;
+            /** @description The Seller's display order (the list's order). */
+            display_order: number;
+            /**
+             * Format: uuid
+             * @description Internal identity (future Cart lines); never a URL segment.
+             */
+            id: string;
+            /** @description First image card key; resolve against bootstrap media_public_origin. */
+            image_key: string | null;
+            name: string;
+            /** @description ISO currency of the price span; null with it. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency). */
+            price_min_minor: number | null;
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
+        };
         StorefrontProductSellerDto: {
             handle: string;
             store_name: string;
         };
         StorefrontProductVariantDto: {
+            /** @description This option can be bought now: the Product is available-eligible (PUBLISHED, Seller and Market ACTIVE) and this Variant is ACTIVE, in stock and priced in the Market currency. Never true while the Product is unavailable. Show it; do not derive it from stock_count. */
+            available: boolean;
             /**
              * Format: uuid
              * @description Variant identity (future Cart lines); never a URL segment.
@@ -2497,6 +2597,9 @@ export interface components {
             stock_confirmed_at: string | null;
             stock_count: number;
             variant_key: string;
+        };
+        StorefrontSearchResultListDto: {
+            data: components["schemas"]["PublicProductSummaryDto"][];
         };
     };
     responses: never;
@@ -3671,11 +3774,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PostLinkProductListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5430,6 +5544,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The Seller public handle. */
                 handle: string;
             };
             cookie?: never;
@@ -5440,13 +5555,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StorefrontProductListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     StorefrontController_product: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description true: a technical re-read of a Product already on screen (a pull, a return from the background), not a new opening; the server then records no product_viewed (founder ruling OVN-073). It can only withhold the event, never create one. Omit it for an opening. */
+                revalidate?: "true";
+            };
             header?: never;
             path: {
                 /** @description The Seller public handle. */
@@ -5501,10 +5630,12 @@ export interface operations {
     StorefrontController_search: {
         parameters: {
             query: {
+                /** @description 1-200 characters; matched in name and description. */
                 q: string;
             };
             header?: never;
             path: {
+                /** @description The Seller public handle. */
                 handle: string;
             };
             cookie?: never;
@@ -5515,7 +5646,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StorefrontSearchResultListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

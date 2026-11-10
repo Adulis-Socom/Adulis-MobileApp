@@ -1482,10 +1482,28 @@
         "operationId": "StorefrontController_resolve",
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostLinkProductListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
+        "summary": "A post link to the LIST of published Products it features (S7.5.1), priced like the list. Idempotency-Key required.",
         "tags": [
           "Storefront"
         ]
@@ -1604,7 +1622,7 @@
             "description": ""
           }
         },
-        "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated.",
+        "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
         "tags": [
           "Analytics"
         ]
@@ -1636,7 +1654,7 @@
             "description": ""
           }
         },
-        "summary": "Essential counts over a date window. Every tier, including Free and Beta.",
+        "summary": "Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted.",
         "tags": [
           "Analytics"
         ]
@@ -3821,6 +3839,7 @@
             "name": "handle",
             "required": true,
             "in": "path",
+            "description": "The Seller public handle.",
             "schema": {
               "type": "string"
             }
@@ -3828,10 +3847,27 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontProductListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Seller's display order is the default (S7.5); lean by design (S14).",
+        "summary": "Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false.",
         "tags": [
           "Storefront"
         ]
@@ -3856,6 +3892,18 @@
             "in": "path",
             "description": "The Product slug within that Seller.",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revalidate",
+            "required": false,
+            "in": "query",
+            "description": "true: a technical re-read of a Product already on screen (a pull, a return from the background), not a new opening; the server then records no product_viewed (founder ruling OVN-073). It can only withhold the event, never create one. Omit it for an opening.",
+            "schema": {
+              "enum": [
+                "true"
+              ],
               "type": "string"
             }
           }
@@ -3928,6 +3976,7 @@
             "name": "handle",
             "required": true,
             "in": "path",
+            "description": "The Seller public handle.",
             "schema": {
               "type": "string"
             }
@@ -3936,6 +3985,7 @@
             "name": "q",
             "required": true,
             "in": "query",
+            "description": "1-200 characters; matched in name and description.",
             "schema": {
               "type": "string"
             }
@@ -3943,10 +3993,27 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorefrontSearchResultListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Scope is one seller, always (S7.5).",
+        "summary": "Scope is one seller, always (S7.5). Not Marketplace Search. Prices are the ACTIVE Variants' span, as on the list.",
         "tags": [
           "Storefront"
         ]
@@ -4521,6 +4588,89 @@
           }
         }
       },
+      "StorefrontProductListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity (future Cart lines); never a URL segment."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor."
+          },
+          "base_price_currency": {
+            "type": "string",
+            "description": "Currency of the seed."
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency)."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO currency of the price span; null with it."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now."
+          },
+          "display_order": {
+            "type": "integer",
+            "description": "The Seller's display order (the list's order)."
+          },
+          "image_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "First image card key; resolve against bootstrap media_public_origin."
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "base_price_minor",
+          "base_price_currency",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
+          "available",
+          "display_order",
+          "image_key"
+        ]
+      },
+      "StorefrontProductListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorefrontProductListItemDto"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "StorefrontProductSellerDto": {
         "type": "object",
         "properties": {
@@ -4566,6 +4716,10 @@
           "status": {
             "type": "string",
             "description": "Only ACTIVE Variants are listed."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "This option can be bought now: the Product is available-eligible (PUBLISHED, Seller and Market ACTIVE) and this Variant is ACTIVE, in stock and priced in the Market currency. Never true while the Product is unavailable. Show it; do not derive it from stock_count."
           }
         },
         "required": [
@@ -4575,7 +4729,8 @@
           "price_currency",
           "stock_count",
           "stock_confirmed_at",
-          "status"
+          "status",
+          "available"
         ]
       },
       "StorefrontProductAttributeDto": {
@@ -4583,17 +4738,45 @@
         "properties": {
           "attribute": {
             "type": "string",
-            "description": "Attribute definition code."
+            "description": "Attribute definition code (machine identifier, not copy)."
+          },
+          "label_key": {
+            "type": "string",
+            "description": "Locale catalogue key of the attribute's display name."
+          },
+          "data_type": {
+            "type": "string",
+            "enum": [
+              "TEXT",
+              "NUMBER",
+              "ENUM",
+              "BOOLEAN"
+            ],
+            "description": "Which typed value `value` carries."
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true,
+            "description": "Unit code for a NUMBER (machine identifier), else null."
           },
           "value": {
             "type": "string",
             "nullable": true,
-            "description": "Option code, or the typed value as text."
+            "description": "ENUM: the option code. TEXT: the Seller-authored text. NUMBER/BOOLEAN: the value as text."
+          },
+          "value_label_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "ENUM only: locale catalogue key of the option's display name."
           }
         },
         "required": [
           "attribute",
-          "value"
+          "label_key",
+          "data_type",
+          "unit",
+          "value",
+          "value_label_key"
         ]
       },
       "StorefrontProductImageDto": {
@@ -4627,34 +4810,53 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Internal identity; the Product is addressed by handle + slug."
+            "description": "Internal identity (future Cart lines); never a URL segment."
           },
           "slug": {
-            "type": "string"
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
           },
           "name": {
             "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor."
+          },
+          "base_price_currency": {
+            "type": "string",
+            "description": "Currency of the seed."
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency)."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO currency of the price span; null with it."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now."
           },
           "description": {
             "type": "string",
             "nullable": true
           },
-          "base_price_minor": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "The creation seed, not a price (DB-01 C1). The prices are variants[].price_minor."
-          },
-          "base_price_currency": {
-            "type": "string"
-          },
           "category_id": {
             "type": "string",
             "format": "uuid",
             "nullable": true
-          },
-          "available": {
-            "type": "boolean",
-            "description": "False: show \"Currently unavailable\" and no purchase action. Product PUBLISHED, an ACTIVE Variant in stock and an ACTIVE Seller, read now."
           },
           "seller": {
             "$ref": "#/components/schemas/StorefrontProductSellerDto"
@@ -4683,15 +4885,167 @@
           "id",
           "slug",
           "name",
-          "description",
           "base_price_minor",
           "base_price_currency",
-          "category_id",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
           "available",
+          "description",
+          "category_id",
           "seller",
           "variants",
           "attributes",
           "images"
+        ]
+      },
+      "PublicProductSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity (future Cart lines); never a URL segment."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor."
+          },
+          "base_price_currency": {
+            "type": "string",
+            "description": "Currency of the seed."
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency)."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO currency of the price span; null with it."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now."
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "base_price_minor",
+          "base_price_currency",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
+          "available"
+        ]
+      },
+      "StorefrontSearchResultListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicProductSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PostLinkProductDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity (future Cart lines); never a URL segment."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor."
+          },
+          "base_price_currency": {
+            "type": "string",
+            "description": "Currency of the seed."
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency)."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO currency of the price span; null with it."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now."
+          },
+          "seller_handle": {
+            "type": "string",
+            "description": "The owning Seller handle (the Product route)."
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "base_price_minor",
+          "base_price_currency",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
+          "available",
+          "seller_handle"
+        ]
+      },
+      "PostLinkProductListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostLinkProductDto"
+            }
+          }
+        },
+        "required": [
+          "data"
         ]
       },
       "CreateScenePostBodyDto": {
