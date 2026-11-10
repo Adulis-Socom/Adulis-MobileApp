@@ -5487,10 +5487,10 @@
           "seller": {
             "$ref": "#/components/schemas/ShopProductSellerDto"
           },
-          "thumb_key": {
+          "image_key": {
             "type": "string",
             "nullable": true,
-            "description": "First image thumbnail key (a bounded derivative, for grids)."
+            "description": "First image card key (as the Seller Profile grid); resolve against bootstrap media_public_origin."
           }
         },
         "required": [
@@ -5504,7 +5504,7 @@
           "price_currency",
           "available",
           "seller",
-          "thumb_key"
+          "image_key"
         ]
       },
       "ShopProductListDto": {

@@ -2563,6 +2563,8 @@ export interface components {
              * @description Internal identity (future Cart lines); never a URL segment.
              */
             id: string;
+            /** @description First image card key (as the Seller Profile grid); resolve against bootstrap media_public_origin. */
+            image_key: string | null;
             name: string;
             /** @description ISO currency of the price span; null with it. */
             price_currency: string | null;
@@ -2573,8 +2575,6 @@ export interface components {
             seller: components["schemas"]["ShopProductSellerDto"];
             /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
             slug: string;
-            /** @description First image thumbnail key (a bounded derivative, for grids). */
-            thumb_key: string | null;
         };
         ShopProductListDto: {
             data: components["schemas"]["ShopProductDto"][];
