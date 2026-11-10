@@ -1,0 +1,22 @@
+# Buyer Seller Profile (WO-006), PRIVATE exclusion, part 2: after the Scene went PRIVATE, a pull
+# reads the Seller's Scenes again and the PRIVATE one is simply absent (no badge, no reason).
+#
+#   maestro test .maestro/seller-profile-private-2.yaml
+appId: com.adulis.app
+name: Seller Profile - PRIVATE Scene, part 2
+tags:
+  - buyer
+  - seller
+---
+- scrollUntilVisible:
+    element: '@fixture-weaves'
+    direction: UP
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    notVisible: 'Scene: Coffee tray and scarf.*'
+    timeout: 30000
+- assertVisible: 'Scene: Morning light on the new baskets.*'
+- assertNotVisible: Private
+- takeScreenshot: seller-private-02-gone

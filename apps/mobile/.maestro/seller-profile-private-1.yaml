@@ -1,0 +1,27 @@
+# Buyer Seller Profile (WO-006), PRIVATE exclusion, part 1: open the profile by link and see both
+# public Scenes. Then the Seller API takes the Coffee tray out of stock (the "Coffee tray and
+# scarf" Scene's only available tag), so the server makes that Scene PRIVATE; part 2 pulls.
+#
+#   maestro test .maestro/seller-profile-private-1.yaml
+appId: com.adulis.app
+name: Seller Profile - PRIVATE Scene, part 1
+tags:
+  - buyer
+  - seller
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- openLink: adulis://sellers/fixture-weaves
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+- extendedWaitUntil:
+    visible: 'Scene: Coffee tray and scarf.*'
+    timeout: 30000
+- assertVisible: 'Scene: Morning light on the new baskets.*'
+- takeScreenshot: seller-private-01-both

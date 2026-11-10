@@ -1,0 +1,95 @@
+# Buyer Seller Profile (WO-006) against the real local API, as a guest: Explore the Scene ->
+# the Seller -> Scenes (default), Products, Reviews, About -> a Scene and a Product from the
+# profile -> "Sold by" back to the profile. Only server data; no Follow, Message or Cart.
+#
+# Needs the WO-CAT-001 native fixtures (Seller "Fixture Weaves", handle fixture-weaves, readied
+# through the Seller API; Woven basket 900.00-1,200.00; two Scenes) plus wo006-fixtures-extra
+# (three reviews: 5, 4, 4). Market B has another fixture-weaves whose Woven basket is 5,000.00.
+#
+#   maestro test .maestro/seller-profile.yaml
+appId: com.adulis.app
+name: Buyer Seller Profile
+tags:
+  - buyer
+  - seller
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- scrollUntilVisible:
+    element: Explore the Scene
+    direction: DOWN
+- tapOn:
+    text: Explore the Scene
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- tapOn:
+    id: scene-seller
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+- assertVisible: Fixture Weaves
+- assertVisible: 'Seller service: 4\.3 out of 5 from 3 reviews'
+- assertVisible:
+    text: Scenes
+    selected: true
+- assertNotVisible: Follow
+- assertNotVisible: Message
+- takeScreenshot: seller-01-scenes
+- extendedWaitUntil:
+    visible: 'Scene: Morning light on the new baskets.*'
+    timeout: 30000
+
+- tapOn: Products
+- extendedWaitUntil:
+    visible: 'Woven basket, .*900\.00.*1,200\.00, Available'
+    timeout: 30000
+- assertNotVisible: '.*5,000\.00.*'
+- takeScreenshot: seller-02-products
+
+- tapOn: Reviews
+- extendedWaitUntil:
+    visible: Rated 5 out of 5
+    timeout: 30000
+- assertVisible: 'Quick replies and the basket was exactly as shown\.'
+- assertVisible: Unverified
+- takeScreenshot: seller-03-reviews
+
+- tapOn: About
+- extendedWaitUntil:
+    visible: 'Baskets, scarves and cups from our Addis Ababa workshop\.'
+    timeout: 30000
+- assertVisible: Collect from the Seller
+- assertVisible: 'On Adulis since .*'
+- takeScreenshot: seller-04-about
+
+# A Scene from the profile opens Explore the Scene.
+- tapOn: Scenes
+- tapOn: 'Scene: Morning light on the new baskets.*'
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+
+# A Product from the profile opens the Product; "Sold by" returns to a Seller Profile.
+- tapOn: Products
+- tapOn: 'Woven basket, .*'
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+- takeScreenshot: seller-05-product
+- tapOn:
+    id: product-seller
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+- takeScreenshot: seller-06-sold-by
