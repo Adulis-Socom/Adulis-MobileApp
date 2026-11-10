@@ -129,13 +129,17 @@ describe('WO-006 -- Seller Profile public reads', () => {
         ($1,'BUYER_COLLECTION',true), ($1,'SELLER_DELIVERY',false)`,
       [SELLER.a],
     );
-    // Seller A: five Products, all display_order 0 (the tiebreak decides), one unpublished.
+    // Seller A: five Products in ONE statement -- the same created_at and display_order 0 -- so
+    // only the slug tiebreak orders them (inserted in reverse name order to prove it). One is
+    // unpublished.
+    await admin.query(
+      `INSERT INTO core.product (id, seller_id, market_id, name, base_price_minor, base_price_currency, visibility, published_at)
+       SELECT ('0e060000-0000-4000-8000-' || lpad(to_hex(256 + n), 12, '0'))::uuid, $1, $2, 'Item ' || n, 1, 'ETB',
+              CASE WHEN n = 5 THEN 'UNPUBLISHED' ELSE 'PUBLISHED' END::core.product_visibility, now()
+         FROM generate_series(5, 1, -1) AS n`,
+      [SELLER.a, MA],
+    );
     for (let n = 1; n <= 5; n++) {
-      await admin.query(
-        `INSERT INTO core.product (id, seller_id, market_id, name, base_price_minor, base_price_currency, visibility, published_at)
-         VALUES ($1,$2,$3,$4,1,'ETB',$5, now())`,
-        [productId(n), SELLER.a, MA, `Item ${n}`, n === 5 ? 'UNPUBLISHED' : 'PUBLISHED'],
-      );
       await admin.query(
         `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor, price_currency, variant_key)
          VALUES ($1,$2,$3,$4,'ETB','one')`,
@@ -174,7 +178,7 @@ describe('WO-006 -- Seller Profile public reads', () => {
     );
     await admin.query(
       `INSERT INTO core.review (order_id, buyer_account_id, seller_id, seller_rating, body, badge) VALUES
-        ($1,$3,$4,4,'Good',  'UNVERIFIED'), ($2,$3,$4,3,NULL,'UNVERIFIED')`,
+        ($1,$3,$4,4,'Good',  'UNVERIFIED'), ($2,$3,$4,4,NULL,'UNVERIFIED')`,
       [orderId(2), orderId(3), OWNER.buyer, SELLER.a],
     );
     await admin.query(
@@ -243,7 +247,8 @@ describe('WO-006 -- Seller Profile public reads', () => {
         description: 'Baskets from Market A',
         status: 'ACTIVE',
         stats: { level: 'ESTABLISHED', completed_handoff_count: 12 },
-        review_summary: { count: 3, average_rating: 4, badge_counts: { UNVERIFIED: 3, VERIFIED_HANDOFF: 0 } },
+        // 5, 4, 4: the mean 4.333... is rounded once, server-side, to 4.3.
+        review_summary: { count: 3, average_rating: 4.3, badge_counts: { UNVERIFIED: 3, VERIFIED_HANDOFF: 0 } },
         fulfilment_methods: ['BUYER_COLLECTION'],
       });
       expect(r.body.member_since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -295,13 +300,32 @@ describe('WO-006 -- Seller Profile public reads', () => {
       expect(p2.body.next_cursor).toBeNull();
     });
 
-    it.each(['garbage', 'eyJ4IjoxfQ', Buffer.from('["2026-11-11T00:00:00Z","x"]').toString('base64url')])(
+    const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
+    it.each([
+      'garbage',
+      'eyJ4IjoxfQ',
+      b64(['2026-11-11T00:00:00Z', 'x']),
+      // well-formed, but not instants Postgres accepts (they were a 500)
+      b64(['2026-02-30T00:00:00.000000Z', 'AAAAAAAAAAAAAAAAAAAAAA']),
+      b64(['0000-01-01T00:00:00.000000Z', 'AAAAAAAAAAAAAAAAAAAAAA']),
+      b64(['2025-02-29T00:00:00.000000Z', 'AAAAAAAAAAAAAAAAAAAAAA']),
+    ])(
       'an invalid cursor (%s) is a 400 CURSOR_INVALID, never a 500',
       async (cursor) => {
         const r = await get(`/v1/storefronts/twin-store/scenes?cursor=${cursor}`).expect(400);
         expect(r.body).toMatchObject({ code: 'VALIDATION_FAILED', slots: { reason: 'CURSOR_INVALID' } });
       },
     );
+
+    it('a draft (never published) Scene is not listed', async () => {
+      const draft = await asOwner(SELLER.a, SESSION.a, server().post('/v1/seller/scene-posts').set('Idempotency-Key', randomUUID()))
+        .send({ caption: 'WO-006 draft', product_ids: [productId(1)] })
+        .expect(201);
+      const r = await get('/v1/storefronts/twin-store/scenes').expect(200);
+      expect(r.body.data).toHaveLength(3);
+      expect(JSON.stringify(r.body)).not.toContain('WO-006 draft');
+      expect(draft.body.id).toEqual(expect.any(String));
+    });
 
     it('a page size outside 1-50 is a 400', async () => {
       await get('/v1/storefronts/twin-store/scenes?limit=0').expect(400);
@@ -332,6 +356,11 @@ describe('WO-006 -- Seller Profile public reads', () => {
       expect(all.body.next_cursor).toBeNull();
       await get('/v1/storefronts/twin-store/products?cursor=bad!').expect(400);
       await get('/v1/storefronts/twin-store/products?limit=101').expect(400);
+      // An int part beyond int4 (Postgres would refuse the cast): 400, not 500.
+      const huge = Buffer.from(JSON.stringify([2147483648, '2026-11-11T00:00:00.000000Z', 'item-1'])).toString('base64url');
+      await get(`/v1/storefronts/twin-store/products?cursor=${huge}`).expect(400);
+      const impossible = Buffer.from(JSON.stringify([0, '2026-04-31T00:00:00.000000Z', 'item-1'])).toString('base64url');
+      await get(`/v1/storefronts/twin-store/products?cursor=${impossible}`).expect(400);
     });
   });
 
@@ -361,6 +390,25 @@ describe('WO-006 -- Seller Profile public reads', () => {
     it('an invalid cursor is a 400 CURSOR_INVALID (it was a 500)', async () => {
       const r = await get('/v1/storefronts/twin-store/reviews?cursor=not-a-date').expect(400);
       expect(r.body.slots).toMatchObject({ reason: 'CURSOR_INVALID' });
+      const impossible = Buffer.from(JSON.stringify(['2026-02-30T00:00:00.000000Z', SELLER.a])).toString('base64url');
+      await get(`/v1/storefronts/twin-store/reviews?cursor=${impossible}`).expect(400);
+    });
+  });
+
+  describe('Seller views (OVN-073 principle)', () => {
+    it('an opening records one storefront_viewed; a declared revalidation records none', async () => {
+      const views = async () =>
+        (
+          await admin.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM analytics.event WHERE name = 'storefront_viewed' AND market_id = $1`,
+            [MA],
+          )
+        ).rows[0]!.n;
+      const before = await views();
+      await get('/v1/storefronts/twin-store').expect(200);
+      await get('/v1/storefronts/twin-store?revalidate=true').expect(200);
+      await get('/v1/storefronts/twin-store?revalidate=true').expect(200);
+      expect(await views()).toBe(before + 1);
     });
   });
 

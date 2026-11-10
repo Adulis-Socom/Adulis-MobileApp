@@ -171,12 +171,20 @@ export class StorefrontController {
       'Header, stats, trust level, availability, review summary and fulfilment -- one round trip (S3.1; the Buyer Seller Profile header and About).',
   })
   @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiQuery({
+    name: 'revalidate',
+    required: false,
+    enum: ['true'],
+    description:
+      'true: a technical re-read of a profile already on screen; the server records no storefront_viewed (the OVN-073 principle, as on the Product read). Omit it for an opening.',
+  })
   @ApiOkResponse({ type: StorefrontDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async storefront(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
+    @Query('revalidate') revalidate?: string,
   ): Promise<StorefrontDto> {
     // The answer depends on the requester's Market and is read now: never shared-cached, its
     // 404 included (set before anything can throw).
@@ -192,8 +200,10 @@ export class StorefrontController {
       const availability = await sql<{ is_open: boolean; reason: string; note: string | null }>`
         SELECT * FROM core.fn_seller_availability_state(${seller.id}, now())`.execute(trx);
       // Seller-service reviews, aggregated plainly (REV-01 S19: arithmetic mean, no blended
-      // score; S30: counts by evidence basis). Reviews publish immediately and nothing hides
-      // one in the database today, so every review counts.
+      // score), rounded ONCE here to one decimal, with counts by the stored badge (the schema's
+      // evidence tiers -- not REV-01's evidence bases, and the schema still admits UNVERIFIED,
+      // which REV-01 does not: SPEC_CONFLICT ON-20261111-033). Reviews publish immediately and
+      // nothing hides one in the database today, so every review counts.
       const reviews = await sql<{
         count: number;
         average: string | null;
@@ -203,7 +213,7 @@ export class StorefrontController {
         unverified: number;
       }>`
         SELECT count(*)::int AS count,
-               round(avg(rv.seller_rating)::numeric, 2)::text AS average,
+               round(avg(rv.seller_rating)::numeric, 1)::text AS average,
                count(*) FILTER (WHERE rv.badge = 'CLAIM_UPHELD')::int AS claim_upheld,
                count(*) FILTER (WHERE rv.badge = 'VERIFIED_HANDOFF')::int AS verified_handoff,
                count(*) FILTER (WHERE rv.badge = 'CONFIRMED_BY_BUYER')::int AS confirmed_by_buyer,
@@ -214,7 +224,9 @@ export class StorefrontController {
         SELECT method::text AS method FROM core.seller_fulfilment_method
          WHERE seller_id = ${seller.id} AND is_active
          ORDER BY method`.execute(trx);
-      await this.emit(trx, 'storefront_viewed', seller.market_id, seller.id);
+      // An opening records a storefront view; a declared revalidation does not (it can only
+      // withhold the event, never create one).
+      if (revalidate !== 'true') await this.emit(trx, 'storefront_viewed', seller.market_id, seller.id);
       const rv = first(reviews.rows);
       return {
         seller_id: seller.id,

@@ -164,9 +164,9 @@ export class ReviewBadgeCountsDto {
 
 export class ReviewSummaryDto {
   @ApiProperty({ type: 'integer', description: 'Seller-service reviews.' }) count!: number;
-  @ApiProperty({ type: Number, nullable: true, description: 'Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review.' })
+  @ApiProperty({ type: Number, nullable: true, description: 'Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is.' })
   average_rating!: number | null;
-  @ApiProperty({ type: ReviewBadgeCountsDto, description: 'Counts by evidence basis (REV-01 S30).' })
+  @ApiProperty({ type: ReviewBadgeCountsDto, description: 'Counts by the stored review badge (evidence tier).' })
   badge_counts!: ReviewBadgeCountsDto;
 }
 

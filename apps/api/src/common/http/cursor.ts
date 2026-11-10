@@ -45,14 +45,28 @@ export function decodeCursor(raw: string | undefined, shape: readonly CursorPart
   return parsed.map((value: unknown, i) => {
     const kind = shape[i]!;
     if (kind === 'int') {
-      if (typeof value === 'number' && Number.isSafeInteger(value)) return value;
+      // int columns: anything outside int4 would make Postgres refuse the cast (a 500).
+      if (typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647) {
+        return value;
+      }
       throw invalid();
     }
     if (typeof value === 'string' && PATTERNS[kind].test(value)) {
-      if (kind !== 'timestamp' || !Number.isNaN(Date.parse(value))) return value;
+      if (kind !== 'timestamp' || isRealInstant(value)) return value;
     }
     throw invalid();
   });
+}
+
+/**
+ * A real calendar instant Postgres accepts. V8's Date.parse rolls impossible dates over
+ * (2026-02-30 becomes March 2), so the value must survive a round trip unchanged; year 0 does
+ * not exist in timestamptz.
+ */
+function isRealInstant(value: string): boolean {
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms) || value.startsWith('0000')) return false;
+  return new Date(ms).toISOString().slice(0, 23) === value.slice(0, 23);
 }
 
 /** A page size from the query: an integer in [1, max], else the default. Out of range is 400. */
