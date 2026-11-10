@@ -85,14 +85,16 @@ describe('For You feed', () => {
     expect(screen.getByText(en['buyer.for_you.end'])).toBeOnTheScreen();
   });
 
-  it('draws Scene units only, each once, and no engagement control', async () => {
+  it('draws Scene units only, each once, with Explore the Scene and no engagement control', async () => {
     const foreign = { ...fypUnit(9), type: 'PRODUCT_POST' };
     serve(ok({ ...fypPage([fypUnit(1), fypUnit(2)]), items: [fypUnit(1), foreign, fypUnit(2), fypUnit(1)] }));
     await renderRouter(APP_DIR);
     await screen.findByText('Store 1');
     expect(screen.getAllByText(/^Store \d$/).map((n) => n.props.children)).toEqual(['Store 1', 'Store 2']);
     expect(screen.queryByText('Store 9')).not.toBeOnTheScreen();
-    for (const action of ['Like', 'Save', 'Share', 'Follow', 'Report', 'Not interested', 'Hide', 'Explore the Scene', 'Reviews', 'More options']) {
+    // One Explore the Scene per card (WO-005), the card's only action.
+    expect(screen.getAllByRole('button', { name: en['buyer.scene.explore'] })).toHaveLength(2);
+    for (const action of ['Like', 'Save', 'Share', 'Follow', 'Report', 'Not interested', 'Hide', 'Reviews', 'More options']) {
       expect(screen.queryByRole('button', { name: action })).not.toBeOnTheScreen();
     }
   });

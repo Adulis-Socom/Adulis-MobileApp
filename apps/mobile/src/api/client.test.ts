@@ -2,7 +2,7 @@ import { en } from '@adulis/locale/mobile';
 
 import { ApiError, createApiClient, isTransient, newIdempotencyKey, wasAnswered } from './client';
 import { failureMessage } from './messages';
-import { GOOD_TOKEN, installFakeApi, problem } from '../testing/fake-api';
+import { GOOD_TOKEN, installFakeApi, problem, publicScene, storefrontProduct } from '../testing/fake-api';
 
 const t = (key: keyof typeof en) => en[key];
 const DEVICE = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -154,5 +154,22 @@ describe('failure messages', () => {
       en['error.request.internal'],
     );
     expect(failureMessage(t, new Error('anything'))).toBe(en['error.request.internal']);
+  });
+
+  it('reads a Scene and a Product publicly: path values stay one segment, no bearer is sent (WO-005)', async () => {
+    const fake = installFakeApi();
+    const { api } = client(GOOD_TOKEN);
+    fake.on('GET /v1/scene-posts/scene-ref-000000000001', () => ({ status: 200, body: publicScene(1) }));
+    fake.on('GET /v1/storefronts/seller-1/products/woven-basket', () => ({
+      status: 200,
+      body: storefrontProduct('woven-basket', 'Woven basket'),
+    }));
+    expect((await api.scene('scene-ref-000000000001')).public_ref).toBe('scene-ref-000000000001');
+    expect((await api.product('seller-1', 'woven-basket')).slug).toBe('woven-basket');
+    for (const call of fake.calls) expect(call.headers.Authorization).toBeUndefined();
+
+    // Whatever a value holds, it cannot add a segment or a query to the path.
+    await failureOf(api.scene('../fyp?x=1'));
+    expect(fake.calls.at(-1)?.path).toBe('/v1/scene-posts/..%2Ffyp%3Fx%3D1');
   });
 });

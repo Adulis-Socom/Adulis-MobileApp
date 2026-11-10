@@ -34,6 +34,9 @@ export type OtpVerifyBody = Json<paths['/v1/auth/otp/verify']['post']['requestBo
 export type OtpVerified = Json<paths['/v1/auth/otp/verify']['post']['responses'][200]>;
 export type FypPage = Json<paths['/v1/fyp']['get']['responses'][200]>;
 export type FypUnit = FypPage['items'][number];
+export type PublicScene = Json<paths['/v1/scene-posts/{publicRef}']['get']['responses'][200]>;
+export type SceneProduct = PublicScene['products'][number];
+export type StorefrontProduct = Json<paths['/v1/storefronts/{handle}/products/{slug}']['get']['responses'][200]>;
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -104,6 +107,8 @@ type Call = {
   bearer?: boolean | string;
   /** Query parameters; an undefined value is left out. */
   query?: Record<string, string | undefined>;
+  /** Values for the path's {name} segments, each URL-encoded so it stays one segment. */
+  params?: Record<string, string>;
   ok: number;
 };
 
@@ -136,7 +141,10 @@ export function createApiClient(deps: ApiDeps) {
     const params = new URLSearchParams();
     for (const [name, value] of Object.entries(init.query ?? {})) if (value !== undefined) params.set(name, value);
     const search = params.toString();
-    const url = `${apiOrigin()}${path}${search ? `?${search}` : ''}`;
+    const resolved = path.replace(/\{(\w+)\}/g, (_match, name: string) =>
+      encodeURIComponent(init.params?.[name] ?? ''),
+    );
+    const url = `${apiOrigin()}${resolved}${search ? `?${search}` : ''}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let res: Response;
@@ -187,6 +195,22 @@ export function createApiClient(deps: ApiDeps) {
         query: { cursor: cursor ?? undefined },
         // A guest feed's request stays a guest's even if a sign-in lands mid-flight.
         bearer: asGuest ? false : true,
+        ok: 200,
+      }),
+
+    /**
+     * GET /v1/scene-posts/{publicRef}: the Scene's current public representation, the
+     * Explorer's only authority (never a feed unit). Public, so it never carries the bearer:
+     * one answer for everyone, and a guest's and an Account's are the same request.
+     */
+    scene: (publicRef: string) =>
+      call<PublicScene>('GET', '/v1/scene-posts/{publicRef}', { params: { publicRef }, bearer: false, ok: 200 }),
+
+    /** GET /v1/storefronts/{handle}/products/{slug}: the public Product, read now. */
+    product: (handle: string, slug: string) =>
+      call<StorefrontProduct>('GET', '/v1/storefronts/{handle}/products/{slug}', {
+        params: { handle, slug },
+        bearer: false,
         ok: 200,
       }),
 

@@ -87,6 +87,86 @@ export function fypPage(items: FypUnit[], next_cursor: string | null = null, fee
   };
 }
 
+export type PublicScene = S['PublicScenePostDto'];
+export type SceneProduct = S['PublicSceneProductDto'];
+export type StorefrontProduct = S['StorefrontProductDto'];
+
+/** The public Scene read for fypUnit(n)'s Scene, shaped exactly like the contract's. */
+export function publicScene(n: number, overrides: Partial<PublicScene> = {}): PublicScene {
+  return {
+    public_ref: fypUnit(n).public_ref,
+    published_at: '2026-11-09T12:00:00.000Z',
+    revision_version: 1,
+    caption: `Scene caption ${n}`,
+    image: {
+      thumb_key: `scenes/${n}/thumb.webp`,
+      card_key: `scenes/${n}/card.webp`,
+      full_key: `scenes/${n}/full.webp`,
+    },
+    seller: { handle: `seller-${n}`, store_name: `Store ${n}` },
+    products: [sceneProduct(1, `item-${n}`, `Item ${n}`)],
+    ...overrides,
+  };
+}
+
+export function sceneProduct(
+  position: number,
+  slug: string,
+  name: string,
+  overrides: Partial<SceneProduct> = {},
+): SceneProduct {
+  return {
+    position,
+    slug,
+    name,
+    base_price_minor: 80000,
+    base_price_currency: 'ETB',
+    image_key: `products/${slug}/card.webp`,
+    available: true,
+    ...overrides,
+  };
+}
+
+/** The public Product read, shaped exactly like the contract's. */
+export function storefrontProduct(
+  slug: string,
+  name: string,
+  overrides: Partial<StorefrontProduct> = {},
+): StorefrontProduct {
+  return {
+    id: '0b6f1a3e-2222-4222-8222-222222222222',
+    slug,
+    name,
+    description: `About ${name}`,
+    base_price_minor: 80000,
+    base_price_currency: 'ETB',
+    category_id: null,
+    available: true,
+    seller: { handle: 'seller-1', store_name: 'Store 1' },
+    variants: [
+      {
+        id: '0b6f1a3e-3333-4333-8333-333333333333',
+        variant_key: 'Default',
+        price_minor: 80000,
+        price_currency: 'ETB',
+        stock_count: 4,
+        stock_confirmed_at: '2026-11-09T12:00:00.000Z',
+        status: 'ACTIVE',
+      },
+    ],
+    attributes: [],
+    images: [
+      {
+        position: 1,
+        thumb_key: `products/${slug}/thumb.webp`,
+        card_key: `products/${slug}/card.webp`,
+        full_key: `products/${slug}/full.webp`,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 export const SIGNED_IN_CONTEXT: NonNullable<Bootstrap['account_context']> = {
   buyer: { available: true },
   seller_companion: { available: false },

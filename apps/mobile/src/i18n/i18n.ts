@@ -24,8 +24,23 @@ export function amharicAvailable(): boolean {
   return __DEV__;
 }
 
-export function useT(): (key: MobileMessageKey) => string {
+/** The language strings and formats render in (English in a release build, above). */
+export function useLocale(): Locale {
   const selected = useUiStore((state) => state.locale);
-  const locale = amharicAvailable() ? selected : 'en';
+  return amharicAvailable() ? selected : 'en';
+}
+
+export function useT(): (key: MobileMessageKey) => string {
+  const locale = useLocale();
   return (key) => translate(locale, key);
+}
+
+/**
+ * Integer minor units (the wire's money) as the currency's own major units, formatted by
+ * Intl for the locale. The currency's fraction digits say where the point goes (ETB: 2),
+ * so no exponent is assumed; the server never formats money.
+ */
+export function formatMinor(locale: Locale, amountMinor: number, currency: string): string {
+  const format = new Intl.NumberFormat(locale, { style: 'currency', currency });
+  return format.format(amountMinor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2));
 }

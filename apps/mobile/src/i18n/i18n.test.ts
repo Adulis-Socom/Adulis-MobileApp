@@ -2,7 +2,7 @@ import { am, en, type MobileMessageKey } from '@adulis/locale/mobile';
 import { renderHook } from '@testing-library/react-native';
 
 import { useUiStore } from '../state/ui-store';
-import { amharicAvailable, translate, useT } from './i18n';
+import { amharicAvailable, formatMinor, translate, useT } from './i18n';
 
 describe('mobile catalogue', () => {
   it('resolves every mobile key to a real string in both languages', () => {
@@ -35,5 +35,16 @@ describe('mobile catalogue', () => {
       devGlobal.__DEV__ = dev;
       useUiStore.setState({ locale: 'en' });
     }
+  });
+});
+
+describe('formatMinor', () => {
+  it('turns integer minor units into the currency own major units (ETB: 2 digits)', () => {
+    expect(formatMinor('en', 45050, 'ETB')).toMatch(/^ETB\s450\.50$/);
+    expect(formatMinor('en', 120000, 'ETB')).toMatch(/1,200\.00/);
+    expect(formatMinor('en', 0, 'ETB')).toMatch(/0\.00/);
+    // A zero-digit currency is not divided by 100.
+    expect(formatMinor('en', 500, 'JPY')).toMatch(/500/);
+    expect(formatMinor('am', 45050, 'ETB')).toMatch(/450\.50/);
   });
 });
