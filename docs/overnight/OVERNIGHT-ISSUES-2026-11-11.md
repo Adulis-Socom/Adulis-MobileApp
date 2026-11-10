@@ -743,7 +743,205 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Evidence:** scratchpad v006/api-test.log, v006/pnpm-test.log; register OVN-047
 - **Root cause:** Known: t13 lowers the platform-wide OTP ceiling while other auth suites run in parallel workers (OVN-047, re-diagnosed on 10 Nov). Shared platform budget, not product code; WO-006 changed no auth code.
 - **Fix and commit:** Not fixed in this batch (auth test infrastructure).
-- **Verification:** Failing suites pass alone (86/86).
+- **Verification:** Failing suites pass alone (86/86). Final batch battery (on 7503e5a): did not recur in either full run (API 884/884 twice); not fixed, so it stays OPEN.
 - **Remaining risk:** Red full runs that hide a real auth regression.
 - **Founder decision required:** No
 - **Recommended resolution:** Run t13 in its own serial project, or give it a private Market/platform budget in tests.
+
+### ON-20261111-042
+
+- **Work order:** WO-007
+- **Severity:** MEDIUM
+- **Type:** UX_QUALITY (review M1)
+- **Status:** RESOLVED
+- **Summary:** The Shop grid used the 160 px thumbnail derivative, upscaled about 3x in a two-column tile and visibly softer than the same ProductTile on the Seller Profile (card derivative).
+- **Expected:** One tile, one image quality, wherever it appears.
+- **Actual:** GET /v1/shop/products returned thumb_key; the Seller Profile Products list returns image_key (card, 640 px).
+- **Reproduction:** Open a Product with an image in Shop and on its Seller Profile on a 2.75x device.
+- **Evidence:** apps/console/src/features/catalogue/Media.tsx:46-48 (thumb 160, card 640); storefront.controller.ts Shop subquery; independent review of bce772b..574bddc
+- **Root cause:** The thumbnail was chosen for low data without checking the derivative's size against the tile.
+- **Fix and commit:** Shop returns image_key (card) like the Seller Profile list (ad06f70); contract regenerated (4ff5f9d); mobile passes it straight through and the test asserts the card URI (9beeaec).
+- **Verification:** wo-007-shop 8/8; mobile 220/220 (image URI asserted); native shop.yaml PASS.
+- **Remaining risk:** None for quality. A 640 px card per tile costs more data than a thumbnail; if a low-data rule is wanted it is a design decision, not made here.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-043
+
+- **Work order:** WO-007
+- **Severity:** MEDIUM
+- **Type:** CORRECTNESS (review M2)
+- **Status:** RESOLVED
+- **Summary:** On a fresh install the Shop could read before the first bootstrap registered the device (the guest's Market), get an empty page and keep showing 'No Products' until a pull or a 5-minute background return.
+- **Expected:** A new install's first Shop read happens with its Market known.
+- **Actual:** The Shop read raced POST /v1/devices + GET /v1/bootstrap; requesterMarket() was null and the server answered {data:[], next_cursor:null}.
+- **Reproduction:** Fresh install, open or deep-link /shop before bootstrap completes (or offline, then reconnect).
+- **Evidence:** apps/mobile/src/api/bootstrap.ts useBootstrap (ensureDeviceRegistered); shop.tsx; review
+- **Root cause:** The Shop list was enabled independently of the bootstrap that registers the device.
+- **Fix and commit:** The Shop read waits for the first bootstrap attempt to settle (9beeaec); test 'a new install reads the Shop only after the first bootstrap'.
+- **Verification:** mobile 220/220 incl. the new test (no Shop request while bootstrap is held; one after release); native shop.yaml with clearState PASS.
+- **Remaining risk:** If the first bootstrap FAILS (offline, registration error) the Shop still reads and, for an unregistered device, gets the same empty page; a pull recovers. The server sends the same payload for 'no Market evidence' and 'empty Market', so the client cannot tell them apart.
+- **Founder decision required:** No
+- **Recommended resolution:** Optionally an additive response signal for 'no Market' in a later API work order.
+
+### ON-20261111-044
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** TEST_GAP (review L2)
+- **Status:** RESOLVED
+- **Summary:** Shop API tests did not exercise the id tiebreak, a realistic hidden Seller, or a device in an inactive Market; the index test explained a simplified statement.
+- **Expected:** Negative and boundary cases covered.
+- **Actual:** All fixture published_at values differed; only a DRAFT Seller was hidden; no SUSPENDED-Market device; EXPLAIN without joins or keyset predicate.
+- **Reproduction:** Read apps/api/test/wo-007-shop.e2e.spec.ts at 574bddc.
+- **Evidence:** review L2
+- **Root cause:** First-pass test design.
+- **Fix and commit:** ad06f70: three Products at one published_at walked one per page (no repeat or gap, id order); SAFETY_SUSPENDED Seller with a PUBLISHED Product excluded; device in the SUSPENDED Market gets an empty page; EXPLAIN of the real statement shape with a cursor.
+- **Verification:** wo-007-shop 8/8.
+- **Remaining risk:** The EXPLAIN test restates the statement shape; it does not execute the controller's own SQL.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-045
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** CODE_QUALITY (review L1, L3)
+- **Status:** RESOLVED
+- **Summary:** The Seller link used a literal 44 instead of the touch-target token; a Shop test comment claimed an image check it did not make.
+- **Expected:** Theme tokens only; tests assert what they say.
+- **Actual:** SellerProfile.tsx minHeight: 44; shop.test.tsx asserted only the query.
+- **Reproduction:** Read the files at 574bddc.
+- **Evidence:** review L1, L3
+- **Root cause:** Oversight.
+- **Fix and commit:** theme.touchTarget; product-photo testID and URI assertion (9beeaec).
+- **Verification:** mobile typecheck, lint, 220/220.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-046
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** DOCUMENTATION (review L4)
+- **Status:** RESOLVED
+- **Summary:** ADU-DB-01 v1.23 S30f cited docs/mobile/WO-007-BUYER-SHOP-DISCOVERY.md before the file existed.
+- **Expected:** Governed documents cite files that exist.
+- **Actual:** Dangling reference between 1503cfc and the WO-007 record commit.
+- **Reproduction:** ls docs/mobile at 9beeaec.
+- **Evidence:** review L4
+- **Root cause:** The record is written at the end of the work order.
+- **Fix and commit:** The WO-007 record is committed on the same branch (see the record's commit).
+- **Verification:** File present at the branch HEAD.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-047
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** RESOLVED
+- **Summary:** First native run: refresh-3, the Dark/1.3 re-run and the scene-explorer regression failed because the harness's republish of the Clay cup was refused (409 LEVEL_LIMIT_REACHED, cap 10, published 35).
+- **Expected:** Fixtures that stay within the product's own limits.
+- **Actual:** The 32 page-filling Products were inserted for the fixture Seller, a NEW-level Seller, so fn_publish_product correctly refused the republish and the three flows that expect the cup failed.
+- **Reproduction:** maestro-007 logs of the first run; cat001-op.mjs publish cup after wo007-fixtures-extra (first version).
+- **Evidence:** Scratchpad wo007-native.out (first run): 'POST /v1/seller/products/.../publish -> 409 ... LEVEL_LIMIT_REACHED ... cap 10, published 35'.
+- **Root cause:** Harness design; the product behaved correctly (the publication cap held).
+- **Fix and commit:** The filler Products moved to a second fixture Seller, 'Fixture Pottery' (which also exercises mixed Sellers); database rebuilt; full native set re-run.
+- **Verification:** Second run: all 11 flows PASS (shop, refresh-1..3, auth-request, sign-in, shop-signed-in, shop-dark-large, seller-profile, scene-explorer, product-1).
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-048
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** ACCESSIBILITY / RENDERING
+- **Status:** OPEN
+- **Summary:** On Android in Dark mode at font scale 1.3, some Shop tiles' Seller line rendered without its underline while others kept it.
+- **Expected:** Every Seller link carries the same non-colour cue.
+- **Actual:** shop-dark-large screenshot shop-04-end: top row and 'Shop item 03' Seller lines not underlined; 'Shop item 02' and '01' underlined. All four underlined in the light run.
+- **Reproduction:** maestro shop.yaml with font_scale 1.3 and night mode; scroll to the end.
+- **Evidence:** Scratchpad maestro-007/shop-dark-large/.../takeScreenshot/shop-04-end.png
+- **Root cause:** Not investigated to the root; consistent with textDecorationLine being lost on recycled FlashList cells on Android.
+- **Fix and commit:** None.
+- **Verification:** The link role and its 'View <store>' label are present on every tile (Maestro selected them by id); only the visual underline varies.
+- **Remaining risk:** Sighted users see some Seller lines distinguished by secondary colour only (a non-colour cue missing).
+- **Founder decision required:** No
+- **Recommended resolution:** A follow-up: give the Seller line a non-text cue that survives recycling (an icon or a 'Sold by' prefix), then re-validate natively.
+
+### ON-20261111-049
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** PRODUCT_SCOPE / MISSING_DATA
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** Shop category browsing, Locally Made, Discounts and New Drops modules are not built: no Buyer-facing category taxonomy exists and no rule defines those modules' membership.
+- **Expected:** Category entry points backed by real, governed data.
+- **Actual:** core.category has only id, parent_id, code, created_at (no labels, no locale strings, one seed row); no discount or 'locally made' attribute is defined for Buyer display.
+- **Reproduction:** \d core.category on the disposable database.
+- **Evidence:** Disposable DB introspection 11 Nov; shop.tsx header comment; batch rule 'Do not fabricate Fashion/Cosmetics/Electronics database categories'.
+- **Root cause:** The taxonomy and the module rules are undefined, not unimplemented.
+- **Fix and commit:** None (deliberately not built). The Shop is one honest list; Home's Locally Made and Discounts channels keep their placeholders; the header's Search entry is unchanged (no Marketplace Search).
+- **Verification:** Mobile test asserts no Fashion/Cosmetics/Electronics/Sort/Filter/Add to cart controls; native shop.yaml asserts no Fashion/Add to cart/Filter.
+- **Remaining risk:** The Shop is less browsable than the prototype until a taxonomy exists.
+- **Founder decision required:** Yes -- a Buyer category taxonomy (labels, locales, Market availability) and the rules for Locally Made, Discounts and New Drops.
+- **Recommended resolution:** A catalogue taxonomy work order before any category UI.
+
+### ON-20261111-050
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** PRODUCT_RULE
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** Shop order is a provisional deterministic order, newest first publication (published_at DESC, id DESC), labelled 'Newest first'; no document defines the Shop's ordering.
+- **Expected:** A founder-defined Shop order.
+- **Actual:** Newest first publication. Republishing keeps the first published_at (fn_publish_product: coalesce(published_at, now())), so unpublish/republish cannot bump a Product to the top; an unavailable Product stays listed in place, labelled.
+- **Reproduction:** GET /v1/shop/products; db/migrations/0020_unpublish_product.sql:115.
+- **Evidence:** wo-007-shop tests; native refresh-3 (republished Clay cup kept its place).
+- **Root cause:** No ordering rule in the pack for a Market-wide Product list.
+- **Fix and commit:** None needed now; the order is honest and labelled.
+- **Verification:** API and native tests above.
+- **Remaining risk:** Newer Sellers' Products dominate the top; no 'available first' (compare ON-20261111-026).
+- **Founder decision required:** Yes -- confirm 'Newest first' or define the Shop order (and whether available-first applies, as for ON-20261111-026).
+- **Recommended resolution:** Keep 'Newest first' until a ranking design exists; never introduce an unlabelled order.
+
+### ON-20261111-051
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** API_DESIGN
+- **Status:** OPEN
+- **Summary:** The Shop cursor carries the Product id as its tiebreaker, unlike the WO-006 lists, which avoid internal UUIDs in list URLs.
+- **Expected:** Opaque cursors that disclose nothing beyond the page.
+- **Actual:** The cursor tuple is (published_at at microseconds, product id). The id is already in every Shop row (PublicProductSummaryDto.id), so nothing new is disclosed; slugs are unique only per Seller, so no other unique public key exists.
+- **Reproduction:** Base64url-decode a Shop next_cursor.
+- **Evidence:** storefront.controller.ts shopProducts; WO-006 record S4
+- **Root cause:** No Market-wide public Product reference exists.
+- **Fix and commit:** None.
+- **Verification:** Forged well-formed cursors only move within the requester's Market (review).
+- **Remaining risk:** If the public summary ever drops id, the cursor would become the only place it travels.
+- **Founder decision required:** No
+- **Recommended resolution:** Revisit if a public Product reference is introduced.
+
+### ON-20261111-052
+
+- **Work order:** WO-007
+- **Severity:** LOW
+- **Type:** CLEANUP
+- **Status:** OPEN
+- **Summary:** The locale key buyer.shop.coming ('Shopping by category arrives in a coming update.') is no longer used by the app.
+- **Expected:** No dead catalogue strings.
+- **Actual:** Key remains in packages/locale (en, am).
+- **Reproduction:** grep -r buyer.shop.coming apps/mobile/src returns nothing.
+- **Evidence:** packages/locale/src/en.ts:315
+- **Root cause:** Removing a key is a packages/locale change in its own commit; left to avoid churn.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** None functional.
+- **Founder decision required:** No
+- **Recommended resolution:** Remove in the next packages/locale change.
