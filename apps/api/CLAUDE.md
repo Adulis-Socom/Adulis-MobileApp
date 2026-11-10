@@ -85,7 +85,8 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 >
 > **WO-CAT-001A (`0056`) adds no table**: the Scene availability view gains the Market-currency
 > term, a trigger keeps Variant/Product prices in the Market currency, and a composite FK keeps a
-> Product in its Seller's Market. **ADU-DB-01 v1.22** records it (counts unchanged).
+> Product in its Seller's Market. **ADU-DB-01 v1.22** records it (counts unchanged). **WO-007 (`0057`)**
+> adds the partial index `idx_product_shop`; **ADU-DB-01 v1.23** records it (counts unchanged).
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
