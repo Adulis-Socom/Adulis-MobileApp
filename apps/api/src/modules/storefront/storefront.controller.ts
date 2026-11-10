@@ -1,7 +1,12 @@
 import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
-import { StorefrontProductDto } from './storefront.dto';
+import {
+  PostLinkProductListDto,
+  StorefrontProductDto,
+  StorefrontProductListDto,
+  StorefrontSearchResultListDto,
+} from './storefront.dto';
 import type { Response } from 'express';
 import { Inject } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
@@ -12,6 +17,14 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.adapter';
+import {
+  minorUnits,
+  priceFields,
+  productAvailable,
+  productTrades,
+  publicPrice,
+  variantSellable,
+} from '../catalogue/public-projection';
 
 /**
  * C8 — the public, anonymous group (ADU-API-01 v1.6 section 12.1).
@@ -45,6 +58,30 @@ const resolveBody = z.object({ url: z.string().max(2048) });
 const VISIBLE_STATES = ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'];
 
 const first = <T>(rows: readonly T[]): T | undefined => rows[0];
+
+/** A public Product summary as the projection reads it (bigint money arrives as text). */
+interface ProductSummaryRow {
+  id: string;
+  slug: string;
+  name: string;
+  base_price_minor: string;
+  base_price_currency: string;
+  price_min_minor: string | null;
+  price_max_minor: string | null;
+  price_currency: string | null;
+  available: boolean;
+}
+
+/** The fields list, search and post-link resolution share, money as JSON integers. */
+const summary = (row: ProductSummaryRow) => ({
+  id: row.id,
+  slug: row.slug,
+  name: row.name,
+  base_price_minor: minorUnits(row.base_price_minor),
+  base_price_currency: row.base_price_currency,
+  ...priceFields(row),
+  available: row.available,
+});
 
 interface SellerRow {
   id: string;
@@ -130,20 +167,34 @@ export class StorefrontController {
 
   @Get('storefronts/:handle/products')
   @Public()
-  @ApiOperation({ summary: "Seller's display order is the default (S7.5); lean by design (S14)." })
-  async products(@Req() req: LocalizedRequest, @Param('handle') handle: string): Promise<unknown> {
+  @ApiOperation({
+    summary:
+      "Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false.",
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiOkResponse({ type: StorefrontProductListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
+  async products(
+    @Req() req: LocalizedRequest,
+    @Param('handle') handle: string,
+  ): Promise<StorefrontProductListDto> {
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
-      const r = await sql<Record<string, unknown>>`
+      const r = await sql<ProductSummaryRow & { display_order: number; image_key: string | null }>`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                p.display_order,
                (SELECT i.card_key FROM core.product_image i
-                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key
+                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
+               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+               ${productAvailable} AS available
           FROM core.product p
+          JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
+         CROSS JOIN ${publicPrice}
          WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
          ORDER BY p.display_order, p.created_at
          LIMIT 100`.execute(trx);
-      return { data: r.rows };
+      return { data: r.rows.map((row) => ({ ...summary(row), display_order: row.display_order, image_key: row.image_key })) };
     });
   }
 
@@ -178,18 +229,17 @@ export class StorefrontController {
     // rule fn_create_order and core.v_scene_product_availability already apply.
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
-      const p = await sql<{
-        id: string;
-        slug: string;
-        name: string;
-        description: string | null;
-        base_price_minor: string;
-        base_price_currency: string;
-        category_id: string | null;
-      }>`
+      const p = await sql<
+        ProductSummaryRow & { description: string | null; category_id: string | null }
+      >`
         SELECT p.id, p.slug, p.name, p.description, p.base_price_minor,
-               p.base_price_currency, p.category_id
+               p.base_price_currency, p.category_id,
+               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+               ${productAvailable} AS available
           FROM core.product p
+          JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
+         CROSS JOIN ${publicPrice}
          WHERE p.slug = ${slug} AND p.seller_id = ${seller.id}
            AND p.visibility = 'PUBLISHED'`.execute(trx);
       const product = first(p.rows);
@@ -198,9 +248,8 @@ export class StorefrontController {
       // slug addresses the product on the wire and the uuid joins it in
       // the database, which is exactly the split doctrine 5 asks for.
       const productId = product.id;
-      const availability = await sql<{ available: boolean }>`
-        SELECT available FROM core.v_scene_product_availability
-         WHERE product_id = ${productId}`.execute(trx);
+      // Per-Variant sellability from the same projection as the Product's `available`, so an
+      // option is never available while its Product is not (OVN-074).
       const variants = await sql<{
         id: string;
         variant_key: string;
@@ -209,20 +258,37 @@ export class StorefrontController {
         stock_count: number;
         stock_confirmed_at: Date | null;
         status: string;
+        available: boolean;
       }>`
         SELECT v.id, v.variant_key, v.price_minor, v.price_currency,
-               v.stock_count, v.stock_confirmed_at, v.status
+               v.stock_count, v.stock_confirmed_at, v.status,
+               (${productTrades} AND ${variantSellable}) AS available
           FROM core.product_variant v
+          JOIN core.product p ON p.id = v.product_id
+          JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
          WHERE v.product_id = ${productId} AND v.status = 'ACTIVE'
          ORDER BY v.variant_key`.execute(trx);
-      const attributes = await sql<{ attribute: string; value: string | null }>`
-        SELECT ad.code AS attribute,
+      // Codes stay for compatibility; the governed label references (OVN-075) ride beside
+      // them. A label key is a locale catalogue key, never prose (0007): a client shows an
+      // attribute only when its catalogue holds the key, so a code is never Buyer copy.
+      const attributes = await sql<{
+        attribute: string;
+        label_key: string;
+        data_type: 'TEXT' | 'NUMBER' | 'ENUM' | 'BOOLEAN';
+        unit: string | null;
+        value: string | null;
+        value_label_key: string | null;
+      }>`
+        SELECT ad.code AS attribute, ad.label_key, ad.data_type, ad.unit,
                coalesce(ao.code, pav.value_text,
-                        pav.value_number::text, pav.value_boolean::text) AS value
+                        pav.value_number::text, pav.value_boolean::text) AS value,
+               ao.label_key AS value_label_key
           FROM core.product_attribute_value pav
           JOIN core.attribute_definition ad ON ad.id = pav.attribute_definition_id
           LEFT JOIN core.attribute_option ao ON ao.id = pav.value_option_id
-         WHERE pav.product_id = ${productId}`.execute(trx);
+         WHERE pav.product_id = ${productId}
+         ORDER BY ad.code`.execute(trx);
       const images = await sql<{ position: number; thumb_key: string; card_key: string; full_key: string }>`
         SELECT position, thumb_key, card_key, full_key
           FROM core.product_image WHERE product_id = ${productId}
@@ -231,15 +297,15 @@ export class StorefrontController {
         product_id: productId,
       });
       return {
-        ...product,
-        base_price_minor: Number(product.base_price_minor),
-        // fn_create_order also needs an ACTIVE Seller: a CLOSING or BILLING_SUSPENDED
-        // storefront stays visible (VISIBLE_STATES) but sells nothing.
-        available: seller.status === 'ACTIVE' && (first(availability.rows)?.available ?? false),
+        // `available` is the projection's: a CLOSING or BILLING_SUSPENDED storefront stays
+        // visible (VISIBLE_STATES) but sells nothing, as fn_create_order requires.
+        ...summary(product),
+        description: product.description,
+        category_id: product.category_id,
         seller: { handle: seller.handle, store_name: seller.store_name },
         variants: variants.rows.map((v) => ({
           ...v,
-          price_minor: Number(v.price_minor),
+          price_minor: minorUnits(v.price_minor),
           stock_confirmed_at: v.stock_confirmed_at ? v.stock_confirmed_at.toISOString() : null,
         })),
         attributes: attributes.rows,
@@ -250,27 +316,39 @@ export class StorefrontController {
 
   @Get('storefronts/:handle/search')
   @Public()
-  @ApiOperation({ summary: 'Scope is one seller, always (S7.5).' })
+  @ApiOperation({
+    summary:
+      'Scope is one seller, always (S7.5). Not Marketplace Search. Prices are the ACTIVE Variants\' span, as on the list.',
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiQuery({ name: 'q', required: true, description: '1-200 characters; matched in name and description.' })
+  @ApiOkResponse({ type: StorefrontSearchResultListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async search(
     @Req() req: LocalizedRequest,
     @Param('handle') handle: string,
     @Query('q') q?: string,
-  ): Promise<unknown> {
+  ): Promise<StorefrontSearchResultListDto> {
     if (!q || q.length > 200) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'q' } });
     }
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
-      const r = await sql<Record<string, unknown>>`
-        SELECT p.id, p.name, p.base_price_minor, p.base_price_currency
+      const r = await sql<ProductSummaryRow>`
+        SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
+               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+               ${productAvailable} AS available
           FROM core.product p
+          JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
+         CROSS JOIN ${publicPrice}
          WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
            AND (p.name ILIKE '%' || ${q} || '%'
                 OR p.description ILIKE '%' || ${q} || '%')
          ORDER BY p.display_order
          LIMIT 25`.execute(trx);
       await this.emit(trx, 'storefront_search_performed', seller.market_id, seller.id);
-      return { data: r.rows };
+      return { data: r.rows.map(summary) };
     });
   }
 
@@ -328,26 +406,36 @@ export class StorefrontController {
    */
   @Post('post-links/resolve')
   @Public()
+  @ApiOperation({
+    summary:
+      'A post link to the LIST of published Products it features (S7.5.1), priced like the list. Idempotency-Key required.',
+  })
+  @ApiOkResponse({ type: PostLinkProductListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async resolve(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<unknown> {
+  ): Promise<PostLinkProductListDto> {
     const body = resolveBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 200, async (trx) => {
       const canonical = await this.postLinks.resolve(body.url);
       if (!canonical) return { data: [] };
-      const r = await sql<Record<string, unknown>>`
+      const r = await sql<ProductSummaryRow & { seller_handle: string }>`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
+               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+               ${productAvailable} AS available,
                s.handle AS seller_handle
           FROM core.social_post sp
           JOIN core.product_social_post psp ON psp.social_post_id = sp.id
           JOIN core.product p ON p.id = psp.product_id
           JOIN core.seller s ON s.id = p.seller_id
+          JOIN core.market m ON m.id = p.market_id
+         CROSS JOIN ${publicPrice}
          WHERE sp.canonical_post_id = ${canonical.canonicalPostId}
            AND p.visibility = 'PUBLISHED'
            AND s.status::text = ANY(${VISIBLE_STATES})
          LIMIT 25`.execute(trx);
-      return { data: r.rows };
+      return { data: r.rows.map((row) => ({ ...summary(row), seller_handle: row.seller_handle })) };
     });
   }
 

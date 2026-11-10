@@ -7,6 +7,7 @@ import { assertPermission } from '../../common/auth/permission';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { IMAGE_CAPS } from '../catalogue/catalogue.service';
 import { MEDIA_STORAGE_ADAPTER, type MediaStorageAdapter } from '../catalogue/media-storage.adapter';
+import { minorUnits, priceFields, productAvailable, publicPrice } from '../catalogue/public-projection';
 import type { CreateScenePostBody, PatchScenePostDraftBody } from './scenes.schemas';
 
 /**
@@ -306,9 +307,11 @@ export class ScenesService {
 
     // Public tags only: a Product that is not public commerce is omitted, an
     // out-of-stock one stays with available=false ("Currently unavailable").
-    // The price is the Variants' (CATINV-01: price lives on the Variant; DB-01
-    // C1: base_price_minor is a creation seed, not a price), read now, in the
-    // same query: the lowest and highest current ACTIVE Variant price.
+    // Price and availability come from the public Catalogue projection (WO-CAT-001),
+    // the same fragments the Product read uses, so a tag and its Product agree. The
+    // Scene's own gate (v_scene_post_public) still reads v_scene_product_availability;
+    // the projection differs from it only for a Variant priced outside the Market's
+    // currency, which no cart can buy (registered).
     const products = await sql<{
       position: number;
       slug: string;
@@ -322,20 +325,17 @@ export class ScenesService {
       available: boolean;
     }>`
       SELECT t.position, p.slug, p.name, p.base_price_minor, p.base_price_currency,
-             pr.price_min_minor, pr.price_max_minor, pr.price_currency,
+             pp.price_min_minor, pp.price_max_minor, pp.price_currency,
              (SELECT i.card_key FROM core.product_image i
                WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
-             a.available
+             ${productAvailable} AS available
         FROM core.scene_post_product t
         JOIN core.product p ON p.id = t.product_id
-        JOIN core.v_scene_product_availability a ON a.product_id = t.product_id
-        CROSS JOIN LATERAL (
-          SELECT min(v.price_minor) AS price_min_minor, max(v.price_minor) AS price_max_minor,
-                 min(v.price_currency) AS price_currency
-            FROM core.product_variant v
-           WHERE v.product_id = p.id AND v.status = 'ACTIVE') pr
+        JOIN core.seller s ON s.id = p.seller_id
+        JOIN core.market m ON m.id = p.market_id
+        CROSS JOIN ${publicPrice}
        WHERE t.revision_id = ${scene.revision_id}
-         AND a.published AND p.market_id = ${scene.market_id}
+         AND p.visibility = 'PUBLISHED' AND p.market_id = ${scene.market_id}
        ORDER BY t.position`.execute(trx);
 
     return {
@@ -351,9 +351,8 @@ export class ScenesService {
       seller: { handle: scene.seller_handle, store_name: scene.seller_store_name },
       products: products.rows.map((p) => ({
         ...p,
-        base_price_minor: Number(p.base_price_minor),
-        price_min_minor: p.price_min_minor === null ? null : Number(p.price_min_minor),
-        price_max_minor: p.price_max_minor === null ? null : Number(p.price_max_minor),
+        base_price_minor: minorUnits(p.base_price_minor),
+        ...priceFields(p),
       })),
     };
   }
