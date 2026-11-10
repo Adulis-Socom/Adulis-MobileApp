@@ -25,6 +25,7 @@ export function PublicListView<I>({
   loading,
   testID,
   label,
+  onRefresh,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -35,6 +36,8 @@ export function PublicListView<I>({
   loading: MobileMessageKey;
   testID: string;
   label: string;
+  /** What a pull does; the list's own refresh by default. */
+  onRefresh?: () => void;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -78,7 +81,7 @@ export function PublicListView<I>({
       style={{ backgroundColor: theme.color.bg }}
       contentContainerStyle={{ padding: theme.space.sm }}
       refreshControl={
-        <RefreshControl refreshing={list.refreshing} onRefresh={list.refresh} colors={[theme.color.accent]} />
+        <RefreshControl refreshing={list.refreshing} onRefresh={onRefresh ?? list.refresh} colors={[theme.color.accent]} />
       }
       ListHeaderComponent={
         <View>

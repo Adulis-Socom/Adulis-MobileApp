@@ -1,4 +1,5 @@
 import { en } from '@adulis/locale/mobile';
+import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -89,12 +90,37 @@ describe('the Seller Profile', () => {
     expect(await screen.findByText(en['buyer.seller.scenes.empty'])).toBeOnTheScreen();
   });
 
-  it('a Scene opens Explore the Scene', async () => {
-    const r = await openProfile();
+  it('a Scene opens Explore the Scene; back on the profile the header and the list are read again', async () => {
+    serve(HEADER, ok(storefront(HANDLE)));
+    serve(
+      SCENES,
+      ok({ data: [sellerScene(1), sellerScene(2)], next_cursor: null }),
+      // Scene 1 went PRIVATE while it was open.
+      ok({ data: [sellerScene(2)], next_cursor: null }),
+    );
+    const r = await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
     serve(`GET /v1/scene-posts/${sellerScene(1).public_ref}`, ok(publicScene(1, { caption: 'The whole caption' })));
     await fireEvent.press(await screen.findByLabelText('Scene: Seller scene 1'));
     expect(await screen.findByText('The whole caption')).toBeOnTheScreen();
     expect(r.getPathname()).toBe(`/scenes/${sellerScene(1).public_ref}`);
+    await act(() => router.back());
+    await settle();
+    expect(await screen.findByLabelText('Scene: Seller scene 2')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Scene: Seller scene 1')).not.toBeOnTheScreen();
+    expect(calls(SCENES)).toHaveLength(2);
+    // The re-read is a revalidation, not a new Seller view.
+    expect(calls(HEADER).map((c) => c.query['revalidate'])).toEqual([undefined, 'true']);
+  });
+
+  it('a pull on a list reads the header again too, as a revalidation', async () => {
+    await openProfile();
+    await screen.findByLabelText('Scene: Seller scene 1');
+    await act(() =>
+      (screen.getByTestId('seller-scenes').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+    );
+    await settle();
+    expect(calls(SCENES)).toHaveLength(2);
+    expect(calls(HEADER).map((c) => c.query['revalidate'])).toEqual([undefined, 'true']);
   });
 
   it('Products: the server price span and availability, paged by the server cursor, opening the Product', async () => {

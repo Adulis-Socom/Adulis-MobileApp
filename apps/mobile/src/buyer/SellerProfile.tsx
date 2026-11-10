@@ -37,7 +37,10 @@ const TABS: readonly Tab[] = ['scenes', 'products', 'reviews', 'about'];
 export function SellerProfile({ handle }: { handle: unknown }) {
   const { api } = useSession();
   const valid = isPathName(handle);
-  const header = usePublicRead(['storefront', valid ? handle : ''], valid ? () => api.storefront(handle) : null);
+  const header = usePublicRead(
+    ['storefront', valid ? handle : ''],
+    valid ? (revalidation) => api.storefront(handle, revalidation) : null,
+  );
   const [tab, setTab] = useState<Tab>('scenes');
 
   // Back from a Scene or a Product: read the Seller again (the first focus is the opening read).
@@ -58,9 +61,11 @@ export function SellerProfile({ handle }: { handle: unknown }) {
   if (tab === 'about') {
     return <AboutTab seller={seller} header={top} pulling={header.pulling} onPull={header.pull} />;
   }
-  if (tab === 'products') return <ProductsTab handle={seller.handle} header={top} />;
-  if (tab === 'reviews') return <ReviewsTab handle={seller.handle} seller={seller} header={top} />;
-  return <ScenesTab handle={seller.handle} header={top} />;
+  // A pull on a list reads the header again too, so the summary and the list agree.
+  const tabProps = { handle: seller.handle, header: top, onPull: revalidate };
+  if (tab === 'products') return <ProductsTab {...tabProps} />;
+  if (tab === 'reviews') return <ReviewsTab {...tabProps} seller={seller} />;
+  return <ScenesTab {...tabProps} />;
 }
 
 function ProfileHeader({ seller, tab, onTab }: { seller: Storefront; tab: Tab; onTab: (t: Tab) => void }) {
@@ -86,7 +91,10 @@ function ProfileHeader({ seller, tab, onTab }: { seller: Storefront; tab: Tab; o
       <AppText style={{ color: theme.color.textSecondary }}>
         {summary.count > 0 && summary.average_rating !== null
           ? fillSlots(t('buyer.seller.rating'), {
-              average: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(summary.average_rating),
+              // Rounded once, by the server (one decimal): shown as is.
+              average: new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(
+                summary.average_rating,
+              ),
               count: summary.count,
             })
           : t('buyer.seller.no_reviews')}
@@ -123,11 +131,7 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
               borderColor: selected ? theme.color.accent : 'transparent',
             }}
           >
-            <AppText
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              style={{ fontWeight: selected ? theme.fontWeight.semibold : undefined }}
-            >
+            <AppText style={{ textAlign: 'center', fontWeight: selected ? theme.fontWeight.semibold : undefined }}>
               {t(`buyer.seller.tab.${key}`)}
             </AppText>
           </Pressable>
@@ -137,7 +141,20 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   );
 }
 
-function ScenesTab({ handle, header }: { handle: string; header: React.ReactElement }) {
+type TabProps = { handle: string; header: React.ReactElement; onPull: () => void };
+
+/** Back from a Scene or a Product: read the visible list again (a Scene may have gone PRIVATE). */
+function useRefreshOnReturn(refresh: () => void) {
+  const focused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focused.current) refresh();
+      focused.current = true;
+    }, [refresh]),
+  );
+}
+
+function ScenesTab({ handle, header, onPull }: TabProps) {
   const { api } = useSession();
   const t = useT();
   const list = usePublicList({
@@ -146,10 +163,15 @@ function ScenesTab({ handle, header }: { handle: string; header: React.ReactElem
     items: (page) => page.data,
     keyOf: (scene: SellerScene) => scene.public_ref,
   });
+  useRefreshOnReturn(list.refresh);
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
       list={list}
+      onRefresh={() => {
+        onPull();
+        list.refresh();
+      }}
       keyOf={(scene) => scene.public_ref}
       renderItem={({ item }) => <SceneTile scene={item} />}
       numColumns={2}
@@ -193,7 +215,7 @@ function SceneTile({ scene }: { scene: SellerScene }) {
   );
 }
 
-function ProductsTab({ handle, header }: { handle: string; header: React.ReactElement }) {
+function ProductsTab({ handle, header, onPull }: TabProps) {
   const { api } = useSession();
   const t = useT();
   const list = usePublicList({
@@ -202,10 +224,15 @@ function ProductsTab({ handle, header }: { handle: string; header: React.ReactEl
     items: (page) => page.data,
     keyOf: (product: SellerProduct) => product.slug,
   });
+  useRefreshOnReturn(list.refresh);
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
       list={list}
+      onRefresh={() => {
+        onPull();
+        list.refresh();
+      }}
       keyOf={(product) => product.slug}
       renderItem={({ item }) => <ProductTile product={item} handle={handle} />}
       numColumns={2}
@@ -276,7 +303,7 @@ export function ProductTile({
   );
 }
 
-function ReviewsTab({ handle, seller, header }: { handle: string; seller: Storefront; header: React.ReactElement }) {
+function ReviewsTab({ handle, seller, header, onPull }: TabProps & { seller: Storefront }) {
   const { api } = useSession();
   const t = useT();
   const theme = useTheme();
@@ -286,10 +313,15 @@ function ReviewsTab({ handle, seller, header }: { handle: string; seller: Storef
     items: (page) => page.data,
     keyOf: (review: SellerReview) => review.id,
   });
+  useRefreshOnReturn(list.refresh);
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
       list={list}
+      onRefresh={() => {
+        onPull();
+        list.refresh();
+      }}
       keyOf={(review) => review.id}
       renderItem={({ item }) => <ReviewRow review={item} />}
       header={
@@ -360,7 +392,9 @@ function AboutTab({
     .map((m) => `buyer.seller.about.fulfilment.${m}`)
     .filter(hasMessage)
     .map((key) => t(key));
-  const since = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(`${seller.member_since}T00:00:00Z`));
+  const since = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    new Date(`${seller.member_since}T00:00:00Z`),
+  );
   return (
     <ScrollView
       testID="seller-about"

@@ -237,8 +237,13 @@ export function createApiClient(deps: ApiDeps) {
      * and Reviews. Like the Scene and Product reads they present the session when one is held, so
      * the server resolves the handle in the same Market as the feed.
      */
-    storefront: (handle: string) =>
-      call<Storefront>('GET', '/v1/storefronts/{handle}', { params: { handle }, ok: 200 }),
+    storefront: (handle: string, revalidate = false) =>
+      call<Storefront>('GET', '/v1/storefronts/{handle}', {
+        params: { handle },
+        // A re-read of a profile already on screen is not a new view (OVN-073 principle).
+        query: { revalidate: revalidate ? 'true' : undefined },
+        ok: 200,
+      }),
     sellerScenes: (handle: string, cursor: string | null) =>
       call<SellerScenePage>('GET', '/v1/storefronts/{handle}/scenes', {
         params: { handle },
