@@ -282,6 +282,39 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .expect(200);
       expect(miss.body.data).toHaveLength(0);
     });
+
+    // LAST in this group: it unpublishes the one Product, and puts it back.
+    it('an unpublished Product leaves every public read, though published_at stays (OVN-011)', async () => {
+      const list = await http().get('/v1/storefronts/c8-store/products').expect(200);
+      const slug = list.body.data[0].slug as string;
+      await admin.query(`SELECT core.fn_unpublish_product($1, $2, 'SELLER')`, [PRODUCT, SELLER]);
+      try {
+        const row = await admin.query<{ visibility: string; published: boolean }>(
+          `SELECT visibility::text AS visibility, published_at IS NOT NULL AS published
+             FROM core.product WHERE id = $1`,
+          [PRODUCT],
+        );
+        // The defect's precondition: the first-publication record survives unpublishing.
+        expect(row.rows[0]).toEqual({ visibility: 'UNPUBLISHED', published: true });
+        await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(404);
+        const after = await http().get('/v1/storefronts/c8-store/products').expect(200);
+        expect(after.body.data).toHaveLength(0);
+        const s = await http().get('/v1/storefronts/c8-store/search?q=scarf').expect(200);
+        expect(s.body.data).toHaveLength(0);
+        const link = await http()
+          .post('/v1/post-links/resolve')
+          .set('Idempotency-Key', key())
+          .set('X-Adulis-Device', DEVICE)
+          .send({ url: 'https://vm.tiktok.com/c8short' })
+          .expect(200);
+        expect(link.body.data).toHaveLength(0);
+      } finally {
+        await admin.query(
+          `UPDATE core.product SET visibility = 'PUBLISHED', unpublished_reason = NULL WHERE id = $1`,
+          [PRODUCT],
+        );
+      }
+    });
   });
 
   describe('analytics (12.13)', () => {

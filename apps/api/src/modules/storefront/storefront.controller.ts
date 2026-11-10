@@ -138,7 +138,7 @@ export class StorefrontController {
                (SELECT i.card_key FROM core.product_image i
                  WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key
           FROM core.product p
-         WHERE p.seller_id = ${seller.id} AND p.published_at IS NOT NULL
+         WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
          ORDER BY p.display_order, p.created_at
          LIMIT 100`.execute(trx);
       return { data: r.rows };
@@ -165,7 +165,7 @@ export class StorefrontController {
                p.base_price_currency, p.category_id
           FROM core.product p
          WHERE p.slug = ${slug} AND p.seller_id = ${seller.id}
-           AND p.published_at IS NOT NULL`.execute(trx);
+           AND p.visibility = 'PUBLISHED'`.execute(trx);
       const product = first(p.rows);
       if (!product) throw new AdulisException('NOT_FOUND');
       // Everything below keys on the resolved ID, not on the slug: the
@@ -213,7 +213,7 @@ export class StorefrontController {
       const r = await sql<Record<string, unknown>>`
         SELECT p.id, p.name, p.base_price_minor, p.base_price_currency
           FROM core.product p
-         WHERE p.seller_id = ${seller.id} AND p.published_at IS NOT NULL
+         WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
            AND (p.name ILIKE '%' || ${q} || '%'
                 OR p.description ILIKE '%' || ${q} || '%')
          ORDER BY p.display_order
@@ -293,7 +293,7 @@ export class StorefrontController {
           JOIN core.product p ON p.id = psp.product_id
           JOIN core.seller s ON s.id = p.seller_id
          WHERE sp.canonical_post_id = ${canonical.canonicalPostId}
-           AND p.published_at IS NOT NULL
+           AND p.visibility = 'PUBLISHED'
            AND s.status::text = ANY(${VISIBLE_STATES})
          LIMIT 25`.execute(trx);
       return { data: r.rows };
