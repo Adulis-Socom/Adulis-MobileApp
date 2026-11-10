@@ -1,0 +1,89 @@
+# Buyer Shop (WO-007) against the real local API, as a guest: the Shop tab lists the Market's
+# PUBLISHED Products newest first under an honest label, with the server's price span and
+# availability; a tile opens the Product, its Seller line the Seller Profile, and Back returns
+# to the Shop where it was; scrolling pages by the server cursor to the end. No categories, sort,
+# filter, Search entry of its own, or cart.
+#
+# Needs the WO-CAT-001 native fixtures (Seller "Fixture Weaves": Woven basket 900.00-1,200.00,
+# Cotton scarf out of stock, Clay cup 350.00, Coffee tray 1,500.00, published in that order) plus
+# wo007-fixtures-extra (a second Seller, "Fixture Pottery", with 32 older "Shop item NN" Products,
+# so the list mixes Sellers and spans two pages of 30).
+# Market B has another fixture-weaves whose Woven basket is 5,000.00: never shown here.
+#
+#   maestro test .maestro/shop.yaml
+appId: com.adulis.app
+name: Buyer Shop
+tags:
+  - buyer
+  - shop
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- tapOn: Shop
+- extendedWaitUntil:
+    visible: Newest first
+    timeout: 30000
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*1,500\.00, Available'
+    timeout: 30000
+- assertVisible: 'Clay cup, .*350\.00, Available'
+- assertVisible: 'Cotton scarf, .*Currently unavailable'
+- assertNotVisible: '.*5,000\.00.*'
+- assertNotVisible: Fashion
+- assertNotVisible: Add to cart
+- assertNotVisible: Filter
+- takeScreenshot: shop-01-grid
+
+# A Product opens the Product; Back returns to the Shop.
+- tapOn: 'Coffee tray, .*'
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+- takeScreenshot: shop-02-product
+- back
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*'
+    timeout: 30000
+- assertVisible: Newest first
+
+# The Seller line opens the Seller Profile; Back returns to the Shop.
+- tapOn:
+    id: product-tile-seller
+    index: 0
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+- assertVisible: Fixture Weaves
+- takeScreenshot: shop-03-seller
+- back
+- extendedWaitUntil:
+    visible: Newest first
+    timeout: 30000
+
+# The second page arrives by the server cursor; the list ends honestly.
+- scrollUntilVisible:
+    element: 'Shop item 01, .*101\.00, Available'
+    direction: DOWN
+    timeout: 90000
+- scrollUntilVisible:
+    element: That is everything for now\.
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: shop-04-end
+
+# Back from a Product deep in the list (the other Seller's) keeps the place.
+- tapOn: 'Shop item 01, .*'
+- extendedWaitUntil:
+    visible: Sold by Fixture Pottery
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: 'Shop item 01, .*'
+    timeout: 30000
+- assertVisible: That is everything for now\.
+- takeScreenshot: shop-05-back-kept-place

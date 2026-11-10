@@ -1,0 +1,23 @@
+# Buyer Shop (WO-007) revalidation, part 1 of 3: open the Shop with the Clay cup listed. Between
+# the parts the harness unpublishes it through the Seller API (part 2: a pull and it is gone),
+# then republishes it and changes the Woven basket's Small price (part 3: a pull shows both).
+#
+#   maestro test .maestro/shop-refresh-1.yaml
+appId: com.adulis.app
+name: Buyer Shop - revalidation, part 1
+tags:
+  - buyer
+  - shop
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- tapOn: Shop
+- extendedWaitUntil:
+    visible: 'Clay cup, .*350\.00, Available'
+    timeout: 30000
+- takeScreenshot: shop-refresh-01-listed

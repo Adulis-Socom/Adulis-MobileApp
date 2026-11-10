@@ -1,0 +1,31 @@
+# Buyer Shop (WO-007) signed in: the Shop reads the Account's Market and shows the same Market's
+# Products. Starts signed in on Saved (after buyer-auth-request.yaml and a sign-in), then signs
+# out at the end.
+#
+#   maestro test .maestro/shop-signed-in.yaml
+appId: com.adulis.app
+name: Buyer Shop - signed in
+tags:
+  - buyer
+  - shop
+---
+- tapOn: Shop
+- extendedWaitUntil:
+    visible: Newest first
+    timeout: 30000
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*1,500\.00, Available'
+    timeout: 30000
+- assertNotVisible: '.*5,000\.00.*'
+- takeScreenshot: shop-signed-in
+- tapOn: 'Coffee tray, .*'
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+- back
+- tapOn: You
+- assertVisible: Sign out
+- tapOn: Sign out
+- extendedWaitUntil:
+    visible: Sign in to see your profile.
+    timeout: 10000

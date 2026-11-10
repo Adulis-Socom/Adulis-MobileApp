@@ -1,0 +1,19 @@
+# Buyer Shop revalidation, part 3 of 3 (after the Clay cup was republished and the Woven basket's
+# Small Variant repriced to 950.00): a pull shows the republished Product and the new price span.
+appId: com.adulis.app
+name: Buyer Shop - revalidation, part 3
+tags:
+  - buyer
+  - shop
+---
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    visible: 'Clay cup, .*350\.00, Available'
+    timeout: 30000
+- scrollUntilVisible:
+    element: 'Woven basket, .*950\.00.*1,200\.00, Available'
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: shop-refresh-03-republished-repriced

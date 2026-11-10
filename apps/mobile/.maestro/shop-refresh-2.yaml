@@ -1,0 +1,16 @@
+# Buyer Shop revalidation, part 2 of 3 (after the Clay cup was unpublished): a pull re-reads the
+# Shop and the unpublished Product is gone.
+appId: com.adulis.app
+name: Buyer Shop - revalidation, part 2
+tags:
+  - buyer
+  - shop
+---
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    notVisible: 'Clay cup, .*'
+    timeout: 30000
+- assertVisible: 'Coffee tray, .*'
+- takeScreenshot: shop-refresh-02-unpublished-gone
