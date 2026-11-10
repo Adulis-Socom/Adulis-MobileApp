@@ -262,6 +262,8 @@ export const enCommon = {
   'buyer.product.description': 'Description',
   'buyer.product.options': 'Options',
   'buyer.product.option': '{option}, {price}, {availability}',
+  'buyer.product.details': 'Product details',
+  'buyer.product.attribute': '{name}: {value}',
   'buyer.search': 'Search',
   'buyer.search.coming': 'Search for Products, Sellers and Scenes arrives in a coming update.',
   'buyer.notifications': 'Notifications',

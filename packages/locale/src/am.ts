@@ -222,6 +222,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.product.description': 'መግለጫ',
   'buyer.product.options': 'አማራጮች',
   'buyer.product.option': '{option}፣ {price}፣ {availability}',
+  'buyer.product.details': 'የምርት ዝርዝሮች',
+  'buyer.product.attribute': '{name}፦ {value}',
   'buyer.search': 'ፍለጋ',
   'buyer.search.coming': 'ምርቶችን፣ ሻጮችን እና ትዕይንቶችን መፈለግ በሚቀጥለው ዝማኔ ይመጣል።',
   'buyer.notifications': 'ማሳወቂያዎች',
