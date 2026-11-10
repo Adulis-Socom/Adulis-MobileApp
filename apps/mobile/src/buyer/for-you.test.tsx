@@ -195,6 +195,8 @@ describe('For You feed', () => {
     expect(await screen.findByText(en['buyer.for_you.session_ended'])).toBeOnTheScreen();
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.for_you.refresh'] }));
+    // The ended session's cards do not stand in while the new one loads (WO-DISC-002A).
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
     expect(await screen.findByText('Store 7')).toBeOnTheScreen();
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
     expect((await settledCalls()).map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }, {}]);
@@ -290,9 +292,19 @@ describe('returning from the background', () => {
     return { reply, release: (r: Reply) => act(async () => release(r)) };
   };
 
+  // React Native's Jest preset already mocks AppState.addEventListener, so spyOn returns
+  // that mock itself: put its own implementation back afterwards (mockRestore would leave
+  // it returning undefined, and the next test's cleanup would fail on `.remove()`).
+  let appState: jest.SpyInstance | undefined;
+  let original: ((...args: never[]) => unknown) | undefined;
+  afterEach(() => {
+    if (appState && original) appState.mockImplementation(original);
+  });
   beforeEach(() => {
     listeners = [];
-    jest.spyOn(AppState, 'addEventListener').mockImplementation((type, listener) => {
+    appState = jest.spyOn(AppState, 'addEventListener');
+    original = appState.getMockImplementation();
+    appState.mockImplementation((type, listener) => {
       if (type === 'change') listeners.push(listener as (state: AppStateStatus) => void);
       return {
         remove: () => {
@@ -335,6 +347,30 @@ describe('returning from the background', () => {
     await screen.findByText('Store 1');
     await away(6);
     expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('a pull-to-refresh after a failed revalidation never brings the withheld cards back', async () => {
+    const next = held();
+    let n = 0;
+    api.on(FEED, () => {
+      n += 1;
+      if (n === 1) return ok(fypPage([fypUnit(1)]));
+      return n === 2 ? problem(500, 'INTERNAL', 'request') : next.reply;
+    });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await away(6);
+    await screen.findByText(en['error.request.internal']);
+    // Pull the error screen. TanStack would offer the last generation that HAD data -- the
+    // withheld one -- as a placeholder.
+    await act(() =>
+      (screen.getByTestId('for-you-state').props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh(),
+    );
+    expect(await screen.findByText(en['buyer.for_you.loading'])).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    await next.release(ok(fypPage([fypUnit(4)])));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
   });
 
@@ -388,17 +424,56 @@ describe('returning from the background', () => {
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
   });
 
-  it('cards that arrived while the app was in the background are not revalidated', async () => {
+  it('cards that arrived in the background age from their arrival', async () => {
     const first = held();
     let n = 0;
     api.on(FEED, () => (n++ === 0 ? first.reply : ok(fypPage([fypUnit(4)]))));
     await renderRouter(APP_DIR);
+    // The feed is mounted (and listening) once it has asked for its first page.
+    await waitFor(() => expect(feedCalls()).toHaveLength(1));
+    await goTo('background');
+    await minutes(4);
+    await first.release(ok(fypPage([fypUnit(1)])));
+    await minutes(3); // seven minutes away, three since the cards were checked
+    await goTo('active');
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    expect(await settledCalls()).toHaveLength(1);
+  });
+
+  it('cards that arrived in the background and then sat past the interval are revalidated', async () => {
+    const first = held();
+    let n = 0;
+    api.on(FEED, () => (n++ === 0 ? first.reply : ok(fypPage([fypUnit(4)]))));
+    await renderRouter(APP_DIR);
+    // The feed is mounted (and listening) once it has asked for its first page.
+    await waitFor(() => expect(feedCalls()).toHaveLength(1));
     await goTo('background');
     await first.release(ok(fypPage([fypUnit(1)])));
     await minutes(6);
     await goTo('active');
-    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
-    expect(await settledCalls()).toHaveLength(1);
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('a pull-to-refresh still loading when the app left is revalidated on return', async () => {
+    const refresh = held();
+    let n = 0;
+    api.on(FEED, () => {
+      n += 1;
+      if (n === 1) return ok(fypPage([fypUnit(1)]));
+      return n === 2 ? refresh.reply : ok(fypPage([fypUnit(4)]));
+    });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await pullToRefresh(); // its old cards stay on screen as placeholders while it loads
+    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+    await away(6);
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    // The refresh that was in flight lands in its abandoned session, never on screen.
+    await refresh.release(ok(fypPage([fypUnit(2)])));
+    await settledCalls();
+    expect(screen.queryByText('Store 2')).not.toBeOnTheScreen();
   });
 });
 

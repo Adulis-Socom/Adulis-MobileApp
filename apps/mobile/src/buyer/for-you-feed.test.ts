@@ -15,9 +15,13 @@ describe('needsForegroundRevalidation (WO-DISC-002A, ADU-MOB-02 S185)', () => {
   it.each([
     ['cards checked before a long enough background', { now: at + five, oldestReceivedAt: at - 1, thresholdMs: five }, true],
     ['a background shorter than the interval', { now: at + five - 1, oldestReceivedAt: at - 1, thresholdMs: five }, false],
-    ['cards that arrived while the app was backgrounded', { now: at + five, oldestReceivedAt: at + 1, thresholdMs: five }, false],
+    // A page that lands just after the app is backgrounded ages from its arrival, not never.
+    ['cards that arrived in the background, less than the interval ago', { now: at + five, oldestReceivedAt: at + 1, thresholdMs: five }, false],
+    ['cards that arrived in the background, the interval ago', { now: at + 1 + five, oldestReceivedAt: at + 1, thresholdMs: five }, true],
     ['nothing loaded yet', { now: at + five, oldestReceivedAt: undefined, thresholdMs: five }, false],
+    ['a clock that went backwards: stale (fail closed)', { now: at - 60_000, oldestReceivedAt: at - 120_000, thresholdMs: five }, true],
     ['the release policy: any return from the background', { now: at, oldestReceivedAt: at - 1, thresholdMs: 0 }, true],
+    ['the release policy, even for cards that arrived in the background', { now: at + 1, oldestReceivedAt: at + 1, thresholdMs: 0 }, true],
   ])('%s', (_label, args, expected) => {
     expect(needsForegroundRevalidation({ backgroundedAt: at, ...args })).toBe(expected);
   });

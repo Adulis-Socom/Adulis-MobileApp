@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { ApiError, isTransient, type FypPage, type FypUnit } from '../api/client';
@@ -24,9 +24,11 @@ export const FOREGROUND_REVALIDATE_AFTER_MS = freshnessIntervalMs(__DEV__);
 export type LoadedFypPage = FypPage & { readonly receivedAt: number };
 
 /**
- * Whether the cards on screen must be revalidated on returning to the foreground: they
- * were checked before the app went to the background, and it stayed there at least
- * `thresholdMs`. Cards that arrived while backgrounded are as fresh as the background.
+ * Whether the cards on screen must be revalidated on returning to the foreground: they have
+ * spent at least `thresholdMs` unchecked in the background, counted from the later of going
+ * to the background and their own arrival (a page that lands just after the app is
+ * backgrounded ages from then, not never). A zero threshold revalidates any return with
+ * cards on screen, and a clock that went backwards counts as stale: fail closed.
  */
 export function needsForegroundRevalidation(args: {
   backgroundedAt: number;
@@ -35,11 +37,10 @@ export function needsForegroundRevalidation(args: {
   thresholdMs: number;
 }): boolean {
   const { backgroundedAt, now, oldestReceivedAt, thresholdMs } = args;
-  return (
-    oldestReceivedAt !== undefined &&
-    oldestReceivedAt <= backgroundedAt &&
-    now - backgroundedAt >= thresholdMs
-  );
+  if (oldestReceivedAt === undefined) return false;
+  if (thresholdMs <= 0) return true;
+  const unchecked = now - Math.max(backgroundedAt, oldestReceivedAt);
+  return unchecked < 0 || unchecked >= thresholdMs;
 }
 
 /**
@@ -135,24 +136,39 @@ export function useForYouFeed() {
     refetchOnReconnect: false,
     // The network may retry; a server answer never does.
     retry: (failures, error) => isTransient(error) && failures < 2,
-    // A refresh keeps the same subject's cards on screen while the new session loads;
-    // a foreground revalidation does not.
+    // A refresh keeps the same subject's cards on screen while the new session loads -- but
+    // only the IMMEDIATELY previous generation's. TanStack offers the last query that HAD
+    // data, so after a withheld revalidation (or a refresh) that failed, the cards from two
+    // generations back would otherwise return as the "current" ones (WO-DISC-002A review).
+    // A foreground revalidation, or a refresh of a session the server ended, shows none.
     placeholderData: (previous, previousQuery) =>
-      !feed.withhold && previousQuery?.queryKey[1] === subject ? previous : undefined,
+      !feed.withhold &&
+      previousQuery?.queryKey[1] === subject &&
+      previousQuery.queryKey[2] === feed.generation - 1
+        ? previous
+        : undefined,
   });
 
   const units = useMemo(() => feedUnits(query.data?.pages), [query.data]);
-  const refresh = useCallback(() => setFeed((f) => ({ generation: f.generation + 1, withhold: false })), []);
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage } = query;
 
-  // Read by the AppState listener at the moment of return, not captured when it subscribed.
-  const shown = useRef({ oldest: undefined as number | undefined, live: false });
-  shown.current = {
-    oldest: query.data?.pages[0]?.receivedAt,
-    // Cards of THIS generation on screen. While a new session loads (or failed) there is
-    // nothing stale to revalidate, which is also what keeps rapid returns to one refresh.
-    live: query.data !== undefined && !isPlaceholderData,
-  };
+  // Read at the moment of a return or a refresh, not captured when the callbacks were made.
+  // `oldest`: the arrival of the oldest card on screen, a pull-to-refresh's placeholders
+  // included (they are the old session's); a withheld revalidation shows none, which is also
+  // what keeps rapid returns to one new session. `ended`: the server ended this session.
+  const shown = useRef({ oldest: undefined as number | undefined, ended: false });
+  useLayoutEffect(() => {
+    shown.current = {
+      oldest: query.data?.pages[0]?.receivedAt,
+      ended: isFetchNextPageError && feedSessionEnded(query.error),
+    };
+  });
+
+  // An ended session's cards do not stand in for the new one while it loads.
+  const refresh = useCallback(
+    () => setFeed((f) => ({ generation: f.generation + 1, withhold: shown.current.ended })),
+    [],
+  );
 
   useEffect(() => {
     // 'background', not merely 'inactive': an iOS control-centre pull is not a background
@@ -166,13 +182,11 @@ export function useForYouFeed() {
       if (state !== 'active' || backgroundedAt === null) return;
       const since = backgroundedAt;
       backgroundedAt = null;
-      const { oldest, live } = shown.current;
       if (
-        live &&
         needsForegroundRevalidation({
           backgroundedAt: since,
           now: Date.now(),
-          oldestReceivedAt: oldest,
+          oldestReceivedAt: shown.current.oldest,
           thresholdMs: FOREGROUND_REVALIDATE_AFTER_MS,
         })
       ) {

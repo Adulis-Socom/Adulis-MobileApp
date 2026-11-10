@@ -6,7 +6,7 @@ import { PublicSceneSellerDto } from '../scenes/scenes.dto';
  * Product Post, Story or advertisement type exists in this response.
  *
  * Public identity only: public_ref and revision_version, never the internal
- * Scene, revision or Seller ids (the server resolves those from impression_id).
+ * Scene, revision or Seller ids (the server resolves those from serve_id).
  * No price or stock: those stay with the Product (ADU-MOB-02 S11, "current
  * product price/stock must not be duplicated"). No hotspot geometry (R-06), no
  * engagement counts, no allowed-actions list (no engagement action has a

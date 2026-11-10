@@ -31,13 +31,15 @@ export function ForYouFeed() {
   );
 
   // Nothing to show and the request waits for a connection (an offline return from the
-  // background, say): say so rather than spin. TanStack resumes it on reconnect.
+  // background, say): say so rather than spin. TanStack resumes it on reconnect; Retry is
+  // what the message asks for, and asks again at once.
   if (feed.status === 'pending' && feed.paused) {
     return (
       <Centered>
         <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
           {t('common.offline')}
         </AppText>
+        <Button label={t('common.retry')} onPress={feed.retry} />
       </Centered>
     );
   }
@@ -152,6 +154,7 @@ function Centered({
   const theme = useTheme();
   return (
     <ScrollView
+      testID="for-you-state"
       style={{ backgroundColor: theme.color.bg }}
       contentContainerStyle={{
         flexGrow: 1,
