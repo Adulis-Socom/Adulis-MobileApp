@@ -3807,6 +3807,57 @@
         ]
       }
     },
+    "/v1/shop/products": {
+      "get": {
+        "operationId": "StorefrontController_shopProducts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "next_cursor of the previous page (opaque).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1-50 (default 30).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopProductListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Market-wide public Products, newest first publication, keyset-paginated; the requester's Market only (empty without one). Not Search, not ranked.",
+        "tags": [
+          "Storefront"
+        ]
+      }
+    },
     "/v1/storefronts/{handle}": {
       "get": {
         "operationId": "StorefrontController_storefront",
@@ -5359,6 +5410,110 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SellerSceneDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "ShopProductSellerDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Seller route: /v1/storefronts/{handle}."
+          },
+          "store_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "handle",
+          "store_name"
+        ]
+      },
+      "ShopProductDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal identity (future Cart lines); never a URL segment."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Product route: /v1/storefronts/{handle}/products/{slug}."
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_price_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor."
+          },
+          "base_price_currency": {
+            "type": "string",
+            "description": "Currency of the seed."
+          },
+          "price_min_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency)."
+          },
+          "price_max_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same."
+          },
+          "price_currency": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO currency of the price span; null with it."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False: show \"Currently unavailable\" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now."
+          },
+          "seller": {
+            "$ref": "#/components/schemas/ShopProductSellerDto"
+          },
+          "thumb_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "First image thumbnail key (a bounded derivative, for grids)."
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "base_price_minor",
+          "base_price_currency",
+          "price_min_minor",
+          "price_max_minor",
+          "price_currency",
+          "available",
+          "seller",
+          "thumb_key"
+        ]
+      },
+      "ShopProductListDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShopProductDto"
             }
           },
           "next_cursor": {

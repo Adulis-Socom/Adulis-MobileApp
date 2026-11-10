@@ -1971,6 +1971,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/shop/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Market-wide public Products, newest first publication, keyset-paginated; the requester's Market only (empty without one). Not Search, not ranked. */
+        get: operations["StorefrontController_shopProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/storefronts/{handle}": {
         parameters: {
             query?: never;
@@ -2533,6 +2550,41 @@ export interface components {
         };
         SessionListResponseDto: {
             data: components["schemas"]["SessionDto"][];
+        };
+        ShopProductDto: {
+            /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
+            available: boolean;
+            /** @description Currency of the seed. */
+            base_price_currency: string;
+            /** @description The creation seed, NEVER a price (DB-01 C1); kept for compatibility. Show price_min_minor..price_max_minor. */
+            base_price_minor: number;
+            /**
+             * Format: uuid
+             * @description Internal identity (future Cart lines); never a URL segment.
+             */
+            id: string;
+            name: string;
+            /** @description ISO currency of the price span; null with it. */
+            price_currency: string | null;
+            /** @description Highest current ACTIVE Variant price; equal to price_min_minor when every ACTIVE Variant costs the same. */
+            price_max_minor: number | null;
+            /** @description Lowest current price among the Product's ACTIVE Variants (in stock or not). Null: no current price (no ACTIVE Variant, or not all priced in the Market's currency). */
+            price_min_minor: number | null;
+            seller: components["schemas"]["ShopProductSellerDto"];
+            /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
+            slug: string;
+            /** @description First image thumbnail key (a bounded derivative, for grids). */
+            thumb_key: string | null;
+        };
+        ShopProductListDto: {
+            data: components["schemas"]["ShopProductDto"][];
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
+        };
+        ShopProductSellerDto: {
+            /** @description Seller route: /v1/storefronts/{handle}. */
+            handle: string;
+            store_name: string;
         };
         SignedUploadDto: {
             /** Format: date-time */
@@ -5628,6 +5680,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    StorefrontController_shopProducts: {
+        parameters: {
+            query?: {
+                /** @description next_cursor of the previous page (opaque). */
+                cursor?: string;
+                /** @description Page size, 1-50 (default 30). */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopProductListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
