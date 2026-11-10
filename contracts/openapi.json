@@ -5080,10 +5080,10 @@
             ],
             "description": "The only unit type. Clients skip any unit type they do not know."
           },
-          "impression_id": {
+          "serve_id": {
             "type": "string",
             "format": "uuid",
-            "description": "The served-impression identity (S55): send it with the telemetry of this unit."
+            "description": "Server-issued identity of this delivery: this Scene revision, at this position, in this feed session, ranked by this algorithm version. A retried or replayed page returns the same serve_id. It is NOT an impression: a qualified impression is a separate, later client observation that will reference it."
           },
           "position": {
             "type": "integer",
@@ -5140,7 +5140,7 @@
         },
         "required": [
           "type",
-          "impression_id",
+          "serve_id",
           "position",
           "candidate_source",
           "public_ref",

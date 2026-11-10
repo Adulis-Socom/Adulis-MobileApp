@@ -2275,11 +2275,6 @@ export interface components {
             caption: string;
             caption_truncated: boolean;
             image: components["schemas"]["FypImageDto"];
-            /**
-             * Format: uuid
-             * @description The served-impression identity (S55): send it with the telemetry of this unit.
-             */
-            impression_id: string;
             /** @description Position in the feed session. */
             position: number;
             /** @description Current public tag summaries in presentation order, read at response time. */
@@ -2291,6 +2286,11 @@ export interface components {
             /** @description The exact served revision. */
             revision_version: number;
             seller: components["schemas"]["PublicSceneSellerDto"];
+            /**
+             * Format: uuid
+             * @description Server-issued identity of this delivery: this Scene revision, at this position, in this feed session, ranked by this algorithm version. A retried or replayed page returns the same serve_id. It is NOT an impression: a qualified impression is a separate, later client observation that will reference it.
+             */
+            serve_id: string;
             /**
              * @description The only unit type. Clients skip any unit type they do not know.
              * @enum {string}

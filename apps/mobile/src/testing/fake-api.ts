@@ -62,7 +62,7 @@ export type FypUnit = S['ScenePostFeedUnitDto'];
 export function fypUnit(n: number, overrides: Partial<FypUnit> = {}): FypUnit {
   return {
     type: 'SCENE_POST',
-    impression_id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
+    serve_id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
     position: n,
     candidate_source: 'RECENT',
     public_ref: `scene-ref-${String(n).padStart(12, '0')}`,
