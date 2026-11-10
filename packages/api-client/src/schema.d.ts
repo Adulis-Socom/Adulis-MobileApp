@@ -2332,9 +2332,9 @@ export interface components {
             VERIFIED_HANDOFF: number;
         };
         ReviewSummaryDto: {
-            /** @description Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review. */
+            /** @description Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is. */
             average_rating: number | null;
-            /** @description Counts by evidence basis (REV-01 S30). */
+            /** @description Counts by the stored review badge (evidence tier). */
             badge_counts: components["schemas"]["ReviewBadgeCountsDto"];
             /** @description Seller-service reviews. */
             count: number;
@@ -5633,7 +5633,10 @@ export interface operations {
     };
     StorefrontController_storefront: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description true: a technical re-read of a profile already on screen; the server records no storefront_viewed (the OVN-073 principle, as on the Product read). Omit it for an opening. */
+                revalidate?: "true";
+            };
             header?: never;
             path: {
                 /** @description The Seller public handle. */

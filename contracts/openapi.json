@@ -3819,6 +3819,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "revalidate",
+            "required": false,
+            "in": "query",
+            "description": "true: a technical re-read of a profile already on screen; the server records no storefront_viewed (the OVN-073 principle, as on the Product read). Omit it for an opening.",
+            "schema": {
+              "enum": [
+                "true"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4812,10 +4824,10 @@
           "average_rating": {
             "type": "number",
             "nullable": true,
-            "description": "Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review."
+            "description": "Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is."
           },
           "badge_counts": {
-            "description": "Counts by evidence basis (REV-01 S30).",
+            "description": "Counts by the stored review badge (evidence tier).",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ReviewBadgeCountsDto"
