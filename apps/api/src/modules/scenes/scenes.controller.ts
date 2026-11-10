@@ -27,6 +27,7 @@ import {
 } from './scenes.dto';
 import { createScenePostBody, patchScenePostDraftBody } from './scenes.schemas';
 import { ScenesService } from './scenes.service';
+import { requesterMarket } from '../storefront/requester-market';
 
 /**
  * Scene Posts (ADU-SCN-01 v3.2 S45; WO-DISC-001 S20-S22). Seller management
@@ -223,6 +224,8 @@ export class ScenesController {
   ) {
     // Scene data bypasses shared caches: eligibility is decided per delivery (S48).
     res.setHeader('Cache-Control', 'no-store');
-    return this.tx.run(req, (trx) => this.svc.publicDetail(trx, publicRef));
+    return this.tx.run(req, async (trx) =>
+      this.svc.publicDetail(trx, publicRef, await requesterMarket(trx, req)),
+    );
   }
 }

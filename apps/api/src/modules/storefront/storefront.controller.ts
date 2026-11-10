@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import {
@@ -17,6 +17,7 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.adapter';
+import { requesterMarket } from './requester-market';
 import {
   minorUnits,
   priceFields,
@@ -99,16 +100,31 @@ export class StorefrontController {
     @Inject(POST_LINK_ADAPTER) private readonly postLinks: PostLinkAdapter,
   ) {}
 
+  /**
+   * The Seller a public handle names, MARKET-SAFE (WO-CAT-001; OVN-016, OVN-077). Handles are
+   * unique per Market only, so the handle is resolved inside the requester's Market
+   * (requesterMarket: the Account's, else the registered device's, read from the database).
+   * With no Market evidence the handle resolves only when exactly ONE ACTIVE Market has it;
+   * two candidates are ambiguous and get the same neutral 404 as an unknown handle -- never
+   * the first matching row. The Seller's Market must be ACTIVE (DB-01 :3092: every Market
+   * resolution reads activation_state = 'ACTIVE'), as the public Scene view already requires.
+   */
   private async sellerByHandle(
     trx: Transaction<Database>,
+    req: AuthedRequest,
     handle: string,
   ): Promise<SellerRow> {
+    const market = await requesterMarket(trx, req);
     const r = await sql<SellerRow>`
-      SELECT id, market_id, store_name, handle, description, status
-        FROM core.seller
-       WHERE handle = ${handle}
-         AND status::text = ANY(${VISIBLE_STATES})`.execute(trx);
-    const seller = first(r.rows);
+      SELECT s.id, s.market_id, s.store_name, s.handle, s.description, s.status
+        FROM core.seller s
+        JOIN core.market m ON m.id = s.market_id
+       WHERE s.handle = ${handle}
+         AND s.status::text = ANY(${VISIBLE_STATES})
+         AND m.activation_state = 'ACTIVE'
+         AND (${market}::uuid IS NULL OR s.market_id = ${market}::uuid)
+       LIMIT 2`.execute(trx);
+    const seller = r.rows.length === 1 ? r.rows[0] : undefined;
     if (!seller) throw new AdulisException('NOT_FOUND');
     return seller;
   }
@@ -139,11 +155,13 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle')
+  // The answer depends on the requester's Market (and is read now): never shared-cached.
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Header, stats, trust level, availability — one round trip (S3.1).' })
   async storefront(@Req() req: LocalizedRequest, @Param('handle') handle: string): Promise<unknown> {
     return this.tx.run(req, async (trx) => {
-      const seller = await this.sellerByHandle(trx, handle);
+      const seller = await this.sellerByHandle(trx, req, handle);
       const stats = await sql<Record<string, unknown>>`
         SELECT ps.level, ps.completed_handoff_count, ps.cancellation_rate,
                ps.confirmation_rate, ps.scan_completion_rate,
@@ -166,6 +184,8 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/products')
+  // The answer depends on the requester's Market (and is read now): never shared-cached.
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({
     summary:
@@ -179,7 +199,7 @@ export class StorefrontController {
     @Param('handle') handle: string,
   ): Promise<StorefrontProductListDto> {
     return this.tx.run(req, async (trx) => {
-      const seller = await this.sellerByHandle(trx, handle);
+      const seller = await this.sellerByHandle(trx, req, handle);
       const r = await sql<ProductSummaryRow & { display_order: number; image_key: string | null }>`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                p.display_order,
@@ -228,7 +248,7 @@ export class StorefrontController {
     // unpublished Product on every public read. visibility = 'PUBLISHED' is the
     // rule fn_create_order and core.v_scene_product_availability already apply.
     return this.tx.run(req, async (trx) => {
-      const seller = await this.sellerByHandle(trx, handle);
+      const seller = await this.sellerByHandle(trx, req, handle);
       const p = await sql<
         ProductSummaryRow & { description: string | null; category_id: string | null }
       >`
@@ -315,6 +335,8 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/search')
+  // The answer depends on the requester's Market (and is read now): never shared-cached.
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({
     summary:
@@ -333,7 +355,7 @@ export class StorefrontController {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'q' } });
     }
     return this.tx.run(req, async (trx) => {
-      const seller = await this.sellerByHandle(trx, handle);
+      const seller = await this.sellerByHandle(trx, req, handle);
       const r = await sql<ProductSummaryRow>`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                pp.price_min_minor, pp.price_max_minor, pp.price_currency,
@@ -353,6 +375,8 @@ export class StorefrontController {
   }
 
   @Get('storefronts/:handle/reviews')
+  // The answer depends on the requester's Market (and is read now): never shared-cached.
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Badge per review (S12); anonymised rows carry no buyer.' })
   async reviews(
@@ -361,7 +385,7 @@ export class StorefrontController {
     @Query('cursor') cursor?: string,
   ): Promise<unknown> {
     return this.tx.run(req, async (trx) => {
-      const seller = await this.sellerByHandle(trx, handle);
+      const seller = await this.sellerByHandle(trx, req, handle);
       const limit = 25;
       const r = await sql<Record<string, unknown> & { published_at: Date }>`
         SELECT rv.id, rv.seller_rating, rv.body, rv.badge, rv.published_at
@@ -381,6 +405,8 @@ export class StorefrontController {
   }
 
   @Get('sellers/lookup')
+  // The answer depends on the requester's Market (and is read now): never shared-cached.
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({ summary: 'Returns sellers only, capped, never suggests (S7.6).' })
   async lookup(@Req() req: LocalizedRequest, @Query('q') q?: string): Promise<unknown> {
@@ -388,10 +414,14 @@ export class StorefrontController {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'q' } });
     }
     return this.tx.run(req, async (trx) => {
+      const market = await requesterMarket(trx, req);
       const r = await sql<Record<string, unknown>>`
         SELECT s.handle, s.store_name
           FROM core.seller s
+          JOIN core.market m ON m.id = s.market_id
          WHERE s.status::text = ANY(${VISIBLE_STATES})
+           AND m.activation_state = 'ACTIVE'
+           AND (${market}::uuid IS NULL OR s.market_id = ${market}::uuid)
            AND (s.handle ILIKE ${q} || '%' OR s.store_name ILIKE ${q} || '%')
          ORDER BY s.store_name
          LIMIT 10`.execute(trx);
@@ -420,6 +450,9 @@ export class StorefrontController {
     return this.tx.runIdempotent(req as LocalizedRequest, res, 200, async (trx) => {
       const canonical = await this.postLinks.resolve(body.url);
       if (!canonical) return { data: [] };
+      // One post may feature Products of Sellers in different Markets: only the requester's
+      // Market's, when it is known; never an inactive Market's.
+      const market = await requesterMarket(trx, req);
       const r = await sql<ProductSummaryRow & { seller_handle: string }>`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                pp.price_min_minor, pp.price_max_minor, pp.price_currency,
@@ -434,6 +467,9 @@ export class StorefrontController {
          WHERE sp.canonical_post_id = ${canonical.canonicalPostId}
            AND p.visibility = 'PUBLISHED'
            AND s.status::text = ANY(${VISIBLE_STATES})
+           AND m.activation_state = 'ACTIVE'
+           AND (${market}::uuid IS NULL OR p.market_id = ${market}::uuid)
+         ORDER BY p.id
          LIMIT 25`.execute(trx);
       return { data: r.rows.map((row) => ({ ...summary(row), seller_handle: row.seller_handle })) };
     });

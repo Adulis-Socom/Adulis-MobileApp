@@ -282,8 +282,14 @@ export class ScenesService {
    * GET /v1/scene-posts/{publicRef}. Reads ONLY core.v_scene_post_public, the
    * central gate (S21, S35): a PRIVATE, draft, archived, out-of-gate or
    * unknown Scene is the same bare 404, with no caption, image, tag or reason.
+   *
+   * `requesterMarket` (WO-CAT-001): the Market the server resolved for the
+   * requester, or null with no evidence. A Scene of another Market is that same
+   * 404 (SCN-01 S405: shown only when the Buyer/public Market matches the
+   * Post's), so Scene -> Product stays in one Market. The public_ref is unique
+   * across Markets, so null needs no disambiguation.
    */
-  async publicDetail(trx: Transaction<Database>, publicRef: string) {
+  async publicDetail(trx: Transaction<Database>, publicRef: string, requesterMarket: string | null) {
     if (!PUBLIC_REF_RE.test(publicRef)) throw new AdulisException('NOT_FOUND');
     const r = await sql<{
       revision_id: string;
@@ -303,7 +309,9 @@ export class ScenesService {
         FROM core.v_scene_post_public
        WHERE public_ref = ${publicRef}`.execute(trx);
     const scene = r.rows[0];
-    if (!scene) throw new AdulisException('NOT_FOUND');
+    if (!scene || (requesterMarket !== null && requesterMarket !== scene.market_id)) {
+      throw new AdulisException('NOT_FOUND');
+    }
 
     // Public tags only: a Product that is not public commerce is omitted, an
     // out-of-stock one stays with available=false ("Currently unavailable").
