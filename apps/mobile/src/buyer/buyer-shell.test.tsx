@@ -136,7 +136,7 @@ describe('Buyer shell', () => {
     await screen.findByText(en['buyer.home.following.coming']);
 
     await fireEvent.press(bottomTab(en['buyer.tab.shop']));
-    expect(await screen.findByText(en['buyer.shop.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.shop.order'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/shop');
     expect(bottomTab(en['buyer.tab.shop'])).toBeSelected();
 

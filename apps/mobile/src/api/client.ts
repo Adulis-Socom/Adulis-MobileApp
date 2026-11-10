@@ -44,6 +44,8 @@ export type SellerProductPage = Json<paths['/v1/storefronts/{handle}/products'][
 export type SellerProduct = SellerProductPage['data'][number];
 export type SellerReviewPage = Json<paths['/v1/storefronts/{handle}/reviews']['get']['responses'][200]>;
 export type SellerReview = SellerReviewPage['data'][number];
+export type ShopProductPage = Json<paths['/v1/shop/products']['get']['responses'][200]>;
+export type ShopProduct = ShopProductPage['data'][number];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -260,6 +262,16 @@ export function createApiClient(deps: ApiDeps) {
       call<SellerReviewPage>('GET', '/v1/storefronts/{handle}/reviews', {
         params: { handle },
         query: { cursor: cursor ?? undefined, limit: '25' },
+        ok: 200,
+      }),
+
+    /**
+     * GET /v1/shop/products (WO-007): the Buyer's Market's public Products, newest first
+     * publication. The Market is the server's (the session when held, else this device).
+     */
+    shopProducts: (cursor: string | null) =>
+      call<ShopProductPage>('GET', '/v1/shop/products', {
+        query: { cursor: cursor ?? undefined, limit: '30' },
         ok: 200,
       }),
 

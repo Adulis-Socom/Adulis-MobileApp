@@ -321,3 +321,23 @@ export function sellerReview(n: number, overrides: Partial<SellerReview> = {}): 
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------- WO-007 Shop
+export type ShopProduct = S['ShopProductDto'];
+
+export function shopProduct(slug: string, name: string, handle = 'seller-1', overrides: Partial<ShopProduct> = {}): ShopProduct {
+  return {
+    id: '0b6f1a3e-cccc-4ccc-8ccc-cccccccccccc',
+    slug,
+    name,
+    base_price_minor: 1,
+    base_price_currency: 'ETB',
+    price_min_minor: 50000,
+    price_max_minor: 50000,
+    price_currency: 'ETB',
+    available: true,
+    seller: { handle, store_name: `Store ${handle}` },
+    thumb_key: `products/${slug}/thumb.webp`,
+    ...overrides,
+  };
+}

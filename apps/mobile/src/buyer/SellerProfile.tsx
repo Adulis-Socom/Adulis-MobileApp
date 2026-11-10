@@ -54,7 +54,14 @@ export function SellerProfile({ handle }: { handle: unknown }) {
   );
 
   if (header.value === undefined) {
-    return <ReadStates read={header} valid={valid} gone="buyer.seller.gone" loading="buyer.seller.loading" />;
+    return (
+      <ReadStates
+        read={header}
+        valid={valid}
+        gone="buyer.seller.gone"
+        loading="buyer.seller.loading"
+      />
+    );
   }
   const seller = header.value;
   const top = <ProfileHeader seller={seller} tab={tab} onTab={setTab} />;
@@ -68,14 +75,28 @@ export function SellerProfile({ handle }: { handle: unknown }) {
   return <ScenesTab {...tabProps} />;
 }
 
-function ProfileHeader({ seller, tab, onTab }: { seller: Storefront; tab: Tab; onTab: (t: Tab) => void }) {
+function ProfileHeader({
+  seller,
+  tab,
+  onTab,
+}: {
+  seller: Storefront;
+  tab: Tab;
+  onTab: (t: Tab) => void;
+}) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
   const level = seller.stats ? `buyer.seller.trust.${seller.stats.level}` : null;
   const summary = seller.review_summary;
   return (
-    <View style={{ gap: theme.space.xs, paddingHorizontal: theme.space.sm, paddingBottom: theme.space.sm }}>
+    <View
+      style={{
+        gap: theme.space.xs,
+        paddingHorizontal: theme.space.sm,
+        paddingBottom: theme.space.sm,
+      }}
+    >
       <AppText variant="heading" accessibilityRole="header">
         {seller.store_name}
       </AppText>
@@ -86,15 +107,18 @@ function ProfileHeader({ seller, tab, onTab }: { seller: Storefront; tab: Tab; o
         </AppText>
       ) : null}
       {seller.stats ? (
-        <AppText>{fillSlots(t('buyer.seller.handoffs'), { count: seller.stats.completed_handoff_count })}</AppText>
+        <AppText>
+          {fillSlots(t('buyer.seller.handoffs'), { count: seller.stats.completed_handoff_count })}
+        </AppText>
       ) : null}
       <AppText style={{ color: theme.color.textSecondary }}>
         {summary.count > 0 && summary.average_rating !== null
           ? fillSlots(t('buyer.seller.rating'), {
               // Rounded once, by the server (one decimal): shown as is.
-              average: new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(
-                summary.average_rating,
-              ),
+              average: new Intl.NumberFormat(locale, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 1,
+              }).format(summary.average_rating),
               count: summary.count,
             })
           : t('buyer.seller.no_reviews')}
@@ -111,7 +135,12 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
     <View
       accessibilityRole="tablist"
       accessibilityLabel={t('buyer.seller.tabs')}
-      style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: theme.color.border, marginTop: theme.space.sm }}
+      style={{
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderColor: theme.color.border,
+        marginTop: theme.space.sm,
+      }}
     >
       {TABS.map((key) => {
         const selected = key === tab;
@@ -131,7 +160,12 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
               borderColor: selected ? theme.color.accent : 'transparent',
             }}
           >
-            <AppText style={{ textAlign: 'center', fontWeight: selected ? theme.fontWeight.semibold : undefined }}>
+            <AppText
+              style={{
+                textAlign: 'center',
+                fontWeight: selected ? theme.fontWeight.semibold : undefined,
+              }}
+            >
               {t(`buyer.seller.tab.${key}`)}
             </AppText>
           </Pressable>
@@ -193,8 +227,15 @@ function SceneTile({ scene }: { scene: SellerScene }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
-      onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
+      accessibilityLabel={
+        fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption
+      }
+      onPress={() =>
+        router.push({
+          pathname: '/scenes/[scenePostRef]',
+          params: { scenePostRef: scene.public_ref },
+        })
+      }
       style={{ flex: 1, margin: theme.space.xs, gap: theme.space.xs }}
       testID="seller-scene"
     >
@@ -203,10 +244,22 @@ function SceneTile({ scene }: { scene: SellerScene }) {
           source={{ uri }}
           contentFit="cover"
           cachePolicy="disk"
-          style={{ width: '100%', aspectRatio: 1, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted }}
+          style={{
+            width: '100%',
+            aspectRatio: 1,
+            borderRadius: theme.radius.md,
+            backgroundColor: theme.color.surfaceMuted,
+          }}
         />
       ) : (
-        <View style={{ width: '100%', aspectRatio: 1, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted }} />
+        <View
+          style={{
+            width: '100%',
+            aspectRatio: 1,
+            borderRadius: theme.radius.md,
+            backgroundColor: theme.color.surfaceMuted,
+          }}
+        />
       )}
       <AppText numberOfLines={2} style={{ color: theme.color.textSecondary }}>
         {scene.caption}
@@ -249,14 +302,17 @@ function ProductsTab({ handle, header, onPull }: TabProps) {
 export function ProductTile({
   product,
   handle,
-  store,
+  seller,
 }: {
-  product: Pick<SellerProduct, 'slug' | 'name' | 'price_min_minor' | 'price_max_minor' | 'price_currency' | 'available'> & {
+  product: Pick<
+    SellerProduct,
+    'slug' | 'name' | 'price_min_minor' | 'price_max_minor' | 'price_currency' | 'available'
+  > & {
     image_key: string | null;
   };
   handle: string;
-  /** The Seller's name, shown where products of many Sellers mix (Shop). */
-  store?: string;
+  /** Where Products of many Sellers mix (Shop): the Seller, shown as its own link to the profile. */
+  seller?: { handle: string; store_name: string };
 }) {
   const t = useT();
   const theme = useTheme();
@@ -269,37 +325,77 @@ export function ProductTile({
     max: product.price_max_minor,
     currency: product.price_currency,
   });
-  const availability = t(product.available ? 'buyer.product.available' : 'buyer.product.unavailable');
-  const label = [product.name, store, price, availability].filter(Boolean).join(', ');
+  const availability = t(
+    product.available ? 'buyer.product.available' : 'buyer.product.unavailable',
+  );
+  const label = [product.name, price, availability].filter(Boolean).join(', ');
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={() => router.push({ pathname: '/product/[handle]/[slug]', params: { handle, slug: product.slug } })}
-      style={{ flex: 1, margin: theme.space.xs, gap: theme.space.xs }}
-      testID="product-tile"
-    >
-      {uri ? (
-        <Image
-          source={{ uri }}
-          contentFit="cover"
-          cachePolicy="disk"
-          style={{ width: '100%', aspectRatio: 1, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted }}
-        />
-      ) : (
-        <View style={{ width: '100%', aspectRatio: 1, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted }} />
-      )}
-      <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
-        {product.name}
-      </AppText>
-      {store ? (
-        <AppText numberOfLines={1} style={{ color: theme.color.textSecondary }}>
-          {store}
+    <View style={{ flex: 1, margin: theme.space.xs, gap: theme.space.xs }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() =>
+          router.push({
+            pathname: '/product/[handle]/[slug]',
+            params: { handle, slug: product.slug },
+          })
+        }
+        style={{ gap: theme.space.xs }}
+        testID="product-tile"
+      >
+        {uri ? (
+          <Image
+            source={{ uri }}
+            contentFit="cover"
+            cachePolicy="disk"
+            style={{
+              width: '100%',
+              aspectRatio: 1,
+              borderRadius: theme.radius.md,
+              backgroundColor: theme.color.surfaceMuted,
+            }}
+          />
+        ) : (
+          <View
+            style={{
+              width: '100%',
+              aspectRatio: 1,
+              borderRadius: theme.radius.md,
+              backgroundColor: theme.color.surfaceMuted,
+            }}
+          />
+        )}
+        <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
+          {product.name}
         </AppText>
+        {price ? <AppText>{price}</AppText> : null}
+        <AppText
+          style={{ color: product.available ? theme.color.text : theme.color.textSecondary }}
+        >
+          {availability}
+        </AppText>
+      </Pressable>
+      {seller ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={
+            fillSlots(t('buyer.seller.view'), { store: seller.store_name }) ?? seller.store_name
+          }
+          onPress={() =>
+            router.push({ pathname: '/sellers/[handle]', params: { handle: seller.handle } })
+          }
+          style={{ minHeight: 44, justifyContent: 'center' }}
+          testID="product-tile-seller"
+        >
+          <AppText
+            numberOfLines={1}
+            style={{ color: theme.color.textSecondary, textDecorationLine: 'underline' }}
+          >
+            {seller.store_name}
+          </AppText>
+        </Pressable>
       ) : null}
-      {price ? <AppText>{price}</AppText> : null}
-      <AppText style={{ color: product.available ? theme.color.text : theme.color.textSecondary }}>{availability}</AppText>
-    </Pressable>
+    </View>
   );
 }
 
@@ -328,7 +424,9 @@ function ReviewsTab({ handle, seller, header, onPull }: TabProps & { seller: Sto
         <View>
           {header}
           {seller.review_summary.count > 0 ? (
-            <AppText style={{ color: theme.color.textSecondary, paddingHorizontal: theme.space.sm }}>
+            <AppText
+              style={{ color: theme.color.textSecondary, paddingHorizontal: theme.space.sm }}
+            >
               {t('buyer.seller.reviews.note')}
             </AppText>
           ) : null}
@@ -347,8 +445,12 @@ function ReviewRow({ review }: { review: SellerReview }) {
   const theme = useTheme();
   const locale = useLocale();
   const badge = `buyer.review.badge.${review.badge}`;
-  const rating = fillSlots(t('buyer.review.rating'), { rating: review.seller_rating }) ?? String(review.seller_rating);
-  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(review.published_at));
+  const rating =
+    fillSlots(t('buyer.review.rating'), { rating: review.seller_rating }) ??
+    String(review.seller_rating);
+  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
+    new Date(review.published_at),
+  );
   return (
     <View
       style={{
@@ -365,8 +467,12 @@ function ReviewRow({ review }: { review: SellerReview }) {
       <AppText accessibilityLabel={rating} style={{ fontWeight: theme.fontWeight.semibold }}>
         {`${'★'.repeat(review.seller_rating)}${'☆'.repeat(5 - review.seller_rating)}`}
       </AppText>
-      {hasMessage(badge) ? <AppText style={{ color: theme.color.textSecondary }}>{t(badge)}</AppText> : null}
-      <AppText style={{ color: theme.color.textSecondary }}>{fillSlots(t('buyer.review.date'), { date })}</AppText>
+      {hasMessage(badge) ? (
+        <AppText style={{ color: theme.color.textSecondary }}>{t(badge)}</AppText>
+      ) : null}
+      <AppText style={{ color: theme.color.textSecondary }}>
+        {fillSlots(t('buyer.review.date'), { date })}
+      </AppText>
       {review.body ? <AppText>{review.body}</AppText> : null}
     </View>
   );
@@ -399,8 +505,14 @@ function AboutTab({
     <ScrollView
       testID="seller-about"
       style={{ backgroundColor: theme.color.bg }}
-      contentContainerStyle={{ padding: theme.space.sm, paddingBottom: theme.space.md + insets.bottom, gap: theme.space.md }}
-      refreshControl={<RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />}
+      contentContainerStyle={{
+        padding: theme.space.sm,
+        paddingBottom: theme.space.md + insets.bottom,
+        gap: theme.space.md,
+      }}
+      refreshControl={
+        <RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />
+      }
     >
       {header}
       <View style={{ gap: theme.space.md, paddingHorizontal: theme.space.sm }}>
@@ -412,9 +524,15 @@ function AboutTab({
             <AppText>{seller.description}</AppText>
           </View>
         ) : null}
-        {level && hasMessage(level) ? <AppText>{fillSlots(t('buyer.seller.trust'), { level: t(level) })}</AppText> : null}
+        {level && hasMessage(level) ? (
+          <AppText>{fillSlots(t('buyer.seller.trust'), { level: t(level) })}</AppText>
+        ) : null}
         {seller.availability ? (
-          <AppText>{t(seller.availability.is_open ? 'buyer.seller.about.open' : 'buyer.seller.about.closed')}</AppText>
+          <AppText>
+            {t(
+              seller.availability.is_open ? 'buyer.seller.about.open' : 'buyer.seller.about.closed',
+            )}
+          </AppText>
         ) : null}
         {methods.length > 0 ? (
           <View style={{ gap: theme.space.xs }}>
