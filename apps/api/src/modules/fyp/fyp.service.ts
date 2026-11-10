@@ -48,7 +48,7 @@ const log = createLogger();
 const CAPTION_EXCERPT = 300;
 /**
  * Write limiters per subject per hour, not product rules: session starts, and
- * newly served pages (each writes impressions; replays write nothing). Counted
+ * newly served pages (each writes served units; replays write nothing). Counted
  * in the request transaction (see RateLimitService.consume).
  */
 const SESSION_START_LIMIT = { bucketKey: 'fyp.session', windowSeconds: 3600, max: 120 } as const;
@@ -221,9 +221,9 @@ export class FypService {
   }
 
   /**
-   * A retried or re-read page: the impressions already served after `offset`,
+   * A retried or re-read page: the units already served after `offset`,
    * re-checked against the gate now. A Scene that is no longer public, or whose
-   * public revision is no longer the served one, is dropped -- the impression
+   * public revision is no longer the served one, is dropped -- the served unit
    * stays on record but the content is not re-delivered.
    */
   private async replay(
@@ -290,7 +290,12 @@ export class FypService {
     return { items, more: ranked.length > items.length || rows.length === budget };
   }
 
-  /** Insert the served impressions (positions after `offset`) and advance the session. */
+  /**
+   * Insert the served units (positions after `offset`) and advance the session.
+   * Each row's id is the unit's serve_id. The table keeps its 0055 name,
+   * core.fyp_impression (naming debt, WO-DISC-002A): it records DELIVERY, never
+   * a qualified impression.
+   */
   private async record(
     trx: Transaction<Database>,
     sessionId: string,
@@ -424,7 +429,7 @@ export class FypService {
 }
 
 function unit(
-  impressionId: string,
+  serveId: string,
   position: number,
   source: string,
   p: PublicScene,
@@ -433,7 +438,7 @@ function unit(
   const caption = captionExcerpt(p.caption, CAPTION_EXCERPT);
   return {
     type: 'SCENE_POST',
-    impression_id: impressionId,
+    serve_id: serveId,
     position,
     candidate_source: source,
     public_ref: p.public_ref,

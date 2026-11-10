@@ -78,7 +78,7 @@ class FypAppModule {}
 
 interface Unit {
   type: string;
-  impression_id: string;
+  serve_id: string;
   position: number;
   candidate_source: string;
   public_ref: string;
@@ -383,7 +383,7 @@ describe('WO-DISC-002 -- For You API', () => {
         expect(u.candidate_source).toBe('RECENT');
         expect(Object.keys(u).sort()).toEqual(
           [
-            'candidate_source', 'caption', 'caption_truncated', 'image', 'impression_id', 'position',
+            'candidate_source', 'caption', 'caption_truncated', 'image', 'serve_id', 'position',
             'products', 'public_ref', 'published_at', 'revision_version', 'seller', 'type',
           ].sort(),
         );
@@ -391,7 +391,7 @@ describe('WO-DISC-002 -- For You API', () => {
         for (const tag of u.products) expect(Object.keys(tag).sort()).toEqual(['available', 'name', 'position', 'slug']);
       }
       expect(p.items.map((u) => u.position)).toEqual([1, 2, 3, 4, 5, 6]);
-      expect(new Set(p.items.map((u) => u.impression_id)).size).toBe(6);
+      expect(new Set(p.items.map((u) => u.serve_id)).size).toBe(6);
       const times = p.items.map((u) => Date.parse(u.published_at));
       expect([...times].sort((a, b) => b - a)).toEqual(times);
       expect(p.items[0]!.seller).toEqual({ handle: 'd25-alpha', store_name: 'D25 Alpha' });
@@ -419,7 +419,7 @@ describe('WO-DISC-002 -- For You API', () => {
       );
       expect(rows.rows).toEqual(
         p.items.map((u) => ({
-          id: u.impression_id, position: u.position, candidate_source: 'RECENT', algorithm_version: BASELINE, current: true,
+          id: u.serve_id, position: u.position, candidate_source: 'RECENT', algorithm_version: BASELINE, current: true,
         })),
       );
       const s = await admin.query<{ served_count: number }>(`SELECT served_count FROM core.fyp_session WHERE id = $1`, [
@@ -443,7 +443,7 @@ describe('WO-DISC-002 -- For You API', () => {
       expect(p2.next_cursor).toBeNull();
     });
 
-    it('a retried page replays its exact impressions', async () => {
+    it('a retried page replays its exact served units', async () => {
       const p1 = await page(guest(DEV.d, { limit: '2' }));
       const p2 = await page(guest(DEV.d, { limit: '2', cursor: p1.next_cursor! }));
       const again = await page(guest(DEV.d, { limit: '2', cursor: p1.next_cursor! }));
@@ -561,6 +561,78 @@ describe('WO-DISC-002 -- For You API', () => {
     });
   });
 
+  // ---------------------------------------------- WO-DISC-002A served units
+
+  /**
+   * The served-unit contract (WO-DISC-002A). `serve_id` proves DELIVERY: this Scene
+   * revision, at this position, in this session, ranked by this version. It is not an
+   * impression; a qualified impression is a later client observation (ADU-ANL-01 S331)
+   * and nothing here creates one.
+   */
+  describe('the served-unit contract', () => {
+    it('the server issues serve_id; a client-supplied one is ignored, never echoed, and no impression id is served', async () => {
+      const forged = '5e5e5e5e-0000-4000-8000-000000000001';
+      const p = await page(guest(DEV.a, { serve_id: forged, impression_id: forged }));
+      expect(p.items.length).toBeGreaterThan(0);
+      for (const u of p.items) {
+        expect(u.serve_id).toMatch(/^[0-9a-f-]{36}$/);
+        expect(u.serve_id).not.toBe(forged);
+        expect(u).not.toHaveProperty('impression_id');
+      }
+      const rows = await admin.query<{ id: string }>(
+        `SELECT id FROM core.fyp_impression WHERE session_id = $1`,
+        [p.feed_session_id],
+      );
+      expect(rows.rows.map((r) => r.id).sort()).toEqual(p.items.map((u) => u.serve_id).sort());
+    });
+
+    it('each serve_id is bound to its session, Market, exact served revision, position and version', async () => {
+      const p = await page(guest(DEV.b, { limit: '3' }));
+      const rows = await admin.query<{
+        id: string; market_id: string; revision_version: number; algorithm_version: string;
+        public_ref: string; position: number;
+      }>(
+        `SELECT i.id, s.market_id, r.version AS revision_version, i.algorithm_version,
+                sp.public_ref, i.position
+           FROM core.fyp_impression i
+           JOIN core.fyp_session s ON s.id = i.session_id
+           JOIN core.scene_post_revision r ON r.id = i.revision_id
+           JOIN core.scene_post sp ON sp.id = i.scene_post_id
+          WHERE i.session_id = $1 ORDER BY i.position`,
+        [p.feed_session_id],
+      );
+      expect(rows.rows).toEqual(
+        p.items.map((u) => ({
+          id: u.serve_id, market_id: M, revision_version: u.revision_version,
+          algorithm_version: p.algorithm_version, public_ref: u.public_ref, position: u.position,
+        })),
+      );
+    });
+
+    it('a retried page keeps its serve_ids; a new session issues new ones for the same Scenes', async () => {
+      const p1 = await page(guest(DEV.c, { limit: '2' }));
+      const p2 = await page(guest(DEV.c, { limit: '2', cursor: p1.next_cursor! }));
+      const again = await page(guest(DEV.c, { limit: '2', cursor: p1.next_cursor! }));
+      expect(again.items.map((u) => u.serve_id)).toEqual(p2.items.map((u) => u.serve_id));
+      const fresh = await page(guest(DEV.c, { limit: '2' }));
+      expect(fresh.feed_session_id).not.toBe(p1.feed_session_id);
+      expect(fresh.items.map((u) => u.public_ref)).toEqual(p1.items.map((u) => u.public_ref));
+      const earlier = new Set(p1.items.map((u) => u.serve_id));
+      expect(fresh.items.every((u) => !earlier.has(u.serve_id))).toBe(true);
+    });
+
+    it('serving writes no analytics event: a returned unit is not an impression', async () => {
+      const p = await page(guest(DEV.d, { limit: '2' }));
+      expect(p.items.length).toBe(2);
+      const events = await admin.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM analytics.event
+          WHERE device_id = $1 OR payload::text LIKE '%' || $2 || '%'`,
+        [DEV.d, p.feed_session_id],
+      );
+      expect(events.rows[0]!.n).toBe(0);
+    });
+  });
+
   // ------------------------------------------------------------- the database
 
   describe('database guarantees', () => {
@@ -584,12 +656,12 @@ describe('WO-DISC-002 -- For You API', () => {
           `INSERT INTO core.fyp_impression (session_id, scene_post_id, revision_id, algorithm_version, position, candidate_source)
            SELECT session_id, scene_post_id, revision_id, algorithm_version, 2, 'RECENT'
              FROM core.fyp_impression WHERE id = $1`,
-          [p.items[0]!.impression_id],
+          [p.items[0]!.serve_id],
         ),
       ).rejects.toMatchObject({ code: '23505' });
     });
 
-    it('device.purge_unbound, as adulis_jobs, takes a stale guest device with its sessions and impressions', async () => {
+    it('device.purge_unbound, as adulis_jobs, takes a stale guest device with its sessions and served units', async () => {
       const p = await page(guest(DEV.purge, { limit: '2' }));
       // Older than the Market's media_retention (90 days in this fixture).
       await admin.query(`UPDATE core.device SET last_seen_at = now() - interval '200 days' WHERE id = $1`, [DEV.purge]);
@@ -611,7 +683,7 @@ describe('WO-DISC-002 -- For You API', () => {
       expect(left.rows[0]).toEqual({ s: 0, i: 0 });
     });
 
-    it("deleting an Account purges its For You sessions and impressions", async () => {
+    it("deleting an Account purges its For You sessions and served units", async () => {
       const p = await page(
         server()
           .get('/v1/fyp')
@@ -664,7 +736,7 @@ describe('WO-DISC-002 -- For You API', () => {
       );
       expect((await guest(DEV.e, { limit: '2', cursor: p1.next_cursor! }).expect(429)).body.code).toBe('RATE_LIMITED');
       const replay = await page(guest(DEV.e, { limit: '2', cursor: p1.next_cursor!.replace(/\.2\./, '.0.') }));
-      expect(replay.items.map((u) => u.impression_id)).toEqual(p1.items.map((u) => u.impression_id));
+      expect(replay.items.map((u) => u.serve_id)).toEqual(p1.items.map((u) => u.serve_id));
     });
 
     it('session starts are rate-limited per subject', async () => {

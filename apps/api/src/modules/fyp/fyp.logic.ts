@@ -125,7 +125,7 @@ export function captionExcerpt(caption: string, max: number): { text: string; tr
  *   changed session id or secret matches nothing.
  * - The offset is the number of units already delivered before this page. It
  *   needs no MAC: whoever holds the secret may re-read their own session's
- *   served units (a retried page replays its exact impressions), and an offset
+ *   served units (a retried page replays its exact served units), and an offset
  *   beyond what was served is refused.
  * - Expiry, the subject, the Market and the algorithm version are checked
  *   against the session row on every use, never trusted from the cursor.

@@ -47,11 +47,22 @@ export class ScenePostFeedUnitDto {
     description: 'The only unit type. Clients skip any unit type they do not know.',
   })
   type!: 'SCENE_POST';
+  /**
+   * WO-DISC-002A: the SERVED-UNIT identity, named for what it proves. It was
+   * `impression_id`, after ADU-REC-01 v3.2 S454; but ADU-ANL-01 v3.3 S331 keeps
+   * "impression" for a later client observation that meets the visibility
+   * threshold, and a re-exposure earns a new one. Delivery is not visibility,
+   * so the two identities are two fields (the qualified `impression_id` comes
+   * with telemetry, which does not exist yet). Stored as core.fyp_impression.id
+   * -- that table name is recorded naming debt.
+   */
   @ApiProperty({
     format: 'uuid',
-    description: 'The served-impression identity (S55): send it with the telemetry of this unit.',
+    description:
+      'Server-issued identity of this delivery: this Scene revision, at this position, in this feed session, ranked by this algorithm version. ' +
+      'A retried or replayed page returns the same serve_id. It is NOT an impression: a qualified impression is a separate, later client observation that will reference it.',
   })
-  impression_id!: string;
+  serve_id!: string;
   @ApiProperty({ type: 'integer', minimum: 1, description: 'Position in the feed session.' })
   position!: number;
   @ApiProperty({ enum: FYP_CANDIDATE_SOURCES }) candidate_source!: string;
