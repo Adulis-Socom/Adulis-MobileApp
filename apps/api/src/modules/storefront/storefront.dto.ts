@@ -49,9 +49,11 @@ export class StorefrontProductListItemDto extends PublicProductSummaryDto {
   image_key!: string | null;
 }
 
-/** GET /v1/storefronts/{handle}/products: at most 100 PUBLISHED Products, unavailable ones included. */
+/** GET /v1/storefronts/{handle}/products: PUBLISHED Products in the Seller's order, unavailable ones included, a page at a time. */
 export class StorefrontProductListDto {
   @ApiProperty({ type: [StorefrontProductListItemDto] }) data!: StorefrontProductListItemDto[];
+  @ApiProperty({ type: String, nullable: true, description: 'Opaque; pass as `cursor` for the next page. Null: the end.' })
+  next_cursor!: string | null;
 }
 
 /** GET /v1/storefronts/{handle}/search: at most 25, one Seller only. */
@@ -130,4 +132,93 @@ export class StorefrontProductDto extends PublicProductSummaryDto {
   @ApiProperty({ type: [StorefrontProductAttributeDto] }) attributes!: StorefrontProductAttributeDto[];
   @ApiProperty({ type: [StorefrontProductImageDto], description: 'In presentation order.' })
   images!: StorefrontProductImageDto[];
+}
+
+// ---------------------------------------------------------------- WO-006 Seller Profile
+
+export class StorefrontStatsDto {
+  @ApiProperty({ enum: ['NEW', 'ESTABLISHED', 'TRUSTED'], description: 'Public Trust level (core.trust_level).' })
+  level!: 'NEW' | 'ESTABLISHED' | 'TRUSTED';
+  @ApiProperty({ type: 'integer' }) completed_handoff_count!: number;
+  @ApiProperty({ type: String, nullable: true, description: 'Decimal fraction as text, or null. No denominator is exposed: do not present as a percentage claim.' })
+  cancellation_rate!: string | null;
+  @ApiProperty({ type: String, nullable: true }) confirmation_rate!: string | null;
+  @ApiProperty({ type: String, nullable: true }) scan_completion_rate!: string | null;
+  @ApiProperty({ type: 'integer' }) unresolved_claim_count!: number;
+  @ApiProperty({ type: 'integer' }) missed_confirmation_windows!: number;
+}
+
+export class StorefrontAvailabilityDto {
+  @ApiProperty({ description: "Whether the Seller is open now (the server's derivation; never computed by a client)." })
+  is_open!: boolean;
+  @ApiProperty({ description: 'Reason code of the derivation.' }) reason!: string;
+  @ApiProperty({ type: String, nullable: true }) note!: string | null;
+}
+
+export class ReviewBadgeCountsDto {
+  @ApiProperty({ type: 'integer' }) CLAIM_UPHELD!: number;
+  @ApiProperty({ type: 'integer' }) VERIFIED_HANDOFF!: number;
+  @ApiProperty({ type: 'integer' }) CONFIRMED_BY_BUYER!: number;
+  @ApiProperty({ type: 'integer' }) UNVERIFIED!: number;
+}
+
+export class ReviewSummaryDto {
+  @ApiProperty({ type: 'integer', description: 'Seller-service reviews.' }) count!: number;
+  @ApiProperty({ type: Number, nullable: true, description: 'Arithmetic mean of seller_rating (1-5), 2 decimals; null with no review.' })
+  average_rating!: number | null;
+  @ApiProperty({ type: ReviewBadgeCountsDto, description: 'Counts by evidence basis (REV-01 S30).' })
+  badge_counts!: ReviewBadgeCountsDto;
+}
+
+/** GET /v1/storefronts/{handle}: the public Seller, one round trip (S3.1). */
+export class StorefrontDto {
+  @ApiProperty({ format: 'uuid', description: 'Internal identity; the Seller is addressed by handle.' }) seller_id!: string;
+  @ApiProperty() store_name!: string;
+  @ApiProperty() handle!: string;
+  @ApiProperty({ type: String, nullable: true }) description!: string | null;
+  @ApiProperty({ enum: ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'] }) status!: string;
+  @ApiProperty({ description: 'Date the Seller joined Adulis (YYYY-MM-DD, UTC).' }) member_since!: string;
+  @ApiProperty({ type: StorefrontStatsDto, nullable: true }) stats!: StorefrontStatsDto | null;
+  @ApiProperty({ type: StorefrontAvailabilityDto, nullable: true }) availability!: StorefrontAvailabilityDto | null;
+  @ApiProperty({ type: ReviewSummaryDto }) review_summary!: ReviewSummaryDto;
+  @ApiProperty({
+    type: [String],
+    enum: ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY'],
+    description: 'Active fulfilment methods, as codes (render with catalogue labels).',
+  })
+  fulfilment_methods!: string[];
+}
+
+export class SellerSceneImageDto {
+  @ApiProperty() thumb_key!: string;
+  @ApiProperty() card_key!: string;
+}
+
+export class SellerSceneDto {
+  @ApiProperty({ description: 'Scene route: /v1/scene-posts/{publicRef}.' }) public_ref!: string;
+  @ApiProperty({ format: 'date-time' }) published_at!: string;
+  @ApiProperty({ description: 'Caption excerpt (140 graphemes).' }) caption!: string;
+  @ApiProperty() caption_truncated!: boolean;
+  @ApiProperty({ type: SellerSceneImageDto }) image!: SellerSceneImageDto;
+}
+
+/** GET /v1/storefronts/{handle}/scenes. */
+export class SellerSceneListDto {
+  @ApiProperty({ type: [SellerSceneDto] }) data!: SellerSceneDto[];
+  @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
+}
+
+export class StorefrontReviewDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 5, description: 'Seller service, 1-5.' }) seller_rating!: number;
+  @ApiProperty({ type: String, nullable: true }) body!: string | null;
+  @ApiProperty({ enum: ['CLAIM_UPHELD', 'VERIFIED_HANDOFF', 'CONFIRMED_BY_BUYER', 'UNVERIFIED'], description: 'Evidence basis (S12).' })
+  badge!: string;
+  @ApiProperty({ format: 'date-time' }) published_at!: string;
+}
+
+/** GET /v1/storefronts/{handle}/reviews. */
+export class StorefrontReviewListDto {
+  @ApiProperty({ type: [StorefrontReviewDto] }) data!: StorefrontReviewDto[];
+  @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
 }

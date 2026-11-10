@@ -3,10 +3,15 @@ import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery } f
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import {
   PostLinkProductListDto,
+  SellerSceneListDto,
+  StorefrontDto,
   StorefrontProductDto,
   StorefrontProductListDto,
+  StorefrontReviewListDto,
   StorefrontSearchResultListDto,
 } from './storefront.dto';
+import { CURSOR_TS, decodeCursor, encodeCursor, pageLimit } from '../../common/http/cursor';
+import { captionExcerpt } from '../fyp/fyp.logic';
 import type { Response } from 'express';
 import { Inject } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
@@ -60,6 +65,9 @@ const VISIBLE_STATES = ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'];
 
 const first = <T>(rows: readonly T[]): T | undefined => rows[0];
 
+/** A Seller Profile Scene tile shows a short excerpt; the Explorer reads the whole caption. */
+const SCENE_CAPTION_EXCERPT = 140;
+
 /** A public Product summary as the projection reads it (bigint money arrives as text). */
 interface ProductSummaryRow {
   id: string;
@@ -91,6 +99,7 @@ interface SellerRow {
   handle: string;
   description: string | null;
   status: string;
+  member_since: string;
 }
 
 @Controller()
@@ -116,7 +125,8 @@ export class StorefrontController {
   ): Promise<SellerRow> {
     const market = await requesterMarket(trx, req);
     const r = await sql<SellerRow>`
-      SELECT s.id, s.market_id, s.store_name, s.handle, s.description, s.status
+      SELECT s.id, s.market_id, s.store_name, s.handle, s.description, s.status,
+             to_char(s.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS member_since
         FROM core.seller s
         JOIN core.market m ON m.id = s.market_id
        WHERE s.handle = ${handle}
@@ -156,18 +166,24 @@ export class StorefrontController {
 
   @Get('storefronts/:handle')
   @Public()
-  @ApiOperation({ summary: 'Header, stats, trust level, availability — one round trip (S3.1).' })
+  @ApiOperation({
+    summary:
+      'Header, stats, trust level, availability, review summary and fulfilment -- one round trip (S3.1; the Buyer Seller Profile header and About).',
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiOkResponse({ type: StorefrontDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async storefront(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
-  ): Promise<unknown> {
+  ): Promise<StorefrontDto> {
     // The answer depends on the requester's Market and is read now: never shared-cached, its
     // 404 included (set before anything can throw).
     res.setHeader('Cache-Control', 'no-store');
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
-      const stats = await sql<Record<string, unknown>>`
+      const stats = await sql<StorefrontDto['stats'] & object>`
         SELECT ps.level, ps.completed_handoff_count, ps.cancellation_rate,
                ps.confirmation_rate, ps.scan_completion_rate,
                ps.unresolved_claim_count, ps.missed_confirmation_windows
@@ -175,15 +191,51 @@ export class StorefrontController {
          WHERE ps.seller_id = ${seller.id}`.execute(trx);
       const availability = await sql<{ is_open: boolean; reason: string; note: string | null }>`
         SELECT * FROM core.fn_seller_availability_state(${seller.id}, now())`.execute(trx);
+      // Seller-service reviews, aggregated plainly (REV-01 S19: arithmetic mean, no blended
+      // score; S30: counts by evidence basis). Reviews publish immediately and nothing hides
+      // one in the database today, so every review counts.
+      const reviews = await sql<{
+        count: number;
+        average: string | null;
+        claim_upheld: number;
+        verified_handoff: number;
+        confirmed_by_buyer: number;
+        unverified: number;
+      }>`
+        SELECT count(*)::int AS count,
+               round(avg(rv.seller_rating)::numeric, 2)::text AS average,
+               count(*) FILTER (WHERE rv.badge = 'CLAIM_UPHELD')::int AS claim_upheld,
+               count(*) FILTER (WHERE rv.badge = 'VERIFIED_HANDOFF')::int AS verified_handoff,
+               count(*) FILTER (WHERE rv.badge = 'CONFIRMED_BY_BUYER')::int AS confirmed_by_buyer,
+               count(*) FILTER (WHERE rv.badge = 'UNVERIFIED')::int AS unverified
+          FROM core.review rv
+         WHERE rv.seller_id = ${seller.id}`.execute(trx);
+      const fulfilment = await sql<{ method: string }>`
+        SELECT method::text AS method FROM core.seller_fulfilment_method
+         WHERE seller_id = ${seller.id} AND is_active
+         ORDER BY method`.execute(trx);
       await this.emit(trx, 'storefront_viewed', seller.market_id, seller.id);
+      const rv = first(reviews.rows);
       return {
         seller_id: seller.id,
         store_name: seller.store_name,
         handle: seller.handle,
         description: seller.description,
         status: seller.status,
+        member_since: seller.member_since,
         stats: first(stats.rows) ?? null,
         availability: first(availability.rows) ?? null,
+        review_summary: {
+          count: rv?.count ?? 0,
+          average_rating: rv?.average === null || rv?.average === undefined ? null : Number(rv.average),
+          badge_counts: {
+            CLAIM_UPHELD: rv?.claim_upheld ?? 0,
+            VERIFIED_HANDOFF: rv?.verified_handoff ?? 0,
+            CONFIRMED_BY_BUYER: rv?.confirmed_by_buyer ?? 0,
+            UNVERIFIED: rv?.unverified ?? 0,
+          },
+        },
+        fulfilment_methods: fulfilment.rows.map((f) => f.method),
       };
     });
   }
@@ -195,21 +247,33 @@ export class StorefrontController {
       "Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false.",
   })
   @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-100 (default 100).' })
   @ApiOkResponse({ type: StorefrontProductListDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async products(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limitRaw?: string,
   ): Promise<StorefrontProductListDto> {
     // The answer depends on the requester's Market and is read now: never shared-cached, its
     // 404 included (set before anything can throw).
     res.setHeader('Cache-Control', 'no-store');
+    // The Seller's display order, as before, with a stable tiebreak so pages never overlap or
+    // skip (WO-006): (display_order, created_at, slug). The slug, not the id, keeps internal
+    // UUIDs out of the list URL.
+    const limit = pageLimit(limitRaw, 100, 100);
+    const after = decodeCursor(cursor, ['int', 'timestamp', 'slug']);
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
-      const r = await sql<ProductSummaryRow & { display_order: number; image_key: string | null }>`
+      const r = await sql<
+        ProductSummaryRow & { display_order: number; image_key: string | null; created_key: string }
+      >`
         SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
                p.display_order,
+               to_char(p.created_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS created_key,
                (SELECT i.card_key FROM core.product_image i
                  WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
                pp.price_min_minor, pp.price_max_minor, pp.price_currency,
@@ -219,9 +283,18 @@ export class StorefrontController {
           JOIN core.market m ON m.id = p.market_id
          CROSS JOIN ${publicPrice}
          WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
-         ORDER BY p.display_order, p.created_at
-         LIMIT 100`.execute(trx);
-      return { data: r.rows.map((row) => ({ ...summary(row), display_order: row.display_order, image_key: row.image_key })) };
+           AND (${after === null}
+                OR (p.display_order, p.created_at, p.slug)
+                   > (${after?.[0] ?? 0}::int, ${after?.[1] ?? null}::timestamptz, ${after?.[2] ?? ''}::text))
+         ORDER BY p.display_order, p.created_at, p.slug
+         LIMIT ${limit + 1}`.execute(trx);
+      const page = r.rows.slice(0, limit);
+      const last = page[page.length - 1];
+      return {
+        data: page.map((row) => ({ ...summary(row), display_order: row.display_order, image_key: row.image_key })),
+        next_cursor:
+          r.rows.length > limit && last ? encodeCursor([last.display_order, last.created_key, last.slug]) : null,
+      };
     });
   }
 
@@ -404,34 +477,121 @@ export class StorefrontController {
     });
   }
 
+  @Get('storefronts/:handle/scenes')
+  @Public()
+  @ApiOperation({
+    summary:
+      "The Seller's public Scenes, newest first: only Scenes the canonical public gate (v_scene_post_public) admits now; a PRIVATE, draft or archived Scene is simply absent. Cursor-paginated.",
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50 (default 20).' })
+  @ApiOkResponse({ type: SellerSceneListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
+  async scenes(
+    @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param('handle') handle: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limitRaw?: string,
+  ): Promise<SellerSceneListDto> {
+    // Eligibility is decided per delivery: never shared-cached, its 404 included.
+    res.setHeader('Cache-Control', 'no-store');
+    const limit = pageLimit(limitRaw, 20, 50);
+    const after = decodeCursor(cursor, ['timestamp', 'ref']);
+    return this.tx.run(req, async (trx) => {
+      const seller = await this.sellerByHandle(trx, req, handle);
+      const r = await sql<{
+        public_ref: string;
+        published_at: Date;
+        published_key: string;
+        caption: string;
+        image_thumb_key: string;
+        image_card_key: string;
+      }>`
+        SELECT v.public_ref, v.published_at,
+               to_char(v.published_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS published_key,
+               v.caption, v.image_thumb_key, v.image_card_key
+          FROM core.v_scene_post_public v
+         WHERE v.seller_id = ${seller.id}
+           AND (${after === null}
+                OR (v.published_at, v.public_ref) < (${after?.[0] ?? null}::timestamptz, ${after?.[1] ?? ''}::text))
+         ORDER BY v.published_at DESC, v.public_ref DESC
+         LIMIT ${limit + 1}`.execute(trx);
+      const page = r.rows.slice(0, limit);
+      const last = page[page.length - 1];
+      return {
+        data: page.map((row) => {
+          const caption = captionExcerpt(row.caption, SCENE_CAPTION_EXCERPT);
+          return {
+            public_ref: row.public_ref,
+            published_at: row.published_at.toISOString(),
+            caption: caption.text,
+            caption_truncated: caption.truncated,
+            image: { thumb_key: row.image_thumb_key, card_key: row.image_card_key },
+          };
+        }),
+        next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.public_ref]) : null,
+      };
+    });
+  }
+
   @Get('storefronts/:handle/reviews')
   @Public()
-  @ApiOperation({ summary: 'Badge per review (S12); anonymised rows carry no buyer.' })
+  @ApiOperation({
+    summary:
+      'Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated.',
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50 (default 25).' })
+  @ApiOkResponse({ type: StorefrontReviewListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async reviews(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
     @Query('cursor') cursor?: string,
-  ): Promise<unknown> {
+    @Query('limit') limitRaw?: string,
+  ): Promise<StorefrontReviewListDto> {
     // The answer depends on the requester's Market and is read now: never shared-cached, its
     // 404 included (set before anything can throw).
     res.setHeader('Cache-Control', 'no-store');
+    // The cursor was the last published_at as a raw ISO string, cast in SQL: a malformed value
+    // was a 500, the millisecond truncation skipped rows, and equal timestamps were skipped at
+    // a page boundary. Now: validated (published_at at full precision, id), tie-safe. The review
+    // id is already in every row, so the cursor discloses nothing new.
+    const after = decodeCursor(cursor, ['timestamp', 'uuid']);
+    const limit = pageLimit(limitRaw, 25, 50);
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
-      const limit = 25;
-      const r = await sql<Record<string, unknown> & { published_at: Date }>`
-        SELECT rv.id, rv.seller_rating, rv.body, rv.badge, rv.published_at
+      const r = await sql<{
+        id: string;
+        seller_rating: number;
+        body: string | null;
+        badge: string;
+        published_at: Date;
+        published_key: string;
+      }>`
+        SELECT rv.id, rv.seller_rating, rv.body, rv.badge::text AS badge, rv.published_at,
+               to_char(rv.published_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS published_key
           FROM core.review rv
          WHERE rv.seller_id = ${seller.id}
-           AND (${cursor ?? null}::timestamptz IS NULL
-                OR rv.published_at < ${cursor ?? null}::timestamptz)
-         ORDER BY rv.published_at DESC
+           AND (${after === null}
+                OR (rv.published_at, rv.id) < (${after?.[0] ?? null}::timestamptz, ${after?.[1] ?? null}::uuid))
+         ORDER BY rv.published_at DESC, rv.id DESC
          LIMIT ${limit + 1}`.execute(trx);
-      const data = r.rows.slice(0, limit);
+      const page = r.rows.slice(0, limit);
+      const last = page[page.length - 1];
       return {
-        data,
-        next_cursor:
-          r.rows.length > limit ? data[data.length - 1]?.published_at.toISOString() : null,
+        data: page.map((row) => ({
+          id: row.id,
+          seller_rating: row.seller_rating,
+          body: row.body,
+          badge: row.badge,
+          published_at: row.published_at.toISOString(),
+        })),
+        next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.id]) : null,
       };
     });
   }
