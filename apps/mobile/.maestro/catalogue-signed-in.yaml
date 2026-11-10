@@ -1,0 +1,53 @@
+# Public Product data (WO-CAT-001) while signed in: the same Scene -> Product journey and the
+# same server answers as for a guest (public reads never carry the bearer). Starts signed in
+# on Saved (after buyer-auth-request.yaml and a sign-in), then signs out at the end.
+#
+#   maestro test .maestro/catalogue-signed-in.yaml
+appId: com.adulis.app
+name: Catalogue - signed-in Scene to Product
+tags:
+  - buyer
+  - catalogue
+---
+- back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- scrollUntilVisible:
+    element: Explore the Scene
+    direction: DOWN
+- tapOn:
+    text: Explore the Scene
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- assertVisible: '1\. Woven basket, .*900\.00.*1,200\.00'
+- tapOn: '1\. Woven basket.*'
+- scrollUntilVisible:
+    element: View Product
+    direction: DOWN
+- tapOn: View Product
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+- assertVisible: '.*900\.00.*1,200\.00'
+- scrollUntilVisible:
+    element: 'Small, .*900\.00, Available'
+    direction: DOWN
+- assertVisible: 'Large, .*1,200\.00, Currently unavailable'
+- takeScreenshot: cat-09-signed-in-product
+- back
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- tapOn: You
+- assertVisible: Sign out
+- tapOn: Sign out
+- extendedWaitUntil:
+    visible: Sign in to see your profile.
+    timeout: 10000

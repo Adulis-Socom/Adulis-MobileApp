@@ -1,0 +1,44 @@
+# Public Product data (WO-CAT-001): Product links. A malformed handle or slug asks nothing and
+# shows the neutral message; an unknown slug is the server's same neutral 404; a valid link
+# opens the Product cold, in the device's Market.
+#
+#   maestro test .maestro/catalogue-product-link.yaml
+appId: com.adulis.app
+name: Catalogue - Product links
+tags:
+  - buyer
+  - catalogue
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- openLink: adulis://product/Bad.Handle/x
+- extendedWaitUntil:
+    visible: This Product is no longer available.
+    timeout: 30000
+- takeScreenshot: cat-10-malformed
+- tapOn: Go back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- openLink: adulis://product/fixture-weaves/no-such-product
+- extendedWaitUntil:
+    visible: This Product is no longer available.
+    timeout: 30000
+- takeScreenshot: cat-11-unknown
+- tapOn: Go back
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- stopApp
+- openLink: adulis://product/fixture-weaves/woven-basket
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 120000
+- assertVisible: '.*900\.00.*1,200\.00'
+- assertNotVisible: '.*5,000\.00.*'
+- takeScreenshot: cat-12-cold-link

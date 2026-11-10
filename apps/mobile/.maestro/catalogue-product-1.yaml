@@ -1,0 +1,59 @@
+# Public Product data (WO-CAT-001), part 1: open a tagged Product from Explore the Scene, as a
+# guest, against the real local API. The Scene and the Product show the same price span, each
+# option's availability comes from the server, no attribute is shown (none can be said in words
+# yet), and nothing from the other Market's Seller with the same handle appears.
+#
+# Needs the development-only WO-CAT-001 fixtures (docs/catalogue/WO-CAT-001-PUBLIC-READ-INTEGRITY.md
+# section 25): Seller "Fixture Weaves" (fixture-weaves) in the device's Market with Woven basket
+# (Small 900.00 x3, Large 1,200.00 x0), Cotton scarf, Clay cup; the newest Scene tags basket,
+# scarf, cup. Market B has another "fixture-weaves" whose Woven basket costs 5,000.00.
+# Parts 2-3 (catalogue-product-refresh.yaml, catalogue-product-back.yaml) continue from here
+# after the Seller API changes stock, price and publication.
+#
+#   maestro test .maestro/catalogue-product-1.yaml
+appId: com.adulis.app
+name: Catalogue - open a tagged Product
+tags:
+  - buyer
+  - catalogue
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- scrollUntilVisible:
+    element: Explore the Scene
+    direction: DOWN
+- tapOn:
+    text: Explore the Scene
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- assertVisible: '1\. Woven basket, .*900\.00.*1,200\.00'
+- assertNotVisible: '.*5,000\.00.*'
+- takeScreenshot: cat-01-explorer
+- tapOn: '1\. Woven basket.*'
+- scrollUntilVisible:
+    element: View Product
+    direction: DOWN
+- tapOn: View Product
+- extendedWaitUntil:
+    visible: Sold by Fixture Weaves
+    timeout: 30000
+# The same span as the Scene tag, from the server; never the 1,000.00 seed or Market B's price.
+- assertVisible: '.*900\.00.*1,200\.00'
+- assertNotVisible: '.*1,000\.00.*'
+- assertNotVisible: '.*5,000\.00.*'
+- assertNotVisible: Product details
+- takeScreenshot: cat-02-product
+- scrollUntilVisible:
+    element: 'Small, .*900\.00, Available'
+    direction: DOWN
+- assertVisible: 'Large, .*1,200\.00, Currently unavailable'
+- assertNotVisible: Add to cart
+- assertNotVisible: Buy now
+- takeScreenshot: cat-03-options

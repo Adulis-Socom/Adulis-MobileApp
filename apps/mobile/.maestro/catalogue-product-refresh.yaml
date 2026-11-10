@@ -1,0 +1,23 @@
+# Public Product data (WO-CAT-001), part 2: on the open Product, pull to refresh and expect the
+# server's new answer. Run after the Seller API changed stock, a price or the publication.
+# The pull is a revalidation: the server records no product view for it (OVN-073).
+#
+#   maestro test -e EXPECT='Small, .*900\.00, Currently unavailable' -e SHOT=cat-04 .maestro/catalogue-product-refresh.yaml
+appId: com.adulis.app
+name: Catalogue - refresh the open Product
+tags:
+  - buyer
+  - catalogue
+---
+# Back to the top of the page, then pull down.
+- scrollUntilVisible:
+    element: 'Woven basket|This Product is no longer available\.'
+    direction: UP
+- swipe:
+    start: 50%, 25%
+    end: 50%, 85%
+- scrollUntilVisible:
+    element: ${EXPECT}
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: ${SHOT}

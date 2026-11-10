@@ -1,0 +1,22 @@
+# Public Product data (WO-CAT-001), part 3: the Product was unpublished and shows only the
+# neutral message; Go back returns to Explore the Scene, which reads the Scene again: the
+# unpublished Product is no longer listed and the Scene's other Products still are.
+#
+#   maestro test .maestro/catalogue-product-back.yaml
+appId: com.adulis.app
+name: Catalogue - back from an unpublished Product
+tags:
+  - buyer
+  - catalogue
+---
+- assertVisible: This Product is no longer available.
+- assertNotVisible: Sold by Fixture Weaves
+- tapOn: Go back
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: '.*Woven basket.*'
+    timeout: 30000
+- assertVisible: '.*Clay cup, .*350\.00'
+- takeScreenshot: cat-08-explorer-after-unpublish
