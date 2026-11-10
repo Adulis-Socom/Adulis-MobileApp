@@ -283,6 +283,23 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(miss.body.data).toHaveLength(0);
     });
 
+    it('the product read is typed: integer money, availability now, the Seller, no-store (WO-005)', async () => {
+      const list = await http().get('/v1/storefronts/c8-store/products').expect(200);
+      const slug = list.body.data[0].slug as string;
+      const r = await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(200);
+      expect(r.headers['cache-control']).toBe('no-store');
+      expect(r.body).toMatchObject({
+        slug,
+        name: 'Woven scarf',
+        base_price_minor: 80000,
+        base_price_currency: 'ETB',
+        available: true,
+        seller: { handle: 'c8-store', store_name: 'C8 Store' },
+      });
+      expect(r.body.variants[0]).toMatchObject({ price_minor: 80000, price_currency: 'ETB', stock_count: 4 });
+      expect(typeof r.body.variants[0].stock_confirmed_at).toBe('string');
+    });
+
     // LAST in this group: it unpublishes the one Product, and puts it back.
     it('an unpublished Product leaves every public read, though published_at stays (OVN-011)', async () => {
       const list = await http().get('/v1/storefronts/c8-store/products').expect(200);

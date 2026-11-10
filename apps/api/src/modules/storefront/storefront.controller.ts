@@ -1,5 +1,7 @@
 import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
+import { StorefrontProductDto } from './storefront.dto';
 import type { Response } from 'express';
 import { Inject } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
@@ -147,20 +149,44 @@ export class StorefrontController {
 
   @Get('storefronts/:handle/products/:slug')
   @Public()
-  @ApiOperation({ summary: 'Structured attributes, variants, stock with confirmed_at.' })
+  @ApiOperation({
+    summary:
+      'Structured attributes, variants, stock with confirmed_at. Only a PUBLISHED Product of a visible Seller; anything else is the same 404.',
+  })
+  @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
+  @ApiParam({ name: 'slug', description: 'The Product slug within that Seller.' })
+  @ApiOkResponse({ type: StorefrontProductDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
   async product(
     @Req() req: LocalizedRequest,
+    @Res({ passthrough: true }) res: Response,
     @Param('handle') handle: string,
     @Param('slug') slug: string,
-  ): Promise<unknown> {
+  ): Promise<StorefrontProductDto> {
+    // Price, stock and availability are read per delivery; nothing may cache them.
+    res.setHeader('Cache-Control', 'no-store');
     // No UUID guard any more: a slug is free text within a seller, and the
     // scope check is the (seller_id, slug) lookup itself. An unknown slug
     // is the ordinary 404 below, which is also what a wrong-seller slug
     // gets -- a storefront must not confirm that a product exists
     // elsewhere.
+    //
+    // PUBLICATION IS `visibility`, NOT `published_at` (OVN-011, WO-005).
+    // fn_unpublish_product sets visibility UNPUBLISHED and keeps published_at
+    // (the first-publication record), so filtering on published_at left an
+    // unpublished Product on every public read. visibility = 'PUBLISHED' is the
+    // rule fn_create_order and core.v_scene_product_availability already apply.
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, handle);
-      const p = await sql<{ id: string } & Record<string, unknown>>`
+      const p = await sql<{
+        id: string;
+        slug: string;
+        name: string;
+        description: string | null;
+        base_price_minor: string;
+        base_price_currency: string;
+        category_id: string | null;
+      }>`
         SELECT p.id, p.slug, p.name, p.description, p.base_price_minor,
                p.base_price_currency, p.category_id
           FROM core.product p
@@ -172,13 +198,24 @@ export class StorefrontController {
       // slug addresses the product on the wire and the uuid joins it in
       // the database, which is exactly the split doctrine 5 asks for.
       const productId = product.id;
-      const variants = await sql<Record<string, unknown>>`
+      const availability = await sql<{ available: boolean }>`
+        SELECT available FROM core.v_scene_product_availability
+         WHERE product_id = ${productId}`.execute(trx);
+      const variants = await sql<{
+        id: string;
+        variant_key: string;
+        price_minor: string;
+        price_currency: string;
+        stock_count: number;
+        stock_confirmed_at: Date | null;
+        status: string;
+      }>`
         SELECT v.id, v.variant_key, v.price_minor, v.price_currency,
                v.stock_count, v.stock_confirmed_at, v.status
           FROM core.product_variant v
          WHERE v.product_id = ${productId} AND v.status = 'ACTIVE'
          ORDER BY v.variant_key`.execute(trx);
-      const attributes = await sql<Record<string, unknown>>`
+      const attributes = await sql<{ attribute: string; value: string | null }>`
         SELECT ad.code AS attribute,
                coalesce(ao.code, pav.value_text,
                         pav.value_number::text, pav.value_boolean::text) AS value
@@ -186,14 +223,26 @@ export class StorefrontController {
           JOIN core.attribute_definition ad ON ad.id = pav.attribute_definition_id
           LEFT JOIN core.attribute_option ao ON ao.id = pav.value_option_id
          WHERE pav.product_id = ${productId}`.execute(trx);
-      const images = await sql<Record<string, unknown>>`
+      const images = await sql<{ position: number; thumb_key: string; card_key: string; full_key: string }>`
         SELECT position, thumb_key, card_key, full_key
           FROM core.product_image WHERE product_id = ${productId}
          ORDER BY position`.execute(trx);
       await this.emit(trx, 'product_viewed', seller.market_id, seller.id, {
         product_id: productId,
       });
-      return { ...product, variants: variants.rows, attributes: attributes.rows, images: images.rows };
+      return {
+        ...product,
+        base_price_minor: Number(product.base_price_minor),
+        available: first(availability.rows)?.available ?? false,
+        seller: { handle: seller.handle, store_name: seller.store_name },
+        variants: variants.rows.map((v) => ({
+          ...v,
+          price_minor: Number(v.price_minor),
+          stock_confirmed_at: v.stock_confirmed_at ? v.stock_confirmed_at.toISOString() : null,
+        })),
+        attributes: attributes.rows,
+        images: images.rows,
+      };
     });
   }
 
