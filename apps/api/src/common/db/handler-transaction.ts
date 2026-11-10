@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import type { Response } from 'express';
 import { APP_DATABASE } from './database.module';
+import { isPoolAcquireTimeout } from './database';
 import type { Database } from './database.types';
 import { withRequestContext, type RequestContext } from './request-context';
 import type { LocalizedRequest } from '../http/locale.middleware';
@@ -15,6 +16,42 @@ import {
 import { BROWSER_DEVICE_COOKIE, clientSurface, readCookie } from '../http/cookies';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A refusal whose writes must STAND: today, a wrong OTP guess, counted in the
+ * same transaction that compared it (ADU-AUTH-02 v3.3 S17: "rollback cannot
+ * restore a failed attempt budget"). Thrown from a handler, it makes
+ * HandlerTransaction COMMIT what the transaction wrote so far -- and write no
+ * idempotency record -- and then serve `refusal`.
+ *
+ * WHY NOT A SECOND CONNECTION OR A WRITE AFTER THE ROLLBACK. The first held
+ * one pooled connection while asking for another, and ten concurrent guesses
+ * hung the API (OVN-045). The second released the challenge before counting,
+ * so a burst of guesses was compared against a stale count and the attempt
+ * budget stopped binding (WO-SEC-001 review). Counting in the comparing
+ * transaction, under the challenge's row lock, needs neither.
+ *
+ * Throw it only where everything the transaction wrote before it should
+ * stand. Never settled (a caller outside HandlerTransaction), it rolls back
+ * and reaches the filter as a 500: loud, so a test catches it.
+ */
+export class RefuseAfterCommit extends Error {
+  constructor(readonly refusal: Error) {
+    super('a refusal that commits its transaction first');
+  }
+}
+
+type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly refusal: Error };
+
+/** Turns a RefuseAfterCommit into a value, so the transaction commits. */
+async function committing<T>(work: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await work };
+  } catch (e) {
+    if (e instanceof RefuseAfterCommit) return { ok: false, refusal: e.refusal };
+    throw e;
+  }
+}
 
 /**
  * The handler stage of the section 5 pipeline: TRANSACTION, SETTINGS, ONE
@@ -119,15 +156,29 @@ export class HandlerTransaction {
     fn: (trx: Transaction<Database>) => Promise<T>,
   ): Promise<T> {
     const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
+    let out: Settled<T>;
     try {
-      return await withRequestContext(this.db, ctx, async (trx) => {
+      out = await withRequestContext(this.db, ctx, async (trx) => {
         await this.activateDueOwnership(trx, ctx.sellerId);
-        return fn(trx);
+        return committing(fn(trx));
       });
     } catch (e) {
-      await this.activateDueOwnershipAfterFailure(ctx);
+      await this.afterFailure(ctx, e);
       throw e;
     }
+    // A refusal arrives here COMMITTED, activation included: nothing to redo.
+    if (!out.ok) throw out.refusal;
+    return out.value;
+  }
+
+  /**
+   * A starved pool is the one failure that must not queue another acquire:
+   * the activation retry would wait out a second bound and add load to the
+   * queue that is already full (WO-SEC-001 review). The next request to the
+   * store activates instead.
+   */
+  private async afterFailure(ctx: RequestContext, e: unknown): Promise<void> {
+    if (!isPoolAcquireTimeout(e)) await this.activateDueOwnershipAfterFailure(ctx);
   }
 
   /**
@@ -137,12 +188,21 @@ export class HandlerTransaction {
    *
    * The handler's return value is the response body; `status` is what a
    * fresh execution serves (and what the store replays).
+   *
+   * `beforeTransaction` runs after the replay check and before the
+   * transaction opens, holding no connection: the place for a rate-limit
+   * count (OVN-045). Counting inside the closure on the default pool held one
+   * pooled connection while waiting for a second, and about ten concurrent
+   * requests then hung the API. Here a replay never counts (it returned
+   * above), and the count commits on its own, so a handler that fails
+   * afterwards cannot reset it -- the semantics the closure had.
    */
   async runIdempotent<T>(
     req: LocalizedRequest,
     res: Response,
     status: number,
     fn: (trx: Transaction<Database>) => Promise<T>,
+    beforeTransaction?: () => Promise<void>,
   ): Promise<T> {
     const key = req.headers['idempotency-key'];
     if (typeof key !== 'string' || key === '') {
@@ -161,18 +221,21 @@ export class HandlerTransaction {
     }
 
     const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
+    let out: Settled<T>;
     try {
-      const result = await withRequestContext(this.db, ctx, async (trx) => {
+      await beforeTransaction?.();
+      out = await withRequestContext(this.db, ctx, async (trx) => {
         await this.activateDueOwnership(trx, ctx.sellerId);
-        const body = await fn(trx);
-        await this.idempotency.record(trx, key, actor, endpoint, requestHash, {
-          status,
-          body,
-        });
-        return body;
+        const settled = await committing(fn(trx));
+        // A refusal commits its writes but is not a response to replay.
+        if (settled.ok) {
+          await this.idempotency.record(trx, key, actor, endpoint, requestHash, {
+            status,
+            body: settled.value,
+          });
+        }
+        return settled;
       });
-      res.status(status);
-      return result;
     } catch (e) {
       // Losing the UNIQUE race to a concurrent twin: our effects rolled
       // back with the transaction; the winner's stored response is the
@@ -191,9 +254,13 @@ export class HandlerTransaction {
           return winner.body as T;
         }
       }
-      await this.activateDueOwnershipAfterFailure(ctx);
+      await this.afterFailure(ctx, e);
       throw e;
     }
+    // A refusal arrives here COMMITTED, activation included: nothing to redo.
+    if (!out.ok) throw out.refusal;
+    res.status(status);
+    return out.value;
   }
 
   /**

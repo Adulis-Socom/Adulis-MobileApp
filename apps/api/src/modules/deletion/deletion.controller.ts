@@ -78,11 +78,6 @@ export class DeletionController {
     const body = deletionOtpRequestBody.parse(req.body);
     let issued: IssuedOtp | null = null;
     const result = await this.tx.runIdempotent(req, res, 202, async (trx) => {
-      await this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
-        bucketKey: 'deletion-otp-request',
-        windowSeconds: 3600,
-        max: 3,
-      });
       const fresh = await this.otp.issueChallenge(trx, {
         phone: body.phone,
         purpose: 'ACCOUNT_DELETION',
@@ -98,7 +93,17 @@ export class DeletionController {
       });
       issued = fresh;
       return {};
-    });
+    },
+    // After the replay check, before the transaction (OVN-045): a replay burns
+    // no budget, no pooled connection is held while counting, and a failed
+    // issue keeps its count -- identical for a known and an unknown phone.
+    () =>
+      this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
+        bucketKey: 'deletion-otp-request',
+        windowSeconds: 3600,
+        max: 3,
+      }),
+    );
     // After commit: a rolled-back issue and an idempotent replay both
     // transport nothing (v2.6 S12 -- transport is downstream of security).
     await this.delivery.transport(issued);

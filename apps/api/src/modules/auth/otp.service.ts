@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { APP_DATABASE } from '../../common/db/database.module';
+import { RefuseAfterCommit } from '../../common/db/handler-transaction';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { resolveKey } from '../../common/crypto/aead';
@@ -69,21 +70,33 @@ export class OtpService {
   ) {}
 
   /**
-   * A wrong guess must SURVIVE the request that carried it: the handler
-   * transaction rolls back on the raise, so the attempt counter is written
-   * on its own connection, outside that transaction. Without this, five
-   * wrong guesses arrive as five requests that each roll their increment
-   * back, and the attempt budget is fiction.
+   * A wrong guess must SURVIVE the request that carried it (ADU-AUTH-02 v3.3
+   * S17: "rollback cannot restore a failed attempt budget"). Without that,
+   * five wrong guesses arrive as five requests that each roll their
+   * increment back, and the attempt budget is fiction.
+   *
+   * COUNTED IN THE TRANSACTION THAT COMPARED, then committed before the
+   * refusal is served (RefuseAfterCommit). The caller holds the challenge's
+   * row lock (FOR UPDATE), so concurrent guesses are compared one at a time,
+   * each against the count the last one committed: never more compares than
+   * the budget. Two designs this replaces (WO-SEC-001): writing on a second
+   * pooled connection while the transaction held one (ten concurrent guesses
+   * hung the API, OVN-045), and writing after the rollback (a burst was
+   * compared against a stale count, so the budget stopped binding).
    */
-  private async burnAttempt(challengeId: string, maxAttempts: number): Promise<never> {
+  private async wrongGuess(
+    trx: Transaction<Database>,
+    challengeId: string,
+    maxAttempts: number,
+  ): Promise<never> {
     const r = await sql<{ attempt_count: number }>`
       UPDATE core.otp_challenge SET attempt_count = attempt_count + 1
        WHERE id = ${challengeId}
-       RETURNING attempt_count`.execute(this.db);
-    if ((result_first(r.rows)?.attempt_count ?? 0) >= maxAttempts) {
-      throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
-    }
-    throw new AdulisException('OTP_INVALID');
+       RETURNING attempt_count`.execute(trx);
+    const spent = (result_first(r.rows)?.attempt_count ?? 0) >= maxAttempts;
+    throw new RefuseAfterCommit(
+      new AdulisException(spent ? 'OTP_ATTEMPTS_EXCEEDED' : 'OTP_INVALID'),
+    );
   }
 
   /**
@@ -521,10 +534,17 @@ export class OtpService {
       code: string;
     },
   ): Promise<OtpChallengeRow> {
-    // No FOR UPDATE here: the attempt counter writes on a second
-    // connection (burnAttempt), and a row lock held by this transaction
-    // would deadlock against it. Single consumption is serialised by the
-    // conditional consume below instead.
+    // FOR UPDATE NOWAIT (WO-SEC-001). The lock makes guesses at one challenge
+    // compared one at a time, each against the attempt count the previous one
+    // committed (wrongGuess counts in this transaction), so never more
+    // compares than the budget. NOWAIT because these routes are anonymous: a
+    // verify that queued on the lock would hold a pooled connection while it
+    // waited, and ten of them aimed at one challenge would pin the pool for
+    // the price of a trickle. A verify that finds the challenge held is
+    // refused at once (RATE_LIMITED, retry in a second) with NOTHING compared.
+    // The lock was left off before only because the counter was written on a
+    // second connection, which it would have deadlocked; nothing writes the
+    // row from elsewhere now.
     const live = await sql<OtpChallengeRow>`
       SELECT id, phone_e164, purpose::text AS purpose, attempt_count,
              expires_at, consumed_at, step_up_action::text AS step_up_action,
@@ -541,7 +561,14 @@ export class OtpService {
          -- is holding.
          AND transported_at IS NOT NULL
        ORDER BY created_at DESC
-       LIMIT 1`.execute(trx);
+       LIMIT 1
+         FOR UPDATE NOWAIT`
+      .execute(trx)
+      .catch((e: unknown) => {
+        throw (e as { code?: string }).code === '55P03'
+          ? new AdulisException('RATE_LIMITED', { slots: { retry_after_seconds: 1 } })
+          : e;
+      });
 
     const row = result_first(live.rows) as
       | (OtpChallengeRow & { code_hash: Buffer })
@@ -592,7 +619,7 @@ export class OtpService {
           throw new AdulisException('OTP_EXPIRED');
         }
       }
-      return this.burnAttempt(row.id, row.max_attempts);
+      return this.wrongGuess(trx, row.id, row.max_attempts);
     }
 
     // Conditional consume: of two concurrent correct verifies, exactly one
@@ -629,7 +656,10 @@ export class OtpService {
       SELECT id, phone_e164, attempt_count, expires_at, consumed_at,
              max_attempts, transported_at, code_hash
         FROM core.otp_challenge
-       WHERE id = ${challengeId}`.execute(trx);
+       WHERE id = ${challengeId}
+         -- Waits rather than NOWAIT: the step_up_challenge lock its only caller
+         -- takes first already serialises these, and the caller is signed in.
+         FOR UPDATE`.execute(trx);
     const row = result_first(r.rows);
     if (!row || row.consumed_at) throw new AdulisException('OTP_INVALID');
     if (new Date() > row.expires_at) throw new AdulisException('OTP_EXPIRED');
@@ -647,7 +677,7 @@ export class OtpService {
       throw new AdulisException('OTP_ATTEMPTS_EXCEEDED');
     }
     if (!constantTimeMatches(row.code_hash, codeHash(row.id, code))) {
-      return this.burnAttempt(row.id, row.max_attempts);
+      return this.wrongGuess(trx, row.id, row.max_attempts);
     }
     const consumed = await sql<{ id: string }>`
       UPDATE core.otp_challenge SET consumed_at = now()

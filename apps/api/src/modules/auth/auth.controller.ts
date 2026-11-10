@@ -126,12 +126,6 @@ export class AuthController {
     const body = otpRequestBody.parse(req.body);
     let issued: IssuedOtp | null = null;
     const result = await this.tx.runIdempotent(req, res, 202, async (trx) => {
-      // Inside the closure so an idempotent replay burns no budget.
-      await this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
-        bucketKey: 'otp-request',
-        windowSeconds: 3600,
-        max: 3,
-      });
       /**
        * THE IP LIMITER IS REMOVED, NOT RELAXED (ADU-AUTH-01 v2.6 S15).
        *
@@ -150,7 +144,8 @@ export class AuthController {
        * did first. It has never run in that topology, which is the only
        * reason it has not already caused an outage.
        *
-       * The phone-keyed limit above (S14, 3/hour/PHONE_KEY) is untouched and
+       * The phone-keyed limit (S14, 3/hour/PHONE_KEY, counted before this
+       * transaction opens -- see the last argument below) is untouched and
        * is the control that actually binds. S15.1 lists what must be
        * documented and tested before an IP limit may exist at all -- trusted
        * hops, forwarding header, spoofed-header behaviour -- and none of it
@@ -169,7 +164,17 @@ export class AuthController {
       });
       issued = fresh;
       return {};
-    });
+    },
+    // After the replay check, before the transaction (OVN-045): an idempotent
+    // replay burns no budget, no pooled connection is held while counting,
+    // and a failed issue keeps its count.
+    () =>
+      this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
+        bucketKey: 'otp-request',
+        windowSeconds: 3600,
+        max: 3,
+      }),
+    );
     // After commit, and only on a fresh execution — a rolled-back issue or
     // a replay transports nothing.
     await this.delivery.transport(issued);
@@ -435,15 +440,17 @@ export class AuthController {
       res,
       202,
       async (trx) => {
-        await this.rateLimit.consume('ACCOUNT', req.ctx?.accountId ?? '', {
-          bucketKey: 'step-up-request',
-          windowSeconds: 3600,
-          max: 5,
-        });
         const fresh = await this.auth.stepUpRequest(trx, req, body);
         issued = fresh;
         return fresh.body;
       },
+      // Before the transaction, as at otp/request (OVN-045).
+      () =>
+        this.rateLimit.consume('ACCOUNT', req.ctx?.accountId ?? '', {
+          bucketKey: 'step-up-request',
+          windowSeconds: 3600,
+          max: 5,
+        }),
     );
     await this.delivery.transport(issued);
     return result;
@@ -502,14 +509,21 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = recoveryBody.parse(req.body);
-    return this.tx.runIdempotent(req, res, 202, async (trx) => {
-      await this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
-        bucketKey: 'auth-recovery',
-        windowSeconds: 86400,
-        max: 2,
-      });
-      await this.auth.openRecovery(trx, body);
-      return {};
-    });
+    return this.tx.runIdempotent(
+      req,
+      res,
+      202,
+      async (trx) => {
+        await this.auth.openRecovery(trx, body);
+        return {};
+      },
+      // Before the transaction, as at otp/request (OVN-045).
+      () =>
+        this.rateLimit.consume('PHONE_HASH', subjectHash(body.phone, hashKey()), {
+          bucketKey: 'auth-recovery',
+          windowSeconds: 86400,
+          max: 2,
+        }),
+    );
   }
 }

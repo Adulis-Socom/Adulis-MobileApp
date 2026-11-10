@@ -132,27 +132,6 @@ export class CouriersController {
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, async (trx) => {
       const { accountId, sellerId } = await this.assertPermission(trx, req);
 
-      // T6-B S2 -- ten per hour, per SELLER, not per account: an oracle run
-      // from three Admin sessions on one store is one oracle. Inside the
-      // closure so an idempotent replay burns no budget (the otp-request
-      // precedent), and RateLimitService writes on its own connection, so
-      // the count survives a rolled-back handler and cannot be reset by
-      // failing on purpose.
-      //
-      // subject_kind = 'ACCOUNT' CARRYING A SELLER ID, and that is a seam
-      // rather than a mistake: core.rate_limit_subject_kind has no SELLER
-      // value, and Appendix C check 16 compares the enum against ADU-DB-01
-      // Appendix A in both directions, so adding one is a document
-      // amendment, not a migration. The primary key is
-      // (subject_kind, subject_id, bucket_key, window_start), so a distinct
-      // bucket_key makes a collision with a real account bucket impossible.
-      // Registered (D-72): Appendix A owes a SELLER value.
-      await this.rateLimit.consume('ACCOUNT', sellerId, {
-        bucketKey: 'seller-courier-invite',
-        windowSeconds: 3600,
-        max: 10,
-      });
-
       // 0. SERIALIZE PER (seller, phone) -- adversarial pass on this
       //    phase. The arbiter index alone cannot hold the invariant: the
       //    winner's SAME transaction stamps its row claimed, which removes
@@ -220,6 +199,37 @@ export class CouriersController {
            AND a.phone_e164 = i.phone AND a.status = 'ACTIVE'`.execute(trx);
 
       return { id };
+    },
+    // T6-B S2 -- ten per hour, per SELLER, not per account: an oracle run
+    // from three Admin sessions on one store is one oracle. Counted after the
+    // replay check, so an idempotent replay burns no budget (the otp-request
+    // precedent), and on its own connection with nothing else held, so the
+    // count survives a rolled-back handler and cannot be reset by failing on
+    // purpose. It used to sit inside the closure, where counting on a second
+    // pooled connection while the transaction held one could hang the API
+    // under a burst (OVN-045).
+    //
+    // AUTHORIZATION FIRST, as before: a caller without seller.couriers:manage
+    // is refused here and burns none of the store's budget. The closure checks
+    // again inside its own transaction, which is the check that binds.
+    //
+    // subject_kind = 'ACCOUNT' CARRYING A SELLER ID, and that is a seam
+    // rather than a mistake: core.rate_limit_subject_kind has no SELLER
+    // value, and Appendix C check 16 compares the enum against ADU-DB-01
+    // Appendix A in both directions, so adding one is a document
+    // amendment, not a migration. The primary key is
+    // (subject_kind, subject_id, bucket_key, window_start), so a distinct
+    // bucket_key makes a collision with a real account bucket impossible.
+    // Registered (D-72): Appendix A owes a SELLER value.
+    async () => {
+      const { sellerId } = await this.tx.run(req as LocalizedRequest, (trx) =>
+        this.assertPermission(trx, req),
+      );
+      await this.rateLimit.consume('ACCOUNT', sellerId, {
+        bucketKey: 'seller-courier-invite',
+        windowSeconds: 3600,
+        max: 10,
+      });
     });
   }
 

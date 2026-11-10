@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { APP_DATABASE } from '../src/common/db/database.module';
+import { RefuseAfterCommit } from '../src/common/db/handler-transaction';
 import { OtpService } from '../src/modules/auth/otp.service';
 import { OtpDeliveryService } from '../src/modules/auth/otp-delivery.service';
 import {
@@ -73,8 +74,14 @@ describe('T14 A4 - transport before supersession', () => {
   };
 
   const verify = (code: string): Promise<{ id: string } | Error> =>
-    inTrx((trx) => otp.verifyCode(trx, { phone: PP + '1', purpose: 'SIGN_IN', code }))
-      .then((r) => ({ id: r.id }))
+    inTrx((trx) =>
+      otp.verifyCode(trx, { phone: PP + '1', purpose: 'SIGN_IN', code }).catch((e: unknown) => {
+        // A wrong guess commits its attempt, then refuses -- as HandlerTransaction does.
+        if (e instanceof RefuseAfterCommit) return e.refusal;
+        throw e;
+      }),
+    )
+      .then((r) => (r instanceof Error ? r : { id: r.id }))
       .catch((e) => e as Error);
 
   const transportedAt = async (id: string): Promise<Date | null> =>

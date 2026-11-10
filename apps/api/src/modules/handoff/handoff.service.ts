@@ -98,7 +98,29 @@ export class HandoffService {
     return { results: scans.map((s) => byNonce.get(s.nonce)) };
   }
 
+  /**
+   * Lost the race to our own concurrent retry (23505 on the nonce): read the
+   * winner -- AFTER the losing transaction has rolled back and handed its
+   * connection back. The retry used to run inside that transaction's
+   * callback, holding one pooled connection while asking for another, so ten
+   * concurrent losers could hang the API (OVN-045's class; the WO-SEC-001
+   * static guard found it). ONE retry, and only for the nonce's own unique
+   * index: the winner is committed, so the second pass reads it as a replay;
+   * anything else rethrows rather than looping.
+   */
   private async processScan(req: AuthedRequest, scan: ScanItem): Promise<SyncOutcome> {
+    try {
+      return await this.processScanOnce(req, scan);
+    } catch (e) {
+      const pg = e as { code?: string; constraint?: string };
+      if (pg.code === '23505' && pg.constraint === 'handoff_scan_nonce_key') {
+        return this.processScanOnce(req, scan);
+      }
+      throw e;
+    }
+  }
+
+  private async processScanOnce(req: AuthedRequest, scan: ScanItem): Promise<SyncOutcome> {
     const ctx = req.ctx ?? { accountId: null, actorRole: 'BUYER', sellerId: null };
     return withRequestContext(this.db, ctx, async (trx) => {
       // Replay discrimination first: a nonce we have seen, with the
@@ -214,36 +236,30 @@ export class HandoffService {
         throw new AdulisException('COURIER_CANNOT_SCAN');
       }
 
-      try {
-        const inserted = await sql<{
-          validity: string;
-          counts_toward_level: boolean;
-        }>`
-          INSERT INTO core.handoff_scan
-            (id, order_id, scanned_by_account_id, nonce, signed_at,
-             reported_clock_offset_ms)
-          VALUES (${randomUUID()}, ${scan.order_ref}, ${ctx.accountId},
-                  ${scan.nonce}, to_timestamp(${scan.signed_at / 1000.0}),
-                  ${Number(req.headers['x-adulis-clock-offset'] ?? 0) || 0})
-          RETURNING validity::text, counts_toward_level`.execute(trx);
-        const row = inserted.rows[0];
-        const state = await sql<{ state: string }>`
-          SELECT state::text FROM core."order" WHERE id = ${scan.order_ref}`.execute(trx);
-        return {
-          nonce: scan.nonce,
-          order_ref: scan.order_ref,
-          outcome: row?.validity ?? 'REJECTED_HORIZON',
-          counts_toward_level: row?.counts_toward_level ?? false,
-          replay: false,
-          order_state: state.rows[0]?.state,
-        };
-      } catch (e) {
-        if ((e as { code?: string }).code === '23505') {
-          // Lost the race to our own concurrent retry — read the winner.
-          return this.processScan(req, scan);
-        }
-        throw e;
-      }
+      // A concurrent twin of this scan can win the nonce's unique index here;
+      // the 23505 rolls this transaction back and processScan reads the winner.
+      const inserted = await sql<{
+        validity: string;
+        counts_toward_level: boolean;
+      }>`
+        INSERT INTO core.handoff_scan
+          (id, order_id, scanned_by_account_id, nonce, signed_at,
+           reported_clock_offset_ms)
+        VALUES (${randomUUID()}, ${scan.order_ref}, ${ctx.accountId},
+                ${scan.nonce}, to_timestamp(${scan.signed_at / 1000.0}),
+                ${Number(req.headers['x-adulis-clock-offset'] ?? 0) || 0})
+        RETURNING validity::text, counts_toward_level`.execute(trx);
+      const row = inserted.rows[0];
+      const state = await sql<{ state: string }>`
+        SELECT state::text FROM core."order" WHERE id = ${scan.order_ref}`.execute(trx);
+      return {
+        nonce: scan.nonce,
+        order_ref: scan.order_ref,
+        outcome: row?.validity ?? 'REJECTED_HORIZON',
+        counts_toward_level: row?.counts_toward_level ?? false,
+        replay: false,
+        order_state: state.rows[0]?.state,
+      };
     });
   }
 
