@@ -5,9 +5,11 @@ import { ApiProperty } from '@nestjs/swagger';
  *
  * The route returned these fields with no schema, so the generated client had no
  * type for them. This DTO documents them as they are, plus two additive fields:
- * `available` (the one Catalogue derivation, core.v_scene_product_availability --
- * Product PUBLISHED and an ACTIVE Variant in stock, the rule fn_create_order
- * applies) and `seller` (the public identity of the Seller in the URL). Money is
+ * `available` (the Catalogue derivation, core.v_scene_product_availability --
+ * Product PUBLISHED and an ACTIVE Variant in stock -- AND an ACTIVE Seller, the
+ * gates fn_create_order applies) and `seller` (the public identity of the Seller
+ * in the URL). The price is the Variants' (`variants[].price_minor`):
+ * base_price_minor is the creation seed, not a price (DB-01 C1). Money is
  * integer minor units, as on every other public read. The internal ids stay for
  * compatibility and for future Cart lines; none of them is ever a URL segment
  * (the Product is addressed by handle + slug).
@@ -49,12 +51,17 @@ export class StorefrontProductDto {
   @ApiProperty() slug!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ type: String, nullable: true }) description!: string | null;
-  @ApiProperty({ type: 'integer', minimum: 0 }) base_price_minor!: number;
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    description: 'The creation seed, not a price (DB-01 C1). The prices are variants[].price_minor.',
+  })
+  base_price_minor!: number;
   @ApiProperty() base_price_currency!: string;
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) category_id!: string | null;
   @ApiProperty({
     description:
-      'False: show "Currently unavailable" and no purchase action. Product PUBLISHED and an ACTIVE Variant in stock, read now.',
+      'False: show "Currently unavailable" and no purchase action. Product PUBLISHED, an ACTIVE Variant in stock and an ACTIVE Seller, read now.',
   })
   available!: boolean;
   @ApiProperty({ type: StorefrontProductSellerDto }) seller!: StorefrontProductSellerDto;

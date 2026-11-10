@@ -306,22 +306,34 @@ export class ScenesService {
 
     // Public tags only: a Product that is not public commerce is omitted, an
     // out-of-stock one stays with available=false ("Currently unavailable").
+    // The price is the Variants' (CATINV-01: price lives on the Variant; DB-01
+    // C1: base_price_minor is a creation seed, not a price), read now, in the
+    // same query: the lowest and highest current ACTIVE Variant price.
     const products = await sql<{
       position: number;
       slug: string;
       name: string;
       base_price_minor: string;
       base_price_currency: string;
+      price_min_minor: string | null;
+      price_max_minor: string | null;
+      price_currency: string | null;
       image_key: string | null;
       available: boolean;
     }>`
       SELECT t.position, p.slug, p.name, p.base_price_minor, p.base_price_currency,
+             pr.price_min_minor, pr.price_max_minor, pr.price_currency,
              (SELECT i.card_key FROM core.product_image i
                WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
              a.available
         FROM core.scene_post_product t
         JOIN core.product p ON p.id = t.product_id
         JOIN core.v_scene_product_availability a ON a.product_id = t.product_id
+        CROSS JOIN LATERAL (
+          SELECT min(v.price_minor) AS price_min_minor, max(v.price_minor) AS price_max_minor,
+                 min(v.price_currency) AS price_currency
+            FROM core.product_variant v
+           WHERE v.product_id = p.id AND v.status = 'ACTIVE') pr
        WHERE t.revision_id = ${scene.revision_id}
          AND a.published AND p.market_id = ${scene.market_id}
        ORDER BY t.position`.execute(trx);
@@ -337,7 +349,12 @@ export class ScenesService {
         full_key: scene.image_full_key,
       },
       seller: { handle: scene.seller_handle, store_name: scene.seller_store_name },
-      products: products.rows.map((p) => ({ ...p, base_price_minor: Number(p.base_price_minor) })),
+      products: products.rows.map((p) => ({
+        ...p,
+        base_price_minor: Number(p.base_price_minor),
+        price_min_minor: p.price_min_minor === null ? null : Number(p.price_min_minor),
+        price_max_minor: p.price_max_minor === null ? null : Number(p.price_max_minor),
+      })),
     };
   }
 

@@ -776,6 +776,31 @@ describe('WO-DISC-001 -- Scene domain foundation', () => {
       }
     });
 
+    it("the public price is the Variants' current span, not the base-price seed (WO-005)", async () => {
+      const scene = await readyPublished([P1]);
+      const extra = id(97);
+      await admin.query(`UPDATE core.product_variant SET price_minor = 99000 WHERE id = $1`, [V1]);
+      await admin.query(
+        `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor, price_currency, variant_key)
+         VALUES ($1,$2,$3,150000,'ETB','large')`,
+        [extra, P1, SELLER],
+      );
+      try {
+        const r = await publicGet(scene.public_ref).expect(200);
+        expect(r.body.products[0]).toMatchObject({
+          base_price_minor: 120000,
+          price_min_minor: 99000,
+          price_max_minor: 150000,
+          price_currency: 'ETB',
+        });
+      } finally {
+        await admin.query(`DELETE FROM core.product_variant WHERE id = $1`, [extra]);
+        await admin.query(`UPDATE core.product_variant SET price_minor = 120000 WHERE id = $1`, [V1]);
+      }
+      const back = await publicGet(scene.public_ref).expect(200);
+      expect(back.body.products[0]).toMatchObject({ price_min_minor: 120000, price_max_minor: 120000 });
+    });
+
     it("another Seller cannot read the management representation", async () => {
       const scene = await readyPublished([P1]);
       // Seller B's owner, in Seller B's context, asking for Seller A's Scene id.

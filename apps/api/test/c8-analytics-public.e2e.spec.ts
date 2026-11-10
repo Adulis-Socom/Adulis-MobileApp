@@ -300,6 +300,19 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
       expect(typeof r.body.variants[0].stock_confirmed_at).toBe('string');
     });
 
+    it('a CLOSING Seller keeps its storefront but its Product is not available (the order gate)', async () => {
+      const list = await http().get('/v1/storefronts/c8-store/products').expect(200);
+      const slug = list.body.data[0].slug as string;
+      await admin.query(`UPDATE core.seller SET status = 'CLOSING' WHERE id = $1`, [SELLER]);
+      try {
+        const r = await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(200);
+        expect(r.body.available).toBe(false);
+        expect(r.body.variants[0].stock_count).toBe(4);
+      } finally {
+        await admin.query(`UPDATE core.seller SET status = 'ACTIVE' WHERE id = $1`, [SELLER]);
+      }
+    });
+
     // LAST in this group: it unpublishes the one Product, and puts it back.
     it('an unpublished Product leaves every public read, though published_at stays (OVN-011)', async () => {
       const list = await http().get('/v1/storefronts/c8-store/products').expect(200);
@@ -313,7 +326,8 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         );
         // The defect's precondition: the first-publication record survives unpublishing.
         expect(row.rows[0]).toEqual({ visibility: 'UNPUBLISHED', published: true });
-        await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(404);
+        const gone = await http().get(`/v1/storefronts/c8-store/products/${slug}`).expect(404);
+        expect(gone.headers['cache-control']).toBe('no-store');
         const after = await http().get('/v1/storefronts/c8-store/products').expect(200);
         expect(after.body.data).toHaveLength(0);
         const s = await http().get('/v1/storefronts/c8-store/search?q=scarf').expect(200);

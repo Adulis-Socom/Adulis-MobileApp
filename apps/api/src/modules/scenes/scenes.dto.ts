@@ -156,8 +156,29 @@ export class PublicSceneProductDto {
   @ApiProperty({ description: 'Product route: /v1/storefronts/{handle}/products/{slug}.' })
   slug!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ type: 'integer', minimum: 0 }) base_price_minor!: number;
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    description: "The Product's creation seed, not a price (DB-01 C1). Kept for compatibility; show price_min_minor..price_max_minor.",
+  })
+  base_price_minor!: number;
   @ApiProperty() base_price_currency!: string;
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    nullable: true,
+    description: "Lowest current price among the Product's ACTIVE Variants (price lives on the Variant). Null: no ACTIVE Variant.",
+  })
+  price_min_minor!: number | null;
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    nullable: true,
+    description: 'Highest current ACTIVE Variant price; equal to price_min_minor when every Variant costs the same.',
+  })
+  price_max_minor!: number | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Currency of the Variant prices.' })
+  price_currency!: string | null;
   @ApiProperty({ type: String, nullable: true }) image_key!: string | null;
   @ApiProperty({ description: 'False: show "Currently unavailable" and no purchase action.' })
   available!: boolean;

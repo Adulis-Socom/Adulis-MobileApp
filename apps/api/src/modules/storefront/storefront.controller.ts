@@ -233,7 +233,9 @@ export class StorefrontController {
       return {
         ...product,
         base_price_minor: Number(product.base_price_minor),
-        available: first(availability.rows)?.available ?? false,
+        // fn_create_order also needs an ACTIVE Seller: a CLOSING or BILLING_SUSPENDED
+        // storefront stays visible (VISIBLE_STATES) but sells nothing.
+        available: seller.status === 'ACTIVE' && (first(availability.rows)?.available ?? false),
         seller: { handle: seller.handle, store_name: seller.store_name },
         variants: variants.rows.map((v) => ({
           ...v,
