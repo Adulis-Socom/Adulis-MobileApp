@@ -220,6 +220,8 @@ describe('C2 — catalogue, media and stock', () => {
       `DELETE FROM core.media_lifecycle WHERE object_key LIKE 'products/%' AND object_key LIKE '%${SELLER}%'`,
       `DELETE FROM core.product_variant WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.product WHERE market_id='${M}'`,
+      // WO-010: the category availability rows the classification test enables in this Market.
+      `DELETE FROM core.category_market_availability WHERE market_id='${M}'`,
       `DELETE FROM core.seller_fulfilment_method WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.payout_details WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.seller_eligibility_evaluation WHERE seller_id='${SELLER}'`,
@@ -253,6 +255,37 @@ describe('C2 — catalogue, media and stock', () => {
         .expect(201);
       productId = r.body.product_id;
       expect(r.body.visibility).toBe('DRAFT');
+    });
+
+    it("WO-010: a Product's category must be enabled in its Market, on create and on edit", async () => {
+      const FASHION = 'ca7e0000-0000-4000-8000-000000000001';
+      const COSMETICS = 'ca7e0000-0000-4000-8000-000000000002';
+      const body = (category_id: string) => ({ name: 'Scarf', base_price_minor: 1000, base_price_currency: 'ETB', category_id });
+      // Not enabled in this Market, or unknown: the governed refusal, nothing created.
+      for (const category of [FASHION, '0e100000-0000-4000-8000-0000000000ff']) {
+        const refused = await write('post', '/v1/seller/products').send(body(category)).expect(400);
+        expect(refused.body).toMatchObject({ code: 'VALIDATION_FAILED', slots: { path: 'category_id' } });
+      }
+      await admin.query(
+        `INSERT INTO core.category_market_availability (category_id, market_id, is_available) VALUES ($1,$3,true), ($2,$3,false)`,
+        [FASHION, COSMETICS, M],
+      );
+      const created = await write('post', '/v1/seller/products').send(body(FASHION)).expect(201);
+      const id = created.body.product_id as string;
+      try {
+        // Disabled in this Market: refused on edit too.
+        const edit = await write('patch', `/v1/seller/products/${id}`).send({ category_id: COSMETICS }).expect(400);
+        expect(edit.body).toMatchObject({ code: 'VALIDATION_FAILED', slots: { path: 'category_id' } });
+        // Disabled after assignment: the Product keeps it, and an unrelated edit still works.
+        await admin.query(`UPDATE core.category_market_availability SET is_available = false WHERE category_id = $1 AND market_id = $2`, [FASHION, M]);
+        await write('patch', `/v1/seller/products/${id}`).send({ name: 'Silk scarf' }).expect(200);
+        const row = await admin.query(`SELECT category_id, name FROM core.product WHERE id = $1`, [id]);
+        expect(row.rows[0]).toEqual({ category_id: FASHION, name: 'Silk scarf' });
+      } finally {
+        // Not part of the rest of this suite (its caps and lists count this Seller's Products).
+        await admin.query(`DELETE FROM core.moderation_queue_item WHERE target_id = $1`, [id]);
+        await admin.query(`DELETE FROM core.product WHERE id = $1`, [id]);
+      }
     });
 
     /**

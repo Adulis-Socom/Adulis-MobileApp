@@ -366,6 +366,11 @@ export function translatePgError(e: PgError): AdulisException | null {
       if (e.constraint === 'product_seed_in_market_currency') {
         return new AdulisException('VALIDATION_FAILED', { slots: { path: 'base_price_currency' } });
       }
+      // WO-010 (0062 fn_guard_product_category_available): a category that does not exist or is
+      // not available in the Product's Market.
+      if (e.constraint === 'product_category_available') {
+        return new AdulisException('VALIDATION_FAILED', { slots: { path: 'category_id' } });
+      }
       return null;
 
     case '23503':

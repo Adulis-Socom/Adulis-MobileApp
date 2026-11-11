@@ -492,7 +492,15 @@ export interface CoreCartLine {
 export interface CoreCategory {
   code: string;
   created_at: Generated<Timestamp>;
+  /**
+   * Deterministic presentation order among siblings (ascending, then code).
+   */
+  display_order: Generated<number>;
   id: string;
+  /**
+   * A locale catalogue key (e.g. catalogue.category.fashion), never rendered prose (ADU-CATINV-01 S40: localized labels are presentation). NULL: not presentable, never listed by GET /v1/categories.
+   */
+  label_key: string | null;
   parent_id: string | null;
 }
 

@@ -135,6 +135,13 @@ describe('the pg translator (section 6.3, R29)', () => {
     ).toBeNull();
   });
 
+  it('WO-010: a category not available in the Product Market -> 400 VALIDATION_FAILED on category_id', () => {
+    const e = translatePgError({ code: '23514', message: 'not available', constraint: 'product_category_available' });
+    expect(e?.code).toBe('VALIDATION_FAILED');
+    expect(e?.status).toBe(400);
+    expect(e?.slots).toEqual({ path: 'category_id' });
+  });
+
   it('a composite scope FK -> 404; an ordinary FK -> unmapped (500)', () => {
     expect(
       translatePgError({

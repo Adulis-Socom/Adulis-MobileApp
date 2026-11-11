@@ -243,6 +243,26 @@ export class ShopProductDto extends PublicProductSummaryDto {
 }
 
 /** GET /v1/shop/products: the requester Market's public Products, newest first publication. */
+export class CategoryDto {
+  @ApiProperty({ type: String, format: 'uuid', description: 'Stable category identity.' }) id!: string;
+  @ApiProperty({ description: 'Stable machine-readable code (FASHION, COSMETICS, ELECTRONICS): the Shop and Search filter value.' })
+  code!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'The parent category; null for a top-level category.' })
+  parent_id!: string | null;
+  @ApiProperty({ description: 'Locale catalogue key of the display label (e.g. catalogue.category.fashion); never prose.' })
+  label_key!: string;
+  @ApiProperty({ type: Number, description: 'Presentation order among siblings, ascending (then code).' }) display_order!: number;
+}
+
+export class CategoryListDto {
+  @ApiProperty({
+    description:
+      'false: the request carries no ACTIVE-Market evidence, so data is empty because no Market could be chosen -- not because the Market has no categories.',
+  })
+  market_resolved!: boolean;
+  @ApiProperty({ type: [CategoryDto] }) data!: CategoryDto[];
+}
+
 export class ShopProductListDto {
   @ApiProperty({
     description:

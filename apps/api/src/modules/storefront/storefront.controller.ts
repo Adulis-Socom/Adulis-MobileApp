@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiDefaultResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import {
+  CategoryListDto,
   PostLinkProductListDto,
   SellerSceneListDto,
   ShopProductListDto,
@@ -24,6 +25,7 @@ import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.adapter';
 import { requesterMarket } from './requester-market';
+import { categoryBinding, categoryCode, categoryInMarket } from '../catalogue/category';
 import { VISIBLE_STATES } from './public-seller';
 import {
   minorUnits,
@@ -568,6 +570,12 @@ export class StorefrontController {
    * Market evidence the answer is an empty page -- a Market-wide list cannot be chosen without one.
    * PUBLISHED Products of publicly visible Sellers in an ACTIVE Market; an out-of-stock or
    * otherwise unavailable Product stays listed with available=false.
+   *
+   * WO-010: `category` (a code from GET /v1/categories) narrows the list to Products assigned that
+   * category, in the same order, filtered here (never by the client). It must be available in the
+   * requester's Market (else VALIDATION_FAILED, path category). A category page's cursor is bound
+   * to its Market and category, so it cannot page another category; the unfiltered list keeps its
+   * cursor shape (uncategorised Products stay there).
    */
   @Get('shop/products')
   @Public()
@@ -577,6 +585,7 @@ export class StorefrontController {
   })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50 (default 30).' })
+  @ApiQuery({ name: 'category', required: false, description: "A category code from GET /v1/categories (e.g. FASHION); must be enabled in the requester's Market." })
   @ApiOkResponse({ type: ShopProductListDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async shopProducts(
@@ -584,15 +593,24 @@ export class StorefrontController {
     @Res({ passthrough: true }) res: Response,
     @Query('cursor') cursor?: string,
     @Query('limit') limitRaw?: string,
+    @Query('category') categoryRaw?: string,
   ): Promise<ShopProductListDto> {
     // The answer depends on the requester's Market and live stock: never shared-cached.
     res.setHeader('Cache-Control', 'no-store');
     const limit = pageLimit(limitRaw, 30, 50);
-    const after = decodeCursor(cursor, ['timestamp', 'uuid']);
+    const code = categoryCode(categoryRaw);
+    // A category page's cursor leads with its binding; the unfiltered cursor is unchanged.
+    const decoded = decodeCursor(cursor, code ? ['ref', 'timestamp', 'uuid'] : ['timestamp', 'uuid']);
     return this.tx.run(req, async (trx) => {
       const market = await requesterMarket(trx, req);
       // Said explicitly, so a client never shows "no Products" when it means "no Market" (ON-043).
       if (market === null) return { market_resolved: false, data: [], next_cursor: null };
+      const category = code ? await categoryInMarket(trx, market, code) : null;
+      const binding = code ? categoryBinding('shop', market, code) : null;
+      if (decoded && binding && decoded[0] !== binding) {
+        throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'cursor', reason: 'CURSOR_INVALID' } });
+      }
+      const after = decoded && binding ? decoded.slice(1) : decoded;
       const r = await sql<
         ProductSummaryRow & { seller_handle: string; seller_store_name: string; image_key: string | null; published_key: string }
       >`
@@ -611,12 +629,14 @@ export class StorefrontController {
            AND p.visibility = 'PUBLISHED' AND p.published_at IS NOT NULL
            AND s.status::text = ANY(${VISIBLE_STATES})
            AND m.activation_state = 'ACTIVE'
+           AND (${category === null} OR p.category_id = ${category}::uuid)
            AND (${after === null}
                 OR (p.published_at, p.id) < (${after?.[0] ?? null}::timestamptz, ${after?.[1] ?? null}::uuid))
          ORDER BY p.published_at DESC, p.id DESC
          LIMIT ${limit + 1}`.execute(trx);
       const page = r.rows.slice(0, limit);
       const last = page[page.length - 1];
+      const position = last ? [last.published_key, last.id] : [];
       return {
         market_resolved: true,
         data: page.map((row) => ({
@@ -625,7 +645,7 @@ export class StorefrontController {
           image_key: row.image_key,
         })),
         // The Product id is already in every row, so the cursor discloses nothing new.
-        next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.id]) : null,
+        next_cursor: r.rows.length > limit && last ? encodeCursor(binding ? [binding, ...position] : position) : null,
       };
     });
   }
@@ -768,15 +788,32 @@ export class StorefrontController {
     });
   }
 
+  /**
+   * GET /v1/categories (ADU-API-01 S12.1 lists it without semantics; WO-010 defines them, additively:
+   * id, code and parent_id as before, plus label_key, display_order and market_resolved). The
+   * categories enabled in the requester's Market (derived server-side, never a parameter) and
+   * presentable (a label key), in presentation order. Only what the taxonomy holds: no Product
+   * counts, ranking or promotion. A read with no write.
+   */
   @Get('categories')
   @Public()
-  async categories(@Req() req: LocalizedRequest): Promise<unknown> {
+  @ApiOperation({ summary: "Categories enabled in the requester's Market, in presentation order (empty without a Market)." })
+  @ApiOkResponse({ type: CategoryListDto })
+  @ApiDefaultResponse(PROBLEM_RESPONSE)
+  async categories(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<CategoryListDto> {
+    // Market-dependent: never shared-cached.
+    res.setHeader('Cache-Control', 'no-store');
     return this.tx.run(req, async (trx) => {
-      const r = await sql<Record<string, unknown>>`
-        SELECT c.id, c.code, c.parent_id
+      const market = await requesterMarket(trx, req);
+      if (market === null) return { market_resolved: false, data: [] };
+      const r = await sql<{ id: string; code: string; parent_id: string | null; label_key: string; display_order: number }>`
+        SELECT c.id, c.code, c.parent_id, c.label_key, c.display_order
           FROM core.category c
-         ORDER BY c.code`.execute(trx);
-      return { data: r.rows };
+          JOIN core.category_market_availability a
+            ON a.category_id = c.id AND a.market_id = ${market}::uuid AND a.is_available
+         WHERE c.label_key IS NOT NULL
+         ORDER BY c.display_order, c.code`.execute(trx);
+      return { market_resolved: true, data: r.rows };
     });
   }
 }

@@ -16,6 +16,7 @@ import { minorUnits, priceFields, productAvailable, publicPrice } from '../catal
 import { captionExcerpt } from '../fyp/fyp.logic';
 import { VISIBLE_STATES } from '../storefront/public-seller';
 import { requesterMarket } from '../storefront/requester-market';
+import { categoryCode, categoryInMarket } from '../catalogue/category';
 import { SEARCH_TYPES, SearchResponseDto, type SearchItem, type SearchType } from './search.dto';
 import {
   cursorBinding,
@@ -126,6 +127,11 @@ export class SearchController {
   @ApiQuery({ name: 'type', required: false, enum: SEARCH_TYPES, description: 'Default TOP.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page of the same query and type (opaque).' })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size for a single type, 1-50 (default 20). Ignored for TOP.' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: "WO-010: a category code from GET /v1/categories, with type=PRODUCT_POST only (else VALIDATION_FAILED); must be enabled in the requester's Market. Narrows Product results; ranking is unchanged.",
+  })
   @ApiOkResponse({ type: SearchResponseDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async search(
@@ -135,6 +141,7 @@ export class SearchController {
     @Query('type') typeRaw?: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limitRaw?: string,
+    @Query('category') categoryRaw?: string,
   ): Promise<SearchResponseDto> {
     // Results depend on the requester's Market and current eligibility: never shared-cached.
     res.setHeader('Cache-Control', 'no-store');
@@ -144,6 +151,11 @@ export class SearchController {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'type' } });
     }
     if (type === 'TOP' && cursor) throw invalidCursor();
+    // Category filters Product results only: Top, Sellers and Scenes are never reinterpreted.
+    const code = categoryCode(categoryRaw);
+    if (code !== null && type !== 'PRODUCT_POST') {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'category' } });
+    }
     const after = type === 'TOP' ? null : decodeCursor(cursor, SHAPES[type]);
     const limit = type === 'TOP' ? 0 : pageLimit(limitRaw, 20, 50);
 
@@ -158,7 +170,8 @@ export class SearchController {
       const device = requestingDevice(req.headers);
       if (accountId) await this.rateLimit.consume('ACCOUNT', accountId, RATE, trx);
       else if (device) await this.rateLimit.consume('DEVICE', device, RATE, trx);
-      if (after && after[0] !== cursorBinding(type, market, q)) throw invalidCursor();
+      const category = code ? await categoryInMarket(trx, market, code) : null;
+      if (after && after[0] !== cursorBinding(type, market, q, code)) throw invalidCursor();
 
       // The fuzzy threshold, for this transaction only (pg_trgm default 0.6 misses one-letter typos in short words).
       await setWordSimilarityThreshold(trx, WORD_SIMILARITY);
@@ -173,19 +186,26 @@ export class SearchController {
       }
       const page =
         type === 'PRODUCT_POST'
-          ? await this.products(trx, market, q, after, limit)
+          ? await this.products(trx, market, q, after, limit, category)
           : type === 'SELLER'
             ? await this.sellers(trx, market, q, after, limit)
             : await this.scenes(trx, market, q, after, limit);
       return {
         ...empty,
         items: page.ranked.map((r) => r.item),
-        next_cursor: page.next ? encodeCursor([cursorBinding(type, market, q), ...page.next]) : null,
+        next_cursor: page.next ? encodeCursor([cursorBinding(type, market, q, code), ...page.next]) : null,
       };
     });
   }
 
-  private async products(trx: Transaction<Database>, market: string, q: NormalizedQuery, after: Array<string | number> | null, limit: number) {
+  private async products(
+    trx: Transaction<Database>,
+    market: string,
+    q: NormalizedQuery,
+    after: Array<string | number> | null,
+    limit: number,
+    category: string | null = null,
+  ) {
     const name = sql.ref('p.name');
     const r = await sql<ProductRow>`
       SELECT c.* FROM (
@@ -204,6 +224,7 @@ export class SearchController {
            AND p.visibility = 'PUBLISHED' AND p.published_at IS NOT NULL
            AND s.status::text = ANY(${VISIBLE_STATES})
            AND m.activation_state = 'ACTIVE'
+           AND (${category === null} OR p.category_id = ${category}::uuid)
            AND ${candidate(name, q, q.text)}
       ) c
        WHERE c.band IS NOT NULL

@@ -67,8 +67,11 @@ export function normalizeQuery(raw: string | undefined): NormalizedQuery {
  * tab or Market is refused rather than silently paging someone else's results. 16 bytes of
  * SHA-256, base64url (22 characters, the cursor `ref` shape). Case-folded as matching is.
  */
-export function cursorBinding(type: SearchType, marketId: string, q: NormalizedQuery): string {
-  return createHash('sha256').update(`${SEARCH_ALGORITHM_VERSION}\u0000${type}\u0000${marketId}\u0000${q.text.toLowerCase()}`).digest('base64url').slice(0, 22);
+export function cursorBinding(type: SearchType, marketId: string, q: NormalizedQuery, category: string | null = null): string {
+  // WO-010: a category filter is part of the binding (appended only when present, so an
+  // unfiltered cursor keeps its value).
+  const filter = category === null ? '' : `\u0000category=${category}`;
+  return createHash('sha256').update(`${SEARCH_ALGORITHM_VERSION}\u0000${type}\u0000${marketId}\u0000${q.text.toLowerCase()}${filter}`).digest('base64url').slice(0, 22);
 }
 
 export interface Ranked<T> {
