@@ -315,6 +315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Categories enabled in the requester's Market, in presentation order (empty without a Market). */
         get: operations["StorefrontController_categories"];
         put?: never;
         post?: never;
@@ -2276,6 +2277,29 @@ export interface components {
              */
             server_time: string;
         };
+        CategoryDto: {
+            /** @description Stable machine-readable code (FASHION, COSMETICS, ELECTRONICS): the Shop and Search filter value. */
+            code: string;
+            /** @description Presentation order among siblings, ascending (then code). */
+            display_order: number;
+            /**
+             * Format: uuid
+             * @description Stable category identity.
+             */
+            id: string;
+            /** @description Locale catalogue key of the display label (e.g. catalogue.category.fashion); never prose. */
+            label_key: string;
+            /**
+             * Format: uuid
+             * @description The parent category; null for a top-level category.
+             */
+            parent_id: string | null;
+        };
+        CategoryListDto: {
+            data: components["schemas"]["CategoryDto"][];
+            /** @description false: the request carries no ACTIVE-Market evidence, so data is empty because no Market could be chosen -- not because the Market has no categories. */
+            market_resolved: boolean;
+        };
         CollectionCreatedDto: {
             /** Format: uuid */
             ref: string;
@@ -3535,7 +3559,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CategoryListDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -4629,6 +4664,8 @@ export interface operations {
     SearchController_search: {
         parameters: {
             query: {
+                /** @description WO-010: a category code from GET /v1/categories, with type=PRODUCT_POST only (else VALIDATION_FAILED); must be enabled in the requester's Market. Narrows Product results; ranking is unchanged. */
+                category?: string;
                 /** @description next_cursor of the previous page of the same query and type (opaque). */
                 cursor?: string;
                 /** @description Page size for a single type, 1-50 (default 20). Ignored for TOP. */
@@ -6328,6 +6365,8 @@ export interface operations {
     StorefrontController_shopProducts: {
         parameters: {
             query?: {
+                /** @description A category code from GET /v1/categories (e.g. FASHION); must be enabled in the requester's Market. */
+                category?: string;
                 /** @description next_cursor of the previous page (opaque). */
                 cursor?: string;
                 /** @description Page size, 1-50 (default 30). */
