@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102.
 
 ## Issues
 
@@ -1566,3 +1566,309 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Default-parallel full runs can fail on a memory-constrained machine.
 - **Founder decision required:** No
 - **Recommended resolution:** Run the full API suite with fewer workers (or close other heavy applications) on this machine; consider a maxWorkers default in a test-infrastructure change.
+
+### ON-20261111-086
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** SPEC_GAP
+- **Status:** RESOLVED (recorded deviation)
+- **Summary:** ADU-SRC-01 v3.2 S19 lists a product_tag_id FK on core.collection_item; no surrogate Product-tag id exists.
+- **Expected:** Tag provenance referencing the canonical tag.
+- **Actual:** A tag is core.scene_post_product (revision_id, product_id) (0054); there is no tag id to reference.
+- **Reproduction:** Read 0054_scene_posts.sql scene_post_product.
+- **Evidence:** db/migrations/0054_scene_posts.sql; 0061 collection_item_origin_tag; ADU-DB-01 v1.26 S30i
+- **Root cause:** The design assumed a surrogate key the schema never had.
+- **Fix and commit:** Realised as the composite FK (originating_scene_revision_id, product_post_id) -> scene_post_product (revision_id, product_id): the database refuses a fabricated Scene/tag relationship (6d25064).
+- **Verification:** wo-009 e2e case 30 (23503 on a forged tag row).
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Fold the composite form into SRC-01 at its next revision.
+
+### ON-20261111-087
+
+- **Work order:** WO-009
+- **Severity:** MEDIUM
+- **Type:** PRIVACY_POLICY_GAP
+- **Status:** OPEN
+- **Summary:** Deleting a Collection is a hard delete; SRC-01 S19 offers an optional deleted_at and no retention for deleted private Collection names is approved.
+- **Expected:** An approved lifecycle for a Buyer-deleted Collection.
+- **Actual:** PRV-01 v3.3 S36 and DPIA-01 PA-08 define only the Account-deletion purge; nothing says how long a deleted Collection or its name may be kept. 0061 creates no deleted_at and DELETE removes the row and its memberships.
+- **Reproduction:** DELETE /v1/collections/{ref}; the row is gone.
+- **Evidence:** ADU-PRV-01 v3.3 S36 (line 604), DPIA-01 PA-08 (line 253, "exact duration LEGAL REVIEW REQUIRED"); 0061 header
+- **Root cause:** Retention is a privacy decision the documents leave open.
+- **Fix and commit:** Data-minimising default implemented: hard delete, no restore (6d25064); recorded here rather than inventing a retention period.
+- **Verification:** wo-009 e2e cases 5-6.
+- **Remaining risk:** If a restore or audit window is later required, a deleted_at column and a purge job are needed.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Confirm hard delete, or approve a soft-delete window and its purge.
+
+### ON-20261111-088
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** POLICY_VALUES
+- **Status:** OPEN
+- **Summary:** Provisional technical bounds with no governing value: Collection name 1-60 characters, saved-state batch of at most 60 targets, pages of 50 Collections / 30 items; no quota or rate limit on Collections or memberships.
+- **Expected:** Values from a governing document or ADU-VAL-01.
+- **Actual:** None of SRC-01, MOB-02 or VAL-01 gives a number; the work order forbids inventing a quota. The independent review (D6) noted storage is bounded only by write speed, and GET /v1/collections and saved-state create the DEFAULT on first need.
+- **Reproduction:** n/a
+- **Evidence:** apps/api/src/modules/collections/collections.logic.ts (NAME_MAX, SAVED_STATE_MAX); 0061 collection_name CHECK
+- **Root cause:** Values are business decisions the documents leave open.
+- **Fix and commit:** Implemented as marked shortcuts; no cap or rate limit added.
+- **Verification:** collections.logic.spec.ts; e2e cases 3, 12.
+- **Remaining risk:** An abusive Account can store many rows (owner-scoped reads only slow its own pages).
+- **Founder decision required:** Yes
+- **Recommended resolution:** Confirm the bounds; decide whether a per-Account cap or write rate limit is wanted (RateLimitService exists).
+
+### ON-20261111-089
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** No error code for "the DEFAULT Collection cannot be renamed or deleted"; the closed taxonomy (ADU-API-01 S7.1) admits no new code from a work order.
+- **Expected:** A specific, translatable refusal.
+- **Actual:** PATCH/DELETE of DEFAULT answer 400 VALIDATION_FAILED with slots.path = collectionRef. The app never offers either action for DEFAULT.
+- **Reproduction:** PATCH /v1/collections/{defaultRef}.
+- **Evidence:** apps/api/src/common/errors/error-catalogue.ts header; collections.service.ts rename/remove
+- **Root cause:** Closed taxonomy by design.
+- **Fix and commit:** Reused VALIDATION_FAILED (9e5b310).
+- **Verification:** e2e cases 4, 6.
+- **Remaining risk:** A future client could show a generic validation message.
+- **Founder decision required:** No (API-01 amendment if a code is wanted)
+- **Recommended resolution:** Add a COLLECTION_DEFAULT_IMMUTABLE code at the next ADU-API-01 revision if wanted.
+
+### ON-20261111-090
+
+- **Work order:** WO-009
+- **Severity:** MEDIUM
+- **Type:** PRODUCT_POLICY_GAP
+- **Status:** OPEN
+- **Summary:** A Seller may hard-delete a never-ordered, untagged Product; the saved membership then disappears instead of showing a tombstone.
+- **Expected:** WO-009 S9: "tombstone when ... deleted".
+- **Actual:** collection_item.product_post_id is ON DELETE CASCADE, so the membership goes with the Product. Unpublished, restricted and out-of-stock Products keep their membership and show the neutral unavailable state.
+- **Reproduction:** Save a never-stocked Product; DELETE /v1/seller/products/{id}; the Collection no longer lists it.
+- **Evidence:** catalogue.service.ts deleteProduct (hard delete); 0061; e2e "Product deleted by its Seller"
+- **Root cause:** A hard-deleted row cannot be referenced; RESTRICT would refuse the Seller (a behaviour change outside this work order), SET NULL would break the one-target CHECK.
+- **Fix and commit:** Cascade chosen so Seller deletion is never blocked (6d25064).
+- **Verification:** e2e "Product deleted by its Seller".
+- **Remaining risk:** The Buyer sees the item vanish rather than a tombstone for this one path.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Accept, or approve a tombstone design (a target_type column plus nullable target, or Product soft delete).
+
+### ON-20261111-091
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** SPEC_CONFLICT
+- **Status:** OPEN
+- **Summary:** SRC-01 S25 suggests "Unavailable in your current market" for a Market change; WO-009 S17 asks for one neutral sentence and no distinguishing reason.
+- **Expected:** One rule for the Buyer-facing text.
+- **Actual:** Implemented the work order: every unavailable cause, Market change included, shows "This Product/Scene is no longer available." with no reason.
+- **Reproduction:** Change the Account Market; open Saved.
+- **Evidence:** ADU-SRC-01 v3.2 S25 (line 714); WO-009 S17, S19; e2e case 31
+- **Root cause:** Two sources, two wordings.
+- **Fix and commit:** Work order wording followed (founder decision outranks).
+- **Verification:** e2e case 31.
+- **Remaining risk:** A travelling Buyer is not told why.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Confirm the single neutral sentence or approve a Market-specific one.
+
+### ON-20261111-092
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** SCOPE
+- **Status:** OPEN
+- **Summary:** Card-level Save on Shop, Search, Seller Profile and For You cards is not built ("where practical"); Save is on Product Detail and Explore the Scene.
+- **Expected:** Optional per WO-009 S15.
+- **Actual:** POST /v1/collections/saved-state:batch exists for those lists (one request per visible page, up to 60 targets); no card calls it yet, so no list sends any per-card request.
+- **Reproduction:** n/a
+- **Evidence:** apps/mobile/src/buyer/SaveButton.tsx; collections.controller.ts savedState
+- **Root cause:** Prioritised the two required surfaces.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** A small follow-up: a SaveToggle on the shared tiles fed by one batch per page.
+
+### ON-20261111-093
+
+- **Work order:** WO-009
+- **Severity:** MEDIUM
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** Independent review D1: POST /v1/collections answered the whole Collection, so the idempotency store kept a private name for 24 hours after the Collection or the Account was deleted.
+- **Expected:** No private name retained past deletion.
+- **Actual:** core.idempotency_record.response_body held CollectionDto (with name) for its 24-hour life; fn_delete_account does not purge it.
+- **Reproduction:** Create a Collection, delete it, read idempotency_record.
+- **Evidence:** handler-transaction.ts runIdempotent; collections.controller.ts create
+- **Root cause:** A POST answer is a stored artifact.
+- **Fix and commit:** POST /v1/collections answers { ref } only (b4814c8, contract f3ebfa8).
+- **Verification:** e2e "stored POST answers carry no Collection name and no target content".
+- **Remaining risk:** Other endpoints store their own answers by the existing design (not changed here).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-094
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** Independent review D2: POST .../items answered the resolved Scene (caption, image keys); a replay of the same key within 24 hours would serve it after the Scene went PRIVATE (same Account only).
+- **Expected:** No content served after it stopped being public.
+- **Actual:** The stored answer was a content snapshot.
+- **Reproduction:** Save a Scene; make it PRIVATE; replay the key.
+- **Evidence:** collections.service.ts addItem
+- **Root cause:** Content resolved into a stored answer.
+- **Fix and commit:** POST .../items answers the membership only (ref, collection_ref, target_type, saved_at) (b4814c8).
+- **Verification:** e2e cases 21-22, 25-27 and the stored-answer test.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-095
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** DATA_INTEGRITY
+- **Status:** RESOLVED
+- **Summary:** Independent review D3: the app kept a Save key across a lost answer; after a removal (picker or another device) the next Save replayed the old membership and drew Saved for nothing until the re-read.
+- **Expected:** Saved drawn only for a real membership.
+- **Actual:** Idempotency replay of a stale 201.
+- **Reproduction:** Lose a Save answer, remove elsewhere, Save again.
+- **Evidence:** apps/mobile/src/buyer/saved.ts, SaveToCollection.tsx
+- **Root cause:** Key lifetime longer than the fact it protected.
+- **Fix and commit:** A fresh key per tap and tick; the membership itself is idempotent (2dcc90f).
+- **Verification:** saved.test.tsx "a refused Save ... saves once".
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-096
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** DATA_INTEGRITY
+- **Status:** RESOLVED
+- **Summary:** Independent review D4: originating_scene_post_id had no ON DELETE action, so a Buyer provenance row would block any future Scene purge.
+- **Expected:** Provenance never blocks the owning domain.
+- **Actual:** NO ACTION FK.
+- **Reproduction:** Delete a saved Scene (no command exists today).
+- **Evidence:** 0061
+- **Root cause:** Oversight.
+- **Fix and commit:** ON DELETE SET NULL; the CHECK tying the two originating columns dropped (c204739; DB-01 9b97f8a).
+- **Verification:** e2e case 29 reads every referential action from pg_constraint.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-097
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** RELIABILITY
+- **Status:** RESOLVED
+- **Summary:** Independent review D5: a Collection or Product deleted between the checks and the INSERT, or a membership removed before the re-read, answered 500.
+- **Expected:** The same 404 as before the race.
+- **Actual:** 23503 (not a scope FK in the translator) became INTERNAL; an empty re-read became undefined.
+- **Reproduction:** Concurrent delete during a Save.
+- **Evidence:** collections.service.ts addItem
+- **Root cause:** Unhandled race outcomes.
+- **Fix and commit:** Mapped to NOT_FOUND (b4814c8).
+- **Verification:** Code review; e2e suite 29/29.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-098
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** TEST_ENVIRONMENT
+- **Status:** RESOLVED
+- **Summary:** Mobile tests: a waitFor whose callback awaited findBy (nested waits) left the act environment off, and every later test in the file rendered nothing; separately the fake server issued the DEFAULT ref to the first named Collection.
+- **Expected:** Independent tests.
+- **Actual:** Cascading "Unable to find" failures after the picker test; a missing named Collection.
+- **Reproduction:** Run saved.test.tsx in order.
+- **Evidence:** apps/mobile/src/buyer/saved.test.tsx; testing/fake-collections.ts
+- **Root cause:** Test-authoring mistakes, not product code.
+- **Fix and commit:** Synchronous queries inside waitFor; fake ids start at 100 (3319049).
+- **Verification:** 17/17 in order and alone.
+- **Remaining risk:** The same nesting would break any suite.
+- **Founder decision required:** No
+- **Recommended resolution:** Never await a findBy inside waitFor.
+
+### ON-20261111-099
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** TEST_CORRECTION
+- **Status:** RESOLVED
+- **Summary:** First e2e run: two expectations were wrong -- re-saving a now-hidden Scene answers 404 (the gate, by design), and a fixture Product with stock events cannot be hard-deleted by its Seller (stock_event references its Variant).
+- **Expected:** Tests that state the intended behaviour.
+- **Actual:** A cascade of 7 failures from one aborted test that left the Scene PRIVATE.
+- **Reproduction:** Run wo-009-collections.e2e.spec.ts at its first version.
+- **Evidence:** apps/api/test/wo-009-collections.e2e.spec.ts
+- **Root cause:** Test fixtures and expectations.
+- **Fix and commit:** Expectations corrected; the deletable Product has no stock events (9e5b310).
+- **Verification:** 29/29.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-100
+
+- **Work order:** WO-009
+- **Severity:** MEDIUM
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** During native validation drive C: reached 0 MB free; Maestro and Metro died ("There is not enough space on the disk").
+- **Expected:** Room for Metro, Maestro and Docker.
+- **Actual:** Two state flows failed for lack of disk, not product behaviour.
+- **Reproduction:** Long sessions of builds, emulator and test runs on a nearly full drive.
+- **Evidence:** maestro-009/back.log, dark.log; Get-PSDrive C: 0 GB free (475.7 GB used)
+- **Root cause:** Host disk pressure (Docker, SDKs, test artifacts).
+- **Fix and commit:** Non-destructive: this session's old scratch outputs (58 folders) and 27 stale Maestro temp APKs (3.2 GB, 8-10 November) moved to G:\adulis-claude-scratch-archive\2026-11-11; nothing deleted. 22 GB free afterwards; the flows re-ran and passed.
+- **Verification:** PASS back, dark after the move.
+- **Remaining risk:** The drive can fill again.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Free space on C: (the G: archive may be deleted at will once reviewed).
+
+### ON-20261111-101
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED
+- **Summary:** Stopping the background API wrapper left its node process serving the previous build on port 3000 (Windows), and the first native tab tap after a launch was swallowed.
+- **Expected:** A restarted API serves the new build; taps land.
+- **Actual:** Port 3000 still answered after the stop; the first Saved tap did nothing.
+- **Reproduction:** Stop the wrapper task; relaunch the app and tap a tab at once.
+- **Evidence:** Get-NetTCPConnection on 3000/8081; maestro-009/collections first run
+- **Root cause:** Known host behaviours (memory notes).
+- **Fix and commit:** Processes stopped by port before each restart; flows tap a tab until it lands (b75a9cb).
+- **Verification:** All native flows PASS.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-102
+
+- **Work order:** WO-009
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (pinned)
+- **Summary:** `npx expo-doctor` fetched 1.21.7, published 11 November 2026 09:48 UTC, which cannot start: "Cannot find module '@expo/env'".
+- **Expected:** 20/20 checks as in WO-008.
+- **Actual:** Exit 1 before any check, also with a fresh npm cache.
+- **Reproduction:** `cd apps/mobile && npx --yes expo-doctor` on 11 November 2026.
+- **Evidence:** v009/expo-doctor.log; expo-doctor-009b.log (fresh cache); `npm view expo-doctor time`.
+- **Root cause:** Upstream packaging of expo-doctor 1.21.7 (not this repository).
+- **Fix and commit:** None in code; ran the previous release `npx expo-doctor@1.21.6`: 20/20 checks passed.
+- **Verification:** expo-doctor-009c.log.
+- **Remaining risk:** An unpinned `npx expo-doctor` fails until upstream republishes.
+- **Founder decision required:** No
+- **Recommended resolution:** Pin the doctor version in any script or CI step that runs it.
