@@ -64,6 +64,7 @@ import { AnalyticsController } from './modules/analytics/analytics.controller';
 import { NotificationsController } from './modules/notifications/notifications.controller';
 import { ReportsController } from './modules/reports/reports.controller';
 import { StorefrontController } from './modules/storefront/storefront.controller';
+import { SearchController } from './modules/search/search.controller';
 import { ObligationsController } from './modules/obligations/obligations.controller';
 import { ScenesController } from './modules/scenes/scenes.controller';
 import { ScenesService } from './modules/scenes/scenes.service';
@@ -90,7 +91,7 @@ export const LOGGER = Symbol('LOGGER');
  */
 @Module({
   imports: [DatabaseModule],
-  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController, FypController],
+  controllers: [HealthController, BootstrapController, OnboardingController, CatalogueController, OrdersController, FinancialController, HandoffController, AuthController, DeletionController, TeamController, OwnershipController, CouriersController, BillingController, ChatController, ClaimsController, ReviewsController, AnalyticsController, NotificationsController, ReportsController, StorefrontController, ObligationsController, ScenesController, FypController, SearchController],
   providers: [
     { provide: LOGGER, useFactory: (): Logger => createLogger() },
     SessionService,

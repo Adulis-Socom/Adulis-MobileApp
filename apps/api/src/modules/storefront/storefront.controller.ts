@@ -24,6 +24,7 @@ import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { POST_LINK_ADAPTER, type PostLinkAdapter } from '../catalogue/post-link.adapter';
 import { requesterMarket } from './requester-market';
+import { VISIBLE_STATES } from './public-seller';
 import {
   minorUnits,
   priceFields,
@@ -60,9 +61,6 @@ import {
  */
 
 const resolveBody = z.object({ url: z.string().max(2048) });
-
-/** A storefront exists while its seller is publicly live. */
-const VISIBLE_STATES = ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'];
 
 const first = <T>(rows: readonly T[]): T | undefined => rows[0];
 
