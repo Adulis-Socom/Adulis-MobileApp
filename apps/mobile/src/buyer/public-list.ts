@@ -57,18 +57,23 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
         : undefined,
   });
 
-  const all = useMemo(() => {
+  const { all, pages } = useMemo(() => {
     const seen = new Set<string>();
     const out: I[] = [];
+    // Each page's own new items as it arrived (WO-009A: one saved-state batch per page).
+    const byPage: Array<{ receivedAt: number; items: I[] }> = [];
     for (const loaded of query.data?.pages ?? []) {
+      const fresh: I[] = [];
       for (const item of items(loaded.page)) {
         const key = keyOf(item);
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(item);
+        fresh.push(item);
       }
+      byPage.push({ receivedAt: loaded.receivedAt, items: fresh });
     }
-    return out;
+    return { all: out, pages: byPage };
     // `items` and `keyOf` are pure projections of the page: the data alone decides.
   }, [query.data]);
 
@@ -96,6 +101,8 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     error: query.error,
     gone: isGone(query.error),
     items: all,
+    /** The same items grouped by the page that brought them, with when it arrived. */
+    pages,
     /** The first page as the server sent it (for a list-level fact such as the Shop's market_resolved). */
     firstPage: query.data?.pages[0]?.page,
     /** Nothing to show yet and the request waits for a connection. */

@@ -9,6 +9,7 @@ import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import type { usePublicList } from './public-list';
+import { CardSavesContext, useCardSaves, type ListSaves } from './saved';
 
 /**
  * A public list's every state in one FlashList (WO-006, WO-007): the header (a profile, a title)
@@ -28,6 +29,7 @@ export function PublicListView<I>({
   onRefresh,
   blocked,
   emptyState,
+  saves,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -44,9 +46,15 @@ export function PublicListView<I>({
   blocked?: { message: string; onRetry?: () => void } | null;
   /** What an empty answer shows instead of the `empty` sentence (e.g. a slotted message with actions). */
   emptyState?: ReactElement | null;
+  /**
+   * Cards that can be saved (WO-009A): how an item becomes a Save target (a stable function)
+   * and the list's surface. Saved state is then read once per page and given to the cards.
+   */
+  saves?: ListSaves<I>;
 }) {
   const t = useT();
   const theme = useTheme();
+  const cardSaves = useCardSaves(list.pages, saves);
 
   const state = (() => {
     if (list.items.length > 0) return null;
@@ -85,6 +93,7 @@ export function PublicListView<I>({
   })();
 
   return (
+    <CardSavesContext.Provider value={cardSaves}>
     <FlashList
       testID={testID}
       accessibilityLabel={label}
@@ -129,5 +138,6 @@ export function PublicListView<I>({
         )
       }
     />
+    </CardSavesContext.Provider>
   );
 }
