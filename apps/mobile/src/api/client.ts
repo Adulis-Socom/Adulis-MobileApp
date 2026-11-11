@@ -383,6 +383,19 @@ export function createApiClient(deps: ApiDeps) {
     confirmDeletion: (ticket: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/deletion/confirm', { body: { acknowledge: true }, ticket, idempotencyKey, ok: 200 }),
 
+    /**
+     * The Buyer inbox (WO-012): GET /v1/notifications?as=buyer, 25 per page, newest first. `as=buyer`
+     * is the server's scope rule (R10): Seller-side and Seller-class rows are never in it. No schema
+     * is published (ON-20261111-140), so the page is checked at the boundary (src/buyer/notifications.ts).
+     * There is deliberately no read-all here: the server's marks the WHOLE Account read, Seller
+     * notifications included (ON-20261111-139).
+     */
+    notifications: (cursor: string | null) =>
+      call<unknown>('GET', '/v1/notifications', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
+    /** POST /v1/notifications/{id}/read: one of the Account's notifications; read_at is set once. */
+    markNotificationRead: (id: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/notifications/{id}/read', { params: { id }, idempotencyKey, ok: 200 }),
+
     /** POST /v1/auth/logout with the credential being signed out (already off the device). */
     logout: (token: string) =>
       call<void>('POST', '/v1/auth/logout', { bearer: token, ok: 204 }).catch((error: unknown) => {
