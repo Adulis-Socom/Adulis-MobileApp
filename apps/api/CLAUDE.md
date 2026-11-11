@@ -3,7 +3,7 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.26** (WO-009) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
+**Governing documents:** ADU-DB-01 **v1.27** (WO-010) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
 remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`;
 v2.8 S0: "There is no permission-grant change in this revision") ·
 ADU-API-01 **v1.11** (T20) · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
@@ -94,7 +94,9 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > `idx_scene_revision_caption_trgm`; **ADU-DB-01 v1.25** records it (counts unchanged).
 > **WO-009 (`0061`)** adds `core.collection` and `core.collection_item`, pinned by name in check 14:
 > `pnpm db:check` prints **125 tables: manifest 109 + 16 body-over-manifest**, and **ADU-DB-01 v1.26**
-> carries them (`core` 99, 71 enum types).
+> carries them (`core` 99, 71 enum types). **WO-010 (`0062`)** adds no table: the three launch categories,
+> `core.category.label_key` / `display_order` and the Product classification trigger; **ADU-DB-01 v1.27** records
+> them (counts unchanged).
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
