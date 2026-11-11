@@ -46,8 +46,13 @@ tags:
 
 # Search and Notifications open over the tabs.
 - tapOn: Search
-- assertVisible: Search for Products, Sellers and Scenes arrives in a coming update.
+# Search exists since WO-008 (its own flow: search.yaml); the shell only checks it opens.
+- extendedWaitUntil:
+    visible: Find Products, Sellers and Scenes in your Market\.
+    timeout: 10000
 - takeScreenshot: buyer-03-search
+# The search field takes focus on open: dismiss the keyboard first or Back only closes it.
+- hideKeyboard
 - back
 - tapOn: Notifications
 - assertVisible: Sign in to see notifications.
@@ -56,7 +61,10 @@ tags:
 
 # The other four tabs, as a guest.
 - tapOn: Shop
-- assertVisible: Shopping by category arrives in a coming update.
+# The Shop exists since WO-007 (shop.yaml, categories.yaml); any of its resolved states will do.
+- extendedWaitUntil:
+    visible: 'All Products|.*, Available|No Products to show right now\.|The Shop could not find your Market\. Try again\.'
+    timeout: 20000
 - tapOn: Saved
 - assertVisible: Sign in to save.
 - assertVisible: Sign in
