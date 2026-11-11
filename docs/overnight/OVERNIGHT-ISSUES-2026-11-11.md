@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged.
 
 ## Issues
 
@@ -912,6 +912,10 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Recommended resolution:** A catalogue taxonomy work order before any category UI.
 - **WO-007A (11 November 2026):** Policy direction APPROVED: initial top-level groups Fashion, Cosmetics, Electronics. Implementation: recorded only (as directed); no category, module or assignment built. Further engineering: the Catalogue taxonomy work order (definitions, subcategories, labels, localisation, Market enablement, classification) and membership rules for Locally Made, Discounts, New Drops. Further legal/privacy authorisation: none.
 - **WO-008:** Marketplace Search launches without category facets for the same reason; no category was fabricated.
+- **WO-010 (11 November 2026):** Status PARTIALLY RESOLVED.
+  - Implemented and tested: the three approved top-level categories (migration 0062, fixed ids, label keys, order; ADU-DB-01 v1.27), Market availability (runbook Step 6 per Market; dev seed), the Product classification guard, `GET /v1/categories` (Market-scoped), Shop category browsing and the Search Product category filter (server-side, cursors bound to the category), Mobile category tabs.
+  - Awaiting founder decisions: subcategories, attribute definitions, classification of existing Products, Locally Made / Discounts / New Drops membership. Not built.
+  - Records: `docs/mobile/WO-010-CATALOGUE-CATEGORIES.md`, `docs/mobile/WO-010-BUYER-CATEGORY-DISCOVERY.md`.
 
 ### ON-20261111-050
 
@@ -1844,6 +1848,10 @@ with a "WO-007A" line separating policy approval from implementation, and added 
   - About 0.49 GB of the 13.8 GB growth is Adulis artifacts. The rest is unattributed; the page file is the likely cause (ON-110).
   - Cleanup removed 485 Maestro driver APKs (3,066,085,337 bytes; ON-109) and this work order's Maestro output (68,528,230 bytes).
   - Still OPEN: C: ends below the policy's 10 GB floor for native batteries. Founder items: ON-110, ON-111.
+- **WO-010 (11 November 2026):** Status MITIGATED.
+  - Measured: stopping a long-running emulator returned about 10.6 GB of C: (ON-110).
+  - Mitigation: development temporary output now goes to the external SSD (`ops/scripts/adulis-ssd-env.sh`), and the emulator is started with its temp there; its boot then cost 12.8 MB of C:.
+  - Checkpoints and cleanup: `docs/engineering/WO-010-SSD-ENVIRONMENT.md`. Still OPEN as a capacity risk: C: is about 19 GB free with a 41 GB page-file ceiling.
 
 ### ON-20261111-101
 
@@ -2025,6 +2033,12 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** C: can run out mid-session again (ON-100).
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder: decide whether to fix the page-file size or close memory-heavy applications during test batteries; the next work order's checkpoints (with the page-file row) will confirm or rule out the cause.
+- **WO-010 (11 November 2026):** Status RESOLVED (cause measured).
+  - With the WO-009A emulator still running: page file 42,726 MB, commit 47.1 of 57.4 GB, 0.38 GB RAM free, C: 10,355,748,864 bytes free.
+  - After stopping only the emulator: page file 38,833 MB (-3,893 MB) and C: 20,951,506,944 bytes free (+10.6 GB). The rest of the release (about 6.7 GB) came from storage no file listing showed.
+  - The page file did not grow during WO-010 (38,833 MB at every checkpoint).
+  - The emulator started with TEMP on the SSD cost 12.8 MB of C: at boot and released nothing measurable at exit after about an hour, consistent with its temp storage having been the hidden part. Proven by stop and start measurements, not by a named file.
+  - Nothing was disabled, resized or relocated. A game using 10 GB of private memory ran throughout (ON-120).
 
 ### ON-20261111-111
 
@@ -2043,6 +2057,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Docker space returns to C: only after a builder prune and a virtual-disk compaction.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder: authorise or decline each; never prune Docker volumes.
+- **WO-010 (11 November 2026):** Unchanged and still awaiting the founder: pip leftovers, the Docker build cache, `G:\wo001a`, the G: archive, another session's scratch, two truncated Maestro files. WO-010 deleted none of them.
 
 ### ON-20261111-112
 
@@ -2061,6 +2076,10 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Low.
 - **Founder decision required:** No
 - **Recommended resolution:** Move them to boundApi in a small follow-up.
+- **WO-010 (11 November 2026):** Status RESOLVED.
+  - The Saved screen, the Collection screen and the picker use `usePrivateApi` / `keepIfCurrent` (session-bound requests; late answers dropped; follow-ups only for the current session).
+  - Without a session both screens ask for a sign-in (review R1).
+  - Tests: saved.test.tsx +5 (Account A/B switches, delayed read, expired session, signed out).
 
 ### ON-20261111-113
 
@@ -2079,3 +2098,147 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** None if merged in order.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder: merge as one PR, or cherry-pick 72efade into its own PR first.
+
+### ON-20261111-114
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** CONTRACT
+- **Status:** OPEN
+- **Summary:** GET /v1/categories had no documented semantics (ADU-API-01 S12.1 lists it with an empty description); WO-010 defines them.
+- **Expected:** A governed contract for the category list.
+- **Actual:** It returned every category (id, code, parent_id). It now returns only the categories enabled in the requester's Market that have a label key, ordered, with additive fields (label_key, display_order, market_resolved). A Seller-side consumer resolving through its Account now sees only that Market's enabled categories.
+- **Reproduction:** n/a
+- **Evidence:** storefront.controller.ts categories; contracts/openapi.json.
+- **Root cause:** The contract never specified the list.
+- **Fix and commit:** Additive response shape; no field removed.
+- **Verification:** wo-010-categories.e2e (GET /v1/categories cases).
+- **Remaining risk:** Operator tooling or a caller with no Market context now gets an empty list.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Record the semantics in an ADU-API-01 amendment.
+
+### ON-20261111-115
+
+- **Work order:** WO-010
+- **Severity:** MEDIUM
+- **Type:** CONFIGURATION
+- **Status:** OPEN
+- **Summary:** The Addis Ababa launch Market's code is not recorded in the repository, so its category enablement is an operator step.
+- **Expected:** The launch Market offers Fashion, Cosmetics and Electronics.
+- **Actual:** Migration 0062 creates the categories everywhere but enables none (Markets are created by the operator). The dev seed enables its fixture Market.
+- **Reproduction:** n/a
+- **Evidence:** ops/runbooks/activate-market.md Step 6.
+- **Root cause:** Market rows are configuration, not migrations.
+- **Fix and commit:** Runbook Step 6: an idempotent per-Market-code enablement with a check query.
+- **Verification:** Seed path verified (GET /v1/categories lists the three for the seed Market; native flows).
+- **Remaining risk:** Until Step 6 runs, the launch Market lists no categories (the Shop shows All only).
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder or operator: run Step 6 with the Addis Ababa Market code.
+
+### ON-20261111-116
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** DATA_INTEGRITY
+- **Status:** OPEN
+- **Summary:** core.seller.category_id (a Seller's store category, migration 0005) is a bare uuid with no foreign key and no Market check.
+- **Expected:** A store category that names a real, Market-enabled category, if store categories are meant to use this taxonomy.
+- **Actual:** Seller onboarding accepts any uuid. Real categories now exist, so the question becomes live.
+- **Reproduction:** n/a
+- **Evidence:** 0005 comment; onboarding.service.ts.
+- **Root cause:** Out of WO-010 scope (Product classification only).
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Low.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Decide whether a Seller's store category uses the Product taxonomy; then add the foreign key and Market check in a forward migration.
+
+### ON-20261111-117
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** Expo Doctor 1.21.6 (the working pinned version) reports 19/20: new Expo SDK 58 patch releases appeared after WO-009A passed 20/20.
+- **Expected:** 20/20.
+- **Actual:** Patch mismatches: expo 58.0.24 expected, 58.0.23 found; likewise expo-constants, expo-font, expo-linking, expo-network, expo-router, expo-secure-store, expo-sqlite, expo-status-bar.
+- **Reproduction:** `npx expo-doctor@1.21.6` on 11 November 2026 (evening).
+- **Evidence:** G:\AdulisDevelopment\WO-010\logs\gates\expo-doctor.log.
+- **Root cause:** Upstream patch releases; WO-010 changed no dependency.
+- **Fix and commit:** None. Not silently upgraded: an upgrade changes the lockfile and may need a native rebuild.
+- **Verification:** n/a
+- **Remaining risk:** The installed patch versions drift from the SDK's recommendation.
+- **Founder decision required:** No
+- **Recommended resolution:** Upgrade in a dependency-maintenance work order (with a native rebuild check).
+
+### ON-20261111-118
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (documented)
+- **Summary:** The external SSD is exFAT with a 1 MiB allocation unit; it cannot hold junctions, and a cache of small files takes about 1 MiB per file.
+- **Expected:** Audit numbers that reflect SSD use; a self-test that works wherever TEMP points.
+- **Actual:** The Jest cache measured 25.9 MB apparent in 3,201 files, about 3.2 GB allocated. The audit self-test failed when TEMP pointed at the SSD.
+- **Reproduction:** Set TEMP to the SSD and run Jest or the audit self-test.
+- **Evidence:** Get-Volume AllocationUnitSize: G: 1,048,576, C: 4,096.
+- **Root cause:** exFAT on a 4 TB drive.
+- **Fix and commit:** The self-test now uses the user's NTFS temp; the policy and audit say SSD use is read from free space.
+- **Verification:** Self-test PASS with TEMP on the SSD.
+- **Remaining risk:** SSD space is used about 10x faster than apparent sizes suggest (3.5 TB free, so capacity is not at risk).
+- **Founder decision required:** No
+- **Recommended resolution:** Optional: reformat a dedicated SSD partition as NTFS (founder's hardware decision).
+
+### ON-20261111-119
+
+- **Work order:** WO-010
+- **Severity:** MEDIUM
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent review of the WO-010 diff: no Critical or High; one Medium and five Low, all fixed before commit.
+- **Expected:** n/a
+- **Actual:** Six findings: R1 (MEDIUM) the Collection screen and the picker waited forever without a session; R2 a Shop category tab could briefly show the previous category's items as its placeholder; R3 the trigger did not re-check a Market change; R4 unlabelled categories were hidden but still accepted as a filter or an assignment; R5 Search did not re-read categories after a refusal; R6 a selection could stay applied with its tab row hidden. Info items: the runbook idempotence wording, a stale Shop docblock, an ALL key sentinel.
+- **Reproduction:** n/a
+- **Evidence:** Review report (session record).
+- **Root cause:** n/a
+- **Fix and commit:** R1 sign-in prompt in the route; R2 placeholder restricted to the same resource; R3 trigger on category_id or market_id; R4 label_key required by the guard and the filter; R5 refetch on refusal; R6 fallback in the screens against the server's successful answer; the info items fixed.
+- **Verification:** Mobile 291/291; affected API suites 78/78; e2e covers W10_HIDDEN and the Market change.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-120
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** A non-development application (a game) held about 10 GB of private memory during development, the largest share of the commit charge.
+- **Expected:** Room in RAM and commit for the emulator, Jest and Docker.
+- **Actual:** 0.38 GB of RAM free at the start of WO-010; commit 47.1 of 57.4 GB with the WO-009A emulator running.
+- **Reproduction:** n/a
+- **Evidence:** Get-Process (CrimsonDesert, 10,026 MB private).
+- **Root cause:** The founder's own application; not closed (only unused development processes may be stopped).
+- **Fix and commit:** None. The idle emulator was stopped during coding and the gates.
+- **Verification:** n/a
+- **Remaining risk:** Page-file growth under memory pressure (ON-110).
+- **Founder decision required:** No
+- **Recommended resolution:** Close memory-heavy applications before a native battery.
+
+### ON-20261111-121
+
+- **Work order:** WO-010
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** The first write to the external SSD after idle took 74 s for 16 MB; later writes ran at 280-408 MB/s.
+- **Expected:** Consistent latency.
+- **Actual:** Measured once at the start of WO-010.
+- **Reproduction:** Write to the SSD after it has idled.
+- **Evidence:** WO-010 SSD probe (G:\AdulisDevelopment\WO-010\logs).
+- **Root cause:** USB drive power management (wake from idle).
+- **Fix and commit:** adulis-ssd-env.sh probes the drive before work; scripts stop instead of falling back to C:.
+- **Verification:** Probe PASS; no later stall observed.
+- **Remaining risk:** A long first write can time out a test that starts while the drive sleeps.
+- **Founder decision required:** No
+- **Recommended resolution:** Keep the probe step before disk-intensive work; optionally disable USB selective suspend for this drive.
