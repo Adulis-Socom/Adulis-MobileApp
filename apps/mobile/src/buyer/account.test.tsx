@@ -76,7 +76,21 @@ const preview = (overrides: Record<string, unknown> = {}) => ({
   },
 });
 
+/** The server's state for one test: whether the signed-in Account (GOOD_TOKEN) was deleted. */
+const server = { deleted: false, deletesThisAccount: true };
+const DONE = `The Adulis Account registered to ${PHONE} has been deleted.`;
+
 function installDeletion(expiresInMs = 15 * 60 * 1000) {
+  server.deleted = false;
+  server.deletesThisAccount = true;
+  // A deleted Account's sessions are revoked as the deletion commits.
+  api.on('GET /v1/bootstrap', (call) => {
+    if (call.headers.Authorization === undefined) return { status: 200, body: bootstrapBody() };
+    if (call.headers.Authorization === `Bearer ${GOOD_TOKEN}` && !(server.deleted && server.deletesThisAccount)) {
+      return { status: 200, body: bootstrapBody({ account_context: SIGNED_IN_CONTEXT }) };
+    }
+    return problem(401, 'SESSION_REVOKED', 'auth');
+  });
   api.on('POST /v1/deletion/otp/request', () => ({ status: 202, body: {} }));
   api.on('POST /v1/deletion/otp/verify', (call) =>
     call.body?.code === DELETION_CODE
@@ -86,11 +100,13 @@ function installDeletion(expiresInMs = 15 * 60 * 1000) {
   api.on('GET /v1/deletion/preview', (call) =>
     call.headers.Authorization === `Ticket ${TICKET}` ? preview() : problem(401, 'SESSION_EXPIRED', 'auth'),
   );
-  api.on('POST /v1/deletion/confirm', (call) =>
-    call.headers.Authorization === `Ticket ${TICKET}` && call.body?.acknowledge === true
-      ? { status: 200, body: { deleted: true } }
-      : problem(401, 'SESSION_EXPIRED', 'auth'),
-  );
+  api.on('POST /v1/deletion/confirm', (call) => {
+    if (call.headers.Authorization !== `Ticket ${TICKET}` || call.body?.acknowledge !== true || server.deleted) {
+      return problem(401, 'SESSION_EXPIRED', 'auth');
+    }
+    server.deleted = true;
+    return { status: 200, body: { deleted: true } };
+  });
 }
 
 /** From the signed-in You tab to the deletion preview: Delete Account, Continue, phone, code. */
@@ -296,12 +312,12 @@ describe('Delete Account', () => {
     expect(api.callsTo('GET /v1/deletion/preview')).toHaveLength(0);
   });
 
-  it('15. an expired ticket (server 401) sends the Buyer back for a new code, and the session survives', async () => {
+  it('15. a ticket the server refuses sends the Buyer back for a new code, and the session survives', async () => {
     signedIn();
     installDeletion();
     api.on('GET /v1/deletion/preview', () => problem(401, 'SESSION_EXPIRED', 'auth'));
     await reachPreview();
-    expect(await screen.findByText(en['buyer.delete.ticket_expired'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.delete.code_unusable'])).toBeOnTheScreen();
     expect(screen.getByLabelText(en['auth.phone.label'])).toBeOnTheScreen();
     // A ticket's 401 is not the session's: still signed in.
     expect(memory.get(TOKEN_KEY)).toBe(GOOD_TOKEN);
@@ -344,8 +360,10 @@ describe('Delete Account', () => {
     await typeAndConfirm('delete me');
     expect(await screen.findByText('Type DELETE exactly to confirm.')).toBeOnTheScreen();
     expect(api.callsTo('POST /v1/deletion/confirm')).toHaveLength(0);
+    expect(screen.getByText(`This deletes the Adulis Account registered to ${PHONE}.`)).toBeOnTheScreen();
     await typeAndConfirm();
-    expect(await screen.findByText(en['buyer.delete.done'])).toBeOnTheScreen();
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.delete.signed_out'])).toBeOnTheScreen();
     const [confirm] = api.callsTo('POST /v1/deletion/confirm');
     expect(confirm?.headers.Authorization).toBe(`Ticket ${TICKET}`);
     expect(confirm?.headers['Idempotency-Key']).toMatch(UUID7);
@@ -361,7 +379,37 @@ describe('Delete Account', () => {
     await typeAndConfirm();
     expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
     expect(memory.get(TOKEN_KEY)).toBe(GOOD_TOKEN);
-    expect(screen.queryByText(en['buyer.delete.done'])).toBeNull();
+    expect(screen.queryByText(DONE)).toBeNull();
+  });
+
+  it('M1. a deletion of ANOTHER Account (the typed phone is not this one) keeps this device signed in', async () => {
+    signedIn();
+    installDeletion();
+    server.deletesThisAccount = false;
+    await reachPreview();
+    await typeAndConfirm();
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+    expect(memory.get(TOKEN_KEY)).toBe(GOOD_TOKEN);
+  });
+
+  it('M1. when the outcome check cannot reach the server, the device signs out properly', async () => {
+    signedIn();
+    installDeletion();
+    let deleted = false;
+    api.on('POST /v1/deletion/confirm', () => {
+      deleted = true;
+      return { status: 200, body: { deleted: true } };
+    });
+    api.on('GET /v1/bootstrap', (call) =>
+      deleted ? 'offline' : { status: 200, body: bootstrapBody(call.headers.Authorization ? { account_context: SIGNED_IN_CONTEXT } : {}) },
+    );
+    await reachPreview();
+    await typeAndConfirm();
+    expect(await screen.findByText(DONE, {}, { timeout: 15_000 })).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.delete.signed_out'])).toBeOnTheScreen();
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+    await waitFor(() => expect(api.callsTo('POST /v1/auth/logout')).toHaveLength(1));
   });
 
   it('17. a 409 DELETION_BLOCKED at confirm shows the blockers it carries', async () => {
@@ -389,13 +437,14 @@ describe('Delete Account', () => {
         first = false;
         return 'offline';
       }
+      server.deleted = true;
       return { status: 200, body: { deleted: true } };
     });
     await reachPreview();
     await typeAndConfirm();
     expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] }));
-    expect(await screen.findByText(en['buyer.delete.done'])).toBeOnTheScreen();
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
     const keys = api.callsTo('POST /v1/deletion/confirm').map((c) => c.headers['Idempotency-Key']);
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
@@ -417,7 +466,53 @@ describe('Delete Account', () => {
     await screen.findByText(en['common.offline']);
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] }));
     expect(await screen.findByText(en['buyer.delete.unconfirmed'])).toBeOnTheScreen();
-    expect(screen.queryByText(en['buyer.delete.done'])).toBeNull();
+    expect(screen.getByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+    expect(screen.queryByText(DONE)).toBeNull();
+    expect(memory.get(TOKEN_KEY)).toBe(GOOD_TOKEN);
+  });
+
+  it('M2. a 5xx after the deletion committed, then a refused ticket: the revoked session settles it as done', async () => {
+    signedIn();
+    installDeletion();
+    let first = true;
+    api.on('POST /v1/deletion/confirm', () => {
+      if (first) {
+        first = false;
+        server.deleted = true;
+        return problem(502, 'INTERNAL', 'request');
+      }
+      return problem(401, 'SESSION_EXPIRED', 'auth');
+    });
+    await reachPreview();
+    await typeAndConfirm();
+    await screen.findByText(en['error.request.internal']);
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] }));
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.delete.signed_out'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.delete.ticket_expired'])).toBeNull();
+  });
+
+  it('L2. a second press while the confirm is in flight sends nothing', async () => {
+    signedIn();
+    installDeletion();
+    const { gate, release } = held();
+    api.on('POST /v1/deletion/confirm', async () => {
+      await gate;
+      server.deleted = true;
+      return { status: 200, body: { deleted: true } };
+    });
+    await reachPreview();
+    await fireEvent.changeText(await screen.findByLabelText(en['buyer.delete.confirm_label']), en['buyer.delete.confirm_word']);
+    // One act scope at a time (overlapping acts corrupt later tests): the second press lands while
+    // the first confirm is held.
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] }));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] }));
+    expect(api.callsTo('POST /v1/deletion/confirm')).toHaveLength(1);
+    await act(async () => release());
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/deletion/confirm')).toHaveLength(1);
+    // Let the revoked session's own clean-up finish inside this test (it clears the shared store).
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
   });
 
   it('20. Cancel leaves without any deletion call', async () => {

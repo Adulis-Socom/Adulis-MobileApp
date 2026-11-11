@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, View } from 'react-native';
 
 import { useBootstrap } from '../api/bootstrap';
-import { ApiError, isTransient, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
+import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { cleanPhone, isE164, isOtpCode } from '../auth/sign-in-flow';
@@ -37,11 +37,14 @@ export function DeleteAccount() {
   const t = useT();
   const theme = useTheme();
   const router = useRouter();
-  const { session, api, clearSession } = useSession();
+  const { session, api, boundApi, clearSession, signOut } = useSession();
   const boot = useBootstrap();
   const current = session.status === 'signedIn' ? session.token : null;
   const owner = useRef(current);
   const [step, setStep] = useState<Step>('intro');
+  // After a deletion: whether the Account on this device was the one deleted (its session dies
+  // with it). Null until the server has said, or when it could not be asked.
+  const [thisAccount, setThisAccount] = useState<boolean | null>(null);
   const [phone, setPhone] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState('');
   const [code, setCode] = useState('');
@@ -52,9 +55,15 @@ export function DeleteAccount() {
   const ticket = useRef<DeletionTicket | null>(null);
   const requestIntent = useRef<{ phone: string; key: string } | null>(null);
   const confirmKey = useRef<string | null>(null);
-  // Set once the outcome is the server's (deleted, or a lost answer we cannot confirm): the
-  // session ending after that is the deletion itself, not a reason to leave.
+  // Set once the outcome is the server's (deleted, or a lost answer we cannot confirm), and while a
+  // confirm is in flight: the session ending then is the deletion itself, not a reason to leave
+  // (the server revokes every session of the deleted Account as it commits).
   const finished = useRef(false);
+  const confirming = useRef(false);
+  // A confirm that was sent and got no definitive answer (offline, a timeout, a 5xx): it may have
+  // deleted the Account, whose ticket the server then refuses. After that, a refused or expired
+  // ticket is "unconfirmed", never "start again".
+  const uncertain = useRef(false);
 
   // A TextField speaks its own error; an error shown outside one (the preview's) is spoken here.
   const fieldless = step === 'preview' && (preview === null || preview.blockers.length > 0 || preview.incomplete);
@@ -62,25 +71,64 @@ export function DeleteAccount() {
     if (error && fieldless) AccessibilityInfo.announceForAccessibility(error);
   }, [error, fieldless]);
 
-  if (!finished.current && (current === null || current !== owner.current)) return <Redirect href="/account" />;
+  if (!finished.current && !confirming.current && (current === null || current !== owner.current)) {
+    return <Redirect href="/account" />;
+  }
 
   const word = t('buyer.delete.confirm_word');
 
-  const expire = () => {
+  const restart = (message: Parameters<typeof t>[0]) => {
     ticket.current = null;
     confirmKey.current = null;
     setPreview(null);
     setTyped('');
     setCode('');
     setStep('phone');
-    setError(t('buyer.delete.ticket_expired'));
+    setError(t(message));
+  };
+  const expire = () => restart('buyer.delete.ticket_expired');
+
+  /**
+   * After the server deleted an Account (or may have): ask, with THIS device's session, whether it
+   * was this Account. The ticket names an Account by its phone, not by this session, so the
+   * deleted Account may be another one. A revoked session means it was this one; a live session
+   * means it was not (the device stays signed in). If the server cannot be asked, the device signs
+   * out properly (the safe default: signing in again costs a code; a session of a deleted Account
+   * left on the device is worse).
+   */
+  const settle = async (outcome: 'done' | 'unconfirmed') => {
+    finished.current = true;
+    confirming.current = false;
+    ticket.current = null;
+    let mine: boolean | null = null;
+    try {
+      await boundApi(owner.current ?? '').bootstrap();
+      mine = false;
+    } catch (failure) {
+      const code = problemCode(failure);
+      if (code === 'SESSION_REVOKED' || code === 'SESSION_EXPIRED' || !(failure instanceof ApiError)) mine = true;
+    }
+    if (mine === null && outcome === 'done') {
+      await signOut().catch(() => undefined);
+      mine = true;
+    } else if (mine) {
+      await clearSession().catch(() => undefined);
+    }
+    // A revoked session means the deletion happened, whatever the lost answer left unknown.
+    const shown = mine ? 'done' : outcome;
+    setThisAccount(mine);
+    setStep(shown);
+    AccessibilityInfo.announceForAccessibility(
+      shown === 'done' ? (fillSlots(t('buyer.delete.done'), { phone: verifiedPhone }) ?? '') : t('buyer.delete.unconfirmed'),
+    );
   };
 
   /** The ticket if it is still within its deadline; otherwise back to the phone step. */
   const liveTicket = (): string | null => {
     const held = ticket.current;
     if (held && Date.now() < held.deadline) return held.ticket;
-    expire();
+    if (uncertain.current) void settle('unconfirmed');
+    else expire();
     return null;
   };
 
@@ -117,7 +165,9 @@ export function DeleteAccount() {
     try {
       setPreview(parsePreview(t, await api.deletionPreview(held)));
     } catch (failure) {
-      if (problemCode(failure) === 'SESSION_EXPIRED') expire();
+      // Refused within its deadline: no ACTIVE Account has that phone, or the code was spent. The
+      // Buyer has proven the phone, so saying the code cannot delete an Account reveals nothing.
+      if (problemCode(failure) === 'SESSION_EXPIRED') restart('buyer.delete.code_unusable');
       else setError(failureMessage(t, failure));
     } finally {
       setBusy(false);
@@ -151,41 +201,37 @@ export function DeleteAccount() {
       setError(fillSlots(t('buyer.delete.confirm_mismatch'), { word }) ?? t('buyer.delete.confirm_mismatch'));
       return;
     }
+    // A ref, not the busy state: two presses in one frame both see busy=false.
+    if (confirming.current) return;
     const held = liveTicket();
     if (!held) return;
-    // One key per ticket: a retry after a lost connection replays the server's answer.
-    const lostAnswerBefore = confirmKey.current !== null;
+    // One key per ticket, kept until a definitive answer. It covers a request that never reached
+    // the server; one that did and deleted the Account is settled below, because the server
+    // refuses a deleted Account's ticket before it would replay.
     confirmKey.current ??= newIdempotencyKey();
+    confirming.current = true;
     setError(null);
     setBusy(true);
     try {
       const body = await api.confirmDeletion(held, confirmKey.current);
       if (!confirmedDeletion(body)) throw new ApiError({ kind: 'unexpected', status: 200 });
-      finished.current = true;
-      ticket.current = null;
-      setStep('done');
-      AccessibilityInfo.announceForAccessibility(t('buyer.delete.done'));
-      // The server has revoked every session of the deleted Account; this device forgets its own.
-      // A failed local delete leaves a dead credential the next bootstrap ends.
-      await clearSession().catch(() => undefined);
+      await settle('done');
     } catch (failure) {
+      confirming.current = false;
       const blocked = blockersOf(t, failure);
       if (blocked) {
+        // Definitive: the Account exists and is blocked.
+        uncertain.current = false;
         confirmKey.current = null;
         setPreview(blocked);
-      } else if (problemCode(failure) === 'SESSION_EXPIRED' && lostAnswerBefore) {
-        // The previous attempt's answer was lost and the ticket no longer works: either it
-        // expired, or that attempt deleted the Account (a deleted Account's ticket is refused).
-        // Say so rather than claim either; a revoked session signs this device out on its own.
-        finished.current = true;
-        ticket.current = null;
-        setStep('unconfirmed');
-        void api.bootstrap().catch(() => undefined);
       } else if (problemCode(failure) === 'SESSION_EXPIRED') {
-        expire();
+        // Definitive for this attempt. After an earlier attempt with no answer, the refusal may be
+        // that attempt's deletion: never "start again" then.
+        if (uncertain.current) await settle('unconfirmed');
+        else expire();
       } else {
-        // Offline or timed out: the outcome is unknown, so the key stays for the retry.
-        if (!isTransient(failure)) confirmKey.current = null;
+        // No definitive answer (offline, timeout, 5xx): the deletion may have happened.
+        uncertain.current = true;
         setError(failureMessage(t, failure));
       }
     } finally {
@@ -199,7 +245,12 @@ export function DeleteAccount() {
   if (step === 'done' || step === 'unconfirmed') {
     return (
       <View style={{ gap: theme.space.md }}>
-        <AppText accessibilityRole="header">{t(step === 'done' ? 'buyer.delete.done' : 'buyer.delete.unconfirmed')}</AppText>
+        <AppText accessibilityRole="header">
+          {step === 'done' ? (fillSlots(t('buyer.delete.done'), { phone: verifiedPhone }) ?? '') : t('buyer.delete.unconfirmed')}
+        </AppText>
+        {thisAccount !== null ? (
+          <AppText>{t(thisAccount ? 'buyer.delete.signed_out' : 'buyer.delete.still_signed_in')}</AppText>
+        ) : null}
         <Button label={t('buyer.delete.done_home')} onPress={() => router.dismissTo('/home/for-you')} />
       </View>
     );
@@ -280,11 +331,14 @@ export function DeleteAccount() {
 
   return (
     <View style={{ gap: theme.space.md }}>
+      <AppText style={{ fontWeight: theme.fontWeight.semibold }}>
+        {fillSlots(t('buyer.delete.for_phone'), { phone: verifiedPhone }) ?? ''}
+      </AppText>
       {preview.effects.length > 0 ? (
         <View style={{ gap: theme.space.sm }}>
           <AppText accessibilityRole="header">{t('buyer.delete.effects_title')}</AppText>
-          {preview.effects.map((effect) => (
-            <AppText key={effect.key}>{effect.text}</AppText>
+          {preview.effects.map((effect, i) => (
+            <AppText key={`${i}-${effect.key}`}>{effect.text}</AppText>
           ))}
         </View>
       ) : null}
@@ -292,8 +346,8 @@ export function DeleteAccount() {
         <View style={{ gap: theme.space.sm }}>
           <AppText accessibilityRole="header">{t('buyer.delete.blocked_title')}</AppText>
           <AppText>{t('error.deletion.deletion_blocked')}</AppText>
-          {preview.blockers.map((blocker) => (
-            <AppText key={blocker.key}>{blocker.text}</AppText>
+          {preview.blockers.map((blocker, i) => (
+            <AppText key={`${i}-${blocker.key}`}>{blocker.text}</AppText>
           ))}
         </View>
       ) : null}
