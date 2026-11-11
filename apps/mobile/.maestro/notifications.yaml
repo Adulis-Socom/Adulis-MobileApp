@@ -1,0 +1,94 @@
+# Buyer notification inbox (WO-012) against the real local API on a DISPOSABLE database, with
+# controlled notification rows the harness inserts for a disposable Account (29 Buyer rows: unread
+# and read, Recent and Older, a template without approved copy; plus one Seller-class row). Every row
+# shows the generic sentence, so this flow cannot see the Seller row's absence: the API suite
+# (c8-analytics-public) proves the Buyer scope excludes it, and the harness checks that marking a
+# Buyer row read leaves the Seller row unread (no Account-wide read-all). Steps (env STEP):
+#   guest   a fresh install: Notifications asks the guest to sign in
+#   read    signed in: the inbox opens (Recent, Unread), one row is marked read, Refresh keeps it
+#           read, Load older reaches the end of the list
+#   view    signed in, in Dark at font scale 1.3 (the harness sets both): the inbox renders
+#
+#   maestro test -e STEP=read .maestro/notifications.yaml
+appId: com.adulis.app
+name: Buyer notifications
+tags:
+  - buyer
+  - notifications
+---
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - launchApp:
+          clearState: true
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP != 'guest'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+- tapOn: Notifications
+
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - assertVisible: Sign in to see notifications.
+      - takeScreenshot: notif-01-guest
+
+- runFlow:
+    when:
+      true: ${STEP != 'guest'}
+    commands:
+      - extendedWaitUntil:
+          visible: Recent
+          timeout: 20000
+      - assertVisible: Unread
+      - assertVisible: You have a notification from Adulis.
+      - assertVisible: 'Received .*'
+      - takeScreenshot: notif-02-inbox
+
+- runFlow:
+    when:
+      true: ${STEP == 'read'}
+    commands:
+      - tapOn:
+          text: Mark as read
+          index: 0
+      - extendedWaitUntil:
+          visible: Read
+          timeout: 20000
+      - takeScreenshot: notif-03-marked
+      - tapOn: Refresh notifications
+      - assertVisible: Read
+      - scrollUntilVisible:
+          element: Load older notifications
+          direction: DOWN
+          timeout: 60000
+      - tapOn: Load older notifications
+      - scrollUntilVisible:
+          element: That is everything for now.
+          direction: DOWN
+          timeout: 60000
+      - takeScreenshot: notif-04-end
+      - scrollUntilVisible:
+          element: Older
+          direction: UP
+          timeout: 60000
+
+- runFlow:
+    when:
+      true: ${STEP == 'view'}
+    commands:
+      - takeScreenshot: notif-05-dark-large
+      - scrollUntilVisible:
+          element: Mark as read
+          direction: DOWN
+      - takeScreenshot: notif-06-dark-large-row
