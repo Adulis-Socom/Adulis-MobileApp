@@ -17,8 +17,9 @@
 --     the tag is the composite FK collection_item_origin_tag, and the
 --     database refuses a Scene/tag relationship that never existed;
 --   * a whole Scene records the revision current when it was saved.
--- Losing a referenced revision or tag degrades provenance to NULL (column-list
--- ON DELETE SET NULL, PostgreSQL 15+); it never blocks a Seller edit.
+-- Losing a referenced Scene, revision or tag degrades provenance to NULL
+-- (column-list ON DELETE SET NULL, PostgreSQL 15+); it never blocks a Seller
+-- edit or a future purge.
 --
 -- Targets cascade: a Seller may hard-delete a never-ordered, untagged Product
 -- (catalogue.service deleteProduct), and a membership must not refuse that.
@@ -74,7 +75,8 @@ CREATE TABLE core.collection_item (
   collection_id                   uuid NOT NULL REFERENCES core.collection (id) ON DELETE CASCADE,
   product_post_id                 uuid NULL REFERENCES core.product (id) ON DELETE CASCADE,
   scene_post_id                   uuid NULL REFERENCES core.scene_post (id) ON DELETE CASCADE,
-  originating_scene_post_id       uuid NULL REFERENCES core.scene_post (id),
+  -- SET NULL: provenance never blocks a future Scene purge (independent review D4).
+  originating_scene_post_id       uuid NULL REFERENCES core.scene_post (id) ON DELETE SET NULL,
   originating_scene_revision_id   uuid NULL,
   scene_revision_seen_at_save_id  uuid NULL,
   source_surface                  text NOT NULL,
@@ -83,11 +85,11 @@ CREATE TABLE core.collection_item (
   CONSTRAINT collection_item_one_target CHECK (num_nonnulls(product_post_id, scene_post_id) = 1),
   CONSTRAINT collection_item_source CHECK (source_surface IN (
     'PRODUCT_DETAIL', 'SCENE_EXPLORER', 'SEARCH', 'SHOP', 'SELLER_PROFILE', 'FOR_YOU', 'SAVED')),
-  -- Scene-origin provenance belongs to a Product membership; a revision implies its Scene.
+  -- Scene-origin provenance belongs to a Product membership. While both originating columns are
+  -- set, collection_item_origin_revision binds the revision to its Scene; either may be nulled
+  -- alone by its referential action, so no CHECK ties them (it would refuse the cascade).
   CONSTRAINT collection_item_origin_product CHECK (
-    originating_scene_post_id IS NULL OR product_post_id IS NOT NULL),
-  CONSTRAINT collection_item_origin_scene CHECK (
-    originating_scene_revision_id IS NULL OR originating_scene_post_id IS NOT NULL),
+    num_nonnulls(originating_scene_post_id, originating_scene_revision_id) = 0 OR product_post_id IS NOT NULL),
   CONSTRAINT collection_item_seen_scene CHECK (
     scene_revision_seen_at_save_id IS NULL OR scene_post_id IS NOT NULL),
   -- The originating revision is a revision OF the originating Scene ...
