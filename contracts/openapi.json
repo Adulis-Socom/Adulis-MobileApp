@@ -775,7 +775,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionDto"
+                  "$ref": "#/components/schemas/CollectionCreatedDto"
                 }
               }
             }
@@ -1132,7 +1132,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionItemDto"
+                  "$ref": "#/components/schemas/CollectionMembershipDto"
                 }
               }
             }
@@ -7216,6 +7216,18 @@
           "name"
         ]
       },
+      "CollectionCreatedDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      },
       "CollectionItemDto": {
         "type": "object",
         "properties": {
@@ -7473,6 +7485,37 @@
         "required": [
           "target",
           "source_surface"
+        ]
+      },
+      "CollectionMembershipDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Membership ref: DELETE /v1/collections/{collectionRef}/items/{itemRef}."
+          },
+          "collection_ref": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_POST",
+              "SCENE_POST"
+            ]
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ref",
+          "collection_ref",
+          "target_type",
+          "saved_at"
         ]
       }
     }

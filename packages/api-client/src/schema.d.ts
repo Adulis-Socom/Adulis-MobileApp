@@ -2276,6 +2276,10 @@ export interface components {
              */
             server_time: string;
         };
+        CollectionCreatedDto: {
+            /** Format: uuid */
+            ref: string;
+        };
         CollectionDetailDto: {
             collection: components["schemas"]["CollectionDto"];
             /** @description Newest first. */
@@ -2327,6 +2331,19 @@ export interface components {
              * @enum {string}
              */
             state: "VISIBLE" | "UNAVAILABLE";
+            /** @enum {string} */
+            target_type: "PRODUCT_POST" | "SCENE_POST";
+        };
+        CollectionMembershipDto: {
+            /** Format: uuid */
+            collection_ref: string;
+            /**
+             * Format: uuid
+             * @description Membership ref: DELETE /v1/collections/{collectionRef}/items/{itemRef}.
+             */
+            ref: string;
+            /** Format: date-time */
+            saved_at: string;
             /** @enum {string} */
             target_type: "PRODUCT_POST" | "SCENE_POST";
         };
@@ -3666,7 +3683,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CollectionDto"];
+                    "application/json": components["schemas"]["CollectionCreatedDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -3802,7 +3819,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CollectionItemDto"];
+                    "application/json": components["schemas"]["CollectionMembershipDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
