@@ -14,9 +14,10 @@ import { configureApp } from '../src/configure-app';
  * TWO HALVES. "As built" runs against the real database: no Order has authoritatively verified
  * payment (K-1: Seller confirmation is not payment truth), so NO Review is public, whatever badge
  * or evidence it carries. "With a payment owner" stands in for WO-PAY-001 -- it replaces the body
- * of core.fn_order_payment_verified, inside this disposable database, with one that answers true
- * for THIS FILE'S fixture Orders only (other suites' Orders still answer false), and restores the
- * migration's body afterwards. It never fabricates receipt or Claim evidence: those are real rows.
+ * of core.fn_order_payment_verified, in the database the suite runs against, with one that answers
+ * true for THIS FILE'S fixture Orders only (other suites' Orders keep the real answer), and puts
+ * back exactly the definition it found (pg_get_functiondef), whatever WO-PAY-001 has made it by
+ * then. It never fabricates receipt or Claim evidence: those are real rows.
  */
 
 const ADMIN = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
@@ -26,7 +27,7 @@ const id = (n: number) => `0e07a000-0000-4000-8000-${n.toString(16).padStart(12,
 const MA = id(1);
 const MC = id(2); // a Market with no Product yet: its currency may still change
 const OWNER = { a: id(10), b: id(11), c: id(12) };
-const BUYER = { one: id(13), two: id(14) };
+const BUYER = { one: id(13), two: id(14), liveTeam: id(16), revokedTeam: id(17) };
 const OPERATOR = id(15);
 const SELLER = { a: id(20), b: id(21), c: id(22) };
 const DEV = id(30);
@@ -51,6 +52,10 @@ const O = {
   confirmedByBuyer: order(14), // a buyer tap, no scan
   self: order(15), // the Seller's owner reviewing their own store
   refundUnpaid: order(16), // upheld REFUND_NOT_DELIVERED, no receipt
+  liveTeam: order(17), // valid receipt, but the Buyer is a live team member of the Seller
+  revokedTeam: order(18), // valid receipt; the Buyer's team membership was revoked
+  horizon: order(19), // a scan past the sync horizon: REJECTED_HORIZON, not a receipt
+  receiptAndClaim: order(20), // valid receipt AND an upheld non-delivery Claim: receipt wins
 } as const;
 const ALL_ORDERS = Object.values(O);
 const PAID = ALL_ORDERS.filter((o) => o !== O.noPay);
@@ -89,12 +94,14 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       c.release();
     }
   };
+  /** The definition found before this file touched it, restored exactly. */
+  let paymentOwnerFound: string | undefined;
   const paymentOwner = (orders: readonly string[]) =>
     sql(`CREATE OR REPLACE FUNCTION core.fn_order_payment_verified(p_order uuid) RETURNS boolean
          LANGUAGE sql STABLE PARALLEL SAFE AS $fn$ SELECT p_order = ANY ('{${orders.join(',')}}'::uuid[]) $fn$`);
-  const restorePaymentOwner = () =>
-    sql(`CREATE OR REPLACE FUNCTION core.fn_order_payment_verified(p_order uuid) RETURNS boolean
-         LANGUAGE sql STABLE PARALLEL SAFE AS $fn$ SELECT false $fn$`);
+  const restorePaymentOwner = async () => {
+    if (paymentOwnerFound) await sql(paymentOwnerFound);
+  };
 
   const newOrder = (o: string, seller: string, buyer: string) =>
     replica(
@@ -103,13 +110,18 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       [o, MA, seller, buyer],
     );
   /** The Buyer's own QR scan of the final receipt, through the production triggers. */
-  const finalReceipt = async (o: string, buyer: string) => {
-    await sql(`INSERT INTO core.order_qr_token (id, order_id, nonce, signing_key_version, issued_at) VALUES ($1,$2,$3,1, now() - interval '1 hour')`, [
+  const finalReceipt = async (o: string, buyer: string, signedAgo = '0 seconds') => {
+    await sql(`INSERT INTO core.order_qr_token (id, order_id, nonce, signing_key_version, issued_at) VALUES ($1,$2,$3,1, now() - interval '10 days')`, [
       randomUUID(),
       o,
       randomUUID(),
     ]);
-    await sql(`INSERT INTO core.handoff_scan (order_id, scanned_by_account_id, nonce, signed_at) VALUES ($1,$2,$3, now())`, [o, buyer, randomUUID()]);
+    await sql(`INSERT INTO core.handoff_scan (order_id, scanned_by_account_id, nonce, signed_at) VALUES ($1,$2,$3, now() - $4::interval)`, [
+      o,
+      buyer,
+      randomUUID(),
+      signedAgo,
+    ]);
   };
   const claim = (o: string, trigger: string, outcome: 'UPHELD' | 'NOT_UPHELD' | null) =>
     replica(
@@ -132,6 +144,12 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
 
   beforeAll(async () => {
     admin = new Pool({ connectionString: ADMIN, max: 4 });
+    const found = await sql(`SELECT pg_get_functiondef('core.fn_order_payment_verified(uuid)'::regprocedure) AS def`);
+    paymentOwnerFound = found.rows[0].def as string;
+    // A run killed mid-way leaves the stand-in behind; restoring that would bless it.
+    if (paymentOwnerFound.includes('0e07a000')) {
+      throw new Error('core.fn_order_payment_verified still holds a WO-007A test stand-in: rebuild this database');
+    }
     await sql(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency, display_timezone,
                                 default_locale, activation_state, otp_enabled, sms_primary_provider)
@@ -159,9 +177,10 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
     );
     await sql(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
-        ($1,'+251911707001',$7,'ACTIVE'), ($2,'+251911707002',$7,'ACTIVE'), ($3,'+251911707003',$8,'ACTIVE'),
-        ($4,'+251911707004',$7,'ACTIVE'), ($5,'+251911707005',$7,'ACTIVE'), ($6,'+251911707006',$7,'ACTIVE')`,
-      [OWNER.a, OWNER.b, OWNER.c, BUYER.one, BUYER.two, OPERATOR, MA, MC],
+        ($1,'+251911707901',$7,'ACTIVE'), ($2,'+251911707902',$7,'ACTIVE'), ($3,'+251911707903',$8,'ACTIVE'),
+        ($4,'+251911707904',$7,'ACTIVE'), ($5,'+251911707905',$7,'ACTIVE'), ($6,'+251911707906',$7,'ACTIVE'),
+        ($9,'+251911707907',$7,'ACTIVE'), ($10,'+251911707908',$7,'ACTIVE')`,
+      [OWNER.a, OWNER.b, OWNER.c, BUYER.one, BUYER.two, OPERATOR, MA, MC, BUYER.liveTeam, BUYER.revokedTeam],
     );
     await sql(`INSERT INTO core.device (id, platform, market_id) VALUES ($1,'ANDROID',$2)`, [DEV, MA]);
     await sql(
@@ -177,12 +196,23 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       [PRODUCT, SELLER.a, MA],
     );
 
+    await sql(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role, revoked_at) VALUES
+        ($1,$3,$4,'SALES_SUPPORT',NULL), ($2,$3,$5,'SALES_SUPPORT', now())`,
+      [id(50), id(51), SELLER.a, BUYER.liveTeam, BUYER.revokedTeam],
+    );
+    const buyerOf = (o: string) =>
+      o === O.self ? OWNER.a : o === O.liveTeam ? BUYER.liveTeam : o === O.revokedTeam ? BUYER.revokedTeam : BUYER.one;
     for (const o of ALL_ORDERS) {
-      await newOrder(o, SELLER.a, o === O.self ? OWNER.a : BUYER.one);
+      await newOrder(o, SELLER.a, buyerOf(o));
     }
     // Evidence, all of it real rows written through the production triggers where they exist.
     for (const o of [O.noPay, O.fh1, O.fh2, O.fh3, O.mismatch]) await finalReceipt(o, BUYER.one);
     await finalReceipt(O.self, OWNER.a);
+    await finalReceipt(O.liveTeam, BUYER.liveTeam);
+    await finalReceipt(O.revokedTeam, BUYER.revokedTeam);
+    await finalReceipt(O.receiptAndClaim, BUYER.one);
+    await finalReceipt(O.horizon, BUYER.one, '8 days'); // the Market's offline_sync_horizon is 7 days
     await replica(
       `INSERT INTO core.payment_submission (id, order_id, evidence_ref, state, decided_by_account_id, decided_at)
        VALUES ($1,$2,$3,'CONFIRMED',$4, now())`,
@@ -200,6 +230,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
     await claim(O.rejected, 'GOODS_NOT_RECEIVED', 'NOT_UPHELD');
     await claim(O.overturn, 'GOODS_NOT_RECEIVED', 'UPHELD');
     await claim(O.notAsDescribed, 'NOT_AS_DESCRIBED', 'UPHELD');
+    await claim(O.receiptAndClaim, 'GOODS_NOT_RECEIVED', 'UPHELD');
 
     // Reviews, one statement each so published_at orders them -- except fh2/fh3, one statement,
     // a timestamp tie. Ineligible 1-star reviews interleave the eligible ones.
@@ -225,6 +256,10 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
     badges['confirmedByBuyer'] = await review('confirmedByBuyer', O.confirmedByBuyer, SELLER.a, BUYER.one, 1);
     badges['self'] = await review('self', O.self, SELLER.a, OWNER.a, 5);
     badges['refundUnpaid'] = await review('refundUnpaid', O.refundUnpaid, SELLER.a, BUYER.one, 3);
+    badges['liveTeam'] = await review('liveTeam', O.liveTeam, SELLER.a, BUYER.liveTeam, 5);
+    badges['revokedTeam'] = await review('revokedTeam', O.revokedTeam, SELLER.a, BUYER.revokedTeam, 4);
+    badges['horizon'] = await review('horizon', O.horizon, SELLER.a, BUYER.one, 1);
+    badges['receiptAndClaim'] = await review('receiptAndClaim', O.receiptAndClaim, SELLER.a, BUYER.one, 5);
     // A failure-only Order with a Product rating the legacy write path allowed: never public.
     await sql(`INSERT INTO core.review_item_rating (review_id, product_id, rating) VALUES ($1,$2,5)`, [reviewOf['failure'], PRODUCT]);
 
@@ -236,7 +271,10 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       confirmedByBuyer: 'CONFIRMED_BY_BUYER',
       unverified: 'UNVERIFIED',
       notAsDescribed: 'CLAIM_UPHELD',
+      horizon: 'UNVERIFIED',
     });
+    const horizon = await sql(`SELECT validity::text AS v FROM core.handoff_scan WHERE order_id = $1`, [O.horizon]);
+    expect(horizon.rows[0].v).toBe('REJECTED_HORIZON');
 
     const moduleRef = await Test.createTestingModule({ imports: [Wo007aAppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -263,6 +301,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
         `DELETE FROM core.courier_custody_transfer WHERE order_id::text LIKE '0e07a000-%'`,
         `DELETE FROM core.payment_submission WHERE order_id::text LIKE '0e07a000-%'`,
         `DELETE FROM core.order_state_transition WHERE order_id::text LIKE '0e07a000-%'`,
+        `DELETE FROM core.seller_team_member WHERE seller_id IN (${sellers})`,
         `DELETE FROM core."order" WHERE seller_id IN (${sellers})`,
         `DELETE FROM core.product WHERE seller_id IN (${sellers})`,
         `DELETE FROM core.seller_level_state WHERE seller_id IN (${sellers})`,
@@ -283,14 +322,14 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
   });
 
   describe('as built: no verified payment exists, so no Review is public (fail closed)', () => {
-    it('the list is one empty, final page although 15 reviews are stored, some with receipt and upheld-claim badges', async () => {
+    it('the list is one empty, final page although 19 reviews are stored, some with receipt and upheld-claim badges', async () => {
       for (const limit of [1, 25, 50]) {
         const r = await get(`/v1/storefronts/review-store/reviews?limit=${limit}`).expect(200);
         expect(r.headers['cache-control']).toBe('no-store');
         expect(r.body).toEqual({ data: [], next_cursor: null });
       }
       const stored = await sql(`SELECT count(*)::int AS n FROM core.review WHERE seller_id = $1`, [SELLER.a]);
-      expect(stored.rows[0].n).toBe(15);
+      expect(stored.rows[0].n).toBe(19);
     });
 
     it('the summary agrees: count 0, no average, no basis counts -- never a perfect score', async () => {
@@ -318,7 +357,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
     beforeAll(() => paymentOwner(PAID));
     afterAll(() => restorePaymentOwner());
 
-    const eligible = ['refundUnpaid', 'overturn', 'fh2', 'fh3', 'failure', 'fh1'];
+    const eligible = ['receiptAndClaim', 'revokedTeam', 'refundUnpaid', 'overturn', 'fh2', 'fh3', 'failure', 'fh1'];
 
     it('lists exactly the reviews with a current evidence basis, newest first, labelled truthfully', async () => {
       const r = await get('/v1/storefronts/review-store/reviews').expect(200);
@@ -326,7 +365,7 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       const keys = r.body.data.map((x: { id: string }) => byId.get(x.id));
       // fh2 and fh3 share published_at: the id tiebreak orders them, either way round.
       expect(new Set(keys)).toEqual(new Set(eligible));
-      expect(keys.slice(0, 2)).toEqual(['refundUnpaid', 'overturn']);
+      expect(keys.slice(0, 4)).toEqual(['receiptAndClaim', 'revokedTeam', 'refundUnpaid', 'overturn']);
       expect(keys[keys.length - 1]).toBe('fh1');
       const basis = Object.fromEntries(r.body.data.map((x: { id: string; evidence_basis: string }) => [byId.get(x.id), x.evidence_basis]));
       expect(basis).toEqual({
@@ -336,14 +375,17 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
         failure: 'VERIFIED_ORDER_FAILURE',
         overturn: 'VERIFIED_ORDER_FAILURE',
         refundUnpaid: 'VERIFIED_ORDER_FAILURE',
+        revokedTeam: 'FINAL_HANDOFF',
+        // A receipt and an upheld non-delivery Claim on one Order: the receipt-based container stays.
+        receiptAndClaim: 'FINAL_HANDOFF',
       });
       expect(r.body.next_cursor).toBeNull();
     });
 
-    it('excludes every case without a complete basis (REV-01 S2, S16; WO-007A S12 cases 1-3, 6, 7, 12, 13)', async () => {
+    it('excludes every case without a complete basis, a rejected scan, and self or live-team reviews (cases 1-3, 6, 7, 12, 13)', async () => {
       const r = await get('/v1/storefronts/review-store/reviews').expect(200);
       const listed = new Set(r.body.data.map((x: { id: string }) => x.id));
-      for (const key of ['noPay', 'payOnly', 'pickup', 'openClaim', 'rejected', 'notAsDescribed', 'unverified', 'confirmedByBuyer', 'self', 'mismatch']) {
+      for (const key of ['noPay', 'payOnly', 'pickup', 'openClaim', 'rejected', 'notAsDescribed', 'unverified', 'confirmedByBuyer', 'self', 'mismatch', 'liveTeam', 'horizon']) {
         expect([key, listed.has(reviewOf[key])]).toEqual([key, false]);
       }
     });
@@ -380,12 +422,12 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       const listed = (await walk('review-store', 2)).flat();
       const s = await summary('review-store');
       expect(s.count).toBe(listed.length);
-      // 3 + 4 + 4 + 3 + 2 + 5 = 21 over 6 = 3.5. The excluded reviews (1 star each, and the owner's
-      // own 5) would make it 34 / 15 = 2.3 if they counted, as the pre-WO-007A summary did.
+      // 5 + 4 + 3 + 4 + 4 + 3 + 2 + 5 = 30 over 8 = 3.75, rounded once to 3.8. Every stored review
+      // would make it 49 / 19 = 2.6, as the pre-WO-007A summary did.
       const mean = listed.reduce((a, x) => a + x.seller_rating, 0) / listed.length;
       expect(s.average_rating).toBe(Math.round(mean * 10) / 10);
-      expect(s.average_rating).toBe(3.5);
-      expect(s.basis_counts).toEqual({ FINAL_HANDOFF: 3, VERIFIED_ORDER_FAILURE: 3 });
+      expect(s.average_rating).toBe(3.8);
+      expect(s.basis_counts).toEqual({ FINAL_HANDOFF: 5, VERIFIED_ORDER_FAILURE: 3 });
     });
 
     it('an overturned Claim leaves the list and the aggregate together (case 9)', async () => {
@@ -395,13 +437,13 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
         expect(ids).not.toContain(reviewOf['overturn']);
         const s = await summary('review-store');
         expect(s.count).toBe(ids.length);
-        expect(s.count).toBe(5);
-        expect(s.basis_counts).toEqual({ FINAL_HANDOFF: 3, VERIFIED_ORDER_FAILURE: 2 });
-        expect(s.average_rating).toBe(3.4); // 17 / 5
+        expect(s.count).toBe(7);
+        expect(s.basis_counts).toEqual({ FINAL_HANDOFF: 5, VERIFIED_ORDER_FAILURE: 2 });
+        expect(s.average_rating).toBe(3.7); // 26 / 7
       } finally {
         await sql(`UPDATE core.claim SET outcome = 'UPHELD' WHERE order_id = $1`, [O.overturn]);
       }
-      expect((await summary('review-store')).count).toBe(6);
+      expect((await summary('review-store')).count).toBe(8);
     });
 
     it('a public review carries only Seller-service fields: no buyer, order, claim, badge or item rating', async () => {
@@ -428,6 +470,24 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
          VALUES ($1,$2,$3,'Race product',1,$4,'DRAFT')`,
         [randomUUID(), seller, m, cur],
       );
+    /** Until the session is waiting on a lock: the race is real, not a timing guess. */
+    const blocked = async (c: PoolClient) => {
+      const pid = (await c.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as number;
+      return async () => {
+        for (let i = 0; i < 100; i++) {
+          const w = await sql(`SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1`, [pid]);
+          if (w.rows[0]?.wait_event_type === 'Lock') return;
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        throw new Error('the second session never waited on the lock');
+      };
+    };
+    const done = async (...clients: PoolClient[]) => {
+      for (const c of clients) {
+        await c.query('ROLLBACK').catch(() => undefined);
+        c.release();
+      }
+    };
     afterEach(async () => {
       await sql(`DELETE FROM core.product WHERE seller_id = $1`, [SELLER.c]);
       await sql(`UPDATE core.market SET display_currency = 'ETB' WHERE id = $1 AND display_currency <> 'ETB'`, [MC]);
@@ -452,19 +512,19 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       const writer = await admin.connect();
       const changer = await admin.connect();
       try {
+        const changerWaits = await blocked(changer);
         await writer.query('BEGIN');
         await productIn(MC, SELLER.c, 'ETB', writer);
         const change = changer.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [MC]).then(
           () => 'changed',
           (e: { constraint?: string }) => e.constraint,
         );
-        await new Promise((r) => setTimeout(r, 300));
+        await changerWaits();
         await writer.query('COMMIT');
         expect(await change).toBe('market_currency_fixed_with_products');
         expect(await currency(MC)).toBe('ETB');
       } finally {
-        writer.release();
-        changer.release();
+        await done(writer, changer);
       }
     });
 
@@ -472,19 +532,42 @@ describe('WO-007A -- public Review eligibility and Market currency', () => {
       const writer = await admin.connect();
       const changer = await admin.connect();
       try {
+        const writerWaits = await blocked(writer);
         await changer.query('BEGIN');
         await changer.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [MC]);
         const insert = productIn(MC, SELLER.c, 'ETB', writer).then(
           () => 'inserted',
           (e: { constraint?: string }) => e.constraint,
         );
-        await new Promise((r) => setTimeout(r, 300));
+        await writerWaits();
         await changer.query('COMMIT');
         expect(await insert).toBe('product_seed_in_market_currency');
         expect(await currency(MC)).toBe('USD');
       } finally {
-        writer.release();
-        changer.release();
+        await done(writer, changer);
+      }
+    });
+
+    it('two currency changes queue behind each other instead of deadlocking', async () => {
+      await sql(`INSERT INTO core.market (id, code, display_name, phase, display_currency, display_timezone,
+                                          default_locale, activation_state, otp_enabled, sms_primary_provider)
+                 VALUES ($1,'V7D','Second empty Market','PHASE_1','ETB','Africa/Addis_Ababa','en','ACTIVE',true,'AFROMESSAGE')`, [id(3)]);
+      const first = await admin.connect();
+      const second = await admin.connect();
+      try {
+        const secondWaits = await blocked(second);
+        await first.query('BEGIN');
+        await first.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [MC]);
+        const other = second.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [id(3)]).then(
+          () => 'changed',
+          (e: { code?: string }) => e.code,
+        );
+        await secondWaits();
+        await first.query('COMMIT');
+        expect(await other).toBe('changed');
+      } finally {
+        await done(first, second);
+        await sql(`DELETE FROM core.market WHERE id = $1`, [id(3)]);
       }
     });
   });
