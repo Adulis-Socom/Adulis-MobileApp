@@ -1,0 +1,42 @@
+# Marketplace Search signed in (WO-008): run after the sign-in flows, without clearing state.
+# The Account's Market answers; results open as for a guest.
+#
+#   maestro test .maestro/search-signed-in.yaml
+appId: com.adulis.app
+name: Marketplace Search (signed in)
+tags:
+  - buyer
+  - search
+---
+- launchApp:
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+- repeat:
+    while:
+      notVisible: Find Products, Sellers and Scenes in your Market\.
+    times: 5
+    commands:
+      - tapOn:
+          text: Search
+          index: 0
+      - waitForAnimationToEnd
+- tapOn:
+    id: search-input
+- inputText: clay
+- extendedWaitUntil:
+    visible: 'Clay cup, .*350\.00, Available'
+    timeout: 30000
+- hideKeyboard
+- takeScreenshot: search-signed-in
+- tapOn: 'Clay cup, .*'
+- extendedWaitUntil:
+    visible:
+      id: product-seller
+    timeout: 30000
+- back
+- extendedWaitUntil:
+    visible: 'Clay cup, .*'
+    timeout: 30000

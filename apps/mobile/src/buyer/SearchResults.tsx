@@ -95,7 +95,7 @@ function SearchRow({ item }: { item: SearchItem }) {
   const row = { flexDirection: 'row' as const, gap: theme.space.sm, padding: theme.space.sm, minHeight: theme.touchTarget, alignItems: 'center' as const };
   const thumb = (key: string | null) => {
     const uri = key ? mediaUrl(mediaOrigin, key) : null;
-    const style = { width: 56, height: 56, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted };
+    const style = { width: theme.touchTarget * 1.25, height: theme.touchTarget * 1.25, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted };
     return uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="disk" style={style} /> : <View style={style} />;
   };
 
@@ -113,7 +113,7 @@ function SearchRow({ item }: { item: SearchItem }) {
         testID="search-product"
       >
         {thumb(p.image_key)}
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: theme.space.xs }}>
           <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
             {p.name}
           </AppText>
@@ -137,7 +137,7 @@ function SearchRow({ item }: { item: SearchItem }) {
         style={row}
         testID="search-seller"
       >
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: theme.space.xs }}>
           <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{s.store_name}</AppText>
           <AppText style={{ color: theme.color.textSecondary }}>{`@${s.handle}`}</AppText>
           {level && hasMessage(level) ? <AppText>{fillSlots(t('buyer.seller.trust'), { level: t(level) })}</AppText> : null}
@@ -155,7 +155,7 @@ function SearchRow({ item }: { item: SearchItem }) {
       testID="search-scene"
     >
       {thumb(scene.image.thumb_key)}
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: theme.space.xs }}>
         <AppText numberOfLines={2}>{scene.caption}</AppText>
         <AppText style={{ color: theme.color.textSecondary }}>
           {fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name}
