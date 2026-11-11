@@ -275,7 +275,9 @@ function ProductsTab({ handle, header, onPull }: TabProps) {
     resource: ['seller-products', handle],
     read: (cursor) => api.sellerProducts(handle, cursor),
     items: (page) => page.data,
-    keyOf: (product: SellerProduct) => product.slug,
+    // Products come available first, then unavailable (WO-007B). A Product whose availability
+    // changes mid-browse can be sent again in the other group: its id keeps it to one tile.
+    keyOf: (product: SellerProduct) => product.id,
   });
   useRefreshOnReturn(list.refresh);
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
@@ -286,7 +288,7 @@ function ProductsTab({ handle, header, onPull }: TabProps) {
         onPull();
         list.refresh();
       }}
-      keyOf={(product) => product.slug}
+      keyOf={(product) => product.id}
       renderItem={({ item }) => <ProductTile product={item} handle={handle} />}
       numColumns={2}
       header={header}

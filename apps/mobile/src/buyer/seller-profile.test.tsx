@@ -142,6 +142,32 @@ describe('the Seller Profile', () => {
     expect(r.getPathname()).toBe(`/product/${HANDLE}/basket`);
   });
 
+  it('Products: shown in the server order (available first); one sent again in the other group shows once (WO-007B)', async () => {
+    await openProfile();
+    const basket = sellerProduct('basket', 'Basket');
+    serve(
+      PRODUCTS,
+      ok({ data: [basket, sellerProduct('cup', 'Cup')], next_cursor: 'page-2' }),
+      // Basket turned unavailable between pages: the server sends it again in the unavailable group.
+      ok({ data: [{ ...basket, available: false }, sellerProduct('scarf', 'Scarf', { available: false })], next_cursor: null }),
+    );
+    await fireEvent.press(tab(en['buyer.seller.tab.products']));
+    await screen.findByLabelText(/^Basket,/);
+    await endReached('seller-products');
+    expect(await screen.findByLabelText(/^Scarf,/)).toBeOnTheScreen();
+    expect(screen.getAllByLabelText(/^Basket,/)).toHaveLength(1);
+    const order = screen.getAllByTestId('product-tile').map((t) => (t.props as { accessibilityLabel: string }).accessibilityLabel.split(',')[0]);
+    expect(order).toEqual(['Basket', 'Cup', 'Scarf']);
+    expect(calls(PRODUCTS).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2']);
+    // A pull reads from the first page again: the refresh reconciles availability.
+    serve(PRODUCTS, ok({ data: [sellerProduct('cup', 'Cup'), { ...basket, available: false }], next_cursor: null }));
+    await act(() =>
+      (screen.getByTestId('seller-products').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+    );
+    expect(await screen.findByLabelText('Basket, ETB 500.00, Currently unavailable')).toBeOnTheScreen();
+    expect(calls(PRODUCTS).at(-1)?.query['cursor']).toBeUndefined();
+  });
+
   it('Reviews: rating in words, the evidence basis in words, date, the service note', async () => {
     await openProfile();
     serve(REVIEWS, ok({ data: [sellerReview(1), sellerReview(2, { seller_rating: 3, evidence_basis: 'VERIFIED_ORDER_FAILURE', body: null })], next_cursor: null }));

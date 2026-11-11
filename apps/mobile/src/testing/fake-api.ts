@@ -294,9 +294,13 @@ export function sellerScene(n: number, overrides: Partial<SellerScene> = {}): Se
   };
 }
 
+/** A stable, distinct uuid per slug: a list de-duplicates Products by id (WO-007B). */
+const productIdFor = (slug: string) =>
+  `0b6f1a3e-aaaa-4aaa-8aaa-${[...slug].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 0xffffffffffff, 7).toString(16).padStart(12, '0')}`;
+
 export function sellerProduct(slug: string, name: string, overrides: Partial<SellerProduct> = {}): SellerProduct {
   return {
-    id: '0b6f1a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    id: productIdFor(slug),
     slug,
     name,
     base_price_minor: 1,
