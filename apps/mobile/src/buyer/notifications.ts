@@ -2,7 +2,7 @@ import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 
-import { ApiError, isTransient, newIdempotencyKey, wasAnswered } from '../api/client';
+import { ApiError, isTransient, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { hasMessage } from '../i18n/i18n';
@@ -66,13 +66,17 @@ export function parseNotificationPage(body: unknown): NotificationPage {
   };
 }
 
+/** The only catalogue namespace a Buyer notification may render from (none is defined yet). */
+const BUYER_TEMPLATES = 'notification.buyer.';
+
 /**
- * The sentence a row shows: its template's catalogue sentence when the template key IS a mobile
- * catalogue key and every slot is present; otherwise the generic sentence. A raw template key or
- * a sentence with holes is never shown.
+ * The sentence a row shows: its template's catalogue sentence when the template key is a mobile
+ * catalogue key in the Buyer notification namespace and every slot is present; otherwise the
+ * generic sentence. A Seller sentence, an error string or any other catalogue key a row happens to
+ * name is never rendered, and a raw template key or a sentence with holes is never shown.
  */
 export function notificationText(t: (key: MobileMessageKey) => string, n: BuyerNotification): string {
-  if (hasMessage(n.templateKey)) {
+  if (n.templateKey.startsWith(BUYER_TEMPLATES) && hasMessage(n.templateKey)) {
     const filled = fillSlots(t(n.templateKey), n.slots);
     if (filled) return filled;
   }
@@ -87,7 +91,9 @@ export function useBuyerNotifications() {
     queryFn: async ({ pageParam }: { pageParam: string | null }) =>
       parseNotificationPage(await keepIfCurrent(boundApi(token!), (api) => api.notifications(pageParam))),
     initialPageParam: null as string | null,
-    getNextPageParam: (last: NotificationPage) => last.nextCursor,
+    // A cursor equal to the one just sent would page forever: treat it as the end.
+    getNextPageParam: (last: NotificationPage, _all: NotificationPage[], lastParam: string | null) =>
+      last.nextCursor !== null && last.nextCursor !== lastParam ? last.nextCursor : null,
     enabled: token !== null,
     retry,
   });
@@ -138,7 +144,11 @@ export function useMarkNotificationRead() {
       } catch (error) {
         // A server answer ends the intent; offline or a timeout keeps the key for the retry.
         if (wasAnswered(error)) keys.current.delete(id);
-        if (api.isCurrent()) setFailed((s) => toggle(s, id, true));
+        if (api.isCurrent()) {
+          setFailed((s) => toggle(s, id, true));
+          // Not this Account's (or gone): show what the server holds now instead of a stale row.
+          if (problemCode(error) === 'NOT_FOUND') void qc.invalidateQueries({ queryKey: [NOTIFICATIONS] });
+        }
       } finally {
         inFlight.current.delete(id);
         setPending((s) => toggle(s, id, false));

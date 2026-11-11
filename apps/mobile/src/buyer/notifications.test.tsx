@@ -130,6 +130,20 @@ describe('the Buyer inbox', () => {
     expect(buttons.filter((l) => l !== en['buyer.notifications.mark_read'] && l !== en['buyer.notifications.refresh'] && l !== en['buyer.tab.home'])).toEqual([]);
   });
 
+  it('4, 15. a row naming a Seller or error catalogue key still shows only the generic sentence', async () => {
+    signedIn();
+    installInbox({
+      [`Bearer ${GOOD_TOKEN}`]: [
+        row(1, { template_key: 'notification.chat.escalated' }),
+        row(2, { template_key: 'error.request.internal' }),
+      ],
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/notifications' });
+    expect(await screen.findAllByText(en['buyer.notifications.generic'])).toHaveLength(2);
+    expect(screen.queryByText(en['notification.chat.escalated'])).toBeNull();
+    expect(screen.queryByText(en['error.request.internal'])).toBeNull();
+  });
+
   it('16. an Order-linked row says so and opens nothing; a malformed row is not shown', async () => {
     signedIn();
     installInbox({
@@ -275,6 +289,8 @@ describe('the Buyer inbox', () => {
     await renderRouter(APP_DIR, { initialUrl: '/notifications' });
     await fireEvent.press(await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] }));
     expect(await screen.findByText(en['buyer.notifications.mark_read_failed'])).toBeOnTheScreen();
+    // The inbox is read again, so it shows what the server holds rather than a stale row.
+    await waitFor(() => expect(inboxCalls()).toHaveLength(2));
     expect(screen.getByText(en['buyer.notifications.unread'])).toBeOnTheScreen();
   });
 });
