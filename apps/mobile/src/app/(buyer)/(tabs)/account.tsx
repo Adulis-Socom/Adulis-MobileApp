@@ -117,6 +117,10 @@ export default function You() {
         : null}
 
       {signedIn
+        ? section(t('buyer.messages'), <Button label={t('buyer.messages')} variant="secondary" onPress={() => router.push('/messages')} />)
+        : null}
+
+      {signedIn
         ? section(
             t('buyer.you.privacy'),
             <Button label={t('buyer.you.delete')} variant="secondary" onPress={() => router.push('/account/delete')} />,

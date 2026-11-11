@@ -48,6 +48,13 @@ export default function BuyerLayout() {
         dangerouslySingular={(_name, params) => String(params.collectionRef)}
       />
       <Stack.Screen name="save-to" options={{ headerShown: true, title: t('buyer.save.picker_title'), presentation: 'modal' }} />
+      {/* WO-013: the Conversations list and one conversation per reference. */}
+      <Stack.Screen name="messages" options={{ headerShown: true, title: t('buyer.messages') }} />
+      <Stack.Screen
+        name="chat/[conversationRef]"
+        options={{ headerShown: true, title: t('buyer.chat.title') }}
+        dangerouslySingular={(_name, params) => String(params.conversationRef)}
+      />
       {/* WO-011: Account deletion opens over the You tab; one at a time. */}
       <Stack.Screen name="account/delete" options={{ headerShown: true, title: t('buyer.you.delete') }} dangerouslySingular />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: true, title: t('auth.sign_in') }} />

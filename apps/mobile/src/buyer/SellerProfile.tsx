@@ -14,6 +14,7 @@ import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
 import { CardSaveButton } from './CardSaveButton';
+import { MessageSellerButton } from './MessageSellerButton';
 import { PublicListView } from './PublicListView';
 import { isPathName, usePublicRead } from './public-read';
 import { GoneState, ReadStates } from './ReadStates';
@@ -26,7 +27,8 @@ import { GoneState, ReadStates } from './ReadStates';
  * - Only what the server sends: the Trust level the database holds, completed handoffs, a review
  *   summary with its count (never a bare score), fulfilment methods and the join date. No rates
  *   are shown: their denominators are not public, and a zero rate must not read as perfect
- *   (TRUST-01 S440). No Follow, Message, Share, Cart or review composer: none is built.
+ *   (TRUST-01 S440). Message Seller opens the one Buyer-Seller conversation (WO-013). No Follow,
+ *   Share, Cart or review composer: none is built.
  * - Scenes come from the canonical public gate; a PRIVATE Scene is simply absent. Opening one
  *   reuses Explore the Scene; a Product opens the Product detail.
  * - Revalidated on opening, on return to this screen, after the background interval and on a
@@ -124,6 +126,7 @@ function ProfileHeader({
             })
           : t('buyer.seller.no_reviews')}
       </AppText>
+      <MessageSellerButton sellerId={seller.seller_id} />
       <TabBar tab={tab} onTab={onTab} />
     </View>
   );

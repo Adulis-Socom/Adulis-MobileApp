@@ -1,0 +1,166 @@
+import type { MobileMessageKey } from '@adulis/locale/mobile';
+import { useInfiniteQuery } from '@tanstack/react-query';
+
+import { ApiError, isTransient } from '../api/client';
+import { fillSlots } from '../api/messages';
+import { useSession } from '../auth/session';
+import { hasMessage } from '../i18n/i18n';
+import { keepIfCurrent } from './saved';
+
+/**
+ * Buyer messaging (WO-013): the supported subset of the existing Chat API (ADU-CHAT-01 v3.3 is
+ * not built in full; docs/mobile/WO-013-CHAT-CONTRACT-GAPS.md). Server state only, bound to the
+ * session on screen (a late answer for an earlier session is refused) and cleared with the whole
+ * cache by clearSession. The API publishes no schemas, so every answer is checked here; a row that
+ * is not one (or whose sender cannot be attributed) is not shown.
+ */
+
+export const MESSAGE_MAX = 4000; // the server's limit (chat.controller: text max 4000)
+export const CONVERSATIONS = 'buyer-conversations';
+export const MESSAGES = 'conversation-messages';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const retry = (failures: number, error: unknown) => isTransient(error) && failures < 2;
+const isIso = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+const contractFailure = () => new ApiError({ kind: 'unexpected', status: 200 });
+
+export const isConversationRef = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
+
+export type Conversation = { id: string; storeName: string; handle: string; lastMessageAt: string };
+export type SenderKind = 'BUYER' | 'SELLER' | 'TEAM_MEMBER' | 'BOT';
+export type ChatMessage = {
+  id: string;
+  kind: SenderKind;
+  /** A human message's text, exactly as sent. */
+  body: string | null;
+  /** A bot message's template key (never prose; rendered from the catalogue or not at all). */
+  templateKey: string | null;
+  sentAt: string;
+  aboutProduct: boolean;
+  aboutOrder: boolean;
+  /** The bot's own escalation turn (not an answer the Buyer can escalate). */
+  escalated: boolean;
+};
+type Page<T> = { items: T[]; nextCursor: string | null };
+
+function page<T>(body: unknown, row: (r: Record<string, unknown>) => T | null): Page<T> {
+  const b = body as { data?: unknown; next_cursor?: unknown } | null;
+  if (!b || !Array.isArray(b.data) || !(b.next_cursor === null || typeof b.next_cursor === 'string')) throw contractFailure();
+  return {
+    items: b.data.map((r) => (r && typeof r === 'object' ? row(r as Record<string, unknown>) : null)).filter((x): x is T => x !== null),
+    nextCursor: b.next_cursor,
+  };
+}
+
+export const parseConversationPage = (body: unknown) =>
+  page<Conversation>(body, (r) =>
+    typeof r.id === 'string' && UUID.test(r.id) && typeof r.store_name === 'string' && typeof r.handle === 'string' && isIso(r.last_message_at)
+      ? { id: r.id, storeName: r.store_name, handle: r.handle, lastMessageAt: r.last_message_at }
+      : null,
+  );
+
+const KINDS: readonly SenderKind[] = ['BUYER', 'SELLER', 'TEAM_MEMBER', 'BOT'];
+
+export const parseMessagePage = (body: unknown) =>
+  page<ChatMessage>(body, (r) => {
+    const kind = r.sender_kind as SenderKind;
+    if (typeof r.id !== 'string' || !UUID.test(r.id) || !KINDS.includes(kind) || !isIso(r.sent_at)) return null;
+    if (kind === 'BOT') {
+      if (typeof r.template_key !== 'string') return null;
+      return {
+        id: r.id,
+        kind,
+        body: null,
+        templateKey: r.template_key,
+        sentAt: r.sent_at,
+        aboutProduct: false,
+        aboutOrder: false,
+        escalated: r.resolution_path === 'ESCALATED',
+      };
+    }
+    if (typeof r.body !== 'string') return null;
+    return {
+      id: r.id,
+      kind,
+      body: r.body,
+      templateKey: null,
+      sentAt: r.sent_at,
+      aboutProduct: typeof r.product_id === 'string',
+      aboutOrder: typeof r.order_id === 'string',
+      escalated: false,
+    };
+  });
+
+/** POST /v1/conversations' answer: `{ conversation_id }`. */
+export function conversationIdOf(body: unknown): string {
+  const id = (body as { conversation_id?: unknown } | null)?.conversation_id;
+  if (!isConversationRef(id)) throw contractFailure();
+  return id;
+}
+
+/** POST .../messages' answer: `{ message_id, bot }`. Accepted only with a message id. */
+export function acceptedMessage(body: unknown): boolean {
+  return isConversationRef((body as { message_id?: unknown } | null)?.message_id);
+}
+
+/** The only catalogue namespace a bot message may render from (CHATBOT-01: no model prose). */
+const BOT_TEMPLATES = 'chat.bot.';
+
+/**
+ * A bot message's sentence: its catalogue sentence when the template key is a chat.bot.* key with
+ * every slot present; otherwise the neutral unavailable sentence. A raw template key, a seller-
+ * written resource the app has no catalogue entry for, or a sentence with holes is never shown.
+ */
+export function botText(t: (key: MobileMessageKey) => string, m: ChatMessage): string {
+  const key = m.templateKey;
+  if (key !== null && key.startsWith(BOT_TEMPLATES) && hasMessage(key)) {
+    const filled = fillSlots(t(key), {});
+    if (filled) return filled;
+  }
+  return t('buyer.chat.bot_unavailable');
+}
+
+/** De-duplicated, in the order given (pages are cut by timestamp). */
+function unique<T extends { id: string }>(pages: Page<T>[] | undefined): T[] {
+  const seen = new Set<string>();
+  return (pages ?? []).flatMap((p) => p.items).filter((x) => !seen.has(x.id) && seen.add(x.id));
+}
+
+const nextOf = <T>(last: Page<T>, _all: Page<T>[], lastParam: string | null) =>
+  last.nextCursor !== null && last.nextCursor !== lastParam ? last.nextCursor : null;
+
+/** The Buyer's conversations, newest activity first. Older pages load only when asked. */
+export function useConversations() {
+  const { session, boundApi } = useSession();
+  const token = session.status === 'signedIn' ? session.token : null;
+  const query = useInfiniteQuery({
+    queryKey: [CONVERSATIONS],
+    queryFn: async ({ pageParam }: { pageParam: string | null }) =>
+      parseConversationPage(await keepIfCurrent(boundApi(token!), (api) => api.conversations(pageParam))),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextOf<Conversation>,
+    enabled: token !== null,
+    retry,
+  });
+  return { ...query, items: unique(query.data?.pages) };
+}
+
+/**
+ * One conversation's messages, NEWEST FIRST (the server's order; the screen draws them bottom-up).
+ * While the screen is focused and the app is in the foreground it re-reads every 30 seconds (the
+ * design's bounded foreground polling); nothing runs in the background.
+ */
+export function useConversationMessages(conversationRef: string | null, focused: boolean) {
+  const { session, boundApi } = useSession();
+  const token = session.status === 'signedIn' ? session.token : null;
+  const query = useInfiniteQuery({
+    queryKey: [MESSAGES, conversationRef ?? ''],
+    queryFn: async ({ pageParam }: { pageParam: string | null }) =>
+      parseMessagePage(await keepIfCurrent(boundApi(token!), (api) => api.conversationMessages(conversationRef!, pageParam))),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextOf<ChatMessage>,
+    enabled: token !== null && conversationRef !== null,
+    refetchInterval: focused ? 30_000 : false,
+    retry,
+  });
+  return { ...query, items: unique(query.data?.pages) };
+}

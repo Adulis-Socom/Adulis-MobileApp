@@ -396,6 +396,24 @@ export function createApiClient(deps: ApiDeps) {
     markNotificationRead: (id: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/notifications/{id}/read', { params: { id }, idempotencyKey, ok: 200 }),
 
+    /**
+     * Buyer messaging (WO-013): the existing Chat API, Buyer side (ADU-API-01 S12.7). One
+     * conversation per Buyer, Seller and Market, created or returned by POST /v1/conversations
+     * (idempotent). `as=buyer` is the server's scope rule (R10). No schemas are published
+     * (ON-20261111-150), so the answers are checked at the boundary (src/buyer/chat.ts). Plain text
+     * only: Product and Order anchors are not sent from the app in this release.
+     */
+    openConversation: (sellerId: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/conversations', { body: { seller_id: sellerId }, idempotencyKey, ok: 201 }),
+    conversations: (cursor: string | null) =>
+      call<unknown>('GET', '/v1/conversations', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
+    conversationMessages: (id: string, cursor: string | null) =>
+      call<unknown>('GET', '/v1/conversations/{id}/messages', { params: { id }, query: { cursor: cursor ?? undefined }, ok: 200 }),
+    sendMessage: (id: string, text: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/conversations/{id}/messages', { params: { id }, body: { text }, idempotencyKey, ok: 201 }),
+    escalateConversation: (id: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/conversations/{id}/escalate', { params: { id }, idempotencyKey, ok: 200 }),
+
     /** POST /v1/auth/logout with the credential being signed out (already off the device). */
     logout: (token: string) =>
       call<void>('POST', '/v1/auth/logout', { bearer: token, ok: 204 }).catch((error: unknown) => {

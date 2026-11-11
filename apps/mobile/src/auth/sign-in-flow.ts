@@ -9,7 +9,7 @@ import { isPathName, isPublicRef } from '../buyer/public-read';
  * on: an in-app path rebuilt here from parts each checked against the public read's own
  * patterns -- never a scheme, host, query or anything else the parameter carried.
  */
-const RETURN_TO = ['/home/for-you', '/saved', '/orders', '/account', '/notifications'] as const;
+const RETURN_TO = ['/home/for-you', '/saved', '/orders', '/account', '/notifications', '/messages'] as const;
 export type ReturnTo = (typeof RETURN_TO)[number] | `/product/${string}/${string}` | `/scenes/${string}`;
 
 export function parseReturnTo(value: unknown): ReturnTo {
