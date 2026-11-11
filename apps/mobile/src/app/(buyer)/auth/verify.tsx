@@ -40,7 +40,7 @@ export default function Verify() {
   const queryClient = useQueryClient();
   const phone = typeof params.phone === 'string' ? params.phone : '';
   const navigation = useNavigation();
-  const { session, api, deviceId, signIn, otpPhone, setOtpPhone } = useSession();
+  const { session, api, boundApi, deviceId, signIn, otpPhone, setOtpPhone } = useSession();
   const [code, setCode] = useState('');
   const [needsAge, setNeedsAge] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -104,8 +104,10 @@ export default function Verify() {
       completing.current = true;
       await signIn(verified.token);
       AccessibilityInfo.announceForAccessibility(t('auth.signed_in'));
-      // The guest's Save, in this new session only; it re-checks the target and never blocks the return.
-      void completePendingSave(api, queryClient, save);
+      // The guest's Save, bound to the credential this sign-in returned (WO-009A S9): it re-checks
+      // the target, sends nothing once that session ends, and never blocks the return. Any other
+      // armed Save (a cancelled sign-in) is dropped here.
+      void completePendingSave(boundApi(verified.token), queryClient, save);
       router.dismissTo(returnTo);
     } catch (failure) {
       completing.current = false;

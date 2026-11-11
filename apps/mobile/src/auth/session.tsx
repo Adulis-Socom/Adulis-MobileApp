@@ -11,6 +11,17 @@ import {
 } from 'react';
 
 import { createApiClient, wasAnswered, type ApiClient } from '../api/client';
+
+/** A request refused before sending: the session it was bound to is no longer this app's. */
+export class SessionChanged extends Error {
+  constructor() {
+    super('session changed');
+    this.name = 'SessionChanged';
+  }
+}
+
+/** A client that speaks for one session only (see SessionContextValue.boundApi). */
+export type BoundApi = ApiClient & { isCurrent: () => boolean };
 import {
   endRegistrationIntent,
   loadDeviceId,
@@ -30,6 +41,13 @@ type SessionContextValue = {
   session: SessionState;
   /** The typed API client, carrying this session's bearer and this install's device id. */
   api: ApiClient;
+  /**
+   * A client bound to ONE credential (WO-009A S9): every request carries exactly that bearer,
+   * and is refused before it is sent once that session is no longer this app's (signed out,
+   * expired, or another sign-in). For work that starts in one session and may finish after
+   * a session change: a guest's Save continuation, a Save tap, a page's saved-state read.
+   */
+  boundApi: (credential: string) => BoundApi;
   /** This install's persistent device id (sent in X-Adulis-Device and as verify's device_id). */
   deviceId: () => Promise<string>;
   /** Register this install with the server once (POST /v1/devices). True if it just did. */
@@ -122,27 +140,45 @@ export function SessionProvider({
   // useState, not useMemo: React may drop a memo, and the id must not change mid-run.
   const [deviceId] = useState(() => loadDeviceId(deviceStorage));
 
+  // The server says this credential is dead (401 SESSION_EXPIRED / SESSION_REVOKED). Only the
+  // session the request carried: a late answer for an earlier session must not end a newer
+  // one. The app leaves it at once whatever storage does; a credential the delete failed to
+  // remove is dead, and the next launch's bootstrap ends it again.
+  const onSessionEnded = useCallback(
+    (ended: string) => {
+      if (ended !== token.current) return;
+      forgetInMemory();
+      storage.clear().catch((error: unknown) => {
+        console.warn(
+          '[session] could not delete an ended credential:',
+          error instanceof Error ? error.message : 'unknown error',
+        );
+      });
+    },
+    [forgetInMemory, storage],
+  );
+
   const api = useMemo(
-    () =>
-      createApiClient({
+    () => createApiClient({ deviceId: () => deviceId, token: () => token.current, onSessionEnded }),
+    [deviceId, onSessionEnded],
+  );
+
+  const boundApi = useCallback(
+    (credential: string): BoundApi => {
+      const isCurrent = () => token.current === credential;
+      const client = createApiClient({
         deviceId: () => deviceId,
-        token: () => token.current,
-        // The server says this credential is dead (401 SESSION_EXPIRED / SESSION_REVOKED).
-        // Only the session the request carried: a late answer for an earlier session must
-        // not end a newer one. The app leaves it at once whatever storage does; a credential
-        // the delete failed to remove is dead, and the next launch's bootstrap ends it again.
-        onSessionEnded: (ended) => {
-          if (ended !== token.current) return;
-          forgetInMemory();
-          storage.clear().catch((error: unknown) => {
-            console.warn(
-              '[session] could not delete an ended credential:',
-              error instanceof Error ? error.message : 'unknown error',
-            );
-          });
+        // Read right before the request is sent (no await in between): a session that changed
+        // while this work waited refuses here, so nothing is ever sent under another Account.
+        token: () => {
+          if (!isCurrent()) throw new SessionChanged();
+          return credential;
         },
-      }),
-    [deviceId, forgetInMemory, storage],
+        onSessionEnded,
+      });
+      return { ...client, isCurrent };
+    },
+    [deviceId, onSessionEnded],
   );
 
   // One registration at a time: a refetch (Send code) joins the attempt in flight instead of
@@ -203,6 +239,7 @@ export function SessionProvider({
     () => ({
       session,
       api,
+      boundApi,
       deviceId: getDeviceId,
       ensureDeviceRegistered,
       otpPhone,
@@ -211,7 +248,7 @@ export function SessionProvider({
       clearSession,
       signOut,
     }),
-    [session, api, getDeviceId, ensureDeviceRegistered, otpPhone, signIn, clearSession, signOut],
+    [session, api, boundApi, getDeviceId, ensureDeviceRegistered, otpPhone, signIn, clearSession, signOut],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
