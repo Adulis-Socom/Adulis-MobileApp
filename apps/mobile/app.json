@@ -20,7 +20,9 @@
       "expo-router",
       "expo-secure-store",
       "expo-sqlite",
-      "expo-image"
+      "expo-image",
+      "expo-font",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
