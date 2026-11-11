@@ -379,9 +379,8 @@ export function ProductTile({
       {seller ? (
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel={
-            fillSlots(t('buyer.seller.view'), { store: seller.store_name }) ?? seller.store_name
-          }
+          // The visible words are the accessible name (label in name), as on the Product.
+          accessibilityHint={fillSlots(t('buyer.seller.view'), { store: seller.store_name }) ?? undefined}
           onPress={() =>
             router.push({ pathname: '/sellers/[handle]', params: { handle: seller.handle } })
           }

@@ -38,7 +38,7 @@ export function PublicListView<I>({
   testID: string;
   label: string;
   /** What a pull does; the list's own refresh by default. */
-  onRefresh?: () => void;
+  onRefresh?: (() => void) | undefined;
   /** Why the list cannot be read at all (the screen's precondition failed): shown instead of any list state. */
   blocked?: { message: string; onRetry?: () => void } | null;
 }) {

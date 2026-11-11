@@ -51,7 +51,7 @@ export default function Shop() {
     : bootstrap.fetchStatus === 'paused'
       ? // Offline: the bootstrap resumes by itself when the connection returns.
         { message: t('common.offline') }
-      : bootstrap.isError
+      : bootstrap.isError && !bootstrap.isFetching // a retry in flight shows the loading state
         ? { message: failureMessage(t, bootstrap.error), onRetry: () => void bootstrap.refetch() }
         : null;
   return (
@@ -84,6 +84,8 @@ export default function Shop() {
         empty="buyer.shop.empty"
         loading="buyer.shop.loading"
         blocked={blocked}
+        // While blocked, a pull does what the retry does (re-place the device), not a bare re-read.
+        onRefresh={blocked?.onRetry}
         testID="shop-products"
         label={t('buyer.shop.products')}
       />

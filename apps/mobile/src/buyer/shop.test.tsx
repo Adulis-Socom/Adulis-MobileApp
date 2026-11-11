@@ -1,4 +1,5 @@
 import { en } from '@adulis/locale/mobile';
+import { onlineManager } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
@@ -66,11 +67,11 @@ describe('the Shop tab', () => {
     expect(screen.getByRole('header', { name: en['buyer.tab.shop'] })).toBeOnTheScreen();
     expect(await screen.findByLabelText(/^Basket, ETB\s900\.00 – ETB\s1,200\.00, Available$/)).toBeOnTheScreen();
     expect(screen.getByLabelText('Scarf, Currently unavailable')).toBeOnTheScreen();
-    expect(screen.getByLabelText('View Store seller-2')).toBeOnTheScreen();
     // The Seller line says what it is in words (ON-048): no underline, which recycled cells dropped.
-    const sellerLine = screen.getByText('Sold by Store seller-2');
-    expect(sellerLine).toBeOnTheScreen();
-    expect(JSON.stringify(sellerLine.props.style)).not.toContain('underline');
+    // Its visible words are its accessible name (label in name); the hint says where it goes.
+    const sellerLink = screen.getByRole('link', { name: 'Sold by Store seller-2' });
+    expect(sellerLink.props.accessibilityHint).toBe('View Store seller-2');
+    expect(JSON.stringify(screen.getByText('Sold by Store seller-2').props.style)).not.toContain('underline');
     expect(screen.getByText(en['buyer.list.end'])).toBeOnTheScreen();
     // The card derivative (as on the Seller Profile), never the full image.
     expect(screen.getAllByTestId('product-photo')[0]?.props.source).toEqual([
@@ -110,7 +111,7 @@ describe('the Shop tab', () => {
     expect(r.getPathname()).toBe('/product/seller-1/basket');
     await act(() => router.back());
     await settle();
-    await fireEvent.press(await screen.findByLabelText('View Store seller-1'));
+    await fireEvent.press(await screen.findByRole('link', { name: 'Sold by Store seller-1' }));
     expect(await screen.findByRole('header', { name: 'Store 1' })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/sellers/seller-1');
     await act(() => router.back());
@@ -197,6 +198,39 @@ describe('the Market behind the Shop (ON-043)', () => {
     fail = false;
     await fireEvent.press(retry);
     expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+  });
+
+  it('a device that starts offline: the paused bootstrap says offline, and the Shop loads by itself on reconnect', async () => {
+    // A cold start reads the connection once (query-client.ts); this device reads "not connected".
+    const network = jest
+      .spyOn(jest.requireMock<typeof import('expo-network')>('expo-network'), 'getNetworkStateAsync')
+      .mockResolvedValue({ isConnected: false } as Awaited<ReturnType<typeof import('expo-network').getNetworkStateAsync>>);
+    onlineManager.setOnline(false);
+    try {
+      serve(SHOP, page(shopProduct('basket', 'Basket')));
+      await renderRouter(APP_DIR, { initialUrl: '/shop' });
+      expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.shop.empty'])).not.toBeOnTheScreen();
+      expect(calls('GET /v1/bootstrap')).toHaveLength(0); // paused, not spent
+      await act(async () => onlineManager.setOnline(true));
+      expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+    } finally {
+      network.mockRestore();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('a pull while blocked re-places the device, like the retry', async () => {
+    serve(SHOP, ok({ market_resolved: false, data: [], next_cursor: null }), page(shopProduct('basket', 'Basket')));
+    await openShop();
+    await screen.findByText(en['buyer.shop.no_market']);
+    const bootstraps = calls('GET /v1/bootstrap').length;
+    await act(() =>
+      (screen.getByTestId('shop-products').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+    );
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+    expect(calls('GET /v1/bootstrap').length).toBe(bootstraps + 1);
   });
 
   it('offline: says offline, not "No Products"; once the connection returns the Shop loads', async () => {
