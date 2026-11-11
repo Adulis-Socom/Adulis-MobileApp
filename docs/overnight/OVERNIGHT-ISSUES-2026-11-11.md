@@ -8,6 +8,10 @@ items are referenced here by ID.
 
 Every discovered issue is recorded, fixed or not. Severity is the severity when found.
 
+WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
+ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070.
+
 ## Issues
 
 ### ON-20261111-001
@@ -159,7 +163,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-CAT-001A
 - **Severity:** LOW
 - **Type:** OPEN_POLICY
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** No document says whether a Market's display_currency may change while it has Products, or what happens to their prices.
 - **Expected:** A governed rule (no conversion is approved).
 - **Actual:** 0056 enforces currency on write; a Market currency change is allowed and makes its Products unpriced/unavailable until re-priced.
@@ -169,15 +173,17 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** None (deliberately not decided in SQL).
 - **Verification:** n/a
 - **Remaining risk:** An operator currency change would hide a Market's catalogue.
-- **Founder decision required:** Yes
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Rule that a Market currency is fixed once Products exist (then a constraint can hold it), or define a re-pricing procedure.
+- **WO-007A (11 November 2026):** Policy APPROVED: a Market currency is fixed once it has Products. Implementation COMPLETED: migration 0059 (trg_market_currency_fixed, 23514 market_currency_fixed_with_products, SHARE ROW EXCLUSIVE on core.product so a concurrent first Product cannot slip past). Further engineering: the exceptional repricing procedure is undesigned (a reviewed forward migration when needed). Further legal/privacy authorisation: none.
+- **WO-007A verification:** wo-007a-reviews (refused with Products, allowed without, both race orders, two changes queue); cat-001a D5 now asserts the refusal; native curl: refused, currency unchanged.
 
 ### ON-20261111-010
 
 - **Work order:** WO-CAT-001A
 - **Severity:** LOW
 - **Type:** GOVERNANCE (carried OVN-086)
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** RESOLVED
 - **Summary:** Whether Catalogue/Scene availability should include Checkout prerequisites (ACTIVE payout, timing configuration, NEW-level cap).
 - **Expected:** A founder decision.
 - **Actual:** Item availability excludes them (WO-CAT-001).
@@ -187,8 +193,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** Documented two alternatives; recommended Alternative 2; nothing implemented.
 - **Verification:** n/a
 - **Remaining risk:** An item may show available while its Seller cannot yet take an order.
-- **Founder decision required:** Yes
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Approve Alternative 2 (item availability distinct from Checkout readiness).
+- **WO-007A (11 November 2026):** Policy APPROVED: Alternative 2. Implementation: already the behaviour (item availability excludes Checkout prerequisites); nothing changed. Further engineering: Checkout must validate its own prerequisites before an Order exists (Checkout work order). Further legal/privacy authorisation: none.
 
 ### ON-20261111-011
 
@@ -213,7 +220,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-CAT-001A
 - **Severity:** LOW
 - **Type:** DOCUMENTATION_DRIFT
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** apps/api/CLAUDE.md still names ADU-DB-01 v1.16 as governing (line 6) and 120 tables in its counts table (line 46).
 - **Expected:** The workstream file cites the governing revision (v1.22) and the current count (123).
 - **Actual:** Stale lines; the authoritative versions are in docs/amendments/README.md and DOCUMENT_AUTHORITY.md (both updated).
@@ -225,6 +232,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** An agent reading only that file sees old numbers.
 - **Founder decision required:** No
 - **Recommended resolution:** Refresh the two lines in the next backend governance pass.
+- **WO-007A (11 November 2026):** apps/api/CLAUDE.md now cites ADU-DB-01 v1.24 and 123 tables (manifest 109 + 14, core 97), the numbers pnpm db:check and pnpm verify:permission-doc print (72d957d).
 
 ### ON-20261111-013
 
@@ -411,7 +419,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-006
 - **Severity:** LOW
 - **Type:** DESIGN_CONFLICT
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** RESOLVED
 - **Summary:** ADU-MOB-02 names the Buyer Seller route (buyer)/seller/[sellerRef]; /seller is already the Seller Companion shell, and no Seller reference exists beyond the handle.
 - **Expected:** One unambiguous Buyer route to a Seller.
 - **Actual:** Implemented as /sellers/[handle] (plural, like /scenes/[ref]); the public web is /s/:handle (STOREFRONT-02).
@@ -421,8 +429,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** Plural route; recorded.
 - **Verification:** seller-profile tests and Maestro flows (deep link adulis://sellers/fixture-weaves).
 - **Remaining risk:** A rename later needs link compatibility.
-- **Founder decision required:** Yes (with OVN-080)
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Decide the cross-surface Seller URL together with the Scene/Product scheme (OVN-080).
+- **WO-007A (11 November 2026):** Policy APPROVED: keep /sellers/[handle] (no collision with the Companion /seller). Implementation: already the route. Further engineering: universal-link standardisation across surfaces is a separate task. Further legal/privacy authorisation: none.
 
 ### ON-20261111-024
 
@@ -475,8 +484,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** Not implemented (deliberate).
 - **Verification:** n/a
 - **Remaining risk:** Unavailable Products may sit above available ones if the Seller ordered them so.
-- **Founder decision required:** Yes
+- **Founder decision required:** Yes -- choose option A (two-phase cursor, at-least-once with client de-duplication) or B (server-side browse snapshot with a retention rule)
 - **Recommended resolution:** Confirm Seller order, or approve available-first with a snapshot-stable cursor (or a server-side partition: available pages, then unavailable).
+- **WO-007A (11 November 2026):** Policy APPROVED: available first. Implementation NOT DONE, by the work order's own rule: a stateless keyset cannot page a list sorted by a value that changes between pages with neither a repeat nor a gap (proof and options: WO-007A-DISCOVERY-STABILIZATION.md S11). The Seller's display order is kept. Further engineering: implement the chosen option. Further legal/privacy authorisation: option B only (a new retention rule).
 
 ### ON-20261111-027
 
@@ -529,8 +539,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** None.
 - **Verification:** n/a
 - **Remaining risk:** A review an operator wants removed stays public.
-- **Founder decision required:** No
+- **Founder decision required:** Yes -- the Review moderation policy and Operator capability
 - **Recommended resolution:** Add the moderation state, filter it in reviews and the summary.
+- **WO-007A (11 November 2026):** Re-audited: no Review moderation state, decision vocabulary (moderation_event.decision is free text), Operator capability or workflow exists. Nothing invented. Now a RELEASE BLOCKER for public Reviews (REV-01 S32): when built, it joins core.v_review_public so the list and the aggregate follow it together. No public Review exists until verified payment does (ON-20261111-053), so no moderated content is public meanwhile.
 
 ### ON-20261111-030
 
@@ -591,7 +602,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-006
 - **Severity:** MEDIUM
 - **Type:** SPEC_CONFLICT
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** RESOLVED
 - **Summary:** REV-01 v3.3 admits public reviews only on a verified evidence basis (FINAL_HANDOFF or VERIFIED_ORDER_FAILURE; 'no unverified fallback'), while the built schema derives an UNVERIFIED badge and the existing public reviews endpoint lists and counts such reviews.
 - **Expected:** One rule for which reviews are public.
 - **Actual:** UNVERIFIED reviews are public, labelled 'Unverified', and counted in the Seller-service mean; badge_counts are the stored tiers, not REV-01's bases.
@@ -601,8 +612,10 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** None (SPEC_CONFLICT: report, do not resolve in code). The comment no longer overclaims (1ed877d).
 - **Verification:** n/a
 - **Remaining risk:** Buyers see unverified opinions in the Seller summary.
-- **Founder decision required:** Yes
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Rule whether UNVERIFIED reviews stay public (labelled) or are excluded from list and mean until the Reviews domain implements REV-01's eligibility resolver.
+- **WO-007A (11 November 2026):** Policy APPROVED: only verified-evidence Reviews are public or counted. Implementation COMPLETED, fail closed: migration 0058 (core.v_review_public, core.fn_order_payment_verified) read by the public list and summary; badge -> evidence_basis, badge_counts -> basis_counts (d905834). Today no Review is public because no verified payment exists (K-1). Every stored Review is kept. Further engineering: ON-20261111-053 to -059 (payment, write path, receipt methods, fault attribution, self-review timing, correction lineage). Further legal/privacy authorisation: none for this change.
+- **WO-007A verification:** wo-007a-reviews 20+ cases (mutation-sensitive: the pre-0058 summary would count 19 reviews at 2.6); wo-006 header/list now 0/null; native: as built "No reviews yet", with the payment stand-in 27 verified reviews paged and labelled, unverified ones never shown.
 
 ### ON-20261111-034
 
@@ -663,7 +676,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-006
 - **Severity:** LOW
 - **Type:** PRIVACY_NOTE
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** The Seller products cursor carries the last Product's created_at to the microsecond (readable after base64 decoding).
 - **Expected:** Doctrine 5 keeps internal UUIDs (time-ordered) out of URLs; creation time itself is a similar, weaker disclosure.
 - **Actual:** Creation time of one listed Product per page is visible in the cursor.
@@ -673,8 +686,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** Not changed.
 - **Verification:** n/a
 - **Remaining risk:** Low: a Product's listing time, not an identifier.
-- **Founder decision required:** Yes (note)
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Accept, or sign/encrypt cursors if creation times are considered sensitive.
+- **WO-007A (11 November 2026):** Policy APPROVED: creation timestamps inside opaque, validated, resource-scoped cursors are accepted for MVP; no encryption only to hide them. Implementation: already the behaviour. Further engineering: none.
 
 ### ON-20261111-038
 
@@ -717,7 +731,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-006
 - **Severity:** LOW
 - **Type:** TEST_GAP
-- **Status:** PARTIALLY RESOLVED
+- **Status:** RESOLVED
 - **Summary:** Review found weak tests: a vacuous products tiebreak, no crafted cursors, no rounding case, no draft exclusion, a mobile 'paged' reviews test that never paged, untested pull/dedup/later-page 404.
 - **Expected:** Tests that fail on regression.
 - **Actual:** Several gaps.
@@ -729,6 +743,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** Mobile: de-dup across pages and a 404 on a later page remain untested (covered by the hook's logic only).
 - **Founder decision required:** No
 - **Recommended resolution:** Add hook-level tests for usePublicList.
+- **WO-007A (11 November 2026):** Shared-list tests added (shop.test.tsx, seller-profile.test.tsx): failed next page with retry, a pull keeping items while it loads, a slow older pull never replacing a newer one, a session ending mid-browse re-reading as a guest, a later-page 404 clearing the profile (2000d1c, f63f65a, 45811df).
 
 ### ON-20261111-041
 
@@ -783,6 +798,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** If the first bootstrap FAILS (offline, registration error) the Shop still reads and, for an unregistered device, gets the same empty page; a pull recovers. The server sends the same payload for 'no Market evidence' and 'empty Market', so the client cannot tell them apart.
 - **Founder decision required:** No
 - **Recommended resolution:** Optionally an additive response signal for 'no Market' in a later API work order.
+- **WO-007A (11 November 2026):** Completed beyond the first-bootstrap race: GET /v1/shop/products adds market_resolved; the Shop reads only after a SUCCESSFUL bootstrap and distinguishes bootstrap or device-registration failure (retry), offline (paused, resumes), unresolved Market (retry re-places the device; a pull does the same) and a genuinely empty Market. Never another Market. Verified in shop.test.tsx (the four Market tests fail against the WO-007 code) and natively (shop-no-market-1/2: unresolved Market -> message -> retry re-places the device; shop-offline-1/2: API unreachable -> offline + retry -> recovery; all PASS on Android).
 
 ### ON-20261111-044
 
@@ -861,7 +877,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-007
 - **Severity:** LOW
 - **Type:** ACCESSIBILITY / RENDERING
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** On Android in Dark mode at font scale 1.3, some Shop tiles' Seller line rendered without its underline while others kept it.
 - **Expected:** Every Seller link carries the same non-colour cue.
 - **Actual:** shop-dark-large screenshot shop-04-end: top row and 'Shop item 03' Seller lines not underlined; 'Shop item 02' and '01' underlined. All four underlined in the light run.
@@ -873,13 +889,14 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** Sighted users see some Seller lines distinguished by secondary colour only (a non-colour cue missing).
 - **Founder decision required:** No
 - **Recommended resolution:** A follow-up: give the Seller line a non-text cue that survives recycling (an icon or a 'Sold by' prefix), then re-validate natively.
+- **WO-007A (11 November 2026):** The tile's Seller line reads "Sold by {store}" (buyer.product.seller) with no underline; the visible words are the accessible name, "View {store}" the hint (label in name, as on the Product). Verified: shop.test.tsx; native: shop.yaml asserts the worded cue on recycled cells (page 2), PASS in Light at 1.0 and Dark at 1.3; screenshot shows the Seller line of every tile wrapping as "Sold by Fixture Pottery".
 
 ### ON-20261111-049
 
 - **Work order:** WO-007
 - **Severity:** LOW
 - **Type:** PRODUCT_SCOPE / MISSING_DATA
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** OPEN
 - **Summary:** Shop category browsing, Locally Made, Discounts and New Drops modules are not built: no Buyer-facing category taxonomy exists and no rule defines those modules' membership.
 - **Expected:** Category entry points backed by real, governed data.
 - **Actual:** core.category has only id, parent_id, code, created_at (no labels, no locale strings, one seed row); no discount or 'locally made' attribute is defined for Buyer display.
@@ -889,15 +906,16 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** None (deliberately not built). The Shop is one honest list; Home's Locally Made and Discounts channels keep their placeholders; the header's Search entry is unchanged (no Marketplace Search).
 - **Verification:** Mobile test asserts no Fashion/Cosmetics/Electronics/Sort/Filter/Add to cart controls; native shop.yaml asserts no Fashion/Add to cart/Filter.
 - **Remaining risk:** The Shop is less browsable than the prototype until a taxonomy exists.
-- **Founder decision required:** Yes -- a Buyer category taxonomy (labels, locales, Market availability) and the rules for Locally Made, Discounts and New Drops.
+- **Founder decision required:** No (direction decided 11 November 2026); the taxonomy itself comes from the Catalogue taxonomy work order
 - **Recommended resolution:** A catalogue taxonomy work order before any category UI.
+- **WO-007A (11 November 2026):** Policy direction APPROVED: initial top-level groups Fashion, Cosmetics, Electronics. Implementation: recorded only (as directed); no category, module or assignment built. Further engineering: the Catalogue taxonomy work order (definitions, subcategories, labels, localisation, Market enablement, classification) and membership rules for Locally Made, Discounts, New Drops. Further legal/privacy authorisation: none.
 
 ### ON-20261111-050
 
 - **Work order:** WO-007
 - **Severity:** LOW
 - **Type:** PRODUCT_RULE
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** RESOLVED
 - **Summary:** Shop order is a provisional deterministic order, newest first publication (published_at DESC, id DESC), labelled 'Newest first'; no document defines the Shop's ordering.
 - **Expected:** A founder-defined Shop order.
 - **Actual:** Newest first publication. Republishing keeps the first published_at (fn_publish_product: coalesce(published_at, now())), so unpublish/republish cannot bump a Product to the top; an unavailable Product stays listed in place, labelled.
@@ -907,8 +925,9 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Fix and commit:** None needed now; the order is honest and labelled.
 - **Verification:** API and native tests above.
 - **Remaining risk:** Newer Sellers' Products dominate the top; no 'available first' (compare ON-20261111-026).
-- **Founder decision required:** Yes -- confirm 'Newest first' or define the Shop order (and whether available-first applies, as for ON-20261111-026).
+- **Founder decision required:** No (decided 11 November 2026)
 - **Recommended resolution:** Keep 'Newest first' until a ranking design exists; never introduce an unlabelled order.
+- **WO-007A (11 November 2026):** Policy APPROVED: keep Newest first (published_at DESC, id DESC). Implementation: already the behaviour. Further engineering: none until a ranking design is approved.
 
 ### ON-20261111-051
 
@@ -933,7 +952,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Work order:** WO-007
 - **Severity:** LOW
 - **Type:** CLEANUP
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** The locale key buyer.shop.coming ('Shopping by category arrives in a coming update.') is no longer used by the app.
 - **Expected:** No dead catalogue strings.
 - **Actual:** Key remains in packages/locale (en, am).
@@ -945,3 +964,328 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 - **Remaining risk:** None functional.
 - **Founder decision required:** No
 - **Recommended resolution:** Remove in the next packages/locale change.
+- **WO-007A (11 November 2026):** buyer.shop.coming removed (en + am) with the four unused buyer.review.badge.* labels; MT-KEYS regenerated (1f54346).
+
+### ON-20261111-053
+
+- **Work order:** WO-007A
+- **Severity:** MEDIUM
+- **Type:** CONTRACT_GAP (release blocker)
+- **Status:** OPEN
+- **Summary:** No authoritatively verified payment exists, so no Review can meet REV-01 and none is public.
+- **Expected:** REV-01 S1-S2: both bases need provider/backend-verified payment.
+- **Actual:** Payment is a Buyer screenshot confirmed by the Seller (0012: "Adulis NEVER asserts a payment is genuine"); K-1 retires that as payment truth.
+- **Reproduction:** GET /v1/storefronts/{handle}/reviews returns an empty page for every Seller.
+- **Evidence:** 0012 core.payment_submission; DOCUMENT_AUTHORITY K-1; 0058 core.fn_order_payment_verified
+- **Root cause:** The payment model is the legacy manual-transfer one until WO-PAY-001.
+- **Fix and commit:** Fail closed: core.fn_order_payment_verified answers false (50ce32b). Nothing fabricated.
+- **Verification:** wo-007a-reviews "as built" half; native curl and seller-profile flow.
+- **Remaining risk:** Public Reviews stay absent from every Seller Profile until WO-PAY-001.
+- **Founder decision required:** Yes -- sequence WO-PAY-001 (it then replaces one function body).
+- **Recommended resolution:** WO-PAY-001 replaces the body of core.fn_order_payment_verified with a read of its provider-verified fact.
+
+### ON-20261111-054
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** The Review write path predates REV-01: POST /v1/orders/{id}/review accepts any terminal Order (cancelled and expired included), derives a legacy badge and accepts item ratings for any Product of the Order, with no Grant.
+- **Expected:** REV-01 S14-S22: a server-authoritative eligibility resolver, one Grant per Seller Order, received-line item ratings only, atomic publication.
+- **Actual:** reviews.controller.ts createReview; no review_grant table.
+- **Reproduction:** POST a review on a CANCELLED_BY_BUYER Order: 201, badge UNVERIFIED.
+- **Evidence:** apps/api/src/modules/reviews/reviews.controller.ts; 0014
+- **Root cause:** Built before REV-01 v3.x.
+- **Fix and commit:** None (out of scope: no Review writing in WO-007A). Such rows are never public (0058).
+- **Verification:** n/a
+- **Remaining risk:** Stored history accumulates non-REV-01 rows; never public.
+- **Founder decision required:** No
+- **Recommended resolution:** A Reviews work order implementing REV-01 phases 2-3 (Grant, resolver, received-line guard) before any Buyer review UI.
+
+### ON-20261111-055
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Only QR receipt exists: no OTP or Manual final receipt, and no delegate receipt.
+- **Expected:** REV-01 S7: QR, OTP or governed Manual receipt, Buyer or authorised delegate.
+- **Actual:** core.handoff_scan is the Buyer's own QR scan (FK to the Order Buyer).
+- **Reproduction:** n/a
+- **Evidence:** 0013 core.handoff_scan
+- **Root cause:** Handoff domain not yet built to the November design.
+- **Fix and commit:** None. 0058 reads VALID/LATE handoff_scan as FINAL_HANDOFF.
+- **Verification:** n/a
+- **Remaining risk:** OTP/Manual receipts, when built, need adding to the view's FINAL_HANDOFF term.
+- **Founder decision required:** No
+- **Recommended resolution:** Handoff work order; extend core.v_review_public with the new receipt facts.
+
+### ON-20261111-056
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** SPEC_GAP
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** VERIFIED_ORDER_FAILURE is read as an UPHELD Claim with trigger GOODS_NOT_RECEIVED or REFUND_NOT_DELIVERED; core.claim has no Seller-fault attribute, and line-scoped Claims count.
+- **Expected:** REV-01 S1: an upheld Seller-fault Claim establishing eligible non-delivery or an unpaid/refused/overdue remedy.
+- **Actual:** The two triggers REV-01 names literally; fault is implied only by the forced demotion an upheld Claim causes.
+- **Reproduction:** n/a (no Review is public today).
+- **Evidence:** 0058 view; 0014 core.claim; independent review finding 5
+- **Root cause:** Claims domain has no liable-party or decision-type column.
+- **Fix and commit:** Narrow literal reading, recorded; not live until verified payment exists.
+- **Verification:** wo-007a-reviews: upheld NOT_AS_DESCRIBED without receipt is excluded; receipt + upheld non-delivery is FINAL_HANDOFF.
+- **Remaining risk:** An upheld Claim whose fault was not the Seller's could support Seller-service feedback once payment is verified.
+- **Founder decision required:** Yes -- confirm the mapping, or require a Seller-fault decision attribute in the Claims domain.
+- **Recommended resolution:** Add a fault/decision type to Claims and key the failure basis on it before WO-PAY-001 goes live.
+
+### ON-20261111-057
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** SPEC_GAP
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** Self-review exclusion (Order Buyer is the Seller's owner or a live team member) is evaluated at read time.
+- **Expected:** REV-01 S50: "Seller-owner self-review conflict -> excluded/rejected according to policy" (the policy is not defined).
+- **Actual:** After an ownership transfer or a revocation, a former owner's or member's Review can become public, and a new owner's earlier purchases disappear.
+- **Reproduction:** n/a (no Review is public today).
+- **Evidence:** 0058 view; independent review finding 6
+- **Root cause:** No policy defines the conflict or its point in time.
+- **Fix and commit:** Fail-closed reading recorded; revoked members' Reviews are eligible, live members' are not (tested).
+- **Verification:** wo-007a-reviews liveTeam excluded, revokedTeam included, self excluded.
+- **Remaining risk:** Edge cases around ownership changes.
+- **Founder decision required:** Yes -- define the self-review policy and whether it is judged at Order time.
+- **Recommended resolution:** Snapshot the relationship at Order time (e.g. on the Grant) once the policy exists.
+
+### ON-20261111-058
+
+- **Work order:** WO-007A
+- **Severity:** INFO
+- **Type:** FUTURE_INTEGRATION
+- **Status:** OPEN
+- **Summary:** The independent review flagged the Trust ladder averaging all core.review rows; the live ladder (0028) reads no rating at all.
+- **Expected:** REV-01 S37: Trust consumes only permitted Review facts.
+- **Actual:** 0010's fn_recompute_seller_level read avg(seller_rating) from core.review; 0028 replaced it and established_min_avg_rating is "READ BY NOTHING at MVP".
+- **Reproduction:** SELECT prosrc FROM pg_proc WHERE proname = 'fn_recompute_seller_level' -- no seller_rating.
+- **Evidence:** 0010:321; 0028:425
+- **Root cause:** Historical code path, superseded.
+- **Fix and commit:** None needed now.
+- **Verification:** Live function source checked on the disposable database.
+- **Remaining risk:** A future rating-based Trust rule could read core.review again.
+- **Founder decision required:** No
+- **Recommended resolution:** Any Trust rule that reads ratings reads core.v_review_public (handoff document S3).
+
+### ON-20261111-059
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** A Claim decision correction is a bare UPDATE of core.claim.outcome; no correction record, no review.eligibility_changed event.
+- **Expected:** REV-01 S25, S29: overturned findings re-evaluate eligibility with auditable correction lineage and an outbox event.
+- **Actual:** The view follows the current outcome live (list and aggregate together), but nothing records the change.
+- **Reproduction:** UPDATE core.claim SET outcome = 'NOT_UPHELD' on an upheld Claim.
+- **Evidence:** 0014 core.claim (decision effects fire only NULL -> outcome)
+- **Root cause:** Claims correction workflow not built.
+- **Fix and commit:** None (no new event infrastructure, as directed).
+- **Verification:** wo-007a-reviews: an overturned Claim leaves the list and the aggregate together.
+- **Remaining risk:** Corrections are not audited.
+- **Founder decision required:** No
+- **Recommended resolution:** Claims work order: governed decision correction and the REV-01 S29 producer contract.
+
+### ON-20261111-060
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** LIMITATION
+- **Status:** OPEN
+- **Summary:** The fixed-currency trigger re-reads after its lock wait only under READ COMMITTED, and its lock pauses Product writes while a currency change is uncommitted.
+- **Expected:** Race-safe under any isolation; short administrative transactions.
+- **Actual:** A REPEATABLE READ session keeps its first snapshot; an idle uncommitted currency change blocks every Product write.
+- **Reproduction:** Two psql sessions in REPEATABLE READ.
+- **Evidence:** 0059; independent review findings 3, 4
+- **Root cause:** Snapshot semantics; the lock is what makes READ COMMITTED safe.
+- **Fix and commit:** Lock mode changed to SHARE ROW EXCLUSIVE (changes queue, no deadlock) (26b9d04); the limit is documented in 0059 and DB-01 S30g.
+- **Verification:** wo-007a-reviews: two race orders and two queued changes, each waiting on a real lock.
+- **Remaining risk:** Only an operator session in a non-default isolation level, or left open, is affected; no API path writes a Market currency.
+- **Founder decision required:** No
+- **Recommended resolution:** Keep currency changes in short READ COMMITTED transactions (the repricing procedure, when written).
+
+### ON-20261111-061
+
+- **Work order:** WO-007A
+- **Severity:** INFO
+- **Type:** CONTRACT_CHANGE
+- **Status:** RESOLVED
+- **Summary:** Two public fields were replaced, not added: StorefrontReviewDto.badge -> evidence_basis, ReviewSummaryDto.badge_counts -> basis_counts.
+- **Expected:** /v1 changes are additive (version skew).
+- **Actual:** Keeping the legacy tiers would have kept the mislabel the founder ruled out.
+- **Reproduction:** n/a
+- **Evidence:** storefront.dto.ts; contracts/openapi.json (8779c3c)
+- **Root cause:** The fields described legacy tiers, not REV-01 bases.
+- **Fix and commit:** Replaced deliberately; no released client exists and the console reads only seller/reviews (checked).
+- **Verification:** Contract regenerated twice, byte-identical; api-client generate:check.
+- **Remaining risk:** None while the Buyer app is unreleased.
+- **Founder decision required:** No
+- **Recommended resolution:** None.
+
+### ON-20261111-062
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** RESOLVED
+- **Summary:** First WO-007A native run: every flow failed at Home with "Something went wrong on our side".
+- **Expected:** The debug app reaches the local API.
+- **Actual:** Metro was started without EXPO_PUBLIC_API_BASE_URL, so the client had no API origin (config.ts throws; shown as the generic error).
+- **Reproduction:** Start Metro without the variable and open the app.
+- **Evidence:** maestro-007a/shop screenshot; apps/mobile/src/api/config.ts
+- **Root cause:** Harness started Metro differently from earlier runs.
+- **Fix and commit:** Metro restarted with EXPO_PUBLIC_API_BASE_URL=http://localhost:3000 and --clear; whole native set re-run.
+- **Verification:** Second native run (S19 of the WO-007A record).
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-063
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** RESOLVED
+- **Summary:** Fixture collisions between parallel API suites: the WO-007A suite reused the Shop suite's Market code (W7C) and phone range (+25191170700N).
+- **Expected:** Each suite owns its unique keys.
+- **Actual:** The Shop suite failed on market_code_key / account_phone_e164_key when the two ran together.
+- **Reproduction:** Run wo-007a-reviews and wo-007-shop in parallel.
+- **Evidence:** a007a-1 / a007a-3 logs
+- **Root cause:** Copied fixture patterns.
+- **Fix and commit:** WO-007A uses V7R/V7C/V7D and +2519117079NN (3468243).
+- **Verification:** Both suites pass together (58/58) and in the full battery.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-064
+
+- **Work order:** WO-007A
+- **Severity:** MEDIUM
+- **Type:** TEST_SAFETY
+- **Status:** RESOLVED
+- **Summary:** The WO-007A test restored a hard-coded payment-interface body; after WO-PAY-001 it would have overwritten the real body in whatever database it ran against.
+- **Expected:** A test that swaps a production function puts back exactly what it found.
+- **Actual:** restorePaymentOwner wrote SELECT false.
+- **Reproduction:** Run the suite after WO-PAY-001.
+- **Evidence:** independent review finding 2
+- **Root cause:** Shortcut in the first draft.
+- **Fix and commit:** Captures pg_get_functiondef before swapping and restores it; refuses to start over a leftover stand-in (3468243).
+- **Verification:** Suite passes; prosrc is SELECT false after every run.
+- **Remaining risk:** A killed run leaves the stand-in for this file's fixture Orders only; the next run refuses to start until the database is rebuilt.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-065
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** TEST_GAP
+- **Status:** RESOLVED
+- **Summary:** Review found tests that would pass with parts of the view deleted: no live/revoked team member, no rejected scan, no receipt-plus-claim precedence, race tests timed by sleep and released mid-transaction.
+- **Expected:** Mutation-sensitive tests.
+- **Actual:** See summary.
+- **Reproduction:** n/a
+- **Evidence:** independent review finding 7
+- **Root cause:** First draft.
+- **Fix and commit:** Fixtures added; races wait for a real lock wait (pg_stat_activity) and roll back before release (3468243).
+- **Verification:** wo-007a-reviews passes; each new case targets one term of the view.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-066
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** UX_STATE
+- **Status:** RESOLVED
+- **Summary:** Shop blocked states: a pull did a bare re-read instead of the retry, a bootstrap retry showed no progress, and the paused (real offline) branch was untested.
+- **Expected:** A pull behaves like the retry while blocked; progress is visible; every branch tested.
+- **Actual:** See summary.
+- **Reproduction:** n/a
+- **Evidence:** independent review finding 8
+- **Root cause:** First draft.
+- **Fix and commit:** onRefresh follows the retry while blocked; a retry in flight shows loading; tests for a device that starts offline and for a pull while blocked (2000d1c).
+- **Verification:** shop.test.tsx 18/18.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-067
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** ACCESSIBILITY
+- **Status:** RESOLVED
+- **Summary:** The Shop tile's Seller link was named "View {store}" while it shows "Sold by {store}" (WCAG 2.5.3 label in name).
+- **Expected:** The accessible name contains the visible words.
+- **Actual:** accessibilityLabel replaced the visible text.
+- **Reproduction:** Voice control: "tap Sold by Store 1" finds nothing.
+- **Evidence:** independent review finding 9
+- **Root cause:** Label kept from the underline version.
+- **Fix and commit:** Visible words are the name, "View {store}" the hint, as on the Product and Scene Explorer (2000d1c).
+- **Verification:** shop.test.tsx: link found by "Sold by ..." with the hint.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-068
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** PROCESS
+- **Status:** OPEN
+- **Summary:** The branch carries packages/locale and packages/api-client commits alongside app commits.
+- **Expected:** packages/* changes go in their own PR (root CLAUDE.md, collision surfaces).
+- **Actual:** They are separate commits on one branch (1f54346 locale; 8779c3c generated contract and client), as in the earlier branches.
+- **Reproduction:** git log fe7ffb2..HEAD
+- **Evidence:** independent review finding 10
+- **Root cause:** Stacked branches without PRs (no PRs in this work order).
+- **Fix and commit:** Kept as separate commits so they can be split.
+- **Verification:** n/a
+- **Remaining risk:** None until integration.
+- **Founder decision required:** No
+- **Recommended resolution:** Split the packages commits into their own PR when the branch is integrated.
+
+### ON-20261111-069
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** RESOLVED
+- **Summary:** The first Dark + 1.3 runs of shop.yaml and seller-reviews-verified.yaml failed at the Shop tab tap.
+- **Expected:** The tab opens on the first tap.
+- **Actual:** Once a debug-build LogBox toast (Metro restarted under a running dev app) covered the tab bar; once the first tab tap after the font-scale change was swallowed. Both are known Android/debug-build quirks.
+- **Reproduction:** Change font_scale, launch, tap Shop at once.
+- **Evidence:** maestro-007a/shop-dark-large and dark-shop screenshots
+- **Root cause:** Emulator and debug-build behaviour, not the app.
+- **Fix and commit:** The flows tap the tab until it lands (repeat while notVisible); a harness-only copy also dismisses a dev toast. Re-run: both PASS in Dark at 1.3; the committed flows PASS again at 1.0 (d94e365).
+- **Verification:** S19 of the WO-007A record.
+- **Remaining risk:** None for release builds (no LogBox).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-070
+
+- **Work order:** WO-007A
+- **Severity:** LOW
+- **Type:** TEST_ISOLATION (pre-existing)
+- **Status:** OPEN
+- **Summary:** The final battery's first full API run failed one test: e2-e6.jobs "stock.confidence_nudge nudges a stale variant once per window" saw 5 nudges on its second run instead of 0.
+- **Expected:** The second run inside the window nudges nothing.
+- **Actual:** stockConfidenceNudge scans every variant in the database (no Market or Seller scope); a parallel suite (wo-006 creates exactly 5 variants) inserted stale variants between the test's two runs, and they were nudged once, correctly.
+- **Reproduction:** Run the full API suite in parallel workers; the window between the two job runs must overlap another suite's variant inserts. Alone, the suite passes.
+- **Evidence:** v007a/api-test.log; apps/api/src/jobs/e3-trust-stock.ts (global SELECT on core.v_stock_confidence); e2-e6.jobs.spec.ts:574-578
+- **Root cause:** A global job asserted with a global count in a shared database. WO-007A changes no stock, variant or job code; its new suite changed worker scheduling.
+- **Fix and commit:** None (outside WO-007A; the test is not weakened).
+- **Verification:** e2-e6.jobs alone 24/24 twice; full run 2 901/901; full run 3 901/901.
+- **Remaining risk:** An intermittent red in parallel full runs.
+- **Founder decision required:** No
+- **Recommended resolution:** Assert on the test's own variant (its notification count stays 1 after the second run), or give the job test its own database.
