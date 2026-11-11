@@ -83,7 +83,7 @@ describe('the Seller Profile', () => {
   });
 
   it('a Seller with no review says so, never a score', async () => {
-    serve(HEADER, ok(storefront(HANDLE, { review_summary: { count: 0, average_rating: null, badge_counts: { CLAIM_UPHELD: 0, VERIFIED_HANDOFF: 0, CONFIRMED_BY_BUYER: 0, UNVERIFIED: 0 } } })));
+    serve(HEADER, ok(storefront(HANDLE, { review_summary: { count: 0, average_rating: null, basis_counts: { FINAL_HANDOFF: 0, VERIFIED_ORDER_FAILURE: 0 } } })));
     serve(SCENES, ok({ data: [], next_cursor: null }));
     await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
     expect(await screen.findByText(en['buyer.seller.no_reviews'])).toBeOnTheScreen();
@@ -142,14 +142,18 @@ describe('the Seller Profile', () => {
     expect(r.getPathname()).toBe(`/product/${HANDLE}/basket`);
   });
 
-  it('Reviews: rating in words, evidence badge, date, the service note; paged', async () => {
+  it('Reviews: rating in words, the evidence basis in words, date, the service note', async () => {
     await openProfile();
-    serve(REVIEWS, ok({ data: [sellerReview(1), sellerReview(2, { seller_rating: 3, badge: 'UNVERIFIED', body: null })], next_cursor: null }));
+    serve(REVIEWS, ok({ data: [sellerReview(1), sellerReview(2, { seller_rating: 3, evidence_basis: 'VERIFIED_ORDER_FAILURE', body: null })], next_cursor: null }));
     await fireEvent.press(tab(en['buyer.seller.tab.reviews']));
     expect(await screen.findByLabelText('Rated 5 out of 5')).toBeOnTheScreen();
     expect(screen.getByLabelText('Rated 3 out of 5')).toBeOnTheScreen();
-    expect(screen.getByText(en['buyer.review.badge.VERIFIED_HANDOFF'])).toBeOnTheScreen();
-    expect(screen.getByText(en['buyer.review.badge.UNVERIFIED'])).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.review.basis.FINAL_HANDOFF'])).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.review.basis.VERIFIED_ORDER_FAILURE'])).toBeOnTheScreen();
+    // No legacy tier wording survives (a badge was never proof: ON-033).
+    for (const legacy of ['Verified handoff', 'Unverified', 'Claim upheld', 'Confirmed by the buyer']) {
+      expect(screen.queryByText(legacy)).not.toBeOnTheScreen();
+    }
     expect(screen.getByText(en['buyer.seller.reviews.note'])).toBeOnTheScreen();
     expect(screen.getByText('Review 1')).toBeOnTheScreen();
   });
@@ -177,6 +181,26 @@ describe('the Seller Profile', () => {
     await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
     expect(await screen.findByText(en['buyer.seller.gone'])).toBeOnTheScreen();
     expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('a 404 on a LATER page clears the whole profile too: nothing earlier stays (ON-040)', async () => {
+    serve(HEADER, ok(storefront(HANDLE)));
+    // Page 2 is held open, so page 1 is seen on screen before the 404 lands.
+    let release: (reply: Reply) => void = () => undefined;
+    let n = 0;
+    api.on(SCENES, () =>
+      n++ === 0 ? ok({ data: [sellerScene(1)], next_cursor: 'page-2' }) : new Promise<Reply>((resolve) => (release = resolve)),
+    );
+    await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
+    await screen.findByLabelText('Scene: Seller scene 1');
+    await act(() => (screen.getByTestId('seller-scenes').props as { onEndReached: () => void }).onEndReached());
+    await settle();
+    expect(screen.getByLabelText('Scene: Seller scene 1')).toBeOnTheScreen();
+    await act(async () => release(gone()));
+    expect(await screen.findByText(en['buyer.seller.gone'])).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Scene: Seller scene 1')).not.toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+    expect(calls(SCENES).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2']);
   });
 
   it('a malformed handle asks nothing', async () => {

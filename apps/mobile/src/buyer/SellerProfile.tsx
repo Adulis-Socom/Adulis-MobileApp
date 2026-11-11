@@ -388,11 +388,10 @@ export function ProductTile({
           style={{ minHeight: theme.touchTarget, justifyContent: 'center' }}
           testID="product-tile-seller"
         >
-          <AppText
-            numberOfLines={1}
-            style={{ color: theme.color.textSecondary, textDecorationLine: 'underline' }}
-          >
-            {seller.store_name}
+          {/* The words carry the cue, as on the Product: an underline was dropped by some
+              recycled cells (ON-048), and colour alone is not a cue. */}
+          <AppText style={{ color: theme.color.textSecondary }}>
+            {fillSlots(t('buyer.product.seller'), { store: seller.store_name }) ?? seller.store_name}
           </AppText>
         </Pressable>
       ) : null}
@@ -445,7 +444,8 @@ function ReviewRow({ review }: { review: SellerReview }) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
-  const badge = `buyer.review.badge.${review.badge}`;
+  // The server's evidence basis (REV-01), in words; an unknown future basis shows no label.
+  const basis = `buyer.review.basis.${review.evidence_basis}`;
   const rating =
     fillSlots(t('buyer.review.rating'), { rating: review.seller_rating }) ??
     String(review.seller_rating);
@@ -468,8 +468,8 @@ function ReviewRow({ review }: { review: SellerReview }) {
       <AppText accessibilityLabel={rating} style={{ fontWeight: theme.fontWeight.semibold }}>
         {`${'★'.repeat(review.seller_rating)}${'☆'.repeat(5 - review.seller_rating)}`}
       </AppText>
-      {hasMessage(badge) ? (
-        <AppText style={{ color: theme.color.textSecondary }}>{t(badge)}</AppText>
+      {hasMessage(basis) ? (
+        <AppText style={{ color: theme.color.textSecondary }}>{t(basis)}</AppText>
       ) : null}
       <AppText style={{ color: theme.color.textSecondary }}>
         {fillSlots(t('buyer.review.date'), { date })}

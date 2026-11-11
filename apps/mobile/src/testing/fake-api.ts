@@ -276,7 +276,7 @@ export function storefront(handle: string, overrides: Partial<Storefront> = {}):
     review_summary: {
       count: 3,
       average_rating: 4,
-      badge_counts: { CLAIM_UPHELD: 0, VERIFIED_HANDOFF: 1, CONFIRMED_BY_BUYER: 0, UNVERIFIED: 2 },
+      basis_counts: { FINAL_HANDOFF: 2, VERIFIED_ORDER_FAILURE: 1 },
     },
     fulfilment_methods: ['BUYER_COLLECTION'],
     ...overrides,
@@ -316,7 +316,7 @@ export function sellerReview(n: number, overrides: Partial<SellerReview> = {}): 
     id: `0b6f1a3e-bbbb-4bbb-8bbb-${n.toString(16).padStart(12, '0')}`,
     seller_rating: 5,
     body: `Review ${n}`,
-    badge: 'VERIFIED_HANDOFF',
+    evidence_basis: 'FINAL_HANDOFF',
     published_at: '2026-11-08T10:00:00.000Z',
     ...overrides,
   };
