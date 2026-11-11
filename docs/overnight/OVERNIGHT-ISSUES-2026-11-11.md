@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder.
 
 ## Issues
 
@@ -1548,6 +1548,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** The committed flow can time out on a slow emulator.
 - **Founder decision required:** No
 - **Recommended resolution:** Raise the scroll timeout or speed of that flow in a test-maintenance change.
+- **WO-009A (11 November 2026):** Not run again (it needs the WO-004A fixtures on their own database). For You was exercised by its Jest suites and by `buyer-scene-explorer.yaml`, which starts in For You (PASS). Still OPEN.
 
 ### ON-20261111-085
 
@@ -1566,6 +1567,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Default-parallel full runs can fail on a memory-constrained machine.
 - **Founder decision required:** No
 - **Recommended resolution:** Run the full API suite with fewer workers (or close other heavy applications) on this machine; consider a maxWorkers default in a test-infrastructure change.
+- **WO-009A (11 November 2026):** The full API suite passed both with `--maxWorkers=2` (969/969) and at default parallelism inside `pnpm test` (969/969, mobile 278/278) on a rebuilt disposable database. Free RAM during the later native runs was 0.9 to 1.2 GB of 15.7 GB, so the pressure that caused this is still present. Still OPEN: one clean default-parallel run does not close it.
 
 ### ON-20261111-086
 
@@ -1692,6 +1694,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** None.
 - **Founder decision required:** No
 - **Recommended resolution:** A small follow-up: a SaveToggle on the shared tiles fed by one batch per page.
+- **WO-009A (11 November 2026):** Status RESOLVED. Card-level Save on Shop Product cards, Search Top rows (Products and Scenes, never Sellers) and the Products and Scenes grids, and Seller Profile Product and Scene cards. One `saved-state:batch` per page of results (at most 60 targets), never per card; guests read nothing. For You cards stay without Save (WO-009A S4). Commits 76ec748, 5be3273; tests card-saves.test.tsx (17); native card-saves flows PASS. Device request counts are in `docs/mobile/WO-009A-CARD-SAVES-SESSION-HARDENING.md` S3.
 
 ### ON-20261111-093
 
@@ -1836,6 +1839,11 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** The drive can fill again.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Free space on C: (the G: archive may be deleted at will once reviewed).
+- **WO-009A (11 November 2026):** Measured (`docs/engineering/WO-009A-STORAGE-AUDIT.md`, tool `ops/scripts/adulis-storage-audit.ps1`, policy `docs/engineering/DEVELOPMENT-STORAGE-POLICY.md`):
+  - C: free was 21,081,735,168 bytes before development, 7,271,710,720 after testing and 10,359,230,464 after cleanup.
+  - About 0.49 GB of the 13.8 GB growth is Adulis artifacts. The rest is unattributed; the page file is the likely cause (ON-110).
+  - Cleanup removed 485 Maestro driver APKs (3,066,085,337 bytes; ON-109) and this work order's Maestro output (68,528,230 bytes).
+  - Still OPEN: C: ends below the policy's 10 GB floor for native batteries. Founder items: ON-110, ON-111.
 
 ### ON-20261111-101
 
@@ -1872,3 +1880,202 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** An unpinned `npx expo-doctor` fails until upstream republishes.
 - **Founder decision required:** No
 - **Recommended resolution:** Pin the doctor version in any script or CI step that runs it.
+- **WO-009A (11 November 2026):** `npm view expo-doctor time` still lists 1.21.7 (09:48 UTC) as the latest release. The battery ran `npx expo-doctor@1.21.6` with the G: npm cache: 20/20. Still pinned.
+
+### ON-20261111-103
+
+- **Work order:** WO-009A
+- **Severity:** MEDIUM
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** A guest Save continuation whose saved-state answer was delayed past a sign-out and another Account's sign-in sent its membership POST with the newer Account's bearer.
+- **Expected:** Every request of a continuation carries the credential of the sign-in that completed it, and none is sent once that session ends.
+- **Actual:** POST /v1/collections/<A's DEFAULT ref>/items with "Authorization: Bearer <B>". The real API refuses it: B does not own A's Collection, so 404. No data changed, but a mutation was issued under the wrong Account.
+- **Reproduction:** saved.test.tsx "25, 26": guest Save, sign in A, hold A's saved-state answers, sign out, sign in B, release.
+- **Evidence:** The test failed on 379adb6 with exactly that request. apps/mobile/src/api/client.ts reads the bearer at send time, after `await deviceId()`.
+- **Root cause:** The continuation used the session's shared client, which presents whichever credential is current when each request leaves.
+- **Fix and commit:** SessionProvider.boundApi(credential): a client pinned to one bearer that throws SessionChanged before sending once that session is no longer current. Used by the continuation (bound to its own sign-in's credential), every one-tap Save and every saved-state read; cache writes are guarded by isCurrent() (051defe, 76ec748).
+- **Verification:** saved.test.tsx 25-26 and 24; card-saves.test.tsx 26-27; native: the A-to-B switch showed B nothing of A's.
+- **Remaining risk:** The picker and the Collection screen still use the shared client (ON-112).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-104
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** An armed guest Save stayed in memory after its sign-in was cancelled, until sign-out.
+- **Expected:** A Save armed for one sign-in is completed by that sign-in or dropped.
+- **Actual:** Back out of sign-in, then sign in from You: the armed Save remained, unused, while signed in. A link could not complete it, because the nonce is unknown to a link.
+- **Reproduction:** saved.test.tsx "22".
+- **Evidence:** The test failed on 379adb6 (pendingSave not null).
+- **Root cause:** completePendingSave returned early without clearing a non-matching Save.
+- **Fix and commit:** Any sign-in consumes the armed Save; it is completed only for its own nonce (76ec748).
+- **Verification:** saved.test.tsx 22, 46.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-105
+
+- **Work order:** WO-009A
+- **Severity:** MEDIUM
+- **Type:** UX
+- **Status:** RESOLVED
+- **Summary:** (Independent review R1) A failed card Save's alert reappeared on every later re-render, for example after a Save on another card.
+- **Expected:** One alert per failure.
+- **Actual:** The alert effect depended on useT(), which returns a new function on each render, so it fired again while the failure was still held.
+- **Reproduction:** card-saves.test.tsx "a failure is said once": Basket fails offline, then Scarf saves.
+- **Evidence:** The test failed with 2 alerts before the fix.
+- **Root cause:** Effect dependency on an unstable function.
+- **Fix and commit:** The control remembers the failure it has already shown, and never alerts for a session change (5be3273).
+- **Verification:** card-saves.test.tsx (1 alert).
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-106
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** UX
+- **Status:** RESOLVED
+- **Summary:** (Independent review R2) After a guest saved from a card and signed in, Back showed the Product again instead of the list.
+- **Expected:** Back returns to the list the card was on.
+- **Actual:** The router's dismissTo, with the Product not yet in the stack, replaced only the verify screen. Back then focused sign-in, whose signed-in redirect reopened the Product.
+- **Reproduction:** card-saves.test.tsx "21" plus router.back(); native card-saves-guest-2.
+- **Evidence:** expo-router StackRouter POP_TO: a route that is not found replaces the current one only.
+- **Root cause:** The card's guest flow left sign-in underneath the Product it opened.
+- **Fix and commit:** The card's Sign in now opens the item first and the sign-in over it, as from Product Detail; the auth screens are unchanged (5be3273).
+- **Verification:** card-saves.test.tsx 21 (Back -> /shop); native card-saves-guest-2 PASS (Back to the Shop, card saved).
+- **Remaining risk:** If the guest cancels sign-in they are on the item, not the list (the prompt says the item opens).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-107
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** DATA_CONSISTENCY
+- **Status:** RESOLVED
+- **Summary:** (Independent review R3) A saved-state read already in flight when a Save, Remove or continuation landed could overwrite the confirmed state with its older answer.
+- **Expected:** The card shows the server's latest state.
+- **Actual:** The narrowed invalidation reached only entries already holding the target; a page batch still on its way, or without an answer yet, was skipped.
+- **Reproduction:** Guest Save from a list, with the list's new batch sent before the continuation's POST commits.
+- **Evidence:** Code review of saved.ts (confirm, onError, completePendingSave).
+- **Root cause:** Invalidation predicate too narrow.
+- **Fix and commit:** Reads in flight or without an answer are sent again after every Save, Remove and continuation (76ec748).
+- **Verification:** card-saves and saved suites; native: the card was saved on return to the Shop after the guest flow.
+- **Remaining risk:** None (the server state was never wrong; the next tap would re-add idempotently).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-108
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent review minor items.
+- **Expected:** n/a
+- **Actual:** Five items: (1) the retry icon could send a batch per tap while one was in flight; (2) the guest bookmark was a toggle although it opens a prompt; (3) a header comment claimed every private request was bound; (4) a request refused for a session change could alert; (5) the storage script stopped without a report if a delete failed.
+- **Reproduction:** n/a
+- **Evidence:** Independent review of the WO-009A diff.
+- **Root cause:** n/a
+- **Fix and commit:** Retry disabled while fetching; the guest control is a button; the comment corrected; no alert for SessionChanged (5be3273, 76ec748); unlock re-checked right before each delete, and a failed delete recorded instead of aborting (de344d1).
+- **Verification:** Mobile 279/279; storage self-test PASS; executed cleanup report: 485 removed, 0 failed.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-109
+
+- **Work order:** WO-009A
+- **Severity:** MEDIUM
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (cleaned; recurs per run)
+- **Summary:** Maestro writes a copy of its driver to %TEMP% on every run and never removes it. Under the names maestro-app*.apk and maestro-server*.apk, 485 copies (2.86 GB) had built up since 8 November, unseen by the WO-009 cleanup, which knew only tmp*.apk.
+- **Expected:** Test-run temporary files do not accumulate on C:.
+- **Actual:** 487 files at checkpoint C (the 33 runs of this work order added 66 files, 416,502,108 bytes). Each run adds 11,736,545 + 884,731 bytes, and every copy is byte-identical (SHA-256 5EF8A8D0...).
+- **Reproduction:** Any `maestro test` run on this machine.
+- **Evidence:** WO-009A storage audit S6; `Win32` file listing by date; manifest of the server APK declares dev.mobile.maestro.test.
+- **Root cause:** Maestro CLI behaviour, not this repository.
+- **Fix and commit:** The audit recognises all three names, identified by manifest or entries; `-Clean -Execute` removed 485 files, 3,066,085,337 bytes, with none in use (de344d1). The policy lets any work order clean verified copies. Two truncated files remain for a person.
+- **Verification:** Checkpoint D: 2 files (320 KB) left; C: +3,087,519,744 bytes free.
+- **Remaining risk:** Recurs on every run until cleaned.
+- **Founder decision required:** No
+- **Recommended resolution:** Run the audit with -Clean -Execute at the end of every work order (policy S4).
+
+### ON-20261111-110
+
+- **Work order:** WO-009A
+- **Severity:** MEDIUM
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** About 13.3 GB of C: was used during WO-009A outside every configured Adulis location, most of it during the test phase.
+- **Expected:** Host free space moves with the work order's artifacts.
+- **Actual:** C: free went from 21,081,735,168 (A) to 7,271,710,720 (C) bytes. Adulis locations explain about 0.49 GB. The Windows page file is 44,801,458,176 bytes allocated, with peak use 10,543 MB and 0.9 to 1.2 GB of RAM free during native runs.
+- **Reproduction:** Full test battery plus the emulator, Metro, Maestro, Docker and the editor on a 15.7 GB machine.
+- **Evidence:** Checkpoints A-D; Win32_PageFileUsage; Docker vhdx not sparse and unchanged.
+- **Root cause:** Not proven: the page file was not recorded at A or B, no low-memory event was logged, and shadow storage needs elevation, which was not used.
+- **Fix and commit:** None in code. The audit now records the page file and free RAM.
+- **Verification:** n/a
+- **Remaining risk:** C: can run out mid-session again (ON-100).
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide whether to fix the page-file size or close memory-heavy applications during test batteries; the next work order's checkpoints (with the page-file row) will confirm or rule out the cause.
+
+### ON-20261111-111
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** Storage the audit cannot clean on its own authority.
+- **Expected:** A person decides each.
+- **Actual:** Candidates: %TEMP%\pip-unpack-* 2.08 GB (2,393 folders, 7-8 November, owner not provable); Docker build cache 28.18 GB (21.43 GB reclaimable, shared with other projects' containers); G:\wo001a 11.31 GB (superseded); G:\adulis-claude-scratch-archive 3.62 GB; another session's scratch 233 MB; two truncated Maestro files.
+- **Reproduction:** n/a
+- **Evidence:** docs/engineering/WO-009A-STORAGE-AUDIT.md S8.
+- **Root cause:** Ownership or necessity uncertain (policy: report, never delete).
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Docker space returns to C: only after a builder prune and a virtual-disk compaction.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: authorise or decline each; never prune Docker volumes.
+
+### ON-20261111-112
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** SECURITY
+- **Status:** OPEN
+- **Summary:** The picker (Add to collection) and the Collection screen still send through the session's shared client, not a session-bound one.
+- **Expected:** Every private request bound to the session that started it.
+- **Actual:** They read the bearer at send time like every other screen. A switch needs a full sign-out, which leaves these screens, and the server scopes every request to the bearer's Account.
+- **Reproduction:** n/a
+- **Evidence:** Independent review (INFO); SaveToCollection.tsx, CollectionScreen.tsx.
+- **Root cause:** Out of WO-009A's scope (the card and continuation paths were bound).
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Low.
+- **Founder decision required:** No
+- **Recommended resolution:** Move them to boundApi in a small follow-up.
+
+### ON-20261111-113
+
+- **Work order:** WO-009A
+- **Severity:** LOW
+- **Type:** PROCESS
+- **Status:** OPEN
+- **Summary:** The packages/locale change (five keys) shares this branch with the app change.
+- **Expected:** packages/* changes in their own PR (Adulis-MobileApp/CLAUDE.md collision surfaces).
+- **Actual:** It is its own commit (72efade), as WO-009 did under its own constraint ("packages/* changes go in their own commits").
+- **Reproduction:** n/a
+- **Evidence:** git log 379adb6..HEAD.
+- **Root cause:** Work-order convention versus repository rule.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** None if merged in order.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: merge as one PR, or cherry-pick 72efade into its own PR first.
