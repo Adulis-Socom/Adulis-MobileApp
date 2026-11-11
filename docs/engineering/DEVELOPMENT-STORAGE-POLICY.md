@@ -44,6 +44,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ops/scripts/adulis-storage-a
 To add a location, add one line to the configuration block with its class and a note. Never
 point it at a folder that holds anything but development artifacts.
 
+## 2a. The external SSD (WO-010)
+
+The founder authorised the connected external SSD for Adulis development storage. WO-010 verified
+it as drive G: (volume label "Extreme SSD", SanDisk Extreme 55AE over USB, exFAT, 1 MiB allocation
+unit); `docs/engineering/WO-010-SSD-ENVIRONMENT.md` has the measurements.
+
+- Before disk-intensive work, in the shell that runs it: `source ops/scripts/adulis-ssd-env.sh WO-xxx`.
+  It checks the volume label and writes a probe, then exports TEMP, TMP and TMPDIR (this shell and
+  its children only) to `G:\AdulisDevelopment\WO-xxx\temp`, so Jest's and Metro's caches and
+  Maestro's driver APKs land there. If the SSD is missing, not that volume, or not writable, it
+  says so and returns non-zero; never fall back to C:. Re-check with `adulis_ssd_ok` before each
+  disk-intensive step.
+- Start the Android emulator with the same process-scoped TEMP and TMP. WO-010 measured a running
+  emulator holding about 10.6 GB of C: through the system TEMP (released when it stopped); started
+  this way, its boot cost 12.8 MB of C:.
+- Pass Maestro `--test-output-dir` and `--debug-output` under `G:\AdulisDevelopment\WO-xxx\maestro`.
+- Keep scratch, logs and screenshots under the work order's `scratch`, `logs` and `maestro` folders.
+- exFAT allocates 1 MiB per file: a cache of many small files takes far more space than its
+  apparent size (the audit reports apparent bytes; read SSD use from its free space).
+- Never move the Android SDK, AVDs, Gradle home, Android Studio, Docker or WSL data, and never
+  change system-wide environment variables for this.
+
 ## 3. Classes
 
 ### A. Safe disposable artifacts
