@@ -54,6 +54,11 @@ tags:
     visible: 'Woven basket, .*900\.00.*1,200\.00, Available'
     timeout: 30000
 - assertNotVisible: '.*5,000\.00.*'
+# WO-007B: available first. Created basket, scarf, cup, tray (same display order); the out-of-stock
+# scarf now comes after every available Product, so in two columns it sits under the Clay cup.
+- assertVisible:
+    text: 'Cotton scarf, .*Currently unavailable'
+    below: 'Clay cup, .*'
 - takeScreenshot: seller-02-products
 
 - tapOn: Reviews

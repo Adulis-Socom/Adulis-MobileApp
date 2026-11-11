@@ -474,7 +474,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-006
 - **Severity:** LOW
 - **Type:** DESIGN_GAP
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** RESOLVED
 - **Summary:** MOB-02 R-09 says the Products tab is 'the catalogue with available first'; the API keeps the Seller's display order.
 - **Expected:** Available Products first.
 - **Actual:** Seller display order (display_order, created_at, slug); unavailable Products are labelled in words.
@@ -484,9 +484,11 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Fix and commit:** Not implemented (deliberate).
 - **Verification:** n/a
 - **Remaining risk:** Unavailable Products may sit above available ones if the Seller ordered them so.
-- **Founder decision required:** Yes -- choose option A (two-phase cursor, at-least-once with client de-duplication) or B (server-side browse snapshot with a retention rule)
+- **Founder decision required:** No (option A decided 11 November 2026)
 - **Recommended resolution:** Confirm Seller order, or approve available-first with a snapshot-stable cursor (or a server-side partition: available pages, then unavailable).
 - **WO-007A (11 November 2026):** Policy APPROVED: available first. Implementation NOT DONE, by the work order's own rule: a stateless keyset cannot page a list sorted by a value that changes between pages with neither a repeat nor a gap (proof and options: WO-007A-DISCOVERY-STABILIZATION.md S11). The Seller's display order is kept. Further engineering: implement the chosen option. Further legal/privacy authorisation: option B only (a new retention rule).
+- **WO-007B (11 November 2026):** Founder APPROVED option A. IMPLEMENTED: GET /v1/storefronts/{handle}/products orders by (availability phase, display_order, created_at, slug) in one statement per page, the cursor carrying the phase; no snapshot storage; mobile de-duplicates by Product id. Accepted limit, documented: a Product that changes group mid-browse may repeat (shown once) or appear only after refresh; Product Detail re-reads availability (09f8edb, a5dfd2b; WO-007B-AVAILABLE-FIRST-CATALOGUE.md).
+- **WO-007B verification:** wo-007b 11/11 (both move directions, 130 Products, malformed cursors, cross-Market); seller-profile.test 17/17; native seller-profile.yaml asserts the out-of-stock Product below the available ones.
 
 ### ON-20261111-027
 
@@ -981,8 +983,9 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Fix and commit:** Fail closed: core.fn_order_payment_verified answers false (50ce32b). Nothing fabricated.
 - **Verification:** wo-007a-reviews "as built" half; native curl and seller-profile flow.
 - **Remaining risk:** Public Reviews stay absent from every Seller Profile until WO-PAY-001.
-- **Founder decision required:** Yes -- sequence WO-PAY-001 (it then replaces one function body).
+- **Founder decision required:** Yes -- the payment architecture itself (deferred by the founder, 11 November 2026)
 - **Recommended resolution:** WO-PAY-001 replaces the body of core.fn_order_payment_verified with a read of its provider-verified fact.
+- **WO-007B (11 November 2026):** Founder decision: payment architecture DEFERRED -- no decision yet on a payment gateway; future research to compare direct Seller transfers, independent verification, provider integrations, cost, compliance and operations. Until a separate work order: no provider, no gateway, no WO-PAY-001, no change to payment verification or workflows, no Checkout, no public Reviews, no weakening of payment or Review gates, nothing new on the Seller-confirmed screenshot model. The fail-closed state is preserved (core.fn_order_payment_verified answers false).
 
 ### ON-20261111-054
 
@@ -1025,7 +1028,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-007A
 - **Severity:** LOW
 - **Type:** SPEC_GAP
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** OPEN
 - **Summary:** VERIFIED_ORDER_FAILURE is read as an UPHELD Claim with trigger GOODS_NOT_RECEIVED or REFUND_NOT_DELIVERED; core.claim has no Seller-fault attribute, and line-scoped Claims count.
 - **Expected:** REV-01 S1: an upheld Seller-fault Claim establishing eligible non-delivery or an unpaid/refused/overdue remedy.
 - **Actual:** The two triggers REV-01 names literally; fault is implied only by the forced demotion an upheld Claim causes.
@@ -1035,15 +1038,16 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Fix and commit:** Narrow literal reading, recorded; not live until verified payment exists.
 - **Verification:** wo-007a-reviews: upheld NOT_AS_DESCRIBED without receipt is excluded; receipt + upheld non-delivery is FINAL_HANDOFF.
 - **Remaining risk:** An upheld Claim whose fault was not the Seller's could support Seller-service feedback once payment is verified.
-- **Founder decision required:** Yes -- confirm the mapping, or require a Seller-fault decision attribute in the Claims domain.
+- **Founder decision required:** No (decided 11 November 2026: approved for future implementation)
 - **Recommended resolution:** Add a fault/decision type to Claims and key the failure basis on it before WO-PAY-001 goes live.
+- **WO-007B (11 November 2026):** Founder decision: an upheld Claim trigger alone does NOT establish Seller fault. The future Claims system must record an explicit, authoritative Seller-fault determination with evidence and correction history, and Reviews must use it. Policy approved; implementation deferred to the Claims and Reviews work orders (nothing built now). The 0058 trigger mapping stays inert because no Review is public (ON-20261111-053).
 
 ### ON-20261111-057
 
 - **Work order:** WO-007A
 - **Severity:** LOW
 - **Type:** SPEC_GAP
-- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Status:** OPEN
 - **Summary:** Self-review exclusion (Order Buyer is the Seller's owner or a live team member) is evaluated at read time.
 - **Expected:** REV-01 S50: "Seller-owner self-review conflict -> excluded/rejected according to policy" (the policy is not defined).
 - **Actual:** After an ownership transfer or a revocation, a former owner's or member's Review can become public, and a new owner's earlier purchases disappear.
@@ -1053,8 +1057,9 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Fix and commit:** Fail-closed reading recorded; revoked members' Reviews are eligible, live members' are not (tested).
 - **Verification:** wo-007a-reviews liveTeam excluded, revokedTeam included, self excluded.
 - **Remaining risk:** Edge cases around ownership changes.
-- **Founder decision required:** Yes -- define the self-review policy and whether it is judged at Order time.
+- **Founder decision required:** No (decided 11 November 2026: approved for future implementation)
 - **Recommended resolution:** Snapshot the relationship at Order time (e.g. on the Grant) once the policy exists.
+- **WO-007B (11 November 2026):** Founder decision: Review eligibility evaluates Seller ownership/team conflicts at Order creation and at Review submission, recording the authoritative relationship at that time; later team or ownership changes do not automatically rewrite the original determination; authorised fraud/moderation corrections remain possible. Policy approved; implementation deferred to the Reviews work order. The 0058 read-time check stays inert meanwhile (no Review is public).
 
 ### ON-20261111-058
 
