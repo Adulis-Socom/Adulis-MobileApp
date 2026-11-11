@@ -691,6 +691,524 @@
         ]
       }
     },
+    "/v1/collections": {
+      "get": {
+        "operationId": "CollectionsController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The caller's Collections, DEFAULT first (created on first need), with membership counts.",
+        "tags": [
+          "Collections"
+        ]
+      },
+      "post": {
+        "operationId": "CollectionsController_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionNameBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a named private Collection.",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collections/saved-state:batch": {
+      "post": {
+        "operationId": "CollectionsController_savedState",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedStateBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedStateDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Saved state for up to 60 typed targets in one request (a read; no Idempotency-Key).",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collections/saves": {
+      "get": {
+        "operationId": "CollectionsController_saves",
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ALL",
+                "PRODUCT_POST",
+                "SCENE_POST"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedItemPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recent Saves across every Collection: each target once, newest first; filter by type.",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collections/{collectionRef}": {
+      "get": {
+        "operationId": "CollectionsController_detail",
+        "parameters": [
+          {
+            "name": "collectionRef",
+            "required": true,
+            "in": "path",
+            "description": "One of the caller's Collections; any other ref is 404.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ALL",
+                "PRODUCT_POST",
+                "SCENE_POST"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One Collection and its items, newest first, resolved through the current public gates.",
+        "tags": [
+          "Collections"
+        ]
+      },
+      "patch": {
+        "operationId": "CollectionsController_rename",
+        "parameters": [
+          {
+            "name": "collectionRef",
+            "required": true,
+            "in": "path",
+            "description": "One of the caller's Collections; any other ref is 404.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionNameBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rename a named Collection (DEFAULT cannot be renamed).",
+        "tags": [
+          "Collections"
+        ]
+      },
+      "delete": {
+        "operationId": "CollectionsController_remove",
+        "parameters": [
+          {
+            "name": "collectionRef",
+            "required": true,
+            "in": "path",
+            "description": "One of the caller's Collections; any other ref is 404.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a named Collection and its memberships (DEFAULT cannot be deleted). Saved objects are untouched.",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collections/{collectionRef}/items": {
+      "post": {
+        "operationId": "CollectionsController_addItem",
+        "parameters": [
+          {
+            "name": "collectionRef",
+            "required": true,
+            "in": "path",
+            "description": "One of the caller's Collections; any other ref is 404.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCollectionItemBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionItemDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Save a Product Post or whole Scene Post; a repeated Save returns the existing membership.",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collections/{collectionRef}/items/{itemRef}": {
+      "delete": {
+        "operationId": "CollectionsController_removeItem",
+        "parameters": [
+          {
+            "name": "collectionRef",
+            "required": true,
+            "in": "path",
+            "description": "One of the caller's Collections; any other ref is 404.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemRef",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove one membership; removing an absent one succeeds.",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
     "/v1/conversations": {
       "post": {
         "operationId": "ChatController_open",
@@ -6605,6 +7123,356 @@
           "algorithm_version",
           "items",
           "next_cursor"
+        ]
+      },
+      "CollectionDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Opaque Collection ref."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEFAULT",
+              "USER_CREATED"
+            ],
+            "description": "DEFAULT: the one server-recognised Saved Collection; it cannot be renamed or deleted."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "null for DEFAULT: show the localised \"Saved\" label (never stored)."
+          },
+          "product_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Product memberships, available or not."
+          },
+          "scene_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Whole-Scene memberships, available or not."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last rename or membership change."
+          }
+        },
+        "required": [
+          "ref",
+          "kind",
+          "name",
+          "product_count",
+          "scene_count",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "CollectionPageDto": {
+        "type": "object",
+        "properties": {
+          "default_collection_ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The DEFAULT Collection (created on first need)."
+          },
+          "data": {
+            "description": "DEFAULT first, then oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "default_collection_ref",
+          "data",
+          "next_cursor"
+        ]
+      },
+      "CollectionNameBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "Trimmed, whitespace runs collapsed; 1-60 characters."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CollectionItemDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Membership ref: DELETE /v1/collections/{collectionRef}/items/{itemRef}."
+          },
+          "collection_ref": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_POST",
+              "SCENE_POST"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "VISIBLE",
+              "UNAVAILABLE"
+            ],
+            "description": "Resolved now, through the current public gates. UNAVAILABLE (unpublished, restricted, deleted, PRIVATE, another Market): show the neutral \"no longer available\" text; product and scene are null and no reason is given."
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "product": {
+            "nullable": true,
+            "description": "Current price span and stock (available=false: out of stock, still saved).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShopProductDto"
+              }
+            ]
+          },
+          "scene": {
+            "nullable": true,
+            "description": "The current PUBLIC revision, never the revision seen at save.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SearchSceneDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ref",
+          "collection_ref",
+          "target_type",
+          "state",
+          "saved_at",
+          "product",
+          "scene"
+        ]
+      },
+      "SavedItemPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Each target once (its most recent membership), newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "CollectionTargetDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_POST",
+              "SCENE_POST"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "description": "PRODUCT_POST: the Product id from a public payload (uuid). SCENE_POST: the Scene public_ref."
+          }
+        },
+        "required": [
+          "type",
+          "ref"
+        ]
+      },
+      "SavedStateBodyDto": {
+        "type": "object",
+        "properties": {
+          "targets": {
+            "minItems": 1,
+            "maxItems": 60,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionTargetDto"
+            }
+          }
+        },
+        "required": [
+          "targets"
+        ]
+      },
+      "SavedMembershipDto": {
+        "type": "object",
+        "properties": {
+          "collection_ref": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_ref": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "collection_ref",
+          "item_ref"
+        ]
+      },
+      "SavedStateItemDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_POST",
+              "SCENE_POST"
+            ]
+          },
+          "ref": {
+            "type": "string"
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "In the DEFAULT Collection: the one-tap Save state."
+          },
+          "default_item_ref": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The DEFAULT membership, to remove it."
+          },
+          "memberships": {
+            "description": "Every Collection of the caller holding the target.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedMembershipDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "ref",
+          "saved",
+          "default_item_ref",
+          "memberships"
+        ]
+      },
+      "SavedStateDto": {
+        "type": "object",
+        "properties": {
+          "default_collection_ref": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "description": "One per requested target, in request order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedStateItemDto"
+            }
+          }
+        },
+        "required": [
+          "default_collection_ref",
+          "items"
+        ]
+      },
+      "CollectionDetailDto": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "$ref": "#/components/schemas/CollectionDto"
+          },
+          "data": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionItemDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; null at the end."
+          }
+        },
+        "required": [
+          "collection",
+          "data",
+          "next_cursor"
+        ]
+      },
+      "AddItemContextDto": {
+        "type": "object",
+        "properties": {
+          "scene_ref": {
+            "type": "string",
+            "description": "The Scene the Product was opened from; recorded only if its current PUBLIC revision tags the Product."
+          }
+        },
+        "required": [
+          "scene_ref"
+        ]
+      },
+      "AddCollectionItemBodyDto": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/CollectionTargetDto"
+          },
+          "source_surface": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_DETAIL",
+              "SCENE_EXPLORER",
+              "SEARCH",
+              "SHOP",
+              "SELLER_PROFILE",
+              "FOR_YOU",
+              "SAVED"
+            ]
+          },
+          "context": {
+            "$ref": "#/components/schemas/AddItemContextDto"
+          }
+        },
+        "required": [
+          "target",
+          "source_surface"
         ]
       }
     }

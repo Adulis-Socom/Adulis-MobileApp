@@ -391,6 +391,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's Collections, DEFAULT first (created on first need), with membership counts. */
+        get: operations["CollectionsController_list"];
+        put?: never;
+        /** Create a named private Collection. */
+        post: operations["CollectionsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/{collectionRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Collection and its items, newest first, resolved through the current public gates. */
+        get: operations["CollectionsController_detail"];
+        put?: never;
+        post?: never;
+        /** Delete a named Collection and its memberships (DEFAULT cannot be deleted). Saved objects are untouched. */
+        delete: operations["CollectionsController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename a named Collection (DEFAULT cannot be renamed). */
+        patch: operations["CollectionsController_rename"];
+        trace?: never;
+    };
+    "/v1/collections/{collectionRef}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save a Product Post or whole Scene Post; a repeated Save returns the existing membership. */
+        post: operations["CollectionsController_addItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/{collectionRef}/items/{itemRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one membership; removing an absent one succeeds. */
+        delete: operations["CollectionsController_removeItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/saved-state:batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Saved state for up to 60 typed targets in one request (a read; no Idempotency-Key). */
+        post: operations["CollectionsController_savedState"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/saves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent Saves across every Collection: each target once, newest first; filter by type. */
+        get: operations["CollectionsController_saves"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/conversations": {
         parameters: {
             query?: never;
@@ -2119,6 +2224,16 @@ export interface components {
             /** @description True when the Account owns a non-deleted Seller or holds an unsuspended, unrevoked team membership of one (the D-97 relationship GET /v1/seller/list returns), AND that role holds at least one permission whose surfaces include MOBILE. GET /v1/seller/list names the Sellers. */
             seller_companion: components["schemas"]["ModeAvailabilityDto"];
         };
+        AddCollectionItemBodyDto: {
+            context?: components["schemas"]["AddItemContextDto"];
+            /** @enum {string} */
+            source_surface: "PRODUCT_DETAIL" | "SCENE_EXPLORER" | "SEARCH" | "SHOP" | "SELLER_PROFILE" | "FOR_YOU" | "SAVED";
+            target: components["schemas"]["CollectionTargetDto"];
+        };
+        AddItemContextDto: {
+            /** @description The Scene the Product was opened from; recorded only if its current PUBLIC revision tags the Product. */
+            scene_ref: string;
+        };
         BootstrapMarketDto: {
             /** @example ET */
             code: string;
@@ -2160,6 +2275,81 @@ export interface components {
              * @description The A5 clock-offset reference.
              */
             server_time: string;
+        };
+        CollectionDetailDto: {
+            collection: components["schemas"]["CollectionDto"];
+            /** @description Newest first. */
+            data: components["schemas"]["CollectionItemDto"][];
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
+        };
+        CollectionDto: {
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * @description DEFAULT: the one server-recognised Saved Collection; it cannot be renamed or deleted.
+             * @enum {string}
+             */
+            kind: "DEFAULT" | "USER_CREATED";
+            /** @description null for DEFAULT: show the localised "Saved" label (never stored). */
+            name: string | null;
+            /** @description Product memberships, available or not. */
+            product_count: number;
+            /**
+             * Format: uuid
+             * @description Opaque Collection ref.
+             */
+            ref: string;
+            /** @description Whole-Scene memberships, available or not. */
+            scene_count: number;
+            /**
+             * Format: date-time
+             * @description Last rename or membership change.
+             */
+            updated_at: string;
+        };
+        CollectionItemDto: {
+            /** Format: uuid */
+            collection_ref: string;
+            /** @description Current price span and stock (available=false: out of stock, still saved). */
+            product: components["schemas"]["ShopProductDto"] | null;
+            /**
+             * Format: uuid
+             * @description Membership ref: DELETE /v1/collections/{collectionRef}/items/{itemRef}.
+             */
+            ref: string;
+            /** Format: date-time */
+            saved_at: string;
+            /** @description The current PUBLIC revision, never the revision seen at save. */
+            scene: components["schemas"]["SearchSceneDto"] | null;
+            /**
+             * @description Resolved now, through the current public gates. UNAVAILABLE (unpublished, restricted, deleted, PRIVATE, another Market): show the neutral "no longer available" text; product and scene are null and no reason is given.
+             * @enum {string}
+             */
+            state: "VISIBLE" | "UNAVAILABLE";
+            /** @enum {string} */
+            target_type: "PRODUCT_POST" | "SCENE_POST";
+        };
+        CollectionNameBodyDto: {
+            /** @description Trimmed, whitespace runs collapsed; 1-60 characters. */
+            name: string;
+        };
+        CollectionPageDto: {
+            /** @description DEFAULT first, then oldest first. */
+            data: components["schemas"]["CollectionDto"][];
+            /**
+             * Format: uuid
+             * @description The DEFAULT Collection (created on first need).
+             */
+            default_collection_ref: string;
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
+        };
+        CollectionTargetDto: {
+            /** @description PRODUCT_POST: the Product id from a public payload (uuid). SCENE_POST: the Scene public_ref. */
+            ref: string;
+            /** @enum {string} */
+            type: "PRODUCT_POST" | "SCENE_POST";
         };
         CreateScenePostBodyDto: {
             caption?: string;
@@ -2389,6 +2579,41 @@ export interface components {
              * @description Required to revoke ANOTHER session (CONSOLE only): a satisfied REVOKE_ALL_SESSIONS step-up, consumed. Not needed to revoke the calling session.
              */
             step_up_challenge_id?: string;
+        };
+        SavedItemPageDto: {
+            /** @description Each target once (its most recent membership), newest first. */
+            data: components["schemas"]["CollectionItemDto"][];
+            /** @description Opaque; null at the end. */
+            next_cursor: string | null;
+        };
+        SavedMembershipDto: {
+            /** Format: uuid */
+            collection_ref: string;
+            /** Format: uuid */
+            item_ref: string;
+        };
+        SavedStateBodyDto: {
+            targets: components["schemas"]["CollectionTargetDto"][];
+        };
+        SavedStateDto: {
+            /** Format: uuid */
+            default_collection_ref: string;
+            /** @description One per requested target, in request order. */
+            items: components["schemas"]["SavedStateItemDto"][];
+        };
+        SavedStateItemDto: {
+            /**
+             * Format: uuid
+             * @description The DEFAULT membership, to remove it.
+             */
+            default_item_ref: string | null;
+            /** @description Every Collection of the caller holding the target. */
+            memberships: components["schemas"]["SavedMembershipDto"][];
+            ref: string;
+            /** @description In the DEFAULT Collection: the one-tap Save state. */
+            saved: boolean;
+            /** @enum {string} */
+            type: "PRODUCT_POST" | "SCENE_POST";
         };
         ScenePostFeedUnitDto: {
             /** @enum {string} */
@@ -3387,6 +3612,301 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    CollectionsController_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionPageDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionNameBodyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_detail: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                type?: "ALL" | "PRODUCT_POST" | "SCENE_POST";
+            };
+            header?: never;
+            path: {
+                /** @description One of the caller's Collections; any other ref is 404. */
+                collectionRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDetailDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One of the caller's Collections; any other ref is 404. */
+                collectionRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One of the caller's Collections; any other ref is 404. */
+                collectionRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionNameBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_addItem: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description One of the caller's Collections; any other ref is 404. */
+                collectionRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCollectionItemBodyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionItemDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_removeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One of the caller's Collections; any other ref is 404. */
+                collectionRef: string;
+                itemRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_savedState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedStateBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedStateDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    CollectionsController_saves: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                type?: "ALL" | "PRODUCT_POST" | "SCENE_POST";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItemPageDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
