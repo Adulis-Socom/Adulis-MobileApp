@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../../../api/bootstrap';
 import type { ShopProduct } from '../../../api/client';
+import { failureMessage } from '../../../api/messages';
 import { useSession } from '../../../auth/session';
 import { usePublicList } from '../../../buyer/public-list';
 import { PublicListView } from '../../../buyer/PublicListView';
@@ -29,15 +30,30 @@ export default function Shop() {
   const t = useT();
   const theme = useTheme();
   const { api } = useSession();
-  // A new install's device (the guest's Market) is registered by the first bootstrap; reading
-  // before it settles gets an empty page that would read as "no Products".
-  const bootstrapSettled = !useBootstrap().isPending;
+  const bootstrap = useBootstrap();
+  // The Market comes from a successful bootstrap (it registers a new install's device). Until one
+  // succeeds there is no Market to browse, so nothing is read: an empty page would read as
+  // "no Products" when the truth is "no Market" (ON-043). Never another Market's Products.
+  const placed = bootstrap.data !== undefined;
   const list = usePublicList({
     resource: ['shop-products'],
-    read: bootstrapSettled ? (cursor) => api.shopProducts(cursor) : null,
+    read: placed ? (cursor) => api.shopProducts(cursor) : null,
     items: (page) => page.data,
     keyOf,
   });
+  const blocked = placed
+    ? list.firstPage?.market_resolved === false
+      ? {
+          message: t('buyer.shop.no_market'),
+          onRetry: () => void bootstrap.refetch().then(() => list.refresh()),
+        }
+      : null
+    : bootstrap.fetchStatus === 'paused'
+      ? // Offline: the bootstrap resumes by itself when the connection returns.
+        { message: t('common.offline') }
+      : bootstrap.isError
+        ? { message: failureMessage(t, bootstrap.error), onRetry: () => void bootstrap.refetch() }
+        : null;
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
@@ -67,6 +83,7 @@ export default function Shop() {
         }
         empty="buyer.shop.empty"
         loading="buyer.shop.loading"
+        blocked={blocked}
         testID="shop-products"
         label={t('buyer.shop.products')}
       />

@@ -53,6 +53,7 @@ describe('the Shop tab', () => {
     serve(
       SHOP,
       ok({
+        market_resolved: true,
         data: [
           shopProduct('basket', 'Basket', 'seller-1', { price_min_minor: 90000, price_max_minor: 120000 }),
           shopProduct('scarf', 'Scarf', 'seller-2', { available: false, price_min_minor: null, price_max_minor: null, price_currency: null }),
@@ -66,6 +67,10 @@ describe('the Shop tab', () => {
     expect(await screen.findByLabelText(/^Basket, ETB\s900\.00 – ETB\s1,200\.00, Available$/)).toBeOnTheScreen();
     expect(screen.getByLabelText('Scarf, Currently unavailable')).toBeOnTheScreen();
     expect(screen.getByLabelText('View Store seller-2')).toBeOnTheScreen();
+    // The Seller line says what it is in words (ON-048): no underline, which recycled cells dropped.
+    const sellerLine = screen.getByText('Sold by Store seller-2');
+    expect(sellerLine).toBeOnTheScreen();
+    expect(JSON.stringify(sellerLine.props.style)).not.toContain('underline');
     expect(screen.getByText(en['buyer.list.end'])).toBeOnTheScreen();
     // The card derivative (as on the Seller Profile), never the full image.
     expect(screen.getAllByTestId('product-photo')[0]?.props.source).toEqual([
@@ -81,8 +86,8 @@ describe('the Shop tab', () => {
   it('pages by the server cursor and says when it has everything', async () => {
     serve(
       SHOP,
-      ok({ data: [shopProduct('a', 'Item A')], next_cursor: 'page-2' }),
-      ok({ data: [shopProduct('b', 'Item B'), shopProduct('a', 'Item A')], next_cursor: null }),
+      ok({ market_resolved: true, data: [shopProduct('a', 'Item A')], next_cursor: 'page-2' }),
+      ok({ market_resolved: true, data: [shopProduct('b', 'Item B'), shopProduct('a', 'Item A')], next_cursor: null }),
     );
     await openShop();
     await screen.findByLabelText(/^Item A,/);
@@ -95,7 +100,7 @@ describe('the Shop tab', () => {
   });
 
   it('a Product opens the Product; its Seller line opens the Seller Profile; Back keeps the Shop as it was', async () => {
-    serve(SHOP, ok({ data: [shopProduct('basket', 'Basket', 'seller-1')], next_cursor: null }));
+    serve(SHOP, ok({ market_resolved: true, data: [shopProduct('basket', 'Basket', 'seller-1')], next_cursor: null }));
     serve('GET /v1/storefronts/seller-1/products/basket', ok(storefrontProduct('basket', 'Basket')));
     serve('GET /v1/storefronts/seller-1', ok(storefront('seller-1')));
     serve('GET /v1/storefronts/seller-1/scenes', ok({ data: [sellerScene(1)], next_cursor: null }));
@@ -116,7 +121,7 @@ describe('the Shop tab', () => {
   });
 
   it('an empty Market says so; a failure says so with a retry', async () => {
-    serve(SHOP, problem(500, 'INTERNAL', 'request'), ok({ data: [], next_cursor: null }));
+    serve(SHOP, problem(500, 'INTERNAL', 'request'), ok({ market_resolved: true, data: [], next_cursor: null }));
     await openShop();
     await fireEvent.press(await screen.findByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByText(en['buyer.shop.empty'])).toBeOnTheScreen();
@@ -125,7 +130,7 @@ describe('the Shop tab', () => {
   it('a new install reads the Shop only after the first bootstrap (which registers the device, its Market)', async () => {
     let release: (reply: Reply) => void = () => undefined;
     api.on('GET /v1/bootstrap', () => new Promise<Reply>((resolve) => (release = resolve)));
-    serve(SHOP, ok({ data: [shopProduct('basket', 'Basket')], next_cursor: null }));
+    serve(SHOP, ok({ market_resolved: true, data: [shopProduct('basket', 'Basket')], next_cursor: null }));
     await renderRouter(APP_DIR, { initialUrl: '/shop' });
     await settle();
     expect(calls(SHOP)).toHaveLength(0);
@@ -136,20 +141,161 @@ describe('the Shop tab', () => {
 
   it('signed in, the Shop read presents the session (the Account Market)', async () => {
     resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
-    serve(SHOP, ok({ data: [shopProduct('basket', 'Basket')], next_cursor: null }));
+    serve(SHOP, ok({ market_resolved: true, data: [shopProduct('basket', 'Basket')], next_cursor: null }));
     await openShop();
     await screen.findByLabelText(/^Basket,/);
     expect(calls(SHOP)[0]?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
   });
 
   it('reached from the tab bar like any tab, and makes no cart, order or payment request', async () => {
-    serve(SHOP, ok({ data: [shopProduct('basket', 'Basket')], next_cursor: null }));
+    serve(SHOP, ok({ market_resolved: true, data: [shopProduct('basket', 'Basket')], next_cursor: null }));
     api.on('GET /v1/fyp', () => ok({ feed_session_id: null, algorithm_version: null, items: [], next_cursor: null }));
     await renderRouter(APP_DIR);
     await screen.findByText(en['buyer.for_you.empty']);
     await fireEvent.press(bottomTab(en['buyer.tab.shop']));
     expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
     expect(api.calls.filter((c) => /\/v1\/(cart|orders?|payments?|reservations?)/.test(c.path))).toEqual([]);
+  });
+});
+
+describe('the Market behind the Shop (ON-043)', () => {
+  const page = (...items: ReturnType<typeof shopProduct>[]) => ok({ market_resolved: true, data: items, next_cursor: null });
+
+  it('no Market resolved: says so with a retry, never "No Products"; the retry places the device again', async () => {
+    serve(SHOP, ok({ market_resolved: false, data: [], next_cursor: null }), page(shopProduct('basket', 'Basket')));
+    await openShop();
+    expect(await screen.findByText(en['buyer.shop.no_market'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.shop.empty'])).not.toBeOnTheScreen();
+    const bootstraps = calls('GET /v1/bootstrap').length;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+    expect(calls('GET /v1/bootstrap').length).toBe(bootstraps + 1);
+    expect(screen.queryByText(en['buyer.shop.no_market'])).not.toBeOnTheScreen();
+  });
+
+  it('a failed bootstrap reads nothing and offers a retry; the retry recovers', async () => {
+    let fail = true;
+    api.on('GET /v1/bootstrap', () => (fail ? problem(500, 'INTERNAL', 'request') : ok(bootstrapBody())));
+    serve(SHOP, page(shopProduct('basket', 'Basket')));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    const retry = await screen.findByRole('button', { name: en['common.retry'] });
+    expect(calls(SHOP)).toHaveLength(0);
+    expect(screen.queryByText(en['buyer.shop.empty'])).not.toBeOnTheScreen();
+    fail = false;
+    await fireEvent.press(retry);
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+    expect(calls(SHOP)).toHaveLength(1);
+  });
+
+  it('a failed device registration is the same: nothing read, a retry, and recovery', async () => {
+    let fail = true;
+    api.on('POST /v1/devices', () => (fail ? problem(500, 'INTERNAL', 'request') : { status: 201, body: {} }));
+    serve(SHOP, page(shopProduct('basket', 'Basket')));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    const retry = await screen.findByRole('button', { name: en['common.retry'] });
+    expect(calls(SHOP)).toHaveLength(0);
+    fail = false;
+    await fireEvent.press(retry);
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+  });
+
+  it('offline: says offline, not "No Products"; once the connection returns the Shop loads', async () => {
+    let offline = true;
+    api.on('GET /v1/bootstrap', () => (offline ? 'offline' : ok(bootstrapBody())));
+    serve(SHOP, page(shopProduct('basket', 'Basket')));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    // The network retries twice before giving up.
+    await act(() => jest.advanceTimersByTimeAsync(10_000));
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.shop.empty'])).not.toBeOnTheScreen();
+    expect(calls(SHOP)).toHaveLength(0);
+    offline = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+  });
+});
+
+describe('the shared public list (ON-040)', () => {
+  const pull = () =>
+    act(() =>
+      (screen.getByTestId('shop-products').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+    );
+  const endReached = () => act(() => (screen.getByTestId('shop-products').props as { onEndReached: () => void }).onEndReached());
+
+  it('a failed next page keeps what is shown, says so under it, and retries that page only', async () => {
+    serve(
+      SHOP,
+      ok({ market_resolved: true, data: [shopProduct('a', 'Item A')], next_cursor: 'page-2' }),
+      problem(500, 'INTERNAL', 'request'),
+      ok({ market_resolved: true, data: [shopProduct('b', 'Item B')], next_cursor: null }),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Item A,/);
+    await endReached();
+    expect(await screen.findByText(new RegExp(en['buyer.list.more_failed']))).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Item A,/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByLabelText(/^Item B,/)).toBeOnTheScreen();
+    expect(calls(SHOP).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2', 'page-2']);
+  });
+
+  it('a pull keeps the items on screen while it loads, then shows the new answer from the first page', async () => {
+    let release: (reply: Reply) => void = () => undefined;
+    let n = 0;
+    api.on(SHOP, () =>
+      n++ === 0
+        ? ok({ market_resolved: true, data: [shopProduct('a', 'Item A')], next_cursor: null })
+        : new Promise<Reply>((resolve) => (release = resolve)),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Item A,/);
+    await pull();
+    await settle();
+    expect(screen.getByLabelText(/^Item A,/)).toBeOnTheScreen();
+    await act(async () => release(ok({ market_resolved: true, data: [shopProduct('b', 'Item B')], next_cursor: null })));
+    expect(await screen.findByLabelText(/^Item B,/)).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Item A,/)).not.toBeOnTheScreen();
+    expect(calls(SHOP)[1]?.query['cursor']).toBeUndefined();
+  });
+
+  it('a slow answer to an older pull never replaces the newer one', async () => {
+    const pending: Array<(reply: Reply) => void> = [];
+    let n = 0;
+    api.on(SHOP, () =>
+      n++ === 0
+        ? ok({ market_resolved: true, data: [shopProduct('a', 'Item A')], next_cursor: null })
+        : new Promise<Reply>((resolve) => pending.push(resolve)),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Item A,/);
+    await pull();
+    await settle();
+    await pull();
+    await settle();
+    expect(pending).toHaveLength(2);
+    await act(async () => pending[1]!(ok({ market_resolved: true, data: [shopProduct('new', 'Newer')], next_cursor: null })));
+    expect(await screen.findByLabelText(/^Newer,/)).toBeOnTheScreen();
+    await act(async () => pending[0]!(ok({ market_resolved: true, data: [shopProduct('old', 'Older')], next_cursor: null })));
+    await settle();
+    expect(screen.getByLabelText(/^Newer,/)).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Older,/)).not.toBeOnTheScreen();
+  });
+
+  it('a session that ends mid-browse reads the list again as a guest, and nothing of the signed-in answer stays', async () => {
+    resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
+    api.on(SHOP, (call) =>
+      call.headers.Authorization
+        ? calls(SHOP).length === 1
+          ? ok({ market_resolved: true, data: [shopProduct('mine', 'Account Market item')], next_cursor: null })
+          : problem(401, 'SESSION_EXPIRED', 'auth')
+        : ok({ market_resolved: true, data: [shopProduct('guest', 'Device Market item')], next_cursor: null }),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Account Market item,/);
+    await pull();
+    expect(await screen.findByLabelText(/^Device Market item,/)).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Account Market item,/)).not.toBeOnTheScreen();
+    expect(calls(SHOP).at(-1)?.headers.Authorization).toBeUndefined();
   });
 });
 
@@ -179,8 +325,8 @@ describe('returning from the background', () => {
   it('a short stay keeps the list; after the interval it is read again and an unpublished Product is gone', async () => {
     serve(
       SHOP,
-      ok({ data: [shopProduct('basket', 'Basket'), shopProduct('scarf', 'Scarf')], next_cursor: null }),
-      ok({ data: [shopProduct('scarf', 'Scarf')], next_cursor: null }),
+      ok({ market_resolved: true, data: [shopProduct('basket', 'Basket'), shopProduct('scarf', 'Scarf')], next_cursor: null }),
+      ok({ market_resolved: true, data: [shopProduct('scarf', 'Scarf')], next_cursor: null }),
     );
     await openShop();
     await screen.findByLabelText(/^Basket,/);

@@ -26,6 +26,7 @@ export function PublicListView<I>({
   testID,
   label,
   onRefresh,
+  blocked,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -38,12 +39,24 @@ export function PublicListView<I>({
   label: string;
   /** What a pull does; the list's own refresh by default. */
   onRefresh?: () => void;
+  /** Why the list cannot be read at all (the screen's precondition failed): shown instead of any list state. */
+  blocked?: { message: string; onRetry?: () => void } | null;
 }) {
   const t = useT();
   const theme = useTheme();
 
   const state = (() => {
     if (list.items.length > 0) return null;
+    if (blocked) {
+      return (
+        <>
+          <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+            {blocked.message}
+          </AppText>
+          {blocked.onRetry ? <Button label={t('common.retry')} onPress={blocked.onRetry} /> : null}
+        </>
+      );
+    }
     if (list.paused) return <AppText accessibilityRole="alert">{t('common.offline')}</AppText>;
     if (list.status === 'pending') {
       return (

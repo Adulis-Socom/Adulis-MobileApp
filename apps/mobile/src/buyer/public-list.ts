@@ -96,6 +96,8 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     error: query.error,
     gone: isGone(query.error),
     items: all,
+    /** The first page as the server sent it (for a list-level fact such as the Shop's market_resolved). */
+    firstPage: query.data?.pages[0]?.page,
     /** Nothing to show yet and the request waits for a connection. */
     paused: query.fetchStatus === 'paused' && query.data === undefined,
     /** A pull is in flight; the previous items are still shown. */
