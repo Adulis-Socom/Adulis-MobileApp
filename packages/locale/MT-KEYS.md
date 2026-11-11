@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-912 keys:
+928 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -231,7 +231,23 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.list.more_failed`
 - `buyer.list.end`
 - `buyer.search`
-- `buyer.search.coming`
+- `buyer.search.input`
+- `buyer.search.clear`
+- `buyer.search.hint`
+- `buyer.search.too_short`
+- `buyer.search.tabs`
+- `buyer.search.tab.top`
+- `buyer.search.tab.products`
+- `buyer.search.tab.scenes`
+- `buyer.search.tab.sellers`
+- `buyer.search.results`
+- `buyer.search.loading`
+- `buyer.search.empty`
+- `buyer.search.no_market`
+- `buyer.search.go_shop`
+- `buyer.search.go_home`
+- `buyer.search.seller`
+- `buyer.search.scene_by`
 - `buyer.notifications`
 - `buyer.notifications.coming`
 - `buyer.notifications.signed_out`
