@@ -1,0 +1,112 @@
+# Delete Account (WO-011) against the real local API on a DISPOSABLE database and a DISPOSABLE
+# Account (never a real person's), run by the harness in steps (env STEP):
+#   request  signed in (after a sign-in flow): You -> Delete Account -> Continue -> the phone ->
+#            Send code; the deletion code goes to the development SMS log
+#   cancel   from the explanation, Cancel returns to You with nothing requested
+#   confirm  (OTP = the deletion code) the code mints a ticket; the server's effects are shown; a
+#            wrong confirmation word is refused; DELETE deletes; the device is signed out
+#
+#   maestro test -e STEP=request -e PHONE=+2519... .maestro/account-delete.yaml
+appId: com.adulis.app
+name: Delete Account
+tags:
+  - buyer
+  - account
+---
+- runFlow:
+    when:
+      true: ${STEP != 'confirm'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+      - extendedWaitUntil:
+          visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+          timeout: 120000
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Delete Account
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Delete Account
+          index: 0
+      - extendedWaitUntil:
+          visible: 'Deleting your Adulis Account is permanent\..*'
+          timeout: 20000
+      - takeScreenshot: delete-01-intro
+
+- runFlow:
+    when:
+      true: ${STEP == 'cancel'}
+    commands:
+      - tapOn: Cancel
+      - extendedWaitUntil:
+          visible: Delete Account
+          timeout: 20000
+      - scrollUntilVisible:
+          element: You are signed in to your Adulis Account on this device.
+          direction: UP
+
+- runFlow:
+    when:
+      true: ${STEP == 'request'}
+    commands:
+      - tapOn: Continue
+      - assertVisible: 'Enter the phone number you sign in with\..*'
+      - tapOn: Phone number
+      - inputText: ${PHONE}
+      - hideKeyboard
+      - tapOn: Send code
+      - extendedWaitUntil:
+          visible: 'We sent a deletion code by SMS to .*'
+          timeout: 20000
+      - takeScreenshot: delete-02-code
+
+- runFlow:
+    when:
+      true: ${STEP == 'confirm'}
+    commands:
+      - tapOn: Six-digit code
+      - inputText: ${OTP}
+      - hideKeyboard
+      - tapOn: Verify
+      - extendedWaitUntil:
+          visible: What deletion does
+          timeout: 20000
+      - assertVisible: 'This deletes the Adulis Account registered to .*'
+      - assertVisible: Your identity details are removed.
+      - takeScreenshot: delete-03-preview
+      - scrollUntilVisible:
+          element: Confirmation
+          direction: DOWN
+      - tapOn: Confirmation
+      - inputText: NO
+      - hideKeyboard
+      - scrollUntilVisible:
+          element: Delete my Account permanently
+          direction: DOWN
+      - tapOn: Delete my Account permanently
+      - assertVisible: Type DELETE exactly to confirm.
+      - tapOn: Confirmation
+      - eraseText: 5
+      - inputText: DELETE
+      - hideKeyboard
+      - scrollUntilVisible:
+          element: Delete my Account permanently
+          direction: DOWN
+      - takeScreenshot: delete-04-typed
+      - tapOn: Delete my Account permanently
+      - extendedWaitUntil:
+          visible: 'The Adulis Account registered to .* has been deleted\.'
+          timeout: 30000
+      - assertVisible: This device is signed out.
+      - takeScreenshot: delete-05-done
+      - tapOn: Go to Home
+      - extendedWaitUntil:
+          visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+          timeout: 30000
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Sign in to see your profile.
+          direction: UP

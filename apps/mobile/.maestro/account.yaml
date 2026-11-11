@@ -1,0 +1,105 @@
+# Buyer Account (WO-011) against the real local API, run by the harness in steps (env STEP):
+#   guest      a fresh install: You shows the sign-in prompt and the device Preferences only;
+#              Appearance switches Dark and back to System
+#   signed-in  after a sign-in flow, without clearing state: the Account statement, this device's
+#              session from GET /v1/auth/sessions (marked "This device"), Refresh, and Language
+#              (development build: Amharic applies at once, English comes back)
+#   sign-out   Sign out returns You to the guest state
+#
+#   maestro test -e STEP=guest .maestro/account.yaml
+appId: com.adulis.app
+name: Buyer Account
+tags:
+  - buyer
+  - account
+---
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - launchApp:
+          clearState: true
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP != 'guest'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+- tapOn: You
+
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - assertVisible: Sign in to see your profile.
+      - assertVisible: Preferences
+      - assertNotVisible: Signed-in sessions
+      - assertNotVisible: Delete Account
+      - tapOn: Dark
+      - assertVisible: ✓ Dark
+      - takeScreenshot: account-01-guest-dark
+      - tapOn: System
+      - assertVisible: ✓ System
+
+- runFlow:
+    when:
+      true: ${STEP == 'signed-in'}
+    commands:
+      - extendedWaitUntil:
+          visible: You are signed in to your Adulis Account on this device.
+          timeout: 20000
+      - takeScreenshot: account-02-signed-in
+      - scrollUntilVisible:
+          element: This device
+          direction: DOWN
+          timeout: 20000
+      - assertVisible: Android device
+      - assertVisible: Adulis app
+      - assertVisible: 'Last active .*'
+      - takeScreenshot: account-03-sessions
+      - scrollUntilVisible:
+          element: Refresh sessions
+          direction: DOWN
+      - tapOn: Refresh sessions
+      - assertVisible: This device
+      - scrollUntilVisible:
+          element: Delete Account
+          direction: DOWN
+      - assertVisible: Sign out
+      - takeScreenshot: account-04-security-privacy
+      - scrollUntilVisible:
+          element: 'Amharic \(development preview\)'
+          direction: UP
+      - tapOn: 'Amharic \(development preview\)'
+      - scrollUntilVisible:
+          element: ምርጫዎች
+          direction: UP
+      - takeScreenshot: account-05-amharic
+      - scrollUntilVisible:
+          element: English
+          direction: DOWN
+      - tapOn: English
+      - scrollUntilVisible:
+          element: Preferences
+          direction: UP
+
+- runFlow:
+    when:
+      true: ${STEP == 'sign-out'}
+    commands:
+      - scrollUntilVisible:
+          element: Sign out
+          direction: DOWN
+          timeout: 20000
+      - tapOn: Sign out
+      - extendedWaitUntil:
+          visible: Sign in to see your profile.
+          timeout: 20000
+      - assertNotVisible: Signed-in sessions
+      - takeScreenshot: account-06-signed-out
