@@ -27,6 +27,12 @@ and the recorded conflicts between the two (K-1 to K-8) are in
 | **ADU-VAL-01** | **v1.2** -- a register, not a specification; S1.1 is machine-read and enforced (`pnpm verify:deferred-values`, the `deferred-values` gate of the one list), **pinned at 14** since v1.2 removed `follower_threshold` (D-92: NULL there is decided) and the embedding dimension (a type question) | [`docs/registers/`](../registers/) |
 | The permission seed, §16.2a | v2.5, **unchanged from v2.3** — 42 codes, 139 grants | [`ADU-AUTH-01_v2_4_permission_seed.sql`](ADU-AUTH-01_v2_4_permission_seed.sql) |
 
+## Proposed amendments -- NOT installed, nothing here governs yet
+
+| Amendment | Status | Records |
+|---|---|---|
+| [`ADU-API-01_A4_categories_PROPOSED.md`](ADU-API-01_A4_categories_PROPOSED.md) | **PROPOSED** (WO-010A, 11 November 2026), awaiting founder approval; ADU-API-01 v1.11 governs unchanged | The semantics WO-010 implemented: `GET /v1/categories` (Market-scoped, presentable, ordered; additive fields), the `category` filter on `GET /v1/shop/products` and on `GET /v1/search?type=PRODUCT_POST`, category-bound cursors, and the Seller Product `category_id` validation (ON-20261111-114) |
+
 ## ADU-AUTH-01 is split, and v2.5 is not superseded
 
 **ADU-AUTH-01 v2.8 S0 requires this manifest to record the split, and it is the
