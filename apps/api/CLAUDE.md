@@ -3,7 +3,7 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.24** (WO-007A) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
+**Governing documents:** ADU-DB-01 **v1.25** (WO-008) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
 remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`;
 v2.8 S0: "There is no permission-grant change in this revision") ·
 ADU-API-01 **v1.11** (T20) · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
@@ -90,7 +90,8 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > **WO-007A (`0058`, `0059`)** adds the view `core.v_review_public` (the one public Review read,
 > fail closed on `core.fn_order_payment_verified`) and the fixed-Market-currency trigger;
 > **ADU-DB-01 v1.24** records them (counts unchanged: measured by `pnpm db:check` and
-> `pnpm verify:permission-doc` on 11 November 2026).
+> `pnpm verify:permission-doc` on 11 November 2026). **WO-008 (`0060`)** adds the caption trigram index
+> `idx_scene_revision_caption_trgm`; **ADU-DB-01 v1.25** records it (counts unchanged).
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
