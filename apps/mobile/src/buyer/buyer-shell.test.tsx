@@ -109,7 +109,7 @@ describe('Buyer shell', () => {
   });
 
   it.each([
-    ['/search', en['buyer.search.coming']],
+    ['/search', en['buyer.search.hint']],
     ['/notifications', en['buyer.notifications.signed_out']],
   ])('opens %s cold with the tabs under it, so Back returns Home', async (path, content) => {
     const r = await renderRouter(APP_DIR, { initialUrl: path });
@@ -156,10 +156,10 @@ describe('Buyer shell', () => {
     await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.search'] }));
-    expect(await screen.findByText(en['buyer.search.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.search.hint'])).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/search');
-    // No input field and no results until marketplace search exists.
-    expect(screen.queryByRole('search')).not.toBeOnTheScreen();
+    // Marketplace Search (WO-008): an input, and no result until a query is typed.
+    expect(screen.getByLabelText(en['buyer.search.input'])).toBeOnTheScreen();
     await act(() => router.back());
     expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
 

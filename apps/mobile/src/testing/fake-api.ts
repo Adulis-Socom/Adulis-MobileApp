@@ -331,7 +331,7 @@ export type ShopProduct = S['ShopProductDto'];
 
 export function shopProduct(slug: string, name: string, handle = 'seller-1', overrides: Partial<ShopProduct> = {}): ShopProduct {
   return {
-    id: '0b6f1a3e-cccc-4ccc-8ccc-cccccccccccc',
+    id: productIdFor(`${handle}/${slug}`),
     slug,
     name,
     base_price_minor: 1,

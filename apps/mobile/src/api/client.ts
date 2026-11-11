@@ -46,6 +46,9 @@ export type SellerReviewPage = Json<paths['/v1/storefronts/{handle}/reviews']['g
 export type SellerReview = SellerReviewPage['data'][number];
 export type ShopProductPage = Json<paths['/v1/shop/products']['get']['responses'][200]>;
 export type ShopProduct = ShopProductPage['data'][number];
+export type SearchPage = Json<paths['/v1/search']['get']['responses'][200]>;
+export type SearchItem = SearchPage['items'][number];
+export type SearchType = SearchPage['type'];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -272,6 +275,12 @@ export function createApiClient(deps: ApiDeps) {
     shopProducts: (cursor: string | null) =>
       call<ShopProductPage>('GET', '/v1/shop/products', {
         query: { cursor: cursor ?? undefined, limit: '30' },
+        ok: 200,
+      }),
+    /** Marketplace Search (WO-008): TOP is one bounded page; a single type pages by cursor. */
+    search: (q: string, type: SearchType, cursor: string | null) =>
+      call<SearchPage>('GET', '/v1/search', {
+        query: { q, type, cursor: cursor ?? undefined, limit: type === 'TOP' ? undefined : '20' },
         ok: 200,
       }),
 

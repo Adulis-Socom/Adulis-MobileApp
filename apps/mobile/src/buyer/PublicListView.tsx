@@ -27,6 +27,7 @@ export function PublicListView<I>({
   label,
   onRefresh,
   blocked,
+  emptyState,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -41,6 +42,8 @@ export function PublicListView<I>({
   onRefresh?: (() => void) | undefined;
   /** Why the list cannot be read at all (the screen's precondition failed): shown instead of any list state. */
   blocked?: { message: string; onRetry?: () => void } | null;
+  /** What an empty answer shows instead of the `empty` sentence (e.g. a slotted message with actions). */
+  emptyState?: ReactElement | null;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -78,7 +81,7 @@ export function PublicListView<I>({
         </>
       );
     }
-    return <AppText style={{ textAlign: 'center', color: theme.color.textSecondary }}>{t(empty)}</AppText>;
+    return emptyState ?? <AppText style={{ textAlign: 'center', color: theme.color.textSecondary }}>{t(empty)}</AppText>;
   })();
 
   return (
@@ -91,6 +94,9 @@ export function PublicListView<I>({
       renderItem={renderItem}
       onEndReached={list.loadMore}
       onEndReachedThreshold={0.5}
+      // A list under a text field (Search): a drag puts the keyboard away; a tap on a result still lands.
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
       style={{ backgroundColor: theme.color.bg }}
       contentContainerStyle={{ padding: theme.space.sm }}
       refreshControl={
