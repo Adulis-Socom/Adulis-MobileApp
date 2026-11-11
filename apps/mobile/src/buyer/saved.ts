@@ -23,8 +23,8 @@ import { useUiStore } from '../state/ui-store';
  * WO-009A: discovery cards read saved state one page at a time (one batch per page of results,
  * never one request per card), and every saved-state read, one-tap Save and guest continuation
  * here is bound to the session that started it (SessionProvider.boundApi), so nothing is sent or
- * cached for another Account. (The picker and the Collection screen send through the session's
- * client; the server scopes every request to the bearer's Account.)
+ * cached for another Account. WO-010 (ON-112): the Saved and Collection screens and the picker use
+ * the same binding (usePrivateApi).
  */
 
 export const SAVED_STATE = 'saved-state';
@@ -43,11 +43,25 @@ export const collectionName = (c: Pick<Collection, 'kind' | 'name'>, t: ReturnTy
 export const saveBody = (target: SaveTarget, surface: SaveSurface, sceneRef: string | null): AddItemBody =>
   target.type === 'PRODUCT_POST' && sceneRef ? { target, source_surface: surface, context: { scene_ref: sceneRef } } : { target, source_surface: surface };
 
-/** One read, kept only while the session that asked is still the one signed in. */
-async function readSavedState(bound: BoundApi, targets: SaveTarget[]): Promise<SavedState> {
-  const state = await bound.savedState(targets);
+/** A private read whose answer is kept only while the session that asked is still the one signed in. */
+export async function keepIfCurrent<T>(bound: BoundApi, read: (api: BoundApi) => Promise<T>): Promise<T> {
+  const answer = await read(bound);
   if (!bound.isCurrent()) throw new SessionChanged();
-  return state;
+  return answer;
+}
+
+const readSavedState = (bound: BoundApi, targets: SaveTarget[]) => keepIfCurrent(bound, (a) => a.savedState(targets));
+
+/**
+ * The private Collections client for the session on screen (WO-010, ON-20261111-112): every
+ * request is bound to that session (SessionProvider.boundApi), so a request started before a
+ * sign-out or another sign-in is refused before it is sent. Capture it at the tap, and check
+ * `isCurrent()` before acting on an answer. Null for a guest.
+ */
+export function usePrivateApi(): BoundApi | null {
+  const { session, boundApi } = useSession();
+  const token = session.status === 'signedIn' ? session.token : null;
+  return useMemo(() => (token ? boundApi(token) : null), [token, boundApi]);
 }
 
 /** One target's saved state (Product Detail, Scene Explorer, the picker): a batch of one. */

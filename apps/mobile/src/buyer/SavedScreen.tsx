@@ -4,7 +4,6 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
-import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -13,7 +12,7 @@ import { useTheme } from '../theme/theme';
 import { usePublicList } from './public-list';
 import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
-import { collectionName } from './saved';
+import { collectionName, keepIfCurrent, usePrivateApi } from './saved';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.saved.tab.recent' },
@@ -29,17 +28,17 @@ const TABS = [
 export function SavedScreen() {
   const t = useT();
   const theme = useTheme();
-  const { api } = useSession();
+  const priv = usePrivateApi();
   const [tab, setTab] = useState<ItemFilter>('ALL');
   const collections = usePublicList({
     resource: ['collections'],
-    read: (cursor) => api.collections(cursor),
+    read: priv ? (cursor) => keepIfCurrent(priv, (a) => a.collections(cursor)) : null,
     items: (page) => page.data,
     keyOf: (c: Collection) => c.ref,
   });
   const saves = usePublicList({
     resource: ['saved-items', tab],
-    read: (cursor) => api.savedItems(tab, cursor),
+    read: priv ? (cursor) => keepIfCurrent(priv, (a) => a.savedItems(tab, cursor)) : null,
     items: (page) => page.data,
     keyOf: (i: CollectionItem) => i.ref,
   });
@@ -145,7 +144,7 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
 export function NewCollection({ onCreated }: { onCreated: (created: CollectionCreated) => void }) {
   const t = useT();
   const theme = useTheme();
-  const { api } = useSession();
+  const priv = usePrivateApi();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -158,16 +157,20 @@ export function NewCollection({ onCreated }: { onCreated: (created: CollectionCr
       setError(t('buyer.saved.name_invalid'));
       return;
     }
+    if (!priv) return;
     if (intent.current?.name !== trimmed) intent.current = { name: trimmed, key: newIdempotencyKey() };
     setBusy(true);
     setError(null);
     try {
-      const created = await api.createCollection(trimmed, intent.current.key);
+      const created = await priv.createCollection(trimmed, intent.current.key);
+      // Answered after a sign-out or another sign-in: nothing more is done for that session.
+      if (!priv.isCurrent()) return;
       intent.current = null;
       setOpen(false);
       setName('');
       onCreated(created);
     } catch (failure) {
+      if (!priv.isCurrent()) return;
       if (wasAnswered(failure)) intent.current = null;
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {

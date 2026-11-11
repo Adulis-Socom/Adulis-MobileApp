@@ -24,7 +24,7 @@ export function installFakeCollections(
   const items: Item[] = [];
   const hidden = new Set<string>();
   // A test can answer a route itself (fail it, hold it); undefined falls through to the fake.
-  const intercepts: Partial<Record<'add' | 'saves' | 'collections' | 'state', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
+  const intercepts: Partial<Record<'add' | 'saves' | 'collections' | 'state' | 'remove', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
   const via =
     (name: keyof typeof intercepts, handler: (call: Recorded) => Reply) =>
     async (call: Recorded): Promise<Reply> =>
@@ -129,13 +129,13 @@ export function installFakeCollections(
     if (!existing) items.push(item);
     return { status: 201, body: { ref: item.ref, collection_ref: item.collection, target_type: item.target.type, saved_at: ts(item.at) } };
   }));
-  api.onPattern('DELETE', /^\/v1\/collections\/[^/]+\/items\/[^/]+$/, (call) => {
+  api.onPattern('DELETE', /^\/v1\/collections\/[^/]+\/items\/[^/]+$/, via('remove', (call) => {
     const c = owned(refAt(call.path, 3));
     if (!c) return problem(404, 'NOT_FOUND', 'request');
     const n = items.findIndex((i) => i.collection === c.ref && i.ref === refAt(call.path, 5));
     if (n >= 0) items.splice(n, 1);
     return { status: 204 };
-  });
+  }));
 
   return {
     collections,

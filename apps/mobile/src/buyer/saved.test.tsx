@@ -426,6 +426,135 @@ describe('the guest Save continuation is bound to the session that signed in (WO
   });
 });
 
+describe('Collections screens are bound to the session that started each request (WO-010, ON-112)', () => {
+  // Account A is restored from storage; the next sign-in on this device is Account B.
+  const TOKEN_B = 'Fake_credential_for_tests_B123456789abcdefg';
+  const asA = (c: { headers: Record<string, string> }) => c.headers.Authorization === `Bearer ${GOOD_TOKEN}`;
+  const asB = (c: { headers: Record<string, string> }) => c.headers.Authorization === `Bearer ${TOKEN_B}`;
+  const privateCalls = () => api.calls.filter((c) => c.path.startsWith('/v1/collections'));
+  // Screens still open after the switch read B's own state (the server answers a foreign ref 404); never a write.
+  const writesAsB = () => privateCalls().filter((c) => asB(c) && c.method !== 'GET' && c.path !== '/v1/collections/saved-state:batch');
+  const accountB = () => {
+    api.on('POST /v1/auth/otp/verify', (call) =>
+      call.body?.code === SIGN_IN_CODE
+        ? { status: 200, body: { account_id: '0b6f1a3e-1111-4111-8111-11111111111b', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: TOKEN_B } }
+        : problem(401, 'OTP_INVALID', 'auth'),
+    );
+    api.on('GET /v1/bootstrap', (call) => ({ status: 200, body: bootstrapBody(call.headers.Authorization ? { account_context: SIGNED_IN_CONTEXT } : {}) }));
+    // B has only its own empty Saved.
+    fc.intercept('collections', (call) =>
+      asB(call)
+        ? { status: 200, body: { default_collection_ref: '0c000000-0000-4000-8000-0000000000bb', data: [{ ref: '0c000000-0000-4000-8000-0000000000bb', kind: 'DEFAULT', name: null, product_count: 0, scene_count: 0, created_at: '2026-11-11T08:00:00.000000Z', updated_at: '2026-11-11T08:00:00.000000Z' }], next_cursor: null } }
+        : undefined,
+    );
+  };
+  const switchToB = async () => {
+    await act(() => router.navigate('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await waitFor(() => expect(screen).toHavePathname('/account'));
+  };
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await act(() => Promise.resolve());
+  };
+
+  it('the picker: a tick sent for Account A is followed by nothing for A or B after the switch', async () => {
+    signedIn();
+    accountB();
+    fc.named('Outfit ideas');
+    const gate = held();
+    fc.intercept('add', async (call) => {
+      if (asA(call)) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/save-to?type=PRODUCT_POST&ref=${PRODUCT_ID}&surface=PRODUCT_DETAIL` });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Outfit ideas' }));
+    await waitFor(() => expect(adds()).toHaveLength(1));
+    await switchToB();
+    const before = privateCalls().length;
+    await act(async () => gate.release());
+    await flush();
+    // The tick itself was A's, sent in A's session; its follow-up reads are never sent afterwards.
+    expect(privateCalls().slice(before)).toEqual([]);
+    expect(writesAsB()).toEqual([]);
+    expect(adds().every(asA)).toBe(true);
+  });
+
+  it('the Collection screen: a Remove sent for Account A is followed by nothing after the switch', async () => {
+    signedIn();
+    accountB();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    const gate = held();
+    fc.intercept('remove', async (call) => {
+      if (asA(call)) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
+    await waitFor(() => expect(removes()).toHaveLength(1));
+    await switchToB();
+    const before = privateCalls().length;
+    await act(async () => gate.release());
+    await flush();
+    expect(privateCalls().slice(before)).toEqual([]);
+    expect(writesAsB()).toEqual([]);
+  });
+
+  it('the Saved tab: a delayed read for Account A never shows after Account B signs in', async () => {
+    signedIn();
+    accountB();
+    fc.named('Private list');
+    const gate = held();
+    fc.intercept('collections', async (call) => {
+      if (asA(call)) {
+        await gate.gate;
+        return undefined;
+      }
+      return { status: 200, body: { default_collection_ref: '0c000000-0000-4000-8000-0000000000bb', data: [{ ref: '0c000000-0000-4000-8000-0000000000bb', kind: 'DEFAULT', name: null, product_count: 0, scene_count: 0, created_at: '2026-11-11T08:00:00.000000Z', updated_at: '2026-11-11T08:00:00.000000Z' }], next_cursor: null } };
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/saved' });
+    await waitFor(() => expect(api.callsTo('GET /v1/collections').filter(asA)).toHaveLength(1));
+    await switchToB();
+    await act(() => router.navigate('/saved'));
+    expect(await screen.findByRole('button', { name: 'Saved, Products: 0, Scenes: 0' })).toBeOnTheScreen();
+    await act(async () => gate.release());
+    await flush();
+    expect(screen.queryByText('Private list')).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Private list, / })).not.toBeOnTheScreen();
+  });
+
+  it('without a session the Collection screen and the picker ask for a sign-in and read nothing (review R1)', async () => {
+    const outfit = fc.named('Outfit ideas');
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['auth.sign_in'] })).toBeOnTheScreen();
+    await act(() => router.navigate(`/save-to?type=PRODUCT_POST&ref=${PRODUCT_ID}&surface=PRODUCT_DETAIL`));
+    expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
+    expect(privateCalls()).toEqual([]);
+  });
+
+  it('an expired session fails safely: a refused tick signs out and sends nothing more', async () => {
+    signedIn();
+    fc.named('Outfit ideas');
+    fc.intercept('add', () => problem(401, 'SESSION_EXPIRED', 'auth'));
+    await renderRouter(APP_DIR, { initialUrl: `/save-to?type=PRODUCT_POST&ref=${PRODUCT_ID}&surface=PRODUCT_DETAIL` });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Outfit ideas' }));
+    await waitFor(() => expect(adds()).toHaveLength(1));
+    await flush();
+    const after = privateCalls().length;
+    // The picker itself now asks for a sign-in (never a load that cannot finish).
+    expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
+    await act(() => router.navigate('/saved'));
+    expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
+    expect(privateCalls().length).toBe(after);
+  });
+});
+
 describe('sign-out', () => {
   it('47, 48. clears private Collections at once, and a late answer from the old session shows nothing', async () => {
     signedIn();

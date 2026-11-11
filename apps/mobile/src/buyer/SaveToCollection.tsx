@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newIdempotencyKey, problemCode, type Collection, type SaveSurface, type SaveTarget } from '../api/client';
 import { failureMessage } from '../api/messages';
-import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Checkbox } from '../components/Checkbox';
@@ -15,7 +14,7 @@ import { useTheme } from '../theme/theme';
 import { isPublicRef } from './public-read';
 import { usePublicList } from './public-list';
 import { NewCollection } from './SavedScreen';
-import { SAVED_STATE, collectionName, saveBody, useSavedState } from './saved';
+import { SAVED_STATE, collectionName, keepIfCurrent, saveBody, usePrivateApi, useSavedState } from './saved';
 
 const SURFACES: readonly SaveSurface[] = ['PRODUCT_DETAIL', 'SCENE_EXPLORER', 'SEARCH', 'SHOP', 'SELLER_PROFILE', 'FOR_YOU', 'SAVED'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -44,11 +43,11 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const { api } = useSession();
+  const priv = usePrivateApi();
   const state = useSavedState(params?.target ?? null);
   const collections = usePublicList({
     resource: ['collections'],
-    read: params ? (cursor) => api.collections(cursor) : null,
+    read: params && priv ? (cursor) => keepIfCurrent(priv, (a) => a.collections(cursor)) : null,
     items: (page) => page.data,
     keyOf: (c: Collection) => c.ref,
   });
@@ -68,23 +67,29 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   }
   const memberships = state.data?.items[0]?.memberships ?? [];
 
+  // Bound to the session of the tick (WO-010, ON-112): after a sign-out or another sign-in nothing
+  // more is sent, read or drawn for it.
   const toggle = async (collectionRef: string, add: boolean) => {
-    if (busy) return;
+    if (busy || !priv) return;
     setBusy(collectionRef);
     setError(null);
     try {
       if (add) {
         // Each tick its own key: the membership itself is idempotent on the server (review D3).
-        await api.addToCollection(collectionRef, saveBody(params.target, params.surface, params.sceneRef), newIdempotencyKey());
+        await priv.addToCollection(collectionRef, saveBody(params.target, params.surface, params.sceneRef), newIdempotencyKey());
       } else {
         const held = memberships.find((m) => m.collection_ref === collectionRef);
-        if (held) await api.removeFromCollection(collectionRef, held.item_ref);
+        if (held) await priv.removeFromCollection(collectionRef, held.item_ref);
       }
     } catch (failure) {
-      setError(problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`);
+      if (priv.isCurrent()) {
+        setError(problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`);
+      }
     } finally {
-      await qc.invalidateQueries({ queryKey: [SAVED_STATE] });
-      collections.refresh();
+      if (priv.isCurrent()) {
+        await qc.invalidateQueries({ queryKey: [SAVED_STATE] });
+        collections.refresh();
+      }
       setBusy(null);
     }
   };

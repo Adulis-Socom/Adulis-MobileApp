@@ -5,7 +5,6 @@ import { AccessibilityInfo, Alert, View } from 'react-native';
 
 import { problemCode, type CollectionDetail, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
-import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -15,7 +14,7 @@ import { usePublicList } from './public-list';
 import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { FilterTabs } from './SavedScreen';
-import { SAVED_STATE, collectionName } from './saved';
+import { SAVED_STATE, collectionName, keepIfCurrent, usePrivateApi } from './saved';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.collection.tab.all' },
@@ -36,7 +35,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const t = useT();
   const theme = useTheme();
   const router = useRouter();
-  const { api } = useSession();
+  const priv = usePrivateApi();
   const qc = useQueryClient();
   const valid = isRef(collectionRef);
   const [tab, setTab] = useState<ItemFilter>('ALL');
@@ -44,7 +43,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const [failure, setFailure] = useState<string | null>(null);
   const list = usePublicList({
     resource: ['collection', valid ? collectionRef : '', tab],
-    read: valid ? (cursor) => api.collection(collectionRef, tab, cursor) : null,
+    read: valid && priv ? (cursor) => keepIfCurrent(priv, (a) => a.collection(collectionRef, tab, cursor)) : null,
     items: (page) => page.data,
     keyOf: (i: CollectionItem) => i.ref,
   });
@@ -59,17 +58,19 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const title = collection ? collectionName(collection, t) : '';
 
   const remove = async (item: CollectionItem) => {
-    if (!valid || removing) return;
+    if (!valid || removing || !priv) return;
     setRemoving(item.ref);
     setFailure(null);
     try {
-      await api.removeFromCollection(collectionRef, item.ref);
+      await priv.removeFromCollection(collectionRef, item.ref);
+      // Answered after a sign-out or another sign-in: nothing is read or drawn for that session.
+      if (!priv.isCurrent()) return;
       AccessibilityInfo.announceForAccessibility(t('buyer.save.removed'));
       list.refresh();
       // Cards in other tabs stay mounted: they read their saved state again (WO-009A).
       void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
-      setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
+      if (priv.isCurrent()) setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
     } finally {
       setRemoving(null);
     }
@@ -132,7 +133,7 @@ function ManageCollection({
 }) {
   const t = useT();
   const theme = useTheme();
-  const { api } = useSession();
+  const priv = usePrivateApi();
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   const [error, setError] = useState<string | null>(null);
@@ -144,13 +145,16 @@ function ManageCollection({
       setError(t('buyer.saved.name_invalid'));
       return;
     }
+    if (!priv) return;
     setBusy(true);
     setError(null);
     try {
-      await api.renameCollection(collectionRef, trimmed);
+      await priv.renameCollection(collectionRef, trimmed);
+      if (!priv.isCurrent()) return;
       setRenaming(false);
       onRenamed();
     } catch (failure) {
+      if (!priv.isCurrent()) return;
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {
       setBusy(false);
@@ -165,12 +169,14 @@ function ManageCollection({
         text: t('buyer.collection.delete_confirm'),
         style: 'destructive',
         onPress: async () => {
+          if (!priv) return;
           setBusy(true);
           setError(null);
           try {
-            await api.deleteCollection(collectionRef);
-            onDeleted();
+            await priv.deleteCollection(collectionRef);
+            if (priv.isCurrent()) onDeleted();
           } catch (failure) {
+            if (!priv.isCurrent()) return;
             // Already gone (here or on another device): the outcome the Buyer asked for.
             if (problemCode(failure) === 'NOT_FOUND') onDeleted();
             else setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
