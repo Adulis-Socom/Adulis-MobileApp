@@ -1,0 +1,148 @@
+# Buyer messaging (WO-013) against the real local API on a DISPOSABLE database. The harness gives the
+# fixture Seller (Fixture Weaves, chatbot-entitled) a disposable intent whose phrase is
+# "Delivery times?" and whose answer template has no catalogue copy, so the bot answers (KEYWORD)
+# and the app shows its neutral line. Steps (env STEP):
+#   guest   a fresh install: Message Seller on the Seller Profile sends the guest to sign in
+#   open    signed in: Seller Profile -> Message Seller -> the conversation opens (empty) -> a plain
+#           message is sent and shown as "You" -> "Delivery times?" gets an "Automated answer" ->
+#           Ask the Seller -> the escalation line appears
+#   reopen  Messages (from You) lists the conversation; opening it shows the same history (the
+#           Seller Profile's Message Seller returns the same conversation, checked by the harness)
+#   view    the conversation in Dark at font scale 1.3 (the harness sets both)
+#
+#   maestro test -e STEP=open .maestro/messaging.yaml
+appId: com.adulis.app
+name: Buyer messaging
+tags:
+  - buyer
+  - messaging
+---
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - launchApp:
+          clearState: true
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP != 'guest'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'guest' || STEP == 'open'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Message Seller
+
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - extendedWaitUntil:
+          visible: 'Enter your phone number\..*'
+          timeout: 20000
+      - takeScreenshot: msg-01-guest-sign-in
+
+- runFlow:
+    when:
+      true: ${STEP == 'open'}
+    commands:
+      - extendedWaitUntil:
+          visible: No messages yet. Write the first one below.
+          timeout: 30000
+      - assertVisible: 'Messages are sent only while you are connected\..*'
+      - takeScreenshot: msg-02-empty
+      - tapOn: Message
+      - inputText: Hello from the native test
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          visible: Hello from the native test
+          timeout: 30000
+      - assertVisible: You
+      - takeScreenshot: msg-03-sent
+      - tapOn: Message
+      - inputText: Delivery times?
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          visible: Automated answer
+          timeout: 30000
+      - assertVisible: This automated answer cannot be shown.
+      - assertVisible: Ask the Seller
+      - takeScreenshot: msg-04-automated
+      - tapOn: Ask the Seller
+      - extendedWaitUntil:
+          visible: Your question has been passed to the seller. They will reply here.
+          timeout: 30000
+      - assertNotVisible: Ask the Seller
+      - takeScreenshot: msg-05-escalated
+
+- runFlow:
+    when:
+      true: ${STEP == 'reopen'}
+    commands:
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Messages
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Messages
+          index: 1
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - takeScreenshot: msg-06-list
+      - tapOn: Fixture Weaves
+      # The newest message is at the bottom, above the composer; older ones may be scrolled away.
+      - extendedWaitUntil:
+          visible: Your question has been passed to the seller. They will reply here.
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'empty'}
+    commands:
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Messages
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Messages
+          index: 1
+      - extendedWaitUntil:
+          visible: No conversations yet. You can message a Seller from their profile.
+          timeout: 30000
+      - assertNotVisible: Fixture Weaves
+      - takeScreenshot: msg-08-other-account
+
+- runFlow:
+    when:
+      true: ${STEP == 'view'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Message Seller
+          direction: DOWN
+      - tapOn: Message Seller
+      - extendedWaitUntil:
+          visible: Automated answer
+          timeout: 30000
+      - takeScreenshot: msg-07-dark-large
