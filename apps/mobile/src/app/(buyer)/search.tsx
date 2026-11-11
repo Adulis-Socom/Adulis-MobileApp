@@ -1,9 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useBootstrap } from '../../api/bootstrap';
 import type { SearchType } from '../../api/client';
+import { CategoryTabs, useCategories, useCategoryStillOffered } from '../../buyer/categories';
 import { SearchResults } from '../../buyer/SearchResults';
 import { AppText } from '../../components/AppText';
 import { useT } from '../../i18n/i18n';
@@ -37,6 +39,17 @@ export default function Search() {
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<SearchType>('TOP');
+  // WO-010: a category narrows Product results only (Top, Scenes and Sellers are unchanged).
+  const [category, setCategory] = useState<string | null>(null);
+  const categories = useCategories(useBootstrap().data !== undefined);
+  const toAll = useCallback(() => setCategory(null), []);
+  useCategoryStillOffered(category, categories, toAll);
+  // A refusal (the category is no longer offered): back to All, and read the categories again.
+  const { refetch: refetchCategories } = categories;
+  const onCategoryRefused = useCallback(() => {
+    setCategory(null);
+    void refetchCategories();
+  }, [refetchCategories]);
 
   useEffect(() => {
     const next = tidy(text);
@@ -123,6 +136,9 @@ export default function Search() {
             );
           })}
         </View>
+        {tab === 'PRODUCT_POST' && categories.categories.length > 0 ? (
+          <CategoryTabs categories={categories.categories} value={category} onChange={setCategory} />
+        ) : null}
       </View>
       {query.length === 0 ? (
         <AppText style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>{t('buyer.search.hint')}</AppText>
@@ -132,7 +148,13 @@ export default function Search() {
         </AppText>
       ) : (
         <View style={{ flex: 1 }}>
-          <SearchResults key={`${tab}|${query}`} query={query} tab={tab} />
+          <SearchResults
+            key={`${tab}|${query}|${tab === 'PRODUCT_POST' ? (category ?? '') : ''}`}
+            query={query}
+            tab={tab}
+            category={tab === 'PRODUCT_POST' ? category : null}
+            onCategoryRefused={onCategoryRefused}
+          />
         </View>
       )}
     </SafeAreaView>

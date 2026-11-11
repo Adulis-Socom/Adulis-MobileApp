@@ -47,6 +47,8 @@ export type SellerReview = SellerReviewPage['data'][number];
 export type ShopProductPage = Json<paths['/v1/shop/products']['get']['responses'][200]>;
 export type ShopProduct = ShopProductPage['data'][number];
 export type SearchPage = Json<paths['/v1/search']['get']['responses'][200]>;
+export type CategoryPage = Json<paths['/v1/categories']['get']['responses'][200]>;
+export type Category = CategoryPage['data'][number];
 export type SearchItem = SearchPage['items'][number];
 export type SearchType = SearchPage['type'];
 export type CollectionPage = Json<paths['/v1/collections']['get']['responses'][200]>;
@@ -284,17 +286,21 @@ export function createApiClient(deps: ApiDeps) {
      * GET /v1/shop/products (WO-007): the Buyer's Market's public Products, newest first
      * publication. The Market is the server's (the session when held, else this device).
      */
-    shopProducts: (cursor: string | null) =>
+    shopProducts: (cursor: string | null, category: string | null = null) =>
       call<ShopProductPage>('GET', '/v1/shop/products', {
-        query: { cursor: cursor ?? undefined, limit: '30' },
+        // WO-010: a category code narrows the list on the server; its cursor is bound to it.
+        query: { cursor: cursor ?? undefined, limit: '30', category: category ?? undefined },
         ok: 200,
       }),
     /** Marketplace Search (WO-008): TOP is one bounded page; a single type pages by cursor. */
-    search: (q: string, type: SearchType, cursor: string | null) =>
+    search: (q: string, type: SearchType, cursor: string | null, category: string | null = null) =>
       call<SearchPage>('GET', '/v1/search', {
-        query: { q, type, cursor: cursor ?? undefined, limit: type === 'TOP' ? undefined : '20' },
+        // WO-010: a category narrows Product results only (the server refuses it elsewhere).
+        query: { q, type, cursor: cursor ?? undefined, limit: type === 'TOP' ? undefined : '20', category: type === 'PRODUCT_POST' ? (category ?? undefined) : undefined },
         ok: 200,
       }),
+    /** GET /v1/categories (WO-010): the requester Market's enabled categories, in order. */
+    categories: () => call<CategoryPage>('GET', '/v1/categories', { ok: 200 }),
 
     /**
      * Private Buyer Collections (WO-009). Signed in only; the owner is the bearer's Account. The

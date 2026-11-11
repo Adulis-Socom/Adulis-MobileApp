@@ -220,6 +220,8 @@ const defaults: Record<string, Handler> = {
     },
   }),
   'GET /v1/collections/saves': () => ({ status: 200, body: { data: [], next_cursor: null } }),
+  // WO-010: no category enabled in the Market unless a test serves some.
+  'GET /v1/categories': () => ({ status: 200, body: { market_resolved: true, data: [] } }),
   'POST /v1/collections/saved-state:batch': (call) => ({
     status: 200,
     body: {

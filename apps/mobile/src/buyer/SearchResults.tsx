@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -11,6 +12,7 @@ import { Button } from '../components/Button';
 import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
+import { categoryRefused } from './categories';
 import { usePublicList } from './public-list';
 import { CardSaveButton } from './CardSaveButton';
 import { PublicListView } from './PublicListView';
@@ -38,7 +40,19 @@ export const searchTarget = (item: SearchItem): SaveTarget | null =>
  * The list is keyed by tab and query, so a late answer to an older query lands in a list nobody
  * shows. Read only once a bootstrap has placed the device in its Market, as the Shop does.
  */
-export function SearchResults({ query, tab }: { query: string; tab: SearchType }) {
+export function SearchResults({
+  query,
+  tab,
+  category = null,
+  onCategoryRefused,
+}: {
+  query: string;
+  tab: SearchType;
+  /** WO-010: a category code narrowing Product results (PRODUCT_POST only). */
+  category?: string | null;
+  /** The server no longer offers that category in this Market. */
+  onCategoryRefused?: () => void;
+}) {
   const t = useT();
   const theme = useTheme();
   const router = useRouter();
@@ -46,8 +60,8 @@ export function SearchResults({ query, tab }: { query: string; tab: SearchType }
   const bootstrap = useBootstrap();
   const placed = bootstrap.data !== undefined;
   const list = usePublicList({
-    resource: ['search', tab, query],
-    read: placed ? (cursor) => api.search(query, tab, cursor) : null,
+    resource: ['search', tab, query, category ?? ''],
+    read: placed ? (cursor) => api.search(query, tab, cursor, category) : null,
     items: (page: SearchPage) => page.items,
     keyOf: searchKey,
   });
@@ -60,6 +74,10 @@ export function SearchResults({ query, tab }: { query: string; tab: SearchType }
       : bootstrap.isError && !bootstrap.isFetching
         ? { message: failureMessage(t, bootstrap.error), onRetry: () => void bootstrap.refetch() }
         : null;
+  const refused = categoryRefused(list.error);
+  useEffect(() => {
+    if (refused) onCategoryRefused?.();
+  }, [refused, onCategoryRefused]);
   const grid = tab === 'PRODUCT_POST' || tab === 'SCENE_POST';
   return (
     <PublicListView

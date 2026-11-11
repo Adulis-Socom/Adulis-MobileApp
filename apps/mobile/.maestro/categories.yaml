@@ -1,0 +1,195 @@
+# Category discovery (WO-010) against the real local API, run by the harness in steps (env STEP):
+#   shop    guest: Shop -> All Products (default) -> Fashion -> Cosmetics -> Electronics -> All;
+#           a Fashion Product opens Product Detail, and its Seller line opens the Seller Profile
+#   search  guest: Search "scarf" -> Products -> Fashion narrows on the server; Top has no categories
+#   save    signed in: Shop -> Fashion -> Save on a filtered card
+#   dark    Shop categories in Dark at an enlarged font scale (the harness sets both)
+# Needs the WO-CAT-001/006/007 native fixtures and the harness's controlled category assignments on
+# the DISPOSABLE database (Cotton scarf FASHION; Shop item 31 and 32 COSMETICS; Shop item 30
+# ELECTRONICS); the seed enables the three launch categories in its fixture Market.
+#
+#   maestro test -e STEP=shop .maestro/categories.yaml
+appId: com.adulis.app
+name: Category discovery
+tags:
+  - buyer
+  - shop
+---
+- runFlow:
+    when:
+      true: ${STEP == 'shop' || STEP == 'search'}
+    commands:
+      - launchApp:
+          clearState: true
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP == 'save' || STEP == 'dark'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes|There are no Scenes to show right now\. Pull down to check again\.
+    timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop' || STEP == 'save' || STEP == 'dark'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: category-tab-FASHION
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop'}
+    commands:
+      - assertVisible:
+          id: category-tab-ALL
+          selected: true
+      - assertVisible: All Products
+      - takeScreenshot: cat-01-all
+      - tapOn:
+          id: category-tab-FASHION
+      - extendedWaitUntil:
+          visible: 'Cotton scarf, .*Currently unavailable'
+          timeout: 30000
+      - assertNotVisible: 'Woven basket, .*'
+      - assertVisible:
+          id: category-tab-FASHION
+          selected: true
+      - takeScreenshot: cat-02-fashion
+      - tapOn:
+          id: category-tab-COSMETICS
+      - extendedWaitUntil:
+          visible: 'Shop item 32, .*'
+          timeout: 30000
+      - assertVisible: 'Shop item 31, .*'
+      - assertNotVisible: 'Cotton scarf, .*'
+      - takeScreenshot: cat-03-cosmetics
+      - tapOn:
+          id: category-tab-ELECTRONICS
+      - extendedWaitUntil:
+          visible: 'Shop item 30, .*'
+          timeout: 30000
+      - assertNotVisible: 'Shop item 32, .*'
+      - takeScreenshot: cat-04-electronics
+      - tapOn:
+          id: category-tab-FASHION
+      - extendedWaitUntil:
+          visible: 'Cotton scarf, .*'
+          timeout: 30000
+      - tapOn: 'Cotton scarf, .*'
+      - extendedWaitUntil:
+          visible:
+            id: product-seller
+          timeout: 30000
+      - takeScreenshot: cat-05-product
+      - tapOn:
+          id: product-seller
+      - extendedWaitUntil:
+          visible: '@fixture-weaves'
+          timeout: 30000
+      - back
+      - back
+      - extendedWaitUntil:
+          visible:
+            id: category-tab-FASHION
+            selected: true
+          timeout: 15000
+      - tapOn:
+          id: category-tab-ALL
+      - extendedWaitUntil:
+          visible: 'Woven basket, .*|Shop item 32, .*'
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'search'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Find Products, Sellers and Scenes in your Market\.
+          times: 5
+          commands:
+            - tapOn:
+                text: Search
+                index: 0
+            - waitForAnimationToEnd
+      - tapOn:
+          id: search-input
+      - inputText: scarf
+      - extendedWaitUntil:
+          visible: 'Cotton scarf, .*'
+          timeout: 30000
+      - hideKeyboard
+      - assertNotVisible:
+          id: category-tab-FASHION
+      - tapOn:
+          id: search-tab-PRODUCT_POST
+      - extendedWaitUntil:
+          visible:
+            id: category-tab-FASHION
+          timeout: 30000
+      - tapOn:
+          id: category-tab-FASHION
+      - extendedWaitUntil:
+          visible: 'Cotton scarf, .*'
+          timeout: 30000
+      - takeScreenshot: cat-06-search-fashion
+      - tapOn:
+          id: category-tab-ELECTRONICS
+      - extendedWaitUntil:
+          visible: No results for .*|Nothing matches .*|.*scarf.*
+          timeout: 30000
+      - assertNotVisible: 'Cotton scarf, .*'
+      - takeScreenshot: cat-07-search-electronics
+
+- runFlow:
+    when:
+      true: ${STEP == 'save'}
+    commands:
+      - tapOn:
+          id: category-tab-FASHION
+      - extendedWaitUntil:
+          visible:
+            text: Save Cotton scarf
+            enabled: true
+          timeout: 30000
+      - tapOn: Save Cotton scarf
+      - extendedWaitUntil:
+          visible:
+            text: Save Cotton scarf
+            checked: true
+          timeout: 15000
+      - takeScreenshot: cat-08-save-filtered
+      - tapOn: Save Cotton scarf
+      - extendedWaitUntil:
+          visible:
+            text: Save Cotton scarf
+            checked: false
+          timeout: 15000
+
+- runFlow:
+    when:
+      true: ${STEP == 'dark'}
+    commands:
+      - takeScreenshot: cat-09-dark-all
+      - tapOn:
+          id: category-tab-COSMETICS
+      - extendedWaitUntil:
+          visible: 'Shop item 32, .*'
+          timeout: 30000
+      - takeScreenshot: cat-10-dark-cosmetics
+      - tapOn:
+          id: category-tab-ALL

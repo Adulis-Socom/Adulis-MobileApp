@@ -39,7 +39,13 @@ tags:
 - assertVisible: 'Clay cup, .*350\.00, Available'
 - assertVisible: 'Cotton scarf, .*Currently unavailable'
 - assertNotVisible: '.*5,000\.00.*'
-- assertNotVisible: Fashion
+# WO-010: the founder-approved categories are offered (All Products selected); the Locally Made,
+# Discounts and New Drops modules are still absent (no membership rule is approved).
+- assertVisible:
+    id: category-tab-ALL
+    selected: true
+- assertNotVisible: Locally Made
+- assertNotVisible: Discounts
 - assertNotVisible: Add to cart
 - assertNotVisible: Filter
 - assertVisible: Sold by Fixture Weaves

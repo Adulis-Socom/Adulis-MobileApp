@@ -51,6 +51,8 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     // Only the immediately previous generation of the same subject stands in while a pull loads.
     placeholderData: (previous, previousQuery) =>
       !list.withhold &&
+      // The same resource only (WO-010 review R2: another category's or filter's items never stand in).
+      resource.every((part, i) => previousQuery?.queryKey[i] === part) &&
       previousQuery?.queryKey[depth] === subject &&
       previousQuery.queryKey[depth + 1] === list.generation - 1
         ? previous
