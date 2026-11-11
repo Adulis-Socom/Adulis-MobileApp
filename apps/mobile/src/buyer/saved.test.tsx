@@ -7,8 +7,11 @@ import { useUiStore } from '../state/ui-store';
 import {
   DEFAULT_COLLECTION_REF,
   GOOD_TOKEN,
+  SIGNED_IN_CONTEXT,
   SIGN_IN_CODE,
+  bootstrapBody,
   installFakeApi,
+  problem,
   publicScene,
   shopProduct,
   storefrontProduct,
@@ -329,6 +332,97 @@ describe('a guest Save', () => {
     await renderRouter(APP_DIR, { initialUrl: '/auth/sign-in?returnTo=https://evil.example/product/a/b' });
     await completeSignIn();
     await waitFor(() => expect(screen).toHavePathname('/account'));
+  });
+});
+
+describe('the guest Save continuation is bound to the session that signed in (WO-009A S9)', () => {
+  // A second Account: the first sign-in answers A's credential, the next one B's.
+  const TOKEN_B = 'Fake_credential_for_tests_B123456789abcdefg';
+  const twoAccounts = () => {
+    let verified = 0;
+    api.on('POST /v1/auth/otp/verify', (call) =>
+      call.body?.code === SIGN_IN_CODE
+        ? {
+            status: 200,
+            body: {
+              account_id: verified === 0 ? '0b6f1a3e-1111-4111-8111-111111111111' : '0b6f1a3e-1111-4111-8111-11111111111b',
+              audience: 'MOBILE',
+              roles: [],
+              expires_at: '2026-12-09T12:00:00.000Z',
+              token: verified++ === 0 ? GOOD_TOKEN : TOKEN_B,
+            },
+          }
+        : problem(401, 'OTP_INVALID', 'auth'),
+    );
+    api.on('GET /v1/bootstrap', (call) => ({
+      status: 200,
+      body: bootstrapBody(call.headers.Authorization ? { account_context: SIGNED_IN_CONTEXT } : {}),
+    }));
+  };
+  const signIn = async () => {
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+  };
+  const startGuestSave = async () => {
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await fireEvent.press(await saveButton());
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await waitFor(() => expect(screen).toHavePathname('/auth/sign-in'));
+  };
+  const asA = (c: { headers: Record<string, string> }) => c.headers.Authorization === `Bearer ${GOOD_TOKEN}`;
+  const stateCalls = () => api.callsTo('POST /v1/collections/saved-state:batch');
+
+  it('25, 26. A delayed answer for Account A sends nothing after sign-out and Account B signing in', async () => {
+    twoAccounts();
+    const gate = held();
+    fc.intercept('state', async (call) => {
+      if (asA(call)) await gate.gate; // every answer for A lands late
+      return undefined;
+    });
+    await startGuestSave();
+    await signIn();
+    await waitFor(() => expect(screen).toHavePathname('/product/seller-1/basket'));
+    await waitFor(() => expect(stateCalls().filter(asA).length).toBeGreaterThanOrEqual(1));
+
+    // A signs out; B signs in on the same device; only then does A's answer arrive.
+    await act(() => router.navigate('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await signIn();
+    await waitFor(() => expect(screen).toHavePathname('/account'));
+    await act(async () => gate.release());
+    // Let every late answer, and anything it would trigger, run to completion.
+    for (let i = 0; i < 20; i++) await act(() => Promise.resolve());
+
+    // No membership request at all: not for B, and not for A after A left.
+    expect(adds()).toEqual([]);
+    expect(fc.items).toEqual([]);
+    expect(useUiStore.getState().pendingSave).toBeNull();
+  });
+
+  it('24. an expired session stops the continuation: signed out, nothing saved', async () => {
+    twoAccounts();
+    fc.intercept('state', (call) => (asA(call) ? problem(401, 'SESSION_EXPIRED', 'auth') : undefined));
+    await startGuestSave();
+    await signIn();
+    await act(() => router.navigate('/saved'));
+    expect(await screen.findByText(en['buyer.saved.signed_out'])).toBeOnTheScreen();
+    expect(adds()).toEqual([]);
+  });
+
+  it('22. a cancelled sign-in drops the armed Save at the next sign-in, whatever screen it starts from', async () => {
+    twoAccounts();
+    await startGuestSave();
+    expect(useUiStore.getState().pendingSave).not.toBeNull();
+    await act(() => router.back());
+    await act(() => router.navigate('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await signIn();
+    await waitFor(() => expect(screen).toHavePathname('/account'));
+    expect(useUiStore.getState().pendingSave).toBeNull();
+    expect(adds()).toEqual([]);
   });
 });
 

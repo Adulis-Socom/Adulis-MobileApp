@@ -1,0 +1,206 @@
+# Card Saves (WO-009A), signed in, against the real local API, run by the harness in steps (env STEP):
+#   shop       Shop (after the guest continuation saved the Woven basket): Remove and Save on the card
+#              (never opens it) -> Saved lists it -> Remove again
+#   search     Search "basket": Top row Save, the Products grid shows the same state and removes it,
+#              the Scenes grid saves a Scene
+#   seller     the Seller Profile (adulis://sellers/fixture-weaves): the Scene saved from Search is
+#              shown saved; the other Scene and the Woven basket are saved from their cards
+#   account-b  another Account signed in on the same device: nothing of the first Account's is shown
+#   dark       the cards in Dark at an enlarged font scale (the harness sets both)
+# Needs the WO-CAT-001 native fixtures (Fixture Weaves: Woven basket, two Scenes).
+#
+#   maestro test -e STEP=shop .maestro/card-saves.yaml
+appId: com.adulis.app
+name: Card Saves
+tags:
+  - buyer
+  - saved
+---
+- launchApp:
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes|There are no Scenes to show right now\. Pull down to check again\.
+    timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop' || STEP == 'account-b' || STEP == 'dark'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            enabled: true
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop'}
+    commands:
+      # Saved by the guest continuation just before (card-saves-guest + saved-guest-2): the server's state.
+      - assertVisible:
+          text: Save Woven basket
+          checked: true
+      - takeScreenshot: card-01-shop-saved-after-guest
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: false
+          timeout: 15000
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: true
+          timeout: 15000
+      - assertVisible: Newest first
+      - tapOn: Saved
+      - extendedWaitUntil:
+          visible: 'Saved, Products: 1, Scenes: 0'
+          timeout: 30000
+      - assertVisible: 'Woven basket, .*'
+      - takeScreenshot: card-02-in-saved
+      - tapOn: Shop
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: false
+          timeout: 15000
+      - takeScreenshot: card-03-shop-removed
+
+- runFlow:
+    when:
+      true: ${STEP == 'search'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Find Products, Sellers and Scenes in your Market\.
+          times: 5
+          commands:
+            - tapOn:
+                text: Search
+                index: 0
+            - waitForAnimationToEnd
+      - tapOn:
+          id: search-input
+      - inputText: basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            enabled: true
+          timeout: 30000
+      - hideKeyboard
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: true
+          timeout: 15000
+      - takeScreenshot: card-04-search-top
+      - tapOn:
+          id: search-tab-PRODUCT_POST
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: true
+          timeout: 30000
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: false
+          timeout: 15000
+      - tapOn:
+          id: search-tab-SCENE_POST
+      - extendedWaitUntil:
+          visible:
+            text: 'Save Morning light on the new baskets.*'
+            enabled: true
+          timeout: 30000
+      - tapOn: 'Save Morning light on the new baskets.*'
+      - extendedWaitUntil:
+          visible:
+            text: 'Save Morning light on the new baskets.*'
+            checked: true
+          timeout: 15000
+      - takeScreenshot: card-05-search-scene
+
+- runFlow:
+    when:
+      true: ${STEP == 'seller'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: '@fixture-weaves'
+          timeout: 30000
+      - extendedWaitUntil:
+          visible:
+            text: 'Save Morning light on the new baskets.*'
+            checked: true
+          timeout: 30000
+      - tapOn:
+          text: 'Save (?!Morning light on the new baskets).*'
+          checked: false
+      - extendedWaitUntil:
+          visible:
+            text: 'Save (?!Morning light on the new baskets).*'
+            checked: true
+          timeout: 15000
+      - takeScreenshot: card-06-seller-scenes
+      - tapOn: Products
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            enabled: true
+          timeout: 30000
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: true
+          timeout: 15000
+      - assertVisible: '@fixture-weaves'
+      - takeScreenshot: card-07-seller-products
+
+- runFlow:
+    when:
+      true: ${STEP == 'account-b'}
+    commands:
+      - assertVisible:
+          text: Save Woven basket
+          checked: false
+      - takeScreenshot: card-08-account-b-shop
+      - tapOn: Saved
+      - extendedWaitUntil:
+          visible: 'Saved, Products: 0, Scenes: 0'
+          timeout: 30000
+      - assertNotVisible: 'Woven basket, .*'
+      - takeScreenshot: card-09-account-b-saved
+
+- runFlow:
+    when:
+      true: ${STEP == 'dark'}
+    commands:
+      - takeScreenshot: card-10-dark-shop
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: true
+          timeout: 15000
+      - takeScreenshot: card-11-dark-shop-saved
+      - tapOn: Save Woven basket
+      - extendedWaitUntil:
+          visible:
+            text: Save Woven basket
+            checked: false
+          timeout: 15000

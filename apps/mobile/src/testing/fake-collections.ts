@@ -24,7 +24,7 @@ export function installFakeCollections(
   const items: Item[] = [];
   const hidden = new Set<string>();
   // A test can answer a route itself (fail it, hold it); undefined falls through to the fake.
-  const intercepts: Partial<Record<'add' | 'saves' | 'collections', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
+  const intercepts: Partial<Record<'add' | 'saves' | 'collections' | 'state', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
   const via =
     (name: keyof typeof intercepts, handler: (call: Recorded) => Reply) =>
     async (call: Recorded): Promise<Reply> =>
@@ -84,7 +84,7 @@ export function installFakeCollections(
       return { status: 200, body: { data: latest.map(present), next_cursor: null } };
     }),
   );
-  api.on('POST /v1/collections/saved-state:batch', (call) => ({
+  api.on('POST /v1/collections/saved-state:batch', via('state', (call) => ({
     status: 200,
     body: {
       default_collection_ref: DEFAULT_COLLECTION_REF,
@@ -99,7 +99,7 @@ export function installFakeCollections(
         };
       }),
     },
-  }));
+  })));
   api.onPattern('GET', /^\/v1\/collections\/[^/]+$/, (call) => {
     const c = owned(refAt(call.path, 3));
     if (!c) return problem(404, 'NOT_FOUND', 'request');

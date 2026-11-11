@@ -1,0 +1,41 @@
+# Card Save as a guest (WO-009A S8), part 2 of 2: the code signs the guest in; the app is on the
+# Product the card named (opened under the sign-in), shown Saved once the Save has finished in the
+# new session; Back returns to the Shop, where the card is saved too (never to sign-in again).
+#
+#   maestro test -e OTP=123456 .maestro/card-saves-guest-2.yaml
+appId: com.adulis.app
+name: Card Save - guest, after sign-in
+tags:
+  - buyer
+  - saved
+---
+- tapOn: Six-digit code
+- inputText: ${OTP}
+- hideKeyboard
+- tapOn: Verify
+- runFlow:
+    when:
+      visible: I confirm that I am 18 years of age or older.
+    commands:
+      - tapOn: I confirm that I am 18 years of age or older.
+      - tapOn: Verify
+- extendedWaitUntil:
+    visible:
+      id: product-seller
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: Saved
+    direction: DOWN
+- takeScreenshot: card-guest-02-saved-after-sign-in
+- back
+- extendedWaitUntil:
+    visible: Newest first
+    timeout: 15000
+- assertNotVisible: Enter your phone number\. We will send you a code by SMS\.
+- extendedWaitUntil:
+    visible:
+      text: Save Woven basket
+      checked: true
+    timeout: 15000
+- takeScreenshot: card-guest-03-back-on-shop

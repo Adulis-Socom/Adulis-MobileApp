@@ -1,0 +1,49 @@
+# Card Save as a guest (WO-009A S8), part 1 of 2, against the real local API: a guest taps the
+# bookmark on a Shop card, is told why signing in is needed, cancels (nothing saved, the card
+# never opened), taps again, chooses Sign in and asks for a code. Part 2 is saved-guest-2.yaml:
+# the code signs in, the app opens that Product and finishes the Save in the new session.
+# Needs the WO-CAT-001 native fixtures (Fixture Weaves: Woven basket).
+#
+#   maestro test -e PHONE=+251911000123 .maestro/card-saves-guest.yaml
+appId: com.adulis.app
+name: Card Save - guest
+tags:
+  - buyer
+  - saved
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+- repeat:
+    while:
+      notVisible: Newest first
+    times: 5
+    commands:
+      - tapOn: Shop
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: Save Woven basket
+    timeout: 30000
+- tapOn: Save Woven basket
+- assertVisible: Sign in to save\.
+- assertVisible: 'Sign in to save Products and Scenes to your private collections\. This item opens, and once you have signed in it is saved if it is still available\.'
+- takeScreenshot: card-guest-01-prompt
+- tapOn: '(?i)cancel'
+- assertVisible: Newest first
+- assertVisible:
+    text: Save Woven basket
+    checked: false
+- tapOn: Save Woven basket
+- tapOn: '(?i)sign in'
+- assertVisible: Enter your phone number\. We will send you a code by SMS\.
+- tapOn: Phone number
+- inputText: ${PHONE}
+- hideKeyboard
+- tapOn: Send code
+- extendedWaitUntil:
+    visible: Six-digit code
+    timeout: 30000
