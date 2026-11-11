@@ -451,6 +451,8 @@ export const enCommon = {
   'buyer.delete.deleting': 'Deleting your Account',
   'buyer.delete.done': 'Your Adulis Account has been deleted, and this device is signed out.',
   'buyer.delete.done_home': 'Go to Home',
+  'buyer.delete.unconfirmed':
+    'We could not confirm whether your Account was deleted. If it was, this device is signed out the next time it reaches Adulis.',
 
   // Mobile sign-in, bootstrap and connectivity (WO-003; ADU-AUTH-02 v3.3, ADU-MOB-02 v4.3
   // S70-S76, S85). Server errors render from their own error.* keys and slots.

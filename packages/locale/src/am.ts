@@ -410,6 +410,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.delete.deleting': 'መለያዎን በመሰረዝ ላይ',
   'buyer.delete.done': 'የአዱሊስ መለያዎ ተሰርዟል፣ እና ይህ መሣሪያ ወጥቷል።',
   'buyer.delete.done_home': 'ወደ መነሻ ሂድ',
+  'buyer.delete.unconfirmed':
+    'መለያዎ መሰረዙን ማረጋገጥ አልተቻለም። ከተሰረዘ፣ ይህ መሣሪያ በሚቀጥለው ጊዜ ወደ አዱሊስ ሲደርስ ይወጣል።',
 
   // WO-003 sign-in and bootstrap: machine-translation placeholders awaiting the human pass,
   // except the age declaration, which a person must translate (HUMAN-REQUIRED).
