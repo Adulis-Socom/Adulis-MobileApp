@@ -5,7 +5,6 @@ import { AccessibilityInfo } from 'react-native';
 import {
   isTransient,
   newIdempotencyKey,
-  wasAnswered,
   type AddItemBody,
   type ApiClient,
   type Collection,
@@ -52,15 +51,16 @@ function confirm(qc: QueryClient, target: SaveTarget, update: (s: SavedState) =>
 
 /**
  * The one-tap Save (S21): Save puts the target in the DEFAULT Collection, Saved removes it from
- * there; named Collections are the picker's. One request at a time; the Save intent keeps its
- * Idempotency-Key across a lost answer and drops it once the server has answered.
+ * there; named Collections are the picker's. One request at a time (the button is disabled while
+ * one is in flight). Each tap is its own Idempotency-Key: the membership is already idempotent on
+ * the server (one row per Collection and target), and a key kept across a lost answer could
+ * replay a membership removed since (independent review D3).
  */
 export function useSaveToggle(target: SaveTarget, surface: SaveSurface, sceneRef: string | null) {
   const t = useT();
   const { api, session } = useSession();
   const qc = useQueryClient();
   const state = useSavedState(target);
-  const intent = useRef<string | null>(null);
   const token = session.status === 'signedIn' ? session.token : null;
   const current = useRef(token);
   current.current = token;
@@ -71,19 +71,10 @@ export function useSaveToggle(target: SaveTarget, surface: SaveSurface, sceneRef
       const held = s.items[0];
       if (held?.saved && held.default_item_ref) {
         await api.removeFromCollection(s.default_collection_ref, held.default_item_ref);
-        // A later Save is a new intent: an old key would replay a membership that no longer exists.
-        intent.current = null;
         return { started, saved: false as const, item: null };
       }
-      intent.current ??= newIdempotencyKey();
-      try {
-        const item = await api.addToCollection(s.default_collection_ref, saveBody(target, surface, sceneRef), intent.current);
-        intent.current = null;
-        return { started, saved: true as const, item: item.ref };
-      } catch (failure) {
-        if (wasAnswered(failure)) intent.current = null;
-        throw failure;
-      }
+      const item = await api.addToCollection(s.default_collection_ref, saveBody(target, surface, sceneRef), newIdempotencyKey());
+      return { started, saved: true as const, item: item.ref };
     },
     onSuccess: ({ started, saved, item }) => {
       // A late answer for an earlier session changes nothing on screen (the cache was cleared).

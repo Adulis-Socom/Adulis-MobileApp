@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionItem, type ItemFilter } from '../api/client';
+import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
@@ -142,7 +142,7 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
  * Create a named Collection (WO-009 S14). The name is checked as the server checks it (1-60
  * characters once trimmed); the server's answer still decides. Returns the new Collection.
  */
-export function NewCollection({ onCreated }: { onCreated: (created: Collection) => void }) {
+export function NewCollection({ onCreated }: { onCreated: (created: CollectionCreated) => void }) {
   const t = useT();
   const theme = useTheme();
   const { api } = useSession();

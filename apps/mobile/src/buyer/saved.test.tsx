@@ -213,7 +213,7 @@ describe('one-tap Save', () => {
     expect(fc.items).toHaveLength(0);
   });
 
-  it('a refused Save stays unsaved and says so; the next tap reuses the same intent after a lost answer', async () => {
+  it('a refused Save stays unsaved and says so; the next tap saves once (the membership is idempotent)', async () => {
     signedIn();
     let answer: Reply | undefined = 'offline';
     fc.intercept('add', () => answer);
@@ -224,8 +224,9 @@ describe('one-tap Save', () => {
     answer = undefined;
     await fireEvent.press(await saveButton());
     expect(await savedButton()).toBeOnTheScreen();
-    const keys = new Set(adds().map((c) => c.headers['Idempotency-Key']));
-    expect(keys.size).toBe(1); // a lost answer is no answer: the same Save, the same key
+    // Each tap is its own key (review D3); the server keeps one membership whatever was lost.
+    expect(new Set(adds().map((c) => c.headers['Idempotency-Key'])).size).toBe(adds().length);
+    expect(fc.items).toHaveLength(1);
   });
 
   it('37, 38. saves and removes a whole Scene from Explore the Scene', async () => {

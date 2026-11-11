@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,7 +58,6 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   }, [hasNextPage, loadMore, collections.items.length]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const intents = useRef(new Map<string, string>());
 
   if (!params) {
     return (
@@ -75,17 +74,13 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     setError(null);
     try {
       if (add) {
-        const key = intents.current.get(collectionRef) ?? newIdempotencyKey();
-        intents.current.set(collectionRef, key);
-        await api.addToCollection(collectionRef, saveBody(params.target, params.surface, params.sceneRef), key);
-        intents.current.delete(collectionRef);
+        // Each tick its own key: the membership itself is idempotent on the server (review D3).
+        await api.addToCollection(collectionRef, saveBody(params.target, params.surface, params.sceneRef), newIdempotencyKey());
       } else {
         const held = memberships.find((m) => m.collection_ref === collectionRef);
         if (held) await api.removeFromCollection(collectionRef, held.item_ref);
-        intents.current.delete(collectionRef); // a later tick is a new intent
       }
     } catch (failure) {
-      if (problemCode(failure) !== null) intents.current.delete(collectionRef);
       setError(problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`);
     } finally {
       await qc.invalidateQueries({ queryKey: [SAVED_STATE] });

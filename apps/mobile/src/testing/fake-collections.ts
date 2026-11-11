@@ -74,7 +74,7 @@ export function installFakeCollections(
     if (name.length < 1 || name.length > 60) return problem(400, 'VALIDATION_FAILED', 'request', { path: 'name' });
     const c = { ref: id(), kind: 'USER_CREATED' as const, name, at: clock++ };
     collections.push(c);
-    return { status: 201, body: summary(c) };
+    return { status: 201, body: { ref: c.ref } };
   });
   api.on(
     'GET /v1/collections/saves',
@@ -127,7 +127,7 @@ export function installFakeCollections(
     const existing = items.find((i) => i.collection === c.ref && key(i.target) === key(target));
     const item = existing ?? { ref: id(), collection: c.ref, target, at: clock++ };
     if (!existing) items.push(item);
-    return { status: 201, body: present(item) };
+    return { status: 201, body: { ref: item.ref, collection_ref: item.collection, target_type: item.target.type, saved_at: ts(item.at) } };
   }));
   api.onPattern('DELETE', /^\/v1\/collections\/[^/]+\/items\/[^/]+$/, (call) => {
     const c = owned(refAt(call.path, 3));

@@ -53,6 +53,8 @@ export type CollectionPage = Json<paths['/v1/collections']['get']['responses'][2
 export type Collection = CollectionPage['data'][number];
 export type CollectionDetail = Json<paths['/v1/collections/{collectionRef}']['get']['responses'][200]>;
 export type CollectionItem = CollectionDetail['data'][number];
+export type CollectionCreated = Json<paths['/v1/collections']['post']['responses'][201]>;
+export type CollectionMembership = Json<paths['/v1/collections/{collectionRef}/items']['post']['responses'][201]>;
 export type SavedItemPage = Json<paths['/v1/collections/saves']['get']['responses'][200]>;
 export type SavedState = Json<paths['/v1/collections/saved-state:batch']['post']['responses'][200]>;
 export type AddItemBody = Json<paths['/v1/collections/{collectionRef}/items']['post']['requestBody']>;
@@ -301,7 +303,7 @@ export function createApiClient(deps: ApiDeps) {
     collections: (cursor: string | null) =>
       call<CollectionPage>('GET', '/v1/collections', { query: { cursor: cursor ?? undefined, limit: '50' }, ok: 200 }),
     createCollection: (name: string, idempotencyKey: string) =>
-      call<Collection>('POST', '/v1/collections', { body: { name }, idempotencyKey, ok: 201 }),
+      call<CollectionCreated>('POST', '/v1/collections', { body: { name }, idempotencyKey, ok: 201 }),
     collection: (collectionRef: string, type: ItemFilter, cursor: string | null) =>
       call<CollectionDetail>('GET', '/v1/collections/{collectionRef}', {
         params: { collectionRef },
@@ -315,9 +317,9 @@ export function createApiClient(deps: ApiDeps) {
     /** Recent Saves across every Collection, each target once, newest first. */
     savedItems: (type: ItemFilter, cursor: string | null) =>
       call<SavedItemPage>('GET', '/v1/collections/saves', { query: { type, cursor: cursor ?? undefined, limit: '30' }, ok: 200 }),
-    /** The key is the Save intent's own: a retry of the same tap reuses it. */
+    /** Answers the membership only; content is read through the Collection reads. */
     addToCollection: (collectionRef: string, body: AddItemBody, idempotencyKey: string) =>
-      call<CollectionItem>('POST', '/v1/collections/{collectionRef}/items', { params: { collectionRef }, body, idempotencyKey, ok: 201 }),
+      call<CollectionMembership>('POST', '/v1/collections/{collectionRef}/items', { params: { collectionRef }, body, idempotencyKey, ok: 201 }),
     /** Idempotent: removing an absent membership succeeds. */
     removeFromCollection: (collectionRef: string, itemRef: string) =>
       call<void>('DELETE', '/v1/collections/{collectionRef}/items/{itemRef}', { params: { collectionRef, itemRef }, ok: 204 }),
