@@ -13,6 +13,8 @@ import { useT } from '../../../i18n/i18n';
 import { useTheme } from '../../../theme/theme';
 
 const keyOf = (product: ShopProduct) => `${product.seller.handle}/${product.slug}`;
+// WO-009A: a Product's Save target is its id, never its handle and slug.
+const saveTarget = (product: ShopProduct) => ({ type: 'PRODUCT_POST' as const, ref: product.id });
 
 /**
  * Shop (ADU-MOB-02 v4.3 S32; WO-007): Product-oriented browsing of the Buyer's Market -- For You
@@ -67,6 +69,7 @@ export default function Shop() {
           <ProductTile product={item} handle={item.seller.handle} seller={item.seller} />
         )}
         numColumns={2}
+        saves={{ surface: 'SHOP', target: saveTarget }}
         header={
           <View
             style={{

@@ -96,15 +96,22 @@ function GuestSave({ target, surface, sceneRef, returnTo }: { target: SaveTarget
   return (
     <View style={{ gap: theme.space.sm }} testID="save-sign-in">
       <AppText accessibilityLiveRegion="polite">{t('buyer.save.sign_in')}</AppText>
-      <Button
-        label={t('auth.sign_in')}
-        onPress={() => {
-          // Armed in memory for this one sign-in; the nonce travels with it and nowhere else.
-          const nonce = uuid.v4();
-          useUiStore.getState().setPendingSave({ nonce, target, surface, sceneRef });
-          router.push({ pathname: '/auth/sign-in', params: { returnTo, save: nonce } });
-        }}
-      />
+      <Button label={t('auth.sign_in')} onPress={() => startGuestSave(router, { target, surface, sceneRef }, returnTo)} />
     </View>
   );
+}
+
+/**
+ * A guest chose Sign in to save (WO-009 S16, and the cards' prompt in WO-009A): the Save is
+ * armed in memory for this one sign-in, and its nonce travels with that sign-in and nowhere
+ * else. `returnTo` is one of the allowlisted destinations (src/auth/sign-in-flow.ts).
+ */
+export function startGuestSave(
+  router: ReturnType<typeof useRouter>,
+  pending: { target: SaveTarget; surface: SaveSurface; sceneRef: string | null },
+  returnTo: ReturnTo,
+) {
+  const nonce = uuid.v4();
+  useUiStore.getState().setPendingSave({ nonce, ...pending });
+  router.push({ pathname: '/auth/sign-in', params: { returnTo, save: nonce } });
 }

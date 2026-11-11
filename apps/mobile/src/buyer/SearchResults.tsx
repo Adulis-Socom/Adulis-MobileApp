@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { useBootstrap } from '../api/bootstrap';
-import type { SearchItem, SearchPage, SearchType } from '../api/client';
+import type { SaveTarget, SearchItem, SearchPage, SearchType } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
@@ -12,6 +12,7 @@ import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
+import { CardSaveButton } from './CardSaveButton';
 import { PublicListView } from './PublicListView';
 import { ProductTile } from './SellerProfile';
 
@@ -22,6 +23,14 @@ export const searchKey = (item: SearchItem) =>
     : item.type === 'SELLER'
       ? `SELLER:${item.payload.handle}`
       : `SCENE_POST:${item.payload.public_ref}`;
+
+/** A result's Save target (WO-009A): Products and Scenes by their public identity; a Seller has none. */
+export const searchTarget = (item: SearchItem): SaveTarget | null =>
+  item.type === 'PRODUCT_POST'
+    ? { type: 'PRODUCT_POST', ref: item.payload.id }
+    : item.type === 'SCENE_POST'
+      ? { type: 'SCENE_POST', ref: item.payload.public_ref }
+      : null;
 
 /**
  * The results of one query in one tab (WO-008): Top is one bounded mixed page; Products and
@@ -66,6 +75,7 @@ export function SearchResults({ query, tab }: { query: string; tab: SearchType }
         )
       }
       numColumns={grid ? 2 : 1}
+      saves={{ surface: 'SEARCH', target: searchTarget }}
       empty="buyer.search.loading"
       emptyState={
         <View style={{ gap: theme.space.md, alignItems: 'center' }}>
@@ -105,13 +115,14 @@ function SearchRow({ item }: { item: SearchItem }) {
     const availability = t(p.available ? 'buyer.product.available' : 'buyer.product.unavailable');
     const label = [p.name, price, availability].filter(Boolean).join(', ');
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={() => router.push({ pathname: '/product/[handle]/[slug]', params: { handle: p.seller.handle, slug: p.slug } })}
-        style={row}
-        testID="search-product"
-      >
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          onPress={() => router.push({ pathname: '/product/[handle]/[slug]', params: { handle: p.seller.handle, slug: p.slug } })}
+          style={[row, { flex: 1 }]}
+          testID="search-product"
+        >
         {thumb(p.image_key)}
         <View style={{ flex: 1, gap: theme.space.xs }}>
           <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
@@ -123,7 +134,14 @@ function SearchRow({ item }: { item: SearchItem }) {
             {fillSlots(t('buyer.product.seller'), { store: p.seller.store_name }) ?? p.seller.store_name}
           </AppText>
         </View>
-      </Pressable>
+        </Pressable>
+        <CardSaveButton
+          target={{ type: 'PRODUCT_POST', ref: p.id }}
+          name={p.name}
+          returnTo={`/product/${p.seller.handle}/${p.slug}`}
+          style={{ marginRight: theme.space.sm }}
+        />
+      </View>
     );
   }
   if (item.type === 'SELLER') {
@@ -147,13 +165,14 @@ function SearchRow({ item }: { item: SearchItem }) {
   }
   const scene = item.payload;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
-      onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
-      style={row}
-      testID="search-scene"
-    >
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
+        onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
+        style={[row, { flex: 1 }]}
+        testID="search-scene"
+      >
       {thumb(scene.image.thumb_key)}
       <View style={{ flex: 1, gap: theme.space.xs }}>
         <AppText numberOfLines={2}>{scene.caption}</AppText>
@@ -161,7 +180,14 @@ function SearchRow({ item }: { item: SearchItem }) {
           {fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name}
         </AppText>
       </View>
-    </Pressable>
+      </Pressable>
+      <CardSaveButton
+        target={{ type: 'SCENE_POST', ref: scene.public_ref }}
+        name={scene.caption}
+        returnTo={`/scenes/${scene.public_ref}`}
+        style={{ marginRight: theme.space.sm }}
+      />
+    </View>
   );
 }
 
@@ -173,18 +199,27 @@ export function SearchSceneTile({ scene }: { scene: Extract<SearchItem, { type: 
   const uri = mediaUrl(useBootstrap().data?.media_public_origin, scene.image.card_key);
   const square = { width: '100%' as const, aspectRatio: 1, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceMuted };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
-      onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
-      style={{ flex: 1, margin: theme.space.xs, gap: theme.space.xs }}
-      testID="search-scene-tile"
-    >
+    <View style={{ flex: 1, margin: theme.space.xs }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
+        onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
+        style={{ gap: theme.space.xs }}
+        testID="search-scene-tile"
+      >
       {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="disk" style={square} /> : <View style={square} />}
       <AppText numberOfLines={2}>{scene.caption}</AppText>
       <AppText numberOfLines={1} style={{ color: theme.color.textSecondary }}>
         {fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name}
       </AppText>
-    </Pressable>
+      </Pressable>
+      {/* In a list that reads saved state (Search); the Saved screen's own tile shows none. */}
+      <CardSaveButton
+        target={{ type: 'SCENE_POST', ref: scene.public_ref }}
+        name={scene.caption}
+        returnTo={`/scenes/${scene.public_ref}`}
+        style={{ position: 'absolute', top: theme.space.xs, right: theme.space.xs }}
+      />
+    </View>
   );
 }

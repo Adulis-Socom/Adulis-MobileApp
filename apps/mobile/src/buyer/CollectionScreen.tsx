@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, View } from 'react-native';
@@ -14,7 +15,7 @@ import { usePublicList } from './public-list';
 import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { FilterTabs } from './SavedScreen';
-import { collectionName } from './saved';
+import { SAVED_STATE, collectionName } from './saved';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.collection.tab.all' },
@@ -36,6 +37,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const theme = useTheme();
   const router = useRouter();
   const { api } = useSession();
+  const qc = useQueryClient();
   const valid = isRef(collectionRef);
   const [tab, setTab] = useState<ItemFilter>('ALL');
   const [removing, setRemoving] = useState<string | null>(null);
@@ -64,6 +66,8 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
       await api.removeFromCollection(collectionRef, item.ref);
       AccessibilityInfo.announceForAccessibility(t('buyer.save.removed'));
       list.refresh();
+      // Cards in other tabs stay mounted: they read their saved state again (WO-009A).
+      void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
       setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
     } finally {

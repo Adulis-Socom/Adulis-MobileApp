@@ -13,6 +13,7 @@ import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
+import { CardSaveButton } from './CardSaveButton';
 import { PublicListView } from './PublicListView';
 import { isPathName, usePublicRead } from './public-read';
 import { GoneState, ReadStates } from './ReadStates';
@@ -188,6 +189,10 @@ function useRefreshOnReturn(refresh: () => void) {
   );
 }
 
+// WO-009A: Save targets, by the public identity the API names (never a handle and slug).
+const sceneTarget = (scene: SellerScene) => ({ type: 'SCENE_POST' as const, ref: scene.public_ref });
+const productTarget = (product: SellerProduct) => ({ type: 'PRODUCT_POST' as const, ref: product.id });
+
 function ScenesTab({ handle, header, onPull }: TabProps) {
   const { api } = useSession();
   const t = useT();
@@ -208,6 +213,7 @@ function ScenesTab({ handle, header, onPull }: TabProps) {
       }}
       keyOf={(scene) => scene.public_ref}
       renderItem={({ item }) => <SceneTile scene={item} />}
+      saves={{ surface: 'SELLER_PROFILE', target: sceneTarget }}
       numColumns={2}
       header={header}
       empty="buyer.seller.scenes.empty"
@@ -225,20 +231,21 @@ function SceneTile({ scene }: { scene: SellerScene }) {
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const uri = mediaUrl(mediaOrigin, scene.image.card_key);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption
-      }
-      onPress={() =>
-        router.push({
-          pathname: '/scenes/[scenePostRef]',
-          params: { scenePostRef: scene.public_ref },
-        })
-      }
-      style={{ flex: 1, margin: theme.space.xs, gap: theme.space.xs }}
-      testID="seller-scene"
-    >
+    <View style={{ flex: 1, margin: theme.space.xs }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption
+        }
+        onPress={() =>
+          router.push({
+            pathname: '/scenes/[scenePostRef]',
+            params: { scenePostRef: scene.public_ref },
+          })
+        }
+        style={{ gap: theme.space.xs }}
+        testID="seller-scene"
+      >
       {uri ? (
         <Image
           source={{ uri }}
@@ -261,10 +268,17 @@ function SceneTile({ scene }: { scene: SellerScene }) {
           }}
         />
       )}
-      <AppText numberOfLines={2} style={{ color: theme.color.textSecondary }}>
-        {scene.caption}
-      </AppText>
-    </Pressable>
+        <AppText numberOfLines={2} style={{ color: theme.color.textSecondary }}>
+          {scene.caption}
+        </AppText>
+      </Pressable>
+      <CardSaveButton
+        target={sceneTarget(scene)}
+        name={scene.caption}
+        returnTo={`/scenes/${scene.public_ref}`}
+        style={{ position: 'absolute', top: theme.space.xs, right: theme.space.xs }}
+      />
+    </View>
   );
 }
 
@@ -290,6 +304,7 @@ function ProductsTab({ handle, header, onPull }: TabProps) {
       }}
       keyOf={(product) => product.id}
       renderItem={({ item }) => <ProductTile product={item} handle={handle} />}
+      saves={{ surface: 'SELLER_PROFILE', target: productTarget }}
       numColumns={2}
       header={header}
       empty="buyer.seller.products.empty"
@@ -308,7 +323,7 @@ export function ProductTile({
 }: {
   product: Pick<
     SellerProduct,
-    'slug' | 'name' | 'price_min_minor' | 'price_max_minor' | 'price_currency' | 'available'
+    'id' | 'slug' | 'name' | 'price_min_minor' | 'price_max_minor' | 'price_currency' | 'available'
   > & {
     image_key: string | null;
   };
@@ -378,6 +393,13 @@ export function ProductTile({
           {availability}
         </AppText>
       </Pressable>
+      {/* WO-009A: over the photo's corner, a sibling of the tile's Pressable, in a list that reads saved state. */}
+      <CardSaveButton
+        target={{ type: 'PRODUCT_POST', ref: product.id }}
+        name={product.name}
+        returnTo={`/product/${handle}/${product.slug}`}
+        style={{ position: 'absolute', top: theme.space.xs, right: theme.space.xs }}
+      />
       {seller ? (
         <Pressable
           accessibilityRole="link"
