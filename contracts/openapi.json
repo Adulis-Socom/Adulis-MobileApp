@@ -1581,6 +1581,81 @@
         ]
       }
     },
+    "/v1/search": {
+      "get": {
+        "operationId": "SearchController_search",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "2-100 characters after Unicode (NFKC) and whitespace normalisation.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Default TOP.",
+            "schema": {
+              "enum": [
+                "TOP",
+                "PRODUCT_POST",
+                "SELLER",
+                "SCENE_POST"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "next_cursor of the previous page of the same query and type (opaque).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size for a single type, 1-50 (default 20). Ignored for TOP.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Marketplace Search: Product Posts, Sellers and Scene Posts of the requester's Market (never a parameter). type=TOP (default) is a bounded mixed set; a single type is cursor-paginated. Lexical (exact, prefix, substring, pg_trgm fuzzy); available Products before relevant unavailable ones. Nothing is stored or logged.",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
@@ -6361,6 +6436,172 @@
         },
         "required": [
           "feed_session_id",
+          "algorithm_version",
+          "items",
+          "next_cursor"
+        ]
+      },
+      "SearchProductItemDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_POST"
+            ]
+          },
+          "payload": {
+            "description": "Current public price span and availability from the Catalogue projection.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShopProductDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "payload"
+        ]
+      },
+      "SearchSellerDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Seller route: /v1/storefronts/{handle}."
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "trust_level": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "ESTABLISHED",
+              "TRUSTED"
+            ],
+            "nullable": true,
+            "description": "Public Trust level, when the Seller has one."
+          }
+        },
+        "required": [
+          "handle",
+          "store_name",
+          "trust_level"
+        ]
+      },
+      "SearchSellerItemDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "SELLER"
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SearchSellerDto"
+          }
+        },
+        "required": [
+          "type",
+          "payload"
+        ]
+      },
+      "SearchSceneDto": {
+        "type": "object",
+        "properties": {
+          "public_ref": {
+            "type": "string",
+            "description": "Scene route: /v1/scene-posts/{publicRef}."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption excerpt (140 graphemes)."
+          },
+          "caption_truncated": {
+            "type": "boolean"
+          },
+          "image": {
+            "$ref": "#/components/schemas/SellerSceneImageDto"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/ShopProductSellerDto"
+          }
+        },
+        "required": [
+          "public_ref",
+          "caption",
+          "caption_truncated",
+          "image",
+          "seller"
+        ]
+      },
+      "SearchSceneItemDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "SCENE_POST"
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SearchSceneDto"
+          }
+        },
+        "required": [
+          "type",
+          "payload"
+        ]
+      },
+      "SearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "market_resolved": {
+            "type": "boolean",
+            "description": "false: the request carries no ACTIVE-Market evidence, so nothing was searched (items is empty because no Market could be chosen)."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "TOP",
+              "PRODUCT_POST",
+              "SELLER",
+              "SCENE_POST"
+            ],
+            "description": "TOP: a bounded mixed set, never paginated; otherwise one result type, cursor-paginated."
+          },
+          "algorithm_version": {
+            "type": "string",
+            "description": "The launch lexical ranking configuration that produced this page."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SearchProductItemDto"
+                },
+                {
+                  "$ref": "#/components/schemas/SearchSellerItemDto"
+                },
+                {
+                  "$ref": "#/components/schemas/SearchSceneItemDto"
+                }
+              ]
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque; bound to this query, type and Market; null at the end (always null for TOP)."
+          }
+        },
+        "required": [
+          "market_resolved",
+          "type",
           "algorithm_version",
           "items",
           "next_cursor"

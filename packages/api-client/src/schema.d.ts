@@ -916,6 +916,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Marketplace Search: Product Posts, Sellers and Scene Posts of the requester's Market (never a parameter). type=TOP (default) is a bounded mixed set; a single type is cursor-paginated. Lexical (exact, prefix, substring, pg_trgm fuzzy); available Products before relevant unavailable ones. Nothing is stored or logged. */
+        get: operations["SearchController_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/seller": {
         parameters: {
             query?: never;
@@ -2441,6 +2458,55 @@ export interface components {
             product_id: string;
             /** @description The Product is public commerce (PUBLISHED). */
             published: boolean;
+        };
+        SearchProductItemDto: {
+            /** @description Current public price span and availability from the Catalogue projection. */
+            payload: components["schemas"]["ShopProductDto"];
+            /** @enum {string} */
+            type: "PRODUCT_POST";
+        };
+        SearchResponseDto: {
+            /** @description The launch lexical ranking configuration that produced this page. */
+            algorithm_version: string;
+            items: (components["schemas"]["SearchProductItemDto"] | components["schemas"]["SearchSellerItemDto"] | components["schemas"]["SearchSceneItemDto"])[];
+            /** @description false: the request carries no ACTIVE-Market evidence, so nothing was searched (items is empty because no Market could be chosen). */
+            market_resolved: boolean;
+            /** @description Opaque; bound to this query, type and Market; null at the end (always null for TOP). */
+            next_cursor: string | null;
+            /**
+             * @description TOP: a bounded mixed set, never paginated; otherwise one result type, cursor-paginated.
+             * @enum {string}
+             */
+            type: "TOP" | "PRODUCT_POST" | "SELLER" | "SCENE_POST";
+        };
+        SearchSceneDto: {
+            /** @description Caption excerpt (140 graphemes). */
+            caption: string;
+            caption_truncated: boolean;
+            image: components["schemas"]["SellerSceneImageDto"];
+            /** @description Scene route: /v1/scene-posts/{publicRef}. */
+            public_ref: string;
+            seller: components["schemas"]["ShopProductSellerDto"];
+        };
+        SearchSceneItemDto: {
+            payload: components["schemas"]["SearchSceneDto"];
+            /** @enum {string} */
+            type: "SCENE_POST";
+        };
+        SearchSellerDto: {
+            /** @description Seller route: /v1/storefronts/{handle}. */
+            handle: string;
+            store_name: string;
+            /**
+             * @description Public Trust level, when the Seller has one.
+             * @enum {string|null}
+             */
+            trust_level: "NEW" | "ESTABLISHED" | "TRUSTED" | null;
+        };
+        SearchSellerItemDto: {
+            payload: components["schemas"]["SearchSellerDto"];
+            /** @enum {string} */
+            type: "SELLER";
         };
         SellerSceneDto: {
             /** @description Caption excerpt (140 graphemes). */
@@ -4010,6 +4076,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicScenePostDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+        };
+    };
+    SearchController_search: {
+        parameters: {
+            query: {
+                /** @description next_cursor of the previous page of the same query and type (opaque). */
+                cursor?: string;
+                /** @description Page size for a single type, 1-50 (default 20). Ignored for TOP. */
+                limit?: string;
+                /** @description 2-100 characters after Unicode (NFKC) and whitespace normalisation. */
+                q: string;
+                /** @description Default TOP. */
+                type?: "TOP" | "PRODUCT_POST" | "SELLER" | "SCENE_POST";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponseDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
