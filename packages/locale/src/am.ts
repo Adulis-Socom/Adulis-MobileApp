@@ -357,7 +357,59 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.you.appearance.dark': 'ጨለማ',
   'buyer.you.account': 'መለያ',
   'buyer.you.more_coming':
-    'መገለጫ፣ ግዢዎች፣ የማሳወቂያ ቅንብሮች፣ ግላዊነት፣ እገዛ እና መለያ መሰረዝ በሚቀጥለው ዝማኔ ይመጣሉ።',
+    'መገለጫ፣ ግዢዎች፣ የማሳወቂያ ቅንብሮች እና እገዛ በሚቀጥለው ዝማኔ ይመጣሉ።',
+
+  // WO-011 Buyer Account: machine-translation placeholders awaiting the human pass. The deletion
+  // confirmation pair is a candidate for HUMAN-REQUIRED (it is what the Buyer types to consent to
+  // an irreversible deletion); classifying it needs a ruling (register ON-20261111-131).
+  'buyer.you.signed_in': 'በዚህ መሣሪያ ላይ ወደ አዱሊስ መለያዎ ገብተዋል።',
+  'buyer.you.preferences': 'ምርጫዎች',
+  'buyer.you.language': 'ቋንቋ',
+  'buyer.you.language.en': 'English',
+  'buyer.you.language.am': 'አማርኛ (የሙከራ ቅድመ እይታ)',
+  'buyer.you.language.english_only': 'አዱሊስ በእንግሊዝኛ ይታያል።',
+  'buyer.you.security': 'ደህንነት',
+  'buyer.you.sessions': 'የገቡባቸው ክፍለ ጊዜዎች',
+  'buyer.you.sessions.refresh': 'ክፍለ ጊዜዎችን አድስ',
+  'buyer.you.sessions.failed': 'ክፍለ ጊዜዎችዎን መጫን አልተቻለም።',
+  'buyer.you.sessions.empty': 'ምንም የገቡበት ክፍለ ጊዜ አልተገኘም።',
+  'buyer.you.sessions.others':
+    'ከዚህ መሣሪያ እዚህ መውጣት ይችላሉ። ከሌሎች ክፍለ ጊዜዎችዎ መውጣት በመተግበሪያው ውስጥ አይገኝም።',
+  'buyer.you.session.current': 'ይህ መሣሪያ',
+  'buyer.you.session.platform.android': 'የአንድሮይድ መሣሪያ',
+  'buyer.you.session.platform.ios': 'አይፎን ወይም አይፓድ',
+  'buyer.you.session.platform.web': 'የድር አሳሽ',
+  'buyer.you.session.platform.unknown': 'ያልታወቀ መሣሪያ',
+  'buyer.you.session.surface.mobile': 'የአዱሊስ መተግበሪያ',
+  'buyer.you.session.surface.console': 'የሻጭ ኮንሶል',
+  'buyer.you.session.first_seen': 'የገቡት {time}',
+  'buyer.you.session.last_active': 'መጨረሻ የታየው {time}',
+  'buyer.you.session.location': 'ግምታዊ አካባቢ፦ {location}',
+  'buyer.you.privacy': 'ግላዊነት',
+  'buyer.you.delete': 'መለያ ሰርዝ',
+  'buyer.delete.intro':
+    'የአዱሊስ መለያዎን መሰረዝ ዘላቂ ነው። ሊቀለበስ አይችልም፣ እና ይህ መሣሪያ ይወጣል።',
+  'buyer.delete.steps':
+    'ለመቀጠል ስልክ ቁጥርዎን በኤስኤምኤስ በሚላክ ኮድ ያረጋግጡ፣ መሰረዝ ምን እንደሚያደርግ ይገምግሙ፣ ከዚያም ያረጋግጡ።',
+  'buyer.delete.continue': 'ቀጥል',
+  'buyer.delete.cancel': 'ተው',
+  'buyer.delete.phone_intro':
+    'የሚገቡበትን ስልክ ቁጥር ያስገቡ። በዚያ ቁጥር የተመዘገበውን መለያ ለመሰረዝ ብቻ የሚያገለግል ኮድ በኤስኤምኤስ እንልካለን።',
+  'buyer.delete.code_sent': 'የመሰረዣ ኮድ በኤስኤምኤስ ወደ {phone} ልከናል።',
+  'buyer.delete.checking': 'መሰረዝ ምን እንደሚያደርግ በመፈተሽ ላይ',
+  'buyer.delete.effects_title': 'መሰረዝ ምን ያደርጋል',
+  'buyer.delete.blocked_title': 'መለያዎ ገና ሊሰረዝ አይችልም',
+  'buyer.delete.preview_incomplete':
+    'የመሰረዣ ዝርዝሮቹ ሙሉ በሙሉ ሊታዩ ስላልቻሉ መሰረዝ አሁን በመተግበሪያው ውስጥ አይገኝም።',
+  'buyer.delete.ticket_expired': 'የመሰረዣ ኮድዎ ጊዜው አልፏል። አዲስ ኮድ ለመቀበል እንደገና ይጀምሩ።',
+  'buyer.delete.confirm_instruction': 'መለያዎን በዘላቂነት መሰረዝ እንደሚፈልጉ ለማረጋገጥ ከታች {word} ብለው ይተይቡ።',
+  'buyer.delete.confirm_word': 'ሰርዝ',
+  'buyer.delete.confirm_label': 'ማረጋገጫ',
+  'buyer.delete.confirm_mismatch': 'ለማረጋገጥ {word} በትክክል ይተይቡ።',
+  'buyer.delete.confirm_button': 'መለያዬን በዘላቂነት ሰርዝ',
+  'buyer.delete.deleting': 'መለያዎን በመሰረዝ ላይ',
+  'buyer.delete.done': 'የአዱሊስ መለያዎ ተሰርዟል፣ እና ይህ መሣሪያ ወጥቷል።',
+  'buyer.delete.done_home': 'ወደ መነሻ ሂድ',
 
   // WO-003 sign-in and bootstrap: machine-translation placeholders awaiting the human pass,
   // except the age declaration, which a person must translate (HUMAN-REQUIRED).

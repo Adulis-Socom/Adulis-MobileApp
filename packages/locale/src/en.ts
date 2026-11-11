@@ -397,7 +397,60 @@ export const enCommon = {
   'buyer.you.appearance.dark': 'Dark',
   'buyer.you.account': 'Account',
   'buyer.you.more_coming':
-    'Profile, purchases, notification settings, privacy, help and account deletion arrive in a coming update.',
+    'Profile, purchases, notification settings and help arrive in a coming update.',
+
+  // WO-011 Buyer Account (ADU-MOB-02 v4.3 S137, R-11): preferences, sessions (ADU-AUTH-02 v3.3
+  // S38, S118; the MOBILE subset of GET/DELETE /v1/auth/sessions) and Account deletion on the
+  // existing deletion-ticket flow (ADU-API-01 v1.11 S12.18). Every sentence is complete; the
+  // server's own deletion.* and error.* keys render its blockers, effects and refusals.
+  'buyer.you.signed_in': 'You are signed in to your Adulis Account on this device.',
+  'buyer.you.preferences': 'Preferences',
+  'buyer.you.language': 'Language',
+  'buyer.you.language.en': 'English',
+  'buyer.you.language.am': 'Amharic (development preview)',
+  'buyer.you.language.english_only': 'Adulis is shown in English.',
+  'buyer.you.security': 'Security',
+  'buyer.you.sessions': 'Signed-in sessions',
+  'buyer.you.sessions.refresh': 'Refresh sessions',
+  'buyer.you.sessions.failed': 'Your sessions could not be loaded.',
+  'buyer.you.sessions.empty': 'No signed-in sessions were found.',
+  'buyer.you.sessions.others':
+    'You can sign out of this device here. Signing out of your other sessions is not available in the app.',
+  'buyer.you.session.current': 'This device',
+  'buyer.you.session.platform.android': 'Android device',
+  'buyer.you.session.platform.ios': 'iPhone or iPad',
+  'buyer.you.session.platform.web': 'Web browser',
+  'buyer.you.session.platform.unknown': 'Unknown device',
+  'buyer.you.session.surface.mobile': 'Adulis app',
+  'buyer.you.session.surface.console': 'Seller Console',
+  'buyer.you.session.first_seen': 'Signed in {time}',
+  'buyer.you.session.last_active': 'Last active {time}',
+  'buyer.you.session.location': 'Approximate location: {location}',
+  'buyer.you.privacy': 'Privacy',
+  'buyer.you.delete': 'Delete Account',
+  'buyer.delete.intro':
+    'Deleting your Adulis Account is permanent. It cannot be undone, and this device will be signed out.',
+  'buyer.delete.steps':
+    'To continue, confirm your phone number with a code sent by SMS, review what deletion does, and then confirm.',
+  'buyer.delete.continue': 'Continue',
+  'buyer.delete.cancel': 'Cancel',
+  'buyer.delete.phone_intro':
+    'Enter the phone number you sign in with. We will send a code by SMS that can only be used to delete the Account registered to that number.',
+  'buyer.delete.code_sent': 'We sent a deletion code by SMS to {phone}.',
+  'buyer.delete.checking': 'Checking what deletion does',
+  'buyer.delete.effects_title': 'What deletion does',
+  'buyer.delete.blocked_title': 'Your Account cannot be deleted yet',
+  'buyer.delete.preview_incomplete':
+    'The deletion details could not be shown in full, so deletion is not available in the app right now.',
+  'buyer.delete.ticket_expired': 'Your deletion code has expired. Start again to receive a new code.',
+  'buyer.delete.confirm_instruction': 'To confirm that you want to delete your Account permanently, type {word} below.',
+  'buyer.delete.confirm_word': 'DELETE',
+  'buyer.delete.confirm_label': 'Confirmation',
+  'buyer.delete.confirm_mismatch': 'Type {word} exactly to confirm.',
+  'buyer.delete.confirm_button': 'Delete my Account permanently',
+  'buyer.delete.deleting': 'Deleting your Account',
+  'buyer.delete.done': 'Your Adulis Account has been deleted, and this device is signed out.',
+  'buyer.delete.done_home': 'Go to Home',
 
   // Mobile sign-in, bootstrap and connectivity (WO-003; ADU-AUTH-02 v3.3, ADU-MOB-02 v4.3
   // S70-S76, S85). Server errors render from their own error.* keys and slots.
