@@ -3,7 +3,7 @@
 Loaded together with the root `CLAUDE.md`. **Start your session here, not at the
 repository root** — from the root, none of the rules below are in context.
 
-**Governing documents:** ADU-DB-01 **v1.16** (T15) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
+**Governing documents:** ADU-DB-01 **v1.24** (WO-007A) · ADU-AUTH-01 **v2.8** (T22, and **v2.5
 remains canonical for the permission catalogue** -- the split is in `docs/amendments/README.md`;
 v2.8 S0: "There is no permission-grant change in this revision") ·
 ADU-API-01 **v1.11** (T20) · ADU-CON-02 **v3.2**. Read `docs/amendments/README.md` first: it says what
@@ -43,7 +43,7 @@ a NestJS service is an invariant a second endpoint can bypass.
 
 | | | Asserted by |
 |---|---|---|
-| Tables | **120** (116 + the four Scene tables of `0054`) | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
+| Tables | **123** (manifest 109 + 14 body-over-manifest; `core` 97) | Appendix C **check 14**, live from Tier 2, **against `db/checks/fixtures/`** |
 | Enum types | **71** types | Appendix C **check 16**, against `pg_type` both directions |
 | Append-only tables | **22**, each with both the trigger and the `REVOKE` | Appendix C **check 5** |
 | Permissions / grants | **42 / 139**, 8 step-up, 12 mobile-reachable | `pnpm verify:permission-doc`, 252 cells both directions |
@@ -87,6 +87,10 @@ A different count is wrong somewhere — **stop and report it** rather than reco
 > term, a trigger keeps Variant/Product prices in the Market currency, and a composite FK keeps a
 > Product in its Seller's Market. **ADU-DB-01 v1.22** records it (counts unchanged). **WO-007 (`0057`)**
 > adds the partial index `idx_product_shop`; **ADU-DB-01 v1.23** records it (counts unchanged).
+> **WO-007A (`0058`, `0059`)** adds the view `core.v_review_public` (the one public Review read,
+> fail closed on `core.fn_order_payment_verified`) and the fixed-Market-currency trigger;
+> **ADU-DB-01 v1.24** records them (counts unchanged: measured by `pnpm db:check` and
+> `pnpm verify:permission-doc` on 11 November 2026).
 >
 > **[!] The INSTALLED revision (v1.16 since T15; the note below dates from v1.14) is correct; the founder's source carried one stale number**
 > (D-190). His Appendix B opens "116 tables" and its closing sentence read "Reproducing
