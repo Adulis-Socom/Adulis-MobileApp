@@ -20,9 +20,10 @@ import { decodeCursor, pageLimit, type CursorPart } from '../../common/http/curs
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import {
   AddCollectionItemBodyDto,
+  CollectionCreatedDto,
   CollectionDetailDto,
   CollectionDto,
-  CollectionItemDto,
+  CollectionMembershipDto,
   CollectionNameBodyDto,
   CollectionPageDto,
   SavedItemPageDto,
@@ -82,7 +83,7 @@ export class CollectionsController {
   @ApiOperation({ summary: 'Create a named private Collection.' })
   @ApiHeader(IDEMPOTENCY_KEY_HEADER)
   @ApiBody({ type: CollectionNameBodyDto })
-  @ApiCreatedResponse({ type: CollectionDto })
+  @ApiCreatedResponse({ type: CollectionCreatedDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async create(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response) {
     const accountId = owner(req);
@@ -172,7 +173,7 @@ export class CollectionsController {
   @ApiParam(COLLECTION_REF)
   @ApiHeader(IDEMPOTENCY_KEY_HEADER)
   @ApiBody({ type: AddCollectionItemBodyDto })
-  @ApiCreatedResponse({ type: CollectionItemDto })
+  @ApiCreatedResponse({ type: CollectionMembershipDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
   async addItem(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response, @Param('collectionRef') ref: string) {
     const accountId = owner(req);

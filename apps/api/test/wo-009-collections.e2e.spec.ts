@@ -80,7 +80,10 @@ describe('WO-009 -- Buyer Saved Collections', () => {
 
   const collections = async (who: Buyer = 'a') => (await get('/v1/collections', who).expect(200)).body as { default_collection_ref: string; data: Collection[]; next_cursor: string | null };
   const defaultRef = async (who: Buyer = 'a') => (await collections(who)).default_collection_ref;
-  const create = async (name: string, who: Buyer = 'a') => (await post('/v1/collections', { name }, who).expect(201)).body as Collection;
+  const create = async (name: string, who: Buyer = 'a') => {
+    const { ref } = (await post('/v1/collections', { name }, who).expect(201)).body as { ref: string };
+    return (await get(`/v1/collections/${ref}`, who).expect(200)).body.collection as Collection;
+  };
   const saveProduct = (coll: string, product: string, who: Buyer = 'a', context?: { scene_ref: string }) =>
     post(`/v1/collections/${coll}/items`, { target: { type: 'PRODUCT_POST', ref: product }, source_surface: 'PRODUCT_DETAIL', ...(context ? { context } : {}) }, who);
   const saveScene = (coll: string, ref: string, who: Buyer = 'a') =>
@@ -272,7 +275,8 @@ describe('WO-009 -- Buyer Saved Collections', () => {
     it('3. creates a named Collection (normalised name), replays an Idempotency-Key, refuses bad names', async () => {
       const key = randomUUID();
       const r1 = await post('/v1/collections', { name: '  Outfit \t ideas  ' }, 'a', key).expect(201);
-      expect(r1.body).toMatchObject({ kind: 'USER_CREATED', name: 'Outfit ideas', product_count: 0, scene_count: 0 });
+      expect(Object.keys(r1.body)).toEqual(['ref']); // no private name in an answer the idempotency store keeps
+      expect((await items(r1.body.ref)).collection).toMatchObject({ kind: 'USER_CREATED', name: 'Outfit ideas', product_count: 0, scene_count: 0 });
       const r2 = await post('/v1/collections', { name: '  Outfit \t ideas  ' }, 'a', key).expect(201);
       expect(r2.headers['x-adulis-idempotent-replay']).toBe('true');
       expect(r2.body.ref).toBe(r1.body.ref);
@@ -470,9 +474,10 @@ describe('WO-009 -- Buyer Saved Collections', () => {
     it('21, 22. an available Product shows current price; an out-of-stock one stays saved, visible, unavailable to buy', async () => {
       const c = await create('Stock');
       const ok = (await saveProduct(c.ref, P(1)).expect(201)).body as Item;
-      expect(ok).toMatchObject({ state: 'VISIBLE', product: { id: P(1), name: 'Saved basket', available: true, price_min_minor: 10001 } });
+      expect(Object.keys(ok).sort()).toEqual(['collection_ref', 'ref', 'saved_at', 'target_type']); // the membership only
+      expect(await itemOf(c.ref, ok.ref)).toMatchObject({ state: 'VISIBLE', product: { id: P(1), name: 'Saved basket', available: true, price_min_minor: 10001 } });
       const jar = (await saveProduct(c.ref, P(2)).expect(201)).body as Item;
-      expect(jar).toMatchObject({ state: 'VISIBLE', product: { available: false } });
+      expect(await itemOf(c.ref, jar.ref)).toMatchObject({ state: 'VISIBLE', product: { available: false } });
       await setStock(V(1), 0);
       expect((await itemOf(c.ref, ok.ref)).product).toMatchObject({ available: false });
       await setStock(V(1), 3);
@@ -504,7 +509,8 @@ describe('WO-009 -- Buyer Saved Collections', () => {
     it('25-27. a PUBLIC Scene renders; PRIVATE hides everything; restored PUBLIC renders again, membership unchanged', async () => {
       const c = await create('Scenes');
       const saved = (await saveScene(c.ref, scenes['morning']!).expect(201)).body as Item;
-      expect(saved).toMatchObject({ state: 'VISIBLE', scene: { public_ref: scenes['morning'], caption: 'Morning baskets by the window' } });
+      expect(saved).not.toHaveProperty('scene'); // a replayed answer can never carry content
+      expect(await itemOf(c.ref, saved.ref)).toMatchObject({ state: 'VISIBLE', scene: { public_ref: scenes['morning'], caption: 'Morning baskets by the window' } });
       await setStock(V(1), 0); // its only tagged Product: the Scene goes PRIVATE
       const hidden = await itemOf(c.ref, saved.ref);
       expect(hidden).toMatchObject({ state: 'UNAVAILABLE', scene: null, product: null });
@@ -528,7 +534,7 @@ describe('WO-009 -- Buyer Saved Collections', () => {
       expect((await items(c.ref)).data.map((i) => i.ref)).toEqual([saved.ref]); // membership retained
     });
 
-    it('29. Scene deletion: none exists (0054 retains Scenes); the membership FK cascades for any future purge', async () => {
+    it('29. Scene deletion: none exists (0054 retains Scenes); targets cascade and provenance nulls for any future purge', async () => {
       // No Scene delete command or purge exists, and append-only transitions keep the root, so the
       // proof is the referential action itself: every target FK cascades, every provenance FK nulls.
       const fks = await admin.query<{ conname: string; confdeltype: string }>(
@@ -539,7 +545,7 @@ describe('WO-009 -- Buyer Saved Collections', () => {
         collection_item_collection_id_fkey: 'c',
         collection_item_origin_revision: 'n',
         collection_item_origin_tag: 'n',
-        collection_item_originating_scene_post_id_fkey: 'a',
+        collection_item_originating_scene_post_id_fkey: 'n',
         collection_item_product_post_id_fkey: 'c',
         collection_item_scene_post_id_fkey: 'c',
         collection_item_seen_revision: 'n',
@@ -637,6 +643,15 @@ describe('WO-009 -- Buyer Saved Collections', () => {
         [BUYER.leaver, [d, named.ref], P(1)],
       );
       expect(left.rows[0]).toEqual({ c: 0, i: 0, p: 1 });
+    });
+
+    it('stored POST answers (the idempotency store) carry no Collection name and no target content', async () => {
+      const stored = await admin.query<{ body: string }>(
+        `SELECT response_body::text AS body FROM core.idempotency_record WHERE actor_id::text LIKE '0e090000-%' AND endpoint LIKE '%/v1/collections%'`,
+      );
+      expect(stored.rows.length).toBeGreaterThan(0);
+      const all = stored.rows.map((r) => r.body).join('\n');
+      for (const secret of ['Outfit', 'Private of A', 'Morning baskets', 'Saved basket', 'card_key', 'caption']) expect(all).not.toContain(secret);
     });
 
     it('the API role holds exactly the grants it needs; responses are never cached', async () => {

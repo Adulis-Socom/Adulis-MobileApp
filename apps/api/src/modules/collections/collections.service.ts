@@ -8,7 +8,7 @@ import { minorUnits, priceFields, productAvailable, publicPrice } from '../catal
 import { captionExcerpt } from '../fyp/fyp.logic';
 import { VISIBLE_STATES } from '../storefront/public-seller';
 import { requesterMarket } from '../storefront/requester-market';
-import type { CollectionDto, CollectionItemDto, SavedStateItemDto } from './collections.dto';
+import type { CollectionDto, CollectionItemDto, CollectionMembershipDto, SavedStateItemDto } from './collections.dto';
 import type { AddItemBody, ItemFilter, Target } from './collections.logic';
 
 type Cursor = Array<string | number> | null;
@@ -140,11 +140,11 @@ export class CollectionsService {
     };
   }
 
-  async create(trx: Transaction<Database>, accountId: string, name: string): Promise<CollectionDto> {
+  async create(trx: Transaction<Database>, accountId: string, name: string): Promise<{ ref: string }> {
     const r = await sql<{ id: string }>`
       INSERT INTO core.collection (owner_account_id, kind, name)
       VALUES (${accountId}, 'USER_CREATED', ${name}) RETURNING id`.execute(trx);
-    return this.toCollection(await this.owned(trx, accountId, r.rows[0]!.id));
+    return { ref: r.rows[0]!.id };
   }
 
   async rename(trx: Transaction<Database>, accountId: string, ref: string, name: string): Promise<CollectionDto> {
@@ -275,9 +275,21 @@ export class CollectionsService {
   /**
    * Save one target into one of the caller's Collections. The target must be visible NOW in the
    * caller's Market (S26 "resolve public target server-side"); a hidden one answers exactly as a
-   * nonexistent one. A repeated Save returns the existing membership (S19).
+   * nonexistent one. A repeated Save returns the existing membership (S19). The answer is the
+   * membership only: it is stored for replay, and content is resolved by reads, now.
    */
-  async addItem(trx: Transaction<Database>, req: AuthedRequest, accountId: string, ref: string, body: AddItemBody): Promise<CollectionItemDto> {
+  async addItem(trx: Transaction<Database>, req: AuthedRequest, accountId: string, ref: string, body: AddItemBody): Promise<CollectionMembershipDto> {
+    try {
+      return await this.insertItem(trx, req, accountId, ref, body);
+    } catch (e) {
+      // Raced by a delete of the Collection or the Product between the checks and the INSERT:
+      // the target of the request is gone, the same 404 as before it (review D5).
+      if ((e as { code?: string }).code === '23503') throw new AdulisException('NOT_FOUND');
+      throw e;
+    }
+  }
+
+  private async insertItem(trx: Transaction<Database>, req: AuthedRequest, accountId: string, ref: string, body: AddItemBody): Promise<CollectionMembershipDto> {
     await this.owned(trx, accountId, ref);
     const market = await requesterMarket(trx, req);
     if (!market) throw new AdulisException('NOT_FOUND');
@@ -327,14 +339,18 @@ export class CollectionsService {
       );
     }
 
-    const row = await sql<ItemRow>`
-      SELECT ci.id, ci.collection_id, ci.product_post_id, ci.scene_post_id, ${ts('ci.created_at')} AS created_at
-        FROM core.collection_item ci
-        LEFT JOIN core.scene_post sp ON sp.id = ci.scene_post_id
-       WHERE ci.collection_id = ${ref}
-         AND (ci.product_post_id = ${target.type === 'PRODUCT_POST' ? target.ref : null}::uuid
-              OR sp.public_ref = ${target.type === 'SCENE_POST' ? target.ref : null})`.execute(trx);
-    return (await this.resolve(trx, market, row.rows))[0]!;
+    const row = (
+      await sql<ItemRow>`
+        SELECT ci.id, ci.collection_id, ci.product_post_id, ci.scene_post_id, ${ts('ci.created_at')} AS created_at
+          FROM core.collection_item ci
+          LEFT JOIN core.scene_post sp ON sp.id = ci.scene_post_id
+         WHERE ci.collection_id = ${ref}
+           AND (ci.product_post_id = ${target.type === 'PRODUCT_POST' ? target.ref : null}::uuid
+                OR sp.public_ref = ${target.type === 'SCENE_POST' ? target.ref : null})`.execute(trx)
+    ).rows[0];
+    // Removed by another device between the INSERT (a duplicate, nothing written) and this read.
+    if (!row) throw new AdulisException('NOT_FOUND');
+    return { ref: row.id, collection_ref: row.collection_id, target_type: target.type, saved_at: row.created_at };
   }
 
   private async touchIfInserted(trx: Transaction<Database>, ref: string, inserted: { rows: unknown[] }) {
@@ -350,7 +366,8 @@ export class CollectionsService {
 
   /**
    * Typed batch membership (S22): two statements for up to 60 targets, so no card ever asks
-   * alone. Reports only the caller's own memberships; an unknown or hidden ref is simply not saved.
+   * alone. Reports only the caller's own memberships, whatever the target's current visibility
+   * (a hidden target saved earlier is `saved`; no content is ever returned); an unknown ref is not saved.
    */
   async savedState(trx: Transaction<Database>, accountId: string, targets: Target[]) {
     const defaultRef = await this.ensureDefault(trx, accountId);

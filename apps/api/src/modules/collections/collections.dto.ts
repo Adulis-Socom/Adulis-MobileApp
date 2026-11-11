@@ -17,6 +17,14 @@ export class CollectionDto {
   @ApiProperty({ format: 'date-time', description: 'Last rename or membership change.' }) updated_at!: string;
 }
 
+/**
+ * The answer to a create: the ref only. A POST answer is kept by the idempotency store for 24
+ * hours, so it carries no private name (independent review D1); read the list for the rest.
+ */
+export class CollectionCreatedDto {
+  @ApiProperty({ format: 'uuid' }) ref!: string;
+}
+
 export class CollectionPageDto {
   @ApiProperty({ format: 'uuid', description: 'The DEFAULT Collection (created on first need).' }) default_collection_ref!: string;
   @ApiProperty({ type: [CollectionDto], description: 'DEFAULT first, then oldest first.' }) data!: CollectionDto[];
@@ -38,6 +46,17 @@ export class CollectionItemDto {
   product!: ShopProductDto | null;
   @ApiProperty({ type: SearchSceneDto, nullable: true, description: 'The current PUBLIC revision, never the revision seen at save.' })
   scene!: SearchSceneDto | null;
+}
+
+/**
+ * The answer to a Save: the membership only, never the target's content, which a replay of the
+ * same Idempotency-Key would otherwise serve after it stopped being public (review D2).
+ */
+export class CollectionMembershipDto {
+  @ApiProperty({ format: 'uuid', description: 'Membership ref: DELETE /v1/collections/{collectionRef}/items/{itemRef}.' }) ref!: string;
+  @ApiProperty({ format: 'uuid' }) collection_ref!: string;
+  @ApiProperty({ enum: TARGET_TYPES }) target_type!: TargetType;
+  @ApiProperty({ format: 'date-time' }) saved_at!: string;
 }
 
 export class CollectionDetailDto {
