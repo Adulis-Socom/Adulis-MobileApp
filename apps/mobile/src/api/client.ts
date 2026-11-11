@@ -63,6 +63,9 @@ export type AddItemBody = Json<paths['/v1/collections/{collectionRef}/items']['p
 export type SaveTarget = AddItemBody['target'];
 export type SaveSurface = AddItemBody['source_surface'];
 export type ItemFilter = 'ALL' | SaveTarget['type'];
+export type SessionList = Json<paths['/v1/auth/sessions']['get']['responses'][200]>;
+export type AccountSession = SessionList['data'][number];
+export type ProblemItem = NonNullable<Problem['items']>[number];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -131,6 +134,11 @@ type Call = {
   idempotencyKey?: string;
   /** Send the current bearer (default). An explicit string sends that one instead. */
   bearer?: boolean | string;
+  /**
+   * A deletion ticket (ADU-AUTH-01 S11): sent as `Authorization: Ticket <id>` INSTEAD of any
+   * bearer. A ticket is never a session, so its 401 never ends the app's session.
+   */
+  ticket?: string;
   /** Query parameters; an undefined value is left out. */
   query?: Record<string, string | undefined>;
   /** Values for the path's {name} segments, each URL-encoded so it stays one segment. */
@@ -157,9 +165,10 @@ export function createApiClient(deps: ApiDeps) {
       'X-Adulis-Client': CLIENT_HEADER,
       'X-Adulis-Device': await deps.deviceId(),
     };
-    const sessionToken = init.bearer === undefined || init.bearer === true ? deps.token() : null;
-    const bearer = typeof init.bearer === 'string' ? init.bearer : sessionToken;
-    if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    const sessionToken = init.ticket === undefined && (init.bearer === undefined || init.bearer === true) ? deps.token() : null;
+    const bearer = init.ticket === undefined && typeof init.bearer === 'string' ? init.bearer : sessionToken;
+    if (init.ticket !== undefined) headers.Authorization = `Ticket ${init.ticket}`;
+    else if (bearer) headers.Authorization = `Bearer ${bearer}`;
     if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -352,6 +361,27 @@ export function createApiClient(deps: ApiDeps) {
 
     verifyOtp: (body: OtpVerifyBody, idempotencyKey: string) =>
       call<OtpVerified>('POST', '/v1/auth/otp/verify', { body, idempotencyKey, bearer: false, ok: 200 }),
+
+    /**
+     * GET /v1/auth/sessions (WO-011): the Account's live sessions, `current` marking this one. A
+     * MOBILE session may revoke only itself (sign out); another session is CONSOLE plus step-up.
+     */
+    sessions: () => call<SessionList>('GET', '/v1/auth/sessions', { ok: 200 }),
+
+    /**
+     * Account deletion (WO-011) on the existing deletion-ticket flow (ADU-API-01 v1.11 S12.18).
+     * Anonymous by design: the phone's OTP mints a fifteen-minute TICKET, never a session, and
+     * no bearer is ever sent with these calls. The contract publishes no schemas for them
+     * (ON-20261111-135), so their answers are `unknown` here and are checked at the boundary
+     * (src/buyer/account.ts) rather than typed by hand.
+     */
+    requestDeletionOtp: (phone: string, idempotencyKey: string) =>
+      call<void>('POST', '/v1/deletion/otp/request', { body: { phone }, idempotencyKey, bearer: false, ok: 202 }),
+    verifyDeletionOtp: (phone: string, code: string) =>
+      call<unknown>('POST', '/v1/deletion/otp/verify', { body: { phone, code }, bearer: false, ok: 200 }),
+    deletionPreview: (ticket: string) => call<unknown>('GET', '/v1/deletion/preview', { ticket, ok: 200 }),
+    confirmDeletion: (ticket: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/deletion/confirm', { body: { acknowledge: true }, ticket, idempotencyKey, ok: 200 }),
 
     /** POST /v1/auth/logout with the credential being signed out (already off the device). */
     logout: (token: string) =>

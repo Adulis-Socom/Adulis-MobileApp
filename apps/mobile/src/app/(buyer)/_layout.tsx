@@ -48,6 +48,8 @@ export default function BuyerLayout() {
         dangerouslySingular={(_name, params) => String(params.collectionRef)}
       />
       <Stack.Screen name="save-to" options={{ headerShown: true, title: t('buyer.save.picker_title'), presentation: 'modal' }} />
+      {/* WO-011: Account deletion opens over the You tab; one at a time. */}
+      <Stack.Screen name="account/delete" options={{ headerShown: true, title: t('buyer.you.delete') }} dangerouslySingular />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: true, title: t('auth.sign_in') }} />
       <Stack.Screen name="auth/verify" options={{ headerShown: true, title: t('auth.verify.title') }} />
     </Stack>
