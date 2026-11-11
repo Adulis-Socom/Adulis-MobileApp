@@ -2,7 +2,9 @@
 
 Status: in force from WO-009A (11 November 2026). Engineering practice for the development
 machine and for AI coding agents working on it. It governs no product behaviour and changes no
-specification. The measured baseline it is based on is `docs/engineering/WO-009A-STORAGE-AUDIT.md`.
+specification. The measured baseline it is based on is `docs/engineering/WO-009A-STORAGE-AUDIT.md`;
+WO-010 added the external SSD (section 2a) and WO-010A the shared caches (section 2b,
+`docs/engineering/WO-010A-SHARED-SSD-CACHE.md`).
 
 ## 1. Why
 
@@ -52,10 +54,11 @@ unit); `docs/engineering/WO-010-SSD-ENVIRONMENT.md` has the measurements.
 
 - Before disk-intensive work, in the shell that runs it: `source ops/scripts/adulis-ssd-env.sh WO-xxx`.
   It checks the volume label and writes a probe, then exports TEMP, TMP and TMPDIR (this shell and
-  its children only) to `G:\AdulisDevelopment\WO-xxx\temp`, so Jest's and Metro's caches and
-  Maestro's driver APKs land there. If the SSD is missing, not that volume, or not writable, it
-  says so and returns non-zero; never fall back to C:. Re-check with `adulis_ssd_ok` before each
-  disk-intensive step.
+  its children only) to `G:\AdulisDevelopment\WO-xxx\temp`, so test temporary files, Maestro's
+  driver APKs and the emulator's temp land there, and points the shared caches at
+  `G:\AdulisDevelopment\shared-cache` (section 2b). If the SSD is missing, not that volume, or
+  not writable, it says so and returns non-zero; never fall back to C:. Re-check with
+  `adulis_ssd_ok` before each disk-intensive step.
 - Start the Android emulator with the same process-scoped TEMP and TMP. WO-010 measured a running
   emulator holding about 10.6 GB of C: through the system TEMP (released when it stopped); started
   this way, its boot cost 12.8 MB of C:.
@@ -65,6 +68,58 @@ unit); `docs/engineering/WO-010-SSD-ENVIRONMENT.md` has the measurements.
   apparent size (the audit reports apparent bytes; read SSD use from its free space).
 - Never move the Android SDK, AVDs, Gradle home, Android Studio, Docker or WSL data, and never
   change system-wide environment variables for this.
+
+## 2b. Shared caches (WO-010A)
+
+Before WO-010A every work order built its own Jest and Metro caches under its own TEMP. On exFAT
+(1 MiB per file) WO-010's Jest cache alone cost about 3.2 GB of SSD for 26 MB of cache, and every
+work order started cold. Caches are now shared; disposable outputs stay per work order.
+
+| Cache | Location | How the tool is pointed there |
+|---|---|---|
+| Jest transform cache | `G:\AdulisDevelopment\shared-cache\jest` | `ADULIS_JEST_CACHE`, read by `apps/mobile/jest.config.js` as `cacheDirectory` (Jest has no environment variable of its own) |
+| Metro transform and file-map caches | `G:\AdulisDevelopment\shared-cache\metro\transform`, `...\metro\file-map` | `ADULIS_METRO_CACHE`, read by `apps/mobile/metro.config.js` (`cacheStores`, `fileMapCacheDirectory`) |
+| Node compile cache | `G:\AdulisDevelopment\shared-cache\node` | `NODE_COMPILE_CACHE`, Node's own variable |
+
+- **Process-scoped.** All three variables come from `source ops/scripts/adulis-ssd-env.sh WO-xxx`
+  and exist only in that shell and its children. Unset (CI, another machine, a shell that did not
+  source the script), every tool uses its default and nothing changes.
+- **Compatibility and invalidation.** Each tool keys its entries itself: Jest by file content,
+  path, Jest version, transformer and configuration; Metro by file content, transformer, Babel
+  configuration and Metro version; Node by source content and Node version. A dependency upgrade
+  therefore writes new entries and never reuses stale ones. Two work orders on different branches
+  can share the cache because entries are content-keyed. If a cache ever looks wrong, clear it for
+  that tool (`jest --clearCache` with the variable set, or Metro's `--clear`), not the whole folder.
+- **Isolation.** The caches hold derived build data only: no credentials, no test results, no API
+  responses. Metro's entries from `expo export` contain the inlined `EXPO_PUBLIC_*` values, which
+  are public by definition (a secret must never be named `EXPO_PUBLIC_*`). Test output, logs,
+  screenshots, Maestro APKs and TEMP stay in the work order's own folder.
+- **Trusted device.** exFAT has no access control, and Node and V8 trust the compile-cache entries
+  they find, so anything that can write the SSD could plant code that later runs in a Node process
+  started from a sourced shell. Keep the SSD attached to this machine only; never mount it on
+  another computer or share the folder. If it has been, clear `shared-cache\node` (rebuildable)
+  before the next run.
+- **Disk checks.** The script's probe runs before anything is created; a full or missing SSD stops
+  the shell with a message rather than writing to C:.
+- **Disconnection.** If the SSD is unplugged mid-run, the running tool fails with an I/O error; it
+  never falls back to C:. Reconnect, re-source the script (the probe re-checks the label) and
+  rerun; a partly written cache entry is ignored or rewritten by the tool.
+- **Cleanup.** The shared caches are class B (rebuildable): never deleted by a work order's
+  cleanup. Clear one only when space is critical, with no Jest, Metro or Node process running.
+  The audit classes everything under `shared-cache` as Rebuildable. One known leak: Node leaves an
+  orphaned temporary file (`<8 hex>.<6 characters>`) in `shared-cache\node` whenever parallel Jest
+  workers write the same entry, about 100 per full mobile suite (about 100 MB of G: on exFAT);
+  clear `shared-cache\node` whenever it grows large (ON-20261111-124).
+- **Cost and speed (measured, `docs/engineering/WO-010A-SHARED-SSD-CACHE.md`).** A cold build of
+  the three caches took 8.9 GB of G: (58 MB apparent: 1 MiB per file) and made the mobile suite and
+  `expo export` 4.1 and 3.3 times faster afterwards. The first full suite on a cold cache can time
+  out two boot tests (ON-20261111-123); rerun it.
+- **Native build copies** (`docs/mobile/WO-010A-EXPO-DEPENDENCY-STABILIZATION.md`): a native
+  Android build needs a short, real (not subst) path on G:. React Native codegen rejects a subst
+  drive (autolinking resolves it to the G: path, "different roots"), and CMake object paths reach
+  about 285 characters even from `G:\w2`. Name the copy after the work order (`G:\w10a`, staging
+  `G:\w10ax`); it needs about 6 GB apparent and far more on exFAT (1 MiB per file). An agent cannot
+  delete a top-level G: folder, so the final report lists it for the founder.
 
 ## 3. Classes
 
@@ -86,8 +141,9 @@ order that created it, unless a person says otherwise.
 
 ### B. Rebuildable caches
 
-Expo and Metro caches (`%TEMP%\metro-cache`), Jest's (`%TEMP%\jest`), Gradle's
-(`G:\Android\Gradle`), the npm and pnpm caches, build outputs (`apps/*/dist`).
+The shared Jest, Metro and Node caches (`G:\AdulisDevelopment\shared-cache`, section 2b), Expo and
+Metro caches in a TEMP that did not source the SSD script (`%TEMP%\metro-cache`, `%TEMP%\jest`),
+Gradle's (`G:\Android\Gradle`), the npm and pnpm caches, build outputs (`apps/*/dist`).
 
 Reuse them: deleting them costs download time (Gradle and SDK downloads are slow here) and
 usually frees less than expected. Clean one only when space is critical, no process is using it

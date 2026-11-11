@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged.
 
 ## Issues
 
@@ -1852,6 +1852,10 @@ with a "WO-007A" line separating policy approval from implementation, and added 
   - Measured: stopping a long-running emulator returned about 10.6 GB of C: (ON-110).
   - Mitigation: development temporary output now goes to the external SSD (`ops/scripts/adulis-ssd-env.sh`), and the emulator is started with its temp there; its boot then cost 12.8 MB of C:.
   - Checkpoints and cleanup: `docs/engineering/WO-010-SSD-ENVIRONMENT.md`. Still OPEN as a capacity risk: C: is about 19 GB free with a 41 GB page-file ceiling.
+- **WO-010A (11-12 November 2026):** Still OPEN as a capacity risk; nothing new on C:.
+  - C: free 17,078,161,408 bytes at checkpoint A, 16,508,252,160 at B (after testing), 16,577,970,176 at C (after cleanup).
+  - The native build (Gradle, CMake, TEMP), the shared caches, the emulator's temp and Maestro all wrote to the SSD; C:'s growth is mostly the pnpm store (+87 MB for the new Expo patches).
+  - C: stayed above 15.6 GB through every native flow.
 
 ### ON-20261111-101
 
@@ -2039,6 +2043,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
   - The page file did not grow during WO-010 (38,833 MB at every checkpoint).
   - The emulator started with TEMP on the SSD cost 12.8 MB of C: at boot and released nothing measurable at exit after about an hour, consistent with its temp storage having been the hidden part. Proven by stop and start measurements, not by a named file.
   - Nothing was disabled, resized or relocated. A game using 10 GB of private memory ran throughout (ON-120).
+- **WO-010A (11-12 November 2026):** Confirmed. With the emulator started on the SSD temp, the page file stayed at 38,826-38,832 MB from checkpoint A to C. Free RAM was 0.54 GB at A and 2.69 GB at B. Nothing was disabled or resized.
 
 ### ON-20261111-111
 
@@ -2104,7 +2109,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-010
 - **Severity:** LOW
 - **Type:** CONTRACT
-- **Status:** OPEN
+- **Status:** OPEN (amendment A4 PROPOSED, awaiting founder approval)
 - **Summary:** GET /v1/categories had no documented semantics (ADU-API-01 S12.1 lists it with an empty description); WO-010 defines them.
 - **Expected:** A governed contract for the category list.
 - **Actual:** It returned every category (id, code, parent_id). It now returns only the categories enabled in the requester's Market that have a label key, ordered, with additive fields (label_key, display_order, market_resolved). A Seller-side consumer resolving through its Account now sees only that Market's enabled categories.
@@ -2116,6 +2121,12 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Operator tooling or a caller with no Market context now gets an empty list.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Record the semantics in an ADU-API-01 amendment.
+- **WO-010A (11-12 November 2026):** Proposed amendment prepared, `docs/amendments/ADU-API-01_A4_categories_PROPOSED.md` (commit `28686e1`). It is listed under "Proposed amendments" in `docs/amendments/README.md`, which says it governs nothing yet.
+  - A4.1: `GET /v1/categories` (Market resolution, fields, eligibility, ordering, `no-store`, compatibility).
+  - A4.2 and A4.3: the Shop and Search `category` filters with Market- and category-bound cursors.
+  - A4.4: the Seller Product `category_id` validation.
+  - A4.5: what is not covered.
+  - Checked against the implementation. No runtime change; v1.11 still governs.
 
 ### ON-20261111-115
 
@@ -2134,6 +2145,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Until Step 6 runs, the launch Market lists no categories (the Shop shows All only).
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder or operator: run Step 6 with the Addis Ababa Market code.
+- **WO-010A (11-12 November 2026):** Unchanged, still OPEN. The Addis Ababa Market code is still not in the repository and was not guessed. No category was enabled in any non-development database, and the development seed Market was not used as a stand-in. The founder or operator runs `ops/runbooks/activate-market.md` Step 6 with the real code.
 
 ### ON-20261111-116
 
@@ -2158,7 +2170,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-010
 - **Severity:** LOW
 - **Type:** ENVIRONMENT
-- **Status:** OPEN
+- **Status:** RESOLVED
 - **Summary:** Expo Doctor 1.21.6 (the working pinned version) reports 19/20: new Expo SDK 58 patch releases appeared after WO-009A passed 20/20.
 - **Expected:** 20/20.
 - **Actual:** Patch mismatches: expo 58.0.24 expected, 58.0.23 found; likewise expo-constants, expo-font, expo-linking, expo-network, expo-router, expo-secure-store, expo-sqlite, expo-status-bar.
@@ -2170,13 +2182,19 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** The installed patch versions drift from the SDK's recommendation.
 - **Founder decision required:** No
 - **Recommended resolution:** Upgrade in a dependency-maintenance work order (with a native rebuild check).
+- **WO-010A (11-12 November 2026):** RESOLVED.
+  - `expo install --fix` within SDK 58 (commit `b7e2b6a`): expo 58.0.24, expo-constants 58.0.16, expo-font 58.0.12, expo-linking 58.0.17, expo-network 58.0.5, expo-router 58.0.31, expo-secure-store 58.0.3, expo-sqlite 58.0.16, expo-status-bar 58.0.5.
+  - Lockfile regenerated by pnpm (Expo packages only; the transitive `getenv` dropped); `--frozen-lockfile` passes. The expo-font and expo-status-bar config plugins were added to `app.json` (no manifest change).
+  - Expo Doctor 1.21.6: 20/20, no check suppressed.
+  - expo-modules-core moved 58.0.30 -> 58.1.0 and eight other modules with native code changed version, so the old APK could not be trusted. The debug APK was rebuilt (`G:\w10a`, BUILD SUCCESSFUL, 326 tasks) and all 31 native flows passed on it.
+  - Record: `docs/mobile/WO-010A-EXPO-DEPENDENCY-STABILIZATION.md`.
 
 ### ON-20261111-118
 
 - **Work order:** WO-010
 - **Severity:** LOW
 - **Type:** ENVIRONMENT
-- **Status:** RESOLVED (documented)
+- **Status:** RESOLVED
 - **Summary:** The external SSD is exFAT with a 1 MiB allocation unit; it cannot hold junctions, and a cache of small files takes about 1 MiB per file.
 - **Expected:** Audit numbers that reflect SSD use; a self-test that works wherever TEMP points.
 - **Actual:** The Jest cache measured 25.9 MB apparent in 3,201 files, about 3.2 GB allocated. The audit self-test failed when TEMP pointed at the SSD.
@@ -2188,6 +2206,10 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** SSD space is used about 10x faster than apparent sizes suggest (3.5 TB free, so capacity is not at risk).
 - **Founder decision required:** No
 - **Recommended resolution:** Optional: reformat a dedicated SSD partition as NTFS (founder's hardware decision).
+- **WO-010A (11-12 November 2026):** The per-work-order caches that exFAT made expensive are now shared (commit `5a7f790`). Jest (`apps/mobile/jest.config.js`), Metro (`apps/mobile/metro.config.js`) and Node's compile cache live in `G:\AdulisDevelopment\shared-cache`, set by `adulis-ssd-env.sh` for the sourcing shell only.
+  - Cold run 177.9 s + 99.8 s; warm 43.4 s + 30.0 s; a new work-order context reused the caches with no new Jest or Metro entries; the invalidation probe passed.
+  - A cold build of the caches costs 8.9 GB of G: once, instead of in every work order.
+  - Follow-ups: ON-20261111-123, -124 and -128. Record: `docs/engineering/WO-010A-SHARED-SSD-CACHE.md`.
 
 ### ON-20261111-119
 
@@ -2242,3 +2264,129 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A long first write can time out a test that starts while the drive sleeps.
 - **Founder decision required:** No
 - **Recommended resolution:** Keep the probe step before disk-intensive work; optionally disable USB selective suspend for this drive.
+
+### ON-20261111-122
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (workaround documented)
+- **Summary:** A native Android build cannot run from a `subst` drive or a long path on the exFAT SSD, and pnpm cannot link workspace packages there.
+- **Expected:** A rebuild in a short-path copy under `G:\AdulisDevelopment\WO-xxx\build`.
+- **Actual:** Under `subst W:`, `generateCodegenSchemaFromJavaScript` failed for safe-area-context, gesture-handler and screens ("this and base files have different roots"): autolinking resolves real paths (G:), and the codegen CLI path stayed on W:. A direct path under G:\AdulisDevelopment is about 31 characters too long for the CMake object paths (285 characters from G:\w2). The pnpm install ends with EISDIR on the `@adulis/*` workspace links (no junctions on exFAT).
+- **Reproduction:** Build from `subst W: G:\AdulisDevelopment\WO-010A\build`.
+- **Evidence:** G:\AdulisDevelopment\WO-010A\logs\build-gradle.log, build-install.log.
+- **Root cause:** Windows path limits, subst versus real-path resolution, and exFAT without reparse points.
+- **Fix and commit:** The copy was moved (same-volume rename) to `G:\w10a`, with CMake staging in `G:\w10ax`. The policy records the rule: a short, real top-level path named after the work order. The workspace links are not needed for a debug APK, whose JavaScript Metro serves. No repository change.
+- **Verification:** BUILD SUCCESSFUL in 13 min 47 s; APK installed; 31 flows PASS.
+- **Remaining risk:** Top-level G: folders cannot be deleted by an agent; each native work order leaves one or two for the founder (at least 98 GB of G: for `G:\w10a`: 100,664 files at 1 MiB or more each).
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: delete superseded build copies when convenient (`G:\wo001a`; `G:\w2` and `G:\w2x` now that `G:\w10a` holds the current APK). Optionally provide an NTFS partition for build copies (ON-20261111-118).
+
+### ON-20261111-123
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** OPEN
+- **Summary:** On a cold Jest cache, two "root providers" tests in `apps/mobile/src/auth/session.test.tsx` can exceed the 5 s test timeout during the full mobile suite.
+- **Expected:** 291/291 on any run.
+- **Actual:** Test A (cold shared cache): 289/291, the file took 62 s. Alone on a cold cache: 8/8 in 24 s. Every warm run: 291/291.
+- **Reproduction:** Empty the Jest cache and run the whole mobile suite (four workers) with the cache on the USB exFAT SSD.
+- **Evidence:** G:\AdulisDevelopment\WO-010A\logs\cache-test\A-jest.log, cold-session.log.
+- **Root cause:** React Native and Expo load internals lazily, so on a cold cache their transforms run inside the first tests, in four workers at once, on a slow drive.
+- **Fix and commit:** None (no test timeout loosened).
+- **Verification:** n/a
+- **Remaining risk:** The first full run after a dependency change can fail two tests.
+- **Founder decision required:** No
+- **Recommended resolution:** Rerun once warm, or use `--maxWorkers=2` for the first run. Raise only these tests' timeout in a test-maintenance change if it recurs in CI.
+
+### ON-20261111-124
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** Node's compile cache costs much more SSD than it holds and leaks orphaned temporary files on Windows.
+- **Expected:** A small, bounded cache.
+- **Actual:** `shared-cache\node` reached 7,541 files (6,789 entries, 752 orphans named `<8 hex>.<6 characters>`): 31 MB apparent, about 7.5 GB of G: (1 MiB per file). About 100 orphans per full mobile suite: parallel Jest workers writing the same entry lose the Windows rename.
+- **Reproduction:** Run the mobile suite or Metro with NODE_COMPILE_CACHE set.
+- **Evidence:** docs/engineering/WO-010A-SHARED-SSD-CACHE.md section 3.2.
+- **Root cause:** Node writes entries through a temporary file and a rename; exFAT allocates 1 MiB per file.
+- **Fix and commit:** Kept, as the work order requires. The policy says to clear `shared-cache\node` when it grows, and to treat the SSD as a trusted device (security LOW-1).
+- **Verification:** File counts before and after each test.
+- **Remaining risk:** Unbounded growth of about 100 MB of G: per suite run.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: keep NODE_COMPILE_CACHE (its benefit was not separately measured) or drop it (one line in `ops/scripts/adulis-ssd-env.sh`).
+
+### ON-20261111-125
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** RESOLVED
+- **Summary:** `apps/mobile/.maestro/buyer-shell.yaml` asserted the Search and Shop placeholder sentences that WO-007 and WO-008 removed; no work order since had run it.
+- **Expected:** The shell flow passes on the current app.
+- **Actual:** FAIL: "Search for Products, Sellers and Scenes arrives in a coming update." not visible.
+- **Reproduction:** Run buyer-shell.yaml on the current app.
+- **Evidence:** G:\AdulisDevelopment\WO-010A\maestro\shell.
+- **Root cause:** Test maintenance missed when Search (WO-008) and the Shop (WO-007) replaced their placeholders.
+- **Fix and commit:** The flow waits for the Search start text, dismisses the focused keyboard before Back, and accepts any resolved Shop state. No app code changed.
+- **Verification:** PASS on the rebuilt APK.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-126
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** OPEN
+- **Summary:** In the parallel `pnpm test`, `wo-sec-001-pool-starvation` (deletion OTP request) got 429 instead of 202 once.
+- **Expected:** 983/983 in every run.
+- **Actual:** Second gates database: 982/983. The suite alone: 19/19. The first database's full API run: 983/983.
+- **Reproduction:** Run `pnpm test` (all suites in parallel) on a fresh disposable database.
+- **Evidence:** G:\AdulisDevelopment\WO-010A\logs\gates\pnpm-test.log, rerun-wo-sec-001.log.
+- **Root cause:** Parallel suites share the OTP rate limits (OVN-047 class).
+- **Fix and commit:** None.
+- **Verification:** Rerun alone: PASS.
+- **Remaining risk:** Intermittent red in the parallel gate.
+- **Founder decision required:** No
+- **Recommended resolution:** Isolate the OTP ceiling per suite (backend test maintenance).
+
+### ON-20261111-127
+
+- **Work order:** WO-010A
+- **Severity:** MEDIUM
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent read-only security review of the WO-010A changes: no Critical, High or Medium; two Low and two Info items.
+- **Expected:** n/a
+- **Actual:** LOW-1: shared V8 compile cache on access-control-free exFAT. LOW-2: the Metro override used Metro's plain FileStore instead of Expo's. INFO: the work-order argument was not validated; the policy wrongly said the caches hold no environment values (Metro's export entries contain the public EXPO_PUBLIC_* values). The lockfile (36 new resolutions, all sha512, npm registry only, no install scripts), the two config plugins (no manifest change) and amendment A4 (tightens security) were checked clean.
+- **Reproduction:** n/a
+- **Evidence:** Review report (session record).
+- **Root cause:** n/a
+- **Fix and commit:** LOW-2: Expo's FileStore. INFO: `^WO-[A-Za-z0-9-]+$` check; policy wording corrected. LOW-1: documented as a trusted-device rule and a founder decision (ON-20261111-124). Commit `5a7f790` and the docs commit.
+- **Verification:** Bad argument refused; Metro config loads with Expo's store; lint clean; all gates green.
+- **Remaining risk:** LOW-1 remains while NODE_COMPILE_CACHE is kept.
+- **Founder decision required:** No
+- **Recommended resolution:** Done (see -124 for the remaining choice).
+
+### ON-20261111-128
+
+- **Work order:** WO-010A
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** Only the mobile Jest cache is shared; `apps/api` and `packages/*` Jest runs still build a cache in each work order's TEMP.
+- **Expected:** One shared Jest cache for every workspace.
+- **Actual:** The gates left 3,124 files (38.9 MB apparent, about 3 GB of G:) in `WO-010A\temp\jest`, removed at cleanup.
+- **Reproduction:** Run the API or package tests in a sourced shell.
+- **Evidence:** Cleanup record in docs/engineering/WO-010A-SHARED-SSD-CACHE.md section 3.3.
+- **Root cause:** Their Jest configuration is outside the mobile work order's write boundary (apps/api; packages need their own PR).
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** About 3 GB of G: per work order that runs the full gates, cleaned as class A.
+- **Founder decision required:** No
+- **Recommended resolution:** A backend or tooling change: the same `cacheDirectory` line in those Jest configurations.
