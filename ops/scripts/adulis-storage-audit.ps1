@@ -224,6 +224,8 @@ $targets = @(
   @{ G = 'Android'; N = 'G:\w2 (9 Nov native build copy)'; P = 'G:\w2'; C = 'Review'; Note = 'its debug APK is reused while native deps are unchanged' }
   @{ G = 'Android'; N = 'G:\w2x (CMake staging for w2)'; P = 'G:\w2x'; C = 'Review'; Note = 'rebuildable if w2 is rebuilt' }
   @{ G = 'Android'; N = 'G:\wo001a (WO-001A build copy)'; P = 'G:\wo001a'; C = 'Review'; Note = 'superseded by w2' }
+  @{ G = 'Android'; N = 'G:\w10a (WO-010A native build copy, SDK 58 patches)'; P = 'G:\w10a'; C = 'Review'; Note = 'its debug APK is reused while native deps are unchanged' }
+  @{ G = 'Android'; N = 'G:\w10ax (CMake staging for w10a)'; P = 'G:\w10ax'; C = 'Review'; Note = 'rebuildable if w10a is rebuilt' }
   # Expo, Metro, Jest
   @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\metro-cache'; P = (Join-Path $UserTemp 'metro-cache'); C = 'Rebuildable'; Note = 'Metro transform cache' }
   @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\jest'; P = (Join-Path $UserTemp 'jest'); C = 'Rebuildable'; Note = 'Jest transform cache' }
@@ -251,7 +253,7 @@ if (Test-Path -LiteralPath $SsdRoot) {
   $targets += @{ G = 'External SSD'; N = "$SsdRoot (total)"; P = $SsdRoot; C = 'Review'; Note = 'work-order temporary outputs and caches' }
   foreach ($w in @(Get-ChildItem -LiteralPath $SsdRoot -Directory -Force)) {
     foreach ($sub in @(Get-ChildItem -LiteralPath $w.FullName -Directory -Force)) {
-      $targets += @{ G = 'External SSD'; N = "$($w.Name)\$($sub.Name)"; P = $sub.FullName; C = $(if ($sub.Name -eq 'cache') { 'Rebuildable' } else { 'Review' }); Note = '' }
+      $targets += @{ G = 'External SSD'; N = "$($w.Name)\$($sub.Name)"; P = $sub.FullName; C = $(if ($w.Name -eq 'shared-cache' -or $sub.Name -eq 'cache') { 'Rebuildable' } else { 'Review' }); Note = '' }
     }
   }
 }
