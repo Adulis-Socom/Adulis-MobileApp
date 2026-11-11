@@ -43,11 +43,22 @@ param(
   [switch]$Execute,
   [int]$MinAgeMinutes = 60,
   [switch]$SkipDocker,
-  [switch]$SelfTest
+  [switch]$SelfTest,
+  # The external SSD's Adulis working directory (WO-010; ops/scripts/adulis-ssd-env.sh). Measured,
+  # and searched for Maestro driver APKs in its <WO>\temp folders; never cleaned otherwise.
+  [string]$SsdRoot = 'G:\AdulisDevelopment'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
+
+# The user's own %TEMP% on C: (from the user environment, so a process-scoped TEMP redirect --
+# adulis-ssd-env.sh -- does not hide C:), and the SSD work-order temp folders.
+$UserTemp = [Environment]::ExpandEnvironmentVariables([string][Environment]::GetEnvironmentVariable('TEMP', 'User'))
+if (-not $UserTemp -or -not (Test-Path -LiteralPath $UserTemp)) { $UserTemp = Join-Path $env:LOCALAPPDATA 'Temp' }
+$SsdTemps = @()
+if (Test-Path -LiteralPath $SsdRoot) { $SsdTemps = @(Get-ChildItem -LiteralPath $SsdRoot -Directory -Force | ForEach-Object { Join-Path $_.FullName 'temp' } | Where-Object { Test-Path -LiteralPath $_ }) }
+$ApkDirs = @($UserTemp) + $SsdTemps
 
 # ---------------------------------------------------------------------------------------------
 # Measuring
@@ -136,7 +147,7 @@ function Get-MaestroApks([int]$AgeMinutes) {
   $now = Get-Date
   $found = @()
   $files = @()
-  foreach ($pattern in $MaestroApkPatterns) { $files += @(Get-ChildItem -LiteralPath $env:TEMP -Filter $pattern -File -Force -ErrorAction SilentlyContinue) }
+  foreach ($dir in $ApkDirs) { foreach ($pattern in $MaestroApkPatterns) { $files += @(Get-ChildItem -LiteralPath $dir -Filter $pattern -File -Force -ErrorAction SilentlyContinue) } }
   # -Filter also matches 8.3 short names (e.g. *.apks): keep real .apk files, each once.
   foreach ($f in @($files | Where-Object { $_.Extension -eq '.apk' } | Sort-Object FullName -Unique)) {
     $old = ($now - $f.LastWriteTime).TotalMinutes -ge $AgeMinutes
@@ -154,7 +165,8 @@ function Get-MaestroApks([int]$AgeMinutes) {
 # Self-test: measuring, junction exclusion and APK identification on a throwaway folder.
 # ---------------------------------------------------------------------------------------------
 if ($SelfTest) {
-  $root = Join-Path $env:TEMP ('adulis-audit-selftest-' + [guid]::NewGuid().ToString('N'))
+  # On the user's NTFS temp: an exFAT SSD (WO-010) cannot hold the junction this test makes.
+  $root = Join-Path $UserTemp ('adulis-audit-selftest-' + [guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Path (Join-Path $root 'a\node_modules') -Force | Out-Null
   [IO.File]::WriteAllBytes((Join-Path $root 'a\one.bin'), (New-Object byte[] 1000))
   [IO.File]::WriteAllBytes((Join-Path $root 'a\node_modules\two.bin'), (New-Object byte[] 2500))
@@ -213,16 +225,16 @@ $targets = @(
   @{ G = 'Android'; N = 'G:\w2x (CMake staging for w2)'; P = 'G:\w2x'; C = 'Review'; Note = 'rebuildable if w2 is rebuilt' }
   @{ G = 'Android'; N = 'G:\wo001a (WO-001A build copy)'; P = 'G:\wo001a'; C = 'Review'; Note = 'superseded by w2' }
   # Expo, Metro, Jest
-  @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\metro-cache'; P = (Join-Path $env:TEMP 'metro-cache'); C = 'Rebuildable'; Note = 'Metro transform cache' }
-  @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\jest'; P = (Join-Path $env:TEMP 'jest'); C = 'Rebuildable'; Note = 'Jest transform cache' }
+  @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\metro-cache'; P = (Join-Path $UserTemp 'metro-cache'); C = 'Rebuildable'; Note = 'Metro transform cache' }
+  @{ G = 'Expo/Metro/Jest'; N = '%TEMP%\jest'; P = (Join-Path $UserTemp 'jest'); C = 'Rebuildable'; Note = 'Jest transform cache' }
   @{ G = 'Expo/Metro/Jest'; N = '%USERPROFILE%\.expo'; P = (Join-Path $env:USERPROFILE '.expo'); C = 'Review'; Note = 'may hold Expo login state' }
   # %TEMP% as a whole: every tool writes there (also non-Adulis ones), measured for attribution only
-  @{ G = 'Temp (all tools)'; N = '%TEMP% total'; P = $env:TEMP; C = 'Review'; Note = 'includes the rows above and other software' }
+  @{ G = 'Temp (all tools)'; N = '%TEMP% total'; P = $UserTemp; C = 'Review'; Note = 'includes the rows above and other software' }
   # Maestro
   @{ G = 'Maestro'; N = '%USERPROFILE%\.maestro'; P = (Join-Path $env:USERPROFILE '.maestro'); C = 'Review'; Note = 'test output and screenshots (evidence)' }
   @{ G = 'Maestro'; N = 'C:\maestro (CLI install)'; P = 'C:\maestro'; C = 'Protected'; Note = '' }
   # AI coding agent
-  @{ G = 'AI agent'; N = '%TEMP%\claude (session scratch, all sessions)'; P = (Join-Path $env:TEMP 'claude'); C = 'Review'; Note = 'may hold evidence of open work' }
+  @{ G = 'AI agent'; N = '%TEMP%\claude (session scratch, all sessions)'; P = (Join-Path $UserTemp 'claude'); C = 'Review'; Note = 'may hold evidence of open work' }
   @{ G = 'AI agent'; N = '%USERPROFILE%\.claude'; P = (Join-Path $env:USERPROFILE '.claude'); C = 'Protected'; Note = 'transcripts, memory, plugins' }
   @{ G = 'AI agent'; N = 'G:\adulis-claude-scratch-archive'; P = 'G:\adulis-claude-scratch-archive'; C = 'Protected'; Note = 'deleting needs founder authorisation' }
   # Package caches
@@ -234,6 +246,15 @@ $targets = @(
   @{ G = 'Docker/WSL'; N = 'docker-desktop distro (ext4.vhdx)'; P = (Join-Path $env:LOCALAPPDATA 'Docker\wsl\main\ext4.vhdx'); C = 'Protected'; Note = '' }
 )
 foreach ($s in $ScratchDir) { $targets += @{ G = 'AI agent'; N = "scratch: $s"; P = $s; C = 'Review'; Note = 'current session' } }
+# The external SSD: its Adulis root and each work order's folder (temp, scratch, Maestro, logs...).
+if (Test-Path -LiteralPath $SsdRoot) {
+  $targets += @{ G = 'External SSD'; N = "$SsdRoot (total)"; P = $SsdRoot; C = 'Review'; Note = 'work-order temporary outputs and caches' }
+  foreach ($w in @(Get-ChildItem -LiteralPath $SsdRoot -Directory -Force)) {
+    foreach ($sub in @(Get-ChildItem -LiteralPath $w.FullName -Directory -Force)) {
+      $targets += @{ G = 'External SSD'; N = "$($w.Name)\$($sub.Name)"; P = $sub.FullName; C = $(if ($sub.Name -eq 'cache') { 'Rebuildable' } else { 'Review' }); Note = '' }
+    }
+  }
+}
 
 # ---------------------------------------------------------------------------------------------
 # Audit
@@ -255,29 +276,38 @@ $rows += [pscustomobject]@{ Group = 'Repository'; Name = 'node_modules (all, no 
 $apks = Get-MaestroApks $MinAgeMinutes
 $apkBytes = [int64]0
 foreach ($a in $apks) { $apkBytes += $a.Bytes }
-$rows += [pscustomobject]@{ Group = 'Maestro'; Name = "%TEMP% driver APKs ($($apks.Count) files)"; Path = (Join-Path $env:TEMP '{tmp,maestro-app,maestro-server}*.apk'); Class = 'Disposable'; Bytes = $apkBytes; Files = $apks.Count; Note = 'Maestro driver APKs, one per run' }
+$ssdApkBytes = [int64]0; $ssdApkCount = 0
+foreach ($a in $apks) { if ($a.Path -notlike "$UserTemp*") { $ssdApkBytes += $a.Bytes; $ssdApkCount++ } }
+$rows += [pscustomobject]@{ Group = 'Maestro'; Name = "driver APKs, all temp dirs ($($apks.Count) files; $ssdApkCount on the SSD)"; Path = ($ApkDirs -join ';'); Class = 'Disposable'; Bytes = $apkBytes; Files = $apks.Count; Note = ('Maestro driver APKs, one per run; {0:N0} bytes on the SSD' -f $ssdApkBytes) }
 
 # The Windows page file grows on C: under memory pressure (emulator, Jest, Docker) and is hidden
 # from a file read: its allocated size and the free RAM, for attribution only (system managed).
 try {
   $pf = @(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop)
   foreach ($p in $pf) {
-    $rows += [pscustomobject]@{ Group = 'Windows'; Name = "page file $($p.Name) (peak use $($p.PeakUsage) MB)"; Path = $p.Name; Class = 'Protected'; Bytes = [int64]$p.AllocatedBaseSize * 1MB; Files = $null; Note = 'system managed; grows under memory pressure' }
+    $rows += [pscustomobject]@{ Group = 'Windows'; Name = "page file $($p.Name) allocated (in use $($p.CurrentUsage) MB, peak $($p.PeakUsage) MB)"; Path = $p.Name; Class = 'Protected'; Bytes = [int64]$p.AllocatedBaseSize * 1MB; Files = $null; Note = 'system managed; grows under memory pressure' }
   }
   $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
   $rows += [pscustomobject]@{ Group = 'Windows'; Name = 'free physical memory (not disk)'; Path = 'RAM'; Class = 'Review'; Bytes = [int64]$os.FreePhysicalMemory * 1KB; Files = $null; Note = ('of {0:N1} GB' -f ($os.TotalVisibleMemorySize / 1MB)) }
+  # Commit charge near the commit limit (RAM + page file) is when a system-managed page file grows.
+  $rows += [pscustomobject]@{ Group = 'Windows'; Name = 'commit charge (not disk)'; Path = 'commit'; Class = 'Review'; Bytes = ([int64]$os.TotalVirtualMemorySize - [int64]$os.FreeVirtualMemory) * 1KB; Files = $null; Note = ('of a {0:N1} GB commit limit' -f ($os.TotalVirtualMemorySize / 1MB)) }
 } catch { }
+# A running Android emulator holds memory backed by C: (WO-010: stopping it returned about 10.6 GB).
+foreach ($q in @(Get-Process -Name 'qemu-system-x86_64' -ErrorAction SilentlyContinue)) {
+  $rows += [pscustomobject]@{ Group = 'Windows'; Name = "Android emulator running (pid $($q.Id), private memory)"; Path = 'qemu'; Class = 'Review'; Bytes = [int64]$q.PrivateMemorySize64; Files = $null; Note = 'stop it when not testing natively' }
+}
+$rows += [pscustomobject]@{ Group = 'Windows'; Name = "temp location of this process: $env:TEMP"; Path = 'TEMP'; Class = 'Review'; Bytes = $null; Files = $null; Note = "user TEMP: $UserTemp" }
 
 # pip's unpack folders left in %TEMP% (owner not provable: reported, never cleaned here).
 $pipBytes = [int64]0; $pipCount = 0
-foreach ($d in @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'pip-unpack-*' -Force -ErrorAction SilentlyContinue)) {
+foreach ($d in @(Get-ChildItem -LiteralPath $UserTemp -Directory -Filter 'pip-unpack-*' -Force -ErrorAction SilentlyContinue)) {
   $pipBytes += (Measure-Tree $d.FullName).Bytes; $pipCount++
 }
-$rows += [pscustomobject]@{ Group = 'Temp (all tools)'; Name = "%TEMP%\pip-unpack-* ($pipCount folders)"; Path = (Join-Path $env:TEMP 'pip-unpack-*'); Class = 'Review'; Bytes = $pipBytes; Files = $null; Note = 'pip leftovers; owner not provable' }
+$rows += [pscustomobject]@{ Group = 'Temp (all tools)'; Name = "%TEMP%\pip-unpack-* ($pipCount folders)"; Path = (Join-Path $UserTemp 'pip-unpack-*'); Class = 'Review'; Bytes = $pipBytes; Files = $null; Note = 'pip leftovers; owner not provable' }
 
 # Largest temporary folders: each agent session scratch folder and each known tool cache.
 $tempDirs = @()
-$claudeTemp = Join-Path $env:TEMP 'claude'
+$claudeTemp = Join-Path $UserTemp 'claude'
 if (Test-Path -LiteralPath $claudeTemp) {
   foreach ($d in @(Get-ChildItem -LiteralPath $claudeTemp -Directory -Force | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory -Force })) {
     $m = Measure-Tree $d.FullName
@@ -285,11 +315,11 @@ if (Test-Path -LiteralPath $claudeTemp) {
   }
 }
 foreach ($p in @('metro-cache', 'jest')) {
-  $full = Join-Path $env:TEMP $p
+  $full = Join-Path $UserTemp $p
   $m = Measure-Tree $full
   if ($m) { $tempDirs += [pscustomobject]@{ Path = $full; Bytes = $m.Bytes; LastWrite = (Get-Item -LiteralPath $full).LastWriteTime.ToString('s') } }
 }
-foreach ($d in @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'haste-map*' -Force -ErrorAction SilentlyContinue)) {
+foreach ($d in @(Get-ChildItem -LiteralPath $UserTemp -Directory -Filter 'haste-map*' -Force -ErrorAction SilentlyContinue)) {
   $tempDirs += [pscustomobject]@{ Path = $d.FullName; Bytes = (Measure-Tree $d.FullName).Bytes; LastWrite = $d.LastWriteTime.ToString('s') }
 }
 $tempDirs = @($tempDirs | Sort-Object Bytes -Descending)
@@ -311,7 +341,9 @@ foreach ($a in $apks) {
 }
 $cutoff = (Get-Date).AddDays(-2)
 foreach ($d in $tempDirs) {
-  if ($d.Path -like "$claudeTemp*" -and [datetime]$d.LastWrite -lt $cutoff -and $d.Bytes -gt 50MB -and ($ScratchDir -notcontains $d.Path)) {
+  # The current session's folder (a parent of a -ScratchDir) is never a candidate.
+  $current = @($ScratchDir | Where-Object { $_ -like "$($d.Path)*" }).Count -gt 0
+  if ($d.Path -like "$claudeTemp*" -and [datetime]$d.LastWrite -lt $cutoff -and $d.Bytes -gt 50MB -and -not $current) {
     $candidates += [pscustomobject]@{ Class = 'Review'; Path = $d.Path; Bytes = $d.Bytes; Action = 'person decides (move, then delete)'; Reason = 'agent scratch untouched for 2+ days' }
   }
 }
