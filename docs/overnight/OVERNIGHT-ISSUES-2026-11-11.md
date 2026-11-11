@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed.
 
 ## Issues
 
@@ -2390,3 +2390,183 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** About 3 GB of G: per work order that runs the full gates, cleaned as class A.
 - **Founder decision required:** No
 - **Recommended resolution:** A backend or tooling change: the same `cacheDirectory` line in those Jest configurations.
+
+### ON-20261111-129
+
+- **Work order:** WO-011
+- **Severity:** MEDIUM
+- **Type:** SPEC_CONFLICT
+- **Status:** OPEN
+- **Summary:** The design deletion lifecycle (ADU-PRV-01 v3.3 S29-S30, S57: deletion requests with step-up, states, optional cooling-off, cancellation and a status route) is not in the backend; only the immediate deletion-ticket flow (ADU-API-01 v1.11 S12.18) exists.
+- **Expected:** Mobile builds the designed lifecycle.
+- **Actual:** Mobile builds the implemented ticket flow, as the work order directs: OTP, ticket, preview, typed confirmation, immediate irreversible deletion.
+- **Reproduction:** Compare PRV-01 S57 with `apps/api/src/modules/deletion`.
+- **Evidence:** docs/mobile/WO-011-BUYER-ACCOUNT.md section 4.
+- **Root cause:** The backend implements the web-era ticket design; the November pack redesigned the lifecycle.
+- **Fix and commit:** None in the backend (out of scope). Mobile uses the existing flow.
+- **Verification:** n/a
+- **Remaining risk:** No cooling-off, cancellation or deletion-status view; deletion is immediate.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide whether the PRV-01 lifecycle (and its cooling-off period, which needs legal review) is built before release, or whether the immediate flow is acceptable for the first release.
+
+### ON-20261111-130
+
+- **Work order:** WO-011
+- **Severity:** MEDIUM
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN (mitigated)
+- **Summary:** The deletion ticket identifies the Account by possession of a phone, not by the signed-in session; the client cannot make the two match.
+- **Expected:** Mobile deletes only the signed-in Account.
+- **Actual:** A signed-in Buyer who types another number they control deletes that number's Account.
+- **Reproduction:** Sign in as A; Delete Account with phone B and B's code.
+- **Evidence:** Security review M1; deletion.service ticketAccount.
+- **Root cause:** The ticket flow was designed for an anonymous web page.
+- **Fix and commit:** Mitigated in commit `ddf71a6`: the preview and outcome name the phone; after deletion the app asks the server with this device's bearer whether its own session was revoked, signs out only then (or when the server cannot be asked), and otherwise says the device is still signed in.
+- **Verification:** Tests M1 (another Account; no answer).
+- **Remaining risk:** Deleting the wrong number remains possible for someone who controls both phones.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide whether Mobile deletion must be bound to the session (a contract change: a session-scoped deletion request, as PRV-01 S57 designs).
+
+### ON-20261111-131
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** DECISION
+- **Status:** OPEN
+- **Summary:** The deletion typed-confirmation strings (`buyer.delete.confirm_instruction`, `buyer.delete.confirm_word`) are candidates for the HUMAN-REQUIRED translation class.
+- **Expected:** A string a person consents to an irreversible action with is translated by a person.
+- **Actual:** They are ordinary machine-translated placeholders: the HUMAN-REQUIRED gate admits only keys with a recorded ruling.
+- **Reproduction:** `pnpm verify:mt-keys` after marking them.
+- **Evidence:** ops/scripts/verify-mt-keys.mjs.
+- **Root cause:** No ruling classifies them; one was not invented.
+- **Fix and commit:** None. Amharic is development-only, so no user sees the placeholder.
+- **Verification:** verify:mt-keys PASS.
+- **Remaining risk:** None until Amharic is enabled.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder or the translation owner: rule whether these join the HUMAN-REQUIRED class.
+
+### ON-20261111-132
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** No Buyer profile exists: R-11 names "Edit Profile", but no document defines a Buyer field and no endpoint reads or edits one.
+- **Expected:** Edit Profile in You.
+- **Actual:** You shows only the signed-in statement; no field is fabricated, and the Seller Profile API was not repurposed.
+- **Reproduction:** n/a
+- **Evidence:** ADU-MOB-02 S232 R-11; contracts/openapi.json.
+- **Root cause:** The Buyer profile was never designed.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** None.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: define the Buyer profile (fields, visibility, review-author display) before an Edit Profile work order.
+
+### ON-20261111-133
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** DECISION
+- **Status:** OPEN
+- **Summary:** Appearance and Language are not persisted across app launches.
+- **Expected:** A device setting survives a restart.
+- **Actual:** Both live in the in-memory UI store for the app run (unchanged behaviour).
+- **Reproduction:** Choose Dark; restart the app.
+- **Evidence:** src/state/ui-store.ts.
+- **Root cause:** The approved device stores are SecureStore (credentials) and SQLite (no tables until a design defines them); a storage library would be a new native dependency.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** A preference resets on each launch.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: approve a device-local preference store (an SQLite settings table, or a key in SecureStore) in a small follow-up.
+
+### ON-20261111-134
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** A Buyer cannot sign out other sessions from the app.
+- **Expected:** ADU-AUTH-02 S38: "revoke one or all other sessions according to policy".
+- **Actual:** The contract allows revoking another session only from CONSOLE with a REVOKE_ALL_SESSIONS step-up, and no step-up is reachable from Mobile.
+- **Reproduction:** n/a
+- **Evidence:** contracts/openapi.json (RevokeSessionBodyDto, RevokeOthersBodyDto).
+- **Root cause:** The policy restricts the action to the console.
+- **Fix and commit:** None; the screen says so in one sentence.
+- **Verification:** n/a
+- **Remaining risk:** A Buyer with no console access cannot end a lost device's session except by waiting for expiry.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide whether Buyers get a MOBILE path to revoke other sessions (and with what verification).
+
+### ON-20261111-135
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** The deletion endpoints publish no request or response schemas in contracts/openapi.json.
+- **Expected:** Generated types for every endpoint a client calls.
+- **Actual:** Mobile checks the verify, preview and confirm answers at its boundary (src/buyer/account.ts) instead of hand-writing DTOs.
+- **Reproduction:** n/a
+- **Evidence:** contracts/openapi.json /v1/deletion/*.
+- **Root cause:** The legacy controller has no Swagger response decorators.
+- **Fix and commit:** None (no API change in this batch).
+- **Verification:** Boundary checks tested.
+- **Remaining risk:** A server change in shape is caught as a contract failure at runtime, not at compile time.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: add response DTOs to the deletion controller and regenerate the contract.
+
+### ON-20261111-136
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (transient)
+- **Summary:** C: lost 4.31 GB between WO-011 checkpoints A and B with no Adulis location growing by more than 50 MB.
+- **Expected:** Host free space moves with the work order's artifacts.
+- **Actual:** C: free 16,315,011,072 (A), 12,000,800,768 (B), 20,244,537,344 after the native runs.
+- **Reproduction:** n/a
+- **Evidence:** Checkpoints A, B; Windows Update downloads 1.0 GB; Docker disk unchanged.
+- **Root cause:** Not proven: other software (likely Windows Update or temporary system files), released later.
+- **Fix and commit:** None needed.
+- **Verification:** C: recovered without any action.
+- **Remaining risk:** Native runs started close to the 10 GB floor once.
+- **Founder decision required:** No
+- **Recommended resolution:** Keep checking free space before each native flow (the harness does).
+
+### ON-20261111-137
+
+- **Work order:** WO-011
+- **Severity:** MEDIUM
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent read-only security review of WO-011: no Critical or High; two Medium and four Low, all fixed before the checkpoint.
+- **Expected:** n/a
+- **Actual:** M1 (wrong-Account outcome), M2 (lost answer reported as expired), L1 (background 401 unmounting the flow), L2 (double submit), L3 (duplicate keys), L4 (fresh ticket refused shown as expired).
+- **Reproduction:** n/a
+- **Evidence:** docs/mobile/WO-011-SECURITY-PRIVACY.md section 3.
+- **Root cause:** n/a
+- **Fix and commit:** Commit `ddf71a6` (and locale `2f80b06`).
+- **Verification:** Account suite 28/28; mobile 319/319; native delete flows PASS.
+- **Remaining risk:** ON-20261111-129 and -130 remain decisions.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-138
+
+- **Work order:** WO-011
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** RESOLVED
+- **Summary:** Three new WO-011 Maestro steps asserted text that the scrolled You tab had pushed above the viewport, and one asserted the old done sentence.
+- **Expected:** Flows pass on the working app.
+- **Actual:** account-dark-large, delete-cancel, delete-confirm failed on assertions while the server state was correct (SCRUBBED, sessions 0).
+- **Reproduction:** Run the flows at font scale 1.3 or after scrolling to the bottom of You.
+- **Evidence:** G:\AdulisDevelopment\WO-011\maestro (screenshots).
+- **Root cause:** Flow authoring: missing scroll-up steps.
+- **Fix and commit:** Flows scroll up before those assertions and assert the new outcome text (commit `d34076f`).
+- **Verification:** All 11 WO-011 flows PASS on the rerun.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
