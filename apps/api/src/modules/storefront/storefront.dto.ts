@@ -155,19 +155,22 @@ export class StorefrontAvailabilityDto {
   @ApiProperty({ type: String, nullable: true }) note!: string | null;
 }
 
-export class ReviewBadgeCountsDto {
-  @ApiProperty({ type: 'integer' }) CLAIM_UPHELD!: number;
-  @ApiProperty({ type: 'integer' }) VERIFIED_HANDOFF!: number;
-  @ApiProperty({ type: 'integer' }) CONFIRMED_BY_BUYER!: number;
-  @ApiProperty({ type: 'integer' }) UNVERIFIED!: number;
+/** REV-01 S1-S2: the two evidence bases a public Review can rest on. */
+export const REVIEW_EVIDENCE_BASES = ['FINAL_HANDOFF', 'VERIFIED_ORDER_FAILURE'] as const;
+
+export class ReviewBasisCountsDto {
+  @ApiProperty({ type: 'integer', description: 'Verified payment and accepted final receipt.' }) FINAL_HANDOFF!: number;
+  @ApiProperty({ type: 'integer', description: 'Verified payment and an upheld Seller-fault non-delivery or unpaid remedy (Seller service only).' })
+  VERIFIED_ORDER_FAILURE!: number;
 }
 
 export class ReviewSummaryDto {
-  @ApiProperty({ type: 'integer', description: 'Seller-service reviews.' }) count!: number;
-  @ApiProperty({ type: Number, nullable: true, description: 'Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is.' })
+  @ApiProperty({ type: 'integer', description: 'Public Seller-service reviews: exactly the population the reviews list returns.' })
+  count!: number;
+  @ApiProperty({ type: Number, nullable: true, description: 'Arithmetic mean of the public seller_rating values (1-5), rounded once to 1 decimal; null with no public review. Show as is.' })
   average_rating!: number | null;
-  @ApiProperty({ type: ReviewBadgeCountsDto, description: 'Counts by the stored review badge (evidence tier).' })
-  badge_counts!: ReviewBadgeCountsDto;
+  @ApiProperty({ type: ReviewBasisCountsDto, description: 'Public reviews by evidence basis (REV-01 S30).' })
+  basis_counts!: ReviewBasisCountsDto;
 }
 
 /** GET /v1/storefronts/{handle}: the public Seller, one round trip (S3.1). */
@@ -212,8 +215,11 @@ export class StorefrontReviewDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 5, description: 'Seller service, 1-5.' }) seller_rating!: number;
   @ApiProperty({ type: String, nullable: true }) body!: string | null;
-  @ApiProperty({ enum: ['CLAIM_UPHELD', 'VERIFIED_HANDOFF', 'CONFIRMED_BY_BUYER', 'UNVERIFIED'], description: 'Evidence basis (S12).' })
-  badge!: string;
+  @ApiProperty({
+    enum: REVIEW_EVIDENCE_BASES,
+    description: 'REV-01 evidence basis. VERIFIED_ORDER_FAILURE is never goods-received or Handoff-verified feedback.',
+  })
+  evidence_basis!: (typeof REVIEW_EVIDENCE_BASES)[number];
   @ApiProperty({ format: 'date-time' }) published_at!: string;
 }
 
@@ -238,6 +244,11 @@ export class ShopProductDto extends PublicProductSummaryDto {
 
 /** GET /v1/shop/products: the requester Market's public Products, newest first publication. */
 export class ShopProductListDto {
+  @ApiProperty({
+    description:
+      'false: the request carries no ACTIVE-Market evidence (no registered device, a device or Account in no ACTIVE Market), so data is empty because no Market could be chosen -- not because the Market has no Products.',
+  })
+  market_resolved!: boolean;
   @ApiProperty({ type: [ShopProductDto] }) data!: ShopProductDto[];
   @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
 }

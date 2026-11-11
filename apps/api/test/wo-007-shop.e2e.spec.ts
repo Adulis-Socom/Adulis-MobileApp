@@ -198,12 +198,14 @@ describe('WO-007 -- Shop products', () => {
     expect(names((await shop(DEV.b).expect(200)).body.data)).toEqual(['B1 lamp']);
   });
 
-  it('with no Market evidence the answer is an empty page, never another Market', async () => {
-    // No device, a device with no Market, a device in a SUSPENDED Market.
+  it('with no Market evidence the answer is an empty page that says so, never another Market', async () => {
+    // No device, a device with no Market, a device in a SUSPENDED Market (WO-007A, ON-043:
+    // market_resolved false is what lets the client say "no Market", not "no Products").
     for (const device of [undefined, DEV.noMarket, DEV.c]) {
       const r = await shop(device).expect(200);
-      expect(r.body).toEqual({ data: [], next_cursor: null });
+      expect(r.body).toEqual({ market_resolved: false, data: [], next_cursor: null });
     }
+    expect((await shop(DEV.a).expect(200)).body.market_resolved).toBe(true);
   });
 
   it("a signed-in Account's Market wins over the device's", async () => {

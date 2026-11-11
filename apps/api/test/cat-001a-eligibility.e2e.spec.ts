@@ -308,11 +308,16 @@ describe('WO-CAT-001A -- Scene and Catalogue eligibility consistency', () => {
       expect(await observe('S', M, SELLER_A, S.ownerA)).toEqual(PUBLIC_EVERYWHERE);
     });
 
-    it("D5: a Market's currency change re-evaluates its Scenes, both ways", async () => {
+    it("D5: a Market with Products keeps its currency, so its Scenes stay as they are (ON-009, WO-007A)", async () => {
+      // This case changed the currency and watched the Scenes go PRIVATE and back. The founder
+      // fixed a Market's currency once it has Products (0059): the change is refused.
       expect(await observe('SB', M2, SELLER_B, S.ownerB)).toEqual(PUBLIC_EVERYWHERE);
-      await admin.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [M2]);
-      expect(await state('SB')).toMatchObject({ visibility: 'PRIVATE' });
-      await admin.query(`UPDATE core.market SET display_currency = 'ETB' WHERE id = $1`, [M2]);
+      await expect(admin.query(`UPDATE core.market SET display_currency = 'USD' WHERE id = $1`, [M2])).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'market_currency_fixed_with_products',
+      });
+      const m = await admin.query<{ c: string }>(`SELECT display_currency AS c FROM core.market WHERE id = $1`, [M2]);
+      expect(m.rows[0]!.c).toBe('ETB');
       expect(await observe('SB', M2, SELLER_B, S.ownerB)).toEqual(PUBLIC_EVERYWHERE);
     });
 

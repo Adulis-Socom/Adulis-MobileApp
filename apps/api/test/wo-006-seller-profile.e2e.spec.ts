@@ -238,7 +238,7 @@ describe('WO-006 -- Seller Profile public reads', () => {
   });
 
   describe('the header (S3.1)', () => {
-    it('carries real Trust, a plain review summary by evidence basis, active fulfilment and member-since', async () => {
+    it('carries real Trust, a review summary of public reviews only, active fulfilment and member-since', async () => {
       const r = await get('/v1/storefronts/twin-store').expect(200);
       expect(r.headers['cache-control']).toBe('no-store');
       expect(r.body).toMatchObject({
@@ -247,11 +247,14 @@ describe('WO-006 -- Seller Profile public reads', () => {
         description: 'Baskets from Market A',
         status: 'ACTIVE',
         stats: { level: 'ESTABLISHED', completed_handoff_count: 12 },
-        // 5, 4, 4: the mean 4.333... is rounded once, server-side, to 4.3.
-        review_summary: { count: 3, average_rating: 4.3, badge_counts: { UNVERIFIED: 3, VERIFIED_HANDOFF: 0 } },
+        // The three stored reviews are UNVERIFIED (no payment or receipt evidence): they stay
+        // stored and are not public (WO-007A, ON-033). This was count 3, average 4.3.
+        review_summary: { count: 0, average_rating: null, basis_counts: { FINAL_HANDOFF: 0, VERIFIED_ORDER_FAILURE: 0 } },
         fulfilment_methods: ['BUYER_COLLECTION'],
       });
       expect(r.body.member_since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      const stored = await admin.query<{ n: number }>(`SELECT count(*)::int AS n FROM core.review WHERE seller_id = $1`, [SELLER.a]);
+      expect(stored.rows[0]!.n).toBe(3);
     });
 
     it('a Seller with no review has count 0 and no average (never a perfect score)', async () => {
@@ -260,7 +263,7 @@ describe('WO-006 -- Seller Profile public reads', () => {
       expect(r.body.review_summary).toEqual({
         count: 0,
         average_rating: null,
-        badge_counts: { CLAIM_UPHELD: 0, VERIFIED_HANDOFF: 0, CONFIRMED_BY_BUYER: 0, UNVERIFIED: 0 },
+        basis_counts: { FINAL_HANDOFF: 0, VERIFIED_ORDER_FAILURE: 0 },
       });
     });
   });
@@ -365,26 +368,13 @@ describe('WO-006 -- Seller Profile public reads', () => {
   });
 
   describe('Seller Reviews', () => {
-    it('pages newest first through a timestamp tie without skipping or repeating', async () => {
-      const ids: string[] = [];
-      const p1 = await get('/v1/storefronts/twin-store/reviews').expect(200);
-      expect(p1.body.data).toHaveLength(3);
-      expect(p1.body.data[0]).toMatchObject({ seller_rating: expect.any(Number), badge: 'UNVERIFIED' });
-      expect(p1.body.data[0]).not.toHaveProperty('buyer_account_id');
-      // One row per page walks across the tie: every review exactly once.
-      let cursor: string | null = null;
-      do {
-        const r: request.Response = await get(`/v1/storefronts/twin-store/reviews?limit=1${cursor ? `&cursor=${cursor}` : ''}`).expect(200);
-        ids.push(...r.body.data.map((x: { id: string }) => x.id));
-        cursor = r.body.next_cursor;
-      } while (cursor && ids.length < 10);
-      expect(ids).toEqual(p1.body.data.map((x: { id: string }) => x.id));
-      // The two reviews of one transaction share published_at: a one-row page must not drop either.
-      const tied = await admin.query<{ n: number }>(
-        `SELECT count(DISTINCT published_at)::int AS n FROM core.review WHERE seller_id = $1`,
-        [SELLER.a],
-      );
-      expect(tied.rows[0]!.n).toBe(2);
+    it('stored UNVERIFIED reviews are not public: one empty, final page (WO-007A, ON-033)', async () => {
+      // The tie walk across eligible reviews moved to wo-007a-reviews, where reviews can be
+      // eligible; here no page, at any size, returns one of the three stored reviews.
+      for (const q of ['', '?limit=1']) {
+        const r = await get(`/v1/storefronts/twin-store/reviews${q}`).expect(200);
+        expect(r.body).toEqual({ data: [], next_cursor: null });
+      }
     });
 
     it('an invalid cursor is a 400 CURSOR_INVALID (it was a 500)', async () => {

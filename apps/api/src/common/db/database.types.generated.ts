@@ -1598,6 +1598,15 @@ export interface CoreVariantAttributeValue {
   variant_id: string;
 }
 
+export interface CoreVReviewPublic {
+  body: string | null;
+  evidence_basis: string | null;
+  id: string | null;
+  published_at: Timestamp | null;
+  seller_id: string | null;
+  seller_rating: number | null;
+}
+
 export interface CoreVScenePostPublic {
   caption: string | null;
   id: string | null;
@@ -1835,6 +1844,7 @@ export interface DB {
   "core.step_up_challenge": CoreStepUpChallenge;
   "core.stock_event": CoreStockEvent;
   "core.timing_config": CoreTimingConfig;
+  "core.v_review_public": CoreVReviewPublic;
   "core.v_scene_post_public": CoreVScenePostPublic;
   "core.v_scene_product_availability": CoreVSceneProductAvailability;
   "core.v_stock_confidence": CoreVStockConfidence;

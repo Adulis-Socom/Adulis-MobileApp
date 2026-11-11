@@ -200,26 +200,22 @@ export class StorefrontController {
          WHERE ps.seller_id = ${seller.id}`.execute(trx);
       const availability = await sql<{ is_open: boolean; reason: string; note: string | null }>`
         SELECT * FROM core.fn_seller_availability_state(${seller.id}, now())`.execute(trx);
-      // Seller-service reviews, aggregated plainly (REV-01 S19: arithmetic mean, no blended
-      // score), rounded ONCE here to one decimal, with counts by the stored badge (the schema's
-      // evidence tiers -- not REV-01's evidence bases, and the schema still admits UNVERIFIED,
-      // which REV-01 does not: SPEC_CONFLICT ON-20261111-033). Reviews publish immediately and
-      // nothing hides one in the database today, so every review counts.
+      // Public Seller-service reviews, aggregated plainly (REV-01 S19: arithmetic mean, no blended
+      // score), rounded ONCE here to one decimal, by evidence basis. The population is
+      // core.v_review_public -- the same view the reviews list reads -- so the count is exactly
+      // what the list can return (WO-007A, founder decision ON-033: only verified evidence is
+      // public; the view fails closed until verified payment exists).
       const reviews = await sql<{
         count: number;
         average: string | null;
-        claim_upheld: number;
-        verified_handoff: number;
-        confirmed_by_buyer: number;
-        unverified: number;
+        final_handoff: number;
+        verified_order_failure: number;
       }>`
         SELECT count(*)::int AS count,
                round(avg(rv.seller_rating)::numeric, 1)::text AS average,
-               count(*) FILTER (WHERE rv.badge = 'CLAIM_UPHELD')::int AS claim_upheld,
-               count(*) FILTER (WHERE rv.badge = 'VERIFIED_HANDOFF')::int AS verified_handoff,
-               count(*) FILTER (WHERE rv.badge = 'CONFIRMED_BY_BUYER')::int AS confirmed_by_buyer,
-               count(*) FILTER (WHERE rv.badge = 'UNVERIFIED')::int AS unverified
-          FROM core.review rv
+               count(*) FILTER (WHERE rv.evidence_basis = 'FINAL_HANDOFF')::int AS final_handoff,
+               count(*) FILTER (WHERE rv.evidence_basis = 'VERIFIED_ORDER_FAILURE')::int AS verified_order_failure
+          FROM core.v_review_public rv
          WHERE rv.seller_id = ${seller.id}`.execute(trx);
       const fulfilment = await sql<{ method: string }>`
         SELECT method::text AS method FROM core.seller_fulfilment_method
@@ -241,11 +237,9 @@ export class StorefrontController {
         review_summary: {
           count: rv?.count ?? 0,
           average_rating: rv?.average === null || rv?.average === undefined ? null : Number(rv.average),
-          badge_counts: {
-            CLAIM_UPHELD: rv?.claim_upheld ?? 0,
-            VERIFIED_HANDOFF: rv?.verified_handoff ?? 0,
-            CONFIRMED_BY_BUYER: rv?.confirmed_by_buyer ?? 0,
-            UNVERIFIED: rv?.unverified ?? 0,
+          basis_counts: {
+            FINAL_HANDOFF: rv?.final_handoff ?? 0,
+            VERIFIED_ORDER_FAILURE: rv?.verified_order_failure ?? 0,
           },
         },
         fulfilment_methods: fulfilment.rows.map((f) => f.method),
@@ -580,7 +574,8 @@ export class StorefrontController {
     const after = decodeCursor(cursor, ['timestamp', 'uuid']);
     return this.tx.run(req, async (trx) => {
       const market = await requesterMarket(trx, req);
-      if (market === null) return { data: [], next_cursor: null };
+      // Said explicitly, so a client never shows "no Products" when it means "no Market" (ON-043).
+      if (market === null) return { market_resolved: false, data: [], next_cursor: null };
       const r = await sql<
         ProductSummaryRow & { seller_handle: string; seller_store_name: string; image_key: string | null; published_key: string }
       >`
@@ -606,6 +601,7 @@ export class StorefrontController {
       const page = r.rows.slice(0, limit);
       const last = page[page.length - 1];
       return {
+        market_resolved: true,
         data: page.map((row) => ({
           ...summary(row),
           seller: { handle: row.seller_handle, store_name: row.seller_store_name },
@@ -621,7 +617,7 @@ export class StorefrontController {
   @Public()
   @ApiOperation({
     summary:
-      'Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated.',
+      'Public Seller-service reviews (REV-01: verified evidence only, core.v_review_public), newest first, evidence basis per review; no buyer, order or claim reference. Filtered before paging. Cursor-paginated.',
   })
   @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
@@ -646,17 +642,19 @@ export class StorefrontController {
     const limit = pageLimit(limitRaw, 25, 50);
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
+      // Eligibility is a WHERE term of the one public projection, so it applies before LIMIT:
+      // excluded reviews never leave a short or empty page in the middle of the list.
       const r = await sql<{
         id: string;
         seller_rating: number;
         body: string | null;
-        badge: string;
+        evidence_basis: 'FINAL_HANDOFF' | 'VERIFIED_ORDER_FAILURE';
         published_at: Date;
         published_key: string;
       }>`
-        SELECT rv.id, rv.seller_rating, rv.body, rv.badge::text AS badge, rv.published_at,
+        SELECT rv.id, rv.seller_rating, rv.body, rv.evidence_basis, rv.published_at,
                to_char(rv.published_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS published_key
-          FROM core.review rv
+          FROM core.v_review_public rv
          WHERE rv.seller_id = ${seller.id}
            AND (${after === null}
                 OR (rv.published_at, rv.id) < (${after?.[0] ?? null}::timestamptz, ${after?.[1] ?? null}::uuid))
@@ -669,7 +667,7 @@ export class StorefrontController {
           id: row.id,
           seller_rating: row.seller_rating,
           body: row.body,
-          badge: row.badge,
+          evidence_basis: row.evidence_basis,
           published_at: row.published_at.toISOString(),
         })),
         next_cursor: r.rows.length > limit && last ? encodeCursor([last.published_key, last.id]) : null,
