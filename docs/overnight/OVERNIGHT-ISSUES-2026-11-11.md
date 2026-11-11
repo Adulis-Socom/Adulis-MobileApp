@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085.
 
 ## Issues
 
@@ -911,6 +911,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Founder decision required:** No (direction decided 11 November 2026); the taxonomy itself comes from the Catalogue taxonomy work order
 - **Recommended resolution:** A catalogue taxonomy work order before any category UI.
 - **WO-007A (11 November 2026):** Policy direction APPROVED: initial top-level groups Fashion, Cosmetics, Electronics. Implementation: recorded only (as directed); no category, module or assignment built. Further engineering: the Catalogue taxonomy work order (definitions, subcategories, labels, localisation, Market enablement, classification) and membership rules for Locally Made, Discounts, New Drops. Further legal/privacy authorisation: none.
+- **WO-008:** Marketplace Search launches without category facets for the same reason; no category was fabricated.
 
 ### ON-20261111-050
 
@@ -1258,6 +1259,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** None until integration.
 - **Founder decision required:** No
 - **Recommended resolution:** Split the packages commits into their own PR when the branch is integrated.
+- **WO-007B / WO-008:** the same pattern continues: 393b8cf (packages/locale) and e7fbace, 36fb3b1 (generated contract and client) are separate commits on the app branches, to split into their own PR at integration.
 
 ### ON-20261111-069
 
@@ -1294,3 +1296,273 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** An intermittent red in parallel full runs.
 - **Founder decision required:** No
 - **Recommended resolution:** Assert on the test's own variant (its notification count stays 1 after the second run), or give the job test its own database.
+
+### ON-20261111-071
+
+- **Work order:** WO-007B
+- **Severity:** LOW
+- **Type:** PERFORMANCE_LIMIT
+- **Status:** OPEN
+- **Summary:** Available-first ordering evaluates price and availability for the Seller's whole published catalogue on every page.
+- **Expected:** Bounded per-page work.
+- **Actual:** The phase is computed, so the index on display order can no longer stop the read early; each page prices every published Product of that Seller, then takes the page.
+- **Reproduction:** EXPLAIN on a 1,000-Product Seller.
+- **Evidence:** WO-007B record S6 (2.7 ms execution, 0.7 ms planning on the disposable database); independent review finding 5
+- **Root cause:** Founder option A computes availability live rather than storing it.
+- **Fix and commit:** None (accepted; measured and documented).
+- **Verification:** WO-007B measurement.
+- **Remaining risk:** Linear in one Seller's catalogue; a very large catalogue would slow its Products tab.
+- **Founder decision required:** No
+- **Recommended resolution:** Revisit only if a Seller catalogue reaches thousands of Products (a maintained availability column or a projection would bound it).
+
+### ON-20261111-072
+
+- **Work order:** WO-007B
+- **Severity:** LOW
+- **Type:** TEST_FIXTURE
+- **Status:** RESOLVED
+- **Summary:** The mobile fake API gave every Seller and Shop Product the same id, so de-duplicating by id collapsed every list to one tile.
+- **Expected:** Distinct ids per Product, as the API sends.
+- **Actual:** sellerProduct and shopProduct returned a fixed uuid.
+- **Reproduction:** Key the Products tab by id and run seller-profile.test.tsx.
+- **Evidence:** apps/mobile/src/testing/fake-api.ts
+- **Root cause:** Fixtures predated id-based de-duplication.
+- **Fix and commit:** productIdFor(slug) gives each fixture Product its own stable id (a5dfd2b, 0f5b039).
+- **Verification:** seller-profile.test.tsx, shop.test.tsx, search.test.tsx pass.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-073
+
+- **Work order:** WO-008
+- **Severity:** MEDIUM
+- **Type:** SECURITY_ABUSE
+- **Status:** RESOLVED
+- **Summary:** Marketplace Search charged its rate limit before resolving the Market: an anonymous request updated one shared bucket row, and a random device id per request inserted a new bucket row -- for requests that can never return results.
+- **Expected:** No write for a request that can find nothing; rate limits keyed to real subjects.
+- **Actual:** consume() ran first; an ANONYMOUS bucket existed; requesterMarket ran after.
+- **Reproduction:** Flood GET /v1/search with no device, or a new random X-Adulis-Device each time.
+- **Evidence:** search.controller.ts; independent review finding 1
+- **Root cause:** Ordering of the rate-limit call.
+- **Fix and commit:** Market resolved first; with none the answer is empty and nothing is written; then ACCOUNT or registered DEVICE is charged; the anonymous bucket removed (93ad3cb).
+- **Verification:** wo-008-search: "a request that cannot find anything writes nothing"; native curl with no device.
+- **Remaining risk:** A registered device can still be multiplied (ON-20261111-076).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-074
+
+- **Work order:** WO-008
+- **Severity:** MEDIUM
+- **Type:** PERFORMANCE
+- **Status:** RESOLVED
+- **Summary:** Scene matching OR-ed the caption predicate with a correlated EXISTS on tagged Products, so the new caption trigram index could not be used for 3+ character queries.
+- **Expected:** Each candidate branch served by its index.
+- **Actual:** Every query read every public Scene of the Market and ran ILIKE and <% on each caption.
+- **Reproduction:** EXPLAIN the Scene statement for a 3+ character query.
+- **Evidence:** search.controller.ts scenes(); independent review finding 2
+- **Root cause:** An OR across an indexable predicate and a correlated subquery.
+- **Fix and commit:** Candidates as a UNION (caption matches; Scenes tagging a Product whose name matches through idx_product_name_trgm), banded after (93ad3cb).
+- **Verification:** wo-008-search: the caption and tag predicates, as written, are served by their trigram indexes; all Scene cases pass.
+- **Remaining risk:** The view still evaluates its availability EXISTS per candidate (bounded by the candidate set).
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-075
+
+- **Work order:** WO-008
+- **Severity:** MEDIUM
+- **Type:** CORRECTNESS
+- **Status:** RESOLVED
+- **Summary:** A Seller query starting with "@" matched handles only at the fuzzy band: the prefix and substring patterns were built from "@handle".
+- **Expected:** "@addis" finds addis-weaves at the prefix band.
+- **Actual:** The exact and fuzzy tests used the handle without "@"; the LIKE patterns used the raw query.
+- **Reproduction:** Search "@addis": the Seller ranked below a prefix-band Product.
+- **Evidence:** search.controller.ts band()/candidate(); independent review finding 3
+- **Root cause:** Patterns computed once from the query instead of from the matched text.
+- **Fix and commit:** likePatterns(text) builds the patterns from the text each column is matched with (93ad3cb).
+- **Verification:** wo-008-search 2b: "@addis" puts the Seller ahead of the prefix-band Product "@addis edition"; unit test of the patterns.
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-076
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** SECURITY_ABUSE
+- **Status:** OPEN
+- **Summary:** The per-device Search limit can be multiplied by registering many devices.
+- **Expected:** A per-network limit as well.
+- **Actual:** Limits are per Account or registered device; device registration is capped platform-wide (50,000 an hour), and per-IP limits wait for trusted-proxy handling (S15.1).
+- **Reproduction:** Register many devices and search from each.
+- **Evidence:** search.controller.ts; bootstrap.controller.ts
+- **Root cause:** No trusted client IP yet.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** A distributed client can exceed 60 searches a minute in aggregate; each query is bounded and indexed.
+- **Founder decision required:** No
+- **Recommended resolution:** Add a per-IP limit when the trusted-proxy work lands.
+
+### ON-20261111-077
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** GOVERNANCE
+- **Status:** RESOLVED
+- **Summary:** The search threshold set_config contradicted the written rule that only withRequestContext calls set_config.
+- **Expected:** One audited place for set_config.
+- **Actual:** The controller called set_config directly.
+- **Reproduction:** n/a
+- **Evidence:** handler-transaction.ts, app.module.ts; independent review finding 6
+- **Root cause:** New tolerance setting.
+- **Fix and commit:** setWordSimilarityThreshold in request-context.ts (the audited file); both comments name the exception (93ad3cb).
+- **Verification:** Typecheck; Search tests.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-078
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** PERFORMANCE
+- **Status:** RESOLVED
+- **Summary:** Queries made only of punctuation or symbols gave the trigram index nothing to narrow on.
+- **Expected:** Refused before any scan.
+- **Actual:** Accepted and scanned.
+- **Reproduction:** GET /v1/search?q=!!
+- **Evidence:** independent review finding 4
+- **Root cause:** No letter/digit requirement.
+- **Fix and commit:** 400 QUERY_NO_TERMS unless the query has a letter or digit (93ad3cb).
+- **Verification:** search.logic.spec; wo-008-search; native curl 400.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-079
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** OPEN_POLICY
+- **Status:** FOUNDER_REVIEW_REQUIRED
+- **Summary:** Search launch thresholds are provisional technical values, not product decisions.
+- **Expected:** Thresholds approved by an authority (SRC-01 S13 leaves the launch configuration "bounded/versioned without an unsupported fixed numeric formula").
+- **Actual:** Minimum 2 characters; substring and fuzzy from 3; pg_trgm word similarity 0.5; Top caps 6 Products, 3 Sellers, 3 Scenes; page 20 (max 50); 60 searches a minute per Account or device; equal relevance ordered by a stable id.
+- **Reproduction:** n/a
+- **Evidence:** search.logic.ts (SEARCH_ALGORITHM_VERSION lexical-trgm-v1); WO-008 record S5
+- **Root cause:** No numeric launch configuration in the design pack.
+- **Fix and commit:** Values chosen, documented and versioned; any change bumps algorithm_version.
+- **Verification:** n/a
+- **Remaining risk:** Ranking may need tuning on real queries.
+- **Founder decision required:** Yes -- confirm or set the launch thresholds.
+- **Recommended resolution:** Confirm, then measure zero-result rate and reformulations once telemetry is approved (ON-20261111-080).
+
+### ON-20261111-080
+
+- **Work order:** WO-008
+- **Severity:** INFO
+- **Type:** DEFERRED_PRIVACY
+- **Status:** OPEN
+- **Summary:** Search telemetry and attribution (search_session_id, query_id, search_performed, search_zero_results, result impressions/opens) are not built.
+- **Expected:** SRC-01 S23 lists them; WO-008 S18 forbids unapproved processing.
+- **Actual:** No event, identifier or raw query is stored or logged.
+- **Reproduction:** n/a
+- **Evidence:** WO-008 record S6
+- **Root cause:** The processing needs a PRV-01/DPIA-01 approved basis and retention.
+- **Fix and commit:** Deferred by design.
+- **Verification:** search.test.tsx: no analytics call; API has no event write.
+- **Remaining risk:** No measurement of zero-result rate or relevance quality yet.
+- **Founder decision required:** Yes -- approve (or not) Search analytics processing and its retention.
+- **Recommended resolution:** Decide the privacy basis; then add query-id telemetry without raw query text in general analytics.
+
+### ON-20261111-081
+
+- **Work order:** WO-008
+- **Severity:** INFO
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Explicit browse Market (country) switching in Search is not implemented.
+- **Expected:** SRC-01 S6, S10: a supported activated Market may be selected; the result corpus follows.
+- **Actual:** Search uses only the server-resolved Market; no country parameter is accepted.
+- **Reproduction:** n/a
+- **Evidence:** WO-008 record S4
+- **Root cause:** No server-approved activated-Market selection contract exists (initially Ethiopia only).
+- **Fix and commit:** Not invented; documented.
+- **Verification:** wo-008-search: Market isolation and inactive-Market cases.
+- **Remaining risk:** None while one Market is active.
+- **Founder decision required:** No
+- **Recommended resolution:** Add with the Market selection contract (MKT-01) when a second Market activates.
+
+### ON-20261111-082
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** DEFERRED_SCOPE
+- **Status:** OPEN
+- **Summary:** Pending Search improvements: structured filters and sort whitelist, category/attribute and description matching, secondary ranking signals (Trust, popularity, conversion, freshness, Seller diversity), suggestions and synonyms, corrected-query recovery, Amharic transliteration, the Ethiopic wordspace as a word separator.
+- **Expected:** SRC-01 S8, S13-S15 (several are "worth adding").
+- **Actual:** Launch is lexical over names, handles and captions only.
+- **Reproduction:** n/a
+- **Evidence:** WO-008 record S3
+- **Root cause:** Dependencies (category taxonomy ON-20261111-049, approved signals, telemetry) not yet in place.
+- **Fix and commit:** Deferred; none faked.
+- **Verification:** n/a
+- **Remaining risk:** Recall is limited to name/handle/caption words.
+- **Founder decision required:** No
+- **Recommended resolution:** Schedule after the Catalogue taxonomy work order and the telemetry decision.
+
+### ON-20261111-083
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** RESOLVED
+- **Summary:** Native search.yaml: the first keystroke typed right after tapping the clear control was dropped ("zqx" for "zzqx").
+- **Expected:** The typed query arrives whole.
+- **Actual:** Maestro typed before the field had settled after the clear tap; the app searched what it received.
+- **Reproduction:** Tap clear, then inputText at once.
+- **Evidence:** maestro-008/search screenshot
+- **Root cause:** Input timing in the harness, not the app.
+- **Fix and commit:** The flow taps the field before typing after a clear (9ace2ba).
+- **Verification:** search.yaml PASS.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-084
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** TEST_HARNESS
+- **Status:** OPEN
+- **Summary:** buyer-for-you.yaml (WO-004A) ran out of its 120-second scroll budget before the end of the 12-Scene feed, twice (reaching Scene 3, then Scene 2).
+- **Expected:** The flow reaches the end marker within its budget.
+- **Actual:** The emulator scrolled the tall cards more slowly than when the flow was written; the feed paged correctly (API: 10, then 2, then the end) and the For You code is unchanged in WO-007B/WO-008.
+- **Reproduction:** Run buyer-for-you.yaml with the 12 WO-004A fixture Scenes on this emulator.
+- **Evidence:** maestro-008b/for-you-3, for-you-4 screenshots; for-you-5 log
+- **Root cause:** Scroll speed versus a fixed timeout, not the app.
+- **Fix and commit:** A harness-only copy with a 360-second budget and the same assertions passed (336 s). The committed flow is unchanged.
+- **Verification:** for-you-5 PASS; API pages checked.
+- **Remaining risk:** The committed flow can time out on a slow emulator.
+- **Founder decision required:** No
+- **Recommended resolution:** Raise the scroll timeout or speed of that flow in a test-maintenance change.
+
+### ON-20261111-085
+
+- **Work order:** WO-008
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** In the final battery the full API suite at default parallelism lost Jest workers to out-of-memory crashes (837/940 in the first run, 927/930 inside pnpm test).
+- **Expected:** A clean full run.
+- **Actual:** "Fatal process out of memory: Zone" twice in run 1 and "Jest worker ran out of memory and crashed" in run 2; crashed suites skipped their afterAll, and later suites collided with the leftover rows (market_pkey, market_code_key) or saw reset connections (ECONNRESET, a 503 database-unavailable).
+- **Reproduction:** Run the full API suite with default workers while the emulator, WSL, Docker and other memory-heavy applications run (2.4 GB free of 15.7 GB at the time).
+- **Evidence:** v008/api-test.log lines 217, 260; v008/pnpm-test.log line 436; Postgres logged no crash or refusal; container not restarted, not OOM-killed.
+- **Root cause:** Host memory pressure, not product code (every failing suite is outside WO-007B/WO-008 and passes in clean runs).
+- **Fix and commit:** None in code. Re-run on a rebuilt disposable database with --maxWorkers=2: 940/940, then 940/940.
+- **Verification:** api-run3-008.log, api-run4-008.log.
+- **Remaining risk:** Default-parallel full runs can fail on a memory-constrained machine.
+- **Founder decision required:** No
+- **Recommended resolution:** Run the full API suite with fewer workers (or close other heavy applications) on this machine; consider a maxWorkers default in a test-infrastructure change.
