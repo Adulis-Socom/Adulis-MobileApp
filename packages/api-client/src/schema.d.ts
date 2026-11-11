@@ -2046,7 +2046,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated. */
+        /** Public Seller-service reviews (REV-01: verified evidence only, core.v_review_public), newest first, evidence basis per review; no buyer, order or claim reference. Filtered before paging. Cursor-paginated. */
         get: operations["StorefrontController_reviews"];
         put?: never;
         post?: never;
@@ -2342,18 +2342,18 @@ export interface components {
             handle: string;
             store_name: string;
         };
-        ReviewBadgeCountsDto: {
-            CLAIM_UPHELD: number;
-            CONFIRMED_BY_BUYER: number;
-            UNVERIFIED: number;
-            VERIFIED_HANDOFF: number;
+        ReviewBasisCountsDto: {
+            /** @description Verified payment and accepted final receipt. */
+            FINAL_HANDOFF: number;
+            /** @description Verified payment and an upheld Seller-fault non-delivery or unpaid remedy (Seller service only). */
+            VERIFIED_ORDER_FAILURE: number;
         };
         ReviewSummaryDto: {
-            /** @description Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is. */
+            /** @description Arithmetic mean of the public seller_rating values (1-5), rounded once to 1 decimal; null with no public review. Show as is. */
             average_rating: number | null;
-            /** @description Counts by the stored review badge (evidence tier). */
-            badge_counts: components["schemas"]["ReviewBadgeCountsDto"];
-            /** @description Seller-service reviews. */
+            /** @description Public reviews by evidence basis (REV-01 S30). */
+            basis_counts: components["schemas"]["ReviewBasisCountsDto"];
+            /** @description Public Seller-service reviews: exactly the population the reviews list returns. */
             count: number;
         };
         RevokeOthersBodyDto: {
@@ -2578,6 +2578,8 @@ export interface components {
         };
         ShopProductListDto: {
             data: components["schemas"]["ShopProductDto"][];
+            /** @description false: the request carries no ACTIVE-Market evidence (no registered device, a device or Account in no ACTIVE Market), so data is empty because no Market could be chosen -- not because the Market has no Products. */
+            market_resolved: boolean;
             /** @description Opaque; null at the end. */
             next_cursor: string | null;
         };
@@ -2729,12 +2731,12 @@ export interface components {
             variant_key: string;
         };
         StorefrontReviewDto: {
+            body: string | null;
             /**
-             * @description Evidence basis (S12).
+             * @description REV-01 evidence basis. VERIFIED_ORDER_FAILURE is never goods-received or Handoff-verified feedback.
              * @enum {string}
              */
-            badge: "CLAIM_UPHELD" | "VERIFIED_HANDOFF" | "CONFIRMED_BY_BUYER" | "UNVERIFIED";
-            body: string | null;
+            evidence_basis: "FINAL_HANDOFF" | "VERIFIED_ORDER_FAILURE";
             /** Format: uuid */
             id: string;
             /** Format: date-time */

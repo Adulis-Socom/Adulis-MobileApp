@@ -4089,7 +4089,7 @@
             }
           }
         },
-        "summary": "Seller-service reviews, newest first, badge per review (S12); anonymised rows carry no buyer. Cursor-paginated.",
+        "summary": "Public Seller-service reviews (REV-01: verified evidence only, core.v_review_public), newest first, evidence basis per review; no buyer, order or claim reference. Filtered before paging. Cursor-paginated.",
         "tags": [
           "Storefront"
         ]
@@ -4842,27 +4842,21 @@
           "note"
         ]
       },
-      "ReviewBadgeCountsDto": {
+      "ReviewBasisCountsDto": {
         "type": "object",
         "properties": {
-          "CLAIM_UPHELD": {
-            "type": "integer"
+          "FINAL_HANDOFF": {
+            "type": "integer",
+            "description": "Verified payment and accepted final receipt."
           },
-          "VERIFIED_HANDOFF": {
-            "type": "integer"
-          },
-          "CONFIRMED_BY_BUYER": {
-            "type": "integer"
-          },
-          "UNVERIFIED": {
-            "type": "integer"
+          "VERIFIED_ORDER_FAILURE": {
+            "type": "integer",
+            "description": "Verified payment and an upheld Seller-fault non-delivery or unpaid remedy (Seller service only)."
           }
         },
         "required": [
-          "CLAIM_UPHELD",
-          "VERIFIED_HANDOFF",
-          "CONFIRMED_BY_BUYER",
-          "UNVERIFIED"
+          "FINAL_HANDOFF",
+          "VERIFIED_ORDER_FAILURE"
         ]
       },
       "ReviewSummaryDto": {
@@ -4870,18 +4864,18 @@
         "properties": {
           "count": {
             "type": "integer",
-            "description": "Seller-service reviews."
+            "description": "Public Seller-service reviews: exactly the population the reviews list returns."
           },
           "average_rating": {
             "type": "number",
             "nullable": true,
-            "description": "Arithmetic mean of seller_rating (1-5), rounded once to 1 decimal; null with no review. Show as is."
+            "description": "Arithmetic mean of the public seller_rating values (1-5), rounded once to 1 decimal; null with no public review. Show as is."
           },
-          "badge_counts": {
-            "description": "Counts by the stored review badge (evidence tier).",
+          "basis_counts": {
+            "description": "Public reviews by evidence basis (REV-01 S30).",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ReviewBadgeCountsDto"
+                "$ref": "#/components/schemas/ReviewBasisCountsDto"
               }
             ]
           }
@@ -4889,7 +4883,7 @@
         "required": [
           "count",
           "average_rating",
-          "badge_counts"
+          "basis_counts"
         ]
       },
       "StorefrontDto": {
@@ -5510,6 +5504,10 @@
       "ShopProductListDto": {
         "type": "object",
         "properties": {
+          "market_resolved": {
+            "type": "boolean",
+            "description": "false: the request carries no ACTIVE-Market evidence (no registered device, a device or Account in no ACTIVE Market), so data is empty because no Market could be chosen -- not because the Market has no Products."
+          },
           "data": {
             "type": "array",
             "items": {
@@ -5523,6 +5521,7 @@
           }
         },
         "required": [
+          "market_resolved",
           "data",
           "next_cursor"
         ]
@@ -5544,15 +5543,13 @@
             "type": "string",
             "nullable": true
           },
-          "badge": {
+          "evidence_basis": {
             "type": "string",
             "enum": [
-              "CLAIM_UPHELD",
-              "VERIFIED_HANDOFF",
-              "CONFIRMED_BY_BUYER",
-              "UNVERIFIED"
+              "FINAL_HANDOFF",
+              "VERIFIED_ORDER_FAILURE"
             ],
-            "description": "Evidence basis (S12)."
+            "description": "REV-01 evidence basis. VERIFIED_ORDER_FAILURE is never goods-received or Handoff-verified feedback."
           },
           "published_at": {
             "type": "string",
@@ -5563,7 +5560,7 @@
           "id",
           "seller_rating",
           "body",
-          "badge",
+          "evidence_basis",
           "published_at"
         ]
       },
