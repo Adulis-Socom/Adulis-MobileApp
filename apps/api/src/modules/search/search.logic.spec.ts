@@ -1,5 +1,5 @@
 import { AdulisException } from '../../common/errors/adulis-exception';
-import { cursorBinding, escapeLike, mergeTop, normalizeQuery, type Ranked } from './search.logic';
+import { cursorBinding, escapeLike, likePatterns, mergeTop, normalizeQuery, type Ranked } from './search.logic';
 
 const reason = (fn: () => unknown) => {
   try {
@@ -24,6 +24,10 @@ describe('Marketplace Search query normalisation (SRC-01 S14)', () => {
     expect(reason(() => normalizeQuery('a'))).toBe('QUERY_TOO_SHORT');
     expect(reason(() => normalizeQuery('x'.repeat(101)))).toBe('QUERY_TOO_LONG');
     expect(reason(() => normalizeQuery('x'.repeat(401)))).toBe('QUERY_TOO_LONG');
+    // Nothing to match on: punctuation or symbols alone.
+    expect(reason(() => normalizeQuery('!!'))).toBe('QUERY_NO_TERMS');
+    expect(reason(() => normalizeQuery('%%%'))).toBe('QUERY_NO_TERMS');
+    expect(reason(() => normalizeQuery('\u{1F600}\u{1F600}'))).toBe('QUERY_NO_TERMS');
     // Two Amharic characters are a real word (ቡና, "coffee").
     expect(normalizeQuery('ቡና').long).toBe(false);
   });
@@ -35,8 +39,10 @@ describe('Marketplace Search query normalisation (SRC-01 S14)', () => {
 
   it('escapes LIKE metacharacters so a query is literal', () => {
     expect(escapeLike('50%_off\\')).toBe('50\\%\\_off\\\\');
-    expect(normalizeQuery('50%').contains).toBe('%50\\%%');
+    expect(likePatterns('50%').contains).toBe('%50\\%%');
     expect(normalizeQuery('@twin-store').handle).toBe('twin-store');
+    // A Seller handle is matched with patterns of the handle, not of "@handle".
+    expect(likePatterns(normalizeQuery('@addis').handle).prefix).toBe('addis%');
   });
 });
 

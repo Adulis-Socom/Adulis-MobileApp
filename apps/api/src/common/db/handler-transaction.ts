@@ -63,8 +63,10 @@ async function committing<T>(work: Promise<T>): Promise<Settled<T>> {
  * rather than disciplinary:
  *
  *  - `set_config(..., true)` — transaction-local, always — happens in
- *    exactly one audited place (withRequestContext), and nothing else in
- *    the codebase touches set_config;
+ *    exactly one audited file (request-context.ts): withRequestContext for
+ *    the adulis.* context, and setWordSimilarityThreshold for Marketplace
+ *    Search's pg_trgm tolerance (WO-008, not access control); nothing else
+ *    in the codebase touches set_config;
  *  - a state-changing POST cannot forget its idempotency record, because
  *    the method that gives it a transaction is the method that writes one.
  *

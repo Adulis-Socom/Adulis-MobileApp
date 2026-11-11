@@ -177,6 +177,7 @@ describe('WO-008 -- Marketplace Search', () => {
     await product(7, SELLER.weaves, MA, 'Studio lamp', 3); // its Scene will lose stock
     await product(8, SELLER.weaves, MA, 'Withdrawn basket', 3, 'UNPUBLISHED'); // moderation-unpublished
     await product(9, SELLER.weaves, MA, '100% cotton scarf', 3);
+    await product(10, SELLER.weaves, MA, '@addis edition', 3); // a name that starts like an @handle
     // Others
     await product(20, SELLER.house, MA, 'Market basket', 3);
     await product(21, SELLER.hidden, MA, 'Hidden basket', 3);
@@ -248,6 +249,15 @@ describe('WO-008 -- Marketplace Search', () => {
       expect(productNames(await search('Woven basket large', 'PRODUCT_POST'))[0]).toBe('Woven basket large');
     });
 
+    it('2b. "@" + a handle prefix matches the handle at the prefix band, ahead of a Product at the same band', async () => {
+      // "@addis": the Seller's handle starts with "addis" (prefix band); the Product "@addis
+      // edition" starts with "@addis" (prefix band too). Same band: the Seller leads Top. Were the
+      // handle matched with "@addis%" it would fall to the fuzzy band, below the Product.
+      const top = await search('@addis');
+      expect(top.items.slice(0, 2).map((i) => i.type)).toEqual(['SELLER', 'PRODUCT_POST']);
+      expect(sellerHandles(await search('@addis', 'SELLER'))).toEqual(['addis-weaves']);
+    });
+
     it('2. an exact Seller handle or name leads Top, with or without @, public Trust level only', async () => {
       for (const q of ['addis-weaves', '@addis-weaves', 'Addis Weaves']) {
         const top = await search(q);
@@ -298,6 +308,9 @@ describe('WO-008 -- Marketplace Search', () => {
       expect((await get('/v1/search?q=%20%20a%20').expect(400)).body.slots).toMatchObject({ reason: 'QUERY_TOO_SHORT' });
       expect((await get(`/v1/search?q=${'x'.repeat(101)}`).expect(400)).body.slots).toMatchObject({ reason: 'QUERY_TOO_LONG' });
       expect((await get('/v1/search?q=basket&type=CREATOR').expect(400)).body.slots).toMatchObject({ path: 'type' });
+      // Symbols alone give the index nothing to narrow on.
+      expect((await get(`/v1/search?q=${encodeURIComponent('!!')}`).expect(400)).body.slots).toMatchObject({ reason: 'QUERY_NO_TERMS' });
+      expect((await get(`/v1/search?q=${encodeURIComponent('%%%')}`).expect(400)).body.slots).toMatchObject({ reason: 'QUERY_NO_TERMS' });
       await get('/v1/search?q=basket&type=PRODUCT_POST&limit=51').expect(400);
     });
   });
@@ -449,6 +462,39 @@ describe('WO-008 -- Marketplace Search', () => {
         await admin.query(`UPDATE core.product SET visibility = 'PUBLISHED', unpublished_reason = NULL WHERE id = $1`, [later]);
       }
     });
+  });
+
+  it('a request that cannot find anything writes nothing, not even a rate-limit counter', async () => {
+    const unregistered = randomUUID();
+    const count = async () =>
+      (
+        await admin.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM core.rate_limit_bucket
+            WHERE subject_id IN ($1, 'marketplace-search-anonymous') OR bucket_key = 'marketplace-search-anonymous'`,
+          [unregistered],
+        )
+      ).rows[0]!.n;
+    const before = await count();
+    expect(await search('basket', undefined, '', unregistered)).toMatchObject({ market_resolved: false, items: [] });
+    expect(await search('basket', undefined, '', null)).toMatchObject({ market_resolved: false, items: [] });
+    expect(await count()).toBe(before);
+  });
+
+  it('the caption and tagged-Product name predicates can use their trigram indexes', async () => {
+    const c = await admin.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query('SET LOCAL enable_seqscan = off');
+      const plan = async (q: string, params: unknown[]) =>
+        (await c.query(`EXPLAIN ${q}`, params)).rows.map((r: { 'QUERY PLAN': string }) => r['QUERY PLAN']).join('\n');
+      // The predicates exactly as the search statements write them, on their own tables: with
+      // sequential scans off, only the trigram GIN index can serve the ILIKE OR <% pair.
+      expect(await plan(`SELECT r.id FROM core.scene_post_revision r WHERE (r.caption ILIKE $1 ESCAPE '\\' OR $2 <% r.caption)`, ['%morning%', 'morning'])).toContain('idx_scene_revision_caption_trgm');
+      expect(await plan(`SELECT tp.id FROM core.product tp WHERE (tp.name ILIKE $1 ESCAPE '\\' OR $2 <% tp.name)`, ['%basket%', 'basket'])).toContain('idx_product_name_trgm');
+    } finally {
+      await c.query('ROLLBACK');
+      c.release();
+    }
   });
 
   it('is rate-limited per device (60 a minute) with a 429 and Retry-After slot', async () => {

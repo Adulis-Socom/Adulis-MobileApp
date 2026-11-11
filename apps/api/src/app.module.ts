@@ -86,8 +86,9 @@ export const LOGGER = Symbol('LOGGER');
  * The express-level stages (request id, body limit, Origin, locale, CORS)
  * are wired in main.ts, where express middleware lives; the Nest-level
  * stages are wired here. Endpoint modules register from Tier 4 onward and
- * consume HandlerTransaction — the one place set_config and the
- * idempotency record happen.
+ * consume HandlerTransaction — the one place the adulis.* set_config and the
+ * idempotency record happen (request-context.ts also holds the pg_trgm
+ * search tolerance, WO-008).
  */
 @Module({
   imports: [DatabaseModule],

@@ -29,15 +29,17 @@ export interface NormalizedQuery {
   handle: string;
   /** Long enough for substring and fuzzy matching. */
   long: boolean;
-  /** LIKE patterns with %, _ and \ escaped (ESCAPE '\'). */
-  prefix: string;
-  wordPrefix: string;
-  contains: string;
 }
 
 const invalid = (reason: string) => new AdulisException('VALIDATION_FAILED', { slots: { path: 'q', reason } });
 
 export const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/** LIKE patterns of one matched text (%, _ and backslash escaped; ESCAPE backslash), built from that text. */
+export function likePatterns(text: string) {
+  const escaped = escapeLike(text);
+  return { prefix: `${escaped}%`, wordPrefix: `% ${escaped}%`, contains: `%${escaped}%` };
+}
 
 export function normalizeQuery(raw: string | undefined): NormalizedQuery {
   if (raw === undefined) throw invalid('QUERY_REQUIRED');
@@ -51,14 +53,12 @@ export function normalizeQuery(raw: string | undefined): NormalizedQuery {
   const length = [...text].length;
   if (length < MIN_QUERY_LENGTH) throw invalid('QUERY_TOO_SHORT');
   if (length > MAX_QUERY_LENGTH) throw invalid('QUERY_TOO_LONG');
-  const escaped = escapeLike(text);
+  // Punctuation or symbols alone give the trigram index nothing to narrow on: refused.
+  if (!/[\p{L}\p{N}]/u.test(text)) throw invalid('QUERY_NO_TERMS');
   return {
     text,
     handle: text.startsWith('@') && length > 1 ? text.slice(1) : text,
     long: length >= FUZZY_MIN_LENGTH,
-    prefix: `${escaped}%`,
-    wordPrefix: `% ${escaped}%`,
-    contains: `%${escaped}%`,
   };
 }
 

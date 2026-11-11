@@ -5,6 +5,7 @@ import { sql, type Transaction } from 'kysely';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { Database } from '../../common/db/database.types';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
+import { setWordSimilarityThreshold } from '../../common/db/request-context';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
 import { requestingDevice } from '../../common/http/cookies';
@@ -18,6 +19,7 @@ import { requesterMarket } from '../storefront/requester-market';
 import { SEARCH_TYPES, SearchResponseDto, type SearchItem, type SearchType } from './search.dto';
 import {
   cursorBinding,
+  likePatterns,
   mergeTop,
   normalizeQuery,
   SEARCH_ALGORITHM_VERSION,
@@ -39,11 +41,12 @@ import {
  *   canonical gate core.v_scene_post_public (current PUBLIC published revision, ACTIVE Seller and
  *   Market, an available tagged Product). Each statement applies the gate before its ORDER BY.
  * - **No tracking (S23, WO-008 S18):** no query, session or result is stored or logged; the only
- *   write is the existing rate-limit counter, keyed by Account or device, never by query text.
+ *   write is the existing rate-limit counter, keyed by Account or registered device, never by query
+ *   text -- and charged only once a Market is resolved, so a request that can find nothing writes
+ *   nothing (an unregistered or absent device has no Market).
  */
 const SCENE_CAPTION_EXCERPT = 140;
 const RATE = { bucketKey: 'marketplace-search', windowSeconds: 60, max: 60 } as const;
-const ANONYMOUS_RATE = { bucketKey: 'marketplace-search-anonymous', windowSeconds: 60, max: 6000 } as const;
 
 const SHAPES: Record<Exclude<SearchType, 'TOP'>, readonly CursorPart[]> = {
   PRODUCT_POST: ['ref', 'int', 'bit', 'int', 'uuid'],
@@ -51,18 +54,23 @@ const SHAPES: Record<Exclude<SearchType, 'TOP'>, readonly CursorPart[]> = {
   SCENE_POST: ['ref', 'int', 'int', 'ref'],
 };
 
-/** The lexical band of one column (see search.logic). */
-const band = (column: ReturnType<typeof sql.ref>, q: NormalizedQuery, text: string) => sql<number | null>`
+/** The lexical band of one column for one matched text (see search.logic): patterns come from that text. */
+const band = (column: ReturnType<typeof sql.ref>, q: NormalizedQuery, text: string) => {
+  const like = likePatterns(text);
+  return sql<number | null>`
   CASE WHEN lower(${column}) = lower(${text}) THEN 0
-       WHEN ${column} ILIKE ${q.prefix} ESCAPE '\\' OR ${column} ILIKE ${q.wordPrefix} ESCAPE '\\' THEN 1
-       WHEN ${q.long} AND ${column} ILIKE ${q.contains} ESCAPE '\\' THEN 2
+       WHEN ${column} ILIKE ${like.prefix} ESCAPE '\\' OR ${column} ILIKE ${like.wordPrefix} ESCAPE '\\' THEN 1
+       WHEN ${q.long} AND ${column} ILIKE ${like.contains} ESCAPE '\\' THEN 2
        WHEN ${q.long} AND ${text} <% ${column} THEN 3 END`;
+};
 
 /** The index-served candidate predicate of one column (trigram GIN serves ILIKE and <%). */
-const candidate = (column: ReturnType<typeof sql.ref>, q: NormalizedQuery, text: string) =>
-  q.long
-    ? sql<boolean>`(${column} ILIKE ${q.contains} ESCAPE '\\' OR ${text} <% ${column})`
-    : sql<boolean>`(${column} ILIKE ${q.prefix} ESCAPE '\\' OR ${column} ILIKE ${q.wordPrefix} ESCAPE '\\')`;
+const candidate = (column: ReturnType<typeof sql.ref>, q: NormalizedQuery, text: string) => {
+  const like = likePatterns(text);
+  return q.long
+    ? sql<boolean>`(${column} ILIKE ${like.contains} ESCAPE '\\' OR ${text} <% ${column})`
+    : sql<boolean>`(${column} ILIKE ${like.prefix} ESCAPE '\\' OR ${column} ILIKE ${like.wordPrefix} ESCAPE '\\')`;
+};
 
 const invalidCursor = () => new AdulisException('VALIDATION_FAILED', { slots: { path: 'cursor', reason: 'CURSOR_INVALID' } });
 
@@ -140,19 +148,20 @@ export class SearchController {
     const limit = type === 'TOP' ? 0 : pageLimit(limitRaw, 20, 50);
 
     return this.tx.run(req, async (trx) => {
+      // Market first: with none (no device, an unregistered one, an inactive Market) there is
+      // nothing to search, and nothing is written -- not even a rate-limit counter.
+      const market = await requesterMarket(trx, req);
+      const empty = { market_resolved: market !== null, type, algorithm_version: SEARCH_ALGORITHM_VERSION, items: [], next_cursor: null };
+      if (market === null) return empty;
+      // A resolved Market means a signed-in Account or a registered device: charge that subject.
       const accountId = req.ctx?.accountId ?? null;
       const device = requestingDevice(req.headers);
       if (accountId) await this.rateLimit.consume('ACCOUNT', accountId, RATE, trx);
       else if (device) await this.rateLimit.consume('DEVICE', device, RATE, trx);
-      else await this.rateLimit.consume('DEVICE', 'marketplace-search-anonymous', ANONYMOUS_RATE, trx);
-
-      const market = await requesterMarket(trx, req);
-      const empty = { market_resolved: market !== null, type, algorithm_version: SEARCH_ALGORITHM_VERSION, items: [], next_cursor: null };
-      if (market === null) return empty;
       if (after && after[0] !== cursorBinding(type, market, q)) throw invalidCursor();
 
       // The fuzzy threshold, for this transaction only (pg_trgm default 0.6 misses one-letter typos in short words).
-      await sql`SELECT set_config('pg_trgm.word_similarity_threshold', ${WORD_SIMILARITY}, true)`.execute(trx);
+      await setWordSimilarityThreshold(trx, WORD_SIMILARITY);
 
       if (type === 'TOP') {
         const [products, sellers, scenes] = [
@@ -276,22 +285,35 @@ export class SearchController {
   private async scenes(trx: Transaction<Database>, market: string, q: NormalizedQuery, after: Array<string | number> | null, limit: number) {
     const caption = sql.ref('v.caption');
     const tagName = sql.ref('tp.name');
-    // A tagged Product's name is secondary context (S11): it can admit a Scene, at the fuzzy band.
-    const tagMatch = q.long
-      ? sql<boolean>`EXISTS (SELECT 1 FROM core.scene_post_product t
-                              JOIN core.product tp ON tp.id = t.product_id
-                             WHERE t.revision_id = v.revision_id AND tp.visibility = 'PUBLISHED'
-                               AND ${candidate(tagName, q, q.text)})`
-      : sql<boolean>`false`;
+    // Candidates as a UNION, so each branch can use its own trigram index (an OR with a correlated
+    // EXISTS cannot): Scenes whose current caption matches, and -- from 3 characters -- Scenes
+    // whose current revision tags a PUBLISHED Product whose name matches. A tagged Product's name
+    // is secondary context (S11): alone it admits a Scene at the fuzzy band.
+    const tagged = q.long
+      ? sql`UNION
+            SELECT v.public_ref, true AS via_tag
+              FROM core.product tp
+              JOIN core.scene_post_product t ON t.product_id = tp.id
+              JOIN core.v_scene_post_public v ON v.revision_id = t.revision_id
+             WHERE tp.market_id = ${market}::uuid AND tp.visibility = 'PUBLISHED'
+               AND v.market_id = ${market}::uuid
+               AND ${candidate(tagName, q, q.text)}`
+      : sql``;
     const r = await sql<SceneRow>`
+      WITH cand AS (
+        SELECT v.public_ref, false AS via_tag
+          FROM core.v_scene_post_public v
+         WHERE v.market_id = ${market}::uuid
+           AND ${candidate(caption, q, q.text)}
+        ${tagged}
+      )
       SELECT c.* FROM (
         SELECT v.public_ref, v.caption, v.image_thumb_key, v.image_card_key,
                v.seller_handle, v.seller_store_name,
-               coalesce(${band(caption, q, q.text)}, CASE WHEN ${tagMatch} THEN 3 END) AS band,
+               coalesce(${band(caption, q, q.text)}, CASE WHEN m.via_tag THEN 3 END) AS band,
                (1000 - round(similarity(v.caption, ${q.text}) * 1000))::int AS inv_sim
-          FROM core.v_scene_post_public v
-         WHERE v.market_id = ${market}::uuid
-           AND (${candidate(caption, q, q.text)} OR ${tagMatch})
+          FROM (SELECT public_ref, bool_or(via_tag) AS via_tag FROM cand GROUP BY public_ref) m
+          JOIN core.v_scene_post_public v ON v.public_ref = m.public_ref
       ) c
        WHERE c.band IS NOT NULL
          AND (${after === null}

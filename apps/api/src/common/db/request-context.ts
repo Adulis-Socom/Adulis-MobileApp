@@ -61,3 +61,12 @@ export async function withRequestContext<T>(
     return fn(trx);
   });
 }
+
+/**
+ * The ONE other set_config, kept in this audited file (WO-008): pg_trgm's word-similarity
+ * threshold for Marketplace Search, transaction-local like the rest. It is a matching tolerance,
+ * not an access-control setting, and never touches the adulis.* context above.
+ */
+export async function setWordSimilarityThreshold(trx: Transaction<Database>, threshold: string): Promise<void> {
+  await sql`SELECT set_config('pg_trgm.word_similarity_threshold', ${threshold}, true)`.execute(trx);
+}
