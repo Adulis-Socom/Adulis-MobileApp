@@ -185,3 +185,13 @@ the default outcome of a merge conflict in these files is a **silent** wrong ans
 | `packages/*` | **Its own PR.** Never bundled into an app change |
 | Root `package.json`, `tsconfig.base.json` | Thin and rarely touched. The root exists to delegate |
 | This file | Shared rules only. Anything true of one workstream belongs in that workstream's file |
+
+## Development storage (every work order)
+
+Drive C: on the development machine has run out mid-session (ON-20261111-100). Follow
+`docs/engineering/DEVELOPMENT-STORAGE-POLICY.md`: run `ops/scripts/adulis-storage-audit.ps1`
+at the start, before cleanup and after cleanup; clean only positively identified disposable
+artifacts of your own work order (dry run first); never delete protected data or run
+`docker system prune -a --volumes`; and end the final report with the policy's nine storage
+lines (start, before cleanup, after cleanup, net growth, generated, removed, recovered,
+protected, concerns).
