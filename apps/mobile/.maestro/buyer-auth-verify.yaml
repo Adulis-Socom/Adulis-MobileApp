@@ -37,7 +37,7 @@ tags:
       - tapOn: Verify
 
 - extendedWaitUntil:
-    visible: Your saved Products and Scenes will appear here in a coming update.
+    visible: Private to you.
     timeout: 20000
 - assertNotVisible: Sign in to save.
 - takeScreenshot: auth-06-saved-signed-in

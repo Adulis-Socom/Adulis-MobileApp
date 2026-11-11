@@ -1,0 +1,30 @@
+# Guest Save (WO-009 S16), part 2 of 2: the code signs the guest in, the app returns to the same
+# Product, and the Save finishes in that new session (the server re-checks the Product).
+#
+#   maestro test -e OTP=123456 .maestro/saved-guest-2.yaml
+appId: com.adulis.app
+name: Guest Save - finish after sign-in
+tags:
+  - buyer
+  - saved
+---
+- tapOn: Six-digit code
+- inputText: ${OTP}
+- hideKeyboard
+- tapOn: Verify
+- runFlow:
+    when:
+      visible: I confirm that I am 18 years of age or older.
+    commands:
+      - tapOn: I confirm that I am 18 years of age or older.
+      - tapOn: Verify
+- extendedWaitUntil:
+    visible:
+      id: product-seller
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: Saved
+    direction: DOWN
+- assertVisible: Add to collection
+- takeScreenshot: saved-guest-02-saved-after-sign-in

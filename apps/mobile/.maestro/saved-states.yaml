@@ -1,0 +1,95 @@
+# Saved states (WO-009), signed in, run by the harness in steps (env STEP):
+#   unavailable  the Woven basket was unpublished first: one neutral sentence, Remove offered
+#   signed-out   after Sign out the private Collections are gone at once
+#   back         after signing in again on a fresh install, the Account's Collections return
+#   dark         the tab and a Collection in Dark at an enlarged font scale (the harness sets both)
+#
+#   maestro test -e STEP=unavailable .maestro/saved-states.yaml
+appId: com.adulis.app
+name: Saved states
+tags:
+  - buyer
+  - saved
+---
+- runFlow:
+    when:
+      true: ${STEP != 'back'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+      - extendedWaitUntil:
+          visible: For You Scenes|There are no Scenes to show right now\. Pull down to check again\.
+          timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'unavailable'}
+    commands:
+      - repeat:
+          while:
+            notVisible: 'Saved, Products: 1, Scenes: 1'
+          times: 5
+          commands:
+            - tapOn: Saved
+            - waitForAnimationToEnd
+      - tapOn: 'Saved, Products: 1, Scenes: 1'
+      - extendedWaitUntil:
+          visible: This Product is no longer available\.
+          timeout: 30000
+      - assertNotVisible: 'Woven basket.*'
+      - assertVisible: Remove this unavailable item from this collection
+      - takeScreenshot: saved-08-unavailable
+      - back
+
+- runFlow:
+    when:
+      true: ${STEP == 'signed-out'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Sign out
+          times: 5
+          commands:
+            - tapOn: You
+            - waitForAnimationToEnd
+      - tapOn: Sign out
+      - tapOn: Saved
+      - extendedWaitUntil:
+          visible: Sign in to save\.
+          timeout: 30000
+      - assertNotVisible: 'Saved, Products: .*'
+      - assertNotVisible: Private to you\.
+      - takeScreenshot: saved-09-signed-out
+
+- runFlow:
+    when:
+      true: ${STEP == 'back'}
+    commands:
+      - extendedWaitUntil:
+          visible: 'Saved, Products: 1, Scenes: 1'
+          timeout: 30000
+      - takeScreenshot: saved-10-after-sign-in
+
+- runFlow:
+    when:
+      true: ${STEP == 'dark'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Private to you\.
+          times: 5
+          commands:
+            - tapOn: Saved
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: 'Saved, Products: .*'
+          timeout: 30000
+      - takeScreenshot: saved-dark-01-tab
+      - tapOn: 'Saved, Products: .*'
+      - extendedWaitUntil:
+          visible:
+            id: collection-list
+          timeout: 30000
+      - takeScreenshot: saved-dark-02-collection
+      - back

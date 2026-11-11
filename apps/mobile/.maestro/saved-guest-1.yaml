@@ -1,0 +1,61 @@
+# Guest Save (WO-009 S16), part 1 of 2, against the real local API: a guest finds a Product, taps
+# Save, is told why signing in is needed, chooses Sign in and asks for a code. Nothing is saved.
+# Part 2 (saved-guest-2.yaml) takes the code from apps/api/.dev-sms.log (development only).
+# Needs the WO-CAT-001 native fixtures (Fixture Weaves: Woven basket).
+#
+#   maestro test -e PHONE=+251911000123 .maestro/saved-guest-1.yaml
+appId: com.adulis.app
+name: Guest Save - sign in to save
+tags:
+  - buyer
+  - saved
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+- repeat:
+    while:
+      notVisible: Find Products, Sellers and Scenes in your Market\.
+    times: 5
+    commands:
+      - tapOn:
+          text: Search
+          index: 0
+      - waitForAnimationToEnd
+- tapOn:
+    id: search-input
+- inputText: basket
+- extendedWaitUntil:
+    visible: 'Woven basket, .*'
+    timeout: 30000
+- hideKeyboard
+- tapOn:
+    text: 'Woven basket, .*'
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: product-seller
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: Save
+    direction: DOWN
+- tapOn:
+    text: Save
+- assertVisible: Sign in to save Products and Scenes to your private collections\.
+- takeScreenshot: saved-guest-01-prompt
+- tapOn:
+    text: Sign in
+    index: 0
+- assertVisible: Enter your phone number\. We will send you a code by SMS\.
+- tapOn: Phone number
+- inputText: ${PHONE}
+- hideKeyboard
+- tapOn: Send code
+- extendedWaitUntil:
+    visible: Six-digit code
+    timeout: 30000

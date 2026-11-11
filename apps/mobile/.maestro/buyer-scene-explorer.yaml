@@ -53,7 +53,7 @@ tags:
 - assertNotVisible: View Product
 - assertNotVisible: Add to cart
 - assertNotVisible: Buy now
-- assertNotVisible: Save
+# Save is in scope since WO-009 (private Collections): .maestro/saved-collections.yaml.
 - assertNotVisible: Share
 - assertNotVisible: Like
 - assertNotVisible: Reviews
@@ -94,7 +94,7 @@ tags:
 - assertVisible: 'Large, .*1,200\.00, Currently unavailable'
 - assertNotVisible: Add to cart
 - assertNotVisible: Buy now
-- assertNotVisible: Save
+# Save is in scope since WO-009 (private Collections): .maestro/saved-collections.yaml.
 - assertNotVisible: Share
 - takeScreenshot: explore-06-product-options
 

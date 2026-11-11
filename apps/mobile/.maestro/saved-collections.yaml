@@ -1,0 +1,148 @@
+# Saved and Collections (WO-009), signed in, against the real local API. Run after
+# saved-guest-1/2 without clearing state (the Woven basket is in Saved). Covers: Saved tab,
+# open a saved Product, Add to collection with a new Collection, For You -> Explore the Scene ->
+# Save the Scene, Saved Scenes -> open the Scene, then rename, remove from and delete a Collection.
+#
+#   maestro test .maestro/saved-collections.yaml
+appId: com.adulis.app
+name: Saved and Collections
+tags:
+  - buyer
+  - saved
+---
+- launchApp:
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+
+# The Product saved as a guest is in Saved, and opens. (The first tab tap after a launch can be
+# swallowed on the emulator: tap until it lands.)
+- repeat:
+    while:
+      notVisible: Private to you\.
+    times: 5
+    commands:
+      - tapOn: Saved
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: 'Saved, Products: 1, Scenes: 0'
+    timeout: 30000
+- scrollUntilVisible:
+    element: 'Woven basket, .*'
+    direction: DOWN
+- takeScreenshot: saved-01-tab
+- tapOn: 'Woven basket, .*'
+- extendedWaitUntil:
+    visible:
+      id: product-seller
+    timeout: 30000
+
+# Add to collection: Saved is ticked; a new Collection is made and filled in one step.
+- scrollUntilVisible:
+    element: Add to collection
+    direction: DOWN
+- tapOn: Add to collection
+- extendedWaitUntil:
+    visible:
+      id: picker-collections
+    timeout: 30000
+- assertVisible:
+    text: Saved
+    checked: true
+- tapOn: New collection
+- tapOn:
+    id: new-collection-name
+- inputText: Gift ideas
+- hideKeyboard
+- tapOn: Create
+- extendedWaitUntil:
+    visible:
+      text: Gift ideas
+      checked: true
+    timeout: 30000
+- takeScreenshot: saved-02-picker
+- tapOn: Done
+- back
+
+# For You -> Explore the Scene -> Save the whole Scene.
+- tapOn: Home
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 30000
+- scrollUntilVisible:
+    element: Explore the Scene
+    direction: DOWN
+- tapOn:
+    text: Explore the Scene
+    index: 0
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: Save
+    direction: DOWN
+- tapOn:
+    text: Save
+- extendedWaitUntil:
+    visible:
+      text: Saved
+    timeout: 30000
+- takeScreenshot: saved-03-scene-saved
+- back
+
+# Saved: both counts; the Scenes tab lists the Scene, which opens.
+- tapOn: Saved
+- extendedWaitUntil:
+    visible: 'Saved, Products: 1, Scenes: 1'
+    timeout: 30000
+- assertVisible: 'Gift ideas, Products: 1, Scenes: 0'
+- tapOn:
+    id: filter-tab-SCENE_POST
+- extendedWaitUntil:
+    visible:
+      id: search-scene-tile
+    timeout: 30000
+- assertNotVisible: 'Woven basket, .*'
+- takeScreenshot: saved-04-scenes
+- tapOn:
+    id: search-scene-tile
+- extendedWaitUntil:
+    visible: Products in this Scene
+    timeout: 30000
+- back
+
+# A named Collection: rename, remove its item (Saved keeps its own), delete after confirming.
+- tapOn: 'Gift ideas, Products: 1, Scenes: 0'
+- extendedWaitUntil:
+    visible: Rename
+    timeout: 30000
+- tapOn: Rename
+- tapOn:
+    id: rename-collection-name
+- eraseText: 20
+- inputText: Gifts
+- hideKeyboard
+- tapOn: Save name
+- extendedWaitUntil:
+    visible: 'Private to you\. Products: 1, Scenes: 0'
+    timeout: 30000
+- assertVisible: Gifts
+- takeScreenshot: saved-05-renamed
+- tapOn: Remove Woven basket from this collection
+- extendedWaitUntil:
+    visible: This collection is empty\.
+    timeout: 30000
+- tapOn: Delete collection
+- extendedWaitUntil:
+    visible: Delete Gifts\?
+    timeout: 10000
+- takeScreenshot: saved-06-confirm-delete
+- tapOn: '(?i)delete'
+- extendedWaitUntil:
+    visible: 'Saved, Products: 1, Scenes: 1'
+    timeout: 30000
+- assertNotVisible: 'Gifts, .*'
+- takeScreenshot: saved-07-after-delete
