@@ -13,12 +13,15 @@
 --
 -- RACE. A Product insert takes only FOR KEY SHARE on its Market (the FK), which
 -- does not conflict with this UPDATE, and the 0056 guard reads the currency
--- unlocked. So the change takes SHARE on core.product first: it waits for any
--- in-flight Product write, then sees it; a Product write that starts after
--- waits for this transaction, and its 0056 guard then reads the new currency.
--- SHARE needs table-level UPDATE on core.product, which every role that can
--- UPDATE core.market holds (adulis_app, the owner), so the function runs as
--- the invoker.
+-- unlocked. So the change takes SHARE ROW EXCLUSIVE on core.product first: it
+-- waits for any in-flight Product write, then sees it; a Product write that
+-- starts after waits for this transaction, and its 0056 guard then reads the
+-- new currency. SHARE ROW EXCLUSIVE (not SHARE) also conflicts with itself, so
+-- two currency changes queue instead of deadlocking when each then writes a
+-- Product. It needs table-level UPDATE on core.product, which every role that
+-- can UPDATE core.market holds (adulis_app, the owner), so the function runs as
+-- the invoker. Known limit: the waiting side re-reads only under READ COMMITTED
+-- (every API transaction); a REPEATABLE READ session keeps its first snapshot.
 --
 -- A Market with no Product (initial setup) may still change. An exceptional
 -- change for a Market with Products is a controlled, explicitly authorised
@@ -30,7 +33,7 @@
 CREATE FUNCTION core.fn_guard_market_currency_fixed() RETURNS trigger
 LANGUAGE plpgsql SET search_path = core AS $fn$
 BEGIN
-  LOCK TABLE core.product IN SHARE MODE;
+  LOCK TABLE core.product IN SHARE ROW EXCLUSIVE MODE;
   IF EXISTS (SELECT 1 FROM core.product p WHERE p.market_id = NEW.id) THEN
     RAISE EXCEPTION 'Market % has Products; its display currency is fixed', NEW.id
       USING ERRCODE = 'check_violation', CONSTRAINT = 'market_currency_fixed_with_products';
