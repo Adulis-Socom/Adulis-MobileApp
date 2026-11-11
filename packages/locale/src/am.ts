@@ -408,7 +408,11 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.delete.confirm_mismatch': 'ለማረጋገጥ {word} በትክክል ይተይቡ።',
   'buyer.delete.confirm_button': 'መለያዬን በዘላቂነት ሰርዝ',
   'buyer.delete.deleting': 'መለያዎን በመሰረዝ ላይ',
-  'buyer.delete.done': 'የአዱሊስ መለያዎ ተሰርዟል፣ እና ይህ መሣሪያ ወጥቷል።',
+  'buyer.delete.done': 'በ{phone} የተመዘገበው የአዱሊስ መለያ ተሰርዟል።',
+  'buyer.delete.signed_out': 'ይህ መሣሪያ ወጥቷል።',
+  'buyer.delete.still_signed_in': 'አሁንም በዚህ መሣሪያ ላይ ወዳለው መለያ ገብተዋል።',
+  'buyer.delete.for_phone': 'ይህ በ{phone} የተመዘገበውን የአዱሊስ መለያ ይሰርዛል።',
+  'buyer.delete.code_unusable': 'ይህ ኮድ መለያ ለመሰረዝ ሊያገለግል አልቻለም። ስልክ ቁጥሩን ያረጋግጡ እና እንደገና ይጀምሩ።',
   'buyer.delete.done_home': 'ወደ መነሻ ሂድ',
   'buyer.delete.unconfirmed':
     'መለያዎ መሰረዙን ማረጋገጥ አልተቻለም። ከተሰረዘ፣ ይህ መሣሪያ በሚቀጥለው ጊዜ ወደ አዱሊስ ሲደርስ ይወጣል።',

@@ -449,7 +449,11 @@ export const enCommon = {
   'buyer.delete.confirm_mismatch': 'Type {word} exactly to confirm.',
   'buyer.delete.confirm_button': 'Delete my Account permanently',
   'buyer.delete.deleting': 'Deleting your Account',
-  'buyer.delete.done': 'Your Adulis Account has been deleted, and this device is signed out.',
+  'buyer.delete.done': 'The Adulis Account registered to {phone} has been deleted.',
+  'buyer.delete.signed_out': 'This device is signed out.',
+  'buyer.delete.still_signed_in': 'You are still signed in to the Account on this device.',
+  'buyer.delete.for_phone': 'This deletes the Adulis Account registered to {phone}.',
+  'buyer.delete.code_unusable': 'This code could not be used to delete an Account. Check the phone number and start again.',
   'buyer.delete.done_home': 'Go to Home',
   'buyer.delete.unconfirmed':
     'We could not confirm whether your Account was deleted. If it was, this device is signed out the next time it reaches Adulis.',
