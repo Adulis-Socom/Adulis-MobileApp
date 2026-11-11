@@ -1,7 +1,7 @@
 import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-import { ApiError, isTransient } from '../api/client';
+import { ApiError, isTransient, problemCode } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { hasMessage } from '../i18n/i18n';
@@ -119,6 +119,26 @@ export function botText(t: (key: MobileMessageKey) => string, m: ChatMessage): s
   return t('buyer.chat.bot_unavailable');
 }
 
+/**
+ * The server writes a Buyer message and its automated answer in one transaction, so both carry the
+ * same sent_at and the server's order between them is undefined (ON-20261111-153). Newest first,
+ * an automated answer sorts before the human message it shares a time with, so it is drawn after
+ * the question it answers.
+ */
+const newestFirst = (a: ChatMessage, b: ChatMessage) =>
+  b.sentAt.localeCompare(a.sentAt) || (a.kind === 'BOT' ? 0 : 1) - (b.kind === 'BOT' ? 0 : 1);
+
+/**
+ * The automated answer the Buyer may escalate: the newest group of messages (one sent_at) holds an
+ * answer and no escalation. Null otherwise.
+ */
+export function escalatableAnswer(items: readonly ChatMessage[]): ChatMessage | null {
+  const newest = items[0]?.sentAt;
+  const group = items.filter((m) => m.sentAt === newest && m.kind === 'BOT');
+  const escalated = group.some((m) => m.escalated || m.templateKey === 'chat.bot.escalated');
+  return escalated ? null : (group[0] ?? null);
+}
+
 /** De-duplicated, in the order given (pages are cut by timestamp). */
 function unique<T extends { id: string }>(pages: Page<T>[] | undefined): T[] {
   const seen = new Set<string>();
@@ -159,8 +179,9 @@ export function useConversationMessages(conversationRef: string | null, focused:
     initialPageParam: null as string | null,
     getNextPageParam: nextOf<ChatMessage>,
     enabled: token !== null && conversationRef !== null,
-    refetchInterval: focused ? 30_000 : false,
+    // Not on a conversation the server says is not available.
+    refetchInterval: (q) => (focused && problemCode(q.state.error) !== 'NOT_FOUND' ? 30_000 : false),
     retry,
   });
-  return { ...query, items: unique(query.data?.pages) };
+  return { ...query, items: unique(query.data?.pages).sort(newestFirst) };
 }

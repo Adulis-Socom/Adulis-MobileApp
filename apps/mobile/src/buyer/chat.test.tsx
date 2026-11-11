@@ -275,7 +275,7 @@ describe('a conversation', () => {
     expect(await screen.findByText('Once only')).toBeOnTheScreen();
   });
 
-  it('12, 13. a message lost offline is not shown as sent; the draft stays and the retry reuses its key', async () => {
+  it('12, 13. a message lost offline is not shown as sent and is "unconfirmed"; the draft stays and the retry reuses its key', async () => {
     const { chat, c } = await openConversation();
     let first = true;
     api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
@@ -289,7 +289,8 @@ describe('a conversation', () => {
     await screen.findByText(en['buyer.chat.empty']);
     await fireEvent.changeText(composer(), 'Are you open today?');
     await fireEvent.press(sendButton());
-    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
     expect(screen.getByText(en['common.offline'])).toBeOnTheScreen();
     expect(composer().props.value).toBe('Are you open today?');
     expect(screen.queryByText(en['buyer.chat.sender.you'])).toBeNull();
@@ -324,6 +325,16 @@ describe('a conversation', () => {
     expect(escalate?.headers['Idempotency-Key']).toMatch(UUID7);
     // The escalation itself is not an answer to escalate again.
     expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull();
+  });
+
+  it('a question and its automated answer written at the same instant: the answer follows, and Ask the Seller is offered', async () => {
+    const same = ago(10);
+    await openConversation((chat, c) => {
+      // The server's order for one sent_at is undefined: here the bot row comes first.
+      chat.msg(c, { sender_kind: 'BOT', template_key: 'nlu.answer.delivery_times', resolution_path: 'KEYWORD', sent_at: same });
+      chat.msg(c, { sender_kind: 'BUYER', body: 'Delivery times?', sent_at: same });
+    });
+    expect(await screen.findByText(en['buyer.chat.ask_seller_hint'])).toBeOnTheScreen();
   });
 
   it('a conversation with no automated answer offers no Ask the Seller', async () => {

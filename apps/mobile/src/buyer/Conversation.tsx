@@ -4,7 +4,7 @@ import { Redirect, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, View } from 'react-native';
 
-import { newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
+import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
@@ -18,6 +18,7 @@ import {
   MESSAGE_MAX,
   acceptedMessage,
   botText,
+  escalatableAnswer,
   isConversationRef,
   useConversationMessages,
   useConversations,
@@ -55,11 +56,13 @@ export function ConversationScreen({ conversationRef }: { conversationRef: unkno
   const messages = useConversationMessages(ref, focused);
   const conversations = useConversations();
   const [draft, setDraft] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'failed'>('idle');
+  // failed: the server refused it; unknown: no answer (it may have been stored).
+  const [state, setState] = useState<'idle' | 'sending' | 'failed' | 'unknown'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [askFailed, setAskFailed] = useState(false);
   const sending = useRef(false);
+  const askingRef = useRef(false);
   const sendIntent = useRef<{ text: string; key: string } | null>(null);
   const askIntent = useRef<{ forMessage: string; key: string } | null>(null);
 
@@ -98,7 +101,8 @@ export function ConversationScreen({ conversationRef }: { conversationRef: unkno
     setError(null);
     try {
       const body = await api.sendMessage(ref, text, sendIntent.current.key);
-      if (!acceptedMessage(body)) throw new Error('send answered without a message id');
+      // An answer without a message id is an answered failure: its key must not be replayed forever.
+      if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
       if (!api.isCurrent()) return;
       setDraft('');
@@ -108,21 +112,25 @@ export function ConversationScreen({ conversationRef }: { conversationRef: unkno
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
     } catch (failure) {
-      // A server answer ends this intent; offline or a timeout keeps the key for the retry.
-      if (wasAnswered(failure)) sendIntent.current = null;
+      // A server answer ends this intent; offline or a timeout keeps the key for the retry, which
+      // replays if the message was stored. The outcome is then unknown: say so, and re-read.
+      const answered = wasAnswered(failure);
+      if (answered) sendIntent.current = null;
       if (!api.isCurrent()) return;
-      setState('failed');
+      setState(answered ? 'failed' : 'unknown');
       setError(failureMessage(t, failure));
+      if (!answered) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } finally {
       sending.current = false;
     }
   };
 
-  const latest = messages.items[0];
-  const canAsk = latest?.kind === 'BOT' && !latest.escalated && latest.templateKey !== 'chat.bot.escalated';
+  const answer = escalatableAnswer(messages.items);
+  const canAsk = answer !== null;
   const ask = async () => {
-    if (!api || !latest || asking) return;
-    if (askIntent.current?.forMessage !== latest.id) askIntent.current = { forMessage: latest.id, key: newIdempotencyKey() };
+    if (!api || !answer || askingRef.current) return;
+    askingRef.current = true;
+    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey() };
     setAsking(true);
     setAskFailed(false);
     try {
@@ -133,6 +141,7 @@ export function ConversationScreen({ conversationRef }: { conversationRef: unkno
       if (wasAnswered(failure)) askIntent.current = null;
       if (api.isCurrent()) setAskFailed(true);
     } finally {
+      askingRef.current = false;
       setAsking(false);
     }
   };
@@ -225,16 +234,16 @@ export function ConversationScreen({ conversationRef }: { conversationRef: unkno
           value={draft}
           onChangeText={(value) => {
             setDraft(value);
-            if (state === 'failed') setState('idle');
+            if (state === 'failed' || state === 'unknown') setState('idle');
           }}
           multiline
           editable={state !== 'sending'}
           error={tooLong ? (fillSlots(t('buyer.chat.too_long'), { max: MESSAGE_MAX.toLocaleString(locale) }) ?? null) : null}
         />
         {state === 'sending' ? <AppText style={secondary}>{t('buyer.chat.sending')}</AppText> : null}
-        {state === 'failed' ? (
+        {state === 'failed' || state === 'unknown' ? (
           <View accessibilityRole="alert">
-            <AppText>{t('buyer.chat.not_sent')}</AppText>
+            <AppText>{t(state === 'failed' ? 'buyer.chat.not_sent' : 'buyer.chat.maybe_not_sent')}</AppText>
             {error ? <AppText style={secondary}>{error}</AppText> : null}
           </View>
         ) : null}
