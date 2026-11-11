@@ -376,6 +376,8 @@ export const enCommon = {
   'buyer.chat.send': 'Send',
   'buyer.chat.sending': 'Sending your message',
   'buyer.chat.not_sent': 'Your message was not sent. It is still in the box below. Try again.',
+  'buyer.chat.maybe_not_sent':
+    'We could not confirm that your message was sent. If it does not appear above, send it again without changing it.',
   'buyer.chat.too_long': 'A message can be up to {max} characters.',
   'buyer.chat.connected_only': 'Messages are sent only while you are connected. New messages appear when you refresh, and every 30 seconds while this conversation is open.',
   'buyer.chat.ask_seller': 'Ask the Seller',

@@ -330,6 +330,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.send': 'ላክ',
   'buyer.chat.sending': 'መልእክትዎን በመላክ ላይ',
   'buyer.chat.not_sent': 'መልእክትዎ አልተላከም። አሁንም ከታች ባለው ሳጥን ውስጥ አለ። እንደገና ይሞክሩ።',
+  'buyer.chat.maybe_not_sent':
+    'መልእክትዎ መላካቱን ማረጋገጥ አልቻልንም። ከላይ ካልታየ ሳይቀይሩ እንደገና ይላኩት።',
   'buyer.chat.too_long': 'አንድ መልእክት እስከ {max} ቁምፊዎች ሊሆን ይችላል።',
   'buyer.chat.connected_only': 'መልእክቶች የሚላኩት በተገናኙ ጂዜ ብቻ ነው። አዲስ መልእክቶች ሲያድሱ እና ይህ ውይይት ሲካፈት በየ 30 ሰከንዶች ይታያሉ።',
   'buyer.chat.ask_seller': 'ሻጉን ይጠይቁ',
