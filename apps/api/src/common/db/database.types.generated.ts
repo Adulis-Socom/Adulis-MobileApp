@@ -529,6 +529,27 @@ export interface CoreClaimEvidenceItem {
   reference_id: string;
 }
 
+export interface CoreCollection {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  kind: string;
+  name: string | null;
+  owner_account_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CoreCollectionItem {
+  collection_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  originating_scene_post_id: string | null;
+  originating_scene_revision_id: string | null;
+  product_post_id: string | null;
+  scene_post_id: string | null;
+  scene_revision_seen_at_save_id: string | null;
+  source_surface: string;
+}
+
 export interface CoreContentReport {
   body: string | null;
   id: Generated<string>;
@@ -1765,6 +1786,8 @@ export interface DB {
   "core.category_market_availability": CoreCategoryMarketAvailability;
   "core.claim": CoreClaim;
   "core.claim_evidence_item": CoreClaimEvidenceItem;
+  "core.collection": CoreCollection;
+  "core.collection_item": CoreCollectionItem;
   "core.content_report": CoreContentReport;
   "core.courier_custody_transfer": CoreCourierCustodyTransfer;
   "core.device": CoreDevice;

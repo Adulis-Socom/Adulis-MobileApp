@@ -85,6 +85,11 @@ const BODY_OVER_MANIFEST = [
   'core.fyp_algorithm_version',
   'core.fyp_session',
   'core.fyp_impression',
+  // WORK ORDER WO-009: ADU-SRC-01 v3.2 S19 DEFINES the private Buyer Collection
+  // and its typed membership. Migration 0061 adds the two; ADU-DB-01 v1.26
+  // carries their Appendix B rows.
+  'core.collection',
+  'core.collection_item',
 ];
 
 export default {
