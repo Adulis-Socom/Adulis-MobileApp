@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148.
 
 ## Issues
 
@@ -2567,6 +2567,186 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Root cause:** Flow authoring: missing scroll-up steps.
 - **Fix and commit:** Flows scroll up before those assertions and assert the new outcome text (commit `d34076f`).
 - **Verification:** All 11 WO-011 flows PASS on the rerun.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-139
+
+- **Work order:** WO-012
+- **Severity:** MEDIUM
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** POST /v1/notifications/read-all marks every unread notification of the Account, Seller rows included; no Buyer-scoped mark-all exists.
+- **Expected:** ADU-NOTIF-01 S61: read-all "updates only currently authorized rows in the requested context/Seller view".
+- **Actual:** The endpoint takes no scope; one Account can own a Seller, so a Buyer-screen call would mark the Seller's notifications read.
+- **Reproduction:** Call read-all as an Account that owns a Seller; its Seller notifications become read.
+- **Evidence:** notifications.controller.ts readAll.
+- **Root cause:** The scope parameter was never implemented.
+- **Fix and commit:** Mark all read is NOT built; every test asserts read-all is never called.
+- **Verification:** notifications.test.tsx afterEach.
+- **Remaining risk:** A Buyer marks rows one at a time.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: add the context parameter (as=buyer / as=seller&seller_id=) to read-all, then a Mark all read control can follow.
+
+### ON-20261111-140
+
+- **Work order:** WO-012
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** GET /v1/notifications and POST /v1/notifications/{id}/read publish no response schemas.
+- **Expected:** Generated types for every endpoint a client calls.
+- **Actual:** Mobile checks each page at its boundary (src/buyer/notifications.ts) and drops malformed rows.
+- **Reproduction:** n/a
+- **Evidence:** contracts/openapi.json /v1/notifications.
+- **Root cause:** The legacy controller has no Swagger response decorators.
+- **Fix and commit:** None (no API change).
+- **Verification:** Boundary checks tested (malformed rows dropped).
+- **Remaining risk:** A server shape change is caught at runtime only.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: add response DTOs and regenerate the contract.
+
+### ON-20261111-141
+
+- **Work order:** WO-012
+- **Severity:** MEDIUM
+- **Type:** SPEC_CONFLICT
+- **Status:** OPEN
+- **Summary:** ADU-NOTIF-01 S40 stores rendered_title/rendered_body per notification; the API returns template_key and slots, and no Buyer notification template has approved catalogue copy.
+- **Expected:** A Buyer reads what each notification is about.
+- **Actual:** Every Buyer row shows the generic sentence "You have a notification from Adulis." (plus "It is about one of your orders." for an Order-linked row).
+- **Reproduction:** Seed any Buyer notification; open the inbox.
+- **Evidence:** packages/locale (no Buyer template keys); console catalogue holds only Seller templates.
+- **Root cause:** Buyer notification copy was never written; the design and the API disagree on where text comes from.
+- **Fix and commit:** None: copy is not invented. A notification.buyer.* catalogue namespace is reserved for it.
+- **Verification:** n/a
+- **Remaining risk:** The inbox carries little information until copy exists.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: approve Buyer notification copy (English, then human Amharic) as notification.buyer.<template> keys, or rule that the server sends rendered text as the design says.
+
+### ON-20261111-142
+
+- **Work order:** WO-012
+- **Severity:** LOW
+- **Type:** API_DEFECT
+- **Status:** OPEN
+- **Summary:** The notification list pages by `scheduled_for < cursor` with a millisecond ISO cursor; rows sharing the boundary timestamp are skipped.
+- **Expected:** Every row reachable by paging.
+- **Actual:** Two rows enqueued in the same millisecond across a page boundary: the second never appears.
+- **Reproduction:** Insert 26+ rows with identical scheduled_for; page.
+- **Evidence:** notifications.controller.ts list/page (security review INFO).
+- **Root cause:** A timestamp-only keyset cursor.
+- **Fix and commit:** None (backend). The client de-duplicates by id and ends on a repeated cursor.
+- **Verification:** n/a
+- **Remaining risk:** Rare silent omission.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: a (scheduled_for, id) keyset cursor, as the Shop uses.
+
+### ON-20261111-143
+
+- **Work order:** WO-012
+- **Severity:** MEDIUM
+- **Type:** DESIGN_GAP
+- **Status:** OPEN
+- **Summary:** NEW_DEVICE_SIGNIN is in the server's Seller-class list, so it is excluded from the Buyer inbox; an Account with no Seller never sees its own new-device security notice in the app.
+- **Expected:** ADU-NOTIF-01 lists NEW_DEVICE_SIGN_IN as an Account security notice.
+- **Actual:** Only the Seller feed shows it.
+- **Reproduction:** Sign in on a new device as a Buyer-only Account; the Buyer inbox stays empty.
+- **Evidence:** notifications.controller.ts sellerClassTemplate.
+- **Root cause:** Seller-era classification of an Account-level notice.
+- **Fix and commit:** None (backend).
+- **Verification:** n/a
+- **Remaining risk:** Buyers miss a security signal.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder/backend: classify Account security notices as Account-level (shown in every mode).
+
+### ON-20261111-144
+
+- **Work order:** WO-012
+- **Severity:** LOW
+- **Type:** DESIGN_GAP
+- **Status:** OPEN
+- **Summary:** No notification-type-to-destination table exists, and the only reference Buyer rows carry is an Order, which has no Buyer screen.
+- **Expected:** ADU-NOTIF-01 S66: a closed type maps to a reviewed typed destination.
+- **Actual:** No row opens a destination.
+- **Reproduction:** n/a
+- **Evidence:** NOTIF-01 S66; ADU-MOB-02 S13 routes not built.
+- **Root cause:** Orders presentation is not built; the mapping was never written.
+- **Fix and commit:** Rows are readable without an action (as the work order allows).
+- **Verification:** Tests 16, 17.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Define the mapping with the Orders work order.
+
+### ON-20261111-145
+
+- **Work order:** WO-012
+- **Severity:** LOW
+- **Type:** SPEC_NOTE
+- **Status:** OPEN
+- **Summary:** Push (Expo Notifications, NOTIF-01 S62) is in the design's MVP but out of this work order's scope; no unread count or badge is designed.
+- **Expected:** n/a
+- **Actual:** No permission prompt, no token, no provider; the in-app inbox works without push.
+- **Reproduction:** n/a
+- **Evidence:** NOTIF-01 S62, S312; MOB-02 S131-S132.
+- **Root cause:** Scope decision for the overnight batch.
+- **Fix and commit:** None.
+- **Verification:** Tests assert no push registration.
+- **Remaining risk:** Buyers learn of notifications only by opening the app.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: approve the push provider and permission moment (MOB-02 S172) in a dedicated work order.
+
+### ON-20261111-146
+
+- **Work order:** WO-012
+- **Severity:** MEDIUM
+- **Type:** SECURITY
+- **Status:** OPEN (mitigated in the client)
+- **Summary:** The server's Buyer scope is a deny-list of Seller-class templates; a Seller template missing from it reaches the Buyer inbox, and its Mark as read clears it in the Seller feed (read state is shared).
+- **Expected:** A Buyer-class allow-list.
+- **Actual:** The list has drifted before (D-227).
+- **Reproduction:** Add a new Seller-class template without updating sellerClassTemplate.
+- **Evidence:** Security review LOW (server side).
+- **Root cause:** Exclusion by enumeration.
+- **Fix and commit:** Client: only notification.buyer.* copy renders (commit `55794c2`), so a leaked Seller row shows the generic sentence.
+- **Verification:** notifications.test.tsx (a Seller and an error key render generically).
+- **Remaining risk:** A leaked row still appears (generic) and can be marked read.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: replace the deny-list with a Buyer allow-list.
+
+### ON-20261111-147
+
+- **Work order:** WO-012
+- **Severity:** MEDIUM
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent read-only security review of WO-012: no Critical or High; one Medium and one Low fixed, one server-side Low recorded (-146).
+- **Expected:** n/a
+- **Actual:** MEDIUM: any catalogue key could render as a notification sentence. LOW: a NOT_FOUND read left a stale row. INFO: timestamp cursor (-142); flow could not observe the Seller row's absence.
+- **Reproduction:** n/a
+- **Evidence:** docs/mobile/WO-012-FOUNDER-HANDOFF.md (Security).
+- **Root cause:** n/a
+- **Fix and commit:** Commit `55794c2`; the flow comment corrected (`211b575`).
+- **Verification:** notifications.test.tsx 14/14; mobile 333/333.
+- **Remaining risk:** ON-20261111-146.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-148
+
+- **Work order:** WO-012
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** RESOLVED
+- **Summary:** notifications.yaml asserted the "Older" header after scrolling to the end of the list, where it is above the viewport.
+- **Expected:** The flow passes on the working inbox.
+- **Actual:** notif-read failed on that one assertion while the database showed the row marked read and the Seller row untouched.
+- **Reproduction:** Run the read step.
+- **Evidence:** G:\AdulisDevelopment\WO-012\maestro.
+- **Root cause:** Flow authoring.
+- **Fix and commit:** Scroll up to the header (commit `211b575`).
+- **Verification:** Rerun PASS.
 - **Remaining risk:** None.
 - **Founder decision required:** No
 - **Recommended resolution:** Done.
