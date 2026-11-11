@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1043 keys:
+1075 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -264,6 +264,38 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.notifications.failed`
 - `buyer.notifications.load_older`
 - `buyer.notifications.refresh`
+- `buyer.messages`
+- `buyer.messages.signed_out`
+- `buyer.messages.empty`
+- `buyer.messages.failed`
+- `buyer.messages.last`
+- `buyer.messages.load_older`
+- `buyer.messages.refresh`
+- `buyer.chat.title`
+- `buyer.chat.message_seller`
+- `buyer.chat.open_failed`
+- `buyer.chat.unavailable`
+- `buyer.chat.sender.you`
+- `buyer.chat.sender.seller`
+- `buyer.chat.sender.team`
+- `buyer.chat.sender.bot`
+- `buyer.chat.bot_unavailable`
+- `buyer.chat.about_product`
+- `buyer.chat.about_order`
+- `buyer.chat.sent_at`
+- `buyer.chat.empty`
+- `buyer.chat.failed`
+- `buyer.chat.load_earlier`
+- `buyer.chat.refresh`
+- `buyer.chat.composer`
+- `buyer.chat.send`
+- `buyer.chat.sending`
+- `buyer.chat.not_sent`
+- `buyer.chat.too_long`
+- `buyer.chat.connected_only`
+- `buyer.chat.ask_seller`
+- `buyer.chat.ask_seller_hint`
+- `buyer.chat.ask_failed`
 - `buyer.shop.order`
 - `buyer.shop.products`
 - `buyer.shop.empty`
