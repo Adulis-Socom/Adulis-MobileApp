@@ -326,6 +326,24 @@ export const enCommon = {
   'buyer.notifications': 'Notifications',
   'buyer.notifications.coming': 'Your notifications will appear here in a coming update.',
   'buyer.notifications.signed_out': 'Sign in to see notifications.',
+
+  // WO-012 Buyer notification inbox (ADU-NOTIF-01 v3.3 S60-S61, ADU-MOB-02 v4.3 S131-S135):
+  // GET /v1/notifications?as=buyer and POST .../{id}/read. A row renders its own sentence only
+  // when its template key is a catalogue key; any other template shows the generic sentence
+  // (no Buyer template has approved copy yet). A notification is never business truth.
+  'buyer.notifications.recent': 'Recent',
+  'buyer.notifications.older': 'Older',
+  'buyer.notifications.unread': 'Unread',
+  'buyer.notifications.read_state': 'Read',
+  'buyer.notifications.generic': 'You have a notification from Adulis.',
+  'buyer.notifications.about_order': 'It is about one of your orders.',
+  'buyer.notifications.received': 'Received {time}',
+  'buyer.notifications.mark_read': 'Mark as read',
+  'buyer.notifications.mark_read_failed': 'This notification could not be marked as read. Try again.',
+  'buyer.notifications.empty': 'You have no notifications.',
+  'buyer.notifications.failed': 'Your notifications could not be loaded.',
+  'buyer.notifications.load_older': 'Load older notifications',
+  'buyer.notifications.refresh': 'Refresh notifications',
   'buyer.shop.order': 'Newest first',
   'buyer.shop.products': 'Products in your Market',
   'buyer.shop.empty': 'No Products to show right now.',
