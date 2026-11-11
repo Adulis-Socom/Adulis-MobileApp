@@ -2012,7 +2012,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false. */
+        /** Available Products first, then unavailable ones, each group in the Seller's display order (MOB-02 R-09; founder ON-026 option A); lean by design (S14). Prices are the ACTIVE Variants' span. Availability is read per page: a Product that changes group mid-browse may repeat (de-duplicate by id) or appear on the next refresh. */
         get: operations["StorefrontController_products"];
         put?: never;
         post?: never;
