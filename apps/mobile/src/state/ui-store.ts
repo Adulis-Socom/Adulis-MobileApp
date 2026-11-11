@@ -1,6 +1,7 @@
 import type { ColorMode } from '@adulis/tokens';
 import { create } from 'zustand';
 
+import type { SaveSurface, SaveTarget } from '../api/client';
 import type { Mode } from '../modes/modes';
 
 export type ThemePreference = 'system' | ColorMode;
@@ -19,6 +20,12 @@ type UiState = {
   locale: Locale;
   /** The UPGRADE_RECOMMENDED notice was dismissed for this app run (not persisted). */
   upgradeNoticeDismissed: boolean;
+  /**
+   * A guest's Save, held for the one sign-in it started (WO-009 S16): completed only by the
+   * verify screen carrying this nonce, then dropped. Never persisted; cleared by clearSession.
+   */
+  pendingSave: { nonce: string; target: SaveTarget; surface: SaveSurface; sceneRef: string | null } | null;
+  setPendingSave: (pending: UiState['pendingSave']) => void;
   setActiveMode: (mode: Mode | null) => void;
   setThemePreference: (preference: ThemePreference) => void;
   setLocale: (locale: Locale) => void;
@@ -34,4 +41,6 @@ export const useUiStore = create<UiState>()((set) => ({
   setThemePreference: (themePreference) => set({ themePreference }),
   setLocale: (locale) => set({ locale }),
   dismissUpgradeNotice: () => set({ upgradeNoticeDismissed: true }),
+  pendingSave: null,
+  setPendingSave: (pendingSave) => set({ pendingSave }),
 }));

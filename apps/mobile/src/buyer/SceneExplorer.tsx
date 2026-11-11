@@ -15,6 +15,7 @@ import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { isPublicRef, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
+import { SaveButton } from './SaveButton';
 
 /** Until the photo reports its own size: the feed's frame. */
 const DEFAULT_ASPECT = 4 / 5;
@@ -133,6 +134,9 @@ function SceneContent({
 
       <AppText>{scene.caption}</AppText>
 
+      {/* The whole Scene, independent of saving any of its Products (WO-009 S10). */}
+      <SaveButton target={{ type: 'SCENE_POST', ref: scene.public_ref }} surface="SCENE_EXPLORER" returnTo={`/scenes/${scene.public_ref}`} />
+
       <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
         {t('buyer.scene.products')}
       </AppText>
@@ -158,6 +162,7 @@ function SceneContent({
                 product={product}
                 number={index + 1}
                 handle={scene.seller.handle}
+                sceneRef={scene.public_ref}
                 mediaOrigin={mediaOrigin}
                 selected={product.slug === selected}
                 onSelect={() => onSelect(product.slug)}
@@ -238,6 +243,7 @@ function ProductRow({
   product,
   number,
   handle,
+  sceneRef,
   mediaOrigin,
   selected,
   onSelect,
@@ -245,6 +251,8 @@ function ProductRow({
   product: SceneProduct;
   number: number;
   handle: string;
+  /** Passed to the Product as `from`: Save provenance the server verifies (WO-009 S11). */
+  sceneRef: string;
   mediaOrigin: string | undefined;
   selected: boolean;
   onSelect: () => void;
@@ -364,7 +372,7 @@ function ProductRow({
               onPress={() =>
                 router.push({
                   pathname: '/product/[handle]/[slug]',
-                  params: { handle, slug: product.slug },
+                  params: { handle, slug: product.slug, from: sceneRef },
                 })
               }
             />

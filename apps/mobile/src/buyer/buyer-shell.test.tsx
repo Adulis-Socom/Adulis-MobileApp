@@ -195,7 +195,7 @@ describe('guest and signed-in destinations', () => {
     await screen.findByText(en['buyer.for_you.empty']);
 
     await fireEvent.press(bottomTab(en['buyer.tab.saved']));
-    expect(await screen.findByText(en['buyer.saved.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.saved.private'])).toBeOnTheScreen();
     await fireEvent.press(bottomTab(en['buyer.tab.orders']));
     expect(await screen.findByText(en['buyer.orders.coming'])).toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.orders.signed_out'])).not.toBeOnTheScreen();

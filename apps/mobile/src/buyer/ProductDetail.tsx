@@ -12,8 +12,9 @@ import { AppText } from '../components/AppText';
 import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
-import { isPathName, usePublicRead } from './public-read';
+import { isPathName, isPublicRef, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
+import { SaveButton } from './SaveButton';
 
 /**
  * The bounded Product read (WO-005, WO-CAT-001): GET /v1/storefronts/{handle}/products/{slug},
@@ -23,14 +24,15 @@ import { ReadStates } from './ReadStates';
  *
  * - The price span and every availability are the SERVER's (the public Catalogue
  *   projection): nothing here derives them from prices or stock counts.
- * - NO PURCHASE, CART, SAVE, ASK SELLER, REVIEWS OR SHARE: none is in scope, so none is
- *   drawn. An unavailable Product says "Currently unavailable" and offers nothing more.
+ * - Save and Add to collection (WO-009): private, never a purchase, a hold or a price freeze.
+ *   NO PURCHASE, CART, ASK SELLER, REVIEWS OR SHARE: none is in scope, so none is drawn. An
+ *   unavailable Product says "Currently unavailable" and can still be saved.
  * - An attribute shows only when the catalogue can say it in words (OVN-075): a code is
  *   never Buyer copy.
  * - Revalidated on opening, on returning from the background and on a pull; a 404 clears it.
  *   Only the opening counts as a view (OVN-073).
  */
-export function ProductDetail({ handle, slug }: { handle: unknown; slug: unknown }) {
+export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: unknown; from?: unknown }) {
   const { api } = useSession();
   const valid = isPathName(handle) && isPathName(slug);
   const read = usePublicRead(
@@ -50,6 +52,8 @@ export function ProductDetail({ handle, slug }: { handle: unknown; slug: unknown
   return (
     <ProductContent
       product={read.value}
+      route={`/product/${handle as string}/${slug as string}`}
+      sceneRef={isPublicRef(from) ? from : null}
       receivedAt={read.receivedAt ?? 0}
       pulling={read.pulling}
       onPull={read.pull}
@@ -59,11 +63,16 @@ export function ProductDetail({ handle, slug }: { handle: unknown; slug: unknown
 
 function ProductContent({
   product,
+  route,
+  sceneRef,
   receivedAt,
   pulling,
   onPull,
 }: {
   product: StorefrontProduct;
+  /** This screen's own path: where a guest's sign-in returns (WO-009 S16). */
+  route: `/product/${string}/${string}`;
+  sceneRef: string | null;
   receivedAt: number;
   pulling: boolean;
   onPull: () => void;
@@ -114,6 +123,7 @@ function ProductContent({
       >
         {availability(product.available)}
       </AppText>
+      <SaveButton target={{ type: 'PRODUCT_POST', ref: product.id }} surface="PRODUCT_DETAIL" sceneRef={sceneRef} returnTo={route} />
       <Pressable
         accessibilityRole="link"
         accessibilityHint={fillSlots(t('buyer.seller.view'), { store: product.seller.store_name }) ?? undefined}

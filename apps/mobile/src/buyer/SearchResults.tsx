@@ -166,7 +166,7 @@ function SearchRow({ item }: { item: SearchItem }) {
 }
 
 /** A Scene in the Scenes grid: image, caption summary, Seller attribution; opens Explore the Scene. */
-function SearchSceneTile({ scene }: { scene: Extract<SearchItem, { type: 'SCENE_POST' }>['payload'] }) {
+export function SearchSceneTile({ scene }: { scene: Extract<SearchItem, { type: 'SCENE_POST' }>['payload'] }) {
   const t = useT();
   const theme = useTheme();
   const router = useRouter();

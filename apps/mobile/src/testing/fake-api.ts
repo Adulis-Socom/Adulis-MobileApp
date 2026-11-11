@@ -24,7 +24,7 @@ export interface Recorded {
 
 export type Reply = { status: number; body?: unknown } | 'offline' | 'hang';
 // A promise lets a test hold a reply and release it later (a response that lands late).
-type Handler = (call: Recorded) => Reply | Promise<Reply>;
+export type Handler = (call: Recorded) => Reply | Promise<Reply>;
 
 export function problem(status: number, code: S['ProblemDto']['code'], group: string, slots?: Record<string, unknown>) {
   return {
@@ -209,11 +209,33 @@ const defaults: Record<string, Handler> = {
   'POST /v1/auth/logout': () => ({ status: 204 }),
   // An empty feed unless a test serves Scenes: no runtime fixture ever reaches the app.
   'GET /v1/fyp': () => ({ status: 200, body: fypPage([]) }),
+  // WO-009: a signed-in Buyer with an empty Saved Collection and nothing saved, unless a test
+  // installs the stateful fake (testing/fake-collections.ts).
+  'GET /v1/collections': () => ({
+    status: 200,
+    body: {
+      default_collection_ref: DEFAULT_COLLECTION_REF,
+      data: [{ ref: DEFAULT_COLLECTION_REF, kind: 'DEFAULT', name: null, product_count: 0, scene_count: 0, created_at: '2026-11-11T08:00:00.000000Z', updated_at: '2026-11-11T08:00:00.000000Z' }],
+      next_cursor: null,
+    },
+  }),
+  'GET /v1/collections/saves': () => ({ status: 200, body: { data: [], next_cursor: null } }),
+  'POST /v1/collections/saved-state:batch': (call) => ({
+    status: 200,
+    body: {
+      default_collection_ref: DEFAULT_COLLECTION_REF,
+      items: ((call.body?.targets ?? []) as Array<{ type: string; ref: string }>).map((t) => ({ ...t, saved: false, default_item_ref: null, memberships: [] })),
+    },
+  }),
 };
+
+export const DEFAULT_COLLECTION_REF = '0c000000-0000-4000-8000-000000000001';
 
 export function installFakeApi() {
   const calls: Recorded[] = [];
   const handlers: Record<string, Handler> = { ...defaults };
+  // Routes with path parameters: a method and a pattern over the path, tried after exact routes.
+  const patterns: Array<{ method: string; pattern: RegExp; handler: Handler }> = [];
   const fetchMock = jest.fn(async (url: string, init: RequestInit = {}): Promise<Response> => {
     const method = init.method ?? 'GET';
     const full = url.startsWith(ORIGIN) ? url.slice(ORIGIN.length) : url;
@@ -226,7 +248,7 @@ export function installFakeApi() {
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined,
     };
     calls.push(call);
-    const handler = handlers[`${method} ${path}`];
+    const handler = handlers[`${method} ${path}`] ?? patterns.find((p) => p.method === method && p.pattern.test(path))?.handler;
     const reply: Reply = handler ? await handler(call) : problem(404, 'NOT_FOUND', 'request');
     if (reply === 'offline') throw new TypeError('Network request failed');
     if (reply === 'hang') return new Promise<Response>(() => undefined);
@@ -241,6 +263,10 @@ export function installFakeApi() {
     /** Replace one route, e.g. on('GET /v1/bootstrap', () => 'offline'). */
     on(route: string, handler: Handler) {
       handlers[route] = handler;
+    },
+    /** A route with path parameters, e.g. onPattern('GET', /^\/v1\/collections\/[^/]+$/, ...). */
+    onPattern(method: string, pattern: RegExp, handler: Handler) {
+      patterns.unshift({ method, pattern, handler });
     },
     callsTo(route: string) {
       return calls.filter((c) => `${c.method} ${c.path}` === route);

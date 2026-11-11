@@ -41,6 +41,13 @@ export default function BuyerLayout() {
         options={{ headerShown: true, title: t('buyer.seller.title') }}
         dangerouslySingular={(_name, params) => String(params.handle)}
       />
+      {/* WO-009: one private Collection (its title is set by the screen), and the Add to collection picker. */}
+      <Stack.Screen
+        name="collections/[collectionRef]"
+        options={{ headerShown: true, title: '' }}
+        dangerouslySingular={(_name, params) => String(params.collectionRef)}
+      />
+      <Stack.Screen name="save-to" options={{ headerShown: true, title: t('buyer.save.picker_title'), presentation: 'modal' }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: true, title: t('auth.sign_in') }} />
       <Stack.Screen name="auth/verify" options={{ headerShown: true, title: t('auth.verify.title') }} />
     </Stack>

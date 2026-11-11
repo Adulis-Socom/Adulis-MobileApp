@@ -6,7 +6,7 @@ import { useBootstrap } from '../../../api/bootstrap';
 import { ApiError, newIdempotencyKey, wasAnswered } from '../../../api/client';
 import { failureMessage } from '../../../api/messages';
 import { useSession } from '../../../auth/session';
-import { cleanPhone, isE164, parseReturnTo } from '../../../auth/sign-in-flow';
+import { cleanPhone, isE164, parseReturnTo, parseSaveNonce } from '../../../auth/sign-in-flow';
 import { AppText } from '../../../components/AppText';
 import { Button } from '../../../components/Button';
 import { Screen } from '../../../components/Screen';
@@ -23,8 +23,10 @@ import { useT } from '../../../i18n/i18n';
 export default function SignIn() {
   const t = useT();
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string; save?: string }>();
   const returnTo = parseReturnTo(params.returnTo);
+  // A guest Save's continuation (WO-009 S16), passed on untouched: verify decides what it means.
+  const save = parseSaveNonce(params.save);
   const { session, api, setOtpPhone } = useSession();
   const boot = useBootstrap();
   const [phone, setPhone] = useState('');
@@ -50,7 +52,7 @@ export default function SignIn() {
       await api.requestOtp(cleaned, intent.current.key);
       intent.current = null;
       setOtpPhone(cleaned);
-      router.push({ pathname: '/auth/verify', params: { phone: cleaned, returnTo } });
+      router.push({ pathname: '/auth/verify', params: { phone: cleaned, returnTo, ...(save ? { save } : {}) } });
     } catch (failure) {
       if (wasAnswered(failure)) intent.current = null;
       if (!(failure instanceof ApiError)) console.warn('[sign-in] request failed:', failure instanceof Error ? failure.message : 'unknown error');

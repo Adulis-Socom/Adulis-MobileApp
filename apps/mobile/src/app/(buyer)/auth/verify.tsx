@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform } from 'react-native';
@@ -5,7 +6,8 @@ import { AccessibilityInfo, KeyboardAvoidingView, Platform } from 'react-native'
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered, type OtpVerifyBody } from '../../../api/client';
 import { failureMessage, fillSlots } from '../../../api/messages';
 import { useSession } from '../../../auth/session';
-import { isOtpCode, parseReturnTo } from '../../../auth/sign-in-flow';
+import { isOtpCode, parseReturnTo, parseSaveNonce } from '../../../auth/sign-in-flow';
+import { completePendingSave } from '../../../buyer/saved';
 import { AppText } from '../../../components/AppText';
 import { Button } from '../../../components/Button';
 import { Checkbox } from '../../../components/Checkbox';
@@ -32,8 +34,10 @@ export default function Verify() {
   const t = useT();
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ phone?: string; returnTo?: string }>();
+  const params = useLocalSearchParams<{ phone?: string; returnTo?: string; save?: string }>();
   const returnTo = parseReturnTo(params.returnTo);
+  const save = parseSaveNonce(params.save);
+  const queryClient = useQueryClient();
   const phone = typeof params.phone === 'string' ? params.phone : '';
   const navigation = useNavigation();
   const { session, api, deviceId, signIn, otpPhone, setOtpPhone } = useSession();
@@ -70,7 +74,7 @@ export default function Verify() {
   // Only for a code this app run asked for: a phone in a link (cold or not) is no proof, so a
   // link alone never shows the form or reaches Send a new code. The form stays while signing in.
   if (otpPhone !== phone && !completing.current) {
-    return <Redirect href={{ pathname: '/auth/sign-in', params: { returnTo } }} />;
+    return <Redirect href={{ pathname: '/auth/sign-in', params: { returnTo, ...(save ? { save } : {}) } }} />;
   }
 
   const verify = async () => {
@@ -100,6 +104,8 @@ export default function Verify() {
       completing.current = true;
       await signIn(verified.token);
       AccessibilityInfo.announceForAccessibility(t('auth.signed_in'));
+      // The guest's Save, in this new session only; it re-checks the target and never blocks the return.
+      void completePendingSave(api, queryClient, save);
       router.dismissTo(returnTo);
     } catch (failure) {
       completing.current = false;

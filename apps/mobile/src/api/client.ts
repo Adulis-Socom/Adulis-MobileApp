@@ -49,6 +49,16 @@ export type ShopProduct = ShopProductPage['data'][number];
 export type SearchPage = Json<paths['/v1/search']['get']['responses'][200]>;
 export type SearchItem = SearchPage['items'][number];
 export type SearchType = SearchPage['type'];
+export type CollectionPage = Json<paths['/v1/collections']['get']['responses'][200]>;
+export type Collection = CollectionPage['data'][number];
+export type CollectionDetail = Json<paths['/v1/collections/{collectionRef}']['get']['responses'][200]>;
+export type CollectionItem = CollectionDetail['data'][number];
+export type SavedItemPage = Json<paths['/v1/collections/saves']['get']['responses'][200]>;
+export type SavedState = Json<paths['/v1/collections/saved-state:batch']['post']['responses'][200]>;
+export type AddItemBody = Json<paths['/v1/collections/{collectionRef}/items']['post']['requestBody']>;
+export type SaveTarget = AddItemBody['target'];
+export type SaveSurface = AddItemBody['source_surface'];
+export type ItemFilter = 'ALL' | SaveTarget['type'];
 
 export type ApiFailure =
   | { kind: 'offline' }
@@ -137,7 +147,7 @@ async function readProblem(res: Response): Promise<Problem | null> {
 }
 
 export function createApiClient(deps: ApiDeps) {
-  async function call<T>(method: 'GET' | 'POST', path: keyof paths, init: Call): Promise<T> {
+  async function call<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: keyof paths, init: Call): Promise<T> {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'X-Adulis-Client': CLIENT_HEADER,
@@ -283,6 +293,37 @@ export function createApiClient(deps: ApiDeps) {
         query: { q, type, cursor: cursor ?? undefined, limit: type === 'TOP' ? undefined : '20' },
         ok: 200,
       }),
+
+    /**
+     * Private Buyer Collections (WO-009). Signed in only; the owner is the bearer's Account. The
+     * server creates the DEFAULT ("Saved") Collection on first need and names it in every list.
+     */
+    collections: (cursor: string | null) =>
+      call<CollectionPage>('GET', '/v1/collections', { query: { cursor: cursor ?? undefined, limit: '50' }, ok: 200 }),
+    createCollection: (name: string, idempotencyKey: string) =>
+      call<Collection>('POST', '/v1/collections', { body: { name }, idempotencyKey, ok: 201 }),
+    collection: (collectionRef: string, type: ItemFilter, cursor: string | null) =>
+      call<CollectionDetail>('GET', '/v1/collections/{collectionRef}', {
+        params: { collectionRef },
+        query: { type, cursor: cursor ?? undefined, limit: '30' },
+        ok: 200,
+      }),
+    renameCollection: (collectionRef: string, name: string) =>
+      call<Collection>('PATCH', '/v1/collections/{collectionRef}', { params: { collectionRef }, body: { name }, ok: 200 }),
+    deleteCollection: (collectionRef: string) =>
+      call<void>('DELETE', '/v1/collections/{collectionRef}', { params: { collectionRef }, ok: 204 }),
+    /** Recent Saves across every Collection, each target once, newest first. */
+    savedItems: (type: ItemFilter, cursor: string | null) =>
+      call<SavedItemPage>('GET', '/v1/collections/saves', { query: { type, cursor: cursor ?? undefined, limit: '30' }, ok: 200 }),
+    /** The key is the Save intent's own: a retry of the same tap reuses it. */
+    addToCollection: (collectionRef: string, body: AddItemBody, idempotencyKey: string) =>
+      call<CollectionItem>('POST', '/v1/collections/{collectionRef}/items', { params: { collectionRef }, body, idempotencyKey, ok: 201 }),
+    /** Idempotent: removing an absent membership succeeds. */
+    removeFromCollection: (collectionRef: string, itemRef: string) =>
+      call<void>('DELETE', '/v1/collections/{collectionRef}/items/{itemRef}', { params: { collectionRef, itemRef }, ok: 204 }),
+    /** One request for up to 60 targets (a read: no Idempotency-Key). */
+    savedState: (targets: SaveTarget[]) =>
+      call<SavedState>('POST', '/v1/collections/saved-state:batch', { body: { targets }, ok: 200 }),
 
     /** POST /v1/devices. The key is the registration intent's own UUIDv7, never the device id. */
     registerDevice: (id: string, idempotencyKey: string) => {

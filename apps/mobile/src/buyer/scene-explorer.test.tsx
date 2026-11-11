@@ -90,7 +90,7 @@ const PURCHASE_AND_ENGAGEMENT = [
   'Buy now',
   'Checkout',
   'Order',
-  'Save',
+  // Save is in scope since WO-009 (private Collections, no purchase semantics): saved.test.tsx.
   'Share',
   'Like',
   'Reviews',

@@ -108,6 +108,7 @@ export function SessionProvider({
     token.current = null;
     queryClient.clear();
     useUiStore.getState().setActiveMode(null);
+    useUiStore.getState().setPendingSave(null);
     setSession({ status: 'signedOut' });
   }, [queryClient]);
 

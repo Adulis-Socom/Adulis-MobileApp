@@ -252,7 +252,7 @@ describe('sign in', () => {
     // The authenticated bootstrap follows at once, with the bearer: no restart needed.
     await waitFor(() => expect(api.callsTo('GET /v1/bootstrap').at(-1)?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`));
     await fireEvent.press(bottomTab(en['buyer.tab.saved']));
-    expect(await screen.findByText(en['buyer.saved.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.saved.private'])).toBeOnTheScreen();
     await fireEvent.press(bottomTab(en['buyer.tab.you']));
     expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
   });
@@ -320,7 +320,7 @@ describe('verify needs a code this app run asked for', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
     await screen.findByLabelText(en['auth.code.label']);
     await enterCode();
-    expect(await screen.findByText(en['buyer.saved.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.saved.private'])).toBeOnTheScreen();
   });
 
   it('an unsafe returnTo on a cold Verify link becomes You', async () => {
