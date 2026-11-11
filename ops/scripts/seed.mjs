@@ -222,6 +222,14 @@ try {
      WHERE NOT EXISTS (SELECT 1 FROM core.ladder_config WHERE market_id = $1)`,
     [M],
   );
+  // WO-010: the founder-approved launch categories (migration 0062), enabled in this fixture Market.
+  // A real Market enables them in ops/runbooks/activate-market.md ("Launch categories").
+  await client.query(
+    `INSERT INTO core.category_market_availability (category_id, market_id, is_available)
+     SELECT c.id, $1, true FROM core.category c WHERE c.code IN ('FASHION', 'COSMETICS', 'ELECTRONICS')
+     ON CONFLICT (category_id, market_id) DO UPDATE SET is_available = true`,
+    [M],
+  );
   // follower_threshold NULL: PRD S4.1 -- no threshold during the beta.
   await client.query(
     `INSERT INTO core.eligibility_config (id, market_id, audience_required,

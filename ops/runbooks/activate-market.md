@@ -240,6 +240,32 @@ SELECT m.code, count(a.*) AS attempts_today,
 Then request an OTP on a real handset in that country. **Item 10 of the checklist is not
 "a test SMS was accepted by the API" — it is "a message arrived on a phone."**
 
+### Step 6 — launch categories (WO-010)
+
+The founder approved three top-level categories for the Ethiopia launch: Fashion, Cosmetics
+and Electronics (ON-20261111-049). Migration 0062 creates them for every environment; a Market
+offers them only once enabled here. For the Addis Ababa launch Market, with its own code in
+place of `XX`:
+
+```sql
+INSERT INTO core.category_market_availability (category_id, market_id, is_available)
+SELECT c.id, m.id, true
+  FROM core.category c CROSS JOIN core.market m
+ WHERE c.code IN ('FASHION', 'COSMETICS', 'ELECTRONICS') AND m.code = 'XX'
+ON CONFLICT (category_id, market_id) DO UPDATE SET is_available = true;
+
+SELECT c.code, a.is_available FROM core.category_market_availability a
+  JOIN core.category c ON c.id = a.category_id JOIN core.market m ON m.id = a.market_id
+ WHERE m.code = 'XX' ORDER BY c.display_order;
+```
+
+Idempotent for enabling: running it again leaves the three enabled -- including one an
+operator has since disabled, so do not re-run it to keep a category off. Enable a category in
+another Market only when
+that Market is authorised for it -- never all Markets at once. Disabling one
+(`is_available = false`) hides it from `GET /v1/categories`, refuses it as a Shop or Search
+filter and as a new Product category; Products already assigned keep it.
+
 ---
 
 ## Suspending a market
