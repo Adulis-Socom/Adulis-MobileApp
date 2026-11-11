@@ -1,0 +1,22 @@
+# WO-007A -- Founder Decisions of 11 November 2026
+
+Source: the founder's WO-007A work order (11 November 2026), which approves all eight
+recommendations of the November 11 morning review. These decisions are authoritative. This record
+separates the policy (approved) from its implementation (what WO-007A did, and what remains).
+
+Issue register: `docs/overnight/OVERNIGHT-ISSUES-2026-11-11.md`.
+
+| Register | Decision (verbatim intent) | Policy | Implementation in WO-007A | Still required |
+|---|---|---|---|---|
+| ON-20261111-009 | A Market's display currency becomes fixed once Products exist in that Market. Ordinary administrative changes are rejected. An exceptional change needs a controlled, explicitly authorised migration/repricing procedure. No automatic conversion. | APPROVED | DONE: migration `0059_market_currency_fixed.sql` refuses a `display_currency` change on a Market with any Product (23514 `market_currency_fixed_with_products`), race-safe against a concurrent first Product; a Market with no Product may still change. | The exceptional repricing procedure itself is not designed (no work order). |
+| ON-20261111-010 | Alternative 2: Catalogue availability and Checkout readiness are separate. A Product can stay discoverable while Seller-level Checkout prerequisites are unsatisfied; Checkout validates its own requirements before an Order exists. Scene visibility does not depend on unrelated payout or operational conditions. | APPROVED | Already the behaviour (WO-CAT-001/001A): item availability excludes Checkout prerequisites. Nothing changed. | Checkout's independent validation belongs to the Checkout work order (not built). |
+| ON-20261111-023 | Keep `/sellers/[handle]` (avoids the Seller Companion's `/seller`). Universal-link standardisation is a separate cross-surface task. | APPROVED | Already the route (WO-006). Nothing changed. | Universal-link standardisation (separate task). |
+| ON-20261111-026 | The Seller Profile Products tab shows available Products first, deterministic within each group, without unsafe pagination. | APPROVED | NOT IMPLEMENTED: no stateless keyset can page a list sorted by a value that changes between pages with neither a repeat nor a gap (proof and options in `WO-007A-DISCOVERY-STABILIZATION.md` S11). The current truthful order (the Seller's display order) is kept, as the work order directs. | A founder choice between the two options recorded in S11. |
+| ON-20261111-033 | Only Reviews supported by an authoritative verified evidence basis (FINAL_HANDOFF, VERIFIED_ORDER_FAILURE) may appear publicly or count in public averages. Unverified history is kept. A legacy badge is not proof. Failure feedback is Seller service, never Product quality. | APPROVED | DONE, fail closed: migration `0058` adds `core.v_review_public`, the one projection the reviews list and the header summary read. The executable system has no authoritatively verified payment (K-1), so no Review is public today; every stored Review is kept. | Verified payment (WO-PAY-001), OTP/Manual receipt, the REV-01 grant write path, Review moderation (ON-20261111-029) and Claim correction lineage before any Review can be public. |
+| ON-20261111-037 | Accept Product creation timestamps inside opaque, validated, resource-scoped cursors for MVP. No encryption only to hide them. | APPROVED | Already the behaviour (WO-006 cursors validated and resource-scoped). Nothing changed. | None. |
+| ON-20261111-049 | Initial top-level commerce category groups: Fashion, Cosmetics, Electronics. Definitions, subcategories, labels, localisation, Market enablement and classification come from the Catalogue taxonomy workstream. Locally Made, Discounts and New Drops need their own membership rules. | APPROVED DIRECTION | Recorded only. No category, module or arbitrary assignment was built (as directed). | The Catalogue taxonomy work order; membership rules for the three modules. |
+| ON-20261111-050 | Keep Newest first (`published_at DESC, id DESC`) as the initial Market-wide Shop order. No personalisation, paid ranking or unapproved recommendation. | APPROVED | Already the behaviour (WO-007). Nothing changed. | None. |
+
+No decision above needs further legal or privacy authorisation for what WO-007A built. The Review
+moderation workflow (ON-20261111-029) needs an Operator capability and policy that do not exist;
+that is a product and authorisation question, recorded there.
