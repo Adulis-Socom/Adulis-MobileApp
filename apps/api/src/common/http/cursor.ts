@@ -11,13 +11,14 @@ import { AdulisException } from '../errors/adulis-exception';
  *   inside that millisecond at a page boundary.
  * - `ref` / `slug`: the public tiebreakers (a Scene public_ref, a Product slug), so no internal
  *   UUID travels in a list URL (doctrine 5). `uuid` only where the id is already public.
+ * - `bit`: 0 or 1 exactly (a two-phase list's phase, WO-007B).
  */
-export type CursorPart = 'timestamp' | 'uuid' | 'int' | 'ref' | 'slug';
+export type CursorPart = 'timestamp' | 'uuid' | 'int' | 'ref' | 'slug' | 'bit';
 
 /** to_char format (bound as a parameter) rendering a timestamptz for a cursor: UTC, microseconds. */
 export const CURSOR_TS = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
 
-const PATTERNS: Record<Exclude<CursorPart, 'int'>, RegExp> = {
+const PATTERNS: Record<Exclude<CursorPart, 'int' | 'bit'>, RegExp> = {
   timestamp: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/,
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   ref: /^[A-Za-z0-9_-]{22}$/,
@@ -44,6 +45,10 @@ export function decodeCursor(raw: string | undefined, shape: readonly CursorPart
   if (!Array.isArray(parsed) || parsed.length !== shape.length) throw invalid();
   return parsed.map((value: unknown, i) => {
     const kind = shape[i]!;
+    if (kind === 'bit') {
+      if (value === 0 || value === 1) return value;
+      throw invalid();
+    }
     if (kind === 'int') {
       // int columns: anything outside int4 would make Postgres refuse the cast (a 500).
       if (typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647) {

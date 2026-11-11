@@ -251,7 +251,7 @@ export class StorefrontController {
   @Public()
   @ApiOperation({
     summary:
-      "Seller's display order is the default (S7.5); lean by design (S14). Prices are the ACTIVE Variants' span; unavailable Products stay listed with available=false.",
+      "Available Products first, then unavailable ones, each group in the Seller's display order (MOB-02 R-09; founder ON-026 option A); lean by design (S14). Prices are the ACTIVE Variants' span. Availability is read per page: a Product that changes group mid-browse may repeat (de-duplicate by id) or appear on the next refresh.",
   })
   @ApiParam({ name: 'handle', description: 'The Seller public handle.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page (opaque).' })
@@ -268,39 +268,58 @@ export class StorefrontController {
     // The answer depends on the requester's Market and is read now: never shared-cached, its
     // 404 included (set before anything can throw).
     res.setHeader('Cache-Control', 'no-store');
-    // The Seller's display order, as before, with a stable tiebreak so pages never overlap or
-    // skip (WO-006): (display_order, created_at, slug). The slug, not the id, keeps internal
-    // UUIDs out of the list URL.
+    // Two-phase keyset (WO-007B, founder ON-026 option A): phase 0 = available, 1 = unavailable,
+    // then the Seller's display order with the WO-006 tiebreak (display_order, created_at, slug).
+    // One statement per page; availability is the public projection's, read now, so the phase
+    // boundary is crossed inside one snapshot. No snapshot is stored: a Product that changes
+    // group between pages may come again (the client de-duplicates by id) or show on the next
+    // refresh -- the accepted limit. The cursor positions within whichever Seller the handle
+    // resolves to in the requester's Market, so it can never reach another Seller's Products.
+    // The slug, not the id, keeps internal UUIDs out of the list URL.
     const limit = pageLimit(limitRaw, 100, 100);
-    const after = decodeCursor(cursor, ['int', 'timestamp', 'slug']);
+    const after = decodeCursor(cursor, ['bit', 'int', 'timestamp', 'slug']);
     return this.tx.run(req, async (trx) => {
       const seller = await this.sellerByHandle(trx, req, handle);
       const r = await sql<
-        ProductSummaryRow & { display_order: number; image_key: string | null; created_key: string }
+        ProductSummaryRow & { display_order: number; image_key: string | null; created_key: string; phase: number }
       >`
-        SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
-               p.display_order,
-               to_char(p.created_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS created_key,
-               (SELECT i.card_key FROM core.product_image i
-                 WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) AS image_key,
-               pp.price_min_minor, pp.price_max_minor, pp.price_currency,
-               ${productAvailable} AS available
-          FROM core.product p
-          JOIN core.seller s ON s.id = p.seller_id
-          JOIN core.market m ON m.id = p.market_id
-         CROSS JOIN ${publicPrice}
-         WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
-           AND (${after === null}
-                OR (p.display_order, p.created_at, p.slug)
-                   > (${after?.[0] ?? 0}::int, ${after?.[1] ?? null}::timestamptz, ${after?.[2] ?? ''}::text))
-         ORDER BY p.display_order, p.created_at, p.slug
+        SELECT q.* FROM (
+          SELECT p.id, p.slug, p.name, p.base_price_minor, p.base_price_currency,
+                 p.display_order, p.created_at,
+                 to_char(p.created_at AT TIME ZONE 'UTC', ${CURSOR_TS}) AS created_key,
+                 pp.price_min_minor, pp.price_max_minor, pp.price_currency,
+                 ${productAvailable} AS available,
+                 CASE WHEN ${productAvailable} THEN 0 ELSE 1 END AS phase
+            FROM core.product p
+            JOIN core.seller s ON s.id = p.seller_id
+            JOIN core.market m ON m.id = p.market_id
+           CROSS JOIN ${publicPrice}
+           WHERE p.seller_id = ${seller.id} AND p.visibility = 'PUBLISHED'
+        ) q
+         WHERE (${after === null}
+                OR (q.phase, q.display_order, q.created_at, q.slug)
+                   > (${after?.[0] ?? 0}::int, ${after?.[1] ?? 0}::int, ${after?.[2] ?? null}::timestamptz, ${after?.[3] ?? ''}::text))
+         ORDER BY q.phase, q.display_order, q.created_at, q.slug
          LIMIT ${limit + 1}`.execute(trx);
       const page = r.rows.slice(0, limit);
+      // The first image's card key for the page's rows only, in one statement.
+      const images = await sql<{ product_id: string; card_key: string }>`
+        SELECT DISTINCT ON (i.product_id) i.product_id, i.card_key
+          FROM core.product_image i
+         WHERE i.product_id = ANY(${page.map((row) => row.id)}::uuid[])
+         ORDER BY i.product_id, i.position`.execute(trx);
+      const imageOf = new Map(images.rows.map((i) => [i.product_id, i.card_key]));
       const last = page[page.length - 1];
       return {
-        data: page.map((row) => ({ ...summary(row), display_order: row.display_order, image_key: row.image_key })),
+        data: page.map((row) => ({
+          ...summary(row),
+          display_order: row.display_order,
+          image_key: imageOf.get(row.id) ?? null,
+        })),
         next_cursor:
-          r.rows.length > limit && last ? encodeCursor([last.display_order, last.created_key, last.slug]) : null,
+          r.rows.length > limit && last
+            ? encodeCursor([last.phase, last.display_order, last.created_key, last.slug])
+            : null,
       };
     });
   }
