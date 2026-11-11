@@ -2,7 +2,8 @@
 # PUBLISHED Products newest first under an honest label, with the server's price span and
 # availability; a tile opens the Product, its Seller line the Seller Profile, and Back returns
 # to the Shop where it was; scrolling pages by the server cursor to the end. No categories, sort,
-# filter, Search entry of its own, or cart.
+# filter, Search entry of its own, or cart. WO-007A (ON-048): every tile's Seller line reads
+# "Sold by <store>" in words, including cells FlashList recycled while scrolling.
 #
 # Needs the WO-CAT-001 native fixtures (Seller "Fixture Weaves": Woven basket 900.00-1,200.00,
 # Cotton scarf out of stock, Clay cup 350.00, Coffee tray 1,500.00, published in that order) plus
@@ -24,10 +25,14 @@ tags:
 - extendedWaitUntil:
     visible: For You Scenes
     timeout: 120000
-- tapOn: Shop
-- extendedWaitUntil:
-    visible: Newest first
-    timeout: 30000
+# Right after a font-scale change the first tab tap can be swallowed (Android): tap until it lands.
+- repeat:
+    while:
+      notVisible: Newest first
+    times: 5
+    commands:
+      - tapOn: Shop
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: 'Coffee tray, .*1,500\.00, Available'
     timeout: 30000
@@ -37,13 +42,16 @@ tags:
 - assertNotVisible: Fashion
 - assertNotVisible: Add to cart
 - assertNotVisible: Filter
+- assertVisible: Sold by Fixture Weaves
 - takeScreenshot: shop-01-grid
 
 # A Product opens the Product; Back returns to the Shop.
 - tapOn: 'Coffee tray, .*'
 - extendedWaitUntil:
-    visible: Sold by Fixture Weaves
+    visible:
+      id: product-seller
     timeout: 30000
+- assertVisible: Sold by Fixture Weaves
 - takeScreenshot: shop-02-product
 - back
 - extendedWaitUntil:
@@ -70,6 +78,8 @@ tags:
     element: 'Shop item 01, .*101\.00, Available'
     direction: DOWN
     timeout: 90000
+# Recycled cells still carry the worded Seller cue.
+- assertVisible: Sold by Fixture Pottery
 - scrollUntilVisible:
     element: That is everything for now\.
     direction: DOWN
@@ -79,8 +89,10 @@ tags:
 # Back from a Product deep in the list (the other Seller's) keeps the place.
 - tapOn: 'Shop item 01, .*'
 - extendedWaitUntil:
-    visible: Sold by Fixture Pottery
+    visible:
+      id: product-seller
     timeout: 30000
+- assertVisible: Sold by Fixture Pottery
 - back
 - extendedWaitUntil:
     visible: 'Shop item 01, .*'

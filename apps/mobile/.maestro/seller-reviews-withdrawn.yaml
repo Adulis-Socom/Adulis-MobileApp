@@ -1,0 +1,24 @@
+# Run right after seller-reviews-verified.yaml, with the payment stand-in switched OFF in between
+# (wo007a-payment.mjs off): the same profile, re-read by a pull, now has no public review -- the
+# list and the summary change together, and no earlier review stays on screen.
+#
+#   maestro test .maestro/seller-reviews-withdrawn.yaml
+appId: com.adulis.app
+name: Buyer Seller Reviews (evidence withdrawn)
+tags:
+  - buyer
+  - seller
+  - reviews
+---
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible: No reviews yet\.
+    timeout: 30000
+- assertVisible: No reviews yet
+- assertNotVisible: Order never arrived 27
+- assertNotVisible: 'Seller service: .*'
+- takeScreenshot: reviews-04-withdrawn

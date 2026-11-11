@@ -1,0 +1,81 @@
+# Buyer Seller Profile Reviews (WO-007A, ON-033) against the real local API: only reviews with a
+# verified evidence basis are public, labelled by that basis, counted and averaged exactly as
+# listed, and paged by the server cursor (25 per page).
+#
+# Needs the WO-CAT-001, WO-006 and WO-007 native fixtures plus wo007a-fixtures (27 Fixture Weaves
+# reviews with real receipt or upheld-Claim evidence: 25 x FINAL_HANDOFF, 2 x
+# VERIFIED_ORDER_FAILURE; ratings average 4.0) AND the payment stand-in ON (wo007a-payment.mjs on):
+# the executable system has no verified payment yet (K-1), so without it nothing is public. The
+# three WO-006 reviews are UNVERIFIED and must never appear.
+#
+#   maestro test .maestro/seller-reviews-verified.yaml
+appId: com.adulis.app
+name: Buyer Seller Reviews (verified evidence)
+tags:
+  - buyer
+  - seller
+  - reviews
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
+# Right after a font-scale change the first tab tap can be swallowed (Android): tap until it lands.
+- repeat:
+    while:
+      notVisible: Newest first
+    times: 5
+    commands:
+      - tapOn: Shop
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*'
+    timeout: 30000
+- tapOn:
+    id: product-tile-seller
+    index: 0
+- extendedWaitUntil:
+    visible: '@fixture-weaves'
+    timeout: 30000
+# 108 / 27 = 4.0: the public summary is the listed population.
+- assertVisible: 'Seller service: 4 out of 5 from 27 reviews'
+- tapOn: Reviews
+- extendedWaitUntil:
+    visible: Order never arrived 27
+    timeout: 30000
+- assertVisible: Verified paid order with an upheld Seller fault
+- assertVisible: Reviews rate the Seller's service\. Product quality is shown on each Product\.
+- takeScreenshot: reviews-01-top
+- scrollUntilVisible:
+    element: Verified review 24
+    direction: DOWN
+    timeout: 30000
+- assertVisible: Verified order, received with Adulis Handoff
+- takeScreenshot: reviews-02-final-handoff
+# Page 2 by the server cursor, to the end; the unverified reviews (the oldest) never follow.
+- scrollUntilVisible:
+    element: Verified review 01
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element: That is everything for now\.
+    direction: DOWN
+    timeout: 30000
+- assertNotVisible: 'Quick replies and the basket was exactly as shown\.'
+- assertNotVisible: 'Collected at the workshop, friendly service\.'
+- assertNotVisible: Unverified
+- takeScreenshot: reviews-03-end
+# A pull re-reads the same population.
+- scrollUntilVisible:
+    element: '@fixture-weaves'
+    direction: UP
+    timeout: 60000
+- swipe:
+    direction: DOWN
+- extendedWaitUntil:
+    visible: Order never arrived 27
+    timeout: 30000
+- assertVisible: 'Seller service: 4 out of 5 from 27 reviews'

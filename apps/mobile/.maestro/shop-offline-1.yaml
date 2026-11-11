@@ -1,0 +1,25 @@
+# Shop initialisation (WO-007A, ON-043), part 1: a clean install starts while the API cannot be
+# reached (the harness stops it), so device registration and bootstrap fail. The Shop says the
+# connection failed and offers a retry -- never "No Products". The harness then starts the API.
+#
+#   maestro test .maestro/shop-offline-1.yaml
+appId: com.adulis.app
+name: Shop offline (1 of 2)
+tags:
+  - buyer
+  - shop
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: Shop
+    timeout: 120000
+- tapOn: Shop
+- extendedWaitUntil:
+    visible: You are offline\. Check your connection and try again\.
+    timeout: 60000
+- assertVisible: Try again
+- assertNotVisible: No Products to show right now\.
+- takeScreenshot: shop-offline-01

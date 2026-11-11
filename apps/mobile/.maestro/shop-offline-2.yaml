@@ -1,0 +1,16 @@
+# Shop initialisation (WO-007A, ON-043), part 2: the API is reachable again; the retry registers
+# the device, bootstraps and reads the Shop.
+#
+#   maestro test .maestro/shop-offline-2.yaml
+appId: com.adulis.app
+name: Shop offline (2 of 2)
+tags:
+  - buyer
+  - shop
+---
+- tapOn: Try again
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*1,500\.00, Available'
+    timeout: 60000
+- assertNotVisible: You are offline\. Check your connection and try again\.
+- takeScreenshot: shop-offline-02-recovered

@@ -1,0 +1,24 @@
+# Shop initialisation (WO-007A, ON-043), part 2: with no Market for the device the Shop says so
+# with a retry -- never "No Products", never another Market's Products. The retry runs bootstrap
+# again (which places the device in its Market) and reads the Shop again.
+#
+#   maestro test .maestro/shop-no-market-2.yaml
+appId: com.adulis.app
+name: Shop without a Market (2 of 2)
+tags:
+  - buyer
+  - shop
+---
+- tapOn: Shop
+- extendedWaitUntil:
+    visible: The Shop could not find your Market\. Try again\.
+    timeout: 30000
+- assertNotVisible: No Products to show right now\.
+- assertNotVisible: '.*5,000\.00.*'
+- takeScreenshot: shop-no-market-01
+- tapOn: Try again
+- extendedWaitUntil:
+    visible: 'Coffee tray, .*1,500\.00, Available'
+    timeout: 30000
+- assertNotVisible: The Shop could not find your Market\. Try again\.
+- takeScreenshot: shop-no-market-02-recovered

@@ -1,0 +1,18 @@
+# Shop initialisation (WO-007A, ON-043), part 1: a clean install registers its device and opens
+# Home. Between part 1 and part 2 the harness clears that device's Market in the disposable
+# database (core.device.market_id = NULL), as an incomplete registration would leave it.
+#
+#   maestro test .maestro/shop-no-market-1.yaml
+appId: com.adulis.app
+name: Shop without a Market (1 of 2)
+tags:
+  - buyer
+  - shop
+---
+- launchApp:
+    clearState: true
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: For You Scenes
+    timeout: 120000
