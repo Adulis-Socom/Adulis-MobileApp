@@ -1,7 +1,7 @@
 import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-import { ApiError, isTransient, problemCode } from '../api/client';
+import { ApiError, isTransient, problemCode, type ApiFailure } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { hasMessage } from '../i18n/i18n';
@@ -124,7 +124,9 @@ export function acceptedMessage(body: unknown): boolean {
  * What a message send that did not return an accepted message proves (WO-022; review S21-03), for
  * the Buyer's messages and a store's replies alike:
  *
- * - `refused`: the API answered with its own problem (`{ code, ... }`, any status). The outcome is
+ * - `refused`: the API answered with its own problem: the contract's envelope (ProblemDto's required
+ *   `title_key`, `request_id`, `retryable`, and a `status` equal to the HTTP status), any status. A
+ *   gateway's `{ code }` alone is not one (review S22-01). The outcome is
  *   known: the message was not stored, or the server keeps that refusal against the key, which a
  *   replay would only repeat. The intent ends; the next attempt gets a new key.
  * - `unknown`: anything else. That covers a lost connection, a timeout, a gateway's answer without
@@ -136,7 +138,25 @@ export function acceptedMessage(body: unknown): boolean {
  * Chat sends only: every other mutation keeps the shared `wasAnswered`.
  */
 export function sendOutcome(failure: unknown): 'refused' | 'unknown' {
-  return failure instanceof ApiError && failure.failure.kind === 'problem' ? 'refused' : 'unknown';
+  return failure instanceof ApiError && isApiProblem(failure.failure) ? 'refused' : 'unknown';
+}
+
+function isApiProblem(f: ApiFailure): boolean {
+  if (f.kind !== 'problem') return false;
+  const p = f.problem as { title_key?: unknown; request_id?: unknown; retryable?: unknown; status?: unknown };
+  return typeof p.title_key === 'string' && typeof p.request_id === 'string' && typeof p.retryable === 'boolean' && p.status === f.status;
+}
+
+/**
+ * Whether to read the conversation again after a failed send: always when the outcome is unknown,
+ * and after a refusal that may still sit beside a stored message (a 5xx or a conflict on the key)
+ * or that may mean the conversation is gone (404). The re-read shows what the server holds before
+ * the person sends anything new (review S22-01).
+ */
+export function rereadAfter(failure: unknown): boolean {
+  if (sendOutcome(failure) === 'unknown') return true;
+  const f = (failure as ApiError).failure as Extract<ApiFailure, { kind: 'problem' }>;
+  return f.status >= 500 || f.status === 409 || f.problem.code === 'NOT_FOUND';
 }
 
 /** The only catalogue namespace a bot message may render from (CHATBOT-01: no model prose). */

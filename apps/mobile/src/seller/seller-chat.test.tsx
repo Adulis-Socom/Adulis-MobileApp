@@ -748,14 +748,17 @@ describe('WO-022 store replies on the shared outcome rule', () => {
     return { s, c };
   }
   /** Stores each key once; the first answers (in order) are lost on the way back. */
+  /** The API's own problem answer (its envelope carries request_id): a refusal, which stores nothing. */
+  const refuses = (r: Reply | undefined) => typeof r === 'object' && typeof (r.body as { request_id?: unknown } | undefined)?.request_id === 'string';
   function storing(s: ReturnType<typeof installServer>, c: Conv, lost: Reply[]) {
     const stored = new Map<string, string>();
     let attempt = 0;
     api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
       if (header(call) !== A.id) return problem(404, 'NOT_FOUND', 'request');
       const key = call.headers['Idempotency-Key']!;
-      if (!stored.has(key)) stored.set(key, s.msg(c, { sender_kind: 'SELLER', body: String(call.body?.text), sent_at: new Date().toISOString() }).id);
-      return lost[attempt++] ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
+      const reply = lost[attempt++];
+      if (!refuses(reply) && !stored.has(key)) stored.set(key, s.msg(c, { sender_kind: 'SELLER', body: String(call.body?.text), sent_at: new Date().toISOString() }).id);
+      return reply ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
     });
   }
 
@@ -764,6 +767,7 @@ describe('WO-022 store replies on the shared outcome rule', () => {
     ['503 with an empty body', { status: 503 } as Reply],
     ['201 with unreadable JSON', { status: 201, unreadable: true } as Reply],
     ['413 from a gateway, not the API', { status: 413, unreadable: true } as Reply],
+    ['502 with JSON carrying only a code (review S22-01)', { status: 502, body: { code: 'BAD_GATEWAY' } } as Reply],
   ])('32-34. a %s is "may already have been received"; the retry keeps the key; stored once', async (_name, reply) => {
     const { s, c } = await ready();
     storing(s, c, [reply]);
@@ -793,6 +797,8 @@ describe('WO-022 store replies on the shared outcome rule', () => {
     await waitFor(() => expect(sends()).toHaveLength(2));
     const [a, b] = sends();
     expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+    // S22-02: the refusal stored nothing; the second attempt is the only copy.
+    await waitFor(() => expect(c.messages.filter((m) => m.body === 'Noted')).toHaveLength(1));
   });
 
   it('36 (switching). a changed conversation in the route starts clean: the store\'s unconfirmed reply is never sent to the other conversation', async () => {

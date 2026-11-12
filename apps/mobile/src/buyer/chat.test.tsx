@@ -1325,6 +1325,8 @@ describe('Uncertain-send reliability (WO-022)', () => {
    * The API storing each key once (the first attempt reaches the database) while the first answers
    * are lost on the way back (`lost`, in order); later attempts get the stored message.
    */
+  /** The API's own problem answer (its envelope carries request_id): a refusal, which stores nothing. */
+  const refuses = (r: Reply | undefined) => typeof r === 'object' && typeof (r.body as { request_id?: unknown } | undefined)?.request_id === 'string';
   function storing(chat: ReturnType<typeof installChat>, lost: Reply[]) {
     const stored = new Map<string, string>();
     let attempt = 0;
@@ -1332,11 +1334,12 @@ describe('Uncertain-send reliability (WO-022)', () => {
       const c = chat.convs.find((x) => call.path.startsWith(`/v1/conversations/${x.id}/`));
       if (!c) return problem(404, 'NOT_FOUND', 'request');
       const key = call.headers['Idempotency-Key']!;
-      if (!stored.has(key)) {
+      const reply = lost[attempt++];
+      if (!refuses(reply) && !stored.has(key)) {
         const productId = (call.body?.product_id as string | undefined) ?? null;
         stored.set(key, chat.msg(c, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString(), product_id: productId }).id);
       }
-      return lost[attempt++] ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
+      return reply ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
     });
   }
   async function open() {
@@ -1371,6 +1374,8 @@ describe('Uncertain-send reliability (WO-022)', () => {
     ['502 with an HTML page', { status: 502, unreadable: true } as Reply],
     ['503 with an empty body', { status: 503 } as Reply],
     ['504 with JSON that is not the API problem', { status: 504, body: { message: 'Gateway Timeout' } } as Reply],
+    // Review S22-01: a code alone (an intermediary's JSON) is not the API's problem envelope.
+    ['502 with JSON carrying only a code', { status: 502, body: { code: 'BAD_GATEWAY' } } as Reply],
   ])('5-7, 11, 12, 14, 15, 30. a gateway %s is "may already have been received"; the retry replays text, conversation, Account and key; shown once', async (_name, reply) => {
     const { chat } = await open();
     storing(chat, [reply]);
@@ -1415,10 +1420,13 @@ describe('Uncertain-send reliability (WO-022)', () => {
   });
 
   it('10. the API\'s own refusal, even a 5xx problem, is "not sent"; the text stays and the next attempt is a new intent', async () => {
-    const { chat } = await open();
+    const { chat, c } = await open();
     storing(chat, [problem(500, 'INTERNAL', 'request')]);
     await send('Open on Sunday?');
     expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    // S22-01: after a 5xx refusal the conversation is read again before anything new is sent.
+    const post = api.calls.findIndex((x) => x.method === 'POST' && /\/messages$/.test(x.path));
+    await waitFor(() => expect(api.calls.slice(post + 1).some((x) => x.method === 'GET' && /\/messages$/.test(x.path))).toBe(true));
     expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
     expect(composer().props.value).toBe('Open on Sunday?');
     expect(composer().props.editable).toBe(true);
@@ -1426,6 +1434,8 @@ describe('Uncertain-send reliability (WO-022)', () => {
     await waitFor(() => expect(sends()).toHaveLength(2));
     const [a, b] = sends();
     expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+    // S22-02: the refusal stored nothing, so the new attempt is the only copy.
+    await waitFor(() => expect(c.messages.filter((m) => m.body === 'Open on Sunday?')).toHaveLength(1));
   });
 
   it('17, 18. after a gateway loss, "Edit the message instead" gives the intent up; the edited text is a new key', async () => {

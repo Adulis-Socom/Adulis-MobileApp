@@ -20,6 +20,7 @@ import {
   acceptedMessage,
   escalatableAnswer,
   isConversationRef,
+  rereadAfter,
   sendOutcome,
   useConversationMessages,
   useConversations,
@@ -285,7 +286,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
         setError(failureMessage(t, failure));
       }
       setState(answered ? 'failed' : 'unknown');
-      if (!answered) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+      if (rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } finally {
       sending.current = false;
     }

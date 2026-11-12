@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 
-import { ApiError, newIdempotencyKey, problemCode } from '../api/client';
+import { ApiError, newIdempotencyKey } from '../api/client';
 import type { BoundApi } from '../auth/session';
-import { MESSAGE_MAX, acceptedMessage, messagesKey, sendOutcome } from '../buyer/chat';
+import { MESSAGE_MAX, acceptedMessage, messagesKey, rereadAfter, sendOutcome } from '../buyer/chat';
 import { usePrivateApi } from '../buyer/saved';
 import { SELLER_ID } from './seller-api';
 import { SELLER } from './seller-context';
@@ -103,7 +103,7 @@ export function useStoreReply(sellerId: string, conversationId: string) {
         setState(answered ? 'failed' : 'unknown');
         // The message may have been stored, or the conversation may be gone: read it again (its own
         // read decides "not available"; a send refusal never does).
-        if (!answered || problemCode(failure) === 'NOT_FOUND') void qc.invalidateQueries({ queryKey: messagesKey({ as: 'seller', sellerId: current.sellerId }, current.conversationId) });
+        if (rereadAfter(failure)) void qc.invalidateQueries({ queryKey: messagesKey({ as: 'seller', sellerId: current.sellerId }, current.conversationId) });
         return false;
       } finally {
         sending.current = false;
