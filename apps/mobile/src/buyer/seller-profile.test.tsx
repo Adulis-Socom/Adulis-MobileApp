@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AccessibilityInfo, AppState, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -316,5 +316,48 @@ describe('returning from the background', () => {
     expect(calls(SCENES)).toHaveLength(2);
     expect(await screen.findByLabelText('Scene: Seller scene 2')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Scene: Seller scene 1')).not.toBeOnTheScreen();
+  });
+});
+
+describe('WO-018 (A-006): screen-reader focus on tab changes', () => {
+  // The element focus was sent to: a host instance, identified by the tab's testID.
+  const focusedTab = (focus: jest.SpyInstance) =>
+    (focus.mock.calls.at(-1)?.[0] as { props?: { testID?: string } } | undefined)?.props?.testID;
+
+  it('a tab press moves focus to the newly selected tab (its list was remounted); opening the profile moves none', async () => {
+    const focus = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    try {
+      serve(PRODUCTS, ok({ data: [sellerProduct('basket', 'Basket')], next_cursor: null }));
+      serve(REVIEWS, ok({ data: [], next_cursor: null }));
+      await openProfile();
+      await settle();
+      expect(focus).not.toHaveBeenCalled();
+
+      await fireEvent.press(tab(en['buyer.seller.tab.products']));
+      await settle();
+      expect(tab(en['buyer.seller.tab.products'])).toBeSelected();
+      expect(focus).toHaveBeenCalledTimes(1);
+      expect(focus.mock.calls[0]![1]).toBe('focus');
+      expect(focusedTab(focus)).toBe('seller-tab-products');
+      // The tab's content is there to continue into.
+      expect(await screen.findByLabelText(/^Basket,/)).toBeOnTheScreen();
+
+      await fireEvent.press(tab(en['buyer.seller.tab.reviews']));
+      await settle();
+      expect(focusedTab(focus)).toBe('seller-tab-reviews');
+      expect(await screen.findByText(en['buyer.seller.reviews.empty'])).toBeOnTheScreen();
+
+      await fireEvent.press(tab(en['buyer.seller.tab.about']));
+      await settle();
+      expect(focusedTab(focus)).toBe('seller-tab-about');
+      expect(tab(en['buyer.seller.tab.about'])).toBeSelected();
+      expect(focus).toHaveBeenCalledTimes(3);
+
+      // Nothing else moves focus afterwards.
+      await settle();
+      expect(focus).toHaveBeenCalledTimes(3);
+    } finally {
+      focus.mockRestore();
+    }
   });
 });

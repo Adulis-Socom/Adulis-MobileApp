@@ -1,6 +1,6 @@
 import { am, en } from '@adulis/locale/mobile';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -530,5 +530,102 @@ describe('Delete Account', () => {
     await renderRouter(APP_DIR, { initialUrl: '/account/delete' });
     expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: en['buyer.delete.continue'] })).toBeNull();
+  });
+});
+
+describe('WO-018 (A-006): Delete Account step focus and spoken states', () => {
+  // The text of the element focus was last sent to (a host instance of AppText).
+  const focusedText = (focus: jest.SpyInstance) =>
+    (focus.mock.calls.at(-1)?.[0] as { props?: { children?: unknown } } | undefined)?.props?.children;
+  const tick = () => act(() => jest.advanceTimersByTimeAsync(500));
+  let focus: jest.SpyInstance;
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    focus = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  });
+  afterEach(() => {
+    focus.mockRestore();
+    announce.mockRestore();
+  });
+
+  it("each step's first line takes focus as it replaces the last; the outcome is read once, by focus", async () => {
+    signedIn();
+    installDeletion();
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.you.delete'] }));
+    await tick();
+    expect(focus).not.toHaveBeenCalled(); // the screen opening is an ordinary navigation
+
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.delete.continue'] }));
+    await tick();
+    expect(focusedText(focus)).toBe(en['buyer.delete.phone_intro']);
+    expect(focus.mock.calls.at(-1)?.[1]).toBe('focus');
+
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await screen.findByLabelText(en['auth.code.label']);
+    await tick();
+    expect(focusedText(focus)).toBe(en['buyer.delete.code_sent'].replace('{phone}', PHONE));
+
+    await fireEvent.changeText(screen.getByLabelText(en['auth.code.label']), DELETION_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await screen.findByLabelText(en['buyer.delete.confirm_label']);
+    await tick();
+    expect(focusedText(focus)).toBe(en['buyer.delete.for_phone'].replace('{phone}', PHONE));
+
+    await typeAndConfirm();
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    await tick();
+    expect(focusedText(focus)).toBe(DONE);
+    // Read by the focus move only: not announced as well (it would be heard twice).
+    expect(announce).not.toHaveBeenCalledWith(DONE);
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+  });
+
+  it('"Deleting" is spoken while the confirm is in flight, with the button still in place and disabled', async () => {
+    signedIn();
+    installDeletion();
+    const { gate, release } = held();
+    api.on('POST /v1/deletion/confirm', async () => {
+      await gate;
+      server.deleted = true;
+      return { status: 200, body: { deleted: true } };
+    });
+    await reachPreview();
+    await typeAndConfirm();
+    expect(await screen.findByText(en['buyer.delete.deleting'])).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(en['buyer.delete.deleting']);
+    expect(screen.getByRole('button', { name: en['buyer.delete.confirm_button'] })).toBeDisabled();
+    await act(async () => release());
+    expect(await screen.findByText(DONE)).toBeOnTheScreen();
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+  });
+
+  it('blockers take focus at their heading; a failed check keeps its Try again in place, busy, and says "Checking" again', async () => {
+    signedIn();
+    installDeletion();
+    let failing = true;
+    const { gate, release } = held();
+    api.on('GET /v1/deletion/preview', async () => {
+      if (failing) return problem(500, 'INTERNAL', 'request');
+      await gate;
+      return preview({ items: [{ code: 'OPEN_CLAIMS', message_key: 'deletion.blocker.open_claims', slots: { count: 1 }, resolving_action: { kind: 'RESOLVE_CLAIMS' } }] });
+    });
+    await reachPreview();
+    const retry = await screen.findByRole('button', { name: en['common.retry'] });
+    await tick();
+    expect(focusedText(focus)).toBe(en['buyer.delete.effects_title']);
+    failing = false;
+    await fireEvent.press(retry);
+    expect(announce).toHaveBeenCalledWith(en['buyer.delete.checking']);
+    // The same control, now busy: focus has not been dropped.
+    expect(screen.getByRole('button', { name: en['common.retry'] })).toBeBusy();
+    expect(screen.getByText(en['buyer.delete.checking'])).toBeOnTheScreen();
+    await act(async () => release());
+    expect(await screen.findByText(en['buyer.delete.blocked_title'])).toBeOnTheScreen();
+    await tick();
+    expect(focusedText(focus)).toBe(en['buyer.delete.blocked_title']);
+    expect(screen.queryByRole('button', { name: en['buyer.delete.confirm_button'] })).toBeNull();
   });
 });

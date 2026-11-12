@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert, Platform } from 'react-native';
+import { AccessibilityInfo, Alert, Platform } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -576,5 +576,120 @@ describe('sign-out', () => {
     await act(async () => gate.release());
     expect(screen.queryByText('Private list')).not.toBeOnTheScreen();
     expect(screen.queryByText('Woven basket')).not.toBeOnTheScreen();
+  });
+});
+
+describe('WO-018 (A-006): one Collection change at a time, announced', () => {
+  const PICKER = `/save-to?type=PRODUCT_POST&ref=${PRODUCT_ID}&surface=PRODUCT_DETAIL`;
+  const box = (name: string) => screen.getByRole('checkbox', { name });
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  });
+  afterEach(() => announce.mockRestore());
+
+  it('while a tick is in flight every box and New collection are disabled and that box is busy; then the result is spoken', async () => {
+    signedIn();
+    fc.named('Outfit ideas');
+    fc.named('Gifts');
+    const gate = held();
+    fc.intercept('add', async () => {
+      await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Outfit ideas' }));
+    await waitFor(() => expect(adds()).toHaveLength(1));
+    await waitFor(() => expect(box('Outfit ideas')).toBeBusy());
+    // The server has not answered: the box still shows the server's state, not a guess.
+    expect(box('Outfit ideas')).not.toBeChecked();
+    expect(box('Outfit ideas')).toBeDisabled();
+    for (const other of ['Saved', 'Gifts']) {
+      expect(box(other)).toBeDisabled();
+      expect(box(other)).not.toBeBusy();
+    }
+    expect(screen.getByRole('button', { name: en['buyer.saved.new'] })).toBeDisabled();
+    // A tap on another box changes nothing while the first is in flight.
+    await fireEvent.press(box('Gifts'));
+    expect(adds()).toHaveLength(1);
+    await act(async () => gate.release());
+    await waitFor(() => expect(box('Outfit ideas')).toBeChecked());
+    expect(announce).toHaveBeenCalledWith('Added to Outfit ideas.');
+    for (const name of ['Saved', 'Outfit ideas', 'Gifts']) {
+      expect(box(name)).toBeEnabled();
+      expect(box(name)).not.toBeBusy();
+    }
+    expect(screen.getByRole('button', { name: en['buyer.saved.new'] })).toBeEnabled();
+    // Removal: the same states, and the result named.
+    await fireEvent.press(box('Outfit ideas'));
+    await waitFor(() => expect(box('Outfit ideas')).not.toBeChecked());
+    expect(announce).toHaveBeenCalledWith('Removed from Outfit ideas.');
+    expect(fc.items).toEqual([]);
+  });
+
+  it('a refused tick changes nothing, says why, and every box is usable again', async () => {
+    signedIn();
+    fc.named('Gifts');
+    let refuse = true;
+    fc.intercept('add', () => (refuse ? ((refuse = false), problem(500, 'INTERNAL', 'request')) : undefined));
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
+    const alert = await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`));
+    expect(alert.props.accessibilityRole).toBe('alert');
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${en['buyer.save.failed']}`)));
+    expect(announce).not.toHaveBeenCalledWith('Added to Gifts.');
+    await waitFor(() => expect(box('Gifts')).toBeEnabled());
+    expect(box('Gifts')).not.toBeChecked();
+    expect(fc.items).toEqual([]);
+    // The next tap is a new, ordinary change.
+    await fireEvent.press(box('Gifts'));
+    await waitFor(() => expect(box('Gifts')).toBeChecked());
+    expect(announce).toHaveBeenCalledWith('Added to Gifts.');
+  });
+
+  it('a tick that times out says so, keeps the server state, and frees the boxes', async () => {
+    signedIn();
+    fc.named('Gifts');
+    fc.intercept('add', () => 'hang');
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
+    await waitFor(() => expect(box('Gifts')).toBeBusy());
+    // The client's 10 s timeout (renderRouter runs fake timers).
+    await act(() => jest.advanceTimersByTimeAsync(11_000));
+    expect(await screen.findByText(`${en['buyer.save.failed']} ${en['common.timeout']}`)).toBeOnTheScreen();
+    await waitFor(() => expect(box('Gifts')).toBeEnabled());
+    expect(box('Gifts')).not.toBeChecked();
+  });
+
+  it('the Collection screen, in Dark: while a Remove is in flight the other Removes, Rename and Delete are disabled; the result names the Collection', async () => {
+    signedIn();
+    useUiStore.setState({ themePreference: 'dark' });
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    fc.saveElsewhere(SCENE_TARGET, outfit);
+    const gate = held();
+    fc.intercept('remove', async () => {
+      await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    const removeBasket = () => screen.getByRole('button', { name: 'Remove Woven basket from this collection' });
+    const removeScene = () => screen.getByRole('button', { name: 'Remove Morning baskets from this collection' });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
+    await waitFor(() => expect(removeBasket()).toBeBusy());
+    expect(removeBasket()).toBeDisabled();
+    expect(removeScene()).toBeDisabled();
+    expect(removeScene()).not.toBeBusy();
+    expect(screen.getByRole('button', { name: en['buyer.collection.rename'] })).toBeDisabled();
+    expect(screen.getByRole('button', { name: en['buyer.collection.delete'] })).toBeDisabled();
+    await fireEvent.press(removeScene());
+    expect(removes()).toHaveLength(1);
+    await act(async () => gate.release());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('Removed from Outfit ideas.'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove Woven basket from this collection' })).toBeNull());
+    expect(removeScene()).toBeEnabled();
+    expect(screen.getByRole('button', { name: en['buyer.collection.rename'] })).toBeEnabled();
+    expect(screen.getByRole('button', { name: en['buyer.collection.delete'] })).toBeEnabled();
+    expect(fc.items.map((i) => i.target)).toEqual([SCENE_TARGET]);
   });
 });

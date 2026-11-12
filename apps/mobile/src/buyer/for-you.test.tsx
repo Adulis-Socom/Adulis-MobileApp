@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { AccessibilityInfo, AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -530,5 +530,50 @@ describe('signing in', () => {
     expect(last?.query).toEqual({}); // a new session: no guest cursor carried over
     // The credential never reaches a URL.
     expect(feedCalls().every((c) => !JSON.stringify(c.query).includes(GOOD_TOKEN))).toBe(true);
+  });
+});
+
+describe('WO-018 (A-006): Load more Scenes', () => {
+  it('asks for the next cursor of the same feed session, in order, with no card twice, and says how many arrived', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      // Taller than the Jest viewport: nothing more loads until the Buyer asks.
+      const first = Array.from({ length: 20 }, (_, i) => fypUnit(i + 1, { position: i + 1 }));
+      serveByCursor({
+        '': [ok(fypPage(first, 'cursor-A'))],
+        'cursor-A': [ok(fypPage([fypUnit(20, { position: 21 }), fypUnit(21, { position: 22 }), fypUnit(22, { position: 23 })], null))],
+      });
+      await renderRouter(APP_DIR);
+      expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+      expect(await settledCalls()).toHaveLength(1);
+      const more = screen.getByRole('button', { name: en['buyer.for_you.load_more'] });
+      expect(more).toBeEnabled();
+      await fireEvent.press(more);
+      expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+      // Three sent, one already on screen (a Scene appears once per session): two new.
+      expect(announce).toHaveBeenCalledWith('Loaded 2 more, just above.');
+      expect(screen.queryByRole('button', { name: en['buyer.for_you.load_more'] })).toBeNull();
+      expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }]);
+      expect(api.calls.filter((c) => /product/i.test(c.path))).toEqual([]);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('a failed page keeps the cards; the same button, now Try again, retries that cursor once', async () => {
+    const first = Array.from({ length: 20 }, (_, i) => fypUnit(i + 1, { position: i + 1 }));
+    serveByCursor({
+      '': [ok(fypPage(first, 'cursor-A'))],
+      'cursor-A': [problem(500, 'INTERNAL', 'request'), ok(fypPage([fypUnit(21, { position: 21 })], null))],
+    });
+    await renderRouter(APP_DIR);
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    await settledCalls();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.for_you.load_more'] }));
+    expect(await screen.findByText(new RegExp(en['buyer.for_you.more_failed']))).toBeOnTheScreen();
+    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-A' }]);
   });
 });

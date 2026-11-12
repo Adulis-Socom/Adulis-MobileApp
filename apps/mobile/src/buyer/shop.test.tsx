@@ -1,8 +1,8 @@
-import { en } from '@adulis/locale/mobile';
+import { am, en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { AccessibilityInfo, AppState, Dimensions, Platform, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -376,5 +376,147 @@ describe('returning from the background', () => {
     expect(calls(SHOP)).toHaveLength(2);
     expect(await screen.findByLabelText(/^Scarf,/)).toBeOnTheScreen();
     expect(screen.queryByLabelText(/^Basket,/)).not.toBeOnTheScreen();
+  });
+});
+
+describe('WO-018 (A-006): Load more and long Product names', () => {
+  const page = (data: unknown[], next_cursor: string | null) => ok({ market_resolved: true, data, next_cursor });
+  const more = () => screen.getByRole('button', { name: en['buyer.list.load_more'] });
+  /** The first page at once; the second held until the test answers it. */
+  function holdSecondPage(first: Reply) {
+    let answer!: (reply: Reply) => void;
+    const second = new Promise<Reply>((r) => (answer = r));
+    let n = 0;
+    api.on(SHOP, () => (n++ === 0 ? first : second));
+    return (reply: Reply) => act(async () => answer(reply));
+  }
+  // Jest's window reports a font scale of 2; each test here says which it means.
+  const WINDOW = Dimensions.get('window');
+  const SCREEN = Dimensions.get('screen');
+  const setFontScale = (fontScale: number) =>
+    Dimensions.set({ window: { ...WINDOW, fontScale }, screen: { ...SCREEN, fontScale } });
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  });
+  afterEach(() => {
+    announce.mockRestore();
+    Dimensions.set({ window: WINDOW, screen: SCREEN });
+  });
+
+  // A first page taller than the list's Jest viewport (900 dp of 100 dp rows): nothing loads until
+  // the Buyer scrolls or presses Load more. Rows past the window are not mounted, so arrivals are
+  // checked by the spoken count and the requests.
+  const firstPage = () => Array.from({ length: 20 }, (_, i) => shopProduct(`p${i}`, `Item ${i}`));
+
+  it('Load more asks for the next cursor, is busy while it loads, says how many arrived, and gives way to the end', async () => {
+    const answer = holdSecondPage(page(firstPage(), 'page-2'));
+    await openShop();
+    await screen.findByLabelText(/^Item 0,/);
+    await settle();
+    expect(calls(SHOP)).toHaveLength(1);
+    expect(more()).toBeEnabled();
+    expect(more()).not.toBeBusy();
+    await fireEvent.press(more());
+    // Still there (focus stays on it), disabled and busy; the progress is spoken.
+    await waitFor(() => expect(more()).toBeBusy());
+    expect(more()).toBeDisabled();
+    expect(announce).toHaveBeenCalledWith(en['buyer.list.loading_more']);
+    expect(screen.getByLabelText(/^Item 0,/)).toBeOnTheScreen(); // nothing loaded is cleared
+    // Three sent, one already shown (a page boundary moved): two are new.
+    await answer(page([shopProduct('c', 'Item C'), shopProduct('p3', 'Item 3'), shopProduct('d', 'Item D')], null));
+    expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith('Loaded 2 more, just above.');
+    expect(screen.queryByRole('button', { name: en['buyer.list.load_more'] })).toBeNull();
+    expect(calls(SHOP).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2']);
+  });
+
+  it('two requests for the next page in one frame (scroll and scroll, or scroll and tap) send one', async () => {
+    const answer = holdSecondPage(page(firstPage(), 'page-2'));
+    await openShop();
+    await screen.findByLabelText(/^Item 0,/);
+    await settle();
+    expect(calls(SHOP)).toHaveLength(1);
+    await act(async () => {
+      const list = screen.getByTestId('shop-products').props as { onEndReached: () => void };
+      list.onEndReached();
+      list.onEndReached();
+    });
+    await settle();
+    expect(calls(SHOP)).toHaveLength(2);
+    // The button waits for the same request rather than starting another.
+    expect(more()).toBeBusy();
+    await fireEvent.press(more());
+    expect(calls(SHOP)).toHaveLength(2);
+    await answer(page([shopProduct('b', 'Item B')], null));
+    expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
+    // A page the scroll brought is not announced as one the Buyer asked for.
+    expect(announce).not.toHaveBeenCalledWith(expect.stringMatching(/^Loaded/));
+    expect(calls(SHOP).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2']);
+  });
+
+  it('a failed page keeps what is shown, says so, and the same button retries the same cursor once', async () => {
+    serve(
+      SHOP,
+      page(firstPage(), 'page-2'),
+      problem(500, 'INTERNAL', 'request'),
+      page([shopProduct('b', 'Item B'), shopProduct('p0', 'Item 0')], null),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Item 0,/);
+    await settle();
+    await fireEvent.press(more());
+    const failed = await screen.findByText(new RegExp(en['buyer.list.more_failed']));
+    expect(failed.props.accessibilityRole).toBe('alert');
+    expect(announce).toHaveBeenCalledWith(expect.stringContaining(en['buyer.list.more_failed']));
+    expect(screen.getByLabelText(/^Item 0,/)).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: en['buyer.list.load_more'] })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
+    expect(screen.getAllByLabelText(/^Item 0,/)).toHaveLength(1);
+    expect(announce).toHaveBeenCalledWith('Loaded 1 more, just above.');
+    expect(calls(SHOP).map((c) => c.query['cursor'])).toEqual([undefined, 'page-2', 'page-2']);
+  });
+
+  const LONG = 'Handwoven cotton scarf with a traditional tibeb border in white and gold, large size';
+
+  it('a long name is two lines in a two-column grid at normal text and in full in one column at large text; the label is always whole', async () => {
+    setFontScale(1);
+    serve(SHOP, page([shopProduct('scarf', LONG), shopProduct('a', 'Item A')], null));
+    await openShop();
+    expect((await screen.findByText(LONG)).props.numberOfLines).toBe(2);
+    expect(screen.getByTestId('shop-products').props.numColumns).toBe(2);
+    expect(screen.getByLabelText(new RegExp(`^${LONG}, `))).toBeOnTheScreen();
+    // The Buyer raises the font size to 160% while the Shop is open.
+    await act(async () => setFontScale(1.6));
+    expect((await screen.findByText(LONG)).props.numberOfLines).toBeUndefined();
+    expect(screen.getByTestId('shop-products').props.numColumns).toBe(1);
+    expect(screen.getByLabelText(new RegExp(`^${LONG}, `))).toBeOnTheScreen();
+    // The card's Save control stays its own labelled control beside the name.
+    expect(screen.getAllByRole('button', { name: `Save ${LONG}` }).length).toBeGreaterThan(0);
+    expect(calls(SHOP)).toHaveLength(1); // a layout change reads nothing again
+  });
+
+  it('at 130% the grid is already one column; at 115% it is still two', async () => {
+    setFontScale(1.15);
+    serve(SHOP, page([shopProduct('scarf', LONG)], null));
+    await openShop();
+    expect((await screen.findByText(LONG)).props.numberOfLines).toBe(2);
+    await act(async () => setFontScale(1.3));
+    expect((await screen.findByText(LONG)).props.numberOfLines).toBeUndefined();
+    expect(screen.getByTestId('shop-products').props.numColumns).toBe(1);
+  });
+
+  it('Amharic (development build) in Dark at 160%: a long Ethiopic-script name in full, and Load more in Amharic', async () => {
+    setFontScale(1.6);
+    useUiStore.setState({ locale: 'am', themePreference: 'dark' });
+    const GEEZ = 'በእጅ የተሸመነ የጥጥ ሻርፕ ከባህላዊ ጥበብ ጠርዝ ጋር በነጭና በወርቅ ቀለም፣ ትልቅ መጠን';
+    // A real cursor never repeats: the second page is the last.
+    serve(SHOP, page([shopProduct('scarf', GEEZ), ...firstPage()], 'page-2'), page([], null));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    expect((await screen.findByText(GEEZ)).props.numberOfLines).toBeUndefined();
+    expect(screen.getByRole('button', { name: am['buyer.list.load_more'] })).toBeEnabled();
+    await fireEvent.press(screen.getByRole('button', { name: am['buyer.list.load_more'] }));
+    expect(await screen.findByText(am['buyer.list.end'])).toBeOnTheScreen();
   });
 });
