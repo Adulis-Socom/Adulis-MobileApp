@@ -386,6 +386,18 @@ if ($Clean) {
   }
 }
 
+# One removed total for the text report and the JSON (ON-20261111-170): only files actually
+# deleted, summed by drive so C: and the SSD stay separate. Never a free-space difference.
+$removed = @($cleaned | Where-Object { $_.Done })
+$removedByDrive = [ordered]@{}
+foreach ($r in $removed) {
+  $drive = $r.Path.Substring(0, 1).ToUpper()
+  if (-not $removedByDrive.Contains($drive)) { $removedByDrive[$drive] = [int64]0 }
+  $removedByDrive[$drive] += [int64]$r.Bytes
+}
+$removedBytes = [int64]0
+foreach ($v in $removedByDrive.Values) { $removedBytes += $v }
+
 # ---------------------------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------------------------
@@ -421,6 +433,8 @@ if ($Clean) {
   Write-Output $(if ($Execute) { 'Cleanup (executed)' } else { 'Cleanup (DRY RUN: add -Execute to remove)' })
   if ($cleaned.Count -eq 0) { Write-Output '  nothing removable' }
   foreach ($c in $cleaned) { Write-Output ('  {0} {1,10}  {2}' -f $(if ($c.Done) { 'removed' } elseif ($Execute) { 'kept (in use or not removable)' } else { 'would remove' }), (Format-Size $c.Bytes), $c.Path) }
+  Write-Output ('  removed: {0} file(s), {1:N0} bytes' -f $removed.Count, $removedBytes)
+  foreach ($k in $removedByDrive.Keys) { Write-Output ('    {0}: {1:N0} bytes' -f $k, $removedByDrive[$k]) }
   Write-Output ''
   foreach ($d in $drivesAfter) { Write-Output ('  {0}:  free now {1}  ({2:N0} bytes)' -f $d.Drive, (Format-Size $d.FreeBytes), $d.FreeBytes) }
 }
@@ -431,7 +445,11 @@ if ($JsonPath) {
   $report = [ordered]@{
     label = $Label; started = $started.ToString('o'); drives = $drives; drivesAfter = $drivesAfter
     targets = $rows; largestTemp = $tempDirs; docker = $docker; candidates = $candidates
-    clean = [ordered]@{ requested = [bool]$Clean; executed = [bool]($Clean -and $Execute); items = $cleaned }
+    clean = [ordered]@{
+      requested = [bool]$Clean; executed = [bool]($Clean -and $Execute)
+      removedCount = $removed.Count; removedBytes = $removedBytes; removedBytesByDrive = $removedByDrive
+      items = $cleaned
+    }
   }
   $report | ConvertTo-Json -Depth 5 | Out-File -FilePath $JsonPath -Encoding utf8
   Write-Output "JSON report: $JsonPath"
