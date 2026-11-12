@@ -296,6 +296,9 @@ describe('WO-CAT-001 -- public Catalogue read integrity', () => {
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
+    // Listen before any request (ISSUE-INFRA-015). Otherwise supertest listens per request and closes
+    // the server when the first one finishes, resetting the rest of a concurrent burst (read ECONNRESET).
+    await app.listen(0, '127.0.0.1');
 
     // One Scene in Market A tagging basket (available), mixed and the all-unavailable tray.
     const asOwner = (r: request.Test) =>

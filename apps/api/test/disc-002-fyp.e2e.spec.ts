@@ -272,6 +272,9 @@ describe('WO-DISC-002 -- For You API', () => {
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
+    // Listen before any request (ISSUE-INFRA-015). Otherwise supertest listens per request and closes
+    // the server when the first one finishes, resetting the rest of a concurrent burst (read ECONNRESET).
+    await app.listen(0, '127.0.0.1');
 
     await publishScene('A1', SELLER_A, S.ownerA, [PA1], `D25 A1 ${'x'.repeat(400)}`);
     await publishScene('B1', SELLER_B, S.ownerB, [PB1]);

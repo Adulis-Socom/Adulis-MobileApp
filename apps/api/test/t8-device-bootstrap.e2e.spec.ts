@@ -109,6 +109,9 @@ describe('T8 Phase 2 - the browser device is server-minted', () => {
     app = mod.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
+    // Listen before any request (ISSUE-INFRA-015). Otherwise supertest listens per request and closes
+    // the server when the first one finishes, resetting the rest of a concurrent burst (read ECONNRESET).
+    await app.listen(0, '127.0.0.1');
     admin = new Pool({ connectionString: ADMIN });
     await purgeBuckets();
     // A crashed earlier run can leave rows pointing at this market, and they

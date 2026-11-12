@@ -288,6 +288,9 @@ describe('WO-SEC-001 -- no request starves the pool (OVN-045)', () => {
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.init();
+    // Listen before any request (ISSUE-INFRA-015). Otherwise supertest listens per request and closes
+    // the server when the first one finishes, resetting the rest of a concurrent burst (read ECONNRESET).
+    await app.listen(0, '127.0.0.1');
   });
 
   afterAll(async () => {
