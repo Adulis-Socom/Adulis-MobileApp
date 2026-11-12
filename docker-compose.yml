@@ -11,6 +11,8 @@
 # checkout's directory, so the same file run from a clone named differently was a
 # different project: a container-name clash with the running stack, and a new,
 # empty database volume. `adulis-platform` is the name the existing stack uses.
+# Consequence: `docker compose down -v` from ANY clone deletes the live database
+# volume. Never run it; plain `docker compose down` keeps the volumes.
 name: adulis-platform
 
 # One MinIO build for the server AND the one-shot init (it ships mc and a shell),
