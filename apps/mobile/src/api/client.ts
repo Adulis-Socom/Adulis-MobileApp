@@ -400,8 +400,9 @@ export function createApiClient(deps: ApiDeps) {
      * Buyer messaging (WO-013): the existing Chat API, Buyer side (ADU-API-01 S12.7). One
      * conversation per Buyer, Seller and Market, created or returned by POST /v1/conversations
      * (idempotent). `as=buyer` is the server's scope rule (R10). No schemas are published
-     * (ON-20261111-150), so the answers are checked at the boundary (src/buyer/chat.ts). Plain text
-     * only: Product and Order anchors are not sent from the app in this release.
+     * (ON-20261111-150), so the answers are checked at the boundary (src/buyer/chat.ts). A message
+     * may carry one Product anchor (WO-014): the id of a Product the app has just read publicly; the
+     * server checks it is the conversation Seller's and PUBLISHED. No Order or Scene anchor is sent.
      */
     openConversation: (sellerId: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/conversations', { body: { seller_id: sellerId }, idempotencyKey, ok: 201 }),
@@ -409,8 +410,13 @@ export function createApiClient(deps: ApiDeps) {
       call<unknown>('GET', '/v1/conversations', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
     conversationMessages: (id: string, cursor: string | null) =>
       call<unknown>('GET', '/v1/conversations/{id}/messages', { params: { id }, query: { cursor: cursor ?? undefined }, ok: 200 }),
-    sendMessage: (id: string, text: string, idempotencyKey: string) =>
-      call<unknown>('POST', '/v1/conversations/{id}/messages', { params: { id }, body: { text }, idempotencyKey, ok: 201 }),
+    sendMessage: (id: string, text: string, idempotencyKey: string, productId: string | null = null) =>
+      call<unknown>('POST', '/v1/conversations/{id}/messages', {
+        params: { id },
+        body: productId === null ? { text } : { text, product_id: productId },
+        idempotencyKey,
+        ok: 201,
+      }),
     escalateConversation: (id: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/conversations/{id}/escalate', { params: { id }, idempotencyKey, ok: 200 }),
 
