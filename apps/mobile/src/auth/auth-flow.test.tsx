@@ -519,7 +519,9 @@ describe('account_context and release builds', () => {
     expect(await screen.findByText('account_context: seller_companion available, courier unavailable')).toBeOnTheScreen();
   });
 
-  it('stays Buyer-only in a release build even when the server says Seller Companion is available', async () => {
+  // WO-020 replaces WO-003's "release builds stay Buyer-only whatever account_context says": Seller
+  // mode is now the server's to grant, in release builds too. Courier and diagnostics stay out.
+  it('a release build offers Seller mode exactly when the server says so, and never Courier or diagnostics', async () => {
     resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
     api.on('GET /v1/bootstrap', () => ({
       status: 200,
@@ -527,13 +529,19 @@ describe('account_context and release builds', () => {
         account_context: { buyer: { available: true }, seller_companion: { available: true }, courier: { available: false } },
       }),
     }));
+    api.on('GET /v1/seller/list', () => ({
+      status: 200,
+      body: { data: [{ id: 'aaaaaaaa-0000-4000-8000-00000000000a', handle: 'store-a', store_name: 'Store A', status: 'ACTIVE', role: 'OWNER' }] },
+    }));
     const dev = devGlobal.__DEV__;
     devGlobal.__DEV__ = false;
     try {
       await renderRouter(APP_DIR, { initialUrl: '/account' });
       expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
-      expect(screen.queryByText(/Seller|Courier|Developer diagnostics/)).not.toBeOnTheScreen();
-      await act(() => router.push('/seller'));
+      expect(screen.queryByText(/Courier|Developer diagnostics/)).not.toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: en['seller.mode.switch_to_seller'] }));
+      expect(await screen.findByRole('header', { name: 'Store A' })).toBeOnTheScreen();
+      await act(() => router.push('/courier'));
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     } finally {
       devGlobal.__DEV__ = dev;
