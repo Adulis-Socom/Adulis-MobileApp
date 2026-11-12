@@ -1,4 +1,5 @@
-import { Text, type TextProps } from 'react-native';
+import type { ComponentProps } from 'react';
+import { Text } from 'react-native';
 
 import { useTheme } from '../theme/theme';
 
@@ -10,7 +11,7 @@ export function AppText({
   variant = 'body',
   style,
   ...props
-}: TextProps & { variant?: 'body' | 'heading' }) {
+}: ComponentProps<typeof Text> & { variant?: 'body' | 'heading' }) {
   const theme = useTheme();
   const heading = variant === 'heading';
   const fontSize = heading ? theme.fontSize.xl : theme.fontSize.base;

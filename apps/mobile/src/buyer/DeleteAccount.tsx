@@ -1,14 +1,16 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, View } from 'react-native';
+import { AccessibilityInfo, View, type HostInstance } from 'react-native';
 
 import { useBootstrap } from '../api/bootstrap';
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { cleanPhone, isE164, isOtpCode } from '../auth/sign-in-flow';
+import { StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
+import { useFocusRequest } from '../components/focus';
 import { TextField } from '../components/TextField';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
@@ -32,6 +34,9 @@ type Step = 'intro' | 'phone' | 'code' | 'preview' | 'done' | 'unconfirmed';
  * - Confirm carries one idempotency key per ticket, kept across a lost connection, so a retry
  *   replays rather than repeats. Local state is cleared only after the server says deleted.
  * - The flow belongs to the session it started in: if that session ends or changes, it leaves.
+ * - Each step replaces the last, so the control the Buyer pressed is gone: the new step's first
+ *   line takes screen-reader focus, which reads it (WO-018, A-006). "Deleting" is spoken; a
+ *   Retry of the consequence check stays in place while it runs.
  */
 export function DeleteAccount() {
   const t = useT();
@@ -52,6 +57,9 @@ export function DeleteAccount() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<DeletionPreview | null>(null);
+  // The consequence check failed and may be retried: its Try again stays in place while it runs.
+  const [checkFailed, setCheckFailed] = useState(false);
+  const stepRef = useRef<HostInstance>(null);
   const ticket = useRef<DeletionTicket | null>(null);
   const requestIntent = useRef<{ phone: string; key: string } | null>(null);
   const confirmKey = useRef<string | null>(null);
@@ -71,6 +79,12 @@ export function DeleteAccount() {
     if (error && fieldless) AccessibilityInfo.announceForAccessibility(error);
   }, [error, fieldless]);
 
+  // What is on screen, finer than the step: the preview step shows the check, then the consequences
+  // or the blockers. Focus moves on every change after the first screen.
+  const view =
+    step === 'preview' ? (preview === null ? 'checking' : preview.blockers.length > 0 || preview.incomplete ? 'blocked' : 'preview') : step;
+  useFocusRequest(stepRef, view === 'intro' ? null : view);
+
   if (!finished.current && !confirming.current && (current === null || current !== owner.current)) {
     return <Redirect href="/account" />;
   }
@@ -81,6 +95,7 @@ export function DeleteAccount() {
     ticket.current = null;
     confirmKey.current = null;
     setPreview(null);
+    setCheckFailed(false);
     setTyped('');
     setCode('');
     setStep('phone');
@@ -117,10 +132,8 @@ export function DeleteAccount() {
     // A revoked session means the deletion happened, whatever the lost answer left unknown.
     const shown = mine ? 'done' : outcome;
     setThisAccount(mine);
+    // Its heading takes focus and is read (no separate announcement: it would be heard twice).
     setStep(shown);
-    AccessibilityInfo.announceForAccessibility(
-      shown === 'done' ? (fillSlots(t('buyer.delete.done'), { phone: verifiedPhone }) ?? '') : t('buyer.delete.unconfirmed'),
-    );
   };
 
   /** The ticket if it is still within its deadline; otherwise back to the phone step. */
@@ -164,11 +177,15 @@ export function DeleteAccount() {
     setBusy(true);
     try {
       setPreview(parsePreview(t, await api.deletionPreview(held)));
+      setCheckFailed(false);
     } catch (failure) {
       // Refused within its deadline: no ACTIVE Account has that phone, or the code was spent. The
       // Buyer has proven the phone, so saying the code cannot delete an Account reveals nothing.
       if (problemCode(failure) === 'SESSION_EXPIRED') restart('buyer.delete.code_unusable');
-      else setError(failureMessage(t, failure));
+      else {
+        setCheckFailed(true);
+        setError(failureMessage(t, failure));
+      }
     } finally {
       setBusy(false);
     }
@@ -245,7 +262,7 @@ export function DeleteAccount() {
   if (step === 'done' || step === 'unconfirmed') {
     return (
       <View style={{ gap: theme.space.md }}>
-        <AppText accessibilityRole="header">
+        <AppText ref={stepRef} accessibilityRole="header">
           {step === 'done' ? (fillSlots(t('buyer.delete.done'), { phone: verifiedPhone }) ?? '') : t('buyer.delete.unconfirmed')}
         </AppText>
         {thisAccount !== null ? (
@@ -270,7 +287,7 @@ export function DeleteAccount() {
   if (step === 'phone') {
     return (
       <View style={{ gap: theme.space.md }}>
-        <AppText>{t('buyer.delete.phone_intro')}</AppText>
+        <AppText ref={stepRef}>{t('buyer.delete.phone_intro')}</AppText>
         <TextField
           label={t('auth.phone.label')}
           hint={t('auth.phone.hint')}
@@ -295,7 +312,7 @@ export function DeleteAccount() {
   if (step === 'code') {
     return (
       <View style={{ gap: theme.space.md }}>
-        <AppText>{fillSlots(t('buyer.delete.code_sent'), { phone: verifiedPhone }) ?? ''}</AppText>
+        <AppText ref={stepRef}>{fillSlots(t('buyer.delete.code_sent'), { phone: verifiedPhone }) ?? ''}</AppText>
         <TextField
           label={t('auth.code.label')}
           error={error}
@@ -321,9 +338,20 @@ export function DeleteAccount() {
   if (preview === null) {
     return (
       <View style={{ gap: theme.space.md }}>
-        <AppText>{t(busy ? 'buyer.delete.checking' : 'buyer.delete.effects_title')}</AppText>
+        {/* Focused on arrival, which reads "Checking"; a Retry announces it itself. */}
+        <AppText ref={stepRef}>{t(busy ? 'buyer.delete.checking' : 'buyer.delete.effects_title')}</AppText>
         {errorText}
-        {!busy && error ? <Button label={t('common.retry')} onPress={() => void loadPreview()} /> : null}
+        {checkFailed ? (
+          <Button
+            label={t('common.retry')}
+            disabled={busy}
+            busy={busy}
+            onPress={() => {
+              AccessibilityInfo.announceForAccessibility(t('buyer.delete.checking'));
+              void loadPreview();
+            }}
+          />
+        ) : null}
         {cancel}
       </View>
     );
@@ -331,7 +359,7 @@ export function DeleteAccount() {
 
   return (
     <View style={{ gap: theme.space.md }}>
-      <AppText style={{ fontWeight: theme.fontWeight.semibold }}>
+      <AppText ref={view === 'preview' ? stepRef : undefined} style={{ fontWeight: theme.fontWeight.semibold }}>
         {fillSlots(t('buyer.delete.for_phone'), { phone: verifiedPhone }) ?? ''}
       </AppText>
       {preview.effects.length > 0 ? (
@@ -344,14 +372,18 @@ export function DeleteAccount() {
       ) : null}
       {preview.blockers.length > 0 ? (
         <View style={{ gap: theme.space.sm }}>
-          <AppText accessibilityRole="header">{t('buyer.delete.blocked_title')}</AppText>
+          <AppText ref={stepRef} accessibilityRole="header">{t('buyer.delete.blocked_title')}</AppText>
           <AppText>{t('error.deletion.deletion_blocked')}</AppText>
           {preview.blockers.map((blocker, i) => (
             <AppText key={`${i}-${blocker.key}`}>{blocker.text}</AppText>
           ))}
         </View>
       ) : null}
-      {preview.incomplete ? <AppText accessibilityRole="alert">{t('buyer.delete.preview_incomplete')}</AppText> : null}
+      {preview.incomplete ? (
+        <AppText ref={preview.blockers.length === 0 ? stepRef : undefined} accessibilityRole="alert">
+          {t('buyer.delete.preview_incomplete')}
+        </AppText>
+      ) : null}
       {preview.blockers.length === 0 && !preview.incomplete ? (
         <View style={{ gap: theme.space.md }}>
           <AppText>{fillSlots(t('buyer.delete.confirm_instruction'), { word }) ?? ''}</AppText>
@@ -367,7 +399,7 @@ export function DeleteAccount() {
             autoCorrect={false}
             editable={!busy}
           />
-          {busy ? <AppText>{t('buyer.delete.deleting')}</AppText> : null}
+          {busy ? <StatusText>{t('buyer.delete.deleting')}</StatusText> : null}
           <Button label={t('buyer.delete.confirm_button')} onPress={() => void confirm()} disabled={busy} />
         </View>
       ) : (
