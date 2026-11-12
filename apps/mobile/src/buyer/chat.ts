@@ -120,6 +120,25 @@ export function acceptedMessage(body: unknown): boolean {
   return isConversationRef((body as { message_id?: unknown } | null)?.message_id);
 }
 
+/**
+ * What a message send that did not return an accepted message proves (WO-022; review S21-03), for
+ * the Buyer's messages and a store's replies alike:
+ *
+ * - `refused`: the API answered with its own problem (`{ code, ... }`, any status). The outcome is
+ *   known: the message was not stored, or the server keeps that refusal against the key, which a
+ *   replay would only repeat. The intent ends; the next attempt gets a new key.
+ * - `unknown`: anything else. That covers a lost connection, a timeout, a gateway's answer without
+ *   the API's problem body (a 502/503/504 page, an empty body), and a 201 whose body cannot be read
+ *   or names no message (thrown as `unexpected 201` by the caller). The message may have been
+ *   stored, so the intent (text, Product, conversation, key) is kept for a replay or an explicit
+ *   "edit instead".
+ *
+ * Chat sends only: every other mutation keeps the shared `wasAnswered`.
+ */
+export function sendOutcome(failure: unknown): 'refused' | 'unknown' {
+  return failure instanceof ApiError && failure.failure.kind === 'problem' ? 'refused' : 'unknown';
+}
+
 /** The only catalogue namespace a bot message may render from (CHATBOT-01: no model prose). */
 const BOT_TEMPLATES = 'chat.bot.';
 

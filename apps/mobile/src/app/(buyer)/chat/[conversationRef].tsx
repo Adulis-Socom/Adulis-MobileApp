@@ -28,7 +28,8 @@ export default function ConversationRoute() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={headerHeight}
     >
-      <ConversationScreen conversationRef={conversationRef} product={product} />
+      {/* Keyed by the conversation (WO-022): a changed reference never inherits a draft or an unconfirmed send. */}
+      <ConversationScreen key={conversationRef} conversationRef={conversationRef} product={product} />
     </KeyboardAvoidingView>
   );
 }

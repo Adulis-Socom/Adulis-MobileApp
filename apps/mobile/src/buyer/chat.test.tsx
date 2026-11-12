@@ -15,9 +15,10 @@ import {
   storefront,
   storefrontProduct,
   type Recorded,
+  type Reply,
 } from '../testing/fake-api';
 import type { StorefrontProduct } from '../api/client';
-import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
+import { TOKEN_KEY, memory, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
  * WO-013: Buyer messaging on the real route tree against an in-memory chat server on the API's
@@ -1303,6 +1304,253 @@ describe('Buyer frontend stabilization (WO-017)', () => {
       expect(screen.queryByText(en['common.loading'])).toBeNull();
     } finally {
       await act(async () => onlineManager.setOnline(true));
+    }
+  });
+});
+
+/**
+ * WO-022 Workstream A: the Buyer's uncertain sends (review S21-03 on the Buyer side). Only the API's
+ * own problem answer proves a message was not stored; anything else that is not an accepted message
+ * leaves the outcome unknown and keeps the whole intent (text, Product, conversation, key). The
+ * numbers are the work order's section 21 matrix.
+ */
+describe('Uncertain-send reliability (WO-022)', () => {
+  const context = () => within(screen.getByTestId('chat-product-context'));
+  const maybe = () => screen.findByText(en['buyer.chat.maybe_not_sent']);
+  const send = async (text: string) => {
+    await fireEvent.changeText(composer(), text);
+    await fireEvent.press(sendButton());
+  };
+  /**
+   * The API storing each key once (the first attempt reaches the database) while the first answers
+   * are lost on the way back (`lost`, in order); later attempts get the stored message.
+   */
+  function storing(chat: ReturnType<typeof installChat>, lost: Reply[]) {
+    const stored = new Map<string, string>();
+    let attempt = 0;
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
+      const c = chat.convs.find((x) => call.path.startsWith(`/v1/conversations/${x.id}/`));
+      if (!c) return problem(404, 'NOT_FOUND', 'request');
+      const key = call.headers['Idempotency-Key']!;
+      if (!stored.has(key)) {
+        const productId = (call.body?.product_id as string | undefined) ?? null;
+        stored.set(key, chat.msg(c, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString(), product_id: productId }).id);
+      }
+      return lost[attempt++] ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
+    });
+  }
+  async function open() {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText(en['buyer.chat.empty']);
+    return { chat, c };
+  }
+  async function askFrom(product: StorefrontProduct) {
+    signedIn();
+    const chat = installChat();
+    const listing = chat.publish(product);
+    await renderRouter(APP_DIR, { initialUrl: `/product/${product.seller.handle}/${product.slug}` });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] }));
+    await context().findByText(product.name);
+    return { chat, listing };
+  }
+
+  it('1, 2, 27. an accepted message (a server message id) is shown once, only after acceptance', async () => {
+    const { chat } = await open();
+    storing(chat, []);
+    await send('Hello');
+    expect(await screen.findByText('Hello')).toBeOnTheScreen();
+    expect(composer().props.value).toBe('');
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    expect(sends()).toHaveLength(1);
+  });
+
+  it.each([
+    ['502 with an HTML page', { status: 502, unreadable: true } as Reply],
+    ['503 with an empty body', { status: 503 } as Reply],
+    ['504 with JSON that is not the API problem', { status: 504, body: { message: 'Gateway Timeout' } } as Reply],
+  ])('5-7, 11, 12, 14, 15, 30. a gateway %s is "may already have been received"; the retry replays text, conversation, Account and key; shown once', async (_name, reply) => {
+    const { chat } = await open();
+    storing(chat, [reply]);
+    await send('Do you ship to Adama?');
+    expect(await maybe()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    expect(composer().props.editable).toBe(false);
+    // 30: the conversation is read again after the uncertain answer (the message may be there).
+    const post = api.calls.findIndex((x) => x.method === 'POST' && /\/messages$/.test(x.path));
+    await waitFor(() => expect(api.calls.slice(post + 1).some((x) => x.method === 'GET' && /\/messages$/.test(x.path))).toBe(true));
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
+    expect(a!.headers['Idempotency-Key']).toMatch(UUID7);
+    expect(b!.body).toEqual({ text: 'Do you ship to Adama?' });
+    expect(b!.body).toEqual(a!.body);
+    expect(b!.path).toBe(a!.path);
+    expect(b!.headers.Authorization).toBe(a!.headers.Authorization);
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    expect(screen.getAllByText('Do you ship to Adama?')).toHaveLength(1);
+  });
+
+  it.each([
+    ['unreadable JSON', { status: 201, unreadable: true } as Reply],
+    ['no message id', { status: 201, body: { bot: null } } as Reply],
+  ])('8, 9, 27, 28. an acceptance with %s is neither sent nor failed: unknown, nothing is sent again by itself, the retry keeps the key', async (_name, reply) => {
+    const { chat } = await open();
+    storing(chat, [reply]);
+    await send('Is it handmade?');
+    expect(await maybe()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    // 28: no queue and no background retry, however long the screen stays open.
+    await act(() => jest.advanceTimersByTimeAsync(120_000));
+    expect(sends()).toHaveLength(1);
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    expect(screen.getAllByText('Is it handmade?')).toHaveLength(1);
+  });
+
+  it('10. the API\'s own refusal, even a 5xx problem, is "not sent"; the text stays and the next attempt is a new intent', async () => {
+    const { chat } = await open();
+    storing(chat, [problem(500, 'INTERNAL', 'request')]);
+    await send('Open on Sunday?');
+    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    expect(composer().props.value).toBe('Open on Sunday?');
+    expect(composer().props.editable).toBe(true);
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+  });
+
+  it('17, 18. after a gateway loss, "Edit the message instead" gives the intent up; the edited text is a new key', async () => {
+    const { chat } = await open();
+    storing(chat, [{ status: 504, unreadable: true }]);
+    await send('First words');
+    await maybe();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.edit_unconfirmed'] }));
+    expect(composer().props.editable).toBe(true);
+    await send('Second words');
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+    expect(b!.body).toEqual({ text: 'Second words' });
+  });
+
+  it('13, 19, 20. an anchored send lost at a gateway: the Product cannot be changed or removed; the retry carries the same Product, text and key', async () => {
+    const { chat } = await askFrom(BASKET);
+    chat.publish(LAMP);
+    storing(chat, [{ status: 502, unreadable: true }]);
+    await send('Is it lined?');
+    expect(await maybe()).toBeOnTheScreen();
+    expect(context().getByRole('button', { name: en['buyer.chat.context_remove'] })).toBeDisabled();
+    expect(screen.getByRole('button', { name: en['buyer.chat.change_product'] })).toBeDisabled();
+    // Entering again with another Product (a link) does not replace a frozen payload's Product.
+    await act(() => router.setParams({ productHandle: 'seller-1', productSlug: 'lamp' }));
+    await act(() => jest.advanceTimersByTimeAsync(500));
+    expect(context().getByText('Woven basket')).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(a!.body).toEqual({ text: 'Is it lined?', product_id: BASKET.id });
+    expect(b!.body).toEqual(a!.body);
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
+  });
+
+  it('21. a Product unpublished between the attempt and its retry: nothing is sent, the outcome stays unknown, the anchor is not dropped', async () => {
+    const { chat, listing } = await askFrom(BASKET);
+    storing(chat, [{ status: 503 }]);
+    await send('Still available?');
+    await maybe();
+    listing.unpublish();
+    await fireEvent.press(retryButton());
+    expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    expect(sends()).toHaveLength(1);
+    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(composer().props.editable).toBe(false);
+    // Removing the Product needs the unconfirmed send to be given up first.
+    expect(context().getByRole('button', { name: en['buyer.chat.context_remove'] })).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.edit_unconfirmed'] }));
+    expect(context().getByRole('button', { name: en['buyer.chat.context_remove'] })).toBeEnabled();
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('22. the Product check lost offline during a retry: nothing is sent and the outcome stays unknown; once checked, the retry is the same intent', async () => {
+    const { chat } = await askFrom(BASKET);
+    storing(chat, ['offline']);
+    await send('Lined?');
+    await maybe();
+    api.on('GET /v1/storefronts/seller-1/products/basket', () => 'offline');
+    await fireEvent.press(retryButton());
+    expect(await context().findByText(en['buyer.chat.context_unchecked'])).toBeOnTheScreen();
+    expect(sends()).toHaveLength(1);
+    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    api.on('GET /v1/storefronts/seller-1/products/basket', () => ({ status: 200, body: BASKET }));
+    await fireEvent.press(context().getByRole('button', { name: en['common.retry'] }));
+    expect(await context().findByText('Woven basket')).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.body).toEqual({ text: 'Lined?', product_id: BASKET.id });
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
+  });
+
+  it('8 (switching). a changed conversation reference starts clean: the unconfirmed intent is never sent to the other conversation', async () => {
+    const { chat } = await open();
+    const other = chat.conv(A, SELLER_2, 'Store 2', HANDLE_2);
+    storing(chat, ['offline']);
+    await send('For store one');
+    await maybe();
+    await act(() => router.setParams({ conversationRef: other.id }));
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    expect(composer().props.value).toBe('');
+    expect(composer().props.editable).toBe(true);
+    await send('For store two');
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.path).toContain(other.id);
+    expect(b!.body).toEqual({ text: 'For store two' });
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+  });
+
+  it('26. closing the conversation drops the unconfirmed intent (nothing persisted); reopening starts clean and shows what the server stored', async () => {
+    const { chat, c } = await open();
+    storing(chat, [{ status: 504 }]);
+    await send('Are you there?');
+    await maybe();
+    await act(() => router.replace('/messages'));
+    await act(() => router.push(`/chat/${c.id}`));
+    expect(await screen.findByText('Are you there?')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    expect(composer().props.value).toBe('');
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('23. an expired session during a send ends the session; the intent is not retried', async () => {
+    const { chat } = await open();
+    storing(chat, [problem(401, 'SESSION_EXPIRED', 'auth')]);
+    await send('Late question');
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+    await act(() => jest.advanceTimersByTimeAsync(60_000));
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('29. an uncertain outcome is announced, not only drawn', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      const { chat } = await open();
+      storing(chat, [{ status: 502, unreadable: true }]);
+      await send('Hello?');
+      await maybe();
+      expect(announce).toHaveBeenCalledWith(en['buyer.chat.maybe_not_sent']);
+      expect(announce).not.toHaveBeenCalledWith(en['buyer.chat.not_sent']);
+    } finally {
+      announce.mockRestore();
     }
   });
 });

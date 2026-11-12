@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 
-import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
+import { ApiError, newIdempotencyKey, problemCode } from '../api/client';
 import type { BoundApi } from '../auth/session';
-import { MESSAGE_MAX, acceptedMessage, messagesKey } from '../buyer/chat';
+import { MESSAGE_MAX, acceptedMessage, messagesKey, sendOutcome } from '../buyer/chat';
 import { usePrivateApi } from '../buyer/saved';
 import { SELLER_ID } from './seller-api';
 import { SELLER } from './seller-context';
@@ -48,18 +48,6 @@ export function parseStoreConversationPage(body: unknown): StoreConversationPage
 
 export const storeConversationsKey = (sellerId: string) => [SELLER, sellerId, 'conversations'] as const;
 
-/**
- * Whether a failed send has a known outcome (the reply was not stored). The API's own refusal (a
- * problem body, 4xx or 5xx) is known. Review S21-03: a gateway's 5xx without that body, or a 201 whose
- * body cannot be read, may follow a stored reply, so the key is kept and the text frozen, like a
- * lost connection. Narrower than the shared wasAnswered, which the Buyer side keeps unchanged.
- */
-function settled(failure: unknown): boolean {
-  if (!wasAnswered(failure)) return false;
-  const f = (failure as ApiError).failure;
-  return !(f.kind === 'unexpected' && (f.status >= 500 || f.status === 201));
-}
-
 type Intent = { api: BoundApi; sellerId: string; conversationId: string; text: string; key: string };
 
 /**
@@ -70,9 +58,9 @@ type Intent = { api: BoundApi; sellerId: string; conversationId: string; text: s
  *   other payload is a new intent with a new key.
  * - Shown as sent only after the server accepts it (a message id in the answer); no queue, no
  *   optimistic message.
- * - A server answer (refusal) ends the intent; no answer (offline, timeout, 5xx-less loss) leaves the
- *   outcome unknown: the text is frozen until "Try sending again" (same key) or "Edit the message
- *   instead" (gives the intent up explicitly).
+ * - The API's own refusal ends the intent; any other failure leaves the outcome unknown (the shared
+ *   Chat rule, `sendOutcome` in src/buyer/chat.ts): the text is frozen until "Try sending again"
+ *   (same key) or "Edit the message instead" (gives the intent up explicitly).
  * - The sender is never sent: the server derives owner or team member from the session and store.
  */
 export function useStoreReply(sellerId: string, conversationId: string) {
@@ -108,7 +96,7 @@ export function useStoreReply(sellerId: string, conversationId: string) {
         void qc.invalidateQueries({ queryKey: storeConversationsKey(current.sellerId) });
         return true;
       } catch (failure) {
-        const answered = settled(failure);
+        const answered = sendOutcome(failure) === 'refused';
         if (answered) intent.current = null;
         if (!current.api.isCurrent()) return false;
         setError(failure);

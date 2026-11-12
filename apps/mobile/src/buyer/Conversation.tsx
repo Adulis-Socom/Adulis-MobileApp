@@ -20,6 +20,7 @@ import {
   acceptedMessage,
   escalatableAnswer,
   isConversationRef,
+  sendOutcome,
   useConversationMessages,
   useConversations,
 } from './chat';
@@ -253,7 +254,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
         sendIntent.current = { text, productId, key: newIdempotencyKey() };
       }
       const body = await api.sendMessage(ref, text, sendIntent.current.key, productId);
-      // An answer without a message id is an answered failure: its key must not be replayed forever.
+      // An acceptance without a readable message id may still have stored it: unknown (WO-022).
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
       if (!api.isCurrent()) return;
@@ -267,9 +268,10 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
     } catch (failure) {
-      // A server answer ends this intent; offline or a timeout keeps the key for the retry, which
-      // replays if the message was stored. The outcome is then unknown: say so, and re-read.
-      const answered = wasAnswered(failure);
+      // The API's own refusal ends this intent; anything else (offline, a timeout, a gateway answer
+      // without the API's problem, an unreadable acceptance) keeps the key for the retry, which
+      // replays if the message was stored. The outcome is then unknown: say so, and re-read (WO-022).
+      const answered = sendOutcome(failure) === 'refused';
       if (answered) sendIntent.current = null;
       if (!api.isCurrent()) return;
       if (problemCode(failure) === 'NOT_FOUND') {
