@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { newIdempotencyKey, problemCode, type Collection, type SaveSurface, type SaveTarget } from '../api/client';
 import { failureMessage } from '../api/messages';
-import { AppText } from '../components/AppText';
+import { AlertText } from '../components/AlertText';
 import { Button } from '../components/Button';
 import { Checkbox } from '../components/Checkbox';
 import { useT } from '../i18n/i18n';
@@ -61,7 +61,7 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   if (!params) {
     return (
       <View style={{ flex: 1, padding: theme.space.lg, backgroundColor: theme.color.bg }}>
-        <AppText accessibilityRole="alert">{t('buyer.save.target_gone')}</AppText>
+        <AlertText>{t('buyer.save.target_gone')}</AlertText>
       </View>
     );
   }
@@ -105,7 +105,7 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     >
       {readFailure ? (
         <View style={{ gap: theme.space.sm }}>
-          <AppText accessibilityRole="alert">{failureMessage(t, readFailure)}</AppText>
+          <AlertText>{failureMessage(t, readFailure)}</AlertText>
           <Button label={t('common.retry')} onPress={() => { void state.refetch(); collections.retry(); }} />
         </View>
       ) : loading ? (
@@ -125,7 +125,7 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
           })}
         </View>
       )}
-      {error ? <AppText accessibilityRole="alert">{error}</AppText> : null}
+      {error ? <AlertText>{error}</AlertText> : null}
       <NewCollection onCreated={(created) => void toggle(created.ref, true)} />
       <Button label={t('buyer.save.done')} variant="secondary" onPress={() => router.back()} />
     </ScrollView>

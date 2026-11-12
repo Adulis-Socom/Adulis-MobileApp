@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import { failureMessage, fillSlots } from '../api/messages';
 import type { AccountSession } from '../api/client';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
@@ -50,11 +51,11 @@ export function AccountSessions() {
         sessions.data.length > 0 ? sessions.data.map(row) : <AppText style={secondary}>{t('buyer.you.sessions.empty')}</AppText>
       ) : sessions.isError ? (
         <View accessibilityRole="alert">
-          <AppText>{t('buyer.you.sessions.failed')}</AppText>
+          <AlertText>{t('buyer.you.sessions.failed')}</AlertText>
           <AppText style={secondary}>{failureMessage(t, sessions.error)}</AppText>
         </View>
       ) : (
-        <AppText style={secondary}>{t('common.loading')}</AppText>
+        <AppText style={secondary}>{t(sessions.fetchStatus === 'paused' ? 'common.offline' : 'common.loading')}</AppText>
       )}
       <Button
         label={sessions.isError && !sessions.data ? t('common.retry') : t('buyer.you.sessions.refresh')}

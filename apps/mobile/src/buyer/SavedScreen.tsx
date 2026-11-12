@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -98,7 +99,7 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
     if (list.status === 'error' || list.paused) {
       return (
         <View style={{ gap: theme.space.sm }}>
-          <AppText accessibilityRole="alert">{`${t('buyer.saved.collections_failed')} ${failureMessage(t, list.error)}`}</AppText>
+          <AlertText>{`${t('buyer.saved.collections_failed')} ${list.paused ? t('common.offline') : failureMessage(t, list.error)}`}</AlertText>
           <Button label={t('common.retry')} variant="secondary" onPress={list.retry} />
         </View>
       );

@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { RefreshControl, View } from 'react-native';
 
 import { failureMessage, fillSlots } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
@@ -65,7 +66,7 @@ export function BuyerNotifications() {
             disabled={pending.has(n.id)}
           />
         ) : null}
-        {failed.has(n.id) ? <AppText accessibilityRole="alert">{t('buyer.notifications.mark_read_failed')}</AppText> : null}
+        {failed.has(n.id) ? <AlertText>{t('buyer.notifications.mark_read_failed')}</AlertText> : null}
       </View>
     );
   };
@@ -83,12 +84,12 @@ export function BuyerNotifications() {
 
   const empty = inbox.isError ? (
     <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
-      <AppText>{t('buyer.notifications.failed')}</AppText>
+      <AlertText>{t('buyer.notifications.failed')}</AlertText>
       <AppText style={secondary}>{failureMessage(t, inbox.error)}</AppText>
       <Button label={t('common.retry')} onPress={() => void inbox.refetch()} />
     </View>
   ) : inbox.isPending ? (
-    <AppText style={secondary}>{t('common.loading')}</AppText>
+    <AppText style={secondary}>{t(inbox.fetchStatus === 'paused' ? 'common.offline' : 'common.loading')}</AppText>
   ) : (
     <AppText>{t('buyer.notifications.empty')}</AppText>
   );

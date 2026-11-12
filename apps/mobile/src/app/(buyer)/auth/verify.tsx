@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { AccessibilityInfo, KeyboardAvoidingView, Platform } from 'react-native';
 
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered, type OtpVerifyBody } from '../../../api/client';
@@ -31,6 +32,7 @@ import { useTheme } from '../../../theme/theme';
  * - The code is never logged, stored or shown back.
  */
 export default function Verify() {
+  const headerHeight = useHeaderHeight();
   const t = useT();
   const theme = useTheme();
   const router = useRouter();
@@ -142,7 +144,12 @@ export default function Verify() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Measured from under the header (WO-017, B-008's pattern): the header's height is the offset.
+      keyboardVerticalOffset={headerHeight}
+    >
       <Screen edges={['bottom', 'left', 'right']}>
         <AppText>{fillSlots(t('auth.verify.sent_to'), { phone }) ?? ''}</AppText>
         <TextField

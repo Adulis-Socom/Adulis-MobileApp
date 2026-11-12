@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, View } from 'react-native';
 
 import { failureMessage, fillSlots } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
@@ -47,12 +48,14 @@ export function Conversations() {
 
   const empty = list.isError ? (
     <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
-      <AppText>{t('buyer.messages.failed')}</AppText>
+      <AlertText>{t('buyer.messages.failed')}</AlertText>
       <AppText style={secondary}>{failureMessage(t, list.error)}</AppText>
       <Button label={t('common.retry')} onPress={() => void list.refetch()} />
     </View>
   ) : (
-    <AppText style={list.isPending ? secondary : undefined}>{t(list.isPending ? 'common.loading' : 'buyer.messages.empty')}</AppText>
+    <AppText style={list.isPending ? secondary : undefined}>
+      {t(list.fetchStatus === 'paused' && list.data === undefined ? 'common.offline' : list.isPending ? 'common.loading' : 'buyer.messages.empty')}
+    </AppText>
   );
 
   return (

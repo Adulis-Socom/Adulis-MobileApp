@@ -1,7 +1,7 @@
 import type { ErrorBoundaryProps } from 'expo-router';
 
 import { useT } from '../i18n/i18n';
-import { AppText } from './AppText';
+import { AlertText } from './AlertText';
 import { Button } from './Button';
 import { Screen } from './Screen';
 
@@ -14,9 +14,7 @@ export function ErrorState({ retry }: Pick<ErrorBoundaryProps, 'retry'>) {
   const t = useT();
   return (
     <Screen centered>
-      <AppText style={{ textAlign: 'center' }} accessibilityRole="alert">
-        {t('error.request.internal')}
-      </AppText>
+      <AlertText style={{ textAlign: 'center' }}>{t('error.request.internal')}</AlertText>
       <Button label={t('common.retry')} onPress={() => void retry()} />
     </Screen>
   );

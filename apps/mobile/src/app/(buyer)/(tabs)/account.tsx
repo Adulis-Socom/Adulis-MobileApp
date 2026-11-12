@@ -5,6 +5,7 @@ import { AccessibilityInfo, View } from 'react-native';
 import { useSession } from '../../../auth/session';
 import { AccountSessions } from '../../../buyer/AccountSessions';
 import { SignInRequired } from '../../../buyer/SignInRequired';
+import { AlertText } from '../../../components/AlertText';
 import { AppText } from '../../../components/AppText';
 import { Button } from '../../../components/Button';
 import { ChoiceGroup } from '../../../components/ChoiceGroup';
@@ -111,7 +112,7 @@ export default function You() {
                   );
                 }}
               />
-              {signOutFailed ? <AppText accessibilityRole="alert">{t('error.request.internal')}</AppText> : null}
+              {signOutFailed ? <AlertText>{t('error.request.internal')}</AlertText> : null}
             </>,
           )
         : null}

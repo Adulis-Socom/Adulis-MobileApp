@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage } from '../api/messages';
-import { AppText } from '../components/AppText';
+import { AlertText } from '../components/AlertText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
@@ -92,7 +92,7 @@ export function MessageSellerButton(props: { sellerId: string } | { product: Pro
         onPress={() => void open()}
         disabled={busy}
       />
-      {error ? <AppText accessibilityRole="alert">{error}</AppText> : null}
+      {error ? <AlertText>{error}</AlertText> : null}
     </View>
   );
 }

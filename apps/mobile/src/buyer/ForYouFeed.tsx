@@ -5,6 +5,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-nativ
 import { useBootstrap } from '../api/bootstrap';
 import type { FypUnit } from '../api/client';
 import { failureMessage } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
@@ -36,9 +37,9 @@ export function ForYouFeed() {
   if (feed.status === 'pending' && feed.paused) {
     return (
       <Centered>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        <AlertText style={{ textAlign: 'center' }}>
           {t('common.offline')}
-        </AppText>
+        </AlertText>
       </Centered>
     );
   }
@@ -57,9 +58,9 @@ export function ForYouFeed() {
   if (feed.status === 'error' && feed.units.length === 0) {
     return (
       <Centered refreshing={feed.refreshing} onRefresh={feed.refresh}>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        <AlertText style={{ textAlign: 'center' }}>
           {failureMessage(t, feed.error)}
-        </AppText>
+        </AlertText>
         <Button label={t('common.retry')} onPress={feed.retry} />
       </Centered>
     );
@@ -70,9 +71,9 @@ export function ForYouFeed() {
   if (feed.isFetchNextPageError && feedSessionEnded(feed.error)) {
     return (
       <Centered refreshing={feed.refreshing} onRefresh={feed.refresh}>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        <AlertText style={{ textAlign: 'center' }}>
           {t('buyer.for_you.session_ended')}
-        </AppText>
+        </AlertText>
         <Button label={t('buyer.for_you.refresh')} onPress={feed.refresh} />
       </Centered>
     );
@@ -118,9 +119,9 @@ export function ForYouFeed() {
               </>
             ) : feed.isFetchNextPageError ? (
               <>
-                <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+                <AlertText style={{ textAlign: 'center' }}>
                   {`${t('buyer.for_you.more_failed')} ${failureMessage(t, feed.error)}`}
-                </AppText>
+                </AlertText>
                 <Button label={t('common.retry')} onPress={feed.retryNextPage} />
               </>
             ) : !feed.hasNextPage ? (

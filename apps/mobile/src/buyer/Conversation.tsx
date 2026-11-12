@@ -7,6 +7,7 @@ import { AccessibilityInfo, FlatList, ScrollView, View } from 'react-native';
 import { ApiError, isTransient, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -369,12 +370,14 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       <View style={{ flex: 1, padding: theme.space.lg, gap: theme.space.sm }}>
         {messages.isError ? (
           <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
-            <AppText>{t('buyer.chat.failed')}</AppText>
+            <AlertText>{t('buyer.chat.failed')}</AlertText>
             <AppText style={secondary}>{failureMessage(t, messages.error)}</AppText>
             <Button label={t('common.retry')} onPress={() => void messages.refetch()} />
           </View>
         ) : (
-          <AppText style={secondary}>{t(messages.isPending ? 'common.loading' : 'buyer.chat.empty')}</AppText>
+          <AppText style={secondary}>
+            {t(messages.fetchStatus === 'paused' && messages.data === undefined ? 'common.offline' : messages.isPending ? 'common.loading' : 'buyer.chat.empty')}
+          </AppText>
         )}
       </View>
     );
@@ -396,7 +399,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           <View style={{ gap: theme.space.xs }}>
             <AppText style={secondary}>{t('buyer.chat.ask_seller_hint')}</AppText>
             <Button label={t('buyer.chat.ask_seller')} variant="secondary" onPress={() => void ask()} disabled={asking} />
-            {askFailed ? <AppText accessibilityRole="alert">{t('buyer.chat.ask_failed')}</AppText> : null}
+            {askFailed ? <AlertText>{t('buyer.chat.ask_failed')}</AlertText> : null}
           </View>
         ) : null}
         <View style={{ gap: theme.space.xs }}>
@@ -525,7 +528,7 @@ function ProductContext({
       ) : status === 'checking' ? (
         <AppText style={secondary}>{t('buyer.chat.context_checking')}</AppText>
       ) : refusal !== null ? (
-        <AppText accessibilityRole="alert">{t(refusal)}</AppText>
+        <AlertText>{t(refusal)}</AlertText>
       ) : null}
       {status === 'unchecked' ? (
         // Checking again never changes the payload, so it stays available while a send is unconfirmed.

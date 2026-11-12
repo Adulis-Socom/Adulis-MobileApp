@@ -5,6 +5,7 @@ import { AccessibilityInfo, Alert, View } from 'react-native';
 
 import { problemCode, type CollectionDetail, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -96,7 +97,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
           ) : null}
         </>
       ) : null}
-      {failure ? <AppText accessibilityRole="alert">{failure}</AppText> : null}
+      {failure ? <AlertText>{failure}</AlertText> : null}
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} label={t('buyer.saved.tabs')} />
     </View>
   );
@@ -212,7 +213,7 @@ function ManageCollection({
           <Button label={t('buyer.collection.delete')} variant="secondary" disabled={busy} onPress={confirmDelete} />
         </View>
       </View>
-      {error ? <AppText accessibilityRole="alert">{error}</AppText> : null}
+      {error ? <AlertText>{error}</AlertText> : null}
     </View>
   );
 }

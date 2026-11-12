@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { ApiError, isTransient, type Category } from '../api/client';
 import { useSession } from '../auth/session';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { hasMessage, useT } from '../i18n/i18n';
@@ -111,9 +112,9 @@ export function CategoryTabs({
       </View>
       {failed ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.space.sm }}>
-          <AppText accessibilityRole="alert" style={{ color: theme.color.textSecondary, flexShrink: 1 }}>
+          <AlertText style={{ color: theme.color.textSecondary, flexShrink: 1 }}>
             {t('buyer.shop.categories_failed')}
-          </AppText>
+          </AlertText>
           {onRetry ? <Button label={t('common.retry')} variant="secondary" onPress={onRetry} /> : null}
         </View>
       ) : null}

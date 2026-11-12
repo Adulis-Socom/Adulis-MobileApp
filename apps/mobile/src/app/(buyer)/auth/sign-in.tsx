@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 
 import { useBootstrap } from '../../../api/bootstrap';
@@ -21,6 +22,7 @@ import { useT } from '../../../i18n/i18n';
  * starts a new one.
  */
 export default function SignIn() {
+  const headerHeight = useHeaderHeight();
   const t = useT();
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string; save?: string }>();
@@ -63,7 +65,12 @@ export default function SignIn() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Measured from under the header (WO-017, B-008's pattern): the header's height is the offset.
+      keyboardVerticalOffset={headerHeight}
+    >
       <Screen edges={['bottom', 'left', 'right']}>
         <AppText>{t('auth.sign_in.intro')}</AppText>
         <TextField

@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { ActivityIndicator, RefreshControl, View } from 'react-native';
 
 import { failureMessage } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import type { MobileMessageKey } from '@adulis/locale/mobile';
@@ -61,14 +62,14 @@ export function PublicListView<I>({
     if (blocked) {
       return (
         <>
-          <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+          <AlertText style={{ textAlign: 'center' }}>
             {blocked.message}
-          </AppText>
+          </AlertText>
           {blocked.onRetry ? <Button label={t('common.retry')} onPress={blocked.onRetry} /> : null}
         </>
       );
     }
-    if (list.paused) return <AppText accessibilityRole="alert">{t('common.offline')}</AppText>;
+    if (list.paused) return <AlertText>{t('common.offline')}</AlertText>;
     if (list.status === 'pending') {
       return (
         <>
@@ -82,9 +83,9 @@ export function PublicListView<I>({
     if (list.status === 'error') {
       return (
         <>
-          <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+          <AlertText style={{ textAlign: 'center' }}>
             {failureMessage(t, list.error)}
-          </AppText>
+          </AlertText>
           <Button label={t('common.retry')} onPress={list.retry} />
         </>
       );
@@ -126,9 +127,9 @@ export function PublicListView<I>({
               <ActivityIndicator color={theme.color.accent} accessibilityLabel={t('buyer.list.loading_more')} />
             ) : list.isFetchNextPageError ? (
               <>
-                <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+                <AlertText style={{ textAlign: 'center' }}>
                   {`${t('buyer.list.more_failed')} ${failureMessage(t, list.error)}`}
-                </AppText>
+                </AlertText>
                 <Button label={t('common.retry')} onPress={list.retryNextPage} />
               </>
             ) : !list.hasNextPage ? (

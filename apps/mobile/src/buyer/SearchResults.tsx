@@ -97,7 +97,7 @@ export function SearchResults({
       empty="buyer.search.loading"
       emptyState={
         <View style={{ gap: theme.space.md, alignItems: 'center' }}>
-          <AppText style={{ textAlign: 'center', color: theme.color.textSecondary }}>
+          <AppText accessibilityLiveRegion="polite" style={{ textAlign: 'center', color: theme.color.textSecondary }}>
             {fillSlots(t('buyer.search.empty'), { query }) ?? query}
           </AppText>
           <Button label={t('buyer.search.go_shop')} onPress={() => router.navigate('/shop')} />
@@ -131,7 +131,8 @@ function SearchRow({ item }: { item: SearchItem }) {
     const p = item.payload;
     const price = formatPriceSpan(locale, t, { min: p.price_min_minor, max: p.price_max_minor, currency: p.price_currency });
     const availability = t(p.available ? 'buyer.product.available' : 'buyer.product.unavailable');
-    const label = [p.name, price, availability].filter(Boolean).join(', ');
+    const soldBy = fillSlots(t('buyer.product.seller'), { store: p.seller.store_name }) ?? p.seller.store_name;
+    const label = [p.name, price, availability, soldBy].filter(Boolean).join(', ');
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Pressable
@@ -168,7 +169,12 @@ function SearchRow({ item }: { item: SearchItem }) {
     return (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={fillSlots(t('buyer.search.seller'), { store: s.store_name, handle: s.handle }) ?? s.store_name}
+        accessibilityLabel={[
+          fillSlots(t('buyer.search.seller'), { store: s.store_name, handle: s.handle }) ?? s.store_name,
+          level && hasMessage(level) ? fillSlots(t('buyer.seller.trust'), { level: t(level) }) : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}
         onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: s.handle } })}
         style={row}
         testID="search-seller"
@@ -186,7 +192,10 @@ function SearchRow({ item }: { item: SearchItem }) {
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
+        accessibilityLabel={[
+          fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption,
+          fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name,
+        ].join(', ')}
         onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
         style={[row, { flex: 1 }]}
         testID="search-scene"
@@ -220,14 +229,17 @@ export function SearchSceneTile({ scene }: { scene: Extract<SearchItem, { type: 
     <View style={{ flex: 1, margin: theme.space.xs }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption}
+        accessibilityLabel={[
+          fillSlots(t('buyer.seller.scene'), { caption: scene.caption }) ?? scene.caption,
+          fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name,
+        ].join(', ')}
         onPress={() => router.push({ pathname: '/scenes/[scenePostRef]', params: { scenePostRef: scene.public_ref } })}
         style={{ gap: theme.space.xs }}
         testID="search-scene-tile"
       >
       {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="disk" style={square} /> : <View style={square} />}
       <AppText numberOfLines={2}>{scene.caption}</AppText>
-      <AppText numberOfLines={1} style={{ color: theme.color.textSecondary }}>
+      <AppText style={{ color: theme.color.textSecondary }}>
         {fillSlots(t('buyer.search.scene_by'), { store: scene.seller.store_name }) ?? scene.seller.store_name}
       </AppText>
       </Pressable>

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 
 import { failureMessage } from '../api/messages';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
@@ -16,9 +17,9 @@ export function GoneState({ message }: { message: MobileMessageKey }) {
   const router = useRouter();
   return (
     <Screen centered edges={['bottom', 'left', 'right']}>
-      <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+      <AlertText style={{ textAlign: 'center' }}>
         {t(message)}
-      </AppText>
+      </AlertText>
       <Button
         label={t('buyer.scene.go_back')}
         // A cold launch into the screen may have nothing under it: go Home instead.
@@ -53,9 +54,9 @@ export function ReadStates({
   if (read.paused) {
     return (
       <Screen centered edges={['bottom', 'left', 'right']}>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        <AlertText style={{ textAlign: 'center' }}>
           {t('common.offline')}
-        </AppText>
+        </AlertText>
       </Screen>
     );
   }
@@ -75,9 +76,9 @@ export function ReadStates({
   if (read.value === undefined) {
     return (
       <Screen centered edges={['bottom', 'left', 'right']}>
-        <AppText accessibilityRole="alert" style={{ textAlign: 'center' }}>
+        <AlertText style={{ textAlign: 'center' }}>
           {failureMessage(t, read.error)}
-        </AppText>
+        </AlertText>
         <Button label={t('common.retry')} onPress={read.revalidate} disabled={read.revalidating} />
       </Screen>
     );

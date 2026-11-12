@@ -7,6 +7,7 @@ import type { SaveSurface, SaveTarget } from '../api/client';
 import { failureMessage } from '../api/messages';
 import { useSession } from '../auth/session';
 import type { ReturnTo } from '../auth/sign-in-flow';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
@@ -79,7 +80,7 @@ function SignedInSave({ target, surface, sceneRef }: { target: SaveTarget; surfa
       </View>
       {failure ? (
         <View style={{ gap: theme.space.xs }}>
-          <AppText accessibilityRole="alert">{`${t('buyer.save.failed')} ${failureMessage(t, failure)}`}</AppText>
+          <AlertText>{`${t('buyer.save.failed')} ${failureMessage(t, failure)}`}</AlertText>
           {save.state.status === 'error' ? <Button label={t('common.retry')} variant="secondary" onPress={() => void refetch()} /> : null}
         </View>
       ) : null}
