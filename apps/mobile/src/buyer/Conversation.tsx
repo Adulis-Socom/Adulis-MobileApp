@@ -18,14 +18,13 @@ import {
   MESSAGES,
   MESSAGE_MAX,
   acceptedMessage,
-  botText,
   escalatableAnswer,
   isConversationRef,
   useConversationMessages,
   useConversations,
-  type ChatMessage,
 } from './chat';
 import type { ProductRef } from './MessageSellerButton';
+import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
@@ -151,7 +150,6 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     );
   }
 
-  const when = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
   const text = draft.trim();
   const tooLong = text.length > MESSAGE_MAX;
   const refresh = () => {
@@ -312,47 +310,13 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     }
   };
 
-  const bubble = (m: ChatMessage) => {
-    const mine = m.kind === 'BUYER';
-    const bot = m.kind === 'BOT';
-    const sender = mine
-      ? 'buyer.chat.sender.you'
-      : bot
-        ? 'buyer.chat.sender.bot'
-        : m.kind === 'TEAM_MEMBER'
-          ? 'buyer.chat.sender.team'
-          : 'buyer.chat.sender.seller';
-    return (
-      <View
-        accessible
-        style={{
-          alignSelf: mine ? 'flex-end' : 'flex-start',
-          maxWidth: '88%',
-          gap: theme.space.xs,
-          padding: theme.space.md,
-          marginVertical: theme.space.xs,
-          borderRadius: theme.radius.md,
-          borderWidth: bot ? 2 : 1,
-          borderColor: bot ? theme.color.infoBorder : mine ? theme.color.accent : theme.color.border,
-          backgroundColor: bot ? theme.color.infoBg : mine ? theme.color.accentSubtle : theme.color.surface,
-        }}
-      >
-        <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{t(sender)}</AppText>
-        <AppText>{bot ? botText(t, m) : m.body}</AppText>
-        {m.aboutProduct ? <AppText style={secondary}>{t('buyer.chat.about_product')}</AppText> : null}
-        {m.aboutOrder ? <AppText style={secondary}>{t('buyer.chat.about_order')}</AppText> : null}
-        <AppText style={secondary}>{fillSlots(t('buyer.chat.sent_at'), { time: when(m.sentAt) })}</AppText>
-      </View>
-    );
-  };
-
   const list =
     messages.items.length > 0 ? (
       <FlatList
         inverted
         data={messages.items}
         keyExtractor={(m) => m.id}
-        renderItem={({ item }) => bubble(item)}
+        renderItem={({ item }) => <MessageBubble message={item} viewer="buyer" />}
         contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.sm }}
         // Inverted: the footer is drawn at the top, above the oldest message.
         ListFooterComponent={

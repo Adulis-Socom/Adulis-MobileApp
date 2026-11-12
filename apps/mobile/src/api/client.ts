@@ -457,6 +457,22 @@ export function createApiClient(deps: ApiDeps) {
     escalateConversation: (id: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/conversations/{id}/escalate', { params: { id }, idempotencyKey, ok: 200 }),
 
+    /**
+     * Seller-side Chat (WO-021): the same conversations, read and answered by the active store. Every
+     * call carries X-Adulis-Seller (the history and send paths are not under /v1/seller, so nothing
+     * adds it implicitly): it is how the server knows the request speaks for the store, and on an
+     * Account that is also the conversation's Buyer it is what keeps a reply from being the Buyer's.
+     * The list's scope must also name the same store (R10). No schema is published: checked in
+     * src/seller/seller-chat.ts and src/buyer/chat.ts. The client never sends a sender: the server
+     * derives owner or team member.
+     */
+    sellerConversations: (seller: string, cursor: string | null) =>
+      call<unknown>('GET', '/v1/conversations', { seller, query: { as: 'seller', seller_id: seller, cursor: cursor ?? undefined }, ok: 200 }),
+    sellerConversationMessages: (seller: string, id: string, cursor: string | null) =>
+      call<unknown>('GET', '/v1/conversations/{id}/messages', { seller, params: { id }, query: { cursor: cursor ?? undefined }, ok: 200 }),
+    sendSellerMessage: (seller: string, id: string, text: string, idempotencyKey: string) =>
+      call<unknown>('POST', '/v1/conversations/{id}/messages', { seller, params: { id }, body: { text }, idempotencyKey, ok: 201 }),
+
     /** POST /v1/auth/logout with the credential being signed out (already off the device). */
     logout: (token: string) =>
       call<void>('POST', '/v1/auth/logout', { bearer: token, ok: 204 }).catch((error: unknown) => {

@@ -5,6 +5,7 @@ import { ApiError, isTransient, problemCode } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { hasMessage } from '../i18n/i18n';
+import { SELLER } from '../seller/seller-context';
 import { keepIfCurrent } from './saved';
 
 /**
@@ -24,6 +25,15 @@ const isIso = (v: unknown): v is string => typeof v === 'string' && !Number.isNa
 const contractFailure = () => new ApiError({ kind: 'unexpected', status: 200 });
 
 export const isConversationRef = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
+
+/** Whose side reads a conversation (WO-021): the Buyer's, or one store's (every request names it). */
+export type ChatScope = { as: 'buyer' } | { as: 'seller'; sellerId: string };
+const BUYER_SIDE: ChatScope = { as: 'buyer' };
+/** A store's conversations live under that store's key only, never the Buyer's. */
+export const messagesKey = (scope: ChatScope, ref: string) =>
+  scope.as === 'buyer' ? [MESSAGES, ref] : [SELLER, scope.sellerId, 'conversation', ref];
+/** A refusal that a re-read cannot change: polling stops on it (WO-021). */
+const FINAL = new Set(['NOT_FOUND', 'PERMISSION_DENIED', 'AUDIENCE_NOT_PERMITTED']);
 
 export type Conversation = { id: string; storeName: string; handle: string; lastMessageAt: string };
 export type SenderKind = 'BUYER' | 'SELLER' | 'TEAM_MEMBER' | 'BOT';
@@ -167,20 +177,28 @@ export function useConversations() {
 /**
  * One conversation's messages, NEWEST FIRST (the server's order; the screen draws them bottom-up).
  * While the screen is focused and the app is in the foreground it re-reads every 30 seconds (the
- * design's bounded foreground polling); nothing runs in the background.
+ * design's bounded foreground polling); nothing runs in the background. WO-021: `scope` reads it as
+ * one store (X-Adulis-Seller on every request, the store's own cache entry, kept only while shown).
  */
-export function useConversationMessages(conversationRef: string | null, focused: boolean) {
+export function useConversationMessages(conversationRef: string | null, focused: boolean, scope: ChatScope = BUYER_SIDE) {
   const { session, boundApi } = useSession();
   const token = session.status === 'signedIn' ? session.token : null;
   const query = useInfiniteQuery({
-    queryKey: [MESSAGES, conversationRef ?? ''],
+    queryKey: messagesKey(scope, conversationRef ?? ''),
     queryFn: async ({ pageParam }: { pageParam: string | null }) =>
-      parseMessagePage(await keepIfCurrent(boundApi(token!), (api) => api.conversationMessages(conversationRef!, pageParam))),
+      parseMessagePage(
+        await keepIfCurrent(boundApi(token!), (api) =>
+          scope.as === 'buyer'
+            ? api.conversationMessages(conversationRef!, pageParam)
+            : api.sellerConversationMessages(scope.sellerId, conversationRef!, pageParam),
+        ),
+      ),
     initialPageParam: null as string | null,
     getNextPageParam: nextOf<ChatMessage>,
     enabled: token !== null && conversationRef !== null,
-    // Not on a conversation the server says is not available.
-    refetchInterval: (q) => (focused && problemCode(q.state.error) !== 'NOT_FOUND' ? 30_000 : false),
+    // Not on a conversation the server says is not available, or that this side may not read.
+    refetchInterval: (q) => (focused && !FINAL.has(problemCode(q.state.error) ?? '') ? 30_000 : false),
+    ...(scope.as === 'seller' ? { gcTime: 0 } : null),
     retry,
   });
   return { ...query, items: unique(query.data?.pages).sort(newestFirst) };
