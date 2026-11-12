@@ -1,5 +1,5 @@
-import { ModeShell } from '../../modes/ModeShell';
+import { SellerHome } from '../../seller/SellerHome';
 
-export default function SellerFoundation() {
-  return <ModeShell mode="seller" />;
+export default function SellerHomeRoute() {
+  return <SellerHome />;
 }

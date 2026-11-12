@@ -11,6 +11,7 @@ import { Button } from '../../../components/Button';
 import { ChoiceGroup } from '../../../components/ChoiceGroup';
 import { Screen } from '../../../components/Screen';
 import { amharicAvailable, useT } from '../../../i18n/i18n';
+import { MODE_HOME, useAvailableModes } from '../../../modes/modes';
 import { useUiStore } from '../../../state/ui-store';
 import { useTheme } from '../../../theme/theme';
 
@@ -26,8 +27,10 @@ import { useTheme } from '../../../theme/theme';
  * - Security: the Account's live sessions and Sign out (the one revoke a MOBILE session may make).
  * - Privacy: Delete Account, on the existing deletion-ticket flow.
  *
- * Mode switching stays out until a later work order wires account_context, and the developer
- * diagnostics entry exists in development builds only.
+ * - Switch to Seller (WO-020): only when the server says this Account has Seller Companion access
+ *   (account_context). The same session continues; nothing is shown about the stores here.
+ *
+ * The developer diagnostics entry exists in development builds only.
  */
 export default function You() {
   const t = useT();
@@ -39,6 +42,7 @@ export default function You() {
   const locale = useUiStore((state) => state.locale);
   const setLocale = useUiStore((state) => state.setLocale);
   const signedIn = session.status === 'signedIn';
+  const sellerAvailable = useAvailableModes().includes('seller');
   const [signOutFailed, setSignOutFailed] = useState(false);
 
   const section = (title: string, children: ReactNode) => (
@@ -58,6 +62,7 @@ export default function You() {
             <>
               <AppText>{t('buyer.you.signed_in')}</AppText>
               <AppText style={{ color: theme.color.textSecondary }}>{t('buyer.you.more_coming')}</AppText>
+              {sellerAvailable ? <Button label={t('seller.mode.switch_to_seller')} onPress={() => router.push(MODE_HOME.seller)} /> : null}
             </>,
           )
         : <SignInRequired message={t('buyer.you.signed_out')} returnTo="/account" />}

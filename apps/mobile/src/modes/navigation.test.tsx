@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 describe('development builds', () => {
-  it('reach the diagnostics from You, and every mode shell from there, without re-authenticating', async () => {
+  it('reach the diagnostics from You, and the Courier shell from there, without re-authenticating; never Seller', async () => {
     resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
     const router = await renderRouter(APP_DIR, { initialUrl: '/account' });
 
@@ -44,13 +44,11 @@ describe('development builds', () => {
     expect(router.getPathname()).toBe('/dev');
     expect(screen.getByText('Session: signed in')).toBeOnTheScreen();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Open Seller Companion' }));
-    expect(await screen.findByText('Seller Companion foundation ready')).toBeOnTheScreen();
-    expect(router.getPathname()).toBe('/seller');
-    expect(useUiStore.getState().activeMode).toBe('seller');
-
-    await fireEvent.press(screen.getByRole('button', { name: 'Switch to Courier' }));
+    // WO-020: the server says this Account has no Seller Companion access, so diagnostics offer none.
+    expect(screen.queryByRole('button', { name: 'Open Seller Companion' })).not.toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Open Courier' }));
     expect(await screen.findByText('Courier foundation ready')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Switch to Seller Companion' })).not.toBeOnTheScreen();
     expect(router.getPathname()).toBe('/courier');
     expect(useUiStore.getState().activeMode).toBe('courier');
 
