@@ -565,6 +565,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'seller.notifications.title': 'የመደብር ማሳወቂያዎች',
   'seller.notifications.generic': 'ከAdulis የመደብር ማሳወቂያ አለዎት።',
   'seller.notifications.about_order': 'ስለዚህ መደብር ትዕዛዝ ነው።',
+  'seller.notifications.protected': 'ይህ አስፈላጊ ማሳወቂያ ነው። በሻጭ ኮንሶል ውስጥ ሙሉውን ያንብቡ።',
   'seller.orders.title': 'ትዕዛዞች',
   'seller.orders.read_only': 'ትዕዛዞች እዚህ ለእይታ ብቻ ናቸው። ለትዕዛዝ ምላሽ መስጠት በአጋዡ ውስጥ አይገኝም።',
   'seller.orders.tabs': 'የትዕዛዝ ቡድኖች',

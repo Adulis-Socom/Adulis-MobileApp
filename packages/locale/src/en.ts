@@ -618,6 +618,7 @@ export const enCommon = {
   'seller.notifications.title': 'Store notifications',
   'seller.notifications.generic': 'You have a store notification from Adulis.',
   'seller.notifications.about_order': 'It is about one of this store\'s Orders.',
+  'seller.notifications.protected': 'This is an important notice. Read it in full in the Seller Console.',
   'seller.orders.title': 'Orders',
   'seller.orders.read_only': 'Orders are view only here. Responding to an Order is not available in the Companion.',
   'seller.orders.tabs': 'Order groups',
