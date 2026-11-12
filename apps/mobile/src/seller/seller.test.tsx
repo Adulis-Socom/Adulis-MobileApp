@@ -228,6 +228,7 @@ describe('store selection', () => {
     await renderRouter(APP_DIR, { initialUrl: '/seller' });
     expect(await screen.findByText(en['seller.chooser.title'])).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Store A, Owner, Open' })).toBeOnTheScreen();
+    expect(screen.getByText('@store-b')).toBeOnTheScreen(); // review F6: same-name stores tell apart
     await fireEvent.press(screen.getByRole('button', { name: 'Store B, Analyst, Suspended' }));
     expect(await screen.findByRole('header', { name: 'Store B' })).toBeOnTheScreen();
     expect(screen.getByText(en['seller.status.restricted'])).toBeOnTheScreen();
@@ -361,7 +362,7 @@ describe('basic overview', () => {
 describe('store notifications', () => {
   it('29, 33, 38. the store\'s inbox (as=seller with the matching header), a neutral sentence for an unknown template, Mark as read', async () => {
     signedIn();
-    installSeller({ notifications: { [A.id]: [[notice(1, { order_id: 'f5b00000-0000-4000-8000-000000000201' })]] } });
+    installSeller({ notifications: { [A.id]: [[notice(1, { order_id: 'f5b00000-0000-4000-8000-000000000201', suppressible: true })]] } });
     await renderRouter(APP_DIR, { initialUrl: '/seller' });
     await fireEvent.press(await screen.findByRole('button', { name: en['seller.notifications.title'] }));
     expect(await screen.findByText(en['seller.notifications.generic'])).toBeOnTheScreen();
@@ -413,7 +414,7 @@ describe('store notifications', () => {
 
   it('34, 35. a second tap while marking sends nothing; offline keeps the key for the retry', async () => {
     signedIn();
-    installSeller({ notifications: { [A.id]: [[notice(1)]] } });
+    installSeller({ notifications: { [A.id]: [[notice(1, { suppressible: true })]] } });
     let calls = 0;
     api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, () => (calls++ === 0 ? 'offline' : ok({ read_at: '2026-11-12T18:00:00.000Z' })));
     await renderRouter(APP_DIR, { initialUrl: '/seller/notifications' });
@@ -433,6 +434,28 @@ describe('store notifications', () => {
     await renderRouter(APP_DIR, { initialUrl: '/seller/notifications' });
     expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
     await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+  });
+});
+
+describe('security review fixes', () => {
+  it('F2. a protected store notice (non-suppressible) offers no Mark as read and points to the Seller Console', async () => {
+    signedIn();
+    installSeller({ notifications: { [A.id]: [[notice(1, { template_key: 'PAYOUT_CHANGE_REQUESTED', slots: { bank_code: 'CBE', account_last4: '6789' } })]] } });
+    await renderRouter(APP_DIR, { initialUrl: '/seller/notifications' });
+    expect(await screen.findByText(en['seller.notifications.protected'])).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: en['buyer.notifications.mark_read'] })).not.toBeOnTheScreen();
+    expect(screen.queryByText(/6789|CBE/)).not.toBeOnTheScreen();
+  });
+
+  it('F1. one store whose reads keep answering 404 while the list still names it: a bounded number of requests', async () => {
+    signedIn();
+    installSeller({ sellers: [A] });
+    api.on('GET /v1/seller/analytics/overview', () => problem(404, 'NOT_FOUND', 'request'));
+    await renderRouter(APP_DIR, { initialUrl: '/seller' });
+    expect(await screen.findByText(new RegExp(`^${en['seller.overview.failed']}`))).toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(10_000));
+    expect(api.callsTo('GET /v1/seller/analytics/overview').length).toBeLessThanOrEqual(2);
+    expect(api.callsTo('GET /v1/seller/list').length).toBeLessThanOrEqual(3);
   });
 });
 

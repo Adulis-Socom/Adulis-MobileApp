@@ -132,6 +132,8 @@ function StoreRow({ seller, onPress }: { seller: SellerRow; onPress: () => void 
       })}
     >
       <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{seller.storeName}</AppText>
+      {/* Two stores can share a name: the handle tells them apart (review F6). */}
+      <AppText style={{ color: theme.color.textSecondary }}>{`@${seller.handle}`}</AppText>
       <AppText style={{ color: theme.color.textSecondary }}>{role}</AppText>
       <AppText style={{ color: theme.color.textSecondary }}>{status}</AppText>
     </Pressable>

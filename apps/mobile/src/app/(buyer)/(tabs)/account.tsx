@@ -11,7 +11,8 @@ import { Button } from '../../../components/Button';
 import { ChoiceGroup } from '../../../components/ChoiceGroup';
 import { Screen } from '../../../components/Screen';
 import { amharicAvailable, useT } from '../../../i18n/i18n';
-import { MODE_HOME, useAvailableModes } from '../../../modes/modes';
+import { useAvailableModes } from '../../../modes/ModeLayout';
+import { MODE_HOME } from '../../../modes/modes';
 import { useUiStore } from '../../../state/ui-store';
 import { useTheme } from '../../../theme/theme';
 

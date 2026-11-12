@@ -1,6 +1,3 @@
-import { useAccountContext } from '../api/bootstrap';
-import { useSession } from '../auth/session';
-
 export const MODES = ['buyer', 'seller', 'courier'] as const;
 export type Mode = (typeof MODES)[number];
 
@@ -46,12 +43,5 @@ export function resolveAvailableModes({
   return modes;
 }
 
-export function useAvailableModes(): readonly Mode[] {
-  const { session } = useSession();
-  const context = useAccountContext();
-  return resolveAvailableModes({
-    devDiagnostics: __DEV__,
-    signedIn: session.status === 'signedIn',
-    sellerCompanion: context?.seller_companion?.available,
-  });
-}
+// The hook that reads these from the session and bootstrap is useAvailableModes (ModeLayout.tsx):
+// this module stays free of them, because the ui-store imports its types.

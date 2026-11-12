@@ -5,7 +5,8 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { useUiStore } from '../state/ui-store';
-import { MODE_HOME, MODE_LABEL, useAvailableModes, type Mode } from './modes';
+import { useAvailableModes } from './ModeLayout';
+import { MODE_HOME, MODE_LABEL, type Mode } from './modes';
 
 /**
  * Foundation diagnostic shell for the Seller Companion and Courier modes (development

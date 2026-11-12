@@ -10,7 +10,8 @@ import { Button } from '../../components/Button';
 import { ChoiceGroup } from '../../components/ChoiceGroup';
 import { Screen } from '../../components/Screen';
 import { useT } from '../../i18n/i18n';
-import { MODE_HOME, MODE_LABEL, useAvailableModes } from '../../modes/modes';
+import { useAvailableModes } from '../../modes/ModeLayout';
+import { MODE_HOME, MODE_LABEL } from '../../modes/modes';
 import { useUiStore } from '../../state/ui-store';
 import { sqliteVersion } from '../../storage/sqlite';
 

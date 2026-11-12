@@ -38,6 +38,8 @@ export type BuyerNotification = {
   slots: Record<string, unknown>;
   /** The Order the row is about, if any: presentation only, never authority. */
   aboutOrder: boolean;
+  /** Only an explicit `suppressible: true`; a protected notice (payout change, new sign-in) is false. */
+  suppressible: boolean;
   scheduledFor: string;
   readAt: string | null;
 };
@@ -56,6 +58,7 @@ function parseRow(row: unknown): BuyerNotification | null {
     templateKey: r.template_key,
     slots,
     aboutOrder: typeof r.order_id === 'string' && r.order_id !== '',
+    suppressible: r.suppressible === true,
     scheduledFor: r.scheduled_for,
     readAt: r.read_at,
   };

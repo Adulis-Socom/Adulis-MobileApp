@@ -1,8 +1,21 @@
 import { Redirect, Slot } from 'expo-router';
 import { useEffect } from 'react';
 
+import { useAccountContext } from '../api/bootstrap';
+import { useSession } from '../auth/session';
 import { useUiStore } from '../state/ui-store';
-import { useAvailableModes, type Mode } from './modes';
+import { resolveAvailableModes, type Mode } from './modes';
+
+/** The modes this account may open now (modes.ts): the session and the server's account_context. */
+export function useAvailableModes(): readonly Mode[] {
+  const { session } = useSession();
+  const context = useAccountContext();
+  return resolveAvailableModes({
+    devDiagnostics: __DEV__,
+    signedIn: session.status === 'signedIn',
+    sellerCompanion: context?.seller_companion?.available,
+  });
+}
 
 /**
  * Entering a mode sets `activeMode` and leaving clears it; the only other writer is

@@ -35,10 +35,12 @@ type SellerContextValue = {
   /** Back to the chooser (Change store). */
   change: () => void;
   /**
-   * A store-scoped read answered 404: the Account no longer holds that store (the server reports
-   * scope failures as 404, ADU-AUTH-01 S19). The store is dropped and the relationship read again,
-   * so a stale bootstrap or list cannot keep it open. A 403 is a feature this role lacks and is
-   * shown where it happens; offline and server errors change nothing.
+   * A store-scoped read answered 404: the Account may no longer hold that store (the server reports
+   * scope failures as 404, ADU-AUTH-01 S19). A chosen store is released and the relationship is read
+   * again (list and bootstrap), so a stale bootstrap or list cannot keep it open: the list decides.
+   * Once per failure: the failed read is not removed and re-sent (review F1: with one store that
+   * looped while the list still named it). A 403 is a feature this role lacks and is shown where it
+   * happens; offline and server errors change nothing.
    */
   refused: (error: unknown) => void;
 };
@@ -79,7 +81,6 @@ export function SellerProvider({ children }: { children: ReactNode }) {
     (error: unknown) => {
       if (problemCode(error) !== 'NOT_FOUND') return;
       setChosenId(null);
-      qc.removeQueries({ queryKey: [SELLER] });
       void qc.invalidateQueries({ queryKey: [SELLER_LIST] });
       void qc.invalidateQueries({ queryKey: ['bootstrap'] });
     },

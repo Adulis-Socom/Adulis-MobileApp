@@ -46,6 +46,9 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
 
   const item = (n: BuyerNotification) => {
     const unread = n.readAt === null;
+    // A store's protected notice is never marked read unseen (read state syncs to the Seller Console,
+    // where it can be read in full; WO-020 review F2). Founder decision pending on the wider rule.
+    const protectedNotice = scope.as === 'seller' && !n.suppressible;
     return (
       <View
         style={{
@@ -66,7 +69,8 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
           <AppText style={secondary}>{t(scope.as === 'seller' ? 'seller.notifications.about_order' : 'buyer.notifications.about_order')}</AppText>
         ) : null}
         <AppText style={secondary}>{fillSlots(t('buyer.notifications.received'), { time: when(n.scheduledFor) })}</AppText>
-        {unread ? (
+        {unread && protectedNotice ? <AppText style={secondary}>{t('seller.notifications.protected')}</AppText> : null}
+        {unread && !protectedNotice ? (
           <Button
             label={t('buyer.notifications.mark_read')}
             variant="secondary"
