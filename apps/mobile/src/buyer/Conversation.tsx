@@ -2,7 +2,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Redirect, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, FlatList, View } from 'react-native';
+import { AccessibilityInfo, FlatList, ScrollView, View } from 'react-native';
 
 import { ApiError, isTransient, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
@@ -57,6 +57,13 @@ import { keepIfCurrent, usePrivateApi } from './saved';
  */
 /** How many pages of the Buyer's conversation list the screen reads to find its Seller (25 each). */
 export const MAX_LIST_PAGES = 4;
+/**
+ * ON-20261111-164 (WO-016): the history keeps at least this much height, and the composer's
+ * content scrolls inside at most COMPOSER_MAX of the screen, with Send fixed under it. Enlarged text
+ * and the keyboard can no longer push the conversation off the screen.
+ */
+const HISTORY_MIN = 120;
+const COMPOSER_MAX = '60%';
 
 export function ConversationScreen({ conversationRef, product = null }: { conversationRef: unknown; product?: ProductRef | null }) {
   const t = useT();
@@ -75,6 +82,8 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   // failed: the server refused it; unknown: no answer (it may have been stored).
   const [state, setState] = useState<'idle' | 'sending' | 'failed' | 'unknown'>('idle');
   const [error, setError] = useState<string | null>(null);
+  // ON-20261111-168 (WO-016): one NOT_FOUND covers the conversation and the Product; name neither.
+  const [notFound, setNotFound] = useState(false);
   const [asking, setAsking] = useState(false);
   const [askFailed, setAskFailed] = useState(false);
   const sending = useRef(false);
@@ -104,9 +113,12 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   });
   const askIntent = useRef<{ forMessage: string; key: string } | null>(null);
 
+  // The alert role alone is not spoken on Android: announce what happened to the message.
   useEffect(() => {
     if (state === 'sending') AccessibilityInfo.announceForAccessibility(t('buyer.chat.sending'));
-  }, [state, t]);
+    if (state === 'unknown') AccessibilityInfo.announceForAccessibility(t('buyer.chat.maybe_not_sent'));
+    if (state === 'failed') AccessibilityInfo.announceForAccessibility(t(notFound ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent'));
+  }, [state, notFound, t]);
   const listed = conversations.items.some((c) => c.id === conversationRef);
   const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
   const pagesRead = conversations.data?.pages.length ?? 0;
@@ -177,6 +189,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     sendIntent.current = null;
     setState('idle');
     setError(null);
+    setNotFound(false);
   };
   const removeContext = () => {
     if (sending.current || (state === 'unknown' && sendIntent.current !== null)) return;
@@ -204,6 +217,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     sending.current = true;
     setState('sending');
     setError(null);
+    setNotFound(false);
     try {
       let productId: string | null = null;
       if (context !== null) {
@@ -254,9 +268,17 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       const answered = wasAnswered(failure);
       if (answered) sendIntent.current = null;
       if (!api.isCurrent()) return;
-      if (context !== null && problemCode(failure) === 'NOT_FOUND') setRefusal('gone');
+      if (problemCode(failure) === 'NOT_FOUND') {
+        // Not "the Product was removed" and not "the conversation was deleted": a current read of
+        // each decides that (a 404 there shows "no longer available" / "not available").
+        setNotFound(true);
+        setError(t(context !== null ? 'buyer.chat.not_found_anchored' : 'buyer.chat.not_found_plain'));
+        if (context !== null) void contextRead.refetch();
+        void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+      } else {
+        setError(failureMessage(t, failure));
+      }
       setState(answered ? 'failed' : 'unknown');
-      setError(failureMessage(t, failure));
       if (!answered) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } finally {
       sending.current = false;
@@ -358,8 +380,13 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.sm }}>
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
       </View>
-      <View style={{ flex: 1 }}>{list}</View>
-      <View style={{ padding: theme.space.lg, gap: theme.space.sm, borderTopWidth: 1, borderColor: theme.color.border }}>
+      <View style={{ flex: 1, minHeight: HISTORY_MIN }}>{list}</View>
+      <View style={{ maxHeight: COMPOSER_MAX, borderTopWidth: 1, borderColor: theme.color.border }}>
+      <ScrollView
+        testID="chat-composer"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: theme.space.lg, paddingBottom: theme.space.sm, gap: theme.space.sm }}
+      >
         {canAsk ? (
           <View style={{ gap: theme.space.xs }}>
             <AppText style={secondary}>{t('buyer.chat.ask_seller_hint')}</AppText>
@@ -410,19 +437,27 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           error={tooLong ? (fillSlots(t('buyer.chat.too_long'), { max: MESSAGE_MAX.toLocaleString(locale) }) ?? null) : null}
         />
         {state === 'sending' ? <AppText style={secondary}>{t('buyer.chat.sending')}</AppText> : null}
-        {state === 'failed' || state === 'unknown' ? (
+        {state === 'failed' && notFound ? (
+          <View accessibilityRole="alert">
+            <AppText>{error}</AppText>
+          </View>
+        ) : state === 'failed' || state === 'unknown' ? (
           <View accessibilityRole="alert">
             <AppText>{t(state === 'failed' ? 'buyer.chat.not_sent' : 'buyer.chat.maybe_not_sent')}</AppText>
             {error ? <AppText style={secondary}>{error}</AppText> : null}
           </View>
         ) : null}
+        <AppText style={secondary}>{t('buyer.chat.connected_only')}</AppText>
+      </ScrollView>
+      <View style={{ paddingHorizontal: theme.space.lg, paddingBottom: theme.space.lg, paddingTop: theme.space.xs, gap: theme.space.sm }}>
+        {/* Unconfirmed: the same message again (same text, Product and key), never a new one. */}
         <Button
-          label={t('buyer.chat.send')}
+          label={t(frozen ? 'buyer.chat.retry_send' : 'buyer.chat.send')}
           onPress={() => void send()}
           disabled={state === 'sending' || text.length === 0 || tooLong || (context !== null && contextStatus !== 'ok')}
         />
         {frozen ? <Button label={t('buyer.chat.edit_unconfirmed')} variant="secondary" onPress={abandon} /> : null}
-        <AppText style={secondary}>{t('buyer.chat.connected_only')}</AppText>
+      </View>
       </View>
     </View>
   );
