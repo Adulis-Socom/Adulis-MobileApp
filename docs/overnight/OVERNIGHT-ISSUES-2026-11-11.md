@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148. WO-013 (12 November 2026, branch `mobile/wo-013-buyer-messaging`, from `37bfd56`) added -149 to -158. The batch's final gates added -159 and -160 and updated -126.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148. WO-013 (12 November 2026, branch `mobile/wo-013-buyer-messaging`, from `37bfd56`) added -149 to -158. The batch's final gates added -159 and -160 and updated -126. WO-014 (12 November 2026, branch `mobile/wo-014-product-context-messaging`, from `706e894`) updated -126, -149, -151, -153 and -159 and added -161 to -170; -129, -130, -132, -141, -146, -152, -154, -156 and the payment deferral are unchanged.
 
 ## Issues
 
@@ -2360,7 +2360,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
     - `e2-e6.jobs` (the global stock-confidence nudge);
     - `wo-009-collections` (a global commerce-row count).
   - Each passed alone on a fresh disposable database (19/19, 24/24, 26/26). OTP limits were not raised.
-
+- **WO-014 (12 November 2026):** Still OPEN. On freshly rebuilt disposable databases at `2997695`: the bounded API run (`--maxWorkers=2`) passed 983/983, and this time the parallel `pnpm test` was green too (API 983/983, mobile 376/376, exit 0). One green parallel run does not show the shared-limit interference is gone; OTP limits were not raised. Evidence: G:\AdulisDevelopment\WO-014\logs\gates\pnpm-test.log.
 
 ### ON-20261111-127
 
@@ -2775,6 +2775,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Buyers cannot attach images, choose a Product or Scene subject, see read state or report a message.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder: prioritise the backend gaps (rows 4, 8, 12, 17, 18, 24) and the policy items (-156) for the next Chat work order.
+- **WO-014 (12 November 2026):** Still OPEN. Row 3 (Ask Seller from a Product) is now SUPPORTED and row 6 sends a Product subject (`product_id`); row 6 stays PARTIAL (no Scene, Order or source context). The other backend gaps and the policy items are unchanged.
 
 ### ON-20261111-150
 
@@ -2799,7 +2800,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-013
 - **Severity:** LOW
 - **Type:** DEFERRED
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-014)
 - **Summary:** Ask Seller from a Product (with the Product as the message subject, MOB R-07, CHAT S5) is not built.
 - **Expected:** Product Detail opens the conversation with the Product preselected.
 - **Actual:** Messaging starts from the Seller Profile only; no message carries a product_id.
@@ -2811,6 +2812,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Buyers describe the Product in text.
 - **Founder decision required:** No
 - **Recommended resolution:** A follow-up: resolve the Seller through the public storefront read by handle, add the selector, send product_id per message (the server already checks the Seller's PUBLISHED Products).
+- **WO-014 (12 November 2026):** RESOLVED. Product Detail has Ask Seller About This Product; the Seller is resolved through the public storefront read by handle (same handle, well-formed id), the one conversation opens with `POST /v1/conversations {seller_id}`, and the composer carries the Product (from its own current read, re-read before sending) as the next message's `product_id`. Commits `2d00d4f`, `a2e5a18`, `518b88a`, `a4c7229`, `2997695`. Verification: chat.test.tsx 43/43; native journeys A-E PASS (docs/mobile/WO-014-PRODUCT-CONTEXT-MESSAGING.md). Choosing another Product from inside the conversation is not built.
 
 ### ON-20261111-152
 
@@ -2847,6 +2849,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Paging can still skip a row at a boundary.
 - **Founder decision required:** No
 - **Recommended resolution:** Backend: clock_timestamp() for the bot row (or a sequence) and an (sent_at, id) keyset cursor.
+- **WO-014 (12 November 2026):** Unchanged (backend). Product-anchored messages use the same list; the native runs showed the question before its automated answer each time, and the client tie rule still applies.
 
 ### ON-20261111-154
 
@@ -2943,7 +2946,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-011..013 (final gates)
 - **Severity:** LOW
 - **Type:** TEST
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-014)
 - **Summary:** `card-saves.yaml` STEP=dark assumes an Account with nothing saved; run after `saved-collections` (which saves the Woven basket) it fails on "Save Woven basket".
 - **Expected:** A regression flow passes in any order.
 - **Actual:** FAIL cards-dark in the final regression battery; the same Dark/enlarged-text check passed through categories.yaml STEP=dark.
@@ -2955,6 +2958,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A future battery can show a false failure.
 - **Founder decision required:** No
 - **Recommended resolution:** Make the step sign in a fresh Account or remove the save first (test maintenance).
+- **WO-014 (12 November 2026):** RESOLVED in the harness, with no assertion weakened: `card-saves` STEP=dark now runs on a fresh disposable Account signed in just before it (`G:\AdulisDevelopment\tools\review\wo014-native.sh`, `fresh_account`). Verified alone (cards-dark-alone PASS) and right after `saved-collections` in the full regression battery (cards-dark PASS), the order that failed before. Evidence: G:\AdulisDevelopment\WO-014\logs\native-regressions.out.
 
 ### ON-20261111-160
 
@@ -2973,3 +2977,183 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** None.
 - **Founder decision required:** No
 - **Recommended resolution:** None.
+
+### ON-20261111-161
+
+- **Work order:** WO-014
+- **Severity:** MEDIUM
+- **Type:** ENVIRONMENT
+- **Status:** OPEN
+- **Summary:** The system-managed page file grew from 15.7 GB to 28.6 GB allocated during the work order, taking C: from 37.95 GB free (checkpoint A) to 14.8 GB (after the native journeys).
+- **Expected:** C: stays well above the 10 GB gate through a native batch.
+- **Actual:** Commit charge reached about 42 GB (the emulator about 6 GB, Docker/WSL, Node, Metro, Jest workers). Stopping the emulator brought C: back to 27.2 GB free; the page file stays large until Windows shrinks it.
+- **Reproduction:** Docker Desktop + emulator + Metro + API + Maestro, then Jest.
+- **Evidence:** G:\AdulisDevelopment\WO-014\logs\checkpoint-A/B/C-dry/C/D.json (C:\pagefile.sys and commit rows).
+- **Root cause:** Memory pressure on a machine with low physical RAM; the page file is system-managed.
+- **Fix and commit:** None (the page file is protected; not changed). The emulator was stopped before the gates.
+- **Verification:** C: never fell below the 10 GB gate.
+- **Remaining risk:** A longer native batch with gates in parallel could reach the 5 GB stop.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide the page-file policy (or reboot before native batches); keep the emulator off during the gates.
+
+### ON-20261111-162
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Neither the public Product read nor the Buyer's conversation list carries a `seller_id`, so the client matches a Product's Seller to a conversation by handle.
+- **Expected:** Seller identity compared by id.
+- **Actual:** Ask Seller resolves the Seller through the storefront read of the Product's handle (used only for the same handle); the conversation screen compares the Product's Seller handle with the list row's handle.
+- **Reproduction:** n/a
+- **Evidence:** docs/mobile/WO-014-CHAT-SECURITY-REVIEW.md I-4; contracts/openapi.json (no schema for the conversation list).
+- **Root cause:** Public DTOs name Sellers by handle (STOREFRONT-02); the Chat endpoints publish no schemas.
+- **Fix and commit:** None (no contract change in this work order).
+- **Verification:** The server checks every `product_id` (the conversation Seller's PUBLISHED Products only).
+- **Remaining risk:** A handle released and reassigned between the two reads (STOREFRONT-02 S12; no handle history, OVN-091) could mislabel a context; the server still refuses a foreign Product.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: add `seller_id` to the public Product DTO and to the conversation list row (additive).
+
+### ON-20261111-163
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Message history cannot name the Product a past message is about; it shows "About a Product".
+- **Expected:** The design's message subject shown with the Product's current name when a current read allows it.
+- **Actual:** A message carries only `product_id`; no Product read by id exists, and the work order forbids a new endpoint.
+- **Reproduction:** Send a Product question; reopen the conversation.
+- **Evidence:** docs/mobile/WO-014-PRODUCT-CONTEXT-MESSAGING.md section 2.
+- **Root cause:** Public Product reads are by handle and slug only.
+- **Fix and commit:** None (the fallback line is the work order's rule).
+- **Verification:** chat.test.tsx 11-16.
+- **Remaining risk:** Buyers see which messages were about a Product, not which one.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: return the Product's public handle and slug (or a public summary) with Buyer messages, filtered by current eligibility.
+
+### ON-20261111-164
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** UX
+- **Status:** OPEN
+- **Summary:** At font scale 1.3 with the keyboard open, the conversation's message list has no height left; only the composer (context, box, Send) shows.
+- **Expected:** Some history visible while typing.
+- **Actual:** The composer stays visible (the work order's requirement), the list collapses until the keyboard closes.
+- **Reproduction:** Font scale 1.3, Ask Seller from a Product, tap the message box.
+- **Evidence:** G:\AdulisDevelopment\WO-014\maestro\pcm-view (pcm-v2-keyboard.png).
+- **Root cause:** A fixed composer area (context block, box, buttons, the connected-only note) under a KeyboardAvoidingView.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Low: the history returns when the keyboard closes.
+- **Founder decision required:** No
+- **Recommended resolution:** A later UX pass: a collapsible context block or a scrollable composer area.
+
+### ON-20261111-165
+
+- **Work order:** WO-014
+- **Severity:** MEDIUM
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** (Security review M-1) The conversation screen requested a failing later page of the conversation list again and again, back to back.
+- **Expected:** At most one request per failure until the Buyer retries.
+- **Actual:** An effect that depended on an object rebuilt every render called fetchNextPage after every render while a page failed (a 500, a 429 or a malformed body).
+- **Reproduction:** A Product context for a conversation beyond the first 25; page 2 answers 500.
+- **Evidence:** docs/mobile/WO-014-CHAT-SECURITY-REVIEW.md.
+- **Root cause:** Effect dependencies.
+- **Fix and commit:** Stop on a list failure; "could not be checked" with Try again (commit `a4c7229`).
+- **Verification:** chat.test.tsx "review M-1" (it never finishes against the original effect).
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** None.
+
+### ON-20261111-166
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** RESOLVED
+- **Summary:** The first native run of Journey D failed on a wrong flow assertion ("About a Product" not visible).
+- **Expected:** The step checks the refusal.
+- **Actual:** The conversation already held the A and B messages, which show "About a Product". The screenshot showed the correct refusal; the rows showed nothing sent about the Product.
+- **Reproduction:** Run pcm journeys A, B, then D in one conversation.
+- **Evidence:** G:\AdulisDevelopment\WO-014\maestro\pcm-d-send (first run).
+- **Root cause:** A flow assertion written for an empty conversation.
+- **Fix and commit:** The assertion is now "Send is disabled" (commit `2997695`).
+- **Verification:** Journey D rerun: PASS.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** None.
+
+### ON-20261111-167
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** SECURITY
+- **Status:** RESOLVED
+- **Summary:** (Security review L-2, L-3) An unconfirmed send could go out again under a new key if the Product now read as another id; re-entering the open conversation with another Product kept the first context.
+- **Expected:** An unconfirmed send replays its own payload or nothing; the context is the Product the Buyer came from.
+- **Actual:** As summarised.
+- **Reproduction:** See docs/mobile/WO-014-CHAT-SECURITY-REVIEW.md.
+- **Evidence:** That record.
+- **Root cause:** The frozen payload was compared with a refreshing read; the singular route reuses the screen.
+- **Fix and commit:** Refuse as a mismatch and keep the send unconfirmed; replace the context on re-entry unless a send is in flight or unconfirmed (commit `a4c7229`).
+- **Verification:** chat.test.tsx "review L-2", "review L-3".
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+- **Recommended resolution:** None.
+
+### ON-20261111-168
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** UX
+- **Status:** OPEN
+- **Summary:** (Security review I-5) Any 404 on an anchored send says the Product is no longer available, even if the conversation itself was not found.
+- **Expected:** The message names what failed.
+- **Actual:** The server answers one NOT_FOUND for both; the client cannot tell them apart.
+- **Reproduction:** n/a (a conversation removed while open).
+- **Evidence:** docs/mobile/WO-014-CHAT-SECURITY-REVIEW.md I-5.
+- **Root cause:** The API's error code (CHAT-CONTRACT-GAPS row 20: no context-specific codes yet).
+- **Fix and commit:** None; nothing is disclosed.
+- **Verification:** n/a
+- **Remaining risk:** A misleading line in a rare case.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: the design's context error codes (MESSAGE_PRODUCT_POST_INVALID).
+
+### ON-20261111-169
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** TOOLING
+- **Status:** RESOLVED
+- **Summary:** The morning review launcher depended on Claude scratch files, and its "API already running?" check looped about 6 minutes before starting a stopped API.
+- **Expected:** A reproducible launcher that starts promptly.
+- **Actual:** Support files lived in a session temporary folder; each probe of a closed localhost port took about 4 seconds on Windows.
+- **Reproduction:** `morning-start.sh start` with the API stopped.
+- **Evidence:** G:\AdulisDevelopment\WO-014\logs\launcher-start.out.
+- **Root cause:** Scratch paths; a 90-try loop used as a single check.
+- **Fix and commit:** All support files in G:\AdulisDevelopment\tools\review (no scratch path left); one quick probe on 127.0.0.1. The guide points there (docs commit).
+- **Verification:** start (cold, then warm: 7.6 s), code, stop and prepare run from the stable location.
+- **Remaining risk:** The tools folder is outside Git (on the SSD by policy).
+- **Founder decision required:** No
+- **Recommended resolution:** None.
+
+### ON-20261111-170
+
+- **Work order:** WO-014
+- **Severity:** LOW
+- **Type:** TOOLING
+- **Status:** OPEN
+- **Summary:** `adulis-storage-audit.ps1 -Clean -Execute` removed 92 Maestro APKs (627 MB) but its JSON `clean` field reported "0 of 1".
+- **Expected:** The JSON lists each removed file.
+- **Actual:** The text report and the drive totals are right; the JSON summary is not.
+- **Reproduction:** Run the audit with -Clean -Execute and read the JSON.
+- **Evidence:** G:\AdulisDevelopment\WO-014\logs\checkpoint-D.json and checkpoint-D.txt.
+- **Root cause:** Not investigated (ops script outside this work order's scope).
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** A reader of the JSON alone under-reports cleanup.
+- **Founder decision required:** No
+- **Recommended resolution:** Ops maintenance: serialise the `$cleaned` array in the JSON.

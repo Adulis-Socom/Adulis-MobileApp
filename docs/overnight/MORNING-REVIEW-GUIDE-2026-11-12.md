@@ -11,7 +11,7 @@ disposable test database (`adulis_gates`), which has been loaded with review dat
 2. Open **Git Bash** and run:
 
    ```
-   bash /g/AdulisDevelopment/WO-013/scratch/morning-start.sh
+   bash /g/AdulisDevelopment/tools/review/morning-start.sh
    ```
 
    The script:
@@ -26,19 +26,18 @@ disposable test database (`adulis_gates`), which has been loaded with review dat
    not sent by SMS. In a second Git Bash window, run:
 
    ```
-   bash /g/AdulisDevelopment/WO-013/scratch/morning-start.sh code +251911700001
+   bash /g/AdulisDevelopment/tools/review/morning-start.sh code +251911700001
    ```
 
    It prints the latest code for that number.
 
-To stop everything afterwards: `bash /g/AdulisDevelopment/WO-013/scratch/morning-start.sh stop`.
+To stop everything afterwards: `bash /g/AdulisDevelopment/tools/review/morning-start.sh stop`.
 
 If something does not start, the script says what failed. Nothing here touches production.
 
-The helper script (tested at the end of the night: prepare, start, code, stop) uses support scripts
-in the overnight session's temporary folder under `C:\Users\naods\AppData\Local\Temp\claude\`. If
-Windows has cleaned that folder and the script reports a missing file, ask Claude to recreate the
-review environment. The app and the test database are unaffected.
+The helper script and every support file it uses live in `G:\AdulisDevelopment\tools\review\` on
+the external SSD (moved there in WO-014, so nothing depends on a temporary folder any more). If the
+SSD is not connected, the script stops and says so. The app and the test database are unaffected.
 
 ## 2. What to check
 
@@ -97,7 +96,7 @@ number each time.
 | | |
 |---|---|
 | Screen | Home -> **Notifications** (top of the Home screen) |
-| Action | Sign in as **+251911700010** in the app. Then, in Git Bash, run `bash /g/AdulisDevelopment/WO-013/scratch/morning-start.sh notifications +251911700010` to load 29 sample notifications for that Account. Open Notifications (or tap Refresh notifications) |
+| Action | Sign in as **+251911700010** in the app. Then, in Git Bash, run `bash /g/AdulisDevelopment/tools/review/morning-start.sh notifications +251911700010` to load 29 sample notifications for that Account. Open Notifications (or tap Refresh notifications) |
 | Success | "Recent" and "Older" groups. Each row says **Unread** or **Read**, "You have a notification from Adulis.", and "Received ...". Tap **Mark as read** on an unread row: it changes to Read. **Refresh notifications** keeps it Read. Scroll down, then **Load older notifications** -> "That is everything for now." |
 | Failure | A row that opens a screen or link; a code like `ORDER_...` shown; a Seller notification such as stock reminders; a "Mark all read" button (deliberately absent) |
 | Sign-in | Yes. Signed out, it shows "Sign in to see notifications." |

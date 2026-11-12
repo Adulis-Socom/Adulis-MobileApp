@@ -16,10 +16,10 @@ Status key:
 |---|---|---|---|---|---|
 | 1 | One conversation per Buyer, Seller and Market; create or return | CHAT S1, S3, S19 | `POST /v1/conversations {seller_id}`, unique pair, idempotent | Message Seller | SUPPORTED |
 | 2 | Entry from the Seller Profile | MOB R-09; CHAT S5 | yes | Built (by the profile's `seller_id`) | SUPPORTED |
-| 3 | Ask Seller from a Product, the Product preselected | MOB R-07; CHAT S5 | A per-message `product_id` anchor (the Seller's PUBLISHED Products only); the Product DTO carries the Seller's handle, not its id | Not built | DEFERRED (needs a Product selector and a Seller lookup by the public handle) |
+| 3 | Ask Seller from a Product, the Product preselected | MOB R-07; CHAT S5 | A per-message `product_id` anchor (the Seller's PUBLISHED Products only); the Product DTO carries the Seller's handle, not its id | WO-014: Ask Seller About This Product on Product Detail; the Seller resolved by the public storefront read of that handle; the Product preselected for the next message only | SUPPORTED (WO-014; choosing another Product from inside the conversation is not built) |
 | 4 | Entry from a Scene; a SCENE_POST subject; Scene with a tagged Product | CHAT S4, S5 | None: no Scene subject, no source context | Not built | BACKEND GAP |
 | 5 | ORDER subject from Order Detail | CHAT S4, S5 | A per-message `order_id` anchor (this pair's Orders) | Not built (Orders not built) | DEFERRED |
-| 6 | Per-message immutable subject: NONE, PRODUCT_POST, SCENE_POST or ORDER, and a source context | CHAT S4, S25 | `product_id` or `order_id`, at most one | Plain text only (no anchor sent) | PARTIAL |
+| 6 | Per-message immutable subject: NONE, PRODUCT_POST, SCENE_POST or ORDER, and a source context | CHAT S4, S25 | `product_id` or `order_id`, at most one | WO-014: NONE or a Product (`product_id`, re-read before sending); no Scene, Order or source context | PARTIAL |
 | 7 | Sender kinds BUYER, SELLER_OWNER, TEAM_MEMBER, BOT | CHAT S7 | BUYER, SELLER, TEAM_MEMBER, BOT | Labelled You / Seller / Seller team / Automated answer | SUPPORTED (SELLER is the owner) |
 | 8 | System facts as timeline events, never as messages | CHAT S7 | None | None shown | BACKEND GAP |
 | 9 | Staff label and bot brand | CHAT S9 | n/a | Generic labels ("Seller team", "Automated answer") | POLICY OPEN |
@@ -50,13 +50,19 @@ Status key:
 
 ## Notes
 
-- **Seller identity.** It comes only from the public profile read's `seller_id`. Handles and
-  names are never used as ids, and route parameters carry only the conversation reference. The
+- **Seller identity.** It comes only from a public read's `seller_id`: the Seller Profile read,
+  or (WO-014) the storefront read of the handle a Product names, used only when it answers for
+  that same handle. Handles and names are never used as ids. Route parameters carry the
+  conversation reference and, from a Product, its public handle and slug as lookup keys only. The
   server decides membership.
 - **Bot answer templates.** `nlu.answer_template.template` values are template resources. No
   mobile catalogue entry exists for them, so every keyword or chip answer currently shows the
   neutral line, and Ask the Seller is offered. Only the escalation line (`chat.bot.escalated`)
   renders.
-- **Product context.** Row 3 can be built on today's backend: resolve the Seller by the public
-  handle the Product carries, then send `product_id` on a message. It needs a Product selector
-  (CHAT S5) and a product decision on the composer. Recorded as ON-20261111-151.
+- **Product context.** Row 3 is built (WO-014, ON-20261111-151): the composer shows the Product
+  from the screen's own current public read, re-reads it before an anchored send, and clears it
+  after the server accepts. Message history shows "About a Product" without a name: no Product
+  read by id exists (row 33's kind of gap), so a past message's Product is never named from a
+  guess. The Product's Seller is matched to the conversation by the Seller handle in the Buyer's
+  conversation list; the Product DTO and the list carry no `seller_id` (see
+  `docs/mobile/WO-014-PRODUCT-CONTEXT-MESSAGING.md`).
