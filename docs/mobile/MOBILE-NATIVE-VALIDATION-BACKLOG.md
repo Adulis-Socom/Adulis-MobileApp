@@ -42,6 +42,34 @@ its phone and the launcher's `code` command. Disposable data only.
 | Android regression | NOT EXECUTED | WO-014..018 flows still pass with Seller mode present |
 | iOS | NOT EXECUTED | No macOS hardware; EAS or cloud workflow needed |
 
+## From WO-021 (Seller Companion messaging)
+
+WO-021 ran under a resource restriction (no emulator, Gradle, Maestro, Docker, PostgreSQL or local
+API). Nothing below was run. Each check needs the API and a store whose owner or team member has
+`seller.messages:*`, a Buyer conversation in the disposable data, and a first answer to W21-02:
+does the running API accept `as=seller` from a MOBILE session at all?
+
+| Item | Status | What to check |
+|---|---|---|
+| Seller conversation inbox | NOT EXECUTED -- RESOURCE DEFERRED | Messages on Seller Home; rows "Buyer conversation" + last activity, most recent first; Load more; Refresh; no Buyer id, preview or unread count |
+| Seller message history | NOT EXECUTED -- RESOURCE DEFERRED | Opens with the store header; Load earlier; 30 s refresh while open only |
+| Seller reply | NOT EXECUTED -- RESOURCE DEFERRED | Sending, then shown once accepted; text over 4,000 refused before sending |
+| Buyer receives Seller reply | NOT EXECUTED -- RESOURCE DEFERRED | The Buyer's conversation shows it as "Seller" (owner) or "Seller team" after Refresh or within 30 s |
+| Owner sender attribution | NOT EXECUTED -- RESOURCE DEFERRED | An OWNER's reply is "Store owner" on the Seller side |
+| Team-member sender attribution | NOT EXECUTED -- RESOURCE DEFERRED | A SALES_SUPPORT reply is "Store team member"; record what an ADMIN's reply is (W21-11) |
+| Seller A/B switching | NOT EXECUTED -- RESOURCE DEFERRED | Needs a second store; A's conversations and drafts never appear under B |
+| Buyer/Seller switching | NOT EXECUTED -- RESOURCE DEFERRED | Same session; a same-Account conversation replied from Seller mode is the store's, not the Buyer's (W21 test 54) |
+| Session expiry | NOT EXECUTED -- RESOURCE DEFERRED | An expired session in the inbox or a conversation signs out and leaves Seller mode |
+| Permission refusal | NOT EXECUTED -- RESOURCE DEFERRED | An INVENTORY or ANALYST member sees "Messaging is not available for your role"; no sign-out |
+| Offline behavior | NOT EXECUTED -- RESOURCE DEFERRED | API stopped: offline, never "not available"; a reply lost offline is "may already have been received" |
+| Idempotent retries | NOT EXECUTED -- RESOURCE DEFERRED | Try sending again after a lost answer stores the reply once |
+| Keyboard layout | NOT EXECUTED -- RESOURCE DEFERRED | Send stays above the keyboard (header offset, as WO-016) |
+| Enlarged text (100%, 130%, 160%) | NOT EXECUTED -- RESOURCE DEFERRED | Inbox rows and the composer; history keeps its minimum height |
+| Dark mode | NOT EXECUTED -- RESOURCE DEFERRED | Bubbles, automated-answer styling, alerts |
+| TalkBack | NOT EXECUTED -- RESOURCE DEFERRED | Rows read "Buyer conversation, Last activity ..."; each bubble reads sender, text, anchor, time; send outcomes spoken |
+| Android regression | NOT EXECUTED -- RESOURCE DEFERRED | WO-013..020 flows (Buyer messaging, Seller Home, Orders, notifications) |
+| iOS verification | NOT EXECUTED -- RESOURCE DEFERRED | No macOS hardware; EAS or cloud workflow needed |
+
 ## Executed
 
 None recorded yet.

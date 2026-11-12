@@ -66,3 +66,19 @@ Status key:
   guess. The Product's Seller is matched to the conversation by the Seller handle in the Buyer's
   conversation list; the Product DTO and the list carry no `seller_id` (see
   `docs/mobile/WO-014-PRODUCT-CONTEXT-MESSAGING.md`).
+- **Seller side (WO-021).** The store's side of the same conversations is now built in the Seller
+  Companion (`docs/mobile/WO-021-SELLER-MESSAGING.md`). It satisfies the following rows for the
+  store too, on the same endpoints with `X-Adulis-Seller`:
+  - Row 7: the server's sender kinds, labelled Buyer / Store owner / Store team member /
+    Automated answer.
+  - Rows 11, 15 and 16: shown only after acceptance; connected-only, in-memory draft; 4,000
+    characters.
+  - Row 13: re-read on opening, on Refresh and every 30 s while focused. It is still a plain GET,
+    so the row stays PARTIAL.
+  - Rows 19 and 22: one key per reply intent; automated answers labelled.
+  - Rows 29-31: no unread counts are fabricated; another store's conversation is "not available";
+    message text is never logged.
+
+  No status above changes. Rows 4, 5, 6, 8, 12, 17, 18, 24 and 32 remain gaps on the Seller side
+  as well (WO-021 W21-01, W21-05). The Seller-side authorization question, whether MOBILE may use
+  the Seller inbox at all, is WO-021 W21-02 (SPEC_CONFLICT with ADU-API-01 v1.11 S12.7).
