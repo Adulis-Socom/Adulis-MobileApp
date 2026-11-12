@@ -267,7 +267,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.list.more_failed': 'ተጨማሪ መጫን አልተቻለም።',
   'buyer.list.end': 'ለአሁን ይህ ብቻ ነው።',
   'buyer.list.load_more': 'ተጨማሪ ጫን',
-  'buyer.list.loaded_more': '{count} ተጨማሪ ተጭነዋል። ከዚህ አዝራር በፊት ይገኛሉ።',
+  'buyer.list.loaded_more': '{count} ተጨማሪ ከላይ ተጭነዋል።',
   'buyer.search': 'ፍለጋ',
   'buyer.search.input': 'ምርቶችን፣ ሻጮችን እና ትዕይንቶችን ይፈልጉ',
   'buyer.search.clear': 'ፍለጋውን አጽዳ',

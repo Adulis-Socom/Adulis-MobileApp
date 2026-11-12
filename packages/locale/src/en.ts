@@ -307,7 +307,7 @@ export const enCommon = {
   'buyer.list.more_failed': 'Could not load more.',
   'buyer.list.end': 'That is everything for now.',
   'buyer.list.load_more': 'Load more',
-  'buyer.list.loaded_more': 'Loaded {count} more. They are just before this button.',
+  'buyer.list.loaded_more': 'Loaded {count} more, just above.',
   'buyer.search': 'Search',
   'buyer.search.input': 'Search Products, Sellers and Scenes',
   'buyer.search.clear': 'Clear search',
