@@ -1,0 +1,128 @@
+# Conversation layout and reliability (WO-016) against the real local API on a DISPOSABLE database.
+# The harness signs in a new Account, opens its Fixture Weaves conversation (seed), writes 30 history
+# messages into it (one of them long), sets the font scale and Dark mode, and runs the steps (env STEP):
+#   seed     Seller Profile -> Message Seller (the conversation exists)
+#   view     Messages -> the conversation: the newest history shown -> a Product attached -> the
+#            keyboard open: the newest message, the context and Send all visible (ON-164) -> the
+#            keyboard closed -> the Product removed
+#   open     Messages -> the conversation, left open (the harness then stops the API)
+#   offline  (no relaunch) a message sent with the API stopped: "may already have been received",
+#            Try sending again and Edit the message instead, the text kept
+#   retry    (no relaunch; the API is back) Try sending again -> the message is sent once
+#
+#   maestro test -e STEP=view .maestro/messaging-layout.yaml
+appId: com.adulis.app
+name: Conversation layout
+tags:
+  - buyer
+  - messaging
+---
+- runFlow:
+    when:
+      true: ${STEP == 'seed' || STEP == 'view' || STEP == 'open'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+      - extendedWaitUntil:
+          visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+          timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'seed'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Message Seller
+      - extendedWaitUntil:
+          visible: No messages yet. Write the first one below.
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'view' || STEP == 'open'}
+    commands:
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Messages
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Messages
+          index: 1
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Fixture Weaves
+      - extendedWaitUntil:
+          visible: History 30
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'view'}
+    commands:
+      - takeScreenshot: lay-01-history
+      - extendedWaitUntil:
+          visible:
+            text: Select Product
+            enabled: true
+          timeout: 30000
+      - tapOn: Select Product
+      - extendedWaitUntil:
+          visible: 'Woven basket, .*'
+          timeout: 30000
+      - tapOn: 'Woven basket, .*'
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - takeScreenshot: lay-02-context
+      - tapOn: Message
+      - inputText: Typing with history
+      # ON-164: with the keyboard open the newest message, the context and Send all stay on screen.
+      - assertVisible: History 30
+      - assertVisible: Send
+      - takeScreenshot: lay-03-keyboard
+      - hideKeyboard
+      - scrollUntilVisible:
+          element: Remove Product
+          direction: DOWN
+          timeout: 10000
+      - tapOn: Remove Product
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 10000
+      - assertVisible: History 30
+      - takeScreenshot: lay-04-removed
+
+- runFlow:
+    when:
+      true: ${STEP == 'offline'}
+    commands:
+      - tapOn: Message
+      - eraseText: 40
+      - inputText: Offline layout check
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          visible: 'Your message may already have been received\..*'
+          timeout: 60000
+      - assertVisible: Try sending again
+      - assertVisible: Edit the message instead
+      - assertVisible: Offline layout check
+      - takeScreenshot: lay-05-unconfirmed
+
+- runFlow:
+    when:
+      true: ${STEP == 'retry'}
+    commands:
+      - tapOn: Try sending again
+      - extendedWaitUntil:
+          notVisible: 'Your message may already have been received\..*'
+          timeout: 30000
+      - assertVisible: Send
+      - assertVisible: Offline layout check
+      - takeScreenshot: lay-06-retried
