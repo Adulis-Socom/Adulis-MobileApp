@@ -12,6 +12,7 @@ import { AppText } from '../components/AppText';
 import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
+import { MessageSellerButton } from './MessageSellerButton';
 import { isPathName, isPublicRef, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
 import { SaveButton } from './SaveButton';
@@ -25,8 +26,10 @@ import { SaveButton } from './SaveButton';
  * - The price span and every availability are the SERVER's (the public Catalogue
  *   projection): nothing here derives them from prices or stock counts.
  * - Save and Add to collection (WO-009): private, never a purchase, a hold or a price freeze.
- *   NO PURCHASE, CART, ASK SELLER, REVIEWS OR SHARE: none is in scope, so none is drawn. An
- *   unavailable Product says "Currently unavailable" and can still be saved.
+ * - Ask Seller About This Product (WO-014, R-07): opens the one conversation with this Product's
+ *   Seller, the Product preselected for the next message. Offered even when it is unavailable.
+ * - NO PURCHASE, CART, REVIEWS OR SHARE: none is in scope, so none is drawn. An unavailable
+ *   Product says "Currently unavailable" and can still be saved.
  * - An attribute shows only when the catalogue can say it in words (OVN-075): a code is
  *   never Buyer copy.
  * - Revalidated on opening, on returning from the background and on a pull; a 404 clears it.
@@ -136,6 +139,8 @@ function ProductContent({
             product.seller.store_name}
         </AppText>
       </Pressable>
+      {/* WO-014 (R-07): an unavailable Product can still be asked about; the server decides visibility. */}
+      <MessageSellerButton product={{ handle: product.seller.handle, slug: product.slug }} />
 
       {product.description ? (
         <View style={{ gap: theme.space.xs }}>
