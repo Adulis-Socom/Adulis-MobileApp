@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View, type HostInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
@@ -9,6 +9,7 @@ import type { SellerProduct, SellerReview, SellerScene, Storefront } from '../ap
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
+import { useFocusRequest } from '../components/focus';
 import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
@@ -33,6 +34,9 @@ import { GoneState, ReadStates } from './ReadStates';
  *   reuses Explore the Scene; a Product opens the Product detail.
  * - Revalidated on opening, on return to this screen, after the background interval and on a
  *   pull; a 404 anywhere shows only the neutral message.
+ * - Each tab is its own list, so a tab press remounts the header with the tab bar in it. The
+ *   newly selected tab then takes screen-reader focus (WO-018, A-006), which reads it as
+ *   selected, and the Buyer continues from there into the tab's content.
  */
 type Tab = 'scenes' | 'products' | 'reviews' | 'about';
 const TABS: readonly Tab[] = ['scenes', 'products', 'reviews', 'about'];
@@ -45,6 +49,12 @@ export function SellerProfile({ handle }: { handle: unknown }) {
     valid ? (revalidation) => api.storefront(handle, revalidation) : null,
   );
   const [tab, setTab] = useState<Tab>('scenes');
+  // Counts the Buyer's tab presses; none yet means nothing to restore (the opening tab).
+  const [tabPresses, setTabPresses] = useState(0);
+  const chooseTab = useCallback((next: Tab) => {
+    setTab(next);
+    setTabPresses((n) => n + 1);
+  }, []);
 
   // Back from a Scene or a Product: read the Seller again (the first focus is the opening read).
   const focused = useRef(false);
@@ -67,7 +77,7 @@ export function SellerProfile({ handle }: { handle: unknown }) {
     );
   }
   const seller = header.value;
-  const top = <ProfileHeader seller={seller} tab={tab} onTab={setTab} />;
+  const top = <ProfileHeader seller={seller} tab={tab} onTab={chooseTab} focusRequest={tabPresses || null} />;
   if (tab === 'about') {
     return <AboutTab seller={seller} header={top} pulling={header.pulling} onPull={header.pull} />;
   }
@@ -82,10 +92,12 @@ function ProfileHeader({
   seller,
   tab,
   onTab,
+  focusRequest,
 }: {
   seller: Storefront;
   tab: Tab;
   onTab: (t: Tab) => void;
+  focusRequest: number | null;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -127,14 +139,16 @@ function ProfileHeader({
           : t('buyer.seller.no_reviews')}
       </AppText>
       <MessageSellerButton sellerId={seller.seller_id} />
-      <TabBar tab={tab} onTab={onTab} />
+      <TabBar tab={tab} onTab={onTab} focusRequest={focusRequest} />
     </View>
   );
 }
 
-function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+function TabBar({ tab, onTab, focusRequest }: { tab: Tab; onTab: (t: Tab) => void; focusRequest: number | null }) {
   const t = useT();
   const theme = useTheme();
+  const selectedRef = useRef<HostInstance>(null);
+  useFocusRequest(selectedRef, focusRequest);
   return (
     <View
       accessibilityRole="tablist"
@@ -151,6 +165,7 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         return (
           <Pressable
             key={key}
+            ref={selected ? selectedRef : undefined}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             onPress={() => onTab(key)}
