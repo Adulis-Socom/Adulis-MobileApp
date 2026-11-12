@@ -32,8 +32,16 @@ const BUYER_SIDE: ChatScope = { as: 'buyer' };
 /** A store's conversations live under that store's key only, never the Buyer's. */
 export const messagesKey = (scope: ChatScope, ref: string) =>
   scope.as === 'buyer' ? [MESSAGES, ref] : [SELLER, scope.sellerId, 'conversation', ref];
-/** A refusal that a re-read cannot change: polling stops on it (WO-021). */
-const FINAL = new Set(['NOT_FOUND', 'PERMISSION_DENIED', 'AUDIENCE_NOT_PERMITTED']);
+/** Any 403 problem: on a store's side it means this role (or surface) may not use the inbox (WO-021 review S21-01). */
+export const isForbidden = (error: unknown) => error instanceof ApiError && error.failure.kind === 'problem' && error.failure.status === 403;
+/**
+ * A refusal that a re-read cannot change, so nothing re-reads on it: the Buyer side stops on
+ * NOT_FOUND (WO-013, unchanged); a store's side also on any 400 or 403 (WO-021 review S21-01, S21-07).
+ */
+const isFinal = (scope: ChatScope, error: unknown) =>
+  problemCode(error) === 'NOT_FOUND' ||
+  (scope.as === 'seller' && error instanceof ApiError && error.failure.kind === 'problem' && (error.failure.status === 400 || error.failure.status === 403));
+type Settled = { state: { error: unknown } };
 
 export type Conversation = { id: string; storeName: string; handle: string; lastMessageAt: string };
 export type SenderKind = 'BUYER' | 'SELLER' | 'TEAM_MEMBER' | 'BOT';
@@ -197,8 +205,11 @@ export function useConversationMessages(conversationRef: string | null, focused:
     getNextPageParam: nextOf<ChatMessage>,
     enabled: token !== null && conversationRef !== null,
     // Not on a conversation the server says is not available, or that this side may not read.
-    refetchInterval: (q) => (focused && !FINAL.has(problemCode(q.state.error) ?? '') ? 30_000 : false),
-    ...(scope.as === 'seller' ? { gcTime: 0 } : null),
+    refetchInterval: (q) => (focused && !isFinal(scope, q.state.error) ? 30_000 : false),
+    // A store's refused read is not repeated on return to the foreground or on reconnect either (S21-02).
+    ...(scope.as === 'seller'
+      ? { gcTime: 0, refetchOnWindowFocus: (q: Settled) => !isFinal(scope, q.state.error), refetchOnReconnect: (q: Settled) => !isFinal(scope, q.state.error) }
+      : null),
     retry,
   });
   return { ...query, items: unique(query.data?.pages).sort(newestFirst) };

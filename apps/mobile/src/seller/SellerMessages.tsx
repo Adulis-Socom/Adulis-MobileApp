@@ -11,7 +11,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { TextField } from '../components/TextField';
-import { MESSAGE_MAX, isConversationRef, messagesKey, useConversationMessages, type ChatScope } from '../buyer/chat';
+import { MESSAGE_MAX, isConversationRef, isForbidden, messagesKey, useConversationMessages, type ChatScope } from '../buyer/chat';
 import { MessageBubble } from '../buyer/MessageBubble';
 import { usePublicList } from '../buyer/public-list';
 import { PublicListView } from '../buyer/PublicListView';
@@ -22,9 +22,11 @@ import { parseStoreConversationPage, storeConversationsKey, useStoreReply, type 
 import { useSellerContext } from './seller-context';
 import { WithStore } from './SellerOrders';
 
-/** The role may not read or send messages in this store (or this surface): never a sign-out, never "deleted". */
-const DENIED = new Set(['PERMISSION_DENIED', 'AUDIENCE_NOT_PERMITTED']);
-const denied = (error: unknown) => DENIED.has(problemCode(error) ?? '');
+/**
+ * Any 403 (PERMISSION_DENIED, AUDIENCE_NOT_PERMITTED or another code, review S21-01): this role or
+ * surface may not read or send messages in this store. Never a sign-out, never "deleted".
+ */
+const denied = isForbidden;
 
 /**
  * The active store's Buyer conversations (WO-021; GET /v1/conversations?as=seller, X-Adulis-Seller),

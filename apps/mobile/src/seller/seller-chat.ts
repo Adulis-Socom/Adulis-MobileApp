@@ -48,6 +48,18 @@ export function parseStoreConversationPage(body: unknown): StoreConversationPage
 
 export const storeConversationsKey = (sellerId: string) => [SELLER, sellerId, 'conversations'] as const;
 
+/**
+ * Whether a failed send has a known outcome (the reply was not stored). The API's own refusal (a
+ * problem body, 4xx or 5xx) is known. Review S21-03: a gateway's 5xx without that body, or a 201 whose
+ * body cannot be read, may follow a stored reply, so the key is kept and the text frozen, like a
+ * lost connection. Narrower than the shared wasAnswered, which the Buyer side keeps unchanged.
+ */
+function settled(failure: unknown): boolean {
+  if (!wasAnswered(failure)) return false;
+  const f = (failure as ApiError).failure;
+  return !(f.kind === 'unexpected' && (f.status >= 500 || f.status === 201));
+}
+
 type Intent = { api: BoundApi; sellerId: string; conversationId: string; text: string; key: string };
 
 /**
@@ -78,7 +90,8 @@ export function useStoreReply(sellerId: string, conversationId: string) {
       if (!SELLER_ID.test(sellerId) || !SELLER_ID.test(conversationId)) return false;
       const held = intent.current;
       // An intent of another session, store or conversation is never replayed here.
-      const same = held !== null && held.api === api && held.sellerId === sellerId && held.conversationId === conversationId;
+      // The held session is compared by being current, not by object identity (review S21-06).
+      const same = held !== null && held.api.isCurrent() && held.sellerId === sellerId && held.conversationId === conversationId;
       if (!same || held.text !== text) intent.current = { api, sellerId, conversationId, text, key: newIdempotencyKey() };
       const current = intent.current!;
       sending.current = true;
@@ -86,7 +99,7 @@ export function useStoreReply(sellerId: string, conversationId: string) {
       setError(null);
       try {
         const body = await current.api.sendSellerMessage(current.sellerId, current.conversationId, current.text, current.key);
-        // An answer without a message id is an answered failure: its key must not be replayed forever.
+        // An acceptance without a readable message id may still have stored the reply: unknown (S21-03).
         if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
         intent.current = null;
         if (!current.api.isCurrent()) return false;
@@ -95,7 +108,7 @@ export function useStoreReply(sellerId: string, conversationId: string) {
         void qc.invalidateQueries({ queryKey: storeConversationsKey(current.sellerId) });
         return true;
       } catch (failure) {
-        const answered = wasAnswered(failure);
+        const answered = settled(failure);
         if (answered) intent.current = null;
         if (!current.api.isCurrent()) return false;
         setError(failure);

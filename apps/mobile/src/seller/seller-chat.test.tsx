@@ -681,3 +681,53 @@ describe('Seller replies', () => {
     expect(sends().every((x) => header(x) === A.id)).toBe(true);
   });
 });
+
+describe('security review fixes (WO-021)', () => {
+  it('S21-01, S21-02. a 403 with any code is "not available for your role"; a refused read is not repeated on reconnect', async () => {
+    signedIn();
+    const s = installServer();
+    const c = s.conv(A.id);
+    api.on('GET /v1/conversations', () => problem(403, 'STEP_UP_REQUIRED', 'auth'));
+    api.onPattern('GET', /^\/v1\/conversations\/[^/]+\/messages$/, () => problem(403, 'STEP_UP_REQUIRED', 'auth'));
+    await openMessages();
+    expect(await screen.findByText(en['seller.messages.unavailable'])).toBeOnTheScreen();
+    await act(() => router.push(`/seller/messages/${c.id}`));
+    await waitFor(() => expect(screen.getAllByText(en['seller.messages.unavailable']).length).toBeGreaterThanOrEqual(1));
+    expect(screen.queryByLabelText(en['seller.messages.composer'])).toBeNull();
+    const reads = histories().length;
+    await act(async () => onlineManager.setOnline(false));
+    await act(async () => onlineManager.setOnline(true));
+    await act(() => jest.advanceTimersByTimeAsync(95_000));
+    expect(histories().length).toBe(reads);
+    expect(memory.get(TOKEN_KEY)).toBe(GOOD_TOKEN);
+  });
+
+  it('S21-03. a gateway 5xx without the API\'s answer, and an acceptance without a message id, are "may already have been received"; the key is kept', async () => {
+    signedIn();
+    const s = installServer();
+    const c = s.conv(A.id);
+    s.msg(c, { sender_kind: 'BUYER', body: 'Still open?', sent_at: ago(30) });
+    await openConversation(c);
+    expect(await screen.findByText('Still open?')).toBeOnTheScreen();
+    let attempt = 0;
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
+      attempt++;
+      if (attempt === 1) return { status: 504, body: undefined };
+      if (attempt === 2) return { status: 201, body: {} };
+      const m = s.msg(c, { sender_kind: 'SELLER', body: String(call.body?.text), sent_at: new Date().toISOString() });
+      return { status: 201, body: { message_id: m.id, bot: null } };
+    });
+    await fireEvent.changeText(composer(), 'Open until six');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(composer().props.editable).toBe(false);
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    expect(await screen.findByText('Open until six')).toBeOnTheScreen();
+    const keys = new Set(sends().map((x) => x.headers['Idempotency-Key']));
+    expect(sends()).toHaveLength(3);
+    expect(keys.size).toBe(1);
+  });
+});
