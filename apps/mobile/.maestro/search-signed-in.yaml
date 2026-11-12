@@ -27,7 +27,7 @@ tags:
     id: search-input
 - inputText: clay
 - extendedWaitUntil:
-    visible: 'Clay cup, .*350\.00, Available'
+    visible: 'Clay cup, .*350\.00, Available, Sold by .*'
     timeout: 30000
 - hideKeyboard
 - takeScreenshot: search-signed-in

@@ -40,7 +40,7 @@ tags:
     id: search-input
 - inputText: basket
 - extendedWaitUntil:
-    visible: 'Woven basket, .*900\.00.*1,200\.00, Available'
+    visible: 'Woven basket, .*900\.00.*1,200\.00, Available, Sold by Fixture Weaves'
     timeout: 30000
 - assertVisible: 'Scene: Morning light on the new baskets.*'
 - assertNotVisible: '.*5,000\.00.*'

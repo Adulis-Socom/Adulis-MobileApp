@@ -37,10 +37,12 @@ tags:
 - takeScreenshot: fyp-01-guest-feed
 
 # Twelve Scenes at ten per page: the end of the feed appears only after the second page.
+# ON-20261111-084 (WO-017): the tall cards scroll slowly on this emulator; the budget is 300 s
+# (it ran out at 120 s twice). The assertions are unchanged.
 - scrollUntilVisible:
     element: You have reached the end of this feed. Pull down to refresh.
     direction: DOWN
-    timeout: 120000
+    timeout: 300000
 - assertVisible: '.*\(1\)'
 - takeScreenshot: fyp-02-end-of-feed
 
@@ -48,7 +50,7 @@ tags:
 - scrollUntilVisible:
     element: '.*\(12\)'
     direction: UP
-    timeout: 120000
+    timeout: 300000
 - swipe:
     start: 50%, 30%
     end: 50%, 85%
@@ -58,15 +60,41 @@ tags:
     timeout: 30000
 - takeScreenshot: fyp-03-after-refresh
 
-# Dark mode: the card's roles follow the theme.
-- tapOn: You
+# Dark mode: the card's roles follow the theme. A tab tap that lands while the whole tree re-renders
+# for the theme can be swallowed (ON-20261111-084, WO-017): each tab tap is retried until its screen
+# shows, as card-saves.yaml does for Shop.
+- repeat:
+    while:
+      notVisible: Dark
+    times: 3
+    commands:
+      - tapOn: You
+      - waitForAnimationToEnd
 - tapOn: Dark
-- tapOn: Home
+- repeat:
+    while:
+      notVisible: For You Scenes
+    times: 3
+    commands:
+      - tapOn: Home
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: For You Scenes
     timeout: 10000
 - takeScreenshot: fyp-04-dark
-- tapOn: You
+- repeat:
+    while:
+      notVisible: System
+    times: 3
+    commands:
+      - tapOn: You
+      - waitForAnimationToEnd
 - tapOn: System
-- tapOn: Home
+- repeat:
+    while:
+      notVisible: For You Scenes
+    times: 3
+    commands:
+      - tapOn: Home
+      - waitForAnimationToEnd
 - assertVisible: For You Scenes

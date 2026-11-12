@@ -1,0 +1,221 @@
+# Buyer navigation journeys (WO-017 section 23) against the real local API on a DISPOSABLE database
+# with the review fixtures (Fixture Weaves). Signed in (the harness signs in a new Account). Steps (env
+# STEP), each from a fresh launch:
+#   j1  For You -> Explore the Scene -> a Product -> View Product -> the Seller -> a Product -> Ask
+#       Seller -> the conversation with the Product attached
+#   j2  Shop -> a category -> a Product -> Ask Seller -> the conversation -> Back to the Product
+#   j3  Search -> a Product -> the Seller -> Message Seller -> the conversation
+#   j4  a Product saved -> Saved -> the saved Product -> Product Detail -> Ask Seller
+#   j5  You -> Messages -> the conversation -> Back to Messages
+#
+#   maestro test -e STEP=j1 .maestro/buyer-journeys.yaml
+appId: com.adulis.app
+name: Buyer journeys
+tags:
+  - buyer
+  - navigation
+---
+- launchApp:
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+
+# j1: For You -> Scene -> Product -> Seller -> Product -> Ask Seller -> conversation.
+- runFlow:
+    when:
+      true: ${STEP == 'j1'}
+    commands:
+      - scrollUntilVisible:
+          element: Explore the Scene
+          direction: DOWN
+      - tapOn:
+          text: Explore the Scene
+          index: 0
+      - extendedWaitUntil:
+          visible: Products in this Scene
+          timeout: 30000
+      - tapOn: '1\. Woven basket.*'
+      - scrollUntilVisible:
+          element: View Product
+          direction: DOWN
+      - tapOn: View Product
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - tapOn:
+          id: product-seller
+      - extendedWaitUntil:
+          visible: '@fixture-weaves'
+          timeout: 30000
+      - tapOn: Products
+      - extendedWaitUntil:
+          visible: 'Coffee tray, .*'
+          timeout: 30000
+      - tapOn: 'Coffee tray, .*'
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - tapOn: Ask Seller About This Product
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Coffee tray
+      - takeScreenshot: jrn-1-foryou-to-chat
+
+# j2: Shop -> category -> Product -> Ask Seller -> conversation -> Back.
+- runFlow:
+    when:
+      true: ${STEP == 'j2'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: category-tab-FASHION
+          timeout: 30000
+      - tapOn:
+          id: category-tab-FASHION
+      - extendedWaitUntil:
+          visible: 'Cotton scarf, .*'
+          timeout: 30000
+      - tapOn: 'Cotton scarf, .*'
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - tapOn: Ask Seller About This Product
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Cotton scarf
+      - assertVisible: Currently unavailable
+      - back
+      - extendedWaitUntil:
+          visible: Ask Seller About This Product
+          timeout: 20000
+      - assertNotVisible: Asking about
+      - takeScreenshot: jrn-2-back-on-product
+
+# j3: Search -> Product -> Seller -> Message Seller -> conversation.
+- runFlow:
+    when:
+      true: ${STEP == 'j3'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Find Products, Sellers and Scenes in your Market\.
+          times: 5
+          commands:
+            - tapOn:
+                text: Search
+                index: 0
+            - waitForAnimationToEnd
+      - tapOn:
+          id: search-input
+      - inputText: basket
+      - extendedWaitUntil:
+          visible: 'Woven basket, .*Sold by Fixture Weaves'
+          timeout: 30000
+      - hideKeyboard
+      - tapOn:
+          text: 'Woven basket, .*'
+          index: 0
+      - extendedWaitUntil:
+          visible:
+            id: product-seller
+          timeout: 30000
+      - tapOn:
+          id: product-seller
+      - extendedWaitUntil:
+          visible: '@fixture-weaves'
+          timeout: 30000
+      - tapOn: Message Seller
+      - extendedWaitUntil:
+          visible:
+            text: Select Product
+            enabled: true
+          timeout: 30000
+      - assertNotVisible: Asking about
+      - takeScreenshot: jrn-3-search-to-messages
+
+# j4: save a Product -> Saved -> the Product -> Ask Seller.
+- runFlow:
+    when:
+      true: ${STEP == 'j4'}
+    commands:
+      - openLink: adulis://product/fixture-weaves/clay-cup
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element:
+            text: Save
+          direction: DOWN
+      - tapOn:
+          text: Save
+      - extendedWaitUntil:
+          visible:
+            text: Saved
+          timeout: 20000
+      - repeat:
+          while:
+            notVisible: 'Saved, Products: .*'
+          times: 5
+          commands:
+            - tapOn: Saved
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: 'Clay cup, .*'
+          timeout: 30000
+      - tapOn: 'Clay cup, .*'
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - tapOn: Ask Seller About This Product
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Clay cup
+      - takeScreenshot: jrn-4-saved-to-chat
+
+# j5: You -> Messages -> conversation -> Back.
+- runFlow:
+    when:
+      true: ${STEP == 'j5'}
+    commands:
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Messages
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Messages
+          index: 1
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Fixture Weaves
+      - extendedWaitUntil:
+          visible: Refresh messages
+          timeout: 30000
+      - back
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 20000
+      - assertNotVisible: Refresh messages
+      - takeScreenshot: jrn-5-back-to-messages
