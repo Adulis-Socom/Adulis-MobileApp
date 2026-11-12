@@ -1,0 +1,297 @@
+# WO-018 (A-006) native checks against the real local API, run by the harness in steps (env STEP).
+# The harness sets font scale and theme, stops and starts the API, and renames two fixture
+# Products to long names (English and Ge'ez) on the DISPOSABLE database.
+#   shop-open     Shop, first page shown (guest)
+#   shop-fail     (API stopped) the end of the list: the next page fails, its failure is shown and
+#                 Load more has become Try again, in place; nothing loaded is cleared
+#   shop-retry    (API started) Try again loads the next page once; the end sentence replaces it
+#   names         the long-named Products in the Shop (screenshots at the harness's font scale)
+#   seller-tabs   the Seller Profile tabs: each press selects its tab (selected state)
+#   collections   (signed in) Add to collection: New collection, ticks, enabled states after each;
+#                 then Saved: Remove from the Collection
+#   delete-request (signed in) Delete Account: intro, phone step, code requested (no deletion)
+#   delete-preview (env OTP) the code verified, the consequence preview, then Cancel (no deletion)
+#
+#   maestro test -e STEP=shop-open .maestro/accessibility-completion.yaml
+appId: com.adulis.app
+name: Accessibility completion (WO-018)
+tags:
+  - buyer
+  - accessibility
+---
+- runFlow:
+    when:
+      true: ${STEP == 'shop-open' || STEP == 'names' || STEP == 'seller-tabs' || STEP == 'collections' || STEP == 'delete-request'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+      - extendedWaitUntil:
+          visible: For You Scenes|There are no Scenes to show right now\. Pull down to check again\.
+          timeout: 120000
+- runFlow:
+    when:
+      true: ${STEP == 'shop-fail' || STEP == 'shop-retry' || STEP == 'delete-preview'}
+    commands:
+      # The same running app: a relaunch would read the first page again.
+      - launchApp:
+          stopApp: false
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop-open' || STEP == 'names'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      # The newest Products come first; the long-named ones (the harness renamed them) a few below.
+      - extendedWaitUntil:
+          visible: 'Coffee tray, .*'
+          timeout: 30000
+      - scrollUntilVisible:
+          element: 'Handwoven cotton scarf with a traditional tibeb border in white and gold, large size, .*'
+          direction: DOWN
+          timeout: 60000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop-open'}
+    commands:
+      - takeScreenshot: a11y-01-shop-first-page
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop-fail'}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: Try again
+          direction: DOWN
+          timeout: 90000
+      - assertVisible: 'Could not load more\. .*'
+      - assertVisible:
+          text: Try again
+          enabled: true
+      - assertNotVisible: Load more
+      - takeScreenshot: a11y-02-shop-next-page-failed
+      # Nothing loaded is cleared: the first page is still there above.
+      - scrollUntilVisible:
+          element: 'Handwoven cotton scarf with a traditional tibeb border in white and gold, large size, .*'
+          direction: UP
+          timeout: 60000
+
+- runFlow:
+    when:
+      true: ${STEP == 'shop-retry'}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: Try again
+          direction: DOWN
+          timeout: 60000
+      - tapOn: Try again
+      - scrollUntilVisible:
+          element: That is everything for now\.
+          direction: DOWN
+          timeout: 60000
+      - assertNotVisible: Try again
+      - assertNotVisible: Load more
+      - assertNotVisible: 'Could not load more\. .*'
+      - takeScreenshot: a11y-03-shop-end
+
+- runFlow:
+    when:
+      true: ${STEP == 'names'}
+    commands:
+      - takeScreenshot: a11y-04-long-name-en
+      - scrollUntilVisible:
+          element: 'በእጅ የተሸመነ የጥጥ ሻርፕ ከባህላዊ ጥበብ ጠርዝ ጋር በነጭና በወርቅ ቀለም፣ ትልቅ መጠን, .*'
+          direction: DOWN
+          timeout: 30000
+      - takeScreenshot: a11y-05-long-name-geez
+
+- runFlow:
+    when:
+      true: ${STEP == 'seller-tabs'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: '@fixture-weaves'
+          timeout: 30000
+      - assertVisible:
+          text: Scenes
+          selected: true
+      - tapOn:
+          id: seller-tab-products
+      - extendedWaitUntil:
+          visible: 'Woven basket, .*'
+          timeout: 30000
+      - assertVisible:
+          id: seller-tab-products
+          selected: true
+      - assertVisible:
+          id: seller-tab-scenes
+          selected: false
+      - takeScreenshot: a11y-06-seller-products
+      - tapOn:
+          id: seller-tab-reviews
+      - assertVisible:
+          id: seller-tab-reviews
+          selected: true
+      - takeScreenshot: a11y-07-seller-reviews
+      - tapOn:
+          id: seller-tab-about
+      - assertVisible:
+          id: seller-tab-about
+          selected: true
+      - takeScreenshot: a11y-08-seller-about
+
+- runFlow:
+    when:
+      true: ${STEP == 'collections'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element: 'Woven basket, .*'
+          direction: DOWN
+          timeout: 60000
+      - tapOn: 'Woven basket, .*'
+      - extendedWaitUntil:
+          visible:
+            id: product-seller
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Add to collection
+          direction: DOWN
+      - tapOn: Add to collection
+      - extendedWaitUntil:
+          visible:
+            id: picker-collections
+          timeout: 30000
+      - assertVisible:
+          text: Saved
+          checked: false
+          enabled: true
+      - tapOn: New collection
+      - tapOn:
+          id: new-collection-name
+      - inputText: Large text list
+      - hideKeyboard
+      - tapOn: Create
+      - extendedWaitUntil:
+          visible:
+            text: Large text list
+            checked: true
+            enabled: true
+          timeout: 30000
+      # Every box usable again once the change is answered.
+      - assertVisible:
+          text: Saved
+          enabled: true
+      - tapOn:
+          text: Saved
+          checked: false
+      - extendedWaitUntil:
+          visible:
+            text: Saved
+            checked: true
+            enabled: true
+          timeout: 30000
+      - tapOn:
+          text: Large text list
+          checked: true
+      - extendedWaitUntil:
+          visible:
+            text: Large text list
+            checked: false
+            enabled: true
+          timeout: 30000
+      - takeScreenshot: a11y-09-picker-after-changes
+      - tapOn: Done
+      - back
+      - repeat:
+          while:
+            notVisible: Private to you\.
+          times: 5
+          commands:
+            - tapOn: Saved
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: 'Saved, Products: 1, Scenes: 0'
+          timeout: 30000
+      - tapOn: 'Saved, Products: 1, Scenes: 0'
+      - extendedWaitUntil:
+          visible: Remove Woven basket from this collection
+          timeout: 30000
+      - takeScreenshot: a11y-10-collection
+      - tapOn: Remove Woven basket from this collection
+      - extendedWaitUntil:
+          visible: This collection is empty\.
+          timeout: 30000
+      - takeScreenshot: a11y-11-collection-empty
+
+- runFlow:
+    when:
+      true: ${STEP == 'delete-request'}
+    commands:
+      # A tab tap right after launch can be swallowed (B-013): retry until You shows.
+      - repeat:
+          while:
+            notVisible: Appearance
+          times: 5
+          commands:
+            - tapOn: You
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element: Delete Account
+          direction: DOWN
+          timeout: 30000
+      - tapOn: Delete Account
+      - extendedWaitUntil:
+          visible: Continue
+          timeout: 30000
+      - takeScreenshot: a11y-12-delete-intro
+      - tapOn: Continue
+      - extendedWaitUntil:
+          visible: Phone number
+          timeout: 30000
+      - takeScreenshot: a11y-13-delete-phone
+      - tapOn: Phone number
+      - inputText: ${PHONE}
+      - hideKeyboard
+      - tapOn: Send code
+      - extendedWaitUntil:
+          visible: We sent a deletion code by SMS to .*
+          timeout: 30000
+      - takeScreenshot: a11y-14-delete-code
+
+- runFlow:
+    when:
+      true: ${STEP == 'delete-preview'}
+    commands:
+      - tapOn: Six-digit code
+      - inputText: ${OTP}
+      - hideKeyboard
+      - tapOn: Verify
+      - extendedWaitUntil:
+          visible: This deletes the Adulis Account registered to .*
+          timeout: 30000
+      - takeScreenshot: a11y-15-delete-preview
+      # Never confirmed: Cancel leaves without deleting.
+      - scrollUntilVisible:
+          element: Cancel
+          direction: DOWN
+      - tapOn: Cancel
+      - extendedWaitUntil:
+          visible: Delete Account
+          timeout: 30000
