@@ -48,6 +48,11 @@ picker); Sign in and Verify (reached from these screens).
 
 ## 4. Remaining issues (A-006, LOW, recorded)
 
+> **Update (WO-018, 12 November 2026):** all four groups below are addressed on
+> `mobile/wo-018-buyer-accessibility-completion`; see `WO-018-BUYER-ACCESSIBILITY-COMPLETION.md`
+> and, for native and TalkBack results, `WO-018-NATIVE-ACCESSIBILITY-VALIDATION.md`. The text below
+> is the WO-017 finding as recorded.
+
 - **Busy states by opacity only.** In Add to collection and a Collection's Remove, other controls
   look enabled while a change is in flight and ignore taps. The checkbox has no disabled state to
   announce.

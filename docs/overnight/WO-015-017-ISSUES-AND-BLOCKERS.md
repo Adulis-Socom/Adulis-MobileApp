@@ -370,7 +370,7 @@ Development-environment issue; Backend contract gap; Founder policy decision.
 - **Fix implemented:** None in this batch (recorded; each is a contained follow-up).
 - **Regression test:** n/a
 - **Verification result:** n/a
-- **Current status:** OPEN
+- **Current status:** OPEN in this batch; addressed in WO-018 (`docs/mobile/WO-018-ISSUES-AND-BLOCKERS.md`, W18-01)
 - **Remaining risk:** Degraded but workable for screen-reader and large-text users.
 - **Founder decision required:** No
 
