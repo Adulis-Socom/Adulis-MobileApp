@@ -331,7 +331,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.sending': 'መልእክትዎን በመላክ ላይ',
   'buyer.chat.not_sent': 'መልእክትዎ አልተላከም። አሁንም ከታች ባለው ሳጥን ውስጥ አለ። እንደገና ይሞክሩ።',
   'buyer.chat.maybe_not_sent':
-    'መልእክትዎ መላካቱን ማረጋገጥ አልቻልንም። ከላይ ካልታየ ሳይቀይሩ እንደገና ይላኩት።',
+    'መልእክትዎ አስቀድሞ ደርሶ ሊሆን ይችላል። እንደገና መሞከር ያንኑ መልእክት ያረጋግጣል፣ ስለዚህ ሁለት ጊዜ አይላክም። ማስተካከል አዲስ መልእክት ይፈጥራል፣ ይህም ሁለት ጊዜ ሊደርስ ይችላል።',
   'buyer.chat.too_long': 'አንድ መልእክት እስከ {max} ቁምፊዎች ሊሆን ይችላል።',
   'buyer.chat.connected_only': 'መልእክቶች የሚላኩት በተገናኙ ጂዜ ብቻ ነው። አዲስ መልእክቶች ሲያድሱ እና ይህ ውይይት ሲካፈት በየ 30 ሰከንዶች ይታያሉ።',
   'buyer.chat.ask_seller': 'ሻጉን ይጠይቁ',
@@ -360,6 +360,10 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.picker_cancel': 'ይቅር',
   'buyer.chat.select_unavailable': 'የዚህ ውይይት ሻጭ ማረጋገጥ ስላልተቻለ አሁን እዚህ ምርት መምረጥ አይቻልም። መልእክቶችን መላክ ይችላሉ።',
   'buyer.chat.context_unresolved': 'የዚህ ውይይት ሻጭ ማረጋገጥ ስላልተቻለ ይህ ምርት ሊያያዝ አይችልም። ያለ እሱ መልእክትዎን ለመላክ ያስወግዱት።',
+  // WO-016 messaging reliability: machine-translation placeholders awaiting the human pass.
+  'buyer.chat.retry_send': 'እንደገና ለመላክ ይሞክሩ',
+  'buyer.chat.not_found_anchored': 'መልእክትዎ አልተላከም። ይህ ውይይት ወይም ከእሱ ጋር ያለው ምርት አሁን ላይገኝ ይችላል። መልእክትዎ አሁንም ከታች ባለው ሳጥን ውስጥ ነው።',
+  'buyer.chat.not_found_plain': 'መልእክትዎ አልተላከም። ይህ ውይይት አሁን ላይገኝ ይችላል። መልእክትዎ አሁንም ከታች ባለው ሳጥን ውስጥ ነው።',
   'buyer.shop.order': 'አዲሶቹ መጀመሪያ',
   'buyer.shop.products': 'በገበያዎ ያሉ ምርቶች',
   'buyer.shop.empty': 'አሁን የሚታዩ ምርቶች የሉም።',

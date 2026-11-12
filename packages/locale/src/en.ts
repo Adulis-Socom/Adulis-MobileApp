@@ -377,7 +377,7 @@ export const enCommon = {
   'buyer.chat.sending': 'Sending your message',
   'buyer.chat.not_sent': 'Your message was not sent. It is still in the box below. Try again.',
   'buyer.chat.maybe_not_sent':
-    'We could not confirm that your message was sent. If it does not appear above, send it again without changing it.',
+    'Your message may already have been received. Trying again checks the same message, so it is not sent twice. Editing it makes a new message, which could arrive twice.',
   'buyer.chat.too_long': 'A message can be up to {max} characters.',
   'buyer.chat.connected_only': 'Messages are sent only while you are connected. New messages appear when you refresh, and every 30 seconds while this conversation is open.',
   'buyer.chat.ask_seller': 'Ask the Seller',
@@ -408,6 +408,11 @@ export const enCommon = {
   'buyer.chat.picker_cancel': 'Cancel',
   'buyer.chat.select_unavailable': 'Products cannot be chosen in this conversation right now because its Seller could not be confirmed. You can still send messages.',
   'buyer.chat.context_unresolved': "This conversation's Seller could not be confirmed, so this Product cannot be attached. Remove it to send your message without it.",
+  // WO-016 messaging reliability (ADU-CHAT-01 v3.3 S10, S15): a retry of an unconfirmed send, and a
+  // refusal whose cause the contract cannot name (one NOT_FOUND for the conversation and the Product).
+  'buyer.chat.retry_send': 'Try sending again',
+  'buyer.chat.not_found_anchored': 'Your message was not sent. This conversation or the Product with it may not be available right now. Your message is still in the box below.',
+  'buyer.chat.not_found_plain': 'Your message was not sent. This conversation may not be available right now. Your message is still in the box below.',
   'buyer.shop.order': 'Newest first',
   'buyer.shop.products': 'Products in your Market',
   'buyer.shop.empty': 'No Products to show right now.',
