@@ -13,6 +13,10 @@
 # empty database volume. `adulis-platform` is the name the existing stack uses.
 name: adulis-platform
 
+# One MinIO build for the server AND the one-shot init (it ships mc and a shell),
+# pinned by digest. Keep it identical to MINIO_IMAGE in .github/workflows/ci.yml.
+x-minio-image: &minio-image cgr.dev/chainguard/minio@sha256:786cb11d340b1a657de8dc899560e36e1d1fb371d3d6f3eb6c903a0bb0cec714
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -56,8 +60,15 @@ services:
   # container on a developer's loopback, not a secret. Production credentials
   # exist only in the deployment environment (SR-8's class: never in the
   # repository, never in an order, never in a report).
+  #
+  # THE IMAGE (WO-INFRA-003). MinIO stopped publishing community images:
+  # docker.io/minio/minio now answers 404 and quay.io/minio/minio 401, which is
+  # why every CI run from 2026-11-08 died at its first step. Chainguard rebuilds
+  # MinIO from source daily (AGPLv3, non-root, amd64 + arm64). Its free tier
+  # serves only `latest`, so the digest is the pin: update it deliberately, and
+  # in ci.yml in the same commit.
   minio:
-    image: minio/minio:latest
+    image: *minio-image
     container_name: adulis-minio
     restart: unless-stopped
     command: server /data
@@ -80,28 +91,21 @@ services:
       start_period: 10s
 
   # One-shot: creates the two buckets and sets their policies, then exits.
-  # TWO BUCKETS, NOT TWO PREFIXES (T19 S3.1 ruling): evidence/raw/ holds a
-  # PLAINTEXT bank screenshot for the window between upload and the commit
-  # that encrypts-and-deletes it, so the public-read policy attaches to the
-  # media bucket ONLY and the evidence bucket has no public policy to
-  # misconfigure. The 1-day expiry on evidence/raw/ is the BACKSTOP for a
-  # commit that died between fetch and delete -- the commit path deletes on
-  # success and S3 lifecycle cannot express hours.
+  # The script, and why there are TWO BUCKETS rather than two prefixes, is
+  # ops/scripts/minio-init.sh -- the same file CI runs.
   minio-init:
-    image: minio/mc:latest
+    image: *minio-image
     container_name: adulis-minio-init
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 adulis-local adulis-local-secret &&
-      (mc mb --ignore-existing local/adulis-media) &&
-      (mc mb --ignore-existing local/adulis-evidence) &&
-      mc anonymous set download local/adulis-media &&
-      mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 ||
-      mc ilm rule ls local/adulis-evidence
-      "
+    environment:
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: adulis-local
+      MINIO_ROOT_PASSWORD: adulis-local-secret
+    volumes:
+      - ./ops/scripts/minio-init.sh:/minio-init.sh:ro
+    entrypoint: ['/bin/sh', '/minio-init.sh']
 
 # EXPLICIT PHYSICAL NAMES, ONE PER SERVICE (WO-INFRA-002, ISSUE-INFRA-001).
 #
