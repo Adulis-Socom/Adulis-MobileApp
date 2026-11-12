@@ -50,7 +50,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,29 +69,32 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  * three console-dist gates then pass "not selected" on top.
  *
  * So the scope is dropped, and the run says so, when a changed file is outside
- * apps/ and packages/ and is not documentation, or when the filter selects no
- * package at all. An unrecognised root path counts as an input: the safe
+ * apps/ and packages/ and is not Markdown (or .claude/ tooling), or when the
+ * filter selects no package at all. docs/ is NOT exempt: the API suite reads
+ * docs/amendments/*.sql. An unrecognised root path counts as an input: the safe
  * failure is a slower run, never a green one that checked nothing.
  */
-const SCOPE_TRACKED = /^(apps|packages|docs|\.claude)\/|\.md$/;
+const SCOPE_TRACKED = /^(apps|packages|\.claude)\/|\.md$/;
 
-export function scopeDecision(raw, changed, countSelected) {
-  if (!raw) return { scope: '', why: 'none (full run)' };
-  if (changed === null) return { scope: '', why: 'UNSCOPED - git could not list the changed files' };
+/** `selectedNames()` lists the packages the filter selects; null when pnpm could not say. */
+export function scopeDecision(raw, changed, selectedNames) {
+  if (!raw) return { scope: '', why: 'none (full run)', selected: [] };
+  const full = (why) => ({ scope: '', why: `UNSCOPED - ${why}`, selected: [] });
+  if (changed === null) return full('git could not list the changed files');
   const roots = changed.filter((f) => !SCOPE_TRACKED.test(f));
-  if (roots.length > 0) {
-    return { scope: '', why: `UNSCOPED - ${roots.length} changed root input(s), e.g. ${roots.slice(0, 3).join(', ')}` };
-  }
-  const n = countSelected();
-  if (!(n > 0)) return { scope: '', why: `UNSCOPED - ${raw} selects no package` };
-  return { scope: raw, why: `${raw} (${n} package(s))` };
+  if (roots.length > 0) return full(`${roots.length} changed root input(s), e.g. ${roots.slice(0, 3).join(', ')}`);
+  const names = selectedNames();
+  if (names === null) return full(`pnpm could not evaluate ${raw}`);
+  if (names.length === 0) return full(`${raw} selects no package`);
+  return { scope: raw, why: `${raw} (${names.length} package(s): ${names.join(', ')})`, selected: names };
 }
 
 function resolveScope(raw) {
   const base = /\[([^\]]+)\]/.exec(raw)?.[1];
-  let changed = [];
+  let changed = []; // a filter with no [base] is not change-based: only the selection check applies
   if (raw && base) {
-    const r = spawnSync('git', ['diff', '--name-only', base], { cwd: root, encoding: 'utf8' });
+    // --no-renames: a root file moved under apps/ must still show its old path.
+    const r = spawnSync('git', ['diff', '--name-only', '--no-renames', base], { cwd: root, encoding: 'utf8' });
     changed = r.status === 0 ? r.stdout.split('\n').filter(Boolean) : null;
   }
   return scopeDecision(raw, changed, () => {
@@ -101,14 +104,25 @@ function resolveScope(raw) {
       shell: process.platform === 'win32',
     });
     try {
-      return r.status === 0 ? JSON.parse(r.stdout).length : 0;
+      return r.status === 0 ? JSON.parse(r.stdout).map((p) => p.name) : null;
     } catch {
-      return 0;
+      return null;
     }
   });
 }
 
-const { scope, why: scopeWhy } = resolveScope(process.env['ADULIS_SCOPE_FILTER'] ?? '');
+const { scope, why: scopeWhy, selected } = resolveScope(process.env['ADULIS_SCOPE_FILTER'] ?? '');
+
+/**
+ * A gate's `env` is a DEFAULT, never an override (review of WO-INFRA-004). It
+ * says which environment a gate run is when the caller said nothing -- CI, or a
+ * local run whose NODE_ENV=development was dropped above. A caller who set
+ * NODE_ENV=staging or production deliberately keeps it, so the seed, reset and
+ * determinism guards still see it and refuse.
+ */
+export function gateEnv(defaults, base = process.env) {
+  return defaults ? { ...defaults, ...base } : base;
+}
 
 /**
  * NODE_ENV=development IS DROPPED, and this is the first thing this file
@@ -157,10 +171,13 @@ const pnpm = (script, { scoped = false } = {}) =>
  * D-93). Under a scope filter, an absent dist means "not selected" and the
  * gate passes WITH A NOTE; unscoped (every local run), an absent dist is
  * still a hard fail, because an unscoped build always produces one.
+ *
+ * "Not selected" is now checked, not assumed (WO-INFRA-006 review): a scoped
+ * run that DID select @adulis/console and still has no dist is a hard fail.
  */
 function consoleDistAbsent(p) {
   if (existsSync(p)) return null;
-  return scope
+  return scope && !selected.includes('@adulis/console')
     ? { ok: true, detail: `console not selected by the scope filter (${p} absent); asserted on every run that builds it` }
     : { ok: false, detail: `${p} is absent - build first` };
 }
@@ -332,8 +349,9 @@ const GATES = [
    * refused with "NODE_ENV=unset" and gate `migrate` went red on main from
    * 2026-09-07 (run 34129602933). Locally it passed only because
    * `pnpm db:seed` re-reads .env. Same fix as `determinism` and `console-e2e`
-   * below: the caller says which environment a gate run is. db:migrate gets
-   * nothing, so a production NODE_ENV still reaches every guard that checks it.
+   * below: the caller says which environment a gate run is -- as a DEFAULT
+   * (gateEnv), so a deliberate staging or production still reaches the seed's
+   * guard and is refused. db:migrate gets nothing.
    */
   {
     id: 'migrate',
@@ -577,8 +595,9 @@ function run(cmd, extraEnv) {
     cwd: root,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+    env: gateEnv(extraEnv),
   });
+  if (r.error) console.error(`      could not start ${cmd[0]}: ${r.error.message}`);
   return r.status === 0;
 }
 
@@ -590,6 +609,12 @@ function main() {
 
   const only = process.argv.indexOf('--only');
   const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+  // A typo in --only used to run nothing and print "PASS all 0 gates" (WO-INFRA-006 review).
+  const unknown = wanted ? [...wanted].filter((id) => !GATES.some((g) => g.id === id)) : [];
+  if (unknown.length > 0 || wanted?.size === 0) {
+    console.error(`FAIL  --only names no known gate: ${unknown.join(', ') || '(empty)'}. See --list.`);
+    process.exit(2);
+  }
 
   console.log(`\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)\nscope: ${scopeWhy}\n`);
 
@@ -624,5 +649,14 @@ function main() {
   console.log(`\nPASS  all ${n} gates.\n`);
 }
 
-// Run as a script only: gates.test.mjs imports GATES and scopeDecision.
-if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) main();
+// Run as a script only: gates.test.mjs imports GATES and scopeDecision. Both sides are
+// realpath'd: through a junction, subst drive or symlink, argv[1] keeps the link path while
+// import.meta.url is resolved, and a plain comparison ran NOTHING and exited 0 (review).
+const self = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+if (process.argv[1] && self(process.argv[1]) === self(fileURLToPath(import.meta.url))) main();
