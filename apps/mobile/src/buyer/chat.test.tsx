@@ -83,6 +83,8 @@ function installChat() {
     );
     return { unpublish: () => (entry.published = false) };
   };
+  /** A fault switch for the list's later pages (a server error, never a lost connection). */
+  const faults = { laterPages: false };
   const mine = (call: Recorded) => convs.filter((c) => c.owner === call.headers.Authorization);
   const byPath = (call: Recorded) => mine(call).find((c) => call.path.startsWith(`/v1/conversations/${c.id}/`));
   api.on('POST /v1/conversations', (call) => {
@@ -96,6 +98,7 @@ function installChat() {
   });
   api.on('GET /v1/conversations', (call) => {
     if (call.query.as !== 'buyer') return problem(400, 'SCOPE_PARAMETER_REQUIRED', 'request');
+    if (call.query.cursor && faults.laterPages) return problem(500, 'INTERNAL', 'server');
     const list = mine(call).sort((x, y) => y.last_message_at.localeCompare(x.last_message_at));
     const start = call.query.cursor ? list.findIndex((c) => c.last_message_at < call.query.cursor!) : 0;
     const slice = start < 0 ? [] : list.slice(start, start + 25);
@@ -133,7 +136,7 @@ function installChat() {
     const m = msg(c, { sender_kind: 'BOT', template_key: 'chat.bot.escalated', resolution_path: 'ESCALATED', sent_at: new Date().toISOString() });
     return { status: 200, body: { escalated: true, bot_message_id: m.id } };
   });
-  return { convs, conv, msg, publish };
+  return { convs, conv, msg, publish, faults };
 }
 
 const sends = () => api.calls.filter((c) => c.method === 'POST' && /\/messages$/.test(c.path));
@@ -757,5 +760,51 @@ describe('Product-context messaging (WO-014)', () => {
     await screen.findByText(en['buyer.you.signed_out']);
     await act(async () => release());
     expect(sends()).toEqual([]);
+  });
+
+  it('review M-1. a later page of the list that fails is not fetched again until Try again', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.publish(BASKET);
+    // 25 newer conversations put this one on the second page.
+    const target = chat.conv(A, SELLER_ID, 'Store 1', HANDLE, ago(10_000));
+    for (let i = 0; i < 25; i++) chat.conv(A, SELLER_2, `Other ${i}`, `other-${i}`, ago(100 + i));
+    chat.faults.laterPages = true;
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${target.id}?productHandle=seller-1&productSlug=basket` });
+    await screen.findByTestId('chat-product-context');
+    expect(await context().findByText(en['buyer.chat.context_unchecked'])).toBeOnTheScreen();
+    const pages = api.callsTo('GET /v1/conversations').length;
+    // Time passes (renderRouter runs on fake timers): a loop would have fetched again by now.
+    await act(() => jest.advanceTimersByTimeAsync(5000));
+    expect(api.callsTo('GET /v1/conversations')).toHaveLength(pages);
+    expect(screen.queryByText('Woven basket')).toBeNull();
+    chat.faults.laterPages = false;
+    await fireEvent.press(context().getByRole('button', { name: en['common.retry'] }));
+    expect(await context().findByText('Woven basket')).toBeOnTheScreen();
+  });
+
+  it('review L-2. an unconfirmed send whose Product now reads as another id sends nothing new', async () => {
+    const chat = await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => 'offline');
+    await send('Same basket?');
+    await screen.findByText(en['buyer.chat.maybe_not_sent']);
+    // The slug now names a re-created Product with a new id.
+    const recreated = { ...BASKET, id: '0b6f1a3e-6666-4666-8666-666666666666' };
+    chat.publish(recreated);
+    await fireEvent.press(sendButton());
+    expect(await context().findByText(en['buyer.chat.context_mismatch'])).toBeOnTheScreen();
+    expect(sends()).toHaveLength(1);
+    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(composer().props.editable).toBe(false);
+  });
+
+  it('review L-3. entering the open conversation again with another Product replaces the context', async () => {
+    const chat = await askFrom(BASKET, (c) => c.publish(LAMP));
+    await context().findByText('Woven basket');
+    const [own] = chat.convs.filter((c) => c.owner === A);
+    await act(() => router.push({ pathname: '/chat/[conversationRef]', params: { conversationRef: own!.id, productHandle: 'seller-1', productSlug: 'lamp' } }));
+    expect(await context().findByText('Clay lamp')).toBeOnTheScreen();
+    expect(screen.queryByText('Woven basket')).toBeNull();
   });
 });

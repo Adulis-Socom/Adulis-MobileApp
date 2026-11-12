@@ -74,6 +74,14 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   // The next message's Product (lookup keys of a public read), and a refusal from the last check.
   const [context, setContext] = useState<ProductRef | null>(product);
   const [refusal, setRefusal] = useState<'gone' | 'mismatch' | 'unchecked' | null>(null);
+  const [entered, setEntered] = useState(product);
+  if (entered?.handle !== product?.handle || entered?.slug !== product?.slug) {
+    setEntered(product);
+    if (!sending.current && !(state === 'unknown' && sendIntent.current !== null)) {
+      setContext(product);
+      setRefusal(null);
+    }
+  }
   const contextRead = useQuery({
     queryKey: ['chat-context', context?.handle ?? '', context?.slug ?? ''],
     // A technical re-read (revalidate): opening the composer is not a Product view.
@@ -89,11 +97,10 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     if (state === 'sending') AccessibilityInfo.announceForAccessibility(t('buyer.chat.sending'));
   }, [state, t]);
   const listed = conversations.items.some((c) => c.id === conversationRef);
+  const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
   useEffect(() => {
-    if (context !== null && !listed && conversations.hasNextPage && !conversations.isFetching) {
-      void conversations.fetchNextPage();
-    }
-  }, [context, listed, conversations]);
+    if (context !== null && !listed && hasNextPage && !isFetching && !listFailed) void fetchNextPage();
+  }, [context, listed, hasNextPage, isFetching, listFailed, fetchNextPage]);
 
   if (current === null || current !== owner.current) return <Redirect href="/messages" />;
 
@@ -130,7 +137,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
             ? 'gone'
             : 'unchecked'
           : contextRead.data === undefined ||
-              (conversation === undefined && (conversations.isPending || conversations.hasNextPage))
+              (conversation === undefined && !listFailed && (conversations.isPending || hasNextPage))
             ? 'checking'
             : conversation === undefined
               ? 'unchecked'
@@ -178,6 +185,11 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           setState(previous);
           return;
         }
+      }
+      if (previous === 'unknown' && sendIntent.current !== null && sendIntent.current.productId !== productId) {
+        setRefusal('mismatch');
+        setState('unknown');
+        return;
       }
       // One key per payload: a retry of the same text and Product replays, never re-sends; a changed
       // text or Product is a new intent.
@@ -327,6 +339,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
             onRetry={() => {
               setRefusal(null);
               void contextRead.refetch();
+              if (listFailed) void conversations.refetch();
             }}
           />
         ) : null}
