@@ -70,6 +70,31 @@ does the running API accept `as=seller` from a MOBILE session at all?
 | Android regression | NOT EXECUTED -- RESOURCE DEFERRED | WO-013..020 flows (Buyer messaging, Seller Home, Orders, notifications) |
 | iOS verification | NOT EXECUTED -- RESOURCE DEFERRED | No macOS hardware; EAS or cloud workflow needed |
 
+## From WO-022 (messaging reliability hardening)
+
+WO-022 ran under the same resource restriction as WO-021. Nothing below was run. The gateway
+and unreadable-response checks need a local proxy in front of the API that can fake those
+answers; they are verified in Jest only.
+
+| Item | Status | What to check |
+|---|---|---|
+| Buyer gateway failure retry | NOT EXECUTED -- RESOURCE DEFERRED | Needs a way to make the API path return a proxy 502/503/504 without the API problem (a local proxy); the message is "may already have been received", Try sending again stores it once |
+| Buyer unreadable 201 response | NOT EXECUTED -- RESOURCE DEFERRED | Same harness: a 201 with a cut-off body is unknown, not "not sent"; the retry keeps the key |
+| Buyer Product-context retry | NOT EXECUTED -- RESOURCE DEFERRED | An anchored message lost in transit retries with the same Product, text and key; Remove/Change Product locked |
+| Buyer Product changes between attempts | NOT EXECUTED -- RESOURCE DEFERRED | Unpublish the Product before Try sending again: nothing sent, still unknown, Product shown as no longer available |
+| Seller retry regression | NOT EXECUTED -- RESOURCE DEFERRED | A store reply lost in transit: unknown, retry stores once (WO-021 rows still owed too) |
+| Buyer/Seller account switching | NOT EXECUTED -- RESOURCE DEFERRED | Sign out during an unconfirmed send; sign in as another Account; nothing of the first remains |
+| Seller A/B isolation | NOT EXECUTED -- RESOURCE DEFERRED | Two stores: inbox header and composer name the open store; no draft or reply crosses |
+| Seller messaging permission refusal | NOT EXECUTED -- RESOURCE DEFERRED | INVENTORY or ANALYST member: "not available for your role", no repeated requests (watch the API log) |
+| Seller conversation UX | NOT EXECUTED -- RESOURCE DEFERRED | Inbox header, both times on each row, "Replies are sent as ...", spoken row labels |
+| Long message rendering | NOT EXECUTED -- RESOURCE DEFERRED | A 3,000-character unbroken message wraps inside the bubble at 360 dp; no horizontal scroll |
+| Keyboard accessibility | NOT EXECUTED -- RESOURCE DEFERRED | Composer, Try sending again and Edit the message instead reachable with the keyboard up; Send above the keyboard |
+| Enlarged text (100%, 130%, 160%) | NOT EXECUTED -- RESOURCE DEFERRED | Inbox rows, store header, composer line, unknown-outcome text |
+| Dark mode | NOT EXECUTED -- RESOURCE DEFERRED | Bubbles, automated-answer styling, alerts, store header |
+| TalkBack | NOT EXECUTED -- RESOURCE DEFERRED | "Your message may already have been received" spoken; rows read title, last activity and start; store header read as a heading |
+| Android regression | NOT EXECUTED -- RESOURCE DEFERRED | WO-013..021 messaging flows, Seller Home, Orders, notifications |
+| iOS verification | NOT EXECUTED -- RESOURCE DEFERRED | No macOS hardware; EAS or cloud workflow needed |
+
 ## Executed
 
 None recorded yet.

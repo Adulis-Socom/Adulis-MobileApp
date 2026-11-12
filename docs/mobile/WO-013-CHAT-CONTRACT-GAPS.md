@@ -82,3 +82,8 @@ Status key:
   No status above changes. Rows 4, 5, 6, 8, 12, 17, 18, 24 and 32 remain gaps on the Seller side
   as well (WO-021 W21-01, W21-05). The Seller-side authorization question, whether MOBILE may use
   the Seller inbox at all, is WO-021 W21-02 (SPEC_CONFLICT with ADU-API-01 v1.11 S12.7).
+- **Uncertain sends (WO-022).** Rows 11 and 19 are strengthened, on both sides, without a status
+  change: only the API's own problem answer now counts as "not sent". A gateway answer without it,
+  or an unreadable 201, is "may already have been received" and keeps the idempotency key (WO-022
+  W22-01; `src/buyer/chat.ts` `sendOutcome`). Row 13's cursor caveat: a timestamp cursor can split
+  a same-time pair across pages (WO-022 W22-07, a contract item, not verified).
