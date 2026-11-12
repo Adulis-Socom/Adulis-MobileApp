@@ -1,0 +1,305 @@
+# Product-context messaging (WO-014) against the real local API on a DISPOSABLE database, with the
+# WO-CAT-001 fixtures (Fixture Weaves: Coffee tray, Woven basket, Clay cup). The harness runs steps
+# (env STEP) and checks the stored rows between them:
+#   guest      a fresh install: a Product's Ask Seller sends the guest to sign in; a code is requested
+#              for PHONE (the harness then reads it)
+#   guest-in   the code (OTP) signs in and returns to the same Product; nothing is opened or sent
+#   c-open     (no relaunch) the Buyer taps Ask Seller again: the conversation opens with the basket
+#   ask-a      Shop -> Coffee tray -> Ask Seller -> "Asking about Coffee tray" -> a question is sent
+#              and shown "About a Product"; the context clears
+#   ask-b      the same Seller's Woven basket -> Ask Seller -> the SAME conversation (the tray
+#              question is above) with the basket as context -> a question is sent
+#   d-open     Clay cup -> Ask Seller -> its context is shown (the harness then unpublishes it)
+#   d-send     (no relaunch) the send is refused before anything is sent; the name is gone; Remove
+#              Product, and the message goes without it
+#   off-open   Woven basket -> Ask Seller (the harness then stops the API)
+#   off-send   (no relaunch) the check cannot reach the server: "could not be checked", not "gone";
+#              nothing is sent
+#   off-retry  (no relaunch; the API is back) Try again -> the context returns -> sent
+#   view       the context in Dark at font scale 1.3 (the harness sets both), then with the keyboard
+#              open: the composer and Send stay visible
+#   other      another Account: Ask Seller opens its own empty conversation; nothing of the first
+#              Account's messages or draft is shown
+#
+#   maestro test -e STEP=ask-a .maestro/product-context-messaging.yaml
+appId: com.adulis.app
+name: Product-context messaging
+tags:
+  - buyer
+  - messaging
+---
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - launchApp:
+          clearState: true
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP == 'ask-a' || STEP == 'ask-b' || STEP == 'd-open' || STEP == 'off-open' || STEP == 'view' || STEP == 'other'}
+    commands:
+      - launchApp:
+          permissions:
+            android.permission.ACCESS_LOCAL_NETWORK: allow
+- runFlow:
+    when:
+      true: ${STEP == 'guest' || STEP == 'ask-a' || STEP == 'ask-b' || STEP == 'd-open' || STEP == 'off-open' || STEP == 'view' || STEP == 'other'}
+    commands:
+      - extendedWaitUntil:
+          visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+          timeout: 120000
+
+# A Product opened by link (guest, B, D, offline, view, other) or from the Shop (A).
+- runFlow:
+    when:
+      true: ${STEP == 'guest' || STEP == 'ask-b' || STEP == 'off-open' || STEP == 'view' || STEP == 'other'}
+    commands:
+      - openLink: adulis://product/fixture-weaves/woven-basket
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+- runFlow:
+    when:
+      true: ${STEP == 'd-open'}
+    commands:
+      - openLink: adulis://product/fixture-weaves/clay-cup
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+- runFlow:
+    when:
+      true: ${STEP == 'ask-a'}
+    commands:
+      - repeat:
+          while:
+            notVisible: Newest first
+          times: 5
+          commands:
+            - tapOn: Shop
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: 'Coffee tray, .*'
+          timeout: 30000
+      - tapOn: 'Coffee tray, .*'
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - takeScreenshot: pcm-a1-product
+- runFlow:
+    when:
+      true: ${STEP == 'guest' || STEP == 'ask-a' || STEP == 'ask-b' || STEP == 'd-open' || STEP == 'off-open' || STEP == 'view' || STEP == 'other'}
+    commands:
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - tapOn: Ask Seller About This Product
+
+# Guest: sign-in, then back on the Product with nothing opened.
+- runFlow:
+    when:
+      true: ${STEP == 'guest'}
+    commands:
+      - extendedWaitUntil:
+          visible: 'Enter your phone number\..*'
+          timeout: 20000
+      - takeScreenshot: pcm-c1-guest-sign-in
+      - tapOn: Phone number
+      - inputText: ${PHONE}
+      - hideKeyboard
+      - tapOn: Send code
+      - extendedWaitUntil:
+          visible: Six-digit code
+          timeout: 20000
+- runFlow:
+    when:
+      true: ${STEP == 'guest-in'}
+    commands:
+      - tapOn: Six-digit code
+      - inputText: ${OTP}
+      - hideKeyboard
+      - tapOn: Verify
+      - runFlow:
+          when:
+            visible: I confirm that I am 18 years of age or older.
+          commands:
+            - tapOn: I confirm that I am 18 years of age or older.
+            - tapOn: Verify
+      - extendedWaitUntil:
+          visible: Sold by Fixture Weaves
+          timeout: 30000
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - assertNotVisible: Asking about
+      - takeScreenshot: pcm-c2-back-on-product
+- runFlow:
+    when:
+      true: ${STEP == 'c-open'}
+    commands:
+      - scrollUntilVisible:
+          element: Ask Seller About This Product
+          direction: DOWN
+      - tapOn: Ask Seller About This Product
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Woven basket
+      - takeScreenshot: pcm-c3-opened
+
+# A: the tray question.
+- runFlow:
+    when:
+      true: ${STEP == 'ask-a'}
+    commands:
+      - extendedWaitUntil:
+          visible: Coffee tray
+          timeout: 30000
+      - assertVisible: Asking about
+      - assertVisible: Your next message will be about this Product.
+      - assertVisible: Remove Product
+      - takeScreenshot: pcm-a2-context
+      - tapOn: Message
+      - inputText: Is the tray food safe?
+      - hideKeyboard
+      - tapOn: Send
+      # The context clears only when the server accepted (the draft text is in the box until then).
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 30000
+      - assertVisible: Is the tray food safe?
+      - assertVisible: About a Product
+      - takeScreenshot: pcm-a3-sent
+
+# B: the same conversation, the basket as context.
+- runFlow:
+    when:
+      true: ${STEP == 'ask-b'}
+    commands:
+      - extendedWaitUntil:
+          visible: Woven basket
+          timeout: 30000
+      - assertVisible: Asking about
+      - extendedWaitUntil:
+          visible: Is the tray food safe?
+          timeout: 30000
+      - takeScreenshot: pcm-b1-same-conversation
+      - tapOn: Message
+      - inputText: Is the basket handmade?
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 30000
+      - assertVisible: Is the basket handmade?
+      - takeScreenshot: pcm-b2-sent
+
+# D: the cup is unpublished between display and send.
+- runFlow:
+    when:
+      true: ${STEP == 'd-open'}
+    commands:
+      - extendedWaitUntil:
+          visible: Clay cup
+          timeout: 30000
+      - assertVisible: Asking about
+      - takeScreenshot: pcm-d1-context
+- runFlow:
+    when:
+      true: ${STEP == 'd-send'}
+    commands:
+      - tapOn: Message
+      - inputText: Do you still have the cup?
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          visible: 'This Product is no longer available to ask about\..*'
+          timeout: 30000
+      - assertNotVisible: Clay cup
+      # Nothing was sent: Send stays disabled until the Product is removed (the harness checks the rows).
+      - assertVisible:
+          text: Send
+          enabled: false
+      - takeScreenshot: pcm-d2-refused
+      - tapOn: Remove Product
+      - assertNotVisible: Asking about
+      - tapOn: Send
+      # No context to watch now: wait for the send to end; the harness checks the stored row.
+      - extendedWaitUntil:
+          notVisible: Sending your message
+          timeout: 30000
+      - assertNotVisible: 'Your message was not sent\..*'
+      - assertNotVisible: 'We could not confirm that your message was sent\..*'
+      - assertVisible: Do you still have the cup?
+      - takeScreenshot: pcm-d3-sent-without
+
+# Offline: the check cannot reach the server.
+- runFlow:
+    when:
+      true: ${STEP == 'off-open'}
+    commands:
+      - extendedWaitUntil:
+          visible: Woven basket
+          timeout: 30000
+      - assertVisible: Asking about
+- runFlow:
+    when:
+      true: ${STEP == 'off-send'}
+    commands:
+      - tapOn: Message
+      - inputText: Offline question
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          visible: 'This Product could not be checked\..*'
+          timeout: 60000
+      - assertNotVisible: 'This Product is no longer available to ask about\..*'
+      - assertNotVisible: Woven basket
+      - takeScreenshot: pcm-o1-unchecked
+- runFlow:
+    when:
+      true: ${STEP == 'off-retry'}
+    commands:
+      - tapOn: Try again
+      - extendedWaitUntil:
+          visible: Woven basket
+          timeout: 30000
+      - tapOn: Send
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 30000
+      - assertVisible: Offline question
+      - takeScreenshot: pcm-o2-sent-after-retry
+
+# Dark, enlarged text, and the keyboard.
+- runFlow:
+    when:
+      true: ${STEP == 'view'}
+    commands:
+      - extendedWaitUntil:
+          visible: Woven basket
+          timeout: 30000
+      - takeScreenshot: pcm-v1-dark-large
+      - tapOn: Message
+      - inputText: Typing with the keyboard open
+      - assertVisible: Send
+      - assertVisible: Typing with the keyboard open
+      - takeScreenshot: pcm-v2-keyboard
+      - hideKeyboard
+
+# E: another Account.
+- runFlow:
+    when:
+      true: ${STEP == 'other'}
+    commands:
+      - extendedWaitUntil:
+          visible: Woven basket
+          timeout: 30000
+      - extendedWaitUntil:
+          visible: No messages yet. Write the first one below.
+          timeout: 30000
+      - assertNotVisible: Is the basket handmade?
+      - assertNotVisible: Is the tray food safe?
+      - assertNotVisible: Typing with the keyboard open
+      - takeScreenshot: pcm-e1-other-account
