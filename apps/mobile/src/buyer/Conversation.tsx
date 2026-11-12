@@ -26,6 +26,7 @@ import {
 } from './chat';
 import type { ProductRef } from './MessageSellerButton';
 import { ProductPicker } from './ProductPicker';
+import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
 
 /**
@@ -110,7 +111,8 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
   const pagesRead = conversations.data?.pages.length ?? 0;
   // Bounded (WO-015): at most MAX_LIST_PAGES pages, and never again after a failure until Try again.
-  const canWalk = !listed && hasNextPage && !listFailed && pagesRead < MAX_LIST_PAGES;
+  const unavailable = messages.isError && problemCode(messages.error) === 'NOT_FOUND';
+  const canWalk = ref !== null && !unavailable && !listed && hasNextPage && !listFailed && pagesRead < MAX_LIST_PAGES;
   // pagesRead re-runs it per page: a page's fetching flag can rise and fall within one render.
   useEffect(() => {
     if (canWalk && !isFetching) void fetchNextPage();
@@ -185,12 +187,14 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   // Never while a send is in flight or unconfirmed: that payload is frozen.
   const choose = (slug: string) => {
     setPicking(false);
-    if (!conversation || sending.current || (state === 'unknown' && sendIntent.current !== null)) return;
+    if (!conversation || !isPathName(conversation.handle) || !isPathName(slug)) return;
+    if (sending.current || (state === 'unknown' && sendIntent.current !== null)) return;
     setContext({ handle: conversation.handle, slug });
     setRefusal(null);
     void qc.invalidateQueries({ queryKey: ['chat-context', conversation.handle, slug] });
   };
-  const canSelect = seller === 'resolved' && state !== 'sending' && !frozen;
+  const canSelect =
+    seller === 'resolved' && conversation !== undefined && isPathName(conversation.handle) && state !== 'sending' && !frozen;
 
   const send = async () => {
     if (!api || sending.current || text.length === 0 || tooLong) return;
@@ -367,7 +371,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           <Button
             label={t(context === null ? 'buyer.chat.select_product' : 'buyer.chat.change_product')}
             variant="secondary"
-            onPress={() => setPicking(true)}
+            onPress={() => setPicking(canSelect)}
             disabled={!canSelect}
           />
           {seller === 'unresolved' || seller === 'failed' ? (
@@ -377,7 +381,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
             <Button label={t('common.retry')} variant="secondary" onPress={() => void conversations.refetch()} />
           ) : null}
         </View>
-        {picking && conversation ? (
+        {picking && canSelect && conversation ? (
           <ProductPicker handle={conversation.handle} store={conversation.storeName} onSelect={choose} onCancel={() => setPicking(false)} />
         ) : null}
         {context !== null ? (

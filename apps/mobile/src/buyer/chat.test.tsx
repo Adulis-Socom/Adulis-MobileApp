@@ -1101,4 +1101,27 @@ describe('In-conversation Product selector (WO-015)', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     await waitFor(() => expect(select()).toBeEnabled());
   });
+
+  it('review I-3. a listed Product with a malformed slug is never attached', async () => {
+    await inConversation();
+    api.on(`GET /v1/storefronts/${HANDLE}/products`, () => ({
+      status: 200,
+      body: { data: [{ ...BASKET, slug: 'Bad Slug', display_order: 0, image_key: null }], next_cursor: null },
+    }));
+    await openPicker();
+    await fireEvent.press(await item(BASKET));
+    await waitFor(() => expect(picker()).toBeNull());
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    expect(api.calls.filter((c) => c.path.includes('/products/Bad'))).toEqual([]);
+  });
+
+  it('review I-2. a malformed or unavailable conversation does not walk the list', async () => {
+    signedIn();
+    const chat = installChat();
+    for (let i = 0; i < 30; i++) chat.conv(A, SELLER_2, `Other ${i}`, `other-${i}`, ago(100 + i));
+    await renderRouter(APP_DIR, { initialUrl: '/chat/not-a-conversation' });
+    expect(await screen.findByText(en['buyer.chat.unavailable'])).toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(2000));
+    expect(api.callsTo('GET /v1/conversations').length).toBeLessThanOrEqual(1);
+  });
 });
