@@ -7,7 +7,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
-import { notificationText, useBuyerNotifications, useMarkNotificationRead, type BuyerNotification } from './notifications';
+import { notificationText, useMarkNotificationRead, useNotificationInbox, type BuyerNotification, type InboxScope } from './notifications';
 
 /** Seven days: the Recent group (presentation only; the design defines no grouping). */
 const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
@@ -18,13 +18,19 @@ type Row = { kind: 'header'; key: string; title: string } | { kind: 'item'; key:
  * The signed-in Buyer's inbox (WO-012): Recent and Older, newest first; each row says Unread or Read
  * in words (not colour alone), its sentence, when it arrived, and, for an unread row, Mark as read.
  * No row opens anything: the inbox informs, and the server's state elsewhere is the truth.
+ * WO-020: the same inbox for one Seller (scope), with its own generic and Order sentences.
  */
 export function BuyerNotifications() {
+  return <NotificationInbox scope={BUYER} />;
+}
+const BUYER: InboxScope = { as: 'buyer' };
+
+export function NotificationInbox({ scope }: { scope: InboxScope }) {
   const t = useT();
   const locale = useLocale();
   const theme = useTheme();
-  const inbox = useBuyerNotifications();
-  const { mark, pending, failed } = useMarkNotificationRead();
+  const inbox = useNotificationInbox(scope);
+  const { mark, pending, failed } = useMarkNotificationRead(scope);
   const when = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
   const secondary = { color: theme.color.textSecondary };
 
@@ -55,8 +61,10 @@ export function BuyerNotifications() {
         <AppText style={{ fontWeight: theme.fontWeight.semibold, color: unread ? theme.color.accent : theme.color.textSecondary }}>
           {t(unread ? 'buyer.notifications.unread' : 'buyer.notifications.read_state')}
         </AppText>
-        <AppText>{notificationText(t, n)}</AppText>
-        {n.aboutOrder ? <AppText style={secondary}>{t('buyer.notifications.about_order')}</AppText> : null}
+        <AppText>{notificationText(t, n, scope.as)}</AppText>
+        {n.aboutOrder ? (
+          <AppText style={secondary}>{t(scope.as === 'seller' ? 'seller.notifications.about_order' : 'buyer.notifications.about_order')}</AppText>
+        ) : null}
         <AppText style={secondary}>{fillSlots(t('buyer.notifications.received'), { time: when(n.scheduledFor) })}</AppText>
         {unread ? (
           <Button
@@ -64,6 +72,7 @@ export function BuyerNotifications() {
             variant="secondary"
             onPress={() => void mark(n.id)}
             disabled={pending.has(n.id)}
+            busy={pending.has(n.id)}
           />
         ) : null}
         {failed.has(n.id) ? <AlertText>{t('buyer.notifications.mark_read_failed')}</AlertText> : null}
@@ -77,6 +86,7 @@ export function BuyerNotifications() {
       variant="secondary"
       onPress={() => void inbox.fetchNextPage()}
       disabled={inbox.isFetchingNextPage}
+      busy={inbox.isFetchingNextPage}
     />
   ) : inbox.items.length > 0 ? (
     <AppText style={{ ...secondary, textAlign: 'center' }}>{t('buyer.list.end')}</AppText>
