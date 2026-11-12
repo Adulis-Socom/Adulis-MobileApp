@@ -129,8 +129,8 @@ Development-environment issue; Backend contract gap; Founder policy decision.
 - **Files affected:** `G:\AdulisDevelopment\shared-cache\metro\file-map` (created; outside Git).
 - **Fix implemented:** Created the folder.
 - **Regression test:** The next Metro start's log (no cache write error expected).
-- **Verification result:** Pending the next Metro start (checked in WO-016).
-- **Current status:** RESOLVED (pending confirmation)
+- **Verification result:** PASS (WO-016): the file-map cache file now exists in `shared-cache\metro\file-map`, and the two Metro starts after the fix logged no cache write error.
+- **Current status:** RESOLVED
 - **Remaining risk:** None.
 - **Founder decision required:** No
 
@@ -145,10 +145,10 @@ Development-environment issue; Backend contract gap; Founder policy decision.
 - **Expected behavior:** `start` returns within seconds once Metro answers.
 - **Actual behavior:** After a Metro restart, `start` hung for over 20 minutes although Metro answered on 127.0.0.1 ("packager-status:running"). The process was stopped by hand; Metro kept running.
 - **Steps to reproduce:** Stop Metro, run `start`.
-- **Root cause:** The Metro checks used `curl http://localhost:8081/status` with no timeout. On this Windows machine a connection to "localhost" can stall instead of failing (the WO-014 API probe had the same cause, ON-20261111-169).
+- **Root cause:** Corrected in WO-016 (the original analysis was incomplete). The process that looked stuck was the subshell that backgrounds Metro: under Git Bash it stays alive with the caller's output attached, so a caller that pipes the script (`start | tail`) waits until that subshell ends. The launcher itself had finished. The unbounded `curl http://localhost:8081/status` checks were a second, real risk on this machine, where "localhost" connections can stall.
 - **Files affected:** `morning-start.sh`, `wo014-native.sh` (outside Git).
-- **Fix implemented:** Every probe uses `127.0.0.1` and `--max-time 5` (Metro and API, launcher and harness). The app's own API address stays `localhost`: on the device it goes through `adb reverse`.
-- **Regression test:** `start` with Metro running: READY in 5.9 s.
+- **Fix implemented:** Every probe uses `127.0.0.1` and `--max-time 5` (Metro and API, launcher and harness). The app's own API address stays `localhost`: on the device it goes through `adb reverse`. WO-016: the Metro subshell (launcher) and the API subshell (harness `api_start`) now detach their own output (`> /dev/null 2>&1 < /dev/null`).
+- **Regression test:** `start` with Metro running: READY in 5.9 s. WO-016: a piped `start` that has to start Metro returned only when the Metro subshell was ended by hand (13:32-13:45, recorded here); after the detach fix, a piped `start` that started Metro returned READY in 16.9 s.
 - **Verification result:** PASS.
 - **Current status:** RESOLVED
 - **Remaining risk:** None known.
@@ -191,5 +191,45 @@ Development-environment issue; Backend contract gap; Founder policy decision.
 - **Regression test:** "review I-2" (fails without the fix), "review I-3".
 - **Verification result:** PASS (chat.test.tsx 60/60; mobile 393/393).
 - **Current status:** RESOLVED (commit `f7ab805`)
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+
+### B-008
+
+- **Issue ID:** B-008
+- **Work order:** WO-016
+- **Date/time discovered:** 2026-11-12 13:47 (native `lay-view-*`, all three font scales)
+- **Severity:** HIGH (the Send button unreachable with the keyboard open)
+- **Category:** UX/accessibility issue
+- **Affected component:** `apps/mobile/src/app/(buyer)/chat/[conversationRef].tsx` (keyboard handling) with the WO-016 composer layout
+- **Expected behavior:** With the keyboard open, the composer and Send stay above the keyboard (ON-20261111-164).
+- **Actual behavior:** After the first WO-016 layout change (history kept; composer content in a scroll area; Send fixed at the bottom), the history stayed visible but Send was under the keyboard at font scales 1.0, 1.3 and 1.6. The Jest suite passed: it cannot show a keyboard.
+- **Steps to reproduce:** Android 17 emulator, a conversation with history, attach a Product, tap the message box (`G:\AdulisDevelopment\WO-016\maestro\lay-view-1.0-light\...\step-025-assertCondition-Send.png`).
+- **Root cause:** The keyboard-avoiding view measures the keyboard against its own frame, which starts under the navigation header, so it shrank the screen by less than the keyboard's height. The bottom of the screen stayed under the keyboard. WO-014 had the same shortfall, but only the small connected-only note was hidden then (visible in its `pcm-v2-keyboard.png`); once Send became the bottom item, Send was hidden.
+- **Files affected:** `apps/mobile/src/app/(buyer)/chat/[conversationRef].tsx`
+- **Fix implemented:** `keyboardVerticalOffset` = the navigation header's height (`useHeaderHeight`).
+- **Regression test:** Native `layout` step (`lay-view-1.0-light`, `lay-view-1.3-dark`, `lay-view-1.6-light`: "History 30" and Send visible with the keyboard open).
+- **Verification result:** PASS after the fix: `lay-view-1.0-light`, `lay-view-1.3-dark`, `lay-view-1.6-light` ("History 30", the composer and Send visible with the keyboard open; screenshots `lay-03-keyboard.png`). The first run (all three FAIL) is kept in `G:\AdulisDevelopment\WO-016\logs\native-layout.out`.
+- **Current status:** RESOLVED (commit `8ffa1d8`)
+- **Remaining risk:** Other screens with text fields under a header may have the same shortfall (WO-017 audit).
+- **Founder decision required:** No
+
+### S-003
+
+- **Issue ID:** S-003
+- **Work order:** WO-016 (security review L1, L2)
+- **Date/time discovered:** 2026-11-12, WO-016 independent security review
+- **Severity:** LOW
+- **Category:** Security defect (L2) and UX/accessibility issue (L1)
+- **Affected component:** `apps/mobile/src/buyer/Conversation.tsx`
+- **Expected behavior:** A screen reader hears the refusal the screen shows; an unconfirmed send's key cannot be replaced while a retry of it is in flight.
+- **Actual behavior:** L1: a 404 on an anchored send was announced as "This conversation may not be available" while the screen said "This conversation or the Product with it...". L2 (existing since WO-014): "Edit the message instead" did not check for a send in flight; a tap landing before the re-render could clear the key, and the in-flight retry would then create a new key for the same payload (a possible duplicate).
+- **Steps to reproduce:** L1: anchored send answered 404 with a screen reader on. L2: a timing window of one frame (reasoned from the code).
+- **Root cause:** L1: one announcement for both cases. L2: a missing guard.
+- **Files affected:** `apps/mobile/src/buyer/Conversation.tsx`, `apps/mobile/src/buyer/chat.test.tsx`
+- **Fix implemented:** L1: the refusal kind (anchored or plain) is kept and announced. L2: `abandon` returns while a send is in flight.
+- **Regression test:** "ON-168. a 404 on an anchored send, then a current read that answers 404" (asserts the anchored announcement). L2 has no automated test (a sub-frame race the test renderer cannot produce); the guard is one line.
+- **Verification result:** PASS (mobile 400/400).
+- **Current status:** RESOLVED (commit `3bbf927`)
 - **Remaining risk:** None known.
 - **Founder decision required:** No

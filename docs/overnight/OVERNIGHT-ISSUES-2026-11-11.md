@@ -3037,7 +3037,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-014
 - **Severity:** LOW
 - **Type:** UX
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-016)
 - **Summary:** At font scale 1.3 with the keyboard open, the conversation's message list has no height left; only the composer (context, box, Send) shows.
 - **Expected:** Some history visible while typing.
 - **Actual:** The composer stays visible (the work order's requirement), the list collapses until the keyboard closes.
@@ -3049,6 +3049,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Low: the history returns when the keyboard closes.
 - **Founder decision required:** No
 - **Recommended resolution:** A later UX pass: a collapsible context block or a scrollable composer area.
+- **WO-016 (12 November 2026):** RESOLVED. The history keeps at least 120 dp; the composer's content scrolls inside at most 60% of the screen with Send fixed under it; and the keyboard-avoiding view is offset by the header's height (the second cause, found natively: B-008 in docs/overnight/WO-015-017-ISSUES-AND-BLOCKERS.md). Commits `1c15fca`, `8ffa1d8`. Verification: native `messaging-layout.yaml` at font scales 1.0, 1.3 (Dark) and 1.6 with the keyboard open (the newest message, the context and Send visible): PASS after the fix (the first run failed at all three, recorded). docs/mobile/WO-016-MESSAGING-UX-RELIABILITY.md section 2.
 
 ### ON-20261111-165
 
@@ -3109,7 +3110,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-014
 - **Severity:** LOW
 - **Type:** UX
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-016, client)
 - **Summary:** (Security review I-5) Any 404 on an anchored send says the Product is no longer available, even if the conversation itself was not found.
 - **Expected:** The message names what failed.
 - **Actual:** The server answers one NOT_FOUND for both; the client cannot tell them apart.
@@ -3121,6 +3122,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A misleading line in a rare case.
 - **Founder decision required:** No
 - **Recommended resolution:** Backend: the design's context error codes (MESSAGE_PRODUCT_POST_INVALID).
+- **WO-016 (12 November 2026):** RESOLVED in the client. A 404 on send now shows a neutral line ("may not be available right now", the text kept); the screen re-reads the Product and the messages, and only a current 404 from those says "no longer available" / "not available". No backend code was added; the design's context-specific error codes are still a backend item. Commits `1c15fca`, `3bbf927` (the announcement matches). Verification: chat.test.tsx ON-168 cases. docs/mobile/WO-016-MESSAGING-UX-RELIABILITY.md section 3.
 
 ### ON-20261111-169
 
