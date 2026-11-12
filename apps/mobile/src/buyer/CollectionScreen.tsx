@@ -31,6 +31,9 @@ const isRef = (value: unknown): value is string =>
  * now, Remove on each, and -- for a Collection the Buyer named -- Rename and Delete (with a
  * confirmation). Saved, the DEFAULT, can be neither renamed nor deleted. A 404 (deleted here or
  * on another device, or never this Account's) is one neutral state.
+ *
+ * One change at a time (WO-018, A-006): while a Remove, a Rename or a Delete is in flight the other
+ * controls are disabled -- announced, not only dimmed -- and the Remove in flight is busy.
  */
 export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) {
   const t = useT();
@@ -41,6 +44,10 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const valid = isRef(collectionRef);
   const [tab, setTab] = useState<ItemFilter>('ALL');
   const [removing, setRemoving] = useState<string | null>(null);
+  // Two taps in one frame both see removing=null: the ref decides.
+  const inFlight = useRef(false);
+  // A Rename or Delete in flight (ManageCollection's).
+  const [managing, setManaging] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const list = usePublicList({
     resource: ['collection', valid ? collectionRef : '', tab],
@@ -59,20 +66,22 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const title = collection ? collectionName(collection, t) : '';
 
   const remove = async (item: CollectionItem) => {
-    if (!valid || removing || !priv) return;
+    if (!valid || inFlight.current || managing || !priv) return;
+    inFlight.current = true;
     setRemoving(item.ref);
     setFailure(null);
     try {
       await priv.removeFromCollection(collectionRef, item.ref);
       // Answered after a sign-out or another sign-in: nothing is read or drawn for that session.
       if (!priv.isCurrent()) return;
-      AccessibilityInfo.announceForAccessibility(t('buyer.save.removed'));
+      AccessibilityInfo.announceForAccessibility(fillSlots(t('buyer.save.removed_from'), { name: title }) ?? t('buyer.save.removed'));
       list.refresh();
       // Cards in other tabs stay mounted: they read their saved state again (WO-009A).
       void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
       if (priv.isCurrent()) setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
     } finally {
+      inFlight.current = false;
       setRemoving(null);
     }
   };
@@ -93,6 +102,9 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
               name={title}
               onRenamed={list.refresh}
               onDeleted={() => router.back()}
+              busy={managing}
+              setBusy={setManaging}
+              blocked={removing !== null}
             />
           ) : null}
         </>
@@ -110,7 +122,9 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
         keyOf={(i) => i.ref}
         numColumns={2}
         header={header}
-        renderItem={({ item }) => <SavedItemCard item={item} removing={removing === item.ref} onRemove={() => void remove(item)} />}
+        renderItem={({ item }) => (
+          <SavedItemCard item={item} removing={removing === item.ref} disabled={removing !== null || managing} onRemove={() => void remove(item)} />
+        )}
         empty="buyer.collection.empty"
         loading="buyer.collection.loading"
         testID="collection-list"
@@ -126,11 +140,19 @@ function ManageCollection({
   name,
   onRenamed,
   onDeleted,
+  busy,
+  setBusy,
+  blocked,
 }: {
   collectionRef: string;
   name: string;
   onRenamed: () => void;
   onDeleted: () => void;
+  /** Lifted to the screen, so a Remove waits for a Rename or Delete in flight. */
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
+  /** A Remove is in flight. */
+  blocked: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -138,7 +160,7 @@ function ManageCollection({
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const off = busy || blocked;
 
   const rename = async () => {
     const trimmed = draft.replace(/\s+/g, ' ').trim();
@@ -194,10 +216,10 @@ function ManageCollection({
         <TextField label={t('buyer.saved.name')} value={draft} onChangeText={setDraft} error={error} maxLength={120} autoFocus testID="rename-collection-name" />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
           <View style={{ flexGrow: 1 }}>
-            <Button label={t('buyer.collection.save_name')} disabled={busy} onPress={() => void rename()} />
+            <Button label={t('buyer.collection.save_name')} disabled={off} busy={busy} onPress={() => void rename()} />
           </View>
           <View style={{ flexGrow: 1 }}>
-            <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { setRenaming(false); setError(null); }} />
+            <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={off} onPress={() => { setRenaming(false); setError(null); }} />
           </View>
         </View>
       </View>
@@ -207,10 +229,10 @@ function ManageCollection({
     <View style={{ gap: theme.space.sm }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
         <View style={{ flexGrow: 1 }}>
-          <Button label={t('buyer.collection.rename')} variant="secondary" disabled={busy} onPress={() => { setDraft(name); setRenaming(true); }} />
+          <Button label={t('buyer.collection.rename')} variant="secondary" disabled={off} onPress={() => { setDraft(name); setRenaming(true); }} />
         </View>
         <View style={{ flexGrow: 1 }}>
-          <Button label={t('buyer.collection.delete')} variant="secondary" disabled={busy} onPress={confirmDelete} />
+          <Button label={t('buyer.collection.delete')} variant="secondary" disabled={off} busy={busy} onPress={confirmDelete} />
         </View>
       </View>
       {error ? <AlertText>{error}</AlertText> : null}

@@ -12,9 +12,20 @@ import { ProductTile } from './SellerProfile';
  * One saved item as the server resolved it NOW (WO-009 S17): a visible Product or Scene uses the
  * Shop and Search tiles; anything else is one neutral sentence with no name, image, price,
  * caption or reason -- private, moderated, deleted and unknown look the same. Remove, where
- * offered, works on every state.
+ * offered, works on every state. `removing`: this item's Remove is in flight; `disabled`: another
+ * change is (WO-018, A-006). Both are announced, not only dimmed.
  */
-export function SavedItemCard({ item, onRemove, removing = false }: { item: CollectionItem; onRemove?: () => void; removing?: boolean }) {
+export function SavedItemCard({
+  item,
+  onRemove,
+  removing = false,
+  disabled = false,
+}: {
+  item: CollectionItem;
+  onRemove?: () => void;
+  removing?: boolean;
+  disabled?: boolean;
+}) {
   const t = useT();
   const theme = useTheme();
   const name = item.product?.name ?? item.scene?.caption ?? null;
@@ -40,10 +51,10 @@ export function SavedItemCard({ item, onRemove, removing = false }: { item: Coll
               ? (fillSlots(t('buyer.collection.remove_label'), { name }) ?? t('buyer.collection.remove'))
               : t('buyer.collection.remove_unavailable')
           }
-          accessibilityState={{ disabled: removing }}
-          disabled={removing}
+          accessibilityState={{ disabled: removing || disabled, busy: removing }}
+          disabled={removing || disabled}
           onPress={onRemove}
-          style={{ minHeight: theme.touchTarget, justifyContent: 'center', marginHorizontal: theme.space.xs, opacity: removing ? 0.6 : 1 }}
+          style={{ minHeight: theme.touchTarget, justifyContent: 'center', marginHorizontal: theme.space.xs, opacity: removing || disabled ? 0.6 : 1 }}
           testID="saved-item-remove"
         >
           <AppText style={{ color: theme.color.accent, fontWeight: theme.fontWeight.semibold }}>{t('buyer.collection.remove')}</AppText>

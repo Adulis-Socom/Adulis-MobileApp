@@ -140,9 +140,16 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
 
 /**
  * Create a named Collection (WO-009 S14). The name is checked as the server checks it (1-60
- * characters once trimmed); the server's answer still decides. Returns the new Collection.
+ * characters once trimmed); the server's answer still decides. Returns the new Collection and its
+ * name. `disabled` while another Collection change is in flight (WO-018, A-006).
  */
-export function NewCollection({ onCreated }: { onCreated: (created: CollectionCreated) => void }) {
+export function NewCollection({
+  onCreated,
+  disabled = false,
+}: {
+  onCreated: (created: CollectionCreated, name: string) => void;
+  disabled?: boolean;
+}) {
   const t = useT();
   const theme = useTheme();
   const priv = usePrivateApi();
@@ -151,7 +158,7 @@ export function NewCollection({ onCreated }: { onCreated: (created: CollectionCr
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const intent = useRef<{ name: string; key: string } | null>(null);
-  if (!open) return <Button label={t('buyer.saved.new')} variant="secondary" onPress={() => setOpen(true)} />;
+  if (!open) return <Button label={t('buyer.saved.new')} variant="secondary" disabled={disabled} onPress={() => setOpen(true)} />;
   const create = async () => {
     const trimmed = name.replace(/\s+/g, ' ').trim();
     if (Array.from(trimmed).length < 1 || Array.from(trimmed).length > 60) {
@@ -169,7 +176,7 @@ export function NewCollection({ onCreated }: { onCreated: (created: CollectionCr
       intent.current = null;
       setOpen(false);
       setName('');
-      onCreated(created);
+      onCreated(created, trimmed);
     } catch (failure) {
       if (!priv.isCurrent()) return;
       if (wasAnswered(failure)) intent.current = null;
@@ -183,7 +190,7 @@ export function NewCollection({ onCreated }: { onCreated: (created: CollectionCr
       <TextField label={t('buyer.saved.name')} value={name} onChangeText={setName} error={error} maxLength={120} autoFocus testID="new-collection-name" />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
         <View style={{ flexGrow: 1 }}>
-          <Button label={t('buyer.saved.create')} disabled={busy} onPress={() => void create()} />
+          <Button label={t('buyer.saved.create')} disabled={busy || disabled} busy={busy} onPress={() => void create()} />
         </View>
         <View style={{ flexGrow: 1 }}>
           <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { setOpen(false); setError(null); }} />
