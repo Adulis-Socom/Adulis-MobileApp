@@ -91,9 +91,10 @@ describe('Marketplace Search', () => {
     await fireEvent.changeText(input, 'wov');
     await fireEvent.changeText(input, 'woven ');
     await settle();
-    expect(await screen.findByLabelText('Addis Weaves, @addis-weaves')).toBeOnTheScreen();
-    expect(screen.getByLabelText(/^Woven basket,/)).toBeOnTheScreen();
-    expect(screen.getByLabelText('Scene: Morning light')).toBeOnTheScreen();
+    // WO-017 (A-003): a label carries what the row shows, the trust level included when there is one.
+    expect(await screen.findByLabelText(/^Addis Weaves, @addis-weaves(, Trust level: \w+)?$/)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Woven basket, .*, Sold by /)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Scene: Morning light, Scene by /)).toBeOnTheScreen();
     expect(screen.getByText('Trust level: Established')).toBeOnTheScreen();
     expect(calls()).toHaveLength(1);
     expect(calls()[0]?.query).toEqual({ q: 'woven', type: 'TOP' });
@@ -124,7 +125,7 @@ describe('Marketplace Search', () => {
     expect(await screen.findByTestId('search-scene-tile')).toBeOnTheScreen();
     expect(screen.getByText('Scene by Store 1')).toBeOnTheScreen();
     await fireEvent.press(tab('SELLER'));
-    expect(await screen.findByLabelText('Basket House, @basket-house')).toBeOnTheScreen();
+    expect(await screen.findByLabelText(/^Basket House, @basket-house(, Trust level: \w+)?$/)).toBeOnTheScreen();
     const asked = calls().map((c) => [c.query['type'], c.query['cursor'] ?? null, c.query['limit'] ?? null]);
     expect(asked).toEqual([
       ['TOP', null, null],
@@ -150,12 +151,12 @@ describe('Marketplace Search', () => {
     await settle();
     expect(await screen.findByLabelText(/^Woven basket,/)).toBeOnTheScreen();
     expect(screen.getByLabelText(en['buyer.search.input']).props.value).toBe('Woven basket');
-    await fireEvent.press(screen.getByLabelText('Store 1, @seller-1'));
+    await fireEvent.press(screen.getByLabelText(/^Store 1, @seller-1(, Trust level: \w+)?$/));
     expect(await screen.findByRole('header', { name: 'Store 1' })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/sellers/seller-1');
     await act(() => router.back());
     await settle();
-    await fireEvent.press(await screen.findByLabelText('Scene: Morning light'));
+    await fireEvent.press(await screen.findByLabelText(/^Scene: Morning light, Scene by /));
     expect(await screen.findByText('The whole caption')).toBeOnTheScreen();
     expect(r.getPathname()).toBe(`/scenes/${sellerScene(1).public_ref}`);
     await act(() => router.back());

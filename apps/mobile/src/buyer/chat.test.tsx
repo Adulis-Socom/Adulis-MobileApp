@@ -1,5 +1,6 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
+import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
 
@@ -1271,5 +1272,37 @@ describe('Messaging UX and reliability (WO-016)', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.select_product'] }));
     expect(await screen.findByRole('button', { name: en['common.retry'] })).toBeOnTheScreen();
     expect(screen.queryByTestId('chat-picker-item')).toBeNull();
+  });
+});
+
+describe('Buyer frontend stabilization (WO-017)', () => {
+  it('A-001. a conversation list that fails is announced, not only drawn', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      signedIn();
+      installChat();
+      api.on('GET /v1/conversations', () => problem(500, 'INTERNAL', 'server'));
+      await renderRouter(APP_DIR, { initialUrl: '/messages' });
+      expect(await screen.findByText(en['buyer.messages.failed'])).toBeOnTheScreen();
+      expect(announce).toHaveBeenCalledWith(en['buyer.messages.failed']);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('A-002. a private list waiting for a connection says offline, never an endless Loading', async () => {
+    signedIn();
+    installChat();
+    try {
+      // The app starts online; the connection drops; then the Buyer opens Messages.
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      await screen.findByRole('button', { name: en['common.signOut'] });
+      await act(async () => onlineManager.setOnline(false));
+      await act(() => router.push('/messages'));
+      expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['common.loading'])).toBeNull();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
   });
 });
