@@ -21,10 +21,18 @@ mc mb --ignore-existing local/adulis-evidence
 mc anonymous set download local/adulis-media
 mc anonymous set none local/adulis-evidence
 
-# A shell pattern, not grep: the MinIO image ships mc and a shell but no grep. `export` fails
-# when the bucket has no lifecycle configuration yet, which simply means "add the rule".
-rules=$(mc ilm rule export local/adulis-evidence 2>/dev/null || true)
+# Shell patterns, not grep: the MinIO image ships mc and a shell but no grep. "does not exist"
+# means no lifecycle configuration yet; any other export failure stops the init instead of being
+# read as "no rule" (which would add a duplicate).
+if ! rules=$(mc ilm rule export local/adulis-evidence 2>&1); then
+  case "$rules" in
+    *'lifecycle configuration does not exist'*) rules='' ;;
+    *) echo "$rules" >&2; exit 1 ;;
+  esac
+fi
+# shortcut: matches mc's export JSON text (enabled rule on the prefix, a 1-day expiry somewhere);
+# a hand-made second rule could satisfy it. Parse the JSON if rules are ever edited by hand.
 case "$rules" in
-  *'"evidence/raw/"'*) echo 'evidence/raw/ expiry rule already present' ;;
+  *'"Days":1}'*'"Prefix":"evidence/raw/"},"Status":"Enabled"'*) echo 'evidence/raw/ 1-day expiry rule already present' ;;
   *) mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 ;;
 esac

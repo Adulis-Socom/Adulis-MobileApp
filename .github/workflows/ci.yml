@@ -193,10 +193,10 @@ jobs:
             -e MINIO_API_CORS_ALLOW_ORIGIN='http://localhost:4173,http://localhost:5173' \
             "$MINIO_IMAGE" server /data
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            if curl -fsS --max-time 5 http://localhost:9000/minio/health/ready >/dev/null; then break; fi
             sleep 2
           done
-          curl -fsS http://localhost:9000/minio/health/live >/dev/null
+          curl -fsS --max-time 5 http://localhost:9000/minio/health/ready >/dev/null || { docker logs adulis-minio; exit 1; }
           docker run --rm --network host \
             -e MINIO_URL=http://localhost:9000 \
             -e MINIO_ROOT_USER=adulis-local \
