@@ -55,7 +55,60 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const scope = process.env['ADULIS_SCOPE_FILTER'] ?? '';
+
+/**
+ * A SCOPE THAT CANNOT SHOW IT SELECTED THE RIGHT THINGS RUNS EVERYTHING
+ * (WO-INFRA-004, ISSUE-INFRA-004).
+ *
+ * pnpm exits 0 when a filter matches nothing. So `typecheck`, `build` and `test`
+ * "passed" without running on every push to main -- `...[origin/main]` diffs the
+ * commit against itself -- and on every branch whose changes were root files:
+ * ci.yml, ops/, db/migrations, tsconfig.base.json, the lockfile. Those belong to
+ * the excluded root project, so they select nothing, although every package
+ * builds or tests against them (runs 34129602933 on main and 34147378670). The
+ * three console-dist gates then pass "not selected" on top.
+ *
+ * So the scope is dropped, and the run says so, when a changed file is outside
+ * apps/ and packages/ and is not documentation, or when the filter selects no
+ * package at all. An unrecognised root path counts as an input: the safe
+ * failure is a slower run, never a green one that checked nothing.
+ */
+const SCOPE_TRACKED = /^(apps|packages|docs|\.claude)\/|\.md$/;
+
+export function scopeDecision(raw, changed, countSelected) {
+  if (!raw) return { scope: '', why: 'none (full run)' };
+  if (changed === null) return { scope: '', why: 'UNSCOPED - git could not list the changed files' };
+  const roots = changed.filter((f) => !SCOPE_TRACKED.test(f));
+  if (roots.length > 0) {
+    return { scope: '', why: `UNSCOPED - ${roots.length} changed root input(s), e.g. ${roots.slice(0, 3).join(', ')}` };
+  }
+  const n = countSelected();
+  if (!(n > 0)) return { scope: '', why: `UNSCOPED - ${raw} selects no package` };
+  return { scope: raw, why: `${raw} (${n} package(s))` };
+}
+
+function resolveScope(raw) {
+  const base = /\[([^\]]+)\]/.exec(raw)?.[1];
+  let changed = [];
+  if (raw && base) {
+    const r = spawnSync('git', ['diff', '--name-only', base], { cwd: root, encoding: 'utf8' });
+    changed = r.status === 0 ? r.stdout.split('\n').filter(Boolean) : null;
+  }
+  return scopeDecision(raw, changed, () => {
+    const r = spawnSync('pnpm', ['--filter', raw, '--filter', '!adulis-platform', 'list', '--depth', '-1', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
+    try {
+      return r.status === 0 ? JSON.parse(r.stdout).length : 0;
+    } catch {
+      return 0;
+    }
+  });
+}
+
+const { scope, why: scopeWhy } = resolveScope(process.env['ADULIS_SCOPE_FILTER'] ?? '');
 
 /**
  * NODE_ENV=development IS DROPPED, and this is the first thing this file
@@ -272,13 +325,22 @@ const GATES = [
    * A STEP, NOT A NEW GATE. ADU-RUL-03 S5.2 cites gates by POSITION, so
    * inserting one here would renumber every gate after it in a governed
    * document this repository does not edit.
+   *
+   * THE SEED STEP DECLARES NODE_ENV=test, AND ONLY THE SEED STEP (WO-INFRA-004).
+   * seed.mjs writes a fixture and refuses anything but development or test;
+   * this file drops NODE_ENV=development and CI sets none, so in CI the seed
+   * refused with "NODE_ENV=unset" and gate `migrate` went red on main from
+   * 2026-09-07 (run 34129602933). Locally it passed only because
+   * `pnpm db:seed` re-reads .env. Same fix as `determinism` and `console-e2e`
+   * below: the caller says which environment a gate run is. db:migrate gets
+   * nothing, so a production NODE_ENV still reaches every guard that checks it.
    */
   {
     id: 'migrate',
     title: 'Migrations apply, and the seed the suites read',
     steps: [
       ['pnpm', 'db:migrate'],
-      ['pnpm', 'db:seed'],
+      { cmd: ['pnpm', 'db:seed'], env: { NODE_ENV: 'test' } },
     ],
   },
   { id: 'worker-schema', title: 'The worker queue schema is installed', cmd: ['pnpm', 'worker:install'] },
@@ -496,15 +558,19 @@ const GATES = [
    * limitation rather than implying otherwise.
    */
   { id: 'render-yaml', title: 'The staging blueprint agrees with the repository it deploys', cmd: ['pnpm', 'verify:render-yaml'] },
+
+  /**
+   * APPENDED, for the reason given four times above.
+   *
+   * The runner's own rules, tested: the seed step's environment and the scope
+   * fail-safe above (WO-INFRA-004). Both defects were invisible from inside a
+   * green run -- one only failed in CI, the other made CI pass by checking
+   * nothing -- so they are asserted directly rather than trusted.
+   */
+  { id: 'gate-runner', title: "The gate runner's environment and scope rules hold", cmd: ['node', '--test', 'ops/scripts/gates.test.mjs'] },
 ];
 
-if (process.argv.includes('--list')) {
-  for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
-  process.exit(0);
-}
-
-const only = process.argv.indexOf('--only');
-const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+export { GATES };
 
 function run(cmd, extraEnv) {
   const r = spawnSync(cmd[0], cmd.slice(1), {
@@ -516,38 +582,47 @@ function run(cmd, extraEnv) {
   return r.status === 0;
 }
 
-console.log(
-  `\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)` +
-    (scope ? `\nscope: ${scope}` : '\nscope: none (full run)') +
-    '\n',
-);
+function main() {
+  if (process.argv.includes('--list')) {
+    for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
+    process.exit(0);
+  }
 
-let n = 0;
-for (const gate of GATES) {
-  if (wanted && !wanted.has(gate.id)) continue;
-  n += 1;
-  console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
-  let ok;
-  if (gate.fn) {
-    const r = gate.fn();
-    ok = r.ok;
-    console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.detail}`);
-  } else if (gate.steps) {
-    ok = gate.steps.every((s) => run(s));
-  } else {
-    ok = run(gate.cmd, gate.env);
+  const only = process.argv.indexOf('--only');
+  const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+
+  console.log(`\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)\nscope: ${scopeWhy}\n`);
+
+  let n = 0;
+  for (const gate of GATES) {
+    if (wanted && !wanted.has(gate.id)) continue;
+    n += 1;
+    console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
+    let ok;
+    if (gate.fn) {
+      const r = gate.fn();
+      ok = r.ok;
+      console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.detail}`);
+    } else if (gate.steps) {
+      ok = gate.steps.every((s) => (Array.isArray(s) ? run(s) : run(s.cmd, s.env)));
+    } else {
+      ok = run(gate.cmd, gate.env);
+    }
+    if (!ok) {
+      console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);
+      console.error(
+        gate.id === 'contract-current'
+          ? '      The committed contract does not match what the code generates.\n' +
+              '      Run: pnpm generate:openapi && pnpm generate:api-client, then COMMIT the result.\n' +
+              '      contracts/openapi.json is tracked and CI-authored: a hand-edited spec is a lie with authority.'
+          : '      Red on any; there is no skip label (ADU-CON-02 S16).',
+      );
+      process.exit(1);
+    }
   }
-  if (!ok) {
-    console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);
-    console.error(
-      gate.id === 'contract-current'
-        ? '      The committed contract does not match what the code generates.\n' +
-            '      Run: pnpm generate:openapi && pnpm generate:api-client, then COMMIT the result.\n' +
-            '      contracts/openapi.json is tracked and CI-authored: a hand-edited spec is a lie with authority.'
-        : '      Red on any; there is no skip label (ADU-CON-02 S16).',
-    );
-    process.exit(1);
-  }
+
+  console.log(`\nPASS  all ${n} gates.\n`);
 }
 
-console.log(`\nPASS  all ${n} gates.\n`);
+// Run as a script only: gates.test.mjs imports GATES and scopeDecision.
+if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) main();
