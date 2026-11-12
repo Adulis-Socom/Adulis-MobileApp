@@ -83,7 +83,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   const [state, setState] = useState<'idle' | 'sending' | 'failed' | 'unknown'>('idle');
   const [error, setError] = useState<string | null>(null);
   // ON-20261111-168 (WO-016): one NOT_FOUND covers the conversation and the Product; name neither.
-  const [notFound, setNotFound] = useState(false);
+  const [notFound, setNotFound] = useState<'anchored' | 'plain' | null>(null);
   const [asking, setAsking] = useState(false);
   const [askFailed, setAskFailed] = useState(false);
   const sending = useRef(false);
@@ -117,7 +117,11 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   useEffect(() => {
     if (state === 'sending') AccessibilityInfo.announceForAccessibility(t('buyer.chat.sending'));
     if (state === 'unknown') AccessibilityInfo.announceForAccessibility(t('buyer.chat.maybe_not_sent'));
-    if (state === 'failed') AccessibilityInfo.announceForAccessibility(t(notFound ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent'));
+    if (state === 'failed') {
+      AccessibilityInfo.announceForAccessibility(
+        t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent'),
+      );
+    }
   }, [state, notFound, t]);
   const listed = conversations.items.some((c) => c.id === conversationRef);
   const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
@@ -186,10 +190,11 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   // Product and key. "Edit the message instead" gives up that intent explicitly.
   const frozen = state === 'unknown' && sendIntent.current !== null;
   const abandon = () => {
+    if (sending.current) return;
     sendIntent.current = null;
     setState('idle');
     setError(null);
-    setNotFound(false);
+    setNotFound(null);
   };
   const removeContext = () => {
     if (sending.current || (state === 'unknown' && sendIntent.current !== null)) return;
@@ -217,7 +222,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     sending.current = true;
     setState('sending');
     setError(null);
-    setNotFound(false);
+    setNotFound(null);
     try {
       let productId: string | null = null;
       if (context !== null) {
@@ -271,7 +276,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       if (problemCode(failure) === 'NOT_FOUND') {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
         // each decides that (a 404 there shows "no longer available" / "not available").
-        setNotFound(true);
+        setNotFound(context !== null ? 'anchored' : 'plain');
         setError(t(context !== null ? 'buyer.chat.not_found_anchored' : 'buyer.chat.not_found_plain'));
         if (context !== null) void contextRead.refetch();
         void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
@@ -437,7 +442,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           error={tooLong ? (fillSlots(t('buyer.chat.too_long'), { max: MESSAGE_MAX.toLocaleString(locale) }) ?? null) : null}
         />
         {state === 'sending' ? <AppText style={secondary}>{t('buyer.chat.sending')}</AppText> : null}
-        {state === 'failed' && notFound ? (
+        {state === 'failed' && notFound !== null ? (
           <View accessibilityRole="alert">
             <AppText>{error}</AppText>
           </View>

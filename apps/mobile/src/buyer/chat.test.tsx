@@ -1170,10 +1170,18 @@ describe('Messaging UX and reliability (WO-016)', () => {
       shelf.unpublish();
       return problem(404, 'NOT_FOUND', 'request');
     });
-    await send('Still for sale?');
-    expect(await screen.findByText(en['buyer.chat.not_found_anchored'])).toBeOnTheScreen();
-    expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
-    expect(composer().props.value).toBe('Still for sale?');
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      await send('Still for sale?');
+      expect(await screen.findByText(en['buyer.chat.not_found_anchored'])).toBeOnTheScreen();
+      expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+      expect(composer().props.value).toBe('Still for sale?');
+      // Review L1: a screen reader hears what the screen shows.
+      expect(announce).toHaveBeenCalledWith(en['buyer.chat.not_found_anchored']);
+      expect(announce).not.toHaveBeenCalledWith(en['buyer.chat.not_found_plain']);
+    } finally {
+      announce.mockRestore();
+    }
   });
 
   it('ON-168. a 404 on a plain send names no cause; a messages read that answers 404 then shows the conversation as not available', async () => {
