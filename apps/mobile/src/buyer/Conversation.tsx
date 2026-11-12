@@ -25,6 +25,7 @@ import {
   type ChatMessage,
 } from './chat';
 import type { ProductRef } from './MessageSellerButton';
+import { ProductPicker } from './ProductPicker';
 import { keepIfCurrent, usePrivateApi } from './saved';
 
 /**
@@ -47,7 +48,15 @@ import { keepIfCurrent, usePrivateApi } from './saved';
  *   handle and slug), shows it only while that read is current and its Seller is this
  *   conversation's, reads it again right before sending, sends its id as the message's product_id,
  *   and clears it after the server accepts. The Buyer can remove it; follow-ups carry no anchor.
+ * - Select Product (WO-015; S5): the Buyer can choose a Product of this conversation's Seller from
+ *   inside the conversation. The Seller is known only by the handle in the Buyer's own conversation
+ *   list (no Seller id is published, ON-20261111-162), found within the first MAX_LIST_PAGES pages;
+ *   if it cannot be found there, Product selection is off and plain messages still work. A chosen
+ *   Product becomes the same context as one from Product Detail: read, checked and sent the same way.
  */
+/** How many pages of the Buyer's conversation list the screen reads to find its Seller (25 each). */
+export const MAX_LIST_PAGES = 4;
+
 export function ConversationScreen({ conversationRef, product = null }: { conversationRef: unknown; product?: ProductRef | null }) {
   const t = useT();
   const theme = useTheme();
@@ -74,6 +83,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   // The next message's Product (lookup keys of a public read), and a refusal from the last check.
   const [context, setContext] = useState<ProductRef | null>(product);
   const [refusal, setRefusal] = useState<'gone' | 'mismatch' | 'unchecked' | null>(null);
+  const [picking, setPicking] = useState(false);
   const [entered, setEntered] = useState(product);
   if (entered?.handle !== product?.handle || entered?.slug !== product?.slug) {
     setEntered(product);
@@ -98,9 +108,13 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   }, [state, t]);
   const listed = conversations.items.some((c) => c.id === conversationRef);
   const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
+  const pagesRead = conversations.data?.pages.length ?? 0;
+  // Bounded (WO-015): at most MAX_LIST_PAGES pages, and never again after a failure until Try again.
+  const canWalk = !listed && hasNextPage && !listFailed && pagesRead < MAX_LIST_PAGES;
+  // pagesRead re-runs it per page: a page's fetching flag can rise and fall within one render.
   useEffect(() => {
-    if (context !== null && !listed && hasNextPage && !isFetching && !listFailed) void fetchNextPage();
-  }, [context, listed, hasNextPage, isFetching, listFailed, fetchNextPage]);
+    if (canWalk && !isFetching) void fetchNextPage();
+  }, [canWalk, isFetching, pagesRead, fetchNextPage]);
 
   if (current === null || current !== owner.current) return <Redirect href="/messages" />;
 
@@ -125,9 +139,18 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
   };
 
+  // This conversation's Seller, as far as the Buyer's own list can say.
+  const seller: 'resolved' | 'resolving' | 'failed' | 'unresolved' =
+    conversation !== undefined
+      ? 'resolved'
+      : listFailed
+        ? 'failed'
+        : conversations.isPending || canWalk
+          ? 'resolving'
+          : 'unresolved';
   // What the composer may say about its Product: shown only from a current read whose Seller is
   // this conversation's (never from route parameters, never after a refusal).
-  const contextStatus: 'none' | 'checking' | 'ok' | 'gone' | 'mismatch' | 'unchecked' =
+  const contextStatus: 'none' | 'checking' | 'ok' | 'gone' | 'mismatch' | 'unchecked' | 'unresolved' =
     context === null
       ? 'none'
       : refusal !== null
@@ -136,14 +159,15 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           ? problemCode(contextRead.error) === 'NOT_FOUND'
             ? 'gone'
             : 'unchecked'
-          : contextRead.data === undefined ||
-              (conversation === undefined && !listFailed && (conversations.isPending || hasNextPage))
+          : contextRead.data === undefined || seller === 'resolving'
             ? 'checking'
-            : conversation === undefined
+            : seller === 'failed'
               ? 'unchecked'
-              : contextRead.data.seller.handle !== conversation.handle
-                ? 'mismatch'
-                : 'ok';
+              : seller === 'unresolved' || conversation === undefined
+                ? 'unresolved'
+                : contextRead.data.seller.handle !== conversation.handle
+                  ? 'mismatch'
+                  : 'ok';
   // While the outcome of a send is unknown the payload is frozen: a retry must replay the same text,
   // Product and key. "Edit the message instead" gives up that intent explicitly.
   const frozen = state === 'unknown' && sendIntent.current !== null;
@@ -157,6 +181,16 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     setContext(null);
     setRefusal(null);
   };
+  // A Product chosen in the picker: this conversation's Seller handle (from the list) and its slug.
+  // Never while a send is in flight or unconfirmed: that payload is frozen.
+  const choose = (slug: string) => {
+    setPicking(false);
+    if (!conversation || sending.current || (state === 'unknown' && sendIntent.current !== null)) return;
+    setContext({ handle: conversation.handle, slug });
+    setRefusal(null);
+    void qc.invalidateQueries({ queryKey: ['chat-context', conversation.handle, slug] });
+  };
+  const canSelect = seller === 'resolved' && state !== 'sending' && !frozen;
 
   const send = async () => {
     if (!api || sending.current || text.length === 0 || tooLong) return;
@@ -329,6 +363,23 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
             {askFailed ? <AppText accessibilityRole="alert">{t('buyer.chat.ask_failed')}</AppText> : null}
           </View>
         ) : null}
+        <View style={{ gap: theme.space.xs }}>
+          <Button
+            label={t(context === null ? 'buyer.chat.select_product' : 'buyer.chat.change_product')}
+            variant="secondary"
+            onPress={() => setPicking(true)}
+            disabled={!canSelect}
+          />
+          {seller === 'unresolved' || seller === 'failed' ? (
+            <AppText style={secondary}>{t('buyer.chat.select_unavailable')}</AppText>
+          ) : null}
+          {seller === 'failed' ? (
+            <Button label={t('common.retry')} variant="secondary" onPress={() => void conversations.refetch()} />
+          ) : null}
+        </View>
+        {picking && conversation ? (
+          <ProductPicker handle={conversation.handle} store={conversation.storeName} onSelect={choose} onCancel={() => setPicking(false)} />
+        ) : null}
         {context !== null ? (
           <ProductContext
             status={contextStatus}
@@ -386,7 +437,7 @@ function ProductContext({
   onRemove,
   onRetry,
 }: {
-  status: 'checking' | 'ok' | 'gone' | 'mismatch' | 'unchecked' | 'none';
+  status: 'checking' | 'ok' | 'gone' | 'mismatch' | 'unchecked' | 'unresolved' | 'none';
   name: string | null;
   available: boolean | null;
   locked: boolean;
@@ -403,7 +454,9 @@ function ProductContext({
         ? 'buyer.chat.context_mismatch'
         : status === 'unchecked'
           ? 'buyer.chat.context_unchecked'
-          : null;
+          : status === 'unresolved'
+            ? 'buyer.chat.context_unresolved'
+            : null;
   return (
     <View
       testID="chat-product-context"
