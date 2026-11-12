@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AccessibilityInfo, AppState, type AppStateStatus } from 'react-native';
+import { AccessibilityInfo, AppState, Dimensions, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -359,5 +359,26 @@ describe('WO-018 (A-006): screen-reader focus on tab changes', () => {
     } finally {
       focus.mockRestore();
     }
+  });
+});
+
+describe('WO-018 (W18-13): tab labels at large text', () => {
+  const WINDOW = Dimensions.get('window');
+  const SCREEN = Dimensions.get('screen');
+  const setFontScale = (fontScale: number) => Dimensions.set({ window: { ...WINDOW, fontScale }, screen: { ...SCREEN, fontScale } });
+  afterEach(() => act(() => Dimensions.set({ window: WINDOW, screen: SCREEN })));
+
+  it('equal-width tabs at ordinary sizes; from 130% each tab is as wide as its label and the row wraps (no word broken)', async () => {
+    setFontScale(1);
+    await openProfile();
+    expect(tab(en['buyer.seller.tab.products'])).toHaveStyle({ flex: 1 });
+    expect(screen.getByLabelText(en['buyer.seller.tabs'])).not.toHaveStyle({ flexWrap: 'wrap' });
+    await act(async () => setFontScale(Math.fround(1.6)));
+    expect(tab(en['buyer.seller.tab.products'])).toHaveStyle({ flexGrow: 1 });
+    expect(tab(en['buyer.seller.tab.products'])).not.toHaveStyle({ flex: 1 });
+    expect(screen.getByLabelText(en['buyer.seller.tabs'])).toHaveStyle({ flexWrap: 'wrap' });
+    // Still one tablist with four tabs, the selected one marked.
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(tab(en['buyer.seller.tab.scenes'])).toBeSelected();
   });
 });

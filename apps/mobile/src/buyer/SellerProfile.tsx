@@ -16,7 +16,7 @@ import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
 import { CardSaveButton } from './CardSaveButton';
 import { MessageSellerButton } from './MessageSellerButton';
-import { PublicListView, useLargeText } from './PublicListView';
+import { PublicListView, useLargeText, useTabLayout } from './PublicListView';
 import { isPathName, usePublicRead } from './public-read';
 import { GoneState, ReadStates } from './ReadStates';
 
@@ -149,12 +149,14 @@ function TabBar({ tab, onTab, focusRequest }: { tab: Tab; onTab: (t: Tab) => voi
   const theme = useTheme();
   const selectedRef = useRef<HostInstance>(null);
   useFocusRequest(selectedRef, focusRequest);
+  const layout = useTabLayout();
   return (
     <View
       accessibilityRole="tablist"
       accessibilityLabel={t('buyer.seller.tabs')}
       style={{
         flexDirection: 'row',
+        ...layout.row,
         borderBottomWidth: 1,
         borderColor: theme.color.border,
         marginTop: theme.space.sm,
@@ -171,7 +173,7 @@ function TabBar({ tab, onTab, focusRequest }: { tab: Tab; onTab: (t: Tab) => voi
             onPress={() => onTab(key)}
             testID={`seller-tab-${key}`}
             style={{
-              flex: 1,
+              ...layout.tab,
               minHeight: 44,
               alignItems: 'center',
               justifyContent: 'center',

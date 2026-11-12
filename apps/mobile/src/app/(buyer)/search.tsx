@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBootstrap } from '../../api/bootstrap';
 import type { SearchType } from '../../api/client';
 import { CategoryTabs, useCategories, useCategoryStillOffered } from '../../buyer/categories';
+import { useTabLayout } from '../../buyer/PublicListView';
 import { SearchResults } from '../../buyer/SearchResults';
 import { AppText } from '../../components/AppText';
 import { useT } from '../../i18n/i18n';
@@ -35,6 +36,7 @@ const tidy = (s: string) => s.replace(/\s+/gu, ' ').trim();
 export default function Search() {
   const t = useT();
   const theme = useTheme();
+  const tabLayout = useTabLayout();
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
@@ -112,7 +114,7 @@ export default function Search() {
             </Pressable>
           ) : null}
         </View>
-        <View accessibilityRole="tablist" accessibilityLabel={t('buyer.search.tabs')} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: theme.color.border }}>
+        <View accessibilityRole="tablist" accessibilityLabel={t('buyer.search.tabs')} style={{ flexDirection: 'row', ...tabLayout.row, borderBottomWidth: 1, borderColor: theme.color.border }}>
           {TABS.map(({ type, label }) => {
             const selected = type === tab;
             return (
@@ -123,7 +125,7 @@ export default function Search() {
                 onPress={() => setTab(type)}
                 testID={`search-tab-${type}`}
                 style={{
-                  flex: 1,
+                  ...tabLayout.tab,
                   minHeight: theme.touchTarget,
                   alignItems: 'center',
                   justifyContent: 'center',

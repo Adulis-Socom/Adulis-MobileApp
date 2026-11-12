@@ -11,7 +11,7 @@ import { TextField } from '../components/TextField';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { usePublicList } from './public-list';
-import { PublicListView } from './PublicListView';
+import { PublicListView, useTabLayout } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { collectionName, keepIfCurrent, usePrivateApi } from './saved';
 
@@ -219,8 +219,9 @@ export function FilterTabs<V extends string>({
 }) {
   const t = useT();
   const theme = useTheme();
+  const layout = useTabLayout();
   return (
-    <View accessibilityRole="tablist" accessibilityLabel={label} style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: theme.color.border }}>
+    <View accessibilityRole="tablist" accessibilityLabel={label} style={{ flexDirection: 'row', ...layout.row, borderBottomWidth: 1, borderColor: theme.color.border }}>
       {tabs.map((tab) => {
         const selected = tab.value === value;
         return (
@@ -230,7 +231,7 @@ export function FilterTabs<V extends string>({
             accessibilityState={{ selected }}
             onPress={() => onChange(tab.value)}
             testID={`filter-tab-${tab.value}`}
-            style={{ flex: 1, minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderColor: selected ? theme.color.accent : 'transparent' }}
+            style={{ ...layout.tab, minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderColor: selected ? theme.color.accent : 'transparent' }}
           >
             <AppText style={{ textAlign: 'center', fontWeight: selected ? theme.fontWeight.semibold : undefined }}>{t(tab.key)}</AppText>
           </Pressable>

@@ -19,7 +19,20 @@ import { CardSavesContext, useCardSaves, type ListSaves } from './saved';
  */
 export const LARGE_TEXT_SCALE = 1.3;
 export function useLargeText() {
-  return useWindowDimensions().fontScale >= LARGE_TEXT_SCALE;
+  // Rounded: Android reports its 130% setting as the float 1.3f, which arrives as 1.2999999523 (W18-12).
+  return Math.round(useWindowDimensions().fontScale * 100) >= Math.round(LARGE_TEXT_SCALE * 100);
+}
+
+/**
+ * A tab row's width rule (WO-018, W18-13): equal widths at ordinary sizes; at large text each tab
+ * is at least as wide as its label and the row wraps, so a label is never broken mid-word.
+ */
+export function useTabLayout() {
+  const largeText = useLargeText();
+  const theme = useTheme();
+  return largeText
+    ? { row: { flexWrap: 'wrap' as const }, tab: { flexGrow: 1, paddingHorizontal: theme.space.sm } }
+    : { row: {}, tab: { flex: 1 } };
 }
 
 /**

@@ -399,9 +399,9 @@ describe('WO-018 (A-006): Load more and long Product names', () => {
   beforeEach(() => {
     announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
   });
-  afterEach(() => {
+  afterEach(async () => {
     announce.mockRestore();
-    Dimensions.set({ window: WINDOW, screen: SCREEN });
+    await act(async () => Dimensions.set({ window: WINDOW, screen: SCREEN }));
   });
 
   // A first page taller than the list's Jest viewport (900 dp of 100 dp rows): nothing loads until
@@ -497,12 +497,14 @@ describe('WO-018 (A-006): Load more and long Product names', () => {
     expect(calls(SHOP)).toHaveLength(1); // a layout change reads nothing again
   });
 
-  it('at 130% the grid is already one column; at 115% it is still two', async () => {
-    setFontScale(1.15);
+  it('at 130% the grid is already one column (as Android reports it); at 115% it is still two', async () => {
+    setFontScale(Math.fround(1.15));
     serve(SHOP, page([shopProduct('scarf', LONG)], null));
     await openShop();
     expect((await screen.findByText(LONG)).props.numberOfLines).toBe(2);
-    await act(async () => setFontScale(1.3));
+    expect(screen.getByTestId('shop-products').props.numColumns).toBe(2);
+    // Android's 130% arrives as the float 1.3f = 1.2999999523 (W18-12, found natively).
+    await act(async () => setFontScale(Math.fround(1.3)));
     expect((await screen.findByText(LONG)).props.numberOfLines).toBeUndefined();
     expect(screen.getByTestId('shop-products').props.numColumns).toBe(1);
   });
