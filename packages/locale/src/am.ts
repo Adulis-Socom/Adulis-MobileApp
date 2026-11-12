@@ -337,6 +337,17 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.ask_seller': 'ሻጉን ይጠይቁ',
   'buyer.chat.ask_seller_hint': 'ጥያቄዎን ከራስ-ሰር ረዳቱ ወደ ሻጉ ያስተላልፋል። ሻጉ ሲችል እዚህ ይመልሳል።',
   'buyer.chat.ask_failed': 'ጥያቄዎን ለሻጉ ማስተላለፍ አልተቻለም። እንደገና ይሞክሩ።',
+
+  // WO-014 Product-context messaging: machine-translation placeholders awaiting the human pass.
+  'buyer.chat.ask_about_product': 'ስለዚህ ምርት ሻጉን ይጠይቁ',
+  'buyer.chat.context_title': 'የሚጠይቁት ስለ',
+  'buyer.chat.context_note': 'ቀጣዩ መልእክትዎ ስለዚህ ምርት ይሆናል።',
+  'buyer.chat.context_checking': 'ይህን ምርት በመፈተሽ ላይ',
+  'buyer.chat.context_gone': 'ይህ ምርት ከእንግዲህ ለመጠየቅ አይገኝም። ያለ እሱ መልእክትዎን ለመላክ ያስወግዱት።',
+  'buyer.chat.context_mismatch': 'ይህ ምርት ከዚህ ሻጭ አይደለም፣ ስለዚህ እዚህ ሊያያዝ አይችልም።',
+  'buyer.chat.context_unchecked': 'ይህን ምርት መፈተሽ አልተቻለም። ግንኝነትዎን ያረጋግጡ እና እንደገና ይሞክሩ።',
+  'buyer.chat.context_remove': 'ምርቱን አስወግድ',
+  'buyer.chat.edit_unconfirmed': 'ይልቁንም መልእክቱን አርትዕ',
   'buyer.shop.order': 'አዲሶቹ መጀመሪያ',
   'buyer.shop.products': 'በገበያዎ ያሉ ምርቶች',
   'buyer.shop.empty': 'አሁን የሚታዩ ምርቶች የሉም።',

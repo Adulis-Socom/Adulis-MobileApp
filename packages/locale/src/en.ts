@@ -383,6 +383,18 @@ export const enCommon = {
   'buyer.chat.ask_seller': 'Ask the Seller',
   'buyer.chat.ask_seller_hint': 'Passes your question from the automated assistant to the Seller. The Seller replies here when they can.',
   'buyer.chat.ask_failed': 'Your question could not be passed to the Seller. Try again.',
+
+  // WO-014 Product-context messaging (ADU-CHAT-01 v3.3 S4-S5: composer selection is temporary and
+  // describes only the next message; R-07 Ask Seller). The Product shown is a current public read.
+  'buyer.chat.ask_about_product': 'Ask Seller About This Product',
+  'buyer.chat.context_title': 'Asking about',
+  'buyer.chat.context_note': 'Your next message will be about this Product.',
+  'buyer.chat.context_checking': 'Checking this Product',
+  'buyer.chat.context_gone': 'This Product is no longer available to ask about. Remove it to send your message without it.',
+  'buyer.chat.context_mismatch': 'This Product is not from this Seller, so it cannot be attached here.',
+  'buyer.chat.context_unchecked': 'This Product could not be checked. Check your connection and try again.',
+  'buyer.chat.context_remove': 'Remove Product',
+  'buyer.chat.edit_unconfirmed': 'Edit the message instead',
   'buyer.shop.order': 'Newest first',
   'buyer.shop.products': 'Products in your Market',
   'buyer.shop.empty': 'No Products to show right now.',
