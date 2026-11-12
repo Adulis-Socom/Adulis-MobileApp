@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { Modal, Pressable, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
 import type { SellerProduct } from '../api/client';
@@ -49,7 +50,9 @@ export function ProductPicker({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onCancel}>
-      <View style={{ flex: 1, backgroundColor: theme.color.bg }}>
+      {/* A modal is its own window, drawn edge to edge: it needs its own safe-area provider (B-005). */}
+      <SafeAreaProvider>
+      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: theme.color.bg }}>
         <View style={{ padding: theme.space.md, gap: theme.space.xs, borderBottomWidth: 1, borderColor: theme.color.border }}>
           <AppText variant="heading" accessibilityRole="header">
             {t('buyer.chat.picker_title')}
@@ -71,7 +74,8 @@ export function ProductPicker({
         <View style={{ padding: theme.space.md, borderTopWidth: 1, borderColor: theme.color.border }}>
           <Button label={t('buyer.chat.picker_cancel')} variant="secondary" onPress={onCancel} />
         </View>
-      </View>
+      </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

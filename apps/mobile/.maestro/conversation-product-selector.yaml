@@ -1,0 +1,135 @@
+# In-conversation Product selector (WO-015) against the real local API on a DISPOSABLE database, with
+# the WO-CAT-001 fixtures (Fixture Weaves: Coffee tray, Woven basket, Clay cup ...). Signed in. The
+# harness runs steps (env STEP) and checks the stored rows between them:
+#   seed     Seller Profile -> Message Seller: the conversation exists (empty)
+#   select   You -> Messages -> the Fixture Weaves conversation -> Select Product -> the picker lists
+#            the Seller's Products -> Coffee tray -> attached (nothing sent, text kept) -> question
+#            sent -> the context clears
+#   select2  the same path -> Choose: Woven basket -> question sent (a second Product, the same
+#            conversation)
+#   view     the picker in Dark at font scale 1.3 (the harness sets both), then Cancel
+#
+#   maestro test -e STEP=select .maestro/conversation-product-selector.yaml
+appId: com.adulis.app
+name: Conversation Product selector
+tags:
+  - buyer
+  - messaging
+---
+- launchApp:
+    permissions:
+      android.permission.ACCESS_LOCAL_NETWORK: allow
+- extendedWaitUntil:
+    visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
+    timeout: 120000
+
+- runFlow:
+    when:
+      true: ${STEP == 'seed'}
+    commands:
+      - openLink: adulis://sellers/fixture-weaves
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Message Seller
+      - extendedWaitUntil:
+          visible: No messages yet. Write the first one below.
+          timeout: 30000
+      - assertVisible: Select Product
+
+# Messages -> the conversation (select, select2, view).
+- runFlow:
+    when:
+      true: ${STEP != 'seed'}
+    commands:
+      - tapOn: You
+      - scrollUntilVisible:
+          element: Messages
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: Messages
+          index: 1
+      - extendedWaitUntil:
+          visible: Fixture Weaves
+          timeout: 30000
+      - tapOn: Fixture Weaves
+      - extendedWaitUntil:
+          visible:
+            text: Select Product
+            enabled: true
+          timeout: 30000
+      - tapOn: Message
+      - inputText: Kept while choosing
+      - hideKeyboard
+      - tapOn: Select Product
+      - extendedWaitUntil:
+          visible: Select a Product
+          timeout: 20000
+      - assertVisible: Products from Fixture Weaves
+      - extendedWaitUntil:
+          visible: 'Coffee tray, .*'
+          timeout: 30000
+
+- runFlow:
+    when:
+      true: ${STEP == 'select'}
+    commands:
+      - takeScreenshot: sel-01-picker
+      - tapOn: 'Coffee tray, .*'
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Coffee tray
+      - assertVisible: Kept while choosing
+      - assertVisible: Choose another Product
+      - takeScreenshot: sel-02-attached
+      - tapOn: Message
+      - eraseText: 30
+      - inputText: Is the tray food safe?
+      - hideKeyboard
+      - tapOn: Send
+      # The context clears only when the server accepted the message.
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 30000
+      - assertVisible: Is the tray food safe?
+      - assertVisible: About a Product
+      - assertVisible: Select Product
+      - takeScreenshot: sel-03-sent
+
+- runFlow:
+    when:
+      true: ${STEP == 'select2'}
+    commands:
+      - scrollUntilVisible:
+          element: 'Woven basket, .*'
+          direction: DOWN
+          timeout: 20000
+      - tapOn: 'Woven basket, .*'
+      - extendedWaitUntil:
+          visible: Asking about
+          timeout: 30000
+      - assertVisible: Woven basket
+      - tapOn: Message
+      - eraseText: 30
+      - inputText: Is the basket handmade?
+      - hideKeyboard
+      - tapOn: Send
+      - extendedWaitUntil:
+          notVisible: Asking about
+          timeout: 30000
+      - assertVisible: Is the basket handmade?
+      - takeScreenshot: sel-04-second-product
+
+- runFlow:
+    when:
+      true: ${STEP == 'view'}
+    commands:
+      - takeScreenshot: sel-05-picker-dark-large
+      - tapOn: Cancel
+      - extendedWaitUntil:
+          notVisible: Select a Product
+          timeout: 20000
+      - assertNotVisible: Asking about
+      - takeScreenshot: sel-06-cancelled
