@@ -233,3 +233,203 @@ Development-environment issue; Backend contract gap; Founder policy decision.
 - **Current status:** RESOLVED (commit `3bbf927`)
 - **Remaining risk:** None known.
 - **Founder decision required:** No
+
+### B-009
+
+- **Issue ID:** B-009
+- **Work order:** WO-017 (ON-20261111-170)
+- **Date/time discovered:** 2026-11-12, WO-017 (reproducing ON-20261111-170)
+- **Severity:** LOW
+- **Category:** Test-harness issue
+- **Affected component:** `ops/scripts/adulis-storage-audit.ps1` (cleanup reporting) and how its JSON was read
+- **Expected behavior:** The text report and the JSON agree on what the cleanup removed; reports quote removed bytes, not a free-space difference.
+- **Actual behavior:** ON-20261111-170 said the JSON reported "0 of 1" after 92 removals. Reproduced from the WO-014 JSON: `clean.items` lists all 92 files with `Done: true` (580,578,696 bytes), matching the 92 "removed" text lines. The "0 of 1" came from WO-014's own reading (`@($j.clean)`, the summary object, instead of `$j.clean.items`). The WO-014 report's "recovered 627 MB on G:" was the drive's free-space change during the run, which includes other activity; the files removed totalled 580,578,696 bytes.
+- **Steps to reproduce:** `@($j.clean) | Where-Object Done` on any cleanup JSON gives 0 of 1.
+- **Root cause:** No removed total in either output, so a reader computed one, wrongly.
+- **Files affected:** `ops/scripts/adulis-storage-audit.ps1`
+- **Fix implemented:** The audit now prints and writes one removed total: `removed: N file(s), B bytes` with a per-drive split (C: and the SSD separate) in the text, and `clean.removedCount`, `clean.removedBytes`, `clean.removedBytesByDrive` in the JSON. Both come only from files actually deleted. The cleanup is still dry-run-first and still deletes only verified Maestro driver APKs.
+- **Regression test:** Dry run: text "removed: 0 file(s), 0 bytes" = JSON `removedCount 0, removedBytes 0`. Executed run: see WO-017 storage (after the native runs).
+- **Verification result:** PASS. Dry run: 0 removed in both outputs. Executed run (WO-017 cleanup): text "removed: 193 file(s), 1,223,379,041 bytes" with "G: 1,223,379,041 bytes"; JSON `removedCount 193`, `removedBytes 1223379041`, `removedBytesByDrive {G: 1223379041}`.
+- **Current status:** RESOLVED (commits `39d5abe`, `bd2b8ca`)
+- **Remaining risk:** None.
+- **Founder decision required:** No
+
+### B-010
+
+- **Issue ID:** B-010
+- **Work order:** WO-017 (navigation audit; first seen in the WO-015 Metro log)
+- **Date/time discovered:** 2026-11-12 13:00
+- **Severity:** LOW
+- **Category:** Development-environment issue
+- **Affected component:** Expo Router 58 `useLinking` (development builds only)
+- **Expected behavior:** No linking warning with a single navigation root.
+- **Actual behavior:** "ERROR Looks like you have configured linking in multiple places" in the Metro log, 21 times across 59 bundle loads, each right after a reload of the app's JavaScript (Maestro relaunches, hot updates).
+- **Steps to reproduce:** Relaunch the debug app repeatedly while Metro runs; read `G:\AdulisDevelopment\WO-REVIEW\logs\metro-morning.log`.
+- **Root cause:** Expo Router's own diagnostic (`expo-router/build/fork/useLinking.native.js:61`) fires when its module-level handler list is not yet empty as a root mounts, which happens on development reloads. The check returns early in production. The app configures no linking of its own and renders one navigation root (Expo Router's); a search of `apps/mobile/src` finds no `NavigationContainer`, `linking` prop or `+native-intent`.
+- **Files affected:** None.
+- **Fix implemented:** None (framework, development-only). Deep links were exercised natively and behaved (WO-014/015 `openLink` steps).
+- **Regression test:** n/a
+- **Verification result:** Classified; no Buyer-visible effect.
+- **Current status:** OPEN (no action; watch on an Expo Router upgrade)
+- **Remaining risk:** Noise in development logs.
+- **Founder decision required:** No
+
+### B-011
+
+- **Issue ID:** B-011
+- **Work order:** WO-017 (ON-20261111-084)
+- **Date/time discovered:** 2026-11-12 14:14 (reproduction run `foryou-1`)
+- **Severity:** LOW
+- **Category:** Test-harness issue
+- **Affected component:** `apps/mobile/.maestro/buyer-for-you.yaml` and its fixtures
+- **Expected behavior:** The dedicated For You flow passes on its own data.
+- **Actual behavior:** Reproduced on a freshly rebuilt database with the twelve WO-004A Scenes. Run 1 (`foryou-1`) passed the feed, the end of the feed, the refresh and Dark, then FAILED at "Tap on System": the preceding "Tap on You" was reported done but the screen stayed on Home (screenshot `step-025-tapOnElement-System.png`). Run 2 of the same, unchanged flow (`foryou-2-after-regression`) PASSED. A Scene Explorer run between them FAILED only because that flow expects the review fixtures' captions, not the twelve For You Scenes: a pairing mistake in the harness, not a regression. The original ON-084 failure (the 120 s scroll budget) did not recur this time.
+- **Steps to reproduce:** Harness step `foryou` (rebuild, the twelve-Scene fixtures, the flow).
+- **Root cause:** Two harness causes. (1) A tab tap that lands while the whole tree re-renders for the theme change can be swallowed. (2) The 120 s scroll budget is tight for the tall cards on this emulator (ON-084's original failure). The flow also depends on fixtures that clash with the review data (both create `fixture-weaves`), which is why it was skipped in earlier batteries.
+- **Files affected:** `apps/mobile/.maestro/buyer-for-you.yaml`; `G:\AdulisDevelopment\tools\review\fyp-native-fixtures.mjs` (stable copy) and the harness step `foryou`.
+- **Fix implemented:** Each tab tap in the theme section is retried until its screen shows (the `card-saves.yaml` pattern); the two long scrolls have a 300 s budget. No assertion changed. The harness rebuilds a database for the flow, seeds the twelve Scenes, runs the flow, related regressions (smoke, shell), the flow again, removes the fixture media and restores the review data (`prepare`).
+- **Regression test:** The harness step `foryou` (WO-017 native battery).
+- **Verification result:** PASS: `foryou-1`, then smoke and shell, then `foryou-2-after-regression` (WO-017 native battery).
+- **Current status:** RESOLVED (commit `ae34634`)
+- **Remaining risk:** The flow still needs its own database (a fixture clash with the review data).
+- **Founder decision required:** No
+
+### A-001
+
+- **Issue ID:** A-001
+- **Work order:** WO-017 (accessibility audit F1)
+- **Date/time discovered:** 2026-11-12, WO-017 read-only accessibility audit
+- **Severity:** HIGH
+- **Category:** UX/accessibility issue
+- **Affected component:** Failure and screen-level error messages across the Buyer app
+- **Expected behavior:** A screen-reader user hears a failure (for example "could not sign out").
+- **Actual behavior:** 25 messages used `accessibilityRole="alert"` alone, which Android and iOS do not speak (the codebase's own note in `TextField.tsx`). A failed sign-out on a shared phone was silent, while a successful one was announced.
+- **Steps to reproduce:** TalkBack on; make sign-out, Save or a collection removal fail.
+- **Root cause:** No shared announcing component; only some sites announced.
+- **Files affected:** `apps/mobile/src/components/AlertText.tsx` (new) and the sites in the commit.
+- **Fix implemented:** `AlertText` announces its message when it appears or changes (no live region, to avoid double reading on Android). Used at 25 sites, plus the headlines of four screen-level failures (Messages, Notifications, Signed-in sessions, a conversation's messages). TextField, Delete Account and Verify already announced and were left as they were.
+- **Regression test:** `AlertText.test.tsx`; chat.test.tsx "A-001. a conversation list that fails is announced".
+- **Verification result:** PASS (Jest). Not verified with TalkBack on the device (no screen-reader automation in this environment).
+- **Current status:** RESOLVED (commit `7a27128`)
+- **Remaining risk:** Announcements were not heard on a real screen reader in this batch.
+- **Founder decision required:** No
+
+### A-002
+
+- **Issue ID:** A-002
+- **Work order:** WO-017 (audit F2)
+- **Date/time discovered:** 2026-11-12, WO-017 audit
+- **Severity:** MEDIUM
+- **Category:** UX/accessibility issue
+- **Affected component:** Private screens: Messages, a conversation, Notifications, Signed-in sessions, Saved
+- **Expected behavior:** Offline is said as offline, distinct from loading or "no results".
+- **Actual behavior:** A first read that waits for a connection stays "pending" without an error, so these screens showed "Loading" indefinitely; Saved showed the generic internal error (an empty error) instead of offline.
+- **Steps to reproduce:** Lose the connection, then open Messages.
+- **Root cause:** TanStack Query pauses offline; only the public read views handled `paused`.
+- **Files affected:** `Conversations.tsx`, `Conversation.tsx`, `BuyerNotifications.tsx`, `AccountSessions.tsx`, `SavedScreen.tsx`
+- **Fix implemented:** A paused first read shows "You are offline. Check your connection and try again."
+- **Regression test:** chat.test.tsx "A-002. a private list waiting for a connection says offline".
+- **Verification result:** PASS (Jest).
+- **Current status:** RESOLVED (commit `7a27128`)
+- **Remaining risk:** None known.
+- **Founder decision required:** No
+
+### A-003, A-004, A-005
+
+- **Issue ID:** A-003 (Search labels), A-004 (Search "no results" not announced), A-005 (keyboard offset on Delete Account, Sign in, Verify)
+- **Work order:** WO-017 (audit F3, F4, F5)
+- **Date/time discovered:** 2026-11-12, WO-017 audit
+- **Severity:** MEDIUM
+- **Category:** UX/accessibility issue
+- **Affected component:** `SearchResults.tsx`; `app/(buyer)/account/delete.tsx`, `auth/sign-in.tsx`, `auth/verify.tsx`
+- **Expected behavior:** A label carries what the row shows; "no results" is spoken; the keyboard does not cover a form's buttons.
+- **Actual behavior:** A-003: Search labels dropped "Sold by", "Scene by" and the trust level; the Scene tile cut the Seller to one line. A-004: "no results" was silent after the announced "Searching". A-005: the three forms had no Android keyboard handling and no header offset (the cause of B-008 in the conversation).
+- **Steps to reproduce:** TalkBack on Search results; the Delete Account confirmation with the keyboard open.
+- **Root cause:** Labels written before the Seller lines; a missing live region; the keyboard-avoiding view's header offset.
+- **Files affected:** As above; `search.test.tsx` and two Maestro Search flows follow the new labels.
+- **Fix implemented:** Labels include the Seller and trust phrases; the Scene tile wraps; "no results" is a polite live region; the three forms use Android 'height' plus the header height.
+- **Regression test:** search.test.tsx (labels assert the Seller and trust phrases); native Search, sign-in and verify flows in the battery.
+- **Verification result:** Jest PASS; native in the WO-017 battery.
+- **Current status:** RESOLVED (commit `7a27128`)
+- **Remaining risk:** The Delete Account confirmation with the keyboard was not exercised natively (its flow deletes an Account; see the WO-017 record).
+- **Founder decision required:** No
+
+### A-006
+
+- **Issue ID:** A-006
+- **Work order:** WO-017 (audit F6, F7, F8 and the focus notes)
+- **Date/time discovered:** 2026-11-12, WO-017 audit
+- **Severity:** LOW
+- **Category:** UX/accessibility issue
+- **Affected component:** `SaveToCollection.tsx`, `CollectionScreen.tsx`, `PublicListView.tsx`, `ForYouFeed.tsx`, `SellerProfile.tsx`, `SearchResults.tsx`, `DeleteAccount.tsx`
+- **Expected behavior:** Busy states announced as disabled; pagination reachable without scrolling; full Product names at large text; focus kept on tab switches.
+- **Actual behavior:** F6: an in-flight checkbox or Remove is shown only by opacity, other controls look enabled while ignored. F7: public lists and For You page only on scroll (Messages, Notifications and a conversation have Load buttons). F8: Product names cut to two lines in tiles. Seller Profile tab switches and Delete Account step changes unmount the pressed control (screen-reader focus lost); Delete Account's "Checking"/"Deleting" lines are not live.
+- **Steps to reproduce:** See the audit (WO-017 accessibility review).
+- **Root cause:** Component design predating the audit.
+- **Files affected:** None changed.
+- **Fix implemented:** None in this batch (recorded; each is a contained follow-up).
+- **Regression test:** n/a
+- **Verification result:** n/a
+- **Current status:** OPEN
+- **Remaining risk:** Degraded but workable for screen-reader and large-text users.
+- **Founder decision required:** No
+
+### B-012
+
+- **Issue ID:** B-012
+- **Work order:** WO-017
+- **Date/time discovered:** 2026-11-12 14:47 (native `jrn-j4`)
+- **Severity:** LOW
+- **Category:** Test-harness issue
+- **Affected component:** `apps/mobile/.maestro/buyer-journeys.yaml` step j4
+- **Expected behavior:** The flow proves a Product was saved, then opens it from Saved.
+- **Actual behavior:** FAIL. After tapping Save, the wait for "Saved" matched the Saved tab label (still in the view hierarchy behind the Product screen), so it did not prove the save; the screenshot still showed "Save". The next tap on "Saved" could not reach the covered tab, and the flow stopped on the Product screen.
+- **Steps to reproduce:** Run `jrn-j4`.
+- **Root cause:** An ambiguous selector and a tab covered by a stack screen (the flow, not the app).
+- **Files affected:** `apps/mobile/.maestro/buyer-journeys.yaml`
+- **Fix implemented:** Tap Save, go Back to the tabs, open Saved, and require the Clay cup in the Saved list (a stronger proof of the save).
+- **Regression test:** `jrn-j4` rerun.
+- **Verification result:** PASS (`jrn-j4` in the isolated rerun).
+- **Current status:** RESOLVED (commit `bd2b8ca`)
+- **Remaining risk:** None.
+- **Founder decision required:** No
+
+### S-004
+
+- **Issue ID:** S-004
+- **Work order:** WO-017 (security review)
+- **Date/time discovered:** 2026-11-12, WO-017 independent security review
+- **Severity:** LOW
+- **Category:** UX/accessibility issue (L), Test-harness issue (L)
+- **Affected component:** `AccountSessions.tsx`, `BuyerNotifications.tsx`, `Conversation.tsx`, `Conversations.tsx`; `ops/scripts/adulis-storage-audit.ps1`
+- **Expected behavior:** A failure is read once; the audit's per-drive totals are right for any path.
+- **Actual behavior:** The review found no Critical, High or Medium issue. It confirmed every announcement is a catalogue sentence or `failureMessage` (no phone, code, token or internal id). Lows: (1) four failure headlines (`AlertText`) sit inside a `View` with the alert role too, so a screen reader may read them twice; (2) the audit's drive key used `Substring(0,1).ToUpper()`, wrong for a UNC path and culture-sensitive. Info: `AlertText` announces again when a recycled row remounts; tabs that stay mounted may announce "offline" in the background (no data yet only).
+- **Steps to reproduce:** Reasoned from the code (review).
+- **Root cause:** Nested alert roles after the WO-017 conversion; a naive drive parser.
+- **Files affected:** As above.
+- **Fix implemented:** (1) The wrapper views lose the alert role (the headline announces). (2) `[IO.Path]::GetPathRoot(...)` with an invariant upper-case. The re-announcement notes are accepted (fixed sentences, only on failures).
+- **Regression test:** The mobile suite (A-001 test) and the audit dry run.
+- **Verification result:** PASS (mobile 403/403; the audit's executed run above).
+- **Current status:** RESOLVED (commit `bd2b8ca`)
+- **Remaining risk:** Re-announcements on remount (Info, accepted).
+- **Founder decision required:** No
+
+### B-013
+
+- **Issue ID:** B-013
+- **Work order:** WO-017
+- **Date/time discovered:** 2026-11-12 14:50-15:57 (WO-017 native battery and reruns)
+- **Severity:** LOW
+- **Category:** Test-harness issue
+- **Affected component:** Maestro flows that tap the You tab right after launch
+- **Expected behavior:** The tap opens You.
+- **Actual behavior:** Intermittent: `sel-select`, `sel-select2`, `msg-reopen` and `account-sign-out-m` failed in the battery (14:50-15:20). In isolated reruns `msg-reopen`, the sign-out and `sel-select` passed, and `sel-select2` failed again with the screen still on Home after "Tap on You" was reported done (screenshot `step-008-scrollUntilVisible-Messages.png`). Other runs of the same flows passed (WO-014 to WO-016, `jrn-j5`, the layout steps).
+- **Steps to reproduce:** Launch, wait for For You, tap You at once; repeat the flow several times.
+- **Root cause:** The same as B-011: a tab tap that lands while the screen re-renders (here the For You feed loading) is not delivered. Not reproduced by hand; a Buyer whose first tap is ignored taps again.
+- **Files affected:** `conversation-product-selector.yaml`, `messaging.yaml`, `messaging-layout.yaml`, `buyer-journeys.yaml`, `account.yaml`
+- **Fix implemented:** The You tap is retried until "Appearance" shows (the `card-saves.yaml` pattern). No assertion changed.
+- **Regression test:** The selector step rerun: all PASS (`native-selector-final.out`).
+- **Verification result:** PASS.
+- **Current status:** RESOLVED
+- **Remaining risk:** Other flows that tap a tab right after launch (for example `saved-states`, `shop-signed-in`) may show the same flake; they keep their existing form.
+- **Founder decision required:** No

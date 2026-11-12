@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148. WO-013 (12 November 2026, branch `mobile/wo-013-buyer-messaging`, from `37bfd56`) added -149 to -158. The batch's final gates added -159 and -160 and updated -126. WO-014 (12 November 2026, branch `mobile/wo-014-product-context-messaging`, from `706e894`) updated -126, -149, -151, -153 and -159 and added -161 to -170; -129, -130, -132, -141, -146, -152, -154, -156 and the payment deferral are unchanged.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148. WO-013 (12 November 2026, branch `mobile/wo-013-buyer-messaging`, from `37bfd56`) added -149 to -158. The batch's final gates added -159 and -160 and updated -126. WO-014 (12 November 2026, branch `mobile/wo-014-product-context-messaging`, from `706e894`) updated -126, -149, -151, -153 and -159 and added -161 to -170; -129, -130, -132, -141, -146, -152, -154, -156 and the payment deferral are unchanged. The WO-015..017 batch (12 November 2026) keeps its own issues file, `docs/overnight/WO-015-017-ISSUES-AND-BLOCKERS.md` (B-, S- and A- IDs), and updated -084, -123, -126, -161, -162, -169 and -170 here (-164 and -168 in WO-016); the pending founder decisions are unchanged.
 
 ## Issues
 
@@ -1540,7 +1540,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Work order:** WO-008
 - **Severity:** LOW
 - **Type:** TEST_HARNESS
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-017)
 - **Summary:** buyer-for-you.yaml (WO-004A) ran out of its 120-second scroll budget before the end of the 12-Scene feed, twice (reaching Scene 3, then Scene 2).
 - **Expected:** The flow reaches the end marker within its budget.
 - **Actual:** The emulator scrolled the tall cards more slowly than when the flow was written; the feed paged correctly (API: 10, then 2, then the end) and the For You code is unchanged in WO-007B/WO-008.
@@ -1553,6 +1553,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Founder decision required:** No
 - **Recommended resolution:** Raise the scroll timeout or speed of that flow in a test-maintenance change.
 - **WO-009A (11 November 2026):** Not run again (it needs the WO-004A fixtures on their own database). For You was exercised by its Jest suites and by `buyer-scene-explorer.yaml`, which starts in For You (PASS). Still OPEN.
+- **WO-017 (12 November 2026):** RESOLVED. Reproduced on its own rebuilt database with the twelve Scenes (batch issue B-011): run 1 failed at the theme step (a tab tap swallowed during the theme re-render), run 2 passed. The flow now retries each tab tap until its screen shows and allows 300 s for the two long scrolls; no assertion changed. The harness step `foryou` builds the flow's data and restores the review data. Verification: `foryou-1` PASS, then smoke and shell, then `foryou-2-after-regression` PASS (G:\AdulisDevelopment\WO-017\logs\native-battery.out). Commit `ae34634`.
 
 ### ON-20261111-085
 
@@ -2300,6 +2301,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** The first full run after a dependency change can fail two tests.
 - **Founder decision required:** No
 - **Recommended resolution:** Rerun once warm, or use `--maxWorkers=2` for the first run. Raise only these tests' timeout in a test-maintenance change if it recurs in CI.
+- **WO-017 (12 November 2026):** Not reproduced (the shared caches were warm throughout the batch). Still OPEN.
 
 ### ON-20261111-124
 
@@ -2361,6 +2363,14 @@ with a "WO-007A" line separating policy approval from implementation, and added 
     - `wo-009-collections` (a global commerce-row count).
   - Each passed alone on a fresh disposable database (19/19, 24/24, 26/26). OTP limits were not raised.
 - **WO-014 (12 November 2026):** Still OPEN. On freshly rebuilt disposable databases at `2997695`: the bounded API run (`--maxWorkers=2`) passed 983/983, and this time the parallel `pnpm test` was green too (API 983/983, mobile 376/376, exit 0). One green parallel run does not show the shared-limit interference is gone; OTP limits were not raised. Evidence: G:\AdulisDevelopment\WO-014\logs\gates\pnpm-test.log.
+- **WO-015..017 batch (12 November 2026, gates at `0ed2ed7`):** Still OPEN.
+  - The bounded API run (`--maxWorkers=2`) passed 983/983.
+  - The parallel `pnpm test` FAILED one test: `wo-009-collections` "saving creates no Cart, reservation, Order or stock change". That is the global commerce-row count already listed in this entry.
+  - The same suite alone, on a freshly rebuilt disposable database, passed 26/26.
+  - The parallel run stopped after the API failure, so the mobile package did not run inside it. Mobile passed 403/403 in its own gate.
+  - OTP limits were not raised.
+  - Required backend work is unchanged: isolate the OTP ceiling, the global stock nudge and the commerce-row counts per suite.
+  - Evidence: G:\AdulisDevelopment\WO-017\logs\gates\pnpm-test.log and G:\AdulisDevelopment\WO-017\logs\wo009-solo.log.
 
 ### ON-20261111-127
 
@@ -2995,6 +3005,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A longer native batch with gates in parallel could reach the 5 GB stop.
 - **Founder decision required:** Yes
 - **Recommended resolution:** Founder: decide the page-file policy (or reboot before native batches); keep the emulator off during the gates.
+- **WO-015..017 (12 November 2026):** Still OPEN. At the batch start 2.17 GB of 15.71 GB memory was free and the page file was 29.4 GB; during the first WO-015 native run C: fell to 9.92 GB (below the 10 GB gate) while an unrelated game held about 10 GB of memory (batch issues B-001, B-003). The page file later shrank to 18.6 GB. The emulator was stopped between native runs. No system setting was changed.
 
 ### ON-20261111-162
 
@@ -3013,6 +3024,7 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A handle released and reassigned between the two reads (STOREFRONT-02 S12; no handle history, OVN-091) could mislabel a context; the server still refuses a foreign Product.
 - **Founder decision required:** No
 - **Recommended resolution:** Backend: add `seller_id` to the public Product DTO and to the conversation list row (additive).
+- **WO-015 (12 November 2026):** Still OPEN, and now also limits the in-conversation Product selector: the conversation's Seller is found by handle in the Buyer's first four list pages (100 conversations); beyond that Product selection is off with an explanation. A handle is unique only per Market (batch issue S-001). Adding `seller_id` (and the Market) to the conversation row and the Product read would remove both limits.
 
 ### ON-20261111-163
 
@@ -3141,13 +3153,14 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** The tools folder is outside Git (on the SSD by policy).
 - **Founder decision required:** No
 - **Recommended resolution:** None.
+- **WO-015 (12 November 2026) correction:** the WO-014 verification of `prepare` was wrong: it had lost a fixture helper and left Fixture Weaves as DRAFT while printing "ready" (batch issue B-004). Fixed in WO-015 (the helper restored; `prepare` stops on a fixture failure and checks Fixture Weaves is ACTIVE). WO-016: the launcher's Metro subshell held a piped caller (B-007), detached. WO-017: `api-stop` / `api-start` added for offline review.
 
 ### ON-20261111-170
 
 - **Work order:** WO-014
 - **Severity:** LOW
 - **Type:** TOOLING
-- **Status:** OPEN
+- **Status:** RESOLVED (WO-017)
 - **Summary:** `adulis-storage-audit.ps1 -Clean -Execute` removed 92 Maestro APKs (627 MB) but its JSON `clean` field reported "0 of 1".
 - **Expected:** The JSON lists each removed file.
 - **Actual:** The text report and the drive totals are right; the JSON summary is not.
@@ -3159,3 +3172,5 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** A reader of the JSON alone under-reports cleanup.
 - **Founder decision required:** No
 - **Recommended resolution:** Ops maintenance: serialise the `$cleaned` array in the JSON.
+- **WO-017 (12 November 2026):** RESOLVED (batch issue B-009). The JSON was correct (`clean.items` listed all 92 removed files); the WO-014 reading counted the summary object. The audit now prints and writes one removed total, by drive (`clean.removedCount`, `removedBytes`, `removedBytesByDrive`), from deleted files only. The WO-014 "recovered 627 MB" was the drive's free-space change; the files removed totalled 580,578,696 bytes. Commit `39d5abe`.
+
