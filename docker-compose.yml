@@ -7,6 +7,12 @@
 # This compose file is local only. Production is managed PostgreSQL on Render
 # (Frankfurt, PITR); nothing here provisions anything.
 
+# THE PROJECT NAME IS PINNED (WO-INFRA-002). Compose otherwise takes it from the
+# checkout's directory, so the same file run from a clone named differently was a
+# different project: a container-name clash with the running stack, and a new,
+# empty database volume. `adulis-platform` is the name the existing stack uses.
+name: adulis-platform
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -97,7 +103,25 @@ services:
       mc ilm rule ls local/adulis-evidence
       "
 
+# EXPLICIT PHYSICAL NAMES, ONE PER SERVICE (WO-INFRA-002, ISSUE-INFRA-001).
+#
+# T20 S4 inserted `adulis-miniodata:` between `adulis-pgdata:` and the
+# `name: adulis-pgdata` line that belonged to it. The name moved to MinIO, so
+# from 2026-09-03 MinIO wrote into the ORIGINAL database volume -- beside the
+# old PostgreSQL data directory -- and PostgreSQL silently started over on a new
+# project-prefixed volume. Both names are now spelled out so neither can drift:
+#
+# - adulis-platform_adulis-pgdata is the volume the database has used since
+#   2026-09-03. Unchanged: nothing moves.
+# - adulis-platform_adulis-miniodata is new. The existing objects are still in
+#   the volume called `adulis-pgdata` and are NOT moved automatically: follow
+#   docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md before or right after
+#   the first `docker compose up` with this file, or MinIO starts empty.
+# - `adulis-pgdata` itself is no longer referenced. Never delete it without the
+#   founder's decision (ISSUE-INFRA-005): it holds the old MinIO objects and the
+#   pre-2026-09-03 database.
 volumes:
   adulis-pgdata:
+    name: adulis-platform_adulis-pgdata
   adulis-miniodata:
-    name: adulis-pgdata
+    name: adulis-platform_adulis-miniodata
