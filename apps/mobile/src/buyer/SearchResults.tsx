@@ -15,7 +15,7 @@ import { mediaUrl } from './for-you-feed';
 import { categoryRefused } from './categories';
 import { usePublicList } from './public-list';
 import { CardSaveButton } from './CardSaveButton';
-import { PublicListView } from './PublicListView';
+import { PublicListView, useLargeText } from './PublicListView';
 import { ProductTile } from './SellerProfile';
 
 /** One result, as a stable key: a type and its public identity. */
@@ -119,6 +119,7 @@ function SearchRow({ item }: { item: SearchItem }) {
   const theme = useTheme();
   const locale = useLocale();
   const router = useRouter();
+  const largeText = useLargeText();
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const row = { flexDirection: 'row' as const, gap: theme.space.sm, padding: theme.space.sm, minHeight: theme.touchTarget, alignItems: 'center' as const };
   const thumb = (key: string | null) => {
@@ -144,7 +145,7 @@ function SearchRow({ item }: { item: SearchItem }) {
         >
         {thumb(p.image_key)}
         <View style={{ flex: 1, gap: theme.space.xs }}>
-          <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
+          <AppText numberOfLines={largeText ? undefined : 2} style={{ fontWeight: theme.fontWeight.semibold }}>
             {p.name}
           </AppText>
           {price ? <AppText>{price}</AppText> : null}

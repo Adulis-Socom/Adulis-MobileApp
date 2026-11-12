@@ -15,7 +15,7 @@ import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
 import { CardSaveButton } from './CardSaveButton';
 import { MessageSellerButton } from './MessageSellerButton';
-import { PublicListView } from './PublicListView';
+import { PublicListView, useLargeText } from './PublicListView';
 import { isPathName, usePublicRead } from './public-read';
 import { GoneState, ReadStates } from './ReadStates';
 
@@ -338,6 +338,7 @@ export function ProductTile({
   const theme = useTheme();
   const locale = useLocale();
   const router = useRouter();
+  const largeText = useLargeText();
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const uri = product.image_key ? mediaUrl(mediaOrigin, product.image_key) : null;
   const price = formatPriceSpan(locale, t, {
@@ -386,7 +387,9 @@ export function ProductTile({
             }}
           />
         )}
-        <AppText numberOfLines={2} style={{ fontWeight: theme.fontWeight.semibold }}>
+        {/* shortcut: two lines in a half-width tile below 130% text, in full at large text where the grid is
+            one column (A-006); the full name is always the accessible name and the Product's title. */}
+        <AppText numberOfLines={largeText ? undefined : 2} style={{ fontWeight: theme.fontWeight.semibold }}>
           {product.name}
         </AppText>
         {price ? <AppText>{price}</AppText> : null}

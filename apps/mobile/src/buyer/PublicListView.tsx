@@ -1,6 +1,6 @@
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import type { ReactElement } from 'react';
-import { ActivityIndicator, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, View, useWindowDimensions } from 'react-native';
 
 import { failureMessage } from '../api/messages';
 import { AlertText } from '../components/AlertText';
@@ -14,10 +14,19 @@ import type { usePublicList } from './public-list';
 import { CardSavesContext, useCardSaves, type ListSaves } from './saved';
 
 /**
+ * Large text (WO-018, A-006): from Android's 130% font size up, grids become one column and
+ * Product names are shown in full, rather than cut to two lines in half the screen.
+ */
+export const LARGE_TEXT_SCALE = 1.3;
+export function useLargeText() {
+  return useWindowDimensions().fontScale >= LARGE_TEXT_SCALE;
+}
+
+/**
  * A public list's every state in one FlashList (WO-006, WO-007): the header (a profile, a title)
  * stays above whatever the list is doing, so a failure, an empty answer or the end of the list
  * is shown under it and nothing the server did not send is drawn. Pull to refresh everywhere, and
- * Load more beside the scroll trigger (WO-018).
+ * Load more beside the scroll trigger (WO-018). A grid (`numColumns` > 1) is one column at large text.
  */
 export function PublicListView<I>({
   list,
@@ -58,6 +67,8 @@ export function PublicListView<I>({
   const t = useT();
   const theme = useTheme();
   const cardSaves = useCardSaves(list.pages, saves);
+  const largeText = useLargeText();
+  const columns = numColumns > 1 && largeText ? 1 : numColumns;
 
   const state = (() => {
     if (list.items.length > 0) return null;
@@ -98,10 +109,12 @@ export function PublicListView<I>({
   return (
     <CardSavesContext.Provider value={cardSaves}>
     <FlashList
+      // A column change re-lays the list out from scratch.
+      key={columns}
       testID={testID}
       accessibilityLabel={label}
       data={list.items}
-      numColumns={numColumns}
+      numColumns={columns}
       keyExtractor={keyOf}
       renderItem={renderItem}
       onEndReached={list.loadMore}
