@@ -1,5 +1,6 @@
 import { en } from '@adulis/locale/mobile';
-import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { router } from 'expo-router';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -10,8 +11,10 @@ import {
   installFakeApi,
   problem,
   storefront,
+  storefrontProduct,
   type Recorded,
 } from '../testing/fake-api';
+import type { StorefrontProduct } from '../api/client';
 import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
@@ -19,6 +22,10 @@ import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
  * rules (one conversation per Buyer and Seller; 25 conversations and 50 messages a page, newest
  * first; text 1-4000; BOT rows as template keys). Numbers are the work order's section 34 matrix
  * (1-26); 24 and 25 (Dark, enlarged text) are native.
+ *
+ * WO-014: Product-context messaging (the "Product context" block, its section 19 matrix 1-40). The
+ * server also holds a small public catalogue: a message's product_id must name a PUBLISHED Product
+ * of the conversation's own Seller, or the send is a 404 (the API's rule).
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -28,6 +35,14 @@ const OTHER_TOKEN = 'Other_credential_for_tests_0123456789abcdef';
 const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HANDLE = 'seller-1';
 const SELLER_ID = storefront(HANDLE).seller_id;
+const HANDLE_2 = 'seller-2';
+const SELLER_2 = '0b6f1a3e-8888-4888-8888-888888888888';
+const BASKET = storefrontProduct('basket', 'Woven basket');
+const LAMP = storefrontProduct('lamp', 'Clay lamp', { id: '0b6f1a3e-4444-4444-8444-444444444444', available: false });
+const VASE = storefrontProduct('vase', 'Glass vase', {
+  id: '0b6f1a3e-5555-4555-8555-555555555555',
+  seller: { handle: HANDLE_2, store_name: 'Store 2' },
+});
 const A = `Bearer ${GOOD_TOKEN}`;
 const B = `Bearer ${OTHER_TOKEN}`;
 let api: ReturnType<typeof installFakeApi>;
@@ -58,12 +73,25 @@ function installChat() {
     c.last_message_at = m.sent_at;
     return full;
   };
+  const catalogue = new Map<string, { product: StorefrontProduct; seller: string; published: boolean }>();
+  /** Publish a Product: its public read answers, and messages may be about it. */
+  const publish = (product: StorefrontProduct) => {
+    const entry = { product, seller: product.seller.handle === HANDLE_2 ? SELLER_2 : SELLER_ID, published: true };
+    catalogue.set(product.id, entry);
+    api.on(`GET /v1/storefronts/${product.seller.handle}/products/${product.slug}`, () =>
+      entry.published ? { status: 200, body: product } : problem(404, 'NOT_FOUND', 'request'),
+    );
+    return { unpublish: () => (entry.published = false) };
+  };
   const mine = (call: Recorded) => convs.filter((c) => c.owner === call.headers.Authorization);
   const byPath = (call: Recorded) => mine(call).find((c) => call.path.startsWith(`/v1/conversations/${c.id}/`));
   api.on('POST /v1/conversations', (call) => {
     if (!call.headers.Authorization) return problem(401, 'SESSION_EXPIRED', 'auth');
-    if (call.body?.seller_id !== SELLER_ID) return problem(404, 'NOT_FOUND', 'request');
-    const found = mine(call).find((c) => c.seller_id === call.body?.seller_id) ?? conv(call.headers.Authorization);
+    const seller = call.body?.seller_id;
+    if (seller !== SELLER_ID && seller !== SELLER_2) return problem(404, 'NOT_FOUND', 'request');
+    const found =
+      mine(call).find((c) => c.seller_id === seller) ??
+      (seller === SELLER_2 ? conv(call.headers.Authorization, SELLER_2, 'Store 2', HANDLE_2, new Date().toISOString()) : conv(call.headers.Authorization));
     return { status: 201, body: { conversation_id: found.id } };
   });
   api.on('GET /v1/conversations', (call) => {
@@ -91,7 +119,12 @@ function installChat() {
     if (!c) return problem(404, 'NOT_FOUND', 'request');
     const text = call.body?.text;
     if (typeof text !== 'string' || text.length < 1 || text.length > 4000) return problem(400, 'VALIDATION_FAILED', 'request', { path: 'text' });
-    const m = msg(c, { sender_kind: 'BUYER', body: text, sent_at: new Date().toISOString(), product_id: null });
+    const productId = call.body?.product_id;
+    if (productId !== undefined) {
+      const entry = typeof productId === 'string' ? catalogue.get(productId) : undefined;
+      if (!entry || !entry.published || entry.seller !== c.seller_id) return problem(404, 'NOT_FOUND', 'request');
+    }
+    const m = msg(c, { sender_kind: 'BUYER', body: text, sent_at: new Date().toISOString(), product_id: (productId as string | undefined) ?? null });
     return { status: 201, body: { message_id: m.id, bot: null } };
   });
   api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/escalate$/, (call) => {
@@ -100,7 +133,7 @@ function installChat() {
     const m = msg(c, { sender_kind: 'BOT', template_key: 'chat.bot.escalated', resolution_path: 'ESCALATED', sent_at: new Date().toISOString() });
     return { status: 200, body: { escalated: true, bot_message_id: m.id } };
   });
-  return { convs, conv, msg };
+  return { convs, conv, msg, publish };
 }
 
 const sends = () => api.calls.filter((c) => c.method === 'POST' && /\/messages$/.test(c.path));
@@ -416,5 +449,313 @@ describe('You', () => {
     const buttons = await screen.findAllByRole('button', { name: en['buyer.messages'] });
     await fireEvent.press(buttons[0]!);
     expect(await screen.findByText(en['buyer.messages.empty'])).toBeOnTheScreen();
+  });
+});
+
+describe('Product-context messaging (WO-014)', () => {
+  const ask = async () => fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] }));
+  const context = () => within(screen.getByTestId('chat-product-context'));
+  const productReads = (p: StorefrontProduct) => api.callsTo(`GET /v1/storefronts/${p.seller.handle}/products/${p.slug}`);
+  const send = async (text: string) => {
+    await fireEvent.changeText(composer(), text);
+    await fireEvent.press(sendButton());
+  };
+  /** A signed-in Buyer on a Product's Ask Seller, then in its conversation with the context shown. */
+  async function askFrom(product: StorefrontProduct, setup?: (chat: ReturnType<typeof installChat>) => void) {
+    signedIn();
+    const chat = installChat();
+    chat.publish(product);
+    setup?.(chat);
+    await renderRouter(APP_DIR, { initialUrl: `/product/${product.seller.handle}/${product.slug}` });
+    await ask();
+    await screen.findByTestId('chat-product-context');
+    return chat;
+  }
+
+  it('1, 2, 3. Ask Seller is on Product Detail; a guest is sent to sign in and nothing is created', async () => {
+    installChat().publish(BASKET);
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await ask();
+    expect(await screen.findByText(en['auth.sign_in.intro'])).toBeOnTheScreen();
+    expect(api.callsTo(`GET /v1/storefronts/${HANDLE}`)).toEqual([]);
+    expect(api.callsTo('POST /v1/conversations')).toEqual([]);
+    expect(sends()).toEqual([]);
+  });
+
+  it('4. a successful sign-in returns to the Product; nothing is opened or sent until the Buyer asks again', async () => {
+    installChat().publish(BASKET);
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await ask();
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911000001');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await waitFor(() => expect(screen).toHavePathname('/product/seller-1/basket'));
+    expect(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] })).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/conversations')).toEqual([]);
+    expect(sends()).toEqual([]);
+  });
+
+  it('5. a cancelled sign-in creates nothing', async () => {
+    installChat().publish(BASKET);
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await ask();
+    await screen.findByLabelText(en['auth.phone.label']);
+    await act(() => router.back());
+    await waitFor(() => expect(screen).toHavePathname('/product/seller-1/basket'));
+    expect(api.callsTo('POST /v1/conversations')).toEqual([]);
+    expect(api.callsTo('GET /v1/conversations')).toEqual([]);
+  });
+
+  it('6, 8. the Seller is resolved by the public storefront read and the conversation opened by its seller_id', async () => {
+    await askFrom(BASKET);
+    const [resolve] = api.callsTo(`GET /v1/storefronts/${HANDLE}`);
+    expect(resolve?.query.revalidate).toBe('true');
+    const [open] = api.callsTo('POST /v1/conversations');
+    expect(open?.body).toEqual({ seller_id: SELLER_ID });
+    expect(open?.headers['Idempotency-Key']).toMatch(UUID7);
+  });
+
+  it.each([
+    ['answers for another handle', storefront('seller-9')],
+    ['names the handle as its id', storefront(HANDLE, { seller_id: HANDLE })],
+  ])('7. a storefront read that %s is not used: nothing is opened', async (_, body) => {
+    signedIn();
+    installChat().publish(BASKET);
+    api.on(`GET /v1/storefronts/${HANDLE}`, () => ({ status: 200, body }));
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await ask();
+    expect(await screen.findByText(en['buyer.chat.open_failed'])).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/conversations')).toEqual([]);
+  });
+
+  it('9. two Products of one Seller go to one conversation, each message about its own Product', async () => {
+    const chat = await askFrom(BASKET, (c) => c.publish(LAMP));
+    await screen.findByText('Woven basket');
+    await send('Is the basket handmade?');
+    await screen.findByText('Is the basket handmade?');
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/lamp' });
+    await ask();
+    expect(await context().findByText('Clay lamp')).toBeOnTheScreen();
+    await send('Will the lamp be back?');
+    await screen.findByText('Will the lamp be back?');
+    const own = chat.convs.filter((c) => c.owner === A);
+    expect(own).toHaveLength(1);
+    expect(own[0]!.messages.map((m) => m.product_id)).toEqual([LAMP.id, BASKET.id]);
+  });
+
+  it('10. Products of different Sellers do not share a conversation', async () => {
+    const chat = await askFrom(BASKET, (c) => c.publish(VASE));
+    api.on(`GET /v1/storefronts/${HANDLE_2}`, () => ({ status: 200, body: storefront(HANDLE_2, { seller_id: SELLER_2, store_name: 'Store 2' }) }));
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-2/vase' });
+    await ask();
+    expect(await context().findByText('Glass vase')).toBeOnTheScreen();
+    const own = chat.convs.filter((c) => c.owner === A);
+    expect(own.map((c) => c.seller_id).sort()).toEqual([SELLER_2, SELLER_ID].sort());
+  });
+
+  it('11, 13, 15, 16. the context shows the current read; the message carries product_id; the context clears and a follow-up has no anchor', async () => {
+    await askFrom(LAMP);
+    expect(await context().findByText('Clay lamp')).toBeOnTheScreen();
+    expect(context().getByText(en['buyer.chat.context_title'])).toBeOnTheScreen();
+    expect(context().getByText(en['buyer.product.unavailable'])).toBeOnTheScreen();
+    expect(context().getByText(en['buyer.chat.context_note'])).toBeOnTheScreen();
+    // No price, stock, discount or promise is drawn in the context.
+    expect(context().queryByText(/ETB|in stock|discount|deliver/i)).toBeNull();
+    await send('When will it be available?');
+    expect(await screen.findByText('When will it be available?')).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.chat.about_product'])).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    await send('Thanks');
+    await screen.findByText('Thanks');
+    expect(sends().map((s) => s.body)).toEqual([{ text: 'When will it be available?', product_id: LAMP.id }, { text: 'Thanks' }]);
+    // Product Detail's opening is the one view; every chat read is a technical re-read.
+    expect(productReads(LAMP).slice(1).every((c) => c.query.revalidate === 'true')).toBe(true);
+    expect(productReads(LAMP).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('12, 14. a removed context sends a message with no Product anchor', async () => {
+    await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    await fireEvent.press(context().getByRole('button', { name: en['buyer.chat.context_remove'] }));
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    await send('A general question');
+    await screen.findByText('A general question');
+    expect(sends()[0]?.body).toEqual({ text: 'A general question' });
+  });
+
+  it('17. the context stays with its conversation: opening it again, or another conversation, carries none', async () => {
+    const chat = await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    const [own] = chat.convs.filter((c) => c.owner === A);
+    const other = chat.conv(A, SELLER_2, 'Store 2', HANDLE_2);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${own!.id}` });
+    await screen.findByText(en['buyer.chat.empty']);
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${other.id}` });
+    await screen.findByText(en['buyer.chat.empty']);
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+  });
+
+  it('18. a malformed Product reference is ignored; an unknown one shows the neutral unavailable state', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}?productHandle=seller-1&productSlug=Bad%20Slug` });
+    await screen.findByText(en['buyer.chat.empty']);
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    api.on('GET /v1/storefronts/seller-1/products/missing', () => problem(404, 'NOT_FOUND', 'request'));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}?productHandle=seller-1&productSlug=missing` });
+    await screen.findByTestId('chat-product-context');
+    expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    await fireEvent.changeText(composer(), 'Hello');
+    expect(sendButton()).toBeDisabled();
+  });
+
+  it('19. a Product of another Seller is never shown or attached; without it the message sends', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.publish(VASE);
+    const c = chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}?productHandle=seller-2&productSlug=vase` });
+    await screen.findByTestId('chat-product-context');
+    expect(await context().findByText(en['buyer.chat.context_mismatch'])).toBeOnTheScreen();
+    expect(screen.queryByText('Glass vase')).toBeNull();
+    await fireEvent.changeText(composer(), 'Hello');
+    expect(sendButton()).toBeDisabled();
+    await fireEvent.press(context().getByRole('button', { name: en['buyer.chat.context_remove'] }));
+    await fireEvent.press(sendButton());
+    await screen.findByText('Hello');
+    expect(sends().map((s) => s.body)).toEqual([{ text: 'Hello' }]);
+  });
+
+  it('20. a Product unpublished after it was shown: the send is refused before anything is sent, the name is gone, the draft stays', async () => {
+    let shelf!: { unpublish: () => void };
+    await askFrom(BASKET, (c) => (shelf = c.publish(BASKET)));
+    await context().findByText('Woven basket');
+    shelf.unpublish();
+    await send('Still have it?');
+    expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    expect(screen.queryByText('Woven basket')).toBeNull();
+    expect(sends()).toEqual([]);
+    expect(composer().props.value).toBe('Still have it?');
+  });
+
+  it('20, 28. a Product the server refuses at send time is not sent, and says why', async () => {
+    await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => problem(404, 'NOT_FOUND', 'request'));
+    await send('Is it in stock?');
+    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    expect(context().getByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.sender.you'])).toBeNull();
+  });
+
+  it('21. a check that cannot reach the server sends nothing and is not called "removed"; checking again then sends', async () => {
+    await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.on('GET /v1/storefronts/seller-1/products/basket', () => 'offline');
+    await send('Do you ship?');
+    expect(await context().findByText(en['buyer.chat.context_unchecked'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.context_gone'])).toBeNull();
+    expect(sends()).toEqual([]);
+    api.on('GET /v1/storefronts/seller-1/products/basket', () => ({ status: 200, body: BASKET }));
+    await fireEvent.press(context().getByRole('button', { name: en['common.retry'] }));
+    await context().findByText('Woven basket');
+    await fireEvent.press(sendButton());
+    await screen.findByText('Do you ship?');
+    expect(sends()[0]?.body).toEqual({ text: 'Do you ship?', product_id: BASKET.id });
+  });
+
+  it('22. a context read lost offline shows no Product details', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    api.on('GET /v1/storefronts/seller-1/products/basket', () => 'offline');
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}?productHandle=seller-1&productSlug=basket` });
+    await screen.findByTestId('chat-product-context');
+    expect(await context().findByText(en['buyer.chat.context_unchecked'], {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(screen.queryByText('Woven basket')).toBeNull();
+    expect(screen.queryByText(en['buyer.product.available'])).toBeNull();
+  });
+
+  it('25. a second press while an anchored message is sending sends nothing', async () => {
+    const { gate, release } = held();
+    const chat = await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, async (call) => {
+      await gate;
+      const [own] = chat.convs.filter((c) => c.owner === A);
+      const m = chat.msg(own!, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString(), product_id: BASKET.id });
+      return { status: 201, body: { message_id: m.id, bot: null } };
+    });
+    await send('Once');
+    expect(await screen.findByText(en['buyer.chat.sending'])).toBeOnTheScreen();
+    await fireEvent.press(sendButton());
+    expect(sends()).toHaveLength(1);
+    await act(async () => release());
+    expect(await screen.findByText('Once')).toBeOnTheScreen();
+  });
+
+  it('26, 29. an unconfirmed anchored send freezes its payload; the retry replays the same text, Product and key, and shows once', async () => {
+    const chat = await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    let first = true;
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
+      const [own] = chat.convs.filter((c) => c.owner === A);
+      // The first attempt is stored but its answer is lost; the replay returns the same message.
+      const stored = own!.messages.find((m) => m.body === call.body?.text);
+      const m = stored ?? chat.msg(own!, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString(), product_id: BASKET.id });
+      if (first) {
+        first = false;
+        return 'offline';
+      }
+      return { status: 201, body: { message_id: m.id, bot: null } };
+    });
+    await send('Is it lined?');
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(composer().props.editable).toBe(false);
+    expect(context().getByRole('button', { name: en['buyer.chat.context_remove'] })).toBeDisabled();
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b?.headers['Idempotency-Key']).toBe(a?.headers['Idempotency-Key']);
+    expect(b?.body).toEqual(a?.body);
+    expect(a?.body).toEqual({ text: 'Is it lined?', product_id: BASKET.id });
+    await waitFor(() => expect(screen.getAllByText('Is it lined?')).toHaveLength(1));
+  });
+
+  it('27. giving up an unconfirmed send and changing the Product is a new intent with a new key', async () => {
+    await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => 'offline');
+    await send('Lined?');
+    await screen.findByText(en['buyer.chat.maybe_not_sent']);
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.edit_unconfirmed'] }));
+    expect(composer().props.editable).toBe(true);
+    await fireEvent.press(context().getByRole('button', { name: en['buyer.chat.context_remove'] }));
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(a?.body).toEqual({ text: 'Lined?', product_id: BASKET.id });
+    expect(b?.body).toEqual({ text: 'Lined?' });
+    expect(b?.headers['Idempotency-Key']).not.toBe(a?.headers['Idempotency-Key']);
+  });
+
+  it('30. signing out while the Product is being checked sends nothing', async () => {
+    const { gate, release } = held();
+    await askFrom(BASKET);
+    await context().findByText('Woven basket');
+    api.on('GET /v1/storefronts/seller-1/products/basket', async () => {
+      await gate;
+      return { status: 200, body: BASKET };
+    });
+    await send('Pending question');
+    // The same app (one session provider): a second renderRouter would be a second app.
+    await act(() => router.push('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await act(async () => release());
+    expect(sends()).toEqual([]);
   });
 });
