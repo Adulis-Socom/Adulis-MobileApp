@@ -9,13 +9,15 @@ import { Button } from '../components/Button';
 import type { MobileMessageKey } from '@adulis/locale/mobile';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
+import { LoadMoreFooter } from './LoadMoreFooter';
 import type { usePublicList } from './public-list';
 import { CardSavesContext, useCardSaves, type ListSaves } from './saved';
 
 /**
  * A public list's every state in one FlashList (WO-006, WO-007): the header (a profile, a title)
  * stays above whatever the list is doing, so a failure, an empty answer or the end of the list
- * is shown under it and nothing the server did not send is drawn. Pull to refresh everywhere.
+ * is shown under it and nothing the server did not send is drawn. Pull to refresh everywhere, and
+ * Load more beside the scroll trigger (WO-018).
  */
 export function PublicListView<I>({
   list,
@@ -122,20 +124,10 @@ export function PublicListView<I>({
       }
       ListFooterComponent={
         list.items.length === 0 ? null : (
-          <View style={{ paddingVertical: theme.space.lg, gap: theme.space.sm, alignItems: 'center' }}>
-            {list.isFetchingNextPage ? (
-              <ActivityIndicator color={theme.color.accent} accessibilityLabel={t('buyer.list.loading_more')} />
-            ) : list.isFetchNextPageError ? (
-              <>
-                <AlertText style={{ textAlign: 'center' }}>
-                  {`${t('buyer.list.more_failed')} ${failureMessage(t, list.error)}`}
-                </AlertText>
-                <Button label={t('common.retry')} onPress={list.retryNextPage} />
-              </>
-            ) : !list.hasNextPage ? (
-              <AppText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t('buyer.list.end')}</AppText>
-            ) : null}
-          </View>
+          <LoadMoreFooter
+            paging={{ ...list, count: list.items.length, pageCount: list.pages.length }}
+            keys={{ load: 'buyer.list.load_more', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
+          />
         )
       }
     />

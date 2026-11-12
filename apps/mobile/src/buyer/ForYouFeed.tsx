@@ -11,6 +11,7 @@ import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { feedSessionEnded, useForYouFeed } from './for-you-feed';
+import { LoadMoreFooter } from './LoadMoreFooter';
 import { SceneCard } from './SceneCard';
 
 /**
@@ -18,7 +19,8 @@ import { SceneCard } from './SceneCard';
  * Every state is its own, and none is filled with content the server did not send: a
  * failure is a message and a retry, an empty feed says so, the end of the feed says so.
  * The card renders from the unit alone (no per-row request); the photo origin is the
- * bootstrap's media_public_origin.
+ * bootstrap's media_public_origin. More Scenes come on scrolling or from Load more (WO-018): the
+ * same request, in the same order, from the same cursor.
  */
 export function ForYouFeed() {
   const t = useT();
@@ -109,27 +111,10 @@ export function ForYouFeed() {
         accessibilityLabel={t('buyer.for_you.feed')}
         testID="for-you-list"
         ListFooterComponent={
-          <View style={{ paddingVertical: theme.space.lg, gap: theme.space.sm, alignItems: 'center' }}>
-            {feed.isFetchingNextPage ? (
-              <>
-                <ActivityIndicator color={theme.color.accent} />
-                <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
-                  {t('buyer.for_you.loading_more')}
-                </AppText>
-              </>
-            ) : feed.isFetchNextPageError ? (
-              <>
-                <AlertText style={{ textAlign: 'center' }}>
-                  {`${t('buyer.for_you.more_failed')} ${failureMessage(t, feed.error)}`}
-                </AlertText>
-                <Button label={t('common.retry')} onPress={feed.retryNextPage} />
-              </>
-            ) : !feed.hasNextPage ? (
-              <AppText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
-                {t('buyer.for_you.end')}
-              </AppText>
-            ) : null}
-          </View>
+          <LoadMoreFooter
+            paging={{ ...feed, count: feed.units.length, pageCount: feed.pageCount }}
+            keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
+          />
         }
       />
     </View>

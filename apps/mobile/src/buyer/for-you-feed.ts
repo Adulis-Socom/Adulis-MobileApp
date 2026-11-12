@@ -226,10 +226,14 @@ export function useForYouFeed() {
     () => setFeed((f) => ({ generation: f.generation + 1, withhold: true })),
   );
 
-  /** Called as the list nears its end: one request at a time, and never into an error. */
+  /**
+   * Called as the list nears its end and by Load more: one request at a time, and never into an
+   * error. `cancelRefetch: false` also keeps a second call in the same frame (a scroll and a tap)
+   * from starting a second request before this render sees the first (WO-018).
+   */
   const loadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError && !isPlaceholderData) {
-      void fetchNextPage();
+      void fetchNextPage({ cancelRefetch: false });
     }
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage]);
 
@@ -237,6 +241,8 @@ export function useForYouFeed() {
     status: query.status,
     error: query.error,
     units,
+    /** Pages of this feed session loaded so far. */
+    pageCount: query.data?.pages.length ?? 0,
     hasNextPage,
     isFetchingNextPage,
     isFetchNextPageError,
@@ -245,7 +251,7 @@ export function useForYouFeed() {
     /** A pull-to-refresh is in flight: the old session's cards are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
     retry,
-    retryNextPage: () => void fetchNextPage(),
+    retryNextPage: () => void fetchNextPage({ cancelRefetch: false }),
     loadMore,
     refresh,
   };

@@ -89,8 +89,9 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
   );
 
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage, refetch } = query;
+  // One next-page request at a time whoever asks (a scroll and Load more in the same frame, WO-018).
   const loadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError && !isPlaceholderData) void fetchNextPage();
+    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError && !isPlaceholderData) void fetchNextPage({ cancelRefetch: false });
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage]);
   const refresh = useCallback(
     () => setList((l) => ({ generation: l.generation + 1, withhold: oldest.current === undefined })),
@@ -115,7 +116,7 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     isFetchingNextPage,
     isFetchNextPageError,
     loadMore,
-    retryNextPage: () => void fetchNextPage(),
+    retryNextPage: () => void fetchNextPage({ cancelRefetch: false }),
     refresh,
     retry,
   };
