@@ -44,7 +44,7 @@ const TABS = BUCKETS.map((value) => ({ value, key: `seller.orders.bucket.${value
  * opens here directly), a loading or failure state. Only a list that has answered without an active
  * store (several to choose from, none, or this one revoked) sends the Buyer to Seller Home.
  */
-function WithStore({ children }: { children: (store: SellerRow) => ReactNode }) {
+export function WithStore({ children }: { children: (store: SellerRow) => ReactNode }) {
   const t = useT();
   const { list, active } = useSellerContext();
   if (active) return <>{children(active)}</>;

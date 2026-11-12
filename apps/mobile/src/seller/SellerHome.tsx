@@ -103,6 +103,7 @@ export function SellerHome() {
       </View>
       {sellers.length > 1 ? <Button label={t('seller.home.change_store')} variant="secondary" onPress={change} /> : null}
       <SellerOverview seller={active} />
+      <Button label={t('seller.messages.title')} onPress={() => router.push('/seller/messages')} />
       <Button label={t('seller.notifications.title')} onPress={() => router.push('/seller/notifications')} />
       <Button label={t('seller.orders.title')} onPress={() => router.push('/seller/orders')} />
       {toBuyer}
