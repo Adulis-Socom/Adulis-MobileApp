@@ -649,6 +649,27 @@ export const enCommon = {
   'seller.order.state.CANCELLED_BY_SELLER': 'Cancelled by the store',
   'seller.order.state.EXPIRED_UNCLAIMED': 'Expired',
   'seller.order.state.other': 'Status not shown',
+  // WO-021: Seller Companion messaging.
+  'seller.messages.title': 'Messages',
+  'seller.messages.note': 'Conversations with Buyers of this store, most recent activity first.',
+  'seller.messages.empty': 'Buyer conversations will appear here when Buyers write to this store.',
+  'seller.messages.loading': 'Loading conversations',
+  'seller.messages.refresh': 'Refresh conversations',
+  'seller.messages.conversation': 'Buyer conversation',
+  'seller.messages.last_activity': 'Last activity {time}',
+  'seller.messages.started': 'Started {time}',
+  'seller.messages.open': 'Opens the conversation',
+  'seller.messages.unavailable': 'Messaging is not available for your role in this store.',
+  'seller.messages.gone': 'This conversation is not available.',
+  'seller.messages.no_messages': 'No messages in this conversation yet.',
+  'seller.messages.failed': 'The messages could not be loaded.',
+  'seller.messages.composer': 'Reply to the Buyer',
+  'seller.messages.sender.buyer': 'Buyer',
+  'seller.messages.sender.owner': 'Store owner',
+  'seller.messages.sender.team': 'Store team member',
+  'seller.messages.sender.bot': 'Automated answer',
+  'seller.messages.send_unavailable': 'Your role cannot send messages in this store. The reply was not sent.',
+  'seller.messages.send_gone': 'This conversation is not available right now. The reply was not sent.',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;

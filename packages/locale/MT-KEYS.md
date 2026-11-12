@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1175 keys:
+1195 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -536,6 +536,26 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `seller.order.state.CANCELLED_BY_SELLER`
 - `seller.order.state.EXPIRED_UNCLAIMED`
 - `seller.order.state.other`
+- `seller.messages.title`
+- `seller.messages.note`
+- `seller.messages.empty`
+- `seller.messages.loading`
+- `seller.messages.refresh`
+- `seller.messages.conversation`
+- `seller.messages.last_activity`
+- `seller.messages.started`
+- `seller.messages.open`
+- `seller.messages.unavailable`
+- `seller.messages.gone`
+- `seller.messages.no_messages`
+- `seller.messages.failed`
+- `seller.messages.composer`
+- `seller.messages.sender.buyer`
+- `seller.messages.sender.owner`
+- `seller.messages.sender.team`
+- `seller.messages.sender.bot`
+- `seller.messages.send_unavailable`
+- `seller.messages.send_gone`
 - `app.title`
 - `error.seller.tier_limit_reached`
 - `sms.otp.step_up.subscription_change`
