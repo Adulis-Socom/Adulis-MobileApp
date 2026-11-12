@@ -253,7 +253,12 @@ export function installFakeApi() {
     const handler = handlers[`${method} ${path}`] ?? patterns.find((p) => p.method === method && p.pattern.test(path))?.handler;
     const reply: Reply = handler ? await handler(call) : problem(404, 'NOT_FOUND', 'request');
     if (reply === 'offline') throw new TypeError('Network request failed');
-    if (reply === 'hang') return new Promise<Response>(() => undefined);
+    // Like a real fetch, a hanging request rejects when its signal aborts (the client's timeout).
+    if (reply === 'hang') {
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))),
+      );
+    }
     return { status: reply.status, json: async () => reply.body } as Response;
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;

@@ -1,6 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
+import { AccessibilityInfo } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -29,6 +30,9 @@ import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
  *
  * WO-015: the in-conversation Product selector (the "Select Product" block, its section 13 matrix
  * 1-25). The server lists each Seller's published Products page by page, as the API does.
+ *
+ * WO-016: messaging UX and reliability (the "Messaging UX and reliability" block): ON-164's
+ * composer layout, ON-168's neutral refusal, the unconfirmed-send wording, and section 20.
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -172,6 +176,8 @@ function installChat() {
 const sends = () => api.calls.filter((c) => c.method === 'POST' && /\/messages$/.test(c.path));
 const composer = () => screen.getByLabelText(en['buyer.chat.composer']);
 const sendButton = () => screen.getByRole('button', { name: en['buyer.chat.send'] });
+/** While a send is unconfirmed the same button reads "Try sending again" (WO-016). */
+const retryButton = () => screen.getByRole('button', { name: en['buyer.chat.retry_send'] });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -360,7 +366,7 @@ describe('a conversation', () => {
     expect(screen.getByText(en['common.offline'])).toBeOnTheScreen();
     expect(composer().props.value).toBe('Are you open today?');
     expect(screen.queryByText(en['buyer.chat.sender.you'])).toBeNull();
-    await fireEvent.press(sendButton());
+    await fireEvent.press(retryButton());
     expect(await screen.findByText(en['buyer.chat.sender.you'])).toBeOnTheScreen();
     const keys = sends().map((s) => s.headers['Idempotency-Key']);
     expect(keys).toHaveLength(2);
@@ -674,14 +680,17 @@ describe('Product-context messaging (WO-014)', () => {
     expect(composer().props.value).toBe('Still have it?');
   });
 
-  it('20, 28. a Product the server refuses at send time is not sent, and says why', async () => {
+  it('20, 28. a 404 at send time is not sent and says so neutrally; a current read decides whether the Product is gone (ON-168)', async () => {
     await askFrom(BASKET);
     await context().findByText('Woven basket');
     api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => problem(404, 'NOT_FOUND', 'request'));
     await send('Is it in stock?');
-    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
-    expect(context().getByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.chat.not_found_anchored'])).toBeOnTheScreen();
+    // The Product still reads as public: it is not called removed, and it stays attached.
+    expect(context().getByText('Woven basket')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.context_gone'])).toBeNull();
     expect(screen.queryByText(en['buyer.chat.sender.you'])).toBeNull();
+    expect(composer().props.value).toBe('Is it in stock?');
   });
 
   it('21. a check that cannot reach the server sends nothing and is not called "removed"; checking again then sends', async () => {
@@ -749,7 +758,7 @@ describe('Product-context messaging (WO-014)', () => {
     expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
     expect(composer().props.editable).toBe(false);
     expect(context().getByRole('button', { name: en['buyer.chat.context_remove'] })).toBeDisabled();
-    await fireEvent.press(sendButton());
+    await fireEvent.press(retryButton());
     await waitFor(() => expect(sends()).toHaveLength(2));
     const [a, b] = sends();
     expect(b?.headers['Idempotency-Key']).toBe(a?.headers['Idempotency-Key']);
@@ -822,7 +831,7 @@ describe('Product-context messaging (WO-014)', () => {
     // The slug now names a re-created Product with a new id.
     const recreated = { ...BASKET, id: '0b6f1a3e-6666-4666-8666-666666666666' };
     chat.publish(recreated);
-    await fireEvent.press(sendButton());
+    await fireEvent.press(retryButton());
     expect(await context().findByText(en['buyer.chat.context_mismatch'])).toBeOnTheScreen();
     expect(sends()).toHaveLength(1);
     expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
@@ -1123,5 +1132,136 @@ describe('In-conversation Product selector (WO-015)', () => {
     expect(await screen.findByText(en['buyer.chat.unavailable'])).toBeOnTheScreen();
     await act(() => jest.advanceTimersByTimeAsync(2000));
     expect(api.callsTo('GET /v1/conversations').length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('Messaging UX and reliability (WO-016)', () => {
+  const context = () => within(screen.getByTestId('chat-product-context'));
+  const send = async (text: string) => {
+    await fireEvent.changeText(composer(), text);
+    await fireEvent.press(sendButton());
+  };
+  async function inConversation(setup?: (chat: ReturnType<typeof installChat>, c: Conv) => void, url?: (c: Conv) => string) {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    setup?.(chat, c);
+    await renderRouter(APP_DIR, { initialUrl: url ? url(c) : `/chat/${c.id}` });
+    await screen.findByText(en['buyer.chat.empty']);
+    return { chat, c };
+  }
+
+  it('ON-164. the composer scrolls inside its own area; Send stays outside it, always reachable', async () => {
+    await inConversation((chat) => chat.publish(BASKET), (c) => `/chat/${c.id}?productHandle=seller-1&productSlug=basket`);
+    await context().findByText('Woven basket');
+    const composerArea = within(screen.getByTestId('chat-composer'));
+    expect(composerArea.getByTestId('chat-product-context')).toBeOnTheScreen();
+    expect(composerArea.getByLabelText(en['buyer.chat.composer'])).toBeOnTheScreen();
+    expect(composerArea.queryByRole('button', { name: en['buyer.chat.send'] })).toBeNull();
+    expect(sendButton()).toBeOnTheScreen();
+  });
+
+  it('ON-168. a 404 on an anchored send, then a current read that answers 404: only then is the Product called gone', async () => {
+    let shelf!: { unpublish: () => void };
+    await inConversation((chat) => (shelf = chat.publish(BASKET)), (c) => `/chat/${c.id}?productHandle=seller-1&productSlug=basket`);
+    await context().findByText('Woven basket');
+    // The server refuses at send time (the check passed a moment before), then the Product is gone.
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => {
+      shelf.unpublish();
+      return problem(404, 'NOT_FOUND', 'request');
+    });
+    await send('Still for sale?');
+    expect(await screen.findByText(en['buyer.chat.not_found_anchored'])).toBeOnTheScreen();
+    expect(await context().findByText(en['buyer.chat.context_gone'])).toBeOnTheScreen();
+    expect(composer().props.value).toBe('Still for sale?');
+  });
+
+  it('ON-168. a 404 on a plain send names no cause; a messages read that answers 404 then shows the conversation as not available', async () => {
+    const { c } = await inConversation();
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => problem(404, 'NOT_FOUND', 'request'));
+    await send('Hello?');
+    expect(await screen.findByText(en['buyer.chat.not_found_plain'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    // The conversation really is gone for this Buyer: a current read says so.
+    api.onPattern('GET', /^\/v1\/conversations\/[^/]+\/messages$/, () => problem(404, 'NOT_FOUND', 'request'));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    expect(await screen.findByText(en['buyer.chat.unavailable'])).toBeOnTheScreen();
+    expect(sends().every((x) => x.path === `/v1/conversations/${c.id}/messages`)).toBe(true);
+  });
+
+  it('18. an unconfirmed send says it may already have been received, offers Try sending again and Edit the message instead, and is never "not sent"', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      await inConversation();
+      api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => 'offline');
+      await send('Are you open?');
+      expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+      expect(retryButton()).toBeEnabled();
+      expect(screen.getByRole('button', { name: en['buyer.chat.edit_unconfirmed'] })).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: en['buyer.chat.send'] })).toBeNull();
+      expect(announce).toHaveBeenCalledWith(en['buyer.chat.maybe_not_sent']);
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(sends()).toHaveLength(2));
+      expect(sends()[1]?.headers['Idempotency-Key']).toBe(sends()[0]?.headers['Idempotency-Key']);
+      expect(sends()[1]?.body).toEqual(sends()[0]?.body);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('20.7. a send that times out is unconfirmed (not failed), and keeps its key', async () => {
+    await inConversation();
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, () => 'hang');
+    await send('Slow network');
+    await act(() => jest.advanceTimersByTimeAsync(11_000));
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    expect(composer().props.editable).toBe(false);
+  });
+
+  it('20.1. signing out while a message is sending: the late answer changes nothing and the next Account sees nothing', async () => {
+    const { gate, release } = held();
+    const { chat, c } = await inConversation();
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, async (call) => {
+      await gate;
+      const m = chat.msg(c, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString() });
+      return { status: 201, body: { message_id: m.id, bot: null } };
+    });
+    await send('In flight');
+    await act(() => router.push('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await act(async () => release());
+    expect(sends()).toHaveLength(1);
+    api.on('GET /v1/bootstrap', (call) =>
+      call.headers.Authorization ? { status: 200, body: bootstrapBody({ account_context: SIGNED_IN_CONTEXT }) } : { status: 200, body: bootstrapBody() },
+    );
+    signedIn(OTHER_TOKEN);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText(en['buyer.chat.unavailable'])).toBeOnTheScreen();
+    expect(screen.queryByText('In flight')).toBeNull();
+  });
+
+  it('20.3, 20.5. a slow Seller list cancelled, and an unavailable one, attach nothing', async () => {
+    const { gate, release } = held();
+    await inConversation((chat) => chat.publish(BASKET));
+    api.on(`GET /v1/storefronts/${HANDLE}/products`, async () => {
+      await gate;
+      return { status: 200, body: { data: [{ ...BASKET, display_order: 0, image_key: null }], next_cursor: null } };
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: en['buyer.chat.select_product'] })).toBeEnabled());
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.select_product'] }));
+    await screen.findByText(en['buyer.chat.picker_loading']);
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.picker_cancel'] }));
+    await act(async () => release());
+    expect(screen.queryByTestId('chat-product-picker')).toBeNull();
+    expect(screen.queryByTestId('chat-product-context')).toBeNull();
+    // The cancelled list is dropped on the next tick (gcTime 0); fake timers need the tick.
+    await act(() => jest.advanceTimersByTimeAsync(10));
+    api.on(`GET /v1/storefronts/${HANDLE}/products`, () => problem(404, 'NOT_FOUND', 'request'));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.select_product'] }));
+    expect(await screen.findByRole('button', { name: en['common.retry'] })).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-picker-item')).toBeNull();
   });
 });
