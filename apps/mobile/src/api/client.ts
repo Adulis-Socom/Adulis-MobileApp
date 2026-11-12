@@ -116,6 +116,7 @@ export function problemCode(error: unknown): Problem['code'] | null {
 }
 
 const TIMEOUT_MS = 10_000;
+const SELLER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // `<surface>/<version>` (the contract's X-Adulis-Client): the version the bootstrap floor reads.
 export const CLIENT_HEADER = `${Platform.OS}/${Constants.expoConfig?.version ?? '0.0.0'}`;
@@ -132,6 +133,13 @@ export interface ApiDeps {
 type Call = {
   body?: unknown;
   idempotencyKey?: string;
+  /**
+   * The active Seller for a Seller-scoped request (`X-Adulis-Seller`, ADU-API-01 S4.2; WO-020). Set
+   * only by the Seller methods below, never globally: a Buyer request carries none, and
+   * GET /v1/seller/list asks which Sellers there are, so it carries none either. It names a store
+   * the server checks against the session's Account; it is never a credential.
+   */
+  seller?: string;
   /** Send the current bearer (default). An explicit string sends that one instead. */
   bearer?: boolean | string;
   /**
@@ -170,6 +178,11 @@ export function createApiClient(deps: ApiDeps) {
     if (init.ticket !== undefined) headers.Authorization = `Ticket ${init.ticket}`;
     else if (bearer) headers.Authorization = `Bearer ${bearer}`;
     if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
+    if (init.seller !== undefined) {
+      // Refused here, before anything is sent: only an id from the Account's Seller list is valid.
+      if (!SELLER_ID.test(init.seller)) throw new Error('invalid seller context');
+      headers['X-Adulis-Seller'] = init.seller;
+    }
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
     // Outside the try: a misconfigured origin is a build error, not "offline".
@@ -392,9 +405,33 @@ export function createApiClient(deps: ApiDeps) {
      */
     notifications: (cursor: string | null) =>
       call<unknown>('GET', '/v1/notifications', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
+    /**
+     * A store's inbox (WO-020): GET /v1/notifications?as=seller&seller_id=, with X-Adulis-Seller equal to
+     * seller_id (the server refuses a mismatch). Same page shape as the Buyer inbox, checked at the boundary.
+     */
+    sellerNotifications: (seller: string, cursor: string | null) =>
+      call<unknown>('GET', '/v1/notifications', { seller, query: { as: 'seller', seller_id: seller, cursor: cursor ?? undefined }, ok: 200 }),
     /** POST /v1/notifications/{id}/read: one of the Account's notifications; read_at is set once. */
     markNotificationRead: (id: string, idempotencyKey: string) =>
       call<unknown>('POST', '/v1/notifications/{id}/read', { params: { id }, idempotencyKey, ok: 200 }),
+
+    /**
+     * Seller Companion reads (WO-020; ADU-API-01 S12.11, S12.13: marked M, MOBILE-reachable). No response
+     * schema is published for any of them, so each is checked at the boundary (src/seller/seller-api.ts)
+     * against the shape the running API returned. Read-only: no Seller mutation is reachable from here.
+     *
+     * GET /v1/seller/list: the Sellers the Account owns or is an active team member of (D-243). The one
+     * /v1/seller path that takes no seller header.
+     */
+    sellerList: () => call<unknown>('GET', '/v1/seller/list', { ok: 200 }),
+    /** GET /v1/seller/analytics/overview: the server's default window (the last 30 days). */
+    sellerOverview: (seller: string) => call<unknown>('GET', '/v1/seller/analytics/overview', { seller, ok: 200 }),
+    /** GET /v1/seller/orders: one server-defined bucket, cursor paged. */
+    sellerOrders: (seller: string, bucket: string, cursor: string | null) =>
+      call<unknown>('GET', '/v1/seller/orders', { seller, query: { bucket, cursor: cursor ?? undefined, limit: '20' }, ok: 200 }),
+    /** GET /v1/seller/orders/{id}: one Order of the active Seller. */
+    sellerOrder: (seller: string, id: string) =>
+      call<unknown>('GET', '/v1/seller/orders/{id}', { seller, params: { id }, ok: 200 }),
 
     /**
      * Buyer messaging (WO-013): the existing Chat API, Buyer side (ADU-API-01 S12.7). One
