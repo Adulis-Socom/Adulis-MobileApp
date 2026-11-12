@@ -18,7 +18,7 @@ import {
   type Reply,
 } from '../testing/fake-api';
 import { installFakeCollections } from '../testing/fake-collections';
-import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
+import { TOKEN_KEY, memory, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
  * WO-009: Saved and Collections on the real route tree against an in-memory server on the API's
@@ -691,5 +691,85 @@ describe('WO-018 (A-006): one Collection change at a time, announced', () => {
     expect(screen.getByRole('button', { name: en['buyer.collection.rename'] })).toBeEnabled();
     expect(screen.getByRole('button', { name: en['buyer.collection.delete'] })).toBeEnabled();
     expect(fc.items.map((i) => i.target)).toEqual([SCENE_TARGET]);
+  });
+});
+
+describe('WO-018 security review fixes (F1-F3)', () => {
+  const PICKER = `/save-to?type=PRODUCT_POST&ref=${PRODUCT_ID}&surface=PRODUCT_DETAIL`;
+  const box = (name: string) => screen.getByRole('checkbox', { name });
+  const deletes = () => api.calls.filter((c) => c.method === 'DELETE' && /^\/v1\/collections\/[^/]+$/.test(c.path));
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+  });
+  afterEach(() => announce.mockRestore());
+
+  it('F1. a session that ends during the re-read after a tick hears nothing about it', async () => {
+    signedIn();
+    fc.named('Outfit ideas');
+    let added = false;
+    fc.intercept('add', () => {
+      added = true;
+      return undefined;
+    });
+    // The re-read that follows the tick finds the session expired.
+    fc.intercept('state', () => (added ? problem(401, 'SESSION_EXPIRED', 'auth') : undefined));
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Outfit ideas' }));
+    await waitFor(() => expect(adds()).toHaveLength(1));
+    await waitFor(() => expect(memory.has(TOKEN_KEY)).toBe(false));
+    for (let i = 0; i < 20; i++) await act(() => Promise.resolve());
+    expect(announce).not.toHaveBeenCalledWith('Added to Outfit ideas.');
+  });
+
+  it('F2. while a New collection Create is in flight every box is disabled; the new Collection is then filled', async () => {
+    signedIn();
+    const gate = held();
+    api.on('POST /v1/collections', async (call) => {
+      await gate.gate;
+      return { status: 201, body: { ref: fc.named(String(call.body?.name)) } };
+    });
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.saved.new'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['buyer.saved.name']), 'Gift ideas');
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.saved.create'] }));
+    await waitFor(() => expect(box('Saved')).toBeDisabled());
+    await fireEvent.press(box('Saved'));
+    expect(adds()).toHaveLength(0);
+    await act(async () => gate.release());
+    await waitFor(() => expect(box('Gift ideas')).toBeChecked());
+    expect(announce).toHaveBeenCalledWith('Added to Gift ideas.');
+    expect(box('Saved')).toBeEnabled();
+    expect(box('Saved')).not.toBeChecked();
+    expect(adds()).toHaveLength(1);
+  });
+
+  it('F3. a Delete confirmed while a Remove is in flight sends nothing', async () => {
+    signedIn();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    const gate = held();
+    fc.intercept('remove', async () => {
+      await gate.gate;
+      return undefined;
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+      // The dialog opens with nothing in flight; a Remove starts while it is open.
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
+      const confirm = alert.mock.calls[0]![2]!.find((b) => b.style === 'destructive')!;
+      await fireEvent.press(screen.getByRole('button', { name: 'Remove Woven basket from this collection' }));
+      await waitFor(() => expect(removes()).toHaveLength(1));
+      await act(async () => {
+        await confirm.onPress!();
+      });
+      expect(deletes()).toEqual([]);
+      await act(async () => gate.release());
+      await waitFor(() => expect(announce).toHaveBeenCalledWith('Removed from Outfit ideas.'));
+      expect(deletes()).toEqual([]);
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

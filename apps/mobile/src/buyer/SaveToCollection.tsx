@@ -61,6 +61,8 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   const [busy, setBusy] = useState<string | null>(null);
   // A ref as well as the state: two taps in one frame both see busy=null.
   const inFlight = useRef(false);
+  // A New collection Create in flight holds the same one-change lock (review F2).
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!params) {
@@ -74,8 +76,12 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
 
   // Bound to the session of the tick (WO-010, ON-112): after a sign-out or another sign-in nothing
   // more is sent, read or drawn for it.
-  const toggle = async (collectionRef: string, add: boolean, name: string) => {
-    if (inFlight.current || !priv) return;
+  const toggle = async (collectionRef: string, add: boolean, name: string, fromCreate = false) => {
+    if (inFlight.current || !priv) {
+      // A Collection just created whose fill was refused is said, not dropped silently (review F2).
+      if (fromCreate && priv?.isCurrent()) setError(t('buyer.save.failed'));
+      return;
+    }
     inFlight.current = true;
     setBusy(collectionRef);
     setError(null);
@@ -96,9 +102,12 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     } finally {
       if (priv.isCurrent()) {
         await qc.invalidateQueries({ queryKey: [SAVED_STATE] });
-        collections.refresh();
-        // After the re-read, so the tick the Buyer hears about is the one now drawn.
-        if (changed) AccessibilityInfo.announceForAccessibility(fillSlots(t(add ? 'buyer.save.added_to' : 'buyer.save.removed_from'), { name }) ?? '');
+        // Checked again: the session may have ended during the re-read (review F1).
+        if (priv.isCurrent()) {
+          collections.refresh();
+          // After the re-read, so the tick the Buyer hears about is the one now drawn.
+          if (changed) AccessibilityInfo.announceForAccessibility(fillSlots(t(add ? 'buyer.save.added_to' : 'buyer.save.removed_from'), { name }) ?? '');
+        }
       }
       inFlight.current = false;
       setBusy(null);
@@ -132,7 +141,7 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
                   <Checkbox
                     label={name}
                     checked={held}
-                    disabled={busy !== null}
+                    disabled={busy !== null || creating}
                     busy={busy === c.ref}
                     onChange={(next) => void toggle(c.ref, next, name)}
                   />
@@ -145,7 +154,11 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
         </View>
       )}
       {error ? <AlertText>{error}</AlertText> : null}
-      <NewCollection disabled={busy !== null} onCreated={(created, name) => void toggle(created.ref, true, name)} />
+      <NewCollection
+        disabled={busy !== null}
+        onBusyChange={setCreating}
+        onCreated={(created, name) => void toggle(created.ref, true, name, true)}
+      />
       <Button label={t('buyer.save.done')} variant="secondary" onPress={() => router.back()} />
     </ScrollView>
   );

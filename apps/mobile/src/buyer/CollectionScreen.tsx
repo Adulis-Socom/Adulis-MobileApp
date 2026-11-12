@@ -44,9 +44,10 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const valid = isRef(collectionRef);
   const [tab, setTab] = useState<ItemFilter>('ALL');
   const [removing, setRemoving] = useState<string | null>(null);
-  // Two taps in one frame both see removing=null: the ref decides.
-  const inFlight = useRef(false);
-  // A Rename or Delete in flight (ManageCollection's).
+  // One lock for Remove, Rename and Delete, checked first by each (review F3): two taps in one
+  // frame both see the state before either, the ref does not.
+  const changing = useRef(false);
+  // A Rename or Delete in flight (ManageCollection's), for the disabled states.
   const [managing, setManaging] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const list = usePublicList({
@@ -66,8 +67,8 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const title = collection ? collectionName(collection, t) : '';
 
   const remove = async (item: CollectionItem) => {
-    if (!valid || inFlight.current || managing || !priv) return;
-    inFlight.current = true;
+    if (!valid || changing.current || !priv) return;
+    changing.current = true;
     setRemoving(item.ref);
     setFailure(null);
     try {
@@ -81,7 +82,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
     } catch (error) {
       if (priv.isCurrent()) setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
     } finally {
-      inFlight.current = false;
+      changing.current = false;
       setRemoving(null);
     }
   };
@@ -105,6 +106,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
               busy={managing}
               setBusy={setManaging}
               blocked={removing !== null}
+              lock={changing}
             />
           ) : null}
         </>
@@ -143,6 +145,7 @@ function ManageCollection({
   busy,
   setBusy,
   blocked,
+  lock,
 }: {
   collectionRef: string;
   name: string;
@@ -153,6 +156,8 @@ function ManageCollection({
   setBusy: (busy: boolean) => void;
   /** A Remove is in flight. */
   blocked: boolean;
+  /** The screen's one-change lock, shared with Remove. */
+  lock: { current: boolean };
 }) {
   const t = useT();
   const theme = useTheme();
@@ -168,7 +173,8 @@ function ManageCollection({
       setError(t('buyer.saved.name_invalid'));
       return;
     }
-    if (!priv) return;
+    if (!priv || lock.current) return;
+    lock.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -180,19 +186,23 @@ function ManageCollection({
       if (!priv.isCurrent()) return;
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   };
 
   // The platform's own dialog: announced, focus-managed, and Cancel is the default.
-  const confirmDelete = () =>
+  const confirmDelete = () => {
+    if (lock.current) return;
     Alert.alert(fillSlots(t('buyer.collection.delete_title'), { name }) ?? t('buyer.collection.delete'), t('buyer.collection.delete_body'), [
       { text: t('buyer.saved.cancel'), style: 'cancel' },
       {
         text: t('buyer.collection.delete_confirm'),
         style: 'destructive',
         onPress: async () => {
-          if (!priv) return;
+          // A change may have started while the dialog was open (or a second dialog was confirmed).
+          if (!priv || lock.current) return;
+          lock.current = true;
           setBusy(true);
           setError(null);
           try {
@@ -204,11 +214,13 @@ function ManageCollection({
             if (problemCode(failure) === 'NOT_FOUND') onDeleted();
             else setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
           } finally {
+            lock.current = false;
             setBusy(false);
           }
         },
       },
     ]);
+  };
 
   if (renaming) {
     return (

@@ -141,14 +141,17 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
 /**
  * Create a named Collection (WO-009 S14). The name is checked as the server checks it (1-60
  * characters once trimmed); the server's answer still decides. Returns the new Collection and its
- * name. `disabled` while another Collection change is in flight (WO-018, A-006).
+ * name. `disabled` while another Collection change is in flight, and `onBusyChange` tells the
+ * screen while its own Create is (WO-018, A-006), so the two never overlap.
  */
 export function NewCollection({
   onCreated,
   disabled = false,
+  onBusyChange,
 }: {
   onCreated: (created: CollectionCreated, name: string) => void;
   disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -168,6 +171,7 @@ export function NewCollection({
     if (!priv) return;
     if (intent.current?.name !== trimmed) intent.current = { name: trimmed, key: newIdempotencyKey() };
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       const created = await priv.createCollection(trimmed, intent.current.key);
@@ -183,6 +187,7 @@ export function NewCollection({
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   };
   return (
