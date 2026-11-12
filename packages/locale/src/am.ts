@@ -617,5 +617,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'seller.messages.sender.bot': 'አውቶማቲክ መልስ',
   'seller.messages.send_unavailable': 'ሚናዎ በዚህ መደብር ውስጥ መልእክት መላክ አይችልም። ምላሹ አልተላከም።',
   'seller.messages.send_gone': 'ይህ ውይይት አሁን አይገኝም። ምላሹ አልተላከም።',
+  // WO-022: Seller messaging store identity.
+  'seller.messages.store': 'የ{store} (@{handle}) ውይይቶች',
+  'seller.messages.replying_as': 'ምላሾች እንደ {store} (@{handle}) ይላካሉ።',
 
 };

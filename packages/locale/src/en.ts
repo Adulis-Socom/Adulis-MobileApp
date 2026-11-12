@@ -670,6 +670,9 @@ export const enCommon = {
   'seller.messages.sender.bot': 'Automated answer',
   'seller.messages.send_unavailable': 'Your role cannot send messages in this store. The reply was not sent.',
   'seller.messages.send_gone': 'This conversation is not available right now. The reply was not sent.',
+  // WO-022: Seller messaging store identity.
+  'seller.messages.store': 'Conversations for {store} (@{handle})',
+  'seller.messages.replying_as': 'Replies are sent as {store} (@{handle}).',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;
