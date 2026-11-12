@@ -10,7 +10,7 @@ Every discovered issue is recorded, fixed or not. Severity is the severity when 
 
 WO-007A (11 November 2026, branch `mobile/wo-007a-discovery-stabilization`, from `fe7ffb2`) updated
 ON-20261111-009, -010, -012, -023, -026, -029, -033, -037, -040, -043, -048, -049, -050 and -052, each
-with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148.
+with a "WO-007A" line separating policy approval from implementation, and added -053 to -070. WO-007B and WO-008 (11 November 2026) updated ON-20261111-026, -049, -053, -056, -057 and -068 and added -071 to -085. WO-009 (11 November 2026, branch `mobile/wo-009-buyer-saved-collections`) added -086 to -102. WO-009A (11 November 2026, branch `mobile/wo-009a-card-saves-storage-hardening`, from `379adb6`) updated -084, -085, -092, -100 and -102 and added -103 to -113; -087, -088, -090 and -091 are unchanged and still await the founder. WO-010 (11 November 2026, branch `mobile/wo-010-catalogue-categories`, from `0f90974`) updated -049, -100, -110, -111 and -112 and added -114 to -121; the other pending founder decisions are unchanged. WO-010A (11-12 November 2026, branch `mobile/wo-010a-dependency-environment-stabilization`, from `9970fea`) updated -100, -110, -114, -115, -117 and -118 and added -122 to -128; -049, -079, -080, -087, -088, -090, -091, -111, -116 and the payment deferral are unchanged. WO-011 (12 November 2026, branch `mobile/wo-011-buyer-account`, from `e00706f`) added -129 to -138; no earlier decision was changed. WO-012 (12 November 2026, branch `mobile/wo-012-buyer-notifications`, from `e598312`) added -139 to -148. WO-013 (12 November 2026, branch `mobile/wo-013-buyer-messaging`, from `37bfd56`) added -149 to -158. The batch's final gates added -159 and -160 and updated -126.
 
 ## Issues
 
@@ -2354,6 +2354,13 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** Intermittent red in the parallel gate.
 - **Founder decision required:** No
 - **Recommended resolution:** Isolate the OTP ceiling per suite (backend test maintenance).
+- **WO-011..013 batch (12 November 2026):** Still OPEN; the full parallel run was NOT consistently green.
+  - Final gates at `85d3cc3`: the bounded API run (`--maxWorkers=2`) passed 983/983, but the parallel `pnpm test` failed 3 suites (962 of 964 tests passed; one suite did not finish):
+    - `wo-sec-001-pool-starvation` (OTP ceiling, this entry);
+    - `e2-e6.jobs` (the global stock-confidence nudge);
+    - `wo-009-collections` (a global commerce-row count).
+  - Each passed alone on a fresh disposable database (19/19, 24/24, 26/26). OTP limits were not raised.
+
 
 ### ON-20261111-127
 
@@ -2750,3 +2757,219 @@ with a "WO-007A" line separating policy approval from implementation, and added 
 - **Remaining risk:** None.
 - **Founder decision required:** No
 - **Recommended resolution:** Done.
+
+### ON-20261111-149
+
+- **Work order:** WO-013
+- **Severity:** MEDIUM
+- **Type:** SPEC_GAP
+- **Status:** OPEN
+- **Summary:** Only the subset of ADU-CHAT-01 v3.3 the existing Chat API supports is built; the canonical design is not complete.
+- **Expected:** The designed Chat: per-message Product/Scene/Order subjects with selectors, read state, attachments, quick replies, a waiting-for-human status, reporting, archive/mute.
+- **Actual:** Built: Message Seller, the Conversations list, history, plain-text sending, bot attribution, Ask the Seller, foreground refresh.
+- **Reproduction:** n/a
+- **Evidence:** docs/mobile/WO-013-CHAT-CONTRACT-GAPS.md (33 rows).
+- **Root cause:** The backend predates the November design.
+- **Fix and commit:** None (no backend change in this batch).
+- **Verification:** n/a
+- **Remaining risk:** Buyers cannot attach images, choose a Product or Scene subject, see read state or report a message.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: prioritise the backend gaps (rows 4, 8, 12, 17, 18, 24) and the policy items (-156) for the next Chat work order.
+
+### ON-20261111-150
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** The Chat endpoints publish no request or response schemas.
+- **Expected:** Generated types (ADU-MOB-02 S232 guardrail).
+- **Actual:** Answers are checked at the client boundary (src/buyer/chat.ts); malformed rows and unattributable senders are dropped.
+- **Reproduction:** n/a
+- **Evidence:** contracts/openapi.json /v1/conversations*.
+- **Root cause:** The legacy controller has no Swagger response decorators.
+- **Fix and commit:** None (no API change).
+- **Verification:** Boundary checks tested.
+- **Remaining risk:** A server shape change is caught at runtime only.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: add response DTOs and regenerate the contract.
+
+### ON-20261111-151
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** DEFERRED
+- **Status:** OPEN
+- **Summary:** Ask Seller from a Product (with the Product as the message subject, MOB R-07, CHAT S5) is not built.
+- **Expected:** Product Detail opens the conversation with the Product preselected.
+- **Actual:** Messaging starts from the Seller Profile only; no message carries a product_id.
+- **Reproduction:** n/a
+- **Evidence:** CHAT-CONTRACT-GAPS row 3.
+- **Root cause:** The Product DTO carries the Seller's handle, not its id, and the design's Product selector (CHAT S5) needs a composer decision.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Buyers describe the Product in text.
+- **Founder decision required:** No
+- **Recommended resolution:** A follow-up: resolve the Seller through the public storefront read by handle, add the selector, send product_id per message (the server already checks the Seller's PUBLISHED Products).
+
+### ON-20261111-152
+
+- **Work order:** WO-013
+- **Severity:** MEDIUM
+- **Type:** CONTRACT_GAP
+- **Status:** OPEN
+- **Summary:** Keyword and chip bot answers are never shown: the server sends nlu.answer_template.template (a template resource, possibly Seller-written) as template_key, and no client catalogue or contract renders it.
+- **Expected:** A Buyer reads the automated answer.
+- **Actual:** Every answer but the escalation shows "This automated answer cannot be shown." and offers Ask the Seller.
+- **Reproduction:** Seed an intent whose answer template has no chat.bot.* key; send its phrase (native flow msg-open).
+- **Evidence:** chat.service.ts answerWith; security review INFO.
+- **Root cause:** Answer templates have no defined rendering path to clients (register D-85 covers slot vocabulary).
+- **Fix and commit:** The app renders only chat.bot.* catalogue copy (no raw key, no unreviewed text).
+- **Verification:** chat.test.tsx 15, 16, 17; native msg-open.
+- **Remaining risk:** The chatbot gives Buyers no information until the rendering contract exists.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder/backend: define how bot answers reach clients (catalogue keys per intent, or reviewed localized text in the response).
+
+### ON-20261111-153
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** API_DEFECT
+- **Status:** OPEN
+- **Summary:** A Buyer message and its automated answer are written in one transaction and share sent_at (DEFAULT now()); the list orders by sent_at alone and pages with a millisecond cursor and strict <.
+- **Expected:** A stable order (question, then answer) and complete paging.
+- **Actual:** The order of a same-instant pair is undefined; rows at a page boundary can be skipped.
+- **Reproduction:** Send a message to a chatbot-entitled Seller; read the messages.
+- **Evidence:** chat.service.ts messages/page; migration 0015 sent_at default (security review LOW).
+- **Root cause:** Transaction-start timestamps and a timestamp-only keyset.
+- **Fix and commit:** Client: same-instant ties sort the answer after the question; Ask the Seller reads the newest group (commit `e99baf7`).
+- **Verification:** chat.test.tsx (same-instant case).
+- **Remaining risk:** Paging can still skip a row at a boundary.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: clock_timestamp() for the bot row (or a sequence) and an (sent_at, id) keyset cursor.
+
+### ON-20261111-154
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** POLICY_OPEN
+- **Status:** OPEN
+- **Summary:** POST /v1/conversations does not refuse an Account that owns the Seller, so a Seller owner can open a Buyer conversation with their own store.
+- **Expected:** A defined rule.
+- **Actual:** Allowed.
+- **Reproduction:** Open Message Seller on your own store's profile.
+- **Evidence:** chat.service.ts openConversation (security review INFO).
+- **Root cause:** No rule was written.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Odd self-conversations in the Seller inbox.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: rule whether self-conversation is refused.
+
+### ON-20261111-155
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** BACKEND_GAP
+- **Status:** OPEN
+- **Summary:** No Buyer read state, unread count or waiting-for-human status exists in the Chat API.
+- **Expected:** CHAT S10 read high-water marks; CHAT S1/S8 waiting status.
+- **Actual:** The app shows neither (nothing is fabricated); new messages appear on refresh or the 30-second foreground re-read.
+- **Reproduction:** n/a
+- **Evidence:** CHAT-CONTRACT-GAPS rows 12, 24.
+- **Root cause:** Not implemented server-side.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** Buyers cannot tell what is new or whether a person is expected.
+- **Founder decision required:** No
+- **Recommended resolution:** Backend: POST .../read per side and a conversation status in the list.
+
+### ON-20261111-156
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** POLICY_OPEN
+- **Status:** OPEN
+- **Summary:** Chat policy items are open: staff labels and bot branding (CHAT S9), Operator messages (MOB S125 vs CHAT S3), blocking (MOB S124), message reporting placement (CHAT S12).
+- **Expected:** Decided policy.
+- **Actual:** The app uses generic labels ("Seller team", "Automated answer") and builds no Operator, block or report UI.
+- **Reproduction:** n/a
+- **Evidence:** CHAT-CONTRACT-GAPS rows 9, 10, 25, 26.
+- **Root cause:** Open in the design pack.
+- **Fix and commit:** None.
+- **Verification:** n/a
+- **Remaining risk:** None until decided.
+- **Founder decision required:** Yes
+- **Recommended resolution:** Founder: decide each item before the next Chat work order.
+
+### ON-20261111-157
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** REVIEW
+- **Status:** RESOLVED
+- **Summary:** Independent read-only security review of WO-013: no Critical, High or Medium; two Low and five Info, the client-side ones fixed.
+- **Expected:** n/a
+- **Actual:** LOW: an unconfirmed send was reported as "not sent" (duplicate risk); LOW (server): same-instant ordering (-153). INFO: a malformed send answer kept its key; polling continued on an unavailable conversation; Ask the Seller guarded by state; Seller templates never shown (-152); self-conversation (-154).
+- **Reproduction:** n/a
+- **Evidence:** docs/mobile/WO-013-FOUNDER-HANDOFF.md (Security).
+- **Root cause:** n/a
+- **Fix and commit:** Commits `e99baf7` and locale `04afe9a`.
+- **Verification:** chat.test.tsx 19/19; mobile 352/352.
+- **Remaining risk:** The server-side items stay open.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-158
+
+- **Work order:** WO-013
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** RESOLVED
+- **Summary:** The first WO-013 native run did not execute: the harness reused the variable name O (the Maestro output folder) for a phone number; then messaging.yaml's reopen step asserted the oldest message, scrolled above the composer.
+- **Expected:** The harness runs every flow; flows assert what is on screen.
+- **Actual:** Every flow failed to start (no log folder); later msg-reopen failed on one assertion while the server state was correct.
+- **Reproduction:** n/a
+- **Evidence:** G:\AdulisDevelopment\WO-013\logs\native-messaging.out, native-messaging-2.out.
+- **Root cause:** Harness and flow authoring.
+- **Fix and commit:** Variable renamed; the reopen step asserts the newest message (commit `85d3cc3`).
+- **Verification:** Messaging flows PASS on the rerun.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** Done.
+
+### ON-20261111-159
+
+- **Work order:** WO-011..013 (final gates)
+- **Severity:** LOW
+- **Type:** TEST
+- **Status:** OPEN
+- **Summary:** `card-saves.yaml` STEP=dark assumes an Account with nothing saved; run after `saved-collections` (which saves the Woven basket) it fails on "Save Woven basket".
+- **Expected:** A regression flow passes in any order.
+- **Actual:** FAIL cards-dark in the final regression battery; the same Dark/enlarged-text check passed through categories.yaml STEP=dark.
+- **Reproduction:** Run saved-collections, then card-saves STEP=dark, with the same Account.
+- **Evidence:** G:\AdulisDevelopment\WO-013\logs\native-regressions.out.
+- **Root cause:** An order-dependent flow (it was written for the WO-009A sequence after account-b).
+- **Fix and commit:** None (no app defect).
+- **Verification:** categories dark PASS.
+- **Remaining risk:** A future battery can show a false failure.
+- **Founder decision required:** No
+- **Recommended resolution:** Make the step sign in a fresh Account or remove the save first (test maintenance).
+
+### ON-20261111-160
+
+- **Work order:** WO-011..013 (final gates)
+- **Severity:** LOW
+- **Type:** ENVIRONMENT
+- **Status:** RESOLVED (transient)
+- **Summary:** Expo Doctor's config-schema check failed once with a connect timeout to exp.host.
+- **Expected:** 20/20.
+- **Actual:** First run: 19/20 (TypeError: fetch failed, ConnectTimeoutError exp.host:443); rerun: 20/20.
+- **Reproduction:** Run Expo Doctor while exp.host is unreachable.
+- **Evidence:** G:\AdulisDevelopment\WO-013\logs\gates\expo-doctor.log, expo-doctor-rerun.log.
+- **Root cause:** The check needs the Expo API; the network timed out.
+- **Fix and commit:** Rerun.
+- **Verification:** Expo Doctor 1.21.6: 20/20.
+- **Remaining risk:** None.
+- **Founder decision required:** No
+- **Recommended resolution:** None.
