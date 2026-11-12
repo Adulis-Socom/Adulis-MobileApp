@@ -369,7 +369,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     ) : (
       <View style={{ flex: 1, padding: theme.space.lg, gap: theme.space.sm }}>
         {messages.isError ? (
-          <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
+          <View style={{ gap: theme.space.sm }}>
             <AlertText>{t('buyer.chat.failed')}</AlertText>
             <AppText style={secondary}>{failureMessage(t, messages.error)}</AppText>
             <Button label={t('common.retry')} onPress={() => void messages.refetch()} />

@@ -92,18 +92,18 @@ tags:
 - tapOn:
     id: search-tab-SELLER
 - extendedWaitUntil:
-    visible: 'Fixture Weaves, @fixture-weaves'
+    visible: 'Fixture Weaves, @fixture-weaves, Trust level: .*'
     timeout: 30000
-- assertVisible: 'Fixture Pottery, @fixture-pottery'
+- assertVisible: 'Fixture Pottery, @fixture-pottery(, Trust level: .*)?'
 - hideKeyboard
 - takeScreenshot: search-05-sellers
-- tapOn: 'Fixture Weaves, @fixture-weaves'
+- tapOn: 'Fixture Weaves, @fixture-weaves, Trust level: .*'
 - extendedWaitUntil:
     visible: '@fixture-weaves'
     timeout: 30000
 - back
 - extendedWaitUntil:
-    visible: 'Fixture Weaves, @fixture-weaves'
+    visible: 'Fixture Weaves, @fixture-weaves, Trust level: .*'
     timeout: 30000
 
 # No results: an honest message and a way to the Shop.

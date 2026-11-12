@@ -83,7 +83,7 @@ export function BuyerNotifications() {
   ) : null;
 
   const empty = inbox.isError ? (
-    <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
+    <View style={{ gap: theme.space.sm }}>
       <AlertText>{t('buyer.notifications.failed')}</AlertText>
       <AppText style={secondary}>{failureMessage(t, inbox.error)}</AppText>
       <Button label={t('common.retry')} onPress={() => void inbox.refetch()} />

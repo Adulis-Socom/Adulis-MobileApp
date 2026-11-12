@@ -391,7 +391,8 @@ if ($Clean) {
 $removed = @($cleaned | Where-Object { $_.Done })
 $removedByDrive = [ordered]@{}
 foreach ($r in $removed) {
-  $drive = $r.Path.Substring(0, 1).ToUpper()
+  # The path's root, culture-invariant (a UNC path keeps its share; review S-004).
+  $drive = [IO.Path]::GetPathRoot($r.Path).TrimEnd('\', ':').ToUpperInvariant()
   if (-not $removedByDrive.Contains($drive)) { $removedByDrive[$drive] = [int64]0 }
   $removedByDrive[$drive] += [int64]$r.Bytes
 }

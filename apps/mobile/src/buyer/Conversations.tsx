@@ -47,7 +47,7 @@ export function Conversations() {
   );
 
   const empty = list.isError ? (
-    <View accessibilityRole="alert" style={{ gap: theme.space.sm }}>
+    <View style={{ gap: theme.space.sm }}>
       <AlertText>{t('buyer.messages.failed')}</AlertText>
       <AppText style={secondary}>{failureMessage(t, list.error)}</AppText>
       <Button label={t('common.retry')} onPress={() => void list.refetch()} />

@@ -165,10 +165,9 @@ tags:
           direction: DOWN
       - tapOn:
           text: Save
-      - extendedWaitUntil:
-          visible:
-            text: Saved
-          timeout: 20000
+      # "Saved" also names the (covered) tab, so the proof is the Saved screen listing the Product.
+      - waitForAnimationToEnd
+      - back
       - repeat:
           while:
             notVisible: 'Saved, Products: .*'

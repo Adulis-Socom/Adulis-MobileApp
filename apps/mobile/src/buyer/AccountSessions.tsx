@@ -50,7 +50,7 @@ export function AccountSessions() {
       {sessions.data ? (
         sessions.data.length > 0 ? sessions.data.map(row) : <AppText style={secondary}>{t('buyer.you.sessions.empty')}</AppText>
       ) : sessions.isError ? (
-        <View accessibilityRole="alert">
+        <View>
           <AlertText>{t('buyer.you.sessions.failed')}</AlertText>
           <AppText style={secondary}>{failureMessage(t, sessions.error)}</AppText>
         </View>
