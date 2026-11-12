@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1085 keys:
+1096 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -306,6 +306,17 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.chat.context_unchecked`
 - `buyer.chat.context_remove`
 - `buyer.chat.edit_unconfirmed`
+- `buyer.chat.select_product`
+- `buyer.chat.change_product`
+- `buyer.chat.picker_title`
+- `buyer.chat.picker_from`
+- `buyer.chat.picker_note`
+- `buyer.chat.picker_loading`
+- `buyer.chat.picker_empty`
+- `buyer.chat.picker_item`
+- `buyer.chat.picker_cancel`
+- `buyer.chat.select_unavailable`
+- `buyer.chat.context_unresolved`
 - `buyer.shop.order`
 - `buyer.shop.products`
 - `buyer.shop.empty`
