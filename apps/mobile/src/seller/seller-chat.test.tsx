@@ -2,6 +2,7 @@ import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import { GOOD_TOKEN, SIGNED_IN_CONTEXT, bootstrapBody, installFakeApi, problem, type Recorded, type Reply } from '../testing/fake-api';
@@ -729,5 +730,172 @@ describe('security review fixes (WO-021)', () => {
     const keys = new Set(sends().map((x) => x.headers['Idempotency-Key']));
     expect(sends()).toHaveLength(3);
     expect(keys.size).toBe(1);
+  });
+});
+
+/**
+ * WO-022: the shared send-outcome rule on the store's side (section 22, 31-42) and the Seller
+ * messaging presentation (section 23, 43-60).
+ */
+describe('WO-022 store replies on the shared outcome rule', () => {
+  async function ready() {
+    signedIn();
+    const s = installServer();
+    const c = s.conv(A.id);
+    s.msg(c, { sender_kind: 'BUYER', body: 'Any news?', sent_at: ago(30) });
+    await openConversation(c);
+    expect(await screen.findByText('Any news?')).toBeOnTheScreen();
+    return { s, c };
+  }
+  /** Stores each key once; the first answers (in order) are lost on the way back. */
+  function storing(s: ReturnType<typeof installServer>, c: Conv, lost: Reply[]) {
+    const stored = new Map<string, string>();
+    let attempt = 0;
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
+      if (header(call) !== A.id) return problem(404, 'NOT_FOUND', 'request');
+      const key = call.headers['Idempotency-Key']!;
+      if (!stored.has(key)) stored.set(key, s.msg(c, { sender_kind: 'SELLER', body: String(call.body?.text), sent_at: new Date().toISOString() }).id);
+      return lost[attempt++] ?? { status: 201, body: { message_id: stored.get(key), bot: null } };
+    });
+  }
+
+  it.each([
+    ['502 with an HTML page', { status: 502, unreadable: true } as Reply],
+    ['503 with an empty body', { status: 503 } as Reply],
+    ['201 with unreadable JSON', { status: 201, unreadable: true } as Reply],
+    ['413 from a gateway, not the API', { status: 413, unreadable: true } as Reply],
+  ])('32-34. a %s is "may already have been received"; the retry keeps the key; stored once', async (_name, reply) => {
+    const { s, c } = await ready();
+    storing(s, c, [reply]);
+    await fireEvent.changeText(composer(), 'Tomorrow at ten');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(composer().props.editable).toBe(false);
+    // The conversation is read again: the reply the server stored is visible while the outcome is unknown.
+    expect(await screen.findByText('Tomorrow at ten')).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
+    expect(header(b!)).toBe(A.id);
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    await waitFor(() => expect(composer().props.value).toBe(''));
+    expect(screen.getAllByText('Tomorrow at ten')).toHaveLength(1);
+  });
+
+  it('31, 52. the API\'s own refusal stays definite on the store\'s side (a problem answer is "not sent", the next attempt a new key)', async () => {
+    const { s, c } = await ready();
+    storing(s, c, [problem(500, 'INTERNAL', 'request')]);
+    await fireEvent.changeText(composer(), 'Noted');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+  });
+
+  it('36 (switching). a changed conversation in the route starts clean: the store\'s unconfirmed reply is never sent to the other conversation', async () => {
+    const { s } = await ready();
+    const other = s.conv(A.id);
+    s.msg(other, { sender_kind: 'BUYER', body: 'Second Buyer', sent_at: ago(20) });
+    api.onPattern('POST', /^\/v1\/conversations\/[^/]+\/messages$/, (call) =>
+      call.path.includes(other.id) ? { status: 201, body: { message_id: 'd0000000-0000-4000-8000-0000000000f9', bot: null } } : 'offline',
+    );
+    await fireEvent.changeText(composer(), 'For the first Buyer');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    await act(() => router.setParams({ conversationId: other.id }));
+    expect(await screen.findByText('Second Buyer')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    expect(composer().props.value).toBe('');
+    await fireEvent.changeText(composer(), 'For the second Buyer');
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    const [a, b] = sends();
+    expect(b!.path).toContain(other.id);
+    expect(b!.body).toEqual({ text: 'For the second Buyer' });
+    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
+  });
+});
+
+describe('WO-022 Seller messaging presentation', () => {
+  it('43, 59. the inbox names the active store (verified name and handle) as its header; each row reads both times', async () => {
+    signedIn();
+    const s = installServer();
+    s.conv(A.id, BUYER_ACCOUNT, ago(300));
+    await openMessages();
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(screen.getByRole('header', { name: 'Conversations for Store A (@store-a)' })).toBeOnTheScreen();
+    expect(screen.getByText(/^Started /)).toBeOnTheScreen();
+    const label = rows()[0]!.props.accessibilityLabel as string;
+    expect(label).toMatch(/^Buyer conversation, Last activity .+, Started .+$/);
+    expect(label).not.toMatch(/beefbeef/);
+    expect(rows()[0]!.props.accessibilityHint).toBe(en['seller.messages.open']);
+  });
+
+  it('44. with several stores, the inbox and the composer name the store that is open', async () => {
+    signedIn();
+    const s = installServer({ sellers: [A, B] });
+    const b1 = s.conv(B.id);
+    s.msg(b1, { sender_kind: 'BUYER', body: 'Hello B', sent_at: ago(30) });
+    await renderRouter(APP_DIR, { initialUrl: '/seller' });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Store B, Sales support, Open' }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['seller.messages.title'] }));
+    expect(await screen.findByRole('header', { name: 'Conversations for Store B (@store-b)' })).toBeOnTheScreen();
+    expect(screen.queryByText(/Store A/)).toBeNull();
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    await fireEvent.press(rows()[0]!);
+    expect(await screen.findByText('Hello B')).toBeOnTheScreen();
+    expect(screen.getByTestId('seller-replying-as')).toHaveTextContent('Replies are sent as Store B (@store-b).');
+  });
+
+  it('45, 46. loading, then the empty sentence, under the store header', async () => {
+    signedIn();
+    installServer();
+    const { gate, release } = held();
+    api.on('GET /v1/conversations', async () => {
+      await gate;
+      return ok({ data: [], next_cursor: null });
+    });
+    await openMessages();
+    expect(await screen.findByText(en['seller.messages.loading'])).toBeOnTheScreen();
+    expect(screen.getByTestId('seller-messages-store')).toBeOnTheScreen();
+    await act(async () => release());
+    expect(await screen.findByText(en['seller.messages.empty'])).toBeOnTheScreen();
+  });
+
+  it('53, 58. a long unbroken message is drawn whole (no truncation), and rows grow with the text instead of a fixed height', async () => {
+    signedIn();
+    const s = installServer();
+    const c = s.conv(A.id);
+    const long = `https://example.test/${'x'.repeat(3000)}`;
+    s.msg(c, { sender_kind: 'BUYER', body: long, sent_at: ago(30) });
+    await openMessages();
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    const style = StyleSheet.flatten(rows()[0]!.props.style);
+    expect(style.height).toBeUndefined();
+    expect(style.minHeight).toBeGreaterThan(0);
+    await fireEvent.press(rows()[0]!);
+    const body = await screen.findByText(long);
+    expect(body.props.numberOfLines).toBeUndefined();
+  });
+
+  it('54, 60. the conversation keeps the store\'s attribution; after sign-out the inbox and its store line are gone', async () => {
+    signedIn();
+    const s = installServer();
+    const c = s.conv(A.id);
+    s.msg(c, { sender_kind: 'TEAM_MEMBER', body: 'Team here', sent_at: ago(30) });
+    await openConversation(c);
+    expect(await screen.findByText('Team here')).toBeOnTheScreen();
+    expect(screen.getByText(en['seller.messages.sender.team'])).toBeOnTheScreen();
+    expect(screen.getByTestId('seller-replying-as')).toHaveTextContent('Replies are sent as Store A (@store-a).');
+    await act(() => router.navigate('/account'));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await act(() => router.push('/seller/messages'));
+    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+    expect(screen.queryByTestId('seller-messages-store')).toBeNull();
+    expect(screen.queryByText('Team here')).toBeNull();
   });
 });

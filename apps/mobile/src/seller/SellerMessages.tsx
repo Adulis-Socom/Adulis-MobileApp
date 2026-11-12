@@ -19,6 +19,7 @@ import { keepIfCurrent, usePrivateApi } from '../buyer/saved';
 import { useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { parseStoreConversationPage, storeConversationsKey, useStoreReply, type StoreConversation } from './seller-chat';
+import type { SellerRow } from './seller-api';
 import { useSellerContext } from './seller-context';
 import { WithStore } from './SellerOrders';
 
@@ -28,6 +29,10 @@ import { WithStore } from './SellerOrders';
  */
 const denied = isForbidden;
 
+/** The store as the list names it: verified name and handle only. */
+const storeLine = (t: ReturnType<typeof useT>, store: SellerRow, key: 'seller.messages.store' | 'seller.messages.replying_as') =>
+  fillSlots(t(key), { store: store.storeName, handle: store.handle }) ?? store.storeName;
+
 /**
  * The active store's Buyer conversations (WO-021; GET /v1/conversations?as=seller, X-Adulis-Seller),
  * most recent activity first as the server orders them. A row is "Buyer conversation" and its last
@@ -35,10 +40,11 @@ const denied = isForbidden;
  * the store is no longer this Account's (the store's relationship check); a 403 is this role.
  */
 export function SellerConversations() {
-  return <WithStore>{(store) => <ConversationList key={store.id} sellerId={store.id} />}</WithStore>;
+  return <WithStore>{(store) => <ConversationList key={store.id} store={store} />}</WithStore>;
 }
 
-function ConversationList({ sellerId }: { sellerId: string }) {
+function ConversationList({ store }: { store: SellerRow }) {
+  const sellerId = store.id;
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
@@ -58,6 +64,10 @@ function ConversationList({ sellerId }: { sellerId: string }) {
 
   const header = (
     <View style={{ gap: theme.space.sm, paddingHorizontal: theme.space.xs, paddingBottom: theme.space.sm }}>
+      {/* Which store's inbox this is (WO-022): an Account may hold several, and may also be a Buyer. */}
+      <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }} testID="seller-messages-store">
+        {storeLine(t, store, 'seller.messages.store')}
+      </AppText>
       <AppText style={{ color: theme.color.textSecondary }}>{t('seller.messages.note')}</AppText>
       <Button label={t('seller.messages.refresh')} variant="secondary" onPress={list.refresh} disabled={list.refreshing} />
     </View>
@@ -69,15 +79,15 @@ function ConversationList({ sellerId }: { sellerId: string }) {
       header={header}
       renderItem={({ item }) => {
         const title = t('seller.messages.conversation');
-        const line = item.lastMessageAt
-          ? fillSlots(t('seller.messages.last_activity'), { time: when(item.lastMessageAt) })
-          : item.startedAt
-            ? fillSlots(t('seller.messages.started'), { time: when(item.startedAt) })
-            : null;
+        // Both times the list carries (WO-022): the only non-identifying facts that tell rows apart.
+        const lines = [
+          item.lastMessageAt ? fillSlots(t('seller.messages.last_activity'), { time: when(item.lastMessageAt) }) : null,
+          item.startedAt ? fillSlots(t('seller.messages.started'), { time: when(item.startedAt) }) : null,
+        ].filter((l): l is string => typeof l === 'string' && l !== '');
         return (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={line ? `${title}, ${line}` : title}
+            accessibilityLabel={[title, ...lines].join(', ')}
             accessibilityHint={t('seller.messages.open')}
             onPress={() => router.push({ pathname: '/seller/messages/[conversationId]', params: { conversationId: item.id } })}
             testID="seller-conversation"
@@ -93,7 +103,11 @@ function ConversationList({ sellerId }: { sellerId: string }) {
             })}
           >
             <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{title}</AppText>
-            {line ? <AppText style={{ color: theme.color.textSecondary }}>{line}</AppText> : null}
+            {lines.map((l) => (
+              <AppText key={l} style={{ color: theme.color.textSecondary }}>
+                {l}
+              </AppText>
+            ))}
           </Pressable>
         );
       }}
@@ -120,10 +134,12 @@ const COMPOSER_MAX = '60%';
  */
 export function SellerConversation({ conversationId }: { conversationId: unknown }) {
   const id = isConversationRef(conversationId) ? conversationId : null;
-  return <WithStore>{(store) => <StoreConversationView key={store.id} sellerId={store.id} conversationId={id} />}</WithStore>;
+  // Keyed by store and conversation (WO-022): neither a draft nor an unconfirmed reply survives a change.
+  return <WithStore>{(store) => <StoreConversationView key={`${store.id}:${id ?? ''}`} store={store} conversationId={id} />}</WithStore>;
 }
 
-function StoreConversationView({ sellerId, conversationId }: { sellerId: string; conversationId: string | null }) {
+function StoreConversationView({ store, conversationId }: { store: SellerRow; conversationId: string | null }) {
+  const sellerId = store.id;
   const t = useT();
   const theme = useTheme();
   const qc = useQueryClient();
@@ -196,17 +212,17 @@ function StoreConversationView({ sellerId, conversationId }: { sellerId: string;
         />
       </View>
       <View style={{ flex: 1, minHeight: HISTORY_MIN }}>{list}</View>
-      <StoreReply sellerId={sellerId} conversationId={conversationId} />
+      <StoreReply store={store} conversationId={conversationId} />
     </View>
   );
 }
 
 /** The reply composer: text only, sent as the store; shown as sent only once the server accepted it. */
-function StoreReply({ sellerId, conversationId }: { sellerId: string; conversationId: string }) {
+function StoreReply({ store, conversationId }: { store: SellerRow; conversationId: string }) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
-  const reply = useStoreReply(sellerId, conversationId);
+  const reply = useStoreReply(store.id, conversationId);
   const [draft, setDraft] = useState('');
   const text = draft.trim();
   const tooLong = text.length > MESSAGE_MAX;
@@ -232,6 +248,10 @@ function StoreReply({ sellerId, conversationId }: { sellerId: string; conversati
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: theme.space.lg, paddingBottom: theme.space.sm, gap: theme.space.sm }}
       >
+        {/* Who the reply speaks for (WO-022): the store, never the Account's Buyer side. */}
+        <AppText style={secondary} testID="seller-replying-as">
+          {storeLine(t, store, 'seller.messages.replying_as')}
+        </AppText>
         <TextField
           label={t('seller.messages.composer')}
           value={draft}
