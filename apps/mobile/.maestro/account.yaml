@@ -31,7 +31,14 @@ tags:
 - extendedWaitUntil:
     visible: 'For You Scenes|There are no Scenes to show right now\. Pull down to check again\.'
     timeout: 120000
-- tapOn: You
+# A tab tap right after launch can be swallowed while the feed renders (B-013): retry until You shows.
+- repeat:
+    while:
+      notVisible: Appearance
+    times: 3
+    commands:
+      - tapOn: You
+      - waitForAnimationToEnd
 
 - runFlow:
     when:

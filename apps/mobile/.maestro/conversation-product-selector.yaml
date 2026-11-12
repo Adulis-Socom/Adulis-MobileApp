@@ -42,7 +42,14 @@ tags:
     when:
       true: ${STEP != 'seed'}
     commands:
-      - tapOn: You
+      # A tab tap right after launch can be swallowed while the feed renders (B-013): retry until You shows.
+      - repeat:
+          while:
+            notVisible: Appearance
+          times: 3
+          commands:
+            - tapOn: You
+            - waitForAnimationToEnd
       - scrollUntilVisible:
           element: Messages
           direction: DOWN
