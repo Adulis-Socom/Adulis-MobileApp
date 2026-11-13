@@ -65,7 +65,8 @@ export function idempotencyKey(header: unknown): string {
  * reusing its key is IDEMPOTENCY_KEY_REUSED rather than a replay. Without a
  * seller the hash is byte-identical to the one stored before the seller was
  * added (JSON.stringify never emits a raw newline, so the suffix cannot
- * collide with a body).
+ * collide with a body). Lower-cased, as the database spells a uuid, so a
+ * retry that only changes the header's letter case is the same request.
  */
 export function hashRequest(
   method: string,
@@ -79,7 +80,7 @@ export function hashRequest(
     .update(path)
     .update('\n')
     .update(JSON.stringify(body ?? null));
-  if (sellerId) h.update('\n').update(sellerId);
+  if (sellerId) h.update('\n').update(sellerId.toLowerCase());
   return h.digest();
 }
 
@@ -111,12 +112,15 @@ export class IdempotencyService {
    * The pre-handler check. Returns the stored response on an identical
    * replay; raises on a reused or expired key; null means run the handler.
    *
-   * `standingSeller` (a seller-context request): the replay is served only
-   * while the account still stands in that seller -- its Owner, or a team
-   * member neither suspended nor revoked, the predicate fn_has_permission
-   * reads. Otherwise null: the handler runs and its own fn_has_permission
-   * answers 403 or 404; were it to pass, the existing record still refuses a
-   * second commit (the unique-collision path).
+   * `standingSeller` (the selected seller of an account request): the replay
+   * is served only while the account still stands in that seller -- its
+   * Owner, or a team member neither suspended nor revoked, the predicate
+   * fn_has_permission reads. An Owner whose ownership transfer is due but not
+   * yet activated does not stand: activation happens only inside a handler
+   * transaction, which a replay never opens. Otherwise null: the handler runs
+   * and decides (fn_has_permission's 403 or 404 on a seller-authorised
+   * path); were it to pass, the existing record still refuses a second
+   * commit (the unique-collision path).
    */
   async check(
     key: string,
@@ -131,7 +135,14 @@ export class IdempotencyService {
              (${standingSeller}::uuid IS NULL
               OR EXISTS (SELECT 1 FROM core.seller s
                           WHERE s.id = ${standingSeller}::uuid
-                            AND s.owner_account_id = ${actor.id}::uuid)
+                            AND s.owner_account_id = ${actor.id}::uuid
+                            AND NOT EXISTS (
+                              SELECT 1 FROM core.seller_ownership_transfer t
+                               WHERE t.seller_id = s.id
+                                 AND t.from_account_id = ${actor.id}::uuid
+                                 AND t.activates_at <= now()
+                                 AND t.activated_at IS NULL
+                                 AND t.cancelled_at IS NULL))
               OR EXISTS (SELECT 1 FROM core.seller_team_member tm
                           WHERE tm.seller_id = ${standingSeller}::uuid
                             AND tm.account_id = ${actor.id}::uuid

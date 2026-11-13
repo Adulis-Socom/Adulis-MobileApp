@@ -49,8 +49,21 @@ const S_MEMBER_S_LATER = `${P}0d`; // a sign-in after the suspension
 const TM_R = `${P}0e`;
 const TM_S = `${P}0f`;
 const ANON_DEVICE = `${P}10`; // an app device id never registered
-const ACCOUNTS = [OWNER, OTHER, MEMBER_R, MEMBER_S];
-const SELLERS = [SELLER_A, SELLER_B, SELLER_C];
+// Review fixes: seller-side chat (a non-/v1/seller path) and a due ownership transfer.
+const MEMBER_R2 = `${P}11`; // ADMIN of SELLER_A, revoked during the run
+const MEMBER_S2 = `${P}12`; // ADMIN of SELLER_A, suspended during the run
+const TM_R2 = `${P}13`;
+const TM_S2 = `${P}14`;
+const S_MEMBER_R2 = `${P}15`;
+const S_MEMBER_S2 = `${P}16`;
+const S_MEMBER_S2_LATER = `${P}17`;
+const CONV = `${P}18`; // SELLER_A <-> OTHER as buyer
+const SELLER_D = `${P}19`; // owned by OWNER; transferred to OTHER during the run
+const OTP_CH = `${P}1a`;
+const STEP_UP = `${P}1b`;
+const TRANSFER = `${P}1c`;
+const ACCOUNTS = [OWNER, OTHER, MEMBER_R, MEMBER_S, MEMBER_R2, MEMBER_S2];
+const SELLERS = [SELLER_A, SELLER_B, SELLER_C, SELLER_D];
 const MARKER = 'wo-sec-002:';
 
 const SELLER_PATH = '/v1/seller/wo-sec-002-probe';
@@ -183,6 +196,33 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
       [S_OWNER, S_MEMBER_R, S_MEMBER_S, OWNER, MEMBER_R, MEMBER_S, DEVICE],
     );
     await armFixtureSessions(admin, [S_OWNER, S_MEMBER_R, S_MEMBER_S]);
+    // Review-fix fixtures.
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status)
+       VALUES ($1,'+251911462005',$3,'ACTIVE'), ($2,'+251911462006',$3,'ACTIVE')`,
+      [MEMBER_R2, MEMBER_S2, M],
+    );
+    await admin.query(
+      `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type, store_name, handle, status)
+       VALUES ($1,$2,$3,'INDIVIDUAL','D','sec002-d','ACTIVE')`,
+      [SELLER_D, M, OWNER],
+    );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+       VALUES ($1,$3,$4,'ADMIN'), ($2,$3,$5,'ADMIN')`,
+      [TM_R2, TM_S2, SELLER_A, MEMBER_R2, MEMBER_S2],
+    );
+    await admin.query(
+      `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
+       VALUES ($1,$3,'MOBILE',$5, now()+interval '30 days', now()),
+              ($2,$4,'MOBILE',$5, now()+interval '30 days', now())`,
+      [S_MEMBER_R2, S_MEMBER_S2, MEMBER_R2, MEMBER_S2, DEVICE],
+    );
+    await armFixtureSessions(admin, [S_MEMBER_R2, S_MEMBER_S2]);
+    await admin.query(
+      `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id) VALUES ($1,$2,$3,$4)`,
+      [CONV, SELLER_A, OTHER, M],
+    );
     const perm = await admin.query(
       `SELECT p.code FROM core.permission p
         WHERE 'MOBILE' = ANY(p.surfaces) AND NOT p.requires_step_up
@@ -207,6 +247,11 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
     for (const q of [
       `DELETE FROM core.idempotency_record WHERE actor_id IN (${accounts},'${ANON_DEVICE}','${DEVICE}')`,
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
+      `DELETE FROM chat.message WHERE conversation_id = '${CONV}'`,
+      `DELETE FROM chat.conversation WHERE id = '${CONV}'`,
+      `DELETE FROM core.seller_ownership_transfer WHERE seller_id = '${SELLER_D}'`,
+      `DELETE FROM core.step_up_challenge WHERE id = '${STEP_UP}'`,
+      `DELETE FROM core.otp_challenge WHERE id = '${OTP_CH}'`,
       `DELETE FROM core.notification WHERE recipient_account_id IN (${accounts})`,
       `DELETE FROM core.session WHERE account_id IN (${accounts})`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN (${sellers})`,
@@ -525,6 +570,112 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
       const r = await http().post('/v1/handoffs/sync').set(bearer(S_OWNER)).set('Idempotency-Key', 'not-a-uuid')
         .send({ scans: [{ nonce: randomUUID(), order_ref: randomUUID(), signed_at: Date.now(), signature: 'a'.repeat(64) }] });
       expectProblem(r, 400, 'VALIDATION_FAILED', 'Idempotency-Key');
+    });
+  });
+
+  describe('review fixes -- standing outside /v1/seller, due ownership transfers, seller id case', () => {
+    /** The seller side of a chat thread: a non-/v1/seller path, acting as the store from the header. */
+    const chatSend = (session: string, key: string, text: string) =>
+      http().post(`/v1/conversations/${CONV}/messages`).set(bearer(session)).set('X-Adulis-Seller', SELLER_A)
+        .set('Idempotency-Key', key).send({ text });
+    const messagesFrom = async (account: string): Promise<number> =>
+      Number((await admin.query(
+        `SELECT count(*) FROM chat.message WHERE conversation_id = $1 AND sender_account_id = $2`,
+        [CONV, account])).rows[0].count);
+
+    it('seller-side chat: a revoked member is not served the replay; the handler answers 403', async () => {
+      const key = randomUUID();
+      const first = await chatSend(S_MEMBER_R2, key, 'from r2');
+      expect(first.status).toBe(201);
+      const again = await chatSend(S_MEMBER_R2, key, 'from r2');
+      expect(again.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(again.body).toEqual(first.body);
+      await admin.query(`UPDATE core.seller_team_member SET revoked_at = now() WHERE id = $1`, [TM_R2]);
+      expectProblem(await chatSend(S_MEMBER_R2, key, 'from r2'), 403, 'PERMISSION_DENIED');
+      expect(await messagesFrom(MEMBER_R2)).toBe(1);
+    });
+
+    it('seller-side chat: a suspended member, signed in again, is not served the replay', async () => {
+      const key = randomUUID();
+      expect((await chatSend(S_MEMBER_S2, key, 'from s2')).status).toBe(201);
+      await admin.query(`UPDATE core.seller_team_member SET suspended_at = now() WHERE id = $1`, [TM_S2]);
+      await admin.query(
+        `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
+         VALUES ($1,$2,'MOBILE',$3, now()+interval '30 days', now())`,
+        [S_MEMBER_S2_LATER, MEMBER_S2, DEVICE],
+      );
+      await armFixtureSessions(admin, [S_MEMBER_S2_LATER]);
+      expectProblem(await chatSend(S_MEMBER_S2_LATER, key, 'from s2'), 403, 'PERMISSION_DENIED');
+      expect(await messagesFrom(MEMBER_S2)).toBe(1);
+    });
+
+    it('a buyer-group request naming a seller the account does not stand in re-runs, rolls back, and still replays', async () => {
+      const key = randomUUID();
+      const post = () => http().post(BUYER_PATH).set(bearer(S_OWNER)).set('X-Adulis-Seller', SELLER_C)
+        .set('Idempotency-Key', key).send({ n: 18 });
+      const first = await post();
+      expect(first.status).toBe(201);
+      const again = await post();
+      expect(again.status).toBe(201);
+      expect(again.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(again.body).toEqual(first.body);
+      expect(executions.get(key)).toBe(2); // the handler ran again...
+      expect(await markers(key)).toBe(1); // ...and its second run rolled back
+      expect(await records(key)).toBe(1);
+    });
+
+    it('an outgoing Owner whose transfer is due but not activated is not served the replay as Owner', async () => {
+      const key = randomUUID();
+      const first = await sellerPost(S_OWNER, SELLER_D, key, { n: 19 });
+      expect(first.status).toBe(201);
+      await admin.query(
+        `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash, expires_at, consumed_at, step_up_action)
+         VALUES ($1,'STEP_UP','+251911462001', decode('00','hex'), now() + interval '1 hour', now(), 'OWNERSHIP_TRANSFER')`,
+        [OTP_CH],
+      );
+      await admin.query(
+        `INSERT INTO core.step_up_challenge (id, account_id, action, otp_challenge_id, satisfied_at, expires_at)
+         VALUES ($1,$2,'OWNERSHIP_TRANSFER',$3, now(), now() + interval '1 hour')`,
+        [STEP_UP, OWNER, OTP_CH],
+      );
+      await admin.query(
+        `INSERT INTO core.seller_ownership_transfer
+           (id, seller_id, from_account_id, to_account_id, step_up_challenge_id, activates_at)
+         VALUES ($1,$2,$3,$4,$5, now() + interval '1 hour')`,
+        [TRANSFER, SELLER_D, OWNER, OTHER, STEP_UP],
+      );
+      // Pending but not yet due: still the Owner, so the replay is served.
+      const pending = await sellerPost(S_OWNER, SELLER_D, key, { n: 19 });
+      expect(pending.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(pending.body).toEqual(first.body);
+
+      await admin.query(
+        `UPDATE core.seller_ownership_transfer SET activates_at = now() - interval '1 minute' WHERE id = $1`,
+        [TRANSFER],
+      );
+      const due = await sellerPost(S_OWNER, SELLER_D, key, { n: 19 });
+      expectProblem(due, 404, 'NOT_FOUND');
+      const after = await admin.query(
+        `SELECT t.activated_at, s.owner_account_id FROM core.seller_ownership_transfer t
+           JOIN core.seller s ON s.id = t.seller_id WHERE t.id = $1`,
+        [TRANSFER],
+      );
+      expect(after.rows[0].activated_at).not.toBeNull();
+      expect(after.rows[0].owner_account_id).toBe(OTHER);
+      expect(executions.get(key)).toBe(1);
+    });
+
+    it('a retry that only changes the letter case of X-Adulis-Seller replays', async () => {
+      expect(hashRequest('POST', SELLER_PATH, { n: 20 }, SELLER_A.toUpperCase())
+        .equals(hashRequest('POST', SELLER_PATH, { n: 20 }, SELLER_A))).toBe(true);
+      const key = randomUUID();
+      const first = await sellerPost(S_OWNER, SELLER_A, key, { n: 20 });
+      expect(first.status).toBe(201);
+      const again = await sellerPost(S_OWNER, SELLER_A.toUpperCase(), key, { n: 20 });
+      expect(again.status).toBe(201);
+      expect(again.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(again.body).toEqual(first.body);
+      expect(executions.get(key)).toBe(1);
     });
   });
 });

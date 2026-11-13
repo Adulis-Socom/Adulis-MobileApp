@@ -213,10 +213,11 @@ export class HandlerTransaction {
     const endpoint = `${req.method} ${req.path}`;
     const requestHash = hashRequest(req.method, req.path, req.body, ctx.sellerId);
 
-    // SELLER is the role auth.guard derives on exactly the section 4.2
-    // seller-context paths, whose handlers all authorise through
-    // fn_has_permission: there a replay waits on the account's standing.
-    const standingSeller = ctx.actorRole === 'SELLER' ? ctx.sellerId : null;
+    // Any selected seller, not only on /v1/seller paths: chat and claims act
+    // as the store from the header with role BUYER. Without standing the
+    // handler runs and decides; where it does not refuse, the existing record
+    // collides at commit and the same-hash response is served after all.
+    const standingSeller = actor.kind === 'ACCOUNT' ? ctx.sellerId : null;
     const replay = await this.idempotency.check(key, actor, endpoint, requestHash, standingSeller);
     if (replay) {
       res.setHeader('X-Adulis-Idempotent-Replay', 'true');
