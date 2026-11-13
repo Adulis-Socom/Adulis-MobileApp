@@ -113,6 +113,12 @@ jobs:
       - name: Create the four extensions
         run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
 
+      # WO-INFRA-012. The API suites refuse any database not marked disposable
+      # (apps/api/test/db-target.ts). This service database exists for this job
+      # only, so it may say so; locally only ops/scripts/test-db.sh sets the mark.
+      - name: Mark the job's database disposable
+        run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "COMMENT ON DATABASE adulis IS 'adulis:disposable-test-database'"
+
       # graphile-worker's own tables are installed by the DDL role INSIDE the
       # gate run below (`worker:install`), not here: the worker's first
       # statement would otherwise be `create schema if not exists jobs`, which
