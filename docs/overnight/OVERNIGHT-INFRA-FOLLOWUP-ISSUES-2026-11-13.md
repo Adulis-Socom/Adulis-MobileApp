@@ -11,6 +11,10 @@ changes. Evidence paths are under `G:\AdulisDevelopment\WO-INFRA-FOLLOWUP\` unle
 | ISSUE-INFRA-FOLLOWUP-001 | 007 | P0 | RESOLVED | The first runbook could report success falsely, lose late writes, and reach PostgreSQL | No |
 | ISSUE-INFRA-FOLLOWUP-002 | 007 | P2 | OPEN (guarded) | No `.env` sets `MINIO_HOST_PORT`; compose's default 9000 is held by another project | YES (small) |
 | ISSUE-INFRA-FOLLOWUP-003 | 007 | P2 | RESOLVED | Three defects in the new migration script, found by its own rehearsal | No |
+| ISSUE-INFRA-FOLLOWUP-004 | 008 | P1 | OPEN | Four of the five listen-first API suites exist only on the mobile line | YES (merge vehicle) |
+| ISSUE-INFRA-FOLLOWUP-005 | 008 | P2 | OPEN | The dev database holds foreign-key orphans; its dump restores with 5 constraints missing | YES |
+| ISSUE-INFRA-FOLLOWUP-006 | 008 | P1 | RESOLVED (candidate) | `main` fails CI on a calendar time bomb in `c1-onboarding` | YES (keep `810b598` in the candidate) |
+| ISSUE-INFRA-FOLLOWUP-007 | 008 | P3 | RESOLVED | A worktree on the exFAT SSD is refused by Git as "dubious ownership" | No |
 
 ## MORNING REVIEW -- FOUNDER ACTIONS REQUIRED
 
@@ -91,4 +95,94 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Verification results:** R10 passes in 63 s; mutation M11 kills the reverted path check.
 - **Remaining risks:** none known.
 - **Recommended action:** none.
+- **Founder decision required:** No.
+
+## ISSUE-INFRA-FOLLOWUP-004 -- Four of the five listen-first API suites exist only on the mobile line
+
+- **Work order:** WO-INFRA-008
+- **Severity:** P1
+- **Status:** OPEN
+- **Description:** `1a8c6f7` (WO-INFRA-005) added `app.listen(0, '127.0.0.1')` to five suites. On `main`
+  only `t8-device-bootstrap` exists; `cat-001`, `disc-002`, `wo-009-collections` and `wo-sec-001` came
+  with the WO-001 to WO-022 line. The integration candidate therefore carries one of the five.
+- **Root cause:** the first infrastructure branch was based on WO-022, not on `main`.
+- **Evidence:** the modify/delete conflicts when cherry-picking `1a8c6f7` onto `main`
+  (`WO-INFRA-008-GIT-RECONCILIATION.md`); `git merge-tree` of the candidate with WO-022 is clean but
+  leaves those four suites unfixed.
+- **Changes attempted:** none on the mobile branch (it is not this batch's to change). The fix lives in
+  both infrastructure branches.
+- **Verification results:** the candidate is green without them (they do not exist there). The first
+  infrastructure branch, which has all five, was green (983 of 983).
+- **Remaining risks:** merging WO-022 itself after the candidate brings back the CI flake F-5 (4
+  ECONNRESET per run).
+- **Recommended action:** bring the mobile line in by merging `infra/wo-infra-007-009-finalization`
+  (WO-022 plus every infrastructure fix), not WO-022 alone.
+- **Founder decision required:** YES: the merge vehicle for the mobile line.
+
+## ISSUE-INFRA-FOLLOWUP-005 -- The dev database holds foreign-key orphans; its dump restores with 5 constraints missing
+
+- **Work order:** WO-INFRA-008
+- **Severity:** P2
+- **Status:** OPEN
+- **Description:** restoring the first batch's `adulis.dump` (the live development database) fails to
+  re-create five foreign keys:
+  - `device_market_id_fkey`;
+  - `notification_recipient_account_id_fkey`;
+  - `claim_evidence_item_claim_id_fkey`;
+  - `order_state_transition_order_id_fkey`;
+  - `otp_delivery_attempt_otp_challenge_id_fkey`.
+  The rows load; the constraints do not.
+- **Root cause:** the live dev database already contains rows that violate those constraints, which
+  PostgreSQL marks as validated: 15 devices referencing a missing market, 3 notifications referencing
+  missing accounts, and others. About 50 API test files clean up with `session_replication_role`, which
+  skips foreign-key triggers, and the API tests run against the dev database `adulis` by default, so
+  their residue accumulates there.
+- **Evidence:** `logs/legacy-current-snapshot-restore.log`; a forced read-only query on the live
+  database (`default_transaction_read_only=on`): `orphan device->market 15`, `orphan
+  notification->account 3`, all five constraints `convalidated = t`.
+- **Changes attempted:** none: the dev data and the test teardowns are not infrastructure, and this
+  batch never modifies existing data.
+- **Verification results:** the dump itself is complete (the data loads). The legacy database, by
+  contrast, is clean (0 unvalidated constraints after restore).
+- **Remaining risks:**
+  - a restore of the dev database needs the constraints re-added after the orphans are cleaned, or
+    added `NOT VALID`;
+  - tests that read across those tables may see stale rows.
+- **Recommended action:** point the API test run at a disposable database (as the gates do), and clean
+  the dev database's orphans in a separate, approved change.
+- **Founder decision required:** YES.
+
+## ISSUE-INFRA-FOLLOWUP-006 -- `main` fails CI on a calendar time bomb in `c1-onboarding`
+
+- **Work order:** WO-INFRA-008
+- **Severity:** P1
+- **Status:** RESOLVED on the candidate, pending the founder's merge decision
+- **Description:** `c1-onboarding.e2e.spec.ts` on `main` stores and expects the override date
+  2026-09-11, while the endpoint lists from `CURRENT_DATE`. Since 2026-09-12 the list is empty and the
+  test throws `Cannot read properties of undefined (reading 'date')`. `main`'s CI would be red even
+  with every infrastructure fix.
+- **Root cause:** a fixed date in a test of a date-relative query. It was fixed on the mobile line by
+  `810b598` (founder-authored, test only), never on `main`.
+- **Evidence:** run 43384239326 (634 of 635, this one failure); run 43385069084 with `810b598`
+  cherry-picked: 635 of 635.
+- **Changes attempted:** `810b598` cherry-picked (`-x`) onto the candidate as its own commit.
+- **Verification results:** green.
+- **Remaining risks:** none; the same patch on both sides merges cleanly later.
+- **Recommended action:** keep it in the candidate.
+- **Founder decision required:** YES (confirm it may travel with an infrastructure merge).
+
+## ISSUE-INFRA-FOLLOWUP-007 -- A worktree on the exFAT SSD is refused by Git as "dubious ownership"
+
+- **Work order:** WO-INFRA-008
+- **Severity:** P3
+- **Status:** RESOLVED
+- **Description:** `git worktree add` to G: succeeded, but every later command failed with "detected
+  dubious ownership": exFAT records no owner.
+- **Root cause:** Git's `safe.directory` protection on a file system without ownership.
+- **Evidence:** the error text in the WO-INFRA-008 session.
+- **Changes attempted:** `git -c safe.directory=<that one path>` on each command. The global Git
+  configuration was not changed.
+- **Verification results:** the cherry-picks and pushes worked.
+- **Remaining risks:** none; the same limitation as junctions on G: (first batch).
+- **Recommended action:** for worktrees on G:, pass `-c safe.directory` per command.
 - **Founder decision required:** No.
