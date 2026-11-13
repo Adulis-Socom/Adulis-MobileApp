@@ -30,6 +30,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 export const BUCKETS = ['adulis-media', 'adulis-evidence'];
@@ -141,6 +142,16 @@ export function tarEntries(read) {
   }
 }
 
+// The SHA-256 recorded for one file in a sha256sum-style file, exact name, hash format checked. A BOM
+// or leading blank used to yield an empty hash, which skipped the comparison (review).
+export function recordedSha(sums, name) {
+  for (const raw of sums.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const m = raw.trim().match(/^([0-9a-fA-F]{64}) [ *](.+)$/);
+    if (m && m[2] === name) return m[1].toLowerCase();
+  }
+  refuse(`no well-formed SHA-256 recorded for ${name}`);
+}
+
 // The inventory script's output (INVENTORY_SH) as data.
 export function parseInventory(text) {
   const inv = { buckets: [], objects: new Map(), hashes: new Map(), policy: {}, lifecycle: {} };
@@ -213,6 +224,13 @@ export function checkTarget(dst, src, probes) {
     );
   if ((dst.policy['adulis-evidence']?.Statement ?? []).length > 0)
     problems.push('adulis-evidence has an anonymous policy');
+  const mediaActions = (dst.policy['adulis-media']?.Statement ?? []).flatMap((st) =>
+    [st.Action].flat(),
+  );
+  if (mediaActions.some((a) => a !== 's3:GetObject'))
+    problems.push(
+      `adulis-media grants anonymous ${mediaActions.join(', ')}; only s3:GetObject is intended`,
+    );
   for (const b of BUCKETS) {
     const [s, d] = [ruleSet(src.lifecycle[b]), ruleSet(dst.lifecycle[b])];
     if (s.join() !== d.join())
@@ -246,28 +264,38 @@ function docker(args, { input, allowFail = false } = {}) {
     );
   return allowFail ? r : r.stdout;
 }
-const exists = (kind, name) => docker([kind, 'inspect', name], { allowFail: true }).status === 0;
+// Absent only when docker says so; any other inspect failure refuses rather than reading as "absent".
+function exists(kind, name) {
+  const r = docker([kind, 'inspect', name], { allowFail: true });
+  if (r.status === 0) return true;
+  if (/no such/i.test(`${r.stderr}${r.stdout}`)) return false;
+  refuse(`docker ${kind} inspect ${name} failed: ${`${r.stderr}`.trim().slice(-300)}`);
+}
 
-// docker with stdin from a file and/or stdout into a stream; resolves only on exit 0.
-function dockerPipe(args, { from, to }) {
-  return new Promise((res, rej) => {
-    const p = spawn('docker', args, {
-      cwd: root,
-      stdio: [from ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-    });
-    let err = '';
-    p.stderr.on('data', (d) => (err = (err + d).slice(-1500)));
-    if (from) createReadStream(from).on('error', rej).pipe(p.stdin);
-    const flushed = to
-      ? new Promise((ok) => p.stdout.pipe(to).on('finish', ok))
-      : (p.stdout.resume(), Promise.resolve());
+// docker with stdin from a file and/or stdout into a stream; resolves only on exit 0. pipeline()
+// turns a stream error (disk full, EPIPE) into a rejection: with pipe() it was an unhandled 'error'
+// event that killed the process before the undo could restart the source (review).
+async function dockerPipe(args, { from, to }) {
+  const p = spawn('docker', args, { cwd: root, stdio: [from ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+  let err = '';
+  p.stderr.on('data', (d) => (err = (err + d).slice(-1500)));
+  const exited = new Promise((res, rej) => {
     p.on('error', rej);
-    p.on('close', (code) =>
-      code === 0
-        ? flushed.then(res)
-        : rej(new Refusal(`docker ${args.slice(0, 2).join(' ')} exited ${code}: ${err.trim()}`)),
-    );
+    p.on('close', res);
   });
+  const what = `docker ${args.slice(0, 2).join(' ')}`;
+  try {
+    await Promise.all([
+      from && pipeline(createReadStream(from), p.stdin),
+      to ? pipeline(p.stdout, to) : p.stdout.resume(),
+    ]);
+  } catch (e) {
+    p.kill();
+    await exited.catch(() => {});
+    refuse(`${what}: ${e.message} ${err.trim()}`);
+  }
+  const code = await exited.catch((e) => refuse(`${what}: ${e.message}`));
+  if (code !== 0) refuse(`${what} exited ${code}: ${err.trim()}`);
 }
 function sha256Sink() {
   const h = createHash('sha256');
@@ -334,13 +362,17 @@ const PROBE_SH = [
   'probe list-evidence mc ls a/adulis-evidence',
   'probe read-evidence bash -c \'mc cat "$0" > /dev/null\' "a/adulis-evidence/$EVIDENCE_KEY"',
   'probe write-evidence bash -c \'echo probe | mc pipe "$0"\' "a/adulis-evidence/minio-migrate-probe-$RUN"',
-  'm=$(mc cat "a/adulis-media/$MEDIA_KEY" 2>/dev/null | sha256sum); printf "M %s\\n" "${m%% *}"',
+  'set -o pipefail; if m=$(mc cat "a/adulis-media/$MEDIA_KEY" 2>/dev/null | sha256sum); then printf "M %s\\n" "${m%% *}"; else echo "M FAILED"; fi',
 ].join('\n');
 
 function anonymousProbes(cfg, s, src) {
   const first = (b) =>
     [...src.objects.keys()].find((k) => k.startsWith(`${b}/`))?.slice(b.length + 1) ?? '';
-  const [mediaKey, evidenceKey] = [first('adulis-media'), first('adulis-evidence')];
+  // With no evidence object, probe a key that does not exist: anonymous S3 is denied either way.
+  const [mediaKey, evidenceKey] = [
+    first('adulis-media'),
+    first('adulis-evidence') || 'minio-migrate-probe-absent',
+  ];
   const out = mc(cfg, s, PROBE_SH, [
     ...mcEnv('a', { ...s, user: '' }),
     '-e',
@@ -487,8 +519,10 @@ function preflight(cfg) {
 // ---------- backup ----------
 
 export async function verifyBackup(tar, expectedSha) {
+  if (!/^[0-9a-f]{64}$/.test(expectedSha ?? ''))
+    refuse(`backup ${tar}: no recorded SHA-256 to verify against`);
   const sha = await fileSha256(tar);
-  if (expectedSha && sha !== expectedSha)
+  if (sha !== expectedSha)
     refuse(`backup ${tar}: SHA-256 ${sha} does not match the recorded ${expectedSha}`);
   const fd = openSync(tar, 'r');
   let names;
@@ -523,16 +557,19 @@ async function takeBackup(cfg) {
       '-',
       '.',
     ],
-    { to: createWriteStream(tar) },
+    { to: createWriteStream(tar, { mode: 0o600 }) },
   );
   const sha = await fileSha256(tar);
-  writeFileSync(`${tar}.sha256`, `${sha} *${basename(tar)}\n`);
+  writeFileSync(`${tar}.sha256`, `${sha} *${basename(tar)}\n`, { mode: 0o600 });
   if (process.env.MIGRATE_FAULT === 'corrupt-backup') {
     const b = readFileSync(tar);
     b[600] ^= 0xff; // one flipped byte after the checksum was recorded
     writeFileSync(tar, b);
   }
-  return { tar, ...(await verifyBackup(tar, readFileSync(`${tar}.sha256`, 'utf8').split(' ')[0])) };
+  return {
+    tar,
+    ...(await verifyBackup(tar, recordedSha(readFileSync(`${tar}.sha256`, 'utf8'), basename(tar)))),
+  };
 }
 
 // Hash of a fresh tar of the (stopped) source: equal to the backup's only if nothing in it changed.
@@ -607,8 +644,22 @@ function recreateLegacy(saved) {
     args.push('-v', `${m.Name}:${m.Destination}`);
   if (netName && exists('network', netName))
     args.push('--network', netName, ...(net.Aliases ?? []).flatMap((a) => ['--network-alias', a]));
-  docker([...args, c.Image, ...(c.Config.Cmd ?? [])]);
-  return name;
+  // Not carried over, said out loud: compose labels (deliberate: compose must not adopt it), the
+  // healthcheck, bind mounts, other ports and networks. The API reaches MinIO by the host port.
+  const left = [
+    ...Object.keys(c.HostConfig.PortBindings ?? {})
+      .filter((k) => k !== '9000/tcp')
+      .map((k) => `port ${k}`),
+    ...Object.keys(c.NetworkSettings?.Networks ?? {})
+      .filter((n) => n !== netName || !args.includes(n))
+      .map((n) => `network ${n}`),
+    ...c.Mounts.filter((x) => x.Type !== 'volume').map((x) => `mount ${x.Destination}`),
+    ...(c.Config.Healthcheck ? ['healthcheck'] : []),
+    'compose labels',
+  ];
+  log(`recreating ${name} from its recorded configuration; not carried over: ${left.join(', ')}`);
+  const id = docker([...args, c.Image, ...(c.Config.Cmd ?? [])]).trim();
+  return { name, id };
 }
 
 async function migrate(cfg) {
@@ -627,16 +678,21 @@ async function migrate(cfg) {
     },
     project: cfg.project,
   };
-  mkdirSync(cfg.backupDir, { recursive: true });
+  // Owner-only: legacy-container.json keeps the old container's environment (its MinIO credentials)
+  // because rollback recreates it from that. exFAT and Windows ignore the modes; Linux honours them.
+  mkdirSync(cfg.backupDir, { recursive: true, mode: 0o700 });
   const save = (name, data) =>
     writeFileSync(
       join(cfg.backupDir, name),
       JSON.stringify(data, (_k, v) => (v instanceof Map ? Object.fromEntries(v) : v), 2),
+      { mode: 0o600 },
     );
   save('legacy-container.json', pre.inspect);
   const net = `minio-migrate-${cfg.run}`;
   const snap = `minio-migrate-${cfg.run}-snapshot`;
   const srv = (role, image, volume, creds) => {
+    // Registered first: a run that creates the container but fails to start it still leaves one.
+    always.push(() => docker(['rm', '-f', `${net}-${role}`], { allowFail: true }));
     docker([
       'run',
       '-d',
@@ -654,9 +710,12 @@ async function migrate(cfg) {
       'server',
       '/data',
     ]);
-    always.push(() => docker(['rm', '-f', `${net}-${role}`], { allowFail: true }));
     return { user: creds.user, pass: creds.pass, network: net, host: `${net}-${role}:9000` };
   };
+  // Ctrl+C: Node stays alive, the running docker call fails, and the undo below still runs.
+  process.on('SIGINT', () =>
+    log('interrupt: the current step will fail and the undo will run; wait'),
+  );
   try {
     log('1/8 source inventory, read from the running server');
     const i0 = inventory(cfg, pre.server);
@@ -733,7 +792,7 @@ async function migrate(cfg) {
     log('7/8 verification: source unchanged, snapshot = source, target = snapshot, security');
     const i1 = inventory(cfg, snapshot);
     fail(
-      'the source changed between its inventory and the stop (a writer is still active?)',
+      'the restored backup differs from the source inventory (a writer still active before the stop, or an incomplete restore)',
       compareObjects(i0, i1),
     );
     const i2 = inventory(cfg, target);
@@ -748,6 +807,10 @@ async function migrate(cfg) {
       );
     save('inventory-source.json', i1.objects);
     for (const f of always.splice(0).reverse()) f();
+    // A helper still serving the target volume would run beside compose's MinIO on the same data.
+    for (const role of ['src', 'dst'])
+      if (exists('container', `${net}-${role}`))
+        refuse(`helper ${net}-${role} could not be removed`);
 
     log(
       `8/8 switching: compose recreates ${cfg.dstContainer} on ${cfg.dstVolume}; ${cfg.srcVolume} is not touched`,
@@ -791,19 +854,31 @@ async function migrate(cfg) {
     log(
       `MIGRATED: ${Object.entries(counts(i3))
         .map(([b, n]) => `${b}=${n}`)
-        .join(
-          ' ',
-        )}; old volume ${cfg.srcVolume} untouched`,
+        .join(' ')}; old volume ${cfg.srcVolume} untouched`,
     );
   } catch (e) {
     log(`FAILED, undoing: ${e.message}`);
-    for (const f of always.splice(0).reverse()) f();
-    for (const f of undo.reverse()) {
+    let clean = true;
+    for (const f of [...always.splice(0).reverse(), ...undo.reverse()]) {
       try {
         f();
       } catch (u) {
+        clean = false;
         log(`UNDO STEP FAILED, act by hand (runbook, Rollback): ${u.message}`);
       }
+    }
+    // Verified, not assumed: the old MinIO must answer on its port again.
+    try {
+      waitReady(cfg, pre.server);
+      log(
+        clean
+          ? `UNDO OK: ${cfg.srcContainer} answers on port ${cfg.hostPort} again`
+          : 'UNDO PARTIAL: MinIO answers, but a step above failed',
+      );
+    } catch (w) {
+      log(
+        `UNDO INCOMPLETE: nothing answers on port ${cfg.hostPort} (${w.message}); act by hand (runbook, Rollback)`,
+      );
     }
     save('manifest.json', { ...manifest, failedAt: new Date().toISOString(), failure: e.message });
     throw e;
@@ -847,12 +922,36 @@ async function rollback(cfg) {
       'that run did not finish its switch; the failure path already restored the old container',
     );
   const legacy = JSON.parse(readFileSync(saved, 'utf8'));
+  // The recorded source decides, not the environment: MIGRATE_SRC_VOLUME=x must not skip the approval.
+  guard('rollback', m.source.volume, process.env);
+  const cur = docker(['inspect', cfg.dstContainer], { allowFail: true });
+  const curMount =
+    cur.status === 0
+      ? JSON.parse(cur.stdout)[0].Mounts.find((x) => x.Destination === '/data')?.Name
+      : null;
+  if (curMount !== cfg.dstVolume)
+    refuse(
+      `${cfg.dstContainer} mounts ${curMount ?? 'nothing'}, not ${cfg.dstVolume}: nothing to roll back (already rolled back?)`,
+    );
+  // The way back must exist before anything stops: the old image can no longer be pulled.
+  if (!exists('image', legacy.Image))
+    refuse(
+      `the old image ${legacy.Image} is gone (pruned?): docker load it from a saved copy first`,
+    );
+  for (const v of legacy.Mounts.filter((x) => x.Type === 'volume'))
+    if (!exists('volume', v.Name)) refuse(`the old volume ${v.Name} does not exist`);
   const served = { network: 'host', host: `127.0.0.1:${cfg.hostPort}`, ...cfg.dstCreds };
-  const now = inventory(cfg, served);
+  let now = null;
+  try {
+    now = inventory(cfg, served);
+  } catch (e) {
+    log(
+      `the new MinIO could not be read (${e.message}); check ${cfg.dstVolume} by hand for objects written after the switch`,
+    );
+  }
   docker(['stop', cfg.dstContainer]);
   const kept = `${cfg.dstContainer}-migrated-${m.run}`;
   docker(['rename', cfg.dstContainer, kept]);
-  const name = recreateLegacy(legacy);
   const envOf = (k) => legacy.Config.Env.find((e) => e.startsWith(`${k}=`))?.slice(k.length + 1);
   const old = {
     network: 'host',
@@ -860,19 +959,45 @@ async function rollback(cfg) {
     user: envOf('MINIO_ROOT_USER'),
     pass: envOf('MINIO_ROOT_PASSWORD'),
   };
-  waitReady(cfg, old);
+  let made = null;
+  try {
+    made = recreateLegacy(legacy);
+    waitReady(cfg, old);
+  } catch (e) {
+    // Never leave nothing serving: remove only what this call created, put the new MinIO back.
+    if (made) docker(['rm', '-f', made.id], { allowFail: true });
+    docker(['rename', kept, cfg.dstContainer], { allowFail: true });
+    docker(['start', cfg.dstContainer], { allowFail: true });
+    refuse(
+      `rollback failed (${e.message}); ${cfg.dstContainer} was put back and started on ${cfg.dstVolume}`,
+    );
+  }
   const back = inventory(cfg, old);
-  const newer = [...now.objects.keys()].filter((k) => !back.objects.has(k));
+  const savedInv = {
+    objects: new Map(
+      Object.entries(
+        JSON.parse(readFileSync(join(cfg.backupDir, 'inventory-source.json'), 'utf8')),
+      ),
+    ),
+  };
+  const drift = compareObjects(savedInv, back);
+  const after = now ? compareObjects(back, now) : ['not readable: check by hand'];
   log(
-    `ROLLED BACK: ${name} serves ${m.source.volume} again (${Object.entries(counts(back))
+    `${kept} and ${cfg.dstVolume} are kept, unchanged. Changes after the switch, only there ("unexpected" = added, "missing" = deleted, "differs" = changed): ${after.length}${after.length ? `\n  ${after.slice(0, 20).join('\n  ')}` : ''}`,
+  );
+  fail(
+    `${made.name} serves ${m.source.volume} again, but it differs from its state at the migration`,
+    drift,
+  );
+  log(
+    `ROLLED BACK: ${made.name} serves ${m.source.volume} again, identical to its state at the migration (${Object.entries(
+      counts(back),
+    )
       .map(([b, n]) => `${b}=${n}`)
       .join(' ')}).`,
   );
   log(
-    `${kept} and ${cfg.dstVolume} are kept, unchanged. Objects written after the switch, still only there: ${newer.length}${newer.length ? `\n  ${newer.slice(0, 20).join('\n  ')}` : ''}`,
-  );
-  log(
-    `While rolled back, \`docker compose up\` fails: it starts ${kept}, whose port ${name} now holds (rehearsed). Nothing is changed by that failure.`,
+    `While rolled back, \`docker compose up\` fails: it starts ${kept}, whose port ${made.name} now holds (rehearsed). Nothing is changed by that failure.`,
   );
 }
 
@@ -886,9 +1011,8 @@ async function main() {
         : existsSync(`${args[0]}.sha256`)
           ? readFileSync(`${args[0]}.sha256`, 'utf8')
           : null;
-      const line = sums?.split('\n').find((l) => l.trim().endsWith(basename(args[0])));
-      if (!line) refuse(`no recorded SHA-256 for ${basename(args[0])}`);
-      const r = await verifyBackup(args[0], line.split(/\s+/)[0]);
+      if (sums === null) refuse(`no checksum file for ${basename(args[0])}`);
+      const r = await verifyBackup(args[0], recordedSha(sums, basename(args[0])));
       log(
         `BACKUP OK: ${args[0]} sha256 ${r.sha}, ${r.entries} entries, holds ${BACKUP_MUST_HOLD.join(', ')}`,
       );
