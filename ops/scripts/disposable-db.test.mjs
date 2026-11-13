@@ -248,6 +248,52 @@ test('A5.10b a child ended by a signal (a real Ctrl+C reaches it) is an interrup
   assert.ok(docker.writes().some((a) => a.at(-1) === 'DROP DATABASE IF EXISTS adulis_det_a_0a1b2c3d WITH (FORCE)'));
 });
 
+// WO-INFRA-015B review: what a child's end means.
+async function determinismWith({ migrate, docker = dockerStub() }) {
+  const out = [];
+  const err = [];
+  const code = await runDeterminism({
+    env: { NODE_ENV: 'test', ADULIS_PG_CONTAINER: 'adulis-test-pg', DATABASE_URL_MIGRATE: URL_OK },
+    docker,
+    migrate,
+    Client: marked(),
+    interrupted: () => null,
+    suffix: () => '0a1b2c3d',
+    out: (l) => out.push(l),
+    err: (l) => err.push(l),
+  });
+  return { code, out: out.join('\n'), err: err.join('\n'), docker };
+}
+
+test('015B: an output overflow (ENOBUFS, which also sends SIGTERM) is a failure, not an interrupt', async () => {
+  const r = await determinismWith({
+    migrate: () => ({ status: null, signal: 'SIGTERM', error: new Error('spawnSync node ENOBUFS'), stdout: '', stderr: '' }),
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /migrations against adulis_det_a_0a1b2c3d failed: spawnSync node ENOBUFS/);
+  assert.doesNotMatch(r.err, /interrupted/);
+});
+
+test('015B: a Windows console Ctrl+C (STATUS_CONTROL_C_EXIT, no signal) is an interrupt', async () => {
+  for (const status of [3221225786, -1073741510]) {
+    const r = await determinismWith({ migrate: () => ({ status, signal: null, stdout: '', stderr: '' }) });
+    assert.equal(r.code, 130, String(status));
+    assert.match(r.err, /interrupted by Ctrl\+C \(during migrations against adulis_det_a_0a1b2c3d\)/);
+  }
+});
+
+test('015B: two schema dumps without a single CREATE TABLE are not a pass', async () => {
+  const base = dockerStub();
+  const docker = Object.assign(
+    (args) => (args[2] === 'pg_dump' ? { status: 0, stdout: 'SET client_encoding = 0;\n', stderr: '' } : base(args)),
+    { calls: base.calls, writes: base.writes },
+  );
+  const r = await determinismWith({ migrate: () => ({ status: 0, stdout: '', stderr: '' }), docker });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /holds no CREATE TABLE/);
+  assert.doesNotMatch(r.out, /converge on an identical schema/);
+});
+
 test('A5.4b a data directory bind-mounted from the host is not a disposable server', async () => {
   const docker = dockerStub({
     mounts: [{ Type: 'bind', Source: 'C:\\pgdata', Destination: '/var/lib/postgresql/data' }],

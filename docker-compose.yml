@@ -11,8 +11,11 @@
 # checkout's directory, so the same file run from a clone named differently was a
 # different project: a container-name clash with the running stack, and a new,
 # empty database volume. `adulis-platform` is the name the existing stack uses.
-# Consequence: `docker compose down -v` from ANY clone deletes the live database
-# volume. Never run it; plain `docker compose down` keeps the volumes.
+# Consequence: the same commands from ANY clone act on the live stack.
+# NEVER RUN `docker compose down -v`. THIS file declares every volume external
+# (WO-INFRA-015B), so through it `down -v` deletes no volume; a checkout with an
+# OLDER compose file still deletes the live database volume (and adulis-pgdata)
+# with it. Use plain `docker compose down`.
 name: adulis-platform
 
 # One MinIO build for the server AND the one-shot init (it ships mc and a shell),
@@ -236,11 +239,25 @@ services:
 # installation not yet moved leaves it unset. If it is set too early, the
 # data-volume guard still refuses to start MinIO on the empty volume, or on one
 # that holds no recorded move. Sequences: docs/infrastructure/MINIO-STARTUP.md.
+#
+# EVERY VOLUME IS EXTERNAL (WO-INFRA-015B), under the names they always had:
+# THIS file never creates them and never deletes them, `docker compose down -v`
+# included. An older compose file in another checkout does not have this
+# protection, so `down -v` stays forbidden everywhere. A fresh machine creates
+# them once, before the first `compose up` (README, MINIO-STARTUP.md):
+#   docker volume create adulis-pgdata
+#   docker volume create adulis-platform_adulis-pgdata
+#   docker volume create adulis-platform_adulis-miniodata
+# A missing one stops compose with "external volume ... not found", touching
+# nothing. An installation that already has them changes nothing; the MinIO move
+# (minio-migrate.mjs) creates the MinIO volume itself.
 volumes:
   adulis-pgdata:
     name: adulis-platform_adulis-pgdata
+    external: true
   adulis-miniodata:
     name: '${ADULIS_MINIO_VOLUME:?is not set. Before the MinIO move, leave it unset and do not run compose; on a fresh machine or after the move, set ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata. See docs/infrastructure/MINIO-STARTUP.md}'
+    external: true
   adulis-legacy:
     name: adulis-pgdata
     external: true

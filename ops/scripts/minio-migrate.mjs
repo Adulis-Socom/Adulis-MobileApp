@@ -92,6 +92,9 @@ const FAULTS = [
   'interrupt-copy',
   'interrupt-switch',
   'fail-rollback',
+  // WO-INFRA-015B: the switch fails after the move record is written, before compose replaces the
+  // old container (the undo must remove the record in that branch too: review M1).
+  'fail-before-switch',
 ];
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -379,6 +382,9 @@ async function dockerPipe(args, { from, to }) {
     p.on('error', rej);
     p.on('close', res);
   });
+  // Handled now: a spawn error before Promise.all settles would otherwise crash Node unhandled and
+  // skip the undo with the source stopped (PHASE-002B-01 review). It is still awaited below.
+  exited.catch(() => {});
   const what = `docker ${args.slice(0, 2).join(' ')}`;
   const signal = interruption.abortSignal; // an interrupt stops the stream and kills the child
   try {
@@ -728,7 +734,7 @@ async function plan(cfg) {
     `source ${cfg.srcContainer} on ${cfg.srcVolume} (image ${pre.inspect.Image.slice(7, 19)}), port ${cfg.hostPort}`,
   );
   log(
-    `target ${cfg.dstVolume} (${pre.targetExists ? 'exists, empty' : 'will be created by compose'}), compose project ${cfg.project}, image ${cfg.dstImage}`,
+    `target ${cfg.dstVolume} (${pre.targetExists ? 'exists, empty' : 'will be created by this run (external volume)'}), compose project ${cfg.project}, image ${cfg.dstImage}`,
   );
   const inv = inventory(cfg, pre.server);
   summary('source inventory', inv);
@@ -742,11 +748,21 @@ async function plan(cfg) {
 // the root: the PostgreSQL files beside its buckets in adulis-pgdata prove it). The data-volume
 // guard in docker-compose.yml serves the new volume beside a legacy volume holding data only with it.
 export const MOVE_RECORD = '.adulis-migration-complete';
+const LEGACY_IMAGE_TAR = 'legacy-image.tar';
 function onTarget(cfg, script, args = [], opts = {}) {
   return docker(
     ['run', '--rm', '-v', `${cfg.dstVolume}:/d`, '--entrypoint', 'sh', cfg.tarImage, '-c', script, 'move-record', ...args],
     opts,
   );
+}
+// Every undo of the switch ends here, verified (PHASE-002B-01 review M1): a record left beside a
+// volume that is not serving lets the next `compose up` serve that stale copy without a word.
+function clearMoveRecord(cfg) {
+  const r = onTarget(cfg, `rm -f /d/${MOVE_RECORD} && [ ! -e /d/${MOVE_RECORD} ]`, [], { allowFail: true });
+  if (r.status !== 0)
+    refuse(
+      `the move record could not be removed from ${cfg.dstVolume}: delete /${MOVE_RECORD} in it by hand before any compose up`,
+    );
 }
 
 function recreateLegacy(saved) {
@@ -814,6 +830,12 @@ async function migrate(cfg) {
       { mode: 0o600 },
     );
   save('legacy-container.json', pre.inspect);
+  // Recorded at once (WO-INFRA-015B review): a run that is killed leaves a manifest with neither
+  // finishedAt nor failedAt, which rollback reports as "killed", instead of no record at all.
+  save('manifest.json', manifest);
+  // The way back must survive an image prune before anything stops (PHASE-002B-01 review L1): after
+  // the switch nothing references the old image, and it can no longer be pulled. Rollback loads it.
+  docker(['save', '-o', join(cfg.backupDir, LEGACY_IMAGE_TAR), pre.inspect.Image]);
   const net = `minio-migrate-${cfg.run}`;
   const snap = `minio-migrate-${cfg.run}-snapshot`;
   const srv = (role, image, volume, creds) => {
@@ -895,7 +917,7 @@ async function migrate(cfg) {
 
     await checkpoint();
     log(
-      `5/8 target volume ${cfg.dstVolume} (created by compose, so compose owns it) and a private target server`,
+      `5/8 target volume ${cfg.dstVolume} (external: created here, never deleted by compose) and a private target server`,
     );
     if (!pre.targetExists)
       undo.push(() => {
@@ -906,13 +928,16 @@ async function migrate(cfg) {
         if (exists('volume', cfg.dstVolume))
           refuse(`target volume ${cfg.dstVolume} could not be removed and may hold a partial copy: remove it by hand before any compose up`);
       });
+    // External in docker-compose.yml (WO-INFRA-015B), so `down -v` cannot delete it: compose expects
+    // it to exist. Created only when absent; the undo registered above removes it again.
+    if (!pre.targetExists) docker(['volume', 'create', cfg.dstVolume]);
     docker(['compose', 'create', '--no-recreate', 'minio']);
     // Not needed until the switch, and it would hold the target volume against the undo.
     if (cfg.guardContainer) {
       docker(['rm', '-f', cfg.guardContainer], { allowFail: true });
       if (exists('container', cfg.guardContainer)) refuse(`${cfg.guardContainer} could not be removed`);
     }
-    if (!exists('volume', cfg.dstVolume)) refuse(`compose did not create ${cfg.dstVolume}`);
+    if (!exists('volume', cfg.dstVolume)) refuse(`${cfg.dstVolume} does not exist after it was created`);
     if (JSON.parse(docker(['inspect', cfg.srcContainer]))[0].Id !== pre.inspect.Id)
       refuse(`compose replaced ${cfg.srcContainer} before the copy was verified`);
     const target = srv('dst', cfg.dstImage, cfg.dstVolume, cfg.dstCreds);
@@ -965,18 +990,25 @@ async function migrate(cfg) {
       `8/8 switching: compose recreates ${cfg.dstContainer} on ${cfg.dstVolume}; ${cfg.srcVolume} is not touched`,
     );
     undo.length = 0; // pre-switch undo steps no longer apply: the old container is replaced by compose
+    // Two undo steps. The undo runs its steps in REVERSE, each on its own, so the record is cleared
+    // FIRST and even when restoring the old container fails: no record of a completed move may
+    // remain on a volume that is not serving (PHASE-002B-01 review M1). First, not last (WO-INFRA-015B
+    // review): a run killed between the two steps then leaves a MinIO without its record, which its
+    // guard refuses at the next start, instead of a record beside a volume nobody serves.
     undo.push(() => {
       const cur = docker(['inspect', cfg.srcContainer], { allowFail: true });
-      if (cur.status === 0 && JSON.parse(cur.stdout)[0].Id === pre.inspect.Id)
-        return docker(['start', cfg.srcContainer]); // compose never replaced it
+      if (cur.status === 0 && JSON.parse(cur.stdout)[0].Id === pre.inspect.Id) {
+        docker(['start', cfg.srcContainer]); // compose never replaced it
+        log(`the verified copy stays in ${cfg.dstVolume}, without its record (the guard will not serve it); remove the volume before a new run`);
+        return;
+      }
       docker(['stop', cfg.dstContainer], { allowFail: true });
       docker(['rename', cfg.dstContainer, `${cfg.dstContainer}-failed-${cfg.run}`], {
         allowFail: true,
       });
       recreateLegacy(pre.inspect);
-      // No record of a completed move may remain on a volume that is not serving (guard rule).
-      onTarget(cfg, `rm -f /d/${MOVE_RECORD}`, [], { allowFail: true });
     });
+    undo.push(() => clearMoveRecord(cfg)); // pushed last, so it runs first
     // The record the data-volume guard (docker-compose.yml) requires before it serves this volume
     // while adulis-pgdata still holds MinIO data. Written here, after the target was verified equal
     // to the stopped source (step 7), because the switch itself runs the guard; any failure from
@@ -984,6 +1016,8 @@ async function migrate(cfg) {
     onTarget(cfg, `printf '%s\\n' "$1" > /d/${MOVE_RECORD}`, [
       JSON.stringify({ run: cfg.run, at: new Date().toISOString(), source: cfg.srcVolume, counts: counts(i2) }),
     ]);
+    if (process.env.MIGRATE_FAULT === 'fail-before-switch')
+      refuse('rehearsal fault: compose up failed before it replaced the old container');
     docker(['compose', 'up', '-d', 'minio', 'minio-init']);
     rehearseInterrupt('switch');
     const code = docker(['wait', cfg.initContainer]).trim();
@@ -1081,7 +1115,9 @@ async function rollback(cfg) {
   const m = JSON.parse(readFileSync(manifest, 'utf8'));
   if (!m.finishedAt)
     refuse(
-      'that run did not finish its switch; the failure path already restored the old container',
+      m.failedAt
+        ? `that run did not finish its switch; its failure path ran (${m.undo ?? 'outcome not recorded'})`
+        : 'that run neither finished nor recorded a failure (killed?): check the containers, the volumes and the move record by hand (runbook, Rollback)',
     );
   const legacy = JSON.parse(readFileSync(saved, 'utf8'));
   // The recorded source decides, not the environment: MIGRATE_SRC_VOLUME=x must not skip the approval.
@@ -1096,10 +1132,15 @@ async function rollback(cfg) {
       `${cfg.dstContainer} mounts ${curMount ?? 'nothing'}, not ${cfg.dstVolume}: nothing to roll back (already rolled back?)`,
     );
   // The way back must exist before anything stops: the old image can no longer be pulled.
-  if (!exists('image', legacy.Image))
-    refuse(
-      `the old image ${legacy.Image} is gone (pruned?): docker load it from a saved copy first`,
-    );
+  if (!exists('image', legacy.Image)) {
+    const tar = join(cfg.backupDir, LEGACY_IMAGE_TAR);
+    if (existsSync(tar)) {
+      log(`the old image ${legacy.Image} is gone (pruned?): loading the copy migrate saved`);
+      docker(['load', '-i', tar]);
+    }
+    if (!exists('image', legacy.Image))
+      refuse(`the old image ${legacy.Image} is gone and no saved copy restores it: docker load it first`);
+  }
   for (const v of legacy.Mounts.filter((x) => x.Type === 'volume'))
     if (!exists('volume', v.Name)) refuse(`the old volume ${v.Name} does not exist`);
   const served = { network: 'host', host: `127.0.0.1:${cfg.hostPort}`, ...cfg.dstCreds };
@@ -1149,6 +1190,18 @@ async function rollback(cfg) {
   }
   if (interruption.signal)
     log(`interrupt (${interruption.signal}) arrived during the switch back, which completed; verifying it`);
+  // The move is undone, so its record goes FIRST, before any check that can fail: the guard must not
+  // serve the kept volume again. Verified; a failure is an error, not a warning (PHASE-002B-01 review).
+  const cleared = onTarget(
+    cfg,
+    `if [ -f /d/${MOVE_RECORD} ]; then mv -f /d/${MOVE_RECORD} /d/.adulis-migration-rolled-back; fi; [ ! -e /d/${MOVE_RECORD} ]`,
+    [],
+    { allowFail: true },
+  );
+  if (cleared.status !== 0)
+    refuse(
+      `${made.name} serves ${m.source.volume} again, BUT the move record in ${cfg.dstVolume} could not be cleared: delete /${MOVE_RECORD} in it by hand, and remove ADULIS_MINIO_VOLUME from .env, before any compose up`,
+    );
   const back = inventory(cfg, old);
   const savedInv = {
     objects: new Map(
@@ -1166,10 +1219,6 @@ async function rollback(cfg) {
     `${made.name} serves ${m.source.volume} again, but it differs from its state at the migration`,
     drift,
   );
-  // The move is undone, so its record goes: the guard must not serve the kept volume again.
-  const cleared = onTarget(cfg, `if [ -f /d/${MOVE_RECORD} ]; then mv -f /d/${MOVE_RECORD} /d/.adulis-migration-rolled-back; fi`, [], { allowFail: true });
-  if (cleared.status !== 0)
-    log(`WARNING: the move record in ${cfg.dstVolume} could not be cleared: remove ADULIS_MINIO_VOLUME from .env and do not run compose`);
   interruption.finished = true;
   log(
     `ROLLED BACK: ${made.name} serves ${m.source.volume} again, identical to its state at the migration (${Object.entries(
@@ -1186,7 +1235,9 @@ async function rollback(cfg) {
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   // Installed for every command, so Node never dies between two steps of a migrate or rollback.
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => interruption.on(sig));
+  // SIGHUP: the console window closed (Node on Windows then has about 10 s); SIGBREAK: Ctrl+Break.
+  // Both used to kill Node between two steps with the source stopped and no undo (review M1).
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) process.on(sig, () => interruption.on(sig));
   try {
     if (cmd === 'verify-backup') {
       if (!args[0]) refuse('usage: verify-backup <tar> [<sha256sums file>]');

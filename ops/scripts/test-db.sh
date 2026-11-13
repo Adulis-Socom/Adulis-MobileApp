@@ -54,7 +54,14 @@ case "${1:-}" in
     # A failed step removes what THIS run started, by container ID: a run that loses a race for the
     # names must not remove the other run's containers (WO-INFRA-015A review).
     started=()
-    trap 'echo "test-db: setup failed; removing the containers this run started" >&2; [ ${#started[@]} -eq 0 ] || docker rm -f -v "${started[@]}" >/dev/null 2>&1' ERR
+    # Never stops the trap that calls it (set -e): a removal that fails is said, not swallowed.
+    remove_started() {
+      [ ${#started[@]} -eq 0 ] || docker rm -f -v "${started[@]}" >/dev/null 2>&1 ||
+        echo "test-db: could not remove ${started[*]}; run 'bash ops/scripts/test-db.sh down'" >&2
+    }
+    trap 'echo "test-db: setup failed; removing the containers this run started" >&2; remove_started' ERR
+    # Ctrl+C or a kill during setup used to leave an unmarked pair behind (WO-INFRA-015B).
+    trap 'echo "test-db: interrupted; removing the containers this run started" >&2; remove_started; exit 130' INT TERM
     started+=("$(docker run -d --rm --name "$PG" -p "127.0.0.1:$PG_PORT:5432" -e POSTGRES_USER=adulis_bootstrap \
       -e POSTGRES_PASSWORD=ci-password -e POSTGRES_DB=adulis pgvector/pgvector:pg17)")
     started+=("$(docker run -d --rm --name "$S3" -p "127.0.0.1:$S3_PORT:9000" -e MINIO_ROOT_USER=adulis-local \
@@ -80,10 +87,13 @@ case "${1:-}" in
     wait_for MinIO docker exec "$S3" mc ready local
     docker exec -i -e MINIO_URL=http://127.0.0.1:9000 -e MINIO_ROOT_USER=adulis-local \
       -e MINIO_ROOT_PASSWORD=adulis-local-secret "$S3" /bin/sh -s <ops/scripts/minio-init.sh >/dev/null
+    # The object-storage guard (WO-INFRA-015B) lets the suites write only to a store carrying this.
+    docker exec -i -e MINIO_URL=http://127.0.0.1:9000 -e MINIO_ROOT_USER=adulis-local \
+      -e MINIO_ROOT_PASSWORD=adulis-local-secret "$S3" /bin/sh -s <ops/scripts/minio-test-marker.sh >/dev/null
     # Last: only a fully set-up database carries the mark the guards accept.
     docker exec "$PG" psql -U adulis_bootstrap -d adulis -v ON_ERROR_STOP=1 -q \
       -c "COMMENT ON DATABASE adulis IS 'adulis:disposable-test-database'"
-    trap - ERR
+    trap - ERR INT TERM
     echo "test-db: ready (PostgreSQL 127.0.0.1:$PG_PORT, MinIO 127.0.0.1:$S3_PORT). Now:" >&2
     echo "  eval \"\$(bash ops/scripts/test-db.sh env)\"" >&2
     ;;

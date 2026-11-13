@@ -48,7 +48,8 @@ process.exitCode = await runDeterminism({
     spawnSync(
       process.execPath,
       ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', '-d', 'DETERMINISM_URL', '-m', 'db/migrations', '-j', 'sql', 'up'],
-      { cwd: root, encoding: 'utf8', env: { ...process.env, DETERMINISM_URL: url } },
+      // node-pg-migrate echoes every migration; the 1 MiB default would kill it (ENOBUFS).
+      { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, DETERMINISM_URL: url } },
     ),
   Client: pg.Client,
   interrupted: () => signal,

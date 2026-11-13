@@ -89,14 +89,17 @@ git clone <this repo> && cd adulis-platform
 pnpm install
 cp .env.example .env                   # fill local values; on a FRESH machine uncomment ADULIS_MINIO_VOLUME
 docker volume create adulis-pgdata     # fresh machine, once: the (empty) legacy volume the MinIO guard reads
+docker volume create adulis-platform_adulis-pgdata     # fresh machine, once: the database volume (external)
+docker volume create adulis-platform_adulis-miniodata  # fresh machine, once: the MinIO volume (external)
 docker compose up -d                   # Postgres 17 + the four extensions, MinIO
+docker compose wait minio-init         # its exit status: non-zero if the buckets or policies failed (up -d says 0 regardless)
                                        # an installation predating WO-INFRA-015A: docs/infrastructure/MINIO-STARTUP.md first
 pnpm db:verify-extensions              # must print 4 PASSes
 pnpm db:migrate                        # runs db/migrations in order
 pnpm worker:install                    # graphile-worker's tables, as the DDL role
 pnpm db:check                          # 16 checks, ADU-DB-01 v1.12 Appendix C
 pnpm db:seed                           # one market, one account, one seller
-pnpm test                              # 459 tests; loads .env itself
+pnpm test                              # under test-db.sh only: the suites refuse a non-disposable database or store
 pnpm dev                               # api :3000 - worker - console :5173
 ```
 

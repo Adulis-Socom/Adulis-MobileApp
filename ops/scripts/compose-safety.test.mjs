@@ -79,6 +79,16 @@ test('the legacy volume is external: compose never creates or deletes it, down -
   assert.equal(render().volumes['adulis-legacy'].external, true);
 });
 
+test('every volume is external under its live name: down -v deletes no data (WO-INFRA-015B)', () => {
+  const c = render();
+  assert.equal(c.volumes['adulis-pgdata'].external, true);
+  assert.equal(c.volumes['adulis-pgdata'].name, 'adulis-platform_adulis-pgdata');
+  assert.equal(c.volumes['adulis-miniodata'].external, true);
+  assert.equal(c.volumes['adulis-miniodata'].name, 'adulis-platform_adulis-miniodata');
+  const managed = Object.entries(c.volumes).filter(([, v]) => !v.external).map(([k]) => k);
+  assert.deepEqual(managed, [], 'a compose-managed volume is one `down -v` deletes');
+});
+
 test('the guard service reads both volumes as root, and the legacy volume is never writable', () => {
   const c = render();
   const g = c.services['minio-volume-guard'];

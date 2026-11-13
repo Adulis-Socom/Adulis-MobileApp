@@ -53,6 +53,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDisposable } from './lib/disposable-db.mjs';
+import { checkDisposableStorage } from './lib/disposable-storage.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -138,6 +139,13 @@ if (missingR2.length) {
   die('object storage is not configured: ' + missingR2.join(', ') + ' unset.' +
       ' The media arms need real storage (MinIO: docker compose up -d).' +
       ' Run via pnpm verify:console-e2e (which loads .env) or export the six R2_* values.');
+}
+// WO-INFRA-015B: the media arms upload real objects, so the store must be the disposable one, not
+// the development MinIO the root .env names (ops/scripts/lib/disposable-storage.mjs).
+{
+  const s = await checkDisposableStorage(process.env, { required: true });
+  if (s.code !== 0) die(s.err.join('\n'));
+  for (const line of s.out) console.log(line);
 }
 const MEDIA_ORIGIN = new URL(process.env['R2_MEDIA_PUBLIC_ORIGIN']).origin;
 {

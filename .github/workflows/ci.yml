@@ -95,17 +95,21 @@ jobs:
       # checkouts only for pull_request_target and workflow_run (not used);
       # setup-node v6 auto-caches npm only, so `cache: pnpm` stays explicit;
       # action-setup v6 adds pnpm 11 and still reads packageManager.
-      - uses: actions/checkout@v7
+      # PINNED BY COMMIT (WO-INFRA-015B, PR105-F12): a tag can be moved to other code; a commit
+      # cannot. The comment names the release the commit is; update both together.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Nothing after the checkout needs git credentials: do not leave the token in the clone.
+          persist-credentials: false
           # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
           # ref, so `--filter "...[origin/main]"` below would select NOTHING and
           # the scoped steps would silently pass without running.
           fetch-depth: 0
 
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -221,6 +225,14 @@ jobs:
             -e MINIO_ROOT_PASSWORD=adulis-local-secret \
             -v "$PWD/ops/scripts/minio-init.sh:/minio-init.sh:ro" \
             --entrypoint /bin/sh "$MINIO_IMAGE" /minio-init.sh
+          # The disposable-storage marker (WO-INFRA-015B): the API suites and console-e2e write
+          # only to a store that carries it. Only CI and test-db.sh create it, never compose.
+          docker run --rm --network host \
+            -e MINIO_URL=http://localhost:9000 \
+            -e MINIO_ROOT_USER=adulis-local \
+            -e MINIO_ROOT_PASSWORD=adulis-local-secret \
+            -v "$PWD/ops/scripts/minio-test-marker.sh:/minio-test-marker.sh:ro" \
+            --entrypoint /bin/sh "$MINIO_IMAGE" /minio-test-marker.sh
 
       - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
         run: pnpm ci:local

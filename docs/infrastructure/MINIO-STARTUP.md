@@ -31,6 +31,12 @@ of MinIO's objects, and how the database scripts decide what they may reset.
 3. **`adulis-pgdata` is an external volume.**
    - Compose never creates it, and never deletes it, `docker compose down -v` included.
    - The guard mounts it read-only only.
+   - So are the database volume `adulis-platform_adulis-pgdata` and MinIO's own volume, in this
+     compose file (WO-INFRA-015B): through it, `docker compose down -v` deletes no volume.
+   - **Still never run `docker compose down -v`.** A checkout with an older compose file (such as
+     the one that created the running stack) still deletes the live database volume and
+     `adulis-pgdata` with it, and the command stops the live containers from any checkout. Use
+     plain `docker compose down`.
 
 Both ports are published on **127.0.0.1 only** by default. That covers:
 - the API;
@@ -46,7 +52,13 @@ Both ports are published on **127.0.0.1 only** by default. That covers:
 This is the state of a machine whose MinIO still runs on `adulis-pgdata`.
 
 - **Leave `ADULIS_MINIO_VOLUME` unset.**
-- **Do not run `docker compose up`:** it will refuse, and that is the intent.
+- **Run no compose command at all, from any checkout** (`up`, `down`, `ps` and `logs` included): it
+  will refuse, and that is the intent. Use `docker ps`, `docker logs` and `docker start` instead.
+  Never set the variable just to get compose back (PHASE-002B-01 review M3).
+- **Keep the old MinIO image:** it can no longer be pulled. Do not prune images before the move, and
+  keep a copy: `docker save -o <folder>/minio-legacy-image.tar minio/minio:latest` (it only reads the
+  image), in a folder other than the run's `MIGRATE_BACKUP_DIR`, which must start empty.
+  `minio-migrate.mjs migrate` saves its own copy into the run's backup folder, where rollback looks.
 - **Starting services:** the running containers restart on their own (`restart: unless-stopped`). To
   start one by hand, use `docker start adulis-postgres` or `docker start adulis-minio`.
 - **If the variable was set by mistake and compose ran:**
@@ -69,8 +81,16 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
   copy. The PostgreSQL directories that share the volume are expected.
 - **An interrupt (Ctrl+C)** stops the run at the next step, and the old MinIO is put back. No success
   line is printed for a run that was interrupted.
-- **What the undo leaves behind:** the new volume is removed again. If that fails, the undo reports
-  UNDO PARTIAL and names the volume to remove.
+- **What the undo leaves behind:** before the switch, the new volume is removed again; if that fails,
+  the undo reports UNDO PARTIAL and names the volume to remove. After the switch has begun, the new
+  volume is kept (it may hold the only copy of later writes), and the undo removes the move record in
+  every case, verified, so the guard never serves a copy that is not current (WO-INFRA-015B).
+- **Ctrl+Break** is treated like Ctrl+C (WO-INFRA-015B).
+- **Closing the console window** is handled the same way, but only as far as Windows allows: it ends
+  Node about 10 seconds later, and the docker commands with the console, so the undo may stop half-way.
+  Do not close the window during a move. If it happened, check by hand which MinIO serves which volume
+  and where the move record is (runbook, Rollback) before anything else.
+- **Rollback** loads the old image from the run's backup folder if it was pruned.
 - **Logging:** pipe the run through `tee -i`, so a Ctrl+C does not end the logger.
 
 ### 3. After a successful move
@@ -79,7 +99,8 @@ Put this line in the root `.env`:
 ```
 ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata
 ```
-From then on, `docker compose up -d` is the normal command:
+From then on, `docker compose up -d && docker compose wait minio-init` is the normal command (see
+"Checking that the buckets were set up" below):
 - the guard finds MinIO data and the move record in the data volume, and accepts;
 - `adulis-pgdata` stays mounted read-only by the guard only;
 - it is kept until the founder decides otherwise.
@@ -100,10 +121,22 @@ Follow the runbook's Rollback section. It clears the move record in the new volu
 cp .env.example .env
 #   then uncomment ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata in .env
 docker volume create adulis-pgdata   # once: the empty legacy volume the guard reads
-docker compose up -d
+docker volume create adulis-platform_adulis-pgdata     # once: the database volume (WO-INFRA-015B)
+docker volume create adulis-platform_adulis-miniodata  # once: the MinIO volume (WO-INFRA-015B)
+docker compose up -d && docker compose wait minio-init
 ```
+- All three volumes are external: compose stops with "external volume ... not found" until they exist,
+  and this compose file's `down -v` never deletes them (still, never run it: see section 3 above).
 - The guard reads the empty `adulis-pgdata` as "nothing to move", and MinIO formats its new volume.
 - Later starts are accepted because the data volume holds MinIO data and the legacy volume none.
+
+## Checking that the buckets were set up (WO-INFRA-015B)
+
+`docker compose up -d` exits 0 even when the one-shot `minio-init` fails, for example on a policy
+step. Follow it with `docker compose wait minio-init`, which exits with the init's own status
+(rehearsed: 0 when it succeeded, 3 when it failed with 3). Do not use `docker compose up -d --wait`:
+this Compose (5.7) reports any exited one-shot container as a failure, so it exits 1 even when the
+init succeeded (rehearsed).
 
 ## Deliberate LAN access
 

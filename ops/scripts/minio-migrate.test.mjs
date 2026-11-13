@@ -279,7 +279,7 @@ test('any other bucket on the source refuses, named, and is never deleted', () =
 });
 
 test('the interrupt and partial-rollback rehearsal faults exist and never reach the live volume', () => {
-  for (const f of ['interrupt-preflight', 'interrupt-backup', 'interrupt-hash', 'interrupt-copy', 'interrupt-switch', 'fail-rollback']) {
+  for (const f of ['interrupt-preflight', 'interrupt-backup', 'interrupt-hash', 'interrupt-copy', 'interrupt-switch', 'fail-rollback', 'fail-before-switch']) {
     assert.equal(guard('migrate', 'infra-rh-src', { MIGRATE_FAULT: f }), false, f);
     refuses(() => guard('migrate', 'adulis-pgdata', { MIGRATE_LIVE: 'approved', MIGRATE_FAULT: f }), /rehearsals only/);
   }
