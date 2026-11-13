@@ -177,7 +177,7 @@ test('lifecycle rules compare as a set, IDs and duplicates ignored', () => {
 const goodProbes = (over = {}) => ({
   results: {
     'read-media': 'ALLOWED',
-    'list-media': 'ALLOWED',
+    'list-media': 'DENIED',
     'write-media': 'DENIED',
     'list-evidence': 'DENIED',
     'read-evidence': 'DENIED',
@@ -191,10 +191,10 @@ const goodProbes = (over = {}) => ({
 test('the target must be exactly the two buckets, private evidence, the expiry rule, and deny by probe', () => {
   const src = parseInventory(invText());
   assert.deepEqual(checkTarget(parseInventory(invText()), src, goodProbes()), []);
-  assert.deepEqual(
-    checkTarget(parseInventory(invText()), src, goodProbes({ 'list-media': 'DENIED' })),
-    [],
-    'listing media is not enforced (ISSUE-INFRA-013)',
+  // The media bucket serves single objects only; listing it is an exposure (ISSUE-INFRA-013).
+  assert.match(
+    checkTarget(parseInventory(invText()), src, goodProbes({ 'list-media': 'ALLOWED' })).join(),
+    /list-media: ALLOWED, expected DENIED/,
   );
   const phantom = parseInventory(invText(['B {"key":"pg_wal/"}']));
   assert.match(checkTarget(phantom, src, goodProbes()).join(), /expected exactly/);
