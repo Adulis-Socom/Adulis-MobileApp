@@ -29,6 +29,23 @@ reproduced.
 | P0 unresolved | 1 (ISSUE-INFRA-001: configuration fixed, live data move blocked pending approval) |
 | P1 unresolved | 0 |
 
+### After the follow-up batch (WO-INFRA-007 to 009, 13 November)
+
+The counts above are the first batch's, kept as they were. Statuses now:
+
+| Metric | Count |
+|---|---|
+| Total issues (this register) | 27 |
+| Resolved | 21 (+ ISSUE-INFRA-013, 016, 027) |
+| Open | 1 (ISSUE-INFRA-010) |
+| Blocked | 1 (ISSUE-INFRA-001, the live move only) |
+| Deferred | 1 (ISSUE-INFRA-011) |
+| Needs founder decision | 3 (ISSUE-INFRA-005 deletion only, 012, 017) |
+| P0 unresolved | 1 (ISSUE-INFRA-001: hardened and rehearsed, awaiting approval) |
+| P1 unresolved | 0 in this register (see the follow-up register for new ones) |
+
+New issues of the follow-up batch: `OVERNIGHT-INFRA-FOLLOWUP-ISSUES-2026-11-13.md`.
+
 ## MORNING REVIEW -- FOUNDER ACTIONS REQUIRED
 
 1. **Approve, or decline, the live MinIO data move (ISSUE-INFRA-001, BLOCKED).**
@@ -61,6 +78,8 @@ it deletes the live database volume (ISSUE-INFRA-026).
 
 **Work Order:** WO-INFRA-001 (found), WO-INFRA-002 (fix)
 **Severity:** P0 | **Category:** Docker | **Status:** BLOCKED (live data move)
+
+**Update 13 November (follow-up batch):** BLOCKED, unchanged. WO-INFRA-007 replaced the hand-run runbook with `ops/scripts/minio-migrate.mjs` (fail-closed, self-undoing), rehearsed with a full move, a rollback and ten deliberate failures. The live move still needs the founder's approval: `WO-INFRA-007-CUTOVER-AND-ROLLBACK.md`.
 **Discovered at:** 2026-11-12T21:58Z
 **Affected files:** `docker-compose.yml`
 
@@ -207,6 +226,8 @@ root project.
 
 **Work Order:** WO-INFRA-001 | **Severity:** P2 | **Category:** Docker / Database
 **Status:** NEEDS FOUNDER DECISION
+
+**Update 13 November (follow-up batch):** NEEDS FOUNDER DECISION, now only about deleting the volume. WO-INFRA-008 recovered the directory from the backup copy (clean shutdown 2026-09-03 10:02:39): migrations 0001-0048 plus the seed fixture, nothing unique. Archived on the SSD with checksums and restore-tested (`WO-INFRA-008-LEGACY-DATABASE-ARCHIVE.md`). The volume is untouched.
 **Discovered at:** 2026-11-12T22:00Z
 **Affected files:** Docker volume `adulis-pgdata`
 
@@ -300,6 +321,8 @@ CI gate evidence.
 ### ISSUE-INFRA-010 -- GitHub MCP plugin did not connect
 
 **Work Order:** WO-INFRA-001 | **Severity:** P3 | **Category:** Other (tooling) | **Status:** OPEN
+
+**Update 13 November (follow-up batch):** OPEN, unchanged: the plugin still fails ("Authorization header is badly formatted"). `gh` was used. Founder action: re-authorise with `/mcp`.
 **Discovered at:** 2026-11-12T21:45Z
 
 **Description:** "Authorization header is badly formatted" at session start. The authenticated `gh` CLI
@@ -310,6 +333,8 @@ was used instead.
 ### ISSUE-INFRA-011 -- `pgvector/pgvector:pg17` is a moving tag
 
 **Work Order:** WO-INFRA-001 | **Severity:** P3 | **Category:** Docker | **Status:** DEFERRED
+
+**Update 13 November (follow-up batch):** DEFERRED, re-checked. Pinning `pgvector/pgvector:pg17` by digest would make the next `docker compose up` recreate `adulis-postgres` (same volume, a restart), and it would stop security updates arriving. The determinism gate passed in every CI run of both batches. Revisit only if determinism drifts.
 **Discovered at:** 2026-11-12T22:04Z
 
 **Description:** the local image is `sha256:cf134a76...`; the tag resolves today to `sha256:7d0a4146...`.
@@ -320,6 +345,8 @@ locally and in CI. **Founder decision required:** NO.
 ### ISSUE-INFRA-012 -- Unmerged CI fix and uncommitted CI edits exist elsewhere
 
 **Work Order:** WO-INFRA-001 | **Severity:** P3 | **Category:** CI | **Status:** NEEDS FOUNDER DECISION
+
+**Update 13 November (follow-up batch):** NEEDS FOUNDER DECISION, now reconciled. `810fb27` merges clean with both infrastructure branches. The Work checkout's uncommitted `gates.mjs` edit collides only at the end of the gate list. An infrastructure-only candidate on `main` is green. Recommendation: option A (`WO-INFRA-008-MERGE-RECOMMENDATION.md`).
 **Discovered at:** 2026-11-12T21:56Z
 
 **Description:** this batch's `ci.yml` changes overlap two other pieces of work:
@@ -334,6 +361,8 @@ main.
 ### ISSUE-INFRA-013 -- The local media bucket is anonymously listable
 
 **Work Order:** WO-INFRA-003 | **Severity:** P3 | **Category:** Security | **Status:** DEFERRED
+
+**Update 13 November (follow-up batch):** RESOLVED by WO-INFRA-009 (`4b38c78`). The media bucket's anonymous policy is `s3:GetObject` on objects only. Tested: anonymous read OK, list and write denied, evidence private, init idempotent. CI run in `WO-INFRA-009-FINAL-VERIFICATION.md`.
 **Discovered at:** 2026-11-12T22:19Z
 
 **Description:** the `download` canned policy grants `s3:ListBucket` as well as `s3:GetObject`. This is
@@ -382,6 +411,8 @@ review.
 ### ISSUE-INFRA-016 -- CI runner moved to Ubuntu 26.04; the Node 20 actions are deprecated
 
 **Work Order:** WO-INFRA-005 | **Severity:** P3 | **Category:** CI | **Status:** OPEN
+
+**Update 13 November (follow-up batch):** RESOLVED by WO-INFRA-009 (`4b38c78`): checkout v7, setup-node v7, pnpm/action-setup v6, all Node 24. CI evidence in `WO-INFRA-009-FINAL-VERIFICATION.md`.
 **Discovered at:** 2026-11-12T22:41Z
 
 **Description:** GitHub annotations:
@@ -398,6 +429,8 @@ pinning `runs-on`. **Founder decision required:** NO.
 
 **Work Order:** WO-INFRA-001 | **Severity:** P2 | **Category:** Database / Other
 **Status:** NEEDS FOUNDER DECISION
+
+**Update 13 November (follow-up batch):** NEEDS FOUNDER DECISION, unchanged. Nothing in this batch could reach a production environment, and its existence or backups are not assumed.
 **Discovered at:** 2026-11-12T22:10Z
 
 **Description:**
@@ -515,6 +548,8 @@ prohibited list.
 ### ISSUE-INFRA-027 -- The image signature was not verified
 
 **Work Order:** WO-INFRA-003 | **Severity:** P3 | **Category:** Security | **Status:** OPEN
+
+**Update 13 November (follow-up batch):** RESOLVED by WO-INFRA-009. cosign verified the signature and the SBOM and SLSA attestations, signed by Chainguard's release workflow. A wrong identity correctly fails. Grype reports 0 known vulnerabilities (`WO-INFRA-009-SUPPLY-CHAIN-REVIEW.md`).
 
 **Description:** Chainguard signs its images with Sigstore. `cosign` is not installed, and installing
 tools was out of scope.

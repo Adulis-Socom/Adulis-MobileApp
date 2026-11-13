@@ -179,7 +179,6 @@ Sections 3 to 7. Integration CI results: `WO-INFRA-008-INTEGRATION-TESTS.md`.
 - **Keep the test-only commit `810b598` in the candidate?** Recommended: yes.
 
 ## 17. Commit SHA and final status
-- **Commit:** the WO-INFRA-008 commit on `infra/wo-infra-007-009-finalization`
-  (`git log --grep WO-INFRA-008`).
+- **Commit:** `e9eaff8` on `infra/wo-infra-007-009-finalization` (`0db7911` on the candidate).
 - **Candidate:** `infra/main-integration-candidate`.
 - **Final status:** **COMPLETE.**

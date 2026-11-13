@@ -109,7 +109,8 @@ Also:
 - `plan` against the live stack, read-only.
 
 ## 10. Actual results
-- **Unit tests:** 8 of 8. **Mutations:** 12 of 12 killed.
+- **Unit tests:** 8 of 8 at `67ef676`; 11 of 11 after the review fixes.
+- **Mutations:** 12 of 12 killed.
 - **Existing backup** (`G:\AdulisDevelopment\WO-INFRA\backup`, taken 2026-11-12T22:14:35Z): all five
   checksums match. The volume tar is complete (7,064 entries) and holds the MinIO data and the old
   PostgreSQL directory.
@@ -162,6 +163,8 @@ ISSUE-INFRA-FOLLOWUP-001 and 003; ISSUE-INFRA-FOLLOWUP-002 is guarded (the scrip
 - Commands: `WO-INFRA-007-CUTOVER-AND-ROLLBACK.md`.
 
 ## 17. Commit SHA and final status
-- **Commit:** the WO-INFRA-007 commit on `infra/wo-infra-007-009-finalization` (`git log --grep WO-INFRA-007`).
+- **Commits:** `67ef676` on `infra/wo-infra-007-009-finalization`, hardened by the review fixes in
+  `7418d82` (WO-INFRA-009, section 13 of its final verification).
+- **On the candidate:** `4aa71de` and `de1ae19`.
 - **Final status:** **PARTIALLY COMPLETE**. The hardening, verification and rehearsal are COMPLETE;
   the **live cutover is BLOCKED** pending approval.

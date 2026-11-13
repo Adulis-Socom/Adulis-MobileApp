@@ -82,6 +82,26 @@ The R10 manifest records:
 3. **The undo for a compose-created target volume was registered after the compose call,** so a failed
    call leaked an empty volume. Now registered before it.
 
+## After the independent reviews (WO-INFRA-009)
+
+The script was hardened in `7418d82`; see section 13 of `WO-INFRA-009-FINAL-VERIFICATION.md`. Re-run on
+disposable copies:
+
+| Run | What | Result |
+|---|---|---|
+| R13 | The committed script (`67ef676`): migrate, then rollback | MIGRATED; ROLLED BACK |
+| R14 | Under the new media policy (`4b38c78`) | MIGRATED, with media listing enforced as DENIED; ROLLED BACK |
+| R15 | Review fixes: migrate, rollback, second rollback | MIGRATED; ROLLED BACK, "identical to its state at the migration", 0 changes after the switch; the second rollback **refused** ("nothing to roll back") |
+| R15b | A rollback of a run recorded on `adulis-pgdata`, with `MIGRATE_SRC_VOLUME=x` | **Refused:** needs the founder's approval |
+| R16 | Init fails at the switch | Refused, then **UNDO OK** (the old MinIO answers on its port again) |
+| R17 | Corrupt backup | Refused, then **UNDO OK** |
+
+Two further checks:
+- **Stream errors:** a disk-full output, an EPIPE on stdin and a non-zero exit all reject, and the
+  process lives on to run its undo (`logs/dockerpipe-error-check.log`).
+- **Checksum files:** `verify-backup` with a BOM and a wrong hash is refused; with a BOM and the right
+  hash it passes.
+
 ## Live, read-only
 
 `plan` against the real stack at 07:21Z:

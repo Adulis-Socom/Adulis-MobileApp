@@ -15,6 +15,8 @@ changes. Evidence paths are under `G:\AdulisDevelopment\WO-INFRA-FOLLOWUP\` unle
 | ISSUE-INFRA-FOLLOWUP-005 | 008 | P2 | OPEN | The dev database holds foreign-key orphans; its dump restores with 5 constraints missing | YES |
 | ISSUE-INFRA-FOLLOWUP-006 | 008 | P1 | RESOLVED (candidate) | `main` fails CI on a calendar time bomb in `c1-onboarding` | YES (keep `810b598` in the candidate) |
 | ISSUE-INFRA-FOLLOWUP-007 | 008 | P3 | RESOLVED | A worktree on the exFAT SSD is refused by Git as "dubious ownership" | No |
+| ISSUE-INFRA-FOLLOWUP-008 | 009 | P1 | RESOLVED | The independent reviews found fail-open paths in the new migration script | No |
+| ISSUE-INFRA-FOLLOWUP-009 | 009 | P3 | RESOLVED | Old MinIO image is unpullable; rollback depends on the local copy | No |
 
 ## MORNING REVIEW -- FOUNDER ACTIONS REQUIRED
 
@@ -185,4 +187,58 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Verification results:** the cherry-picks and pushes worked.
 - **Remaining risks:** none; the same limitation as junctions on G: (first batch).
 - **Recommended action:** for worktrees on G:, pass `-c safe.directory` per command.
+- **Founder decision required:** No.
+
+## ISSUE-INFRA-FOLLOWUP-008 -- The independent reviews found fail-open paths in the new migration script
+
+- **Work order:** WO-INFRA-009 (review of WO-INFRA-007)
+- **Severity:** P1
+- **Status:** RESOLVED
+- **Description:** two independent, read-only reviews (PR Review Toolkit `code-reviewer` and
+  `silent-failure-hunter`), given the diff and the rules but not my conclusions, found:
+  - `verify-backup` printed BACKUP OK without comparing hashes when the checksum file had a BOM or a
+    leading blank;
+  - a stream error during backup or restore crashed Node before the undo, leaving the source stopped;
+  - `rollback` could skip the approval (it used the environment's volume, not the run's), could stop
+    the restored MinIO on a second run, did not check that the old image and volume still exist, and
+    reported success without comparing the restored store;
+  - the undo was never verified, and cleanup failures were ignored;
+  - smaller probe and logging gaps.
+- **Root cause:** my own code: a lenient parser, `pipe()` without error handlers, and a rollback
+  written for the happy path.
+- **Evidence:** both reviewers reproduced the stream crash and the BOM pass in scratch scripts.
+  Findings are listed in `WO-INFRA-009-FINAL-VERIFICATION.md` (section 13).
+- **Changes attempted:** see the review-fix commit: strict `recordedSha`, `pipeline()`, a Ctrl+C
+  handler, rollback preconditions, a put-back path and a content comparison, a verified undo, guarded
+  cleanup, `exists()` that refuses on errors, fail-closed probes, a media-policy action check, and
+  owner-only backup files.
+- **Verification results:**
+  - 11 unit tests (3 new) and 13 `gate-runner` tests;
+  - the BOM case refused on the real backup;
+  - all three stream-failure kinds reject without crashing (`logs/dockerpipe-error-check.log`);
+  - re-rehearsed R15 to R17 (`logs/rehearsal-R15-R17.log`).
+- **Remaining risks:**
+  - `minio-init.sh`'s lifecycle pattern can still match across two rules. That is a documented
+    shortcut, and `migrate` checks the rule set itself.
+  - Large multipart objects would be refused by ETag, which is the safe direction.
+- **Recommended action:** none.
+- **Founder decision required:** No.
+
+## ISSUE-INFRA-FOLLOWUP-009 -- Old MinIO image is unpullable; rollback depends on the local copy
+
+- **Work order:** WO-INFRA-009
+- **Severity:** P3
+- **Status:** RESOLVED
+- **Description:** `rollback` recreates the old container from image `14cea493d9a3` (`minio/minio:latest`,
+  RELEASE.2025-09-07), which Docker Hub no longer serves. After the move nothing runs it, so an image
+  prune or a Docker Desktop clean-up would delete it and make the rollback impossible.
+- **Root cause:** upstream MinIO stopped publishing images (WO-INFRA-003).
+- **Evidence:** WO-INFRA-003 (Docker Hub 404); the code review's finding 3.
+- **Changes attempted:** `rollback` now refuses before stopping anything if the image is missing. The
+  runbook says to save it first.
+- **Verification results:** the image was saved, which is non-destructive:
+  `G:\AdulisDevelopment\WO-INFRA-FOLLOWUP\backup\minio-old-image-14cea493d9a3.tar` (62,259,712 bytes,
+  SHA-256 `ff5c117e...`, recorded in `SHA256SUMS.txt` beside it). `docker load -i <file>` restores it.
+- **Remaining risks:** none while that file exists.
+- **Recommended action:** keep the file until the move is verified and ISSUE-INFRA-005 is decided.
 - **Founder decision required:** No.
