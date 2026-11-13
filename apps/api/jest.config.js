@@ -7,6 +7,8 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: './coverage',
   testEnvironment: 'node',
+  // WO-INFRA-012: refuses any database not marked disposable (test/db-target.ts) before a suite runs.
+  globalSetup: '<rootDir>/test/global-setup.ts',
   // Tests and hooks alike. The e2e setups build the Nest app and their fixtures through the API;
   // under parallel workers several exceeded the 5 s default in their beforeAll, failing whole
   // suites intermittently (ON-20261111-011). Assertions are unaffected.

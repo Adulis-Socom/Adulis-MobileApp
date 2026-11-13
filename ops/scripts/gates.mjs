@@ -596,6 +596,24 @@ const GATES = [
    * rehearsed on disposable copies; these are the decisions that must refuse.
    */
   { id: 'minio-migrate', title: 'The MinIO data move refuses what it must', cmd: ['node', '--test', 'ops/scripts/minio-migrate.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-012), and last on purpose: it audits what every earlier gate left behind.
+   *
+   * `orphan-sweep` above checks the foreign keys into core.seller. This checks ALL of them
+   * (read-only), because a teardown under `replica` orphans children of any parent. A fresh
+   * disposable database holds all of them; after one full API run five break, each a known teardown
+   * (ISSUE-INFRA-CLOSURE-004). Those five are named in fk-audit.mjs and tolerated; any other key
+   * with an orphan fails, so the leak cannot spread while the five are fixed.
+   */
+  {
+    id: 'fk-integrity',
+    title: 'No foreign key is broken beyond the five known test leaks',
+    steps: [
+      ['node', '--test', 'ops/scripts/fk-audit.test.mjs'],
+      ['node', 'ops/scripts/fk-audit.mjs', '--known-test-leaks'],
+    ],
+  },
 ];
 
 export { GATES };
