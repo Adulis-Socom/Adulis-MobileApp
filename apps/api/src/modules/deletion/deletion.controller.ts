@@ -10,7 +10,7 @@ import {
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import { IdempotencyService, hashRequest } from '../../common/idempotency/idempotency';
+import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
@@ -158,10 +158,7 @@ export class DeletionController {
   ): Promise<unknown> {
     deletionConfirmBody.parse(req.body);
     const ticket = this.ticketId(req);
-    const key = req.headers['idempotency-key'];
-    if (typeof key !== 'string' || key === '') {
-      throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
-    }
+    const key = idempotencyKey(req.headers['idempotency-key']);
 
     // Manual idempotency: the actor is the ticket's account, resolved
     // before the handler transaction — the web page holds no session and
@@ -174,7 +171,7 @@ export class DeletionController {
     const resolved: TicketAccount = account;
     const actor = { kind: 'ACCOUNT' as const, id: resolved.accountId };
     const endpoint = `${req.method} ${req.path}`;
-    const requestHash = hashRequest(req.method, req.path, req.body);
+    const requestHash = hashRequest(req.method, req.path, req.body, req.ctx?.sellerId ?? null);
 
     const replay = await this.idempotency.check(key, actor, endpoint, requestHash);
     if (replay) {

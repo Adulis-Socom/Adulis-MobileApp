@@ -10,10 +10,11 @@ import { AdulisException } from '../errors/adulis-exception';
 import {
   IdempotencyService,
   hashRequest,
+  idempotencyKey,
   type IdempotencyActor,
   type StoredResponse,
 } from '../idempotency/idempotency';
-import { BROWSER_DEVICE_COOKIE, clientSurface, readCookie } from '../http/cookies';
+import { BROWSER_DEVICE_COOKIE, clientSurface, deviceHeader, readCookie } from '../http/cookies';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -206,23 +207,24 @@ export class HandlerTransaction {
     fn: (trx: Transaction<Database>) => Promise<T>,
     beforeTransaction?: () => Promise<void>,
   ): Promise<T> {
-    const key = req.headers['idempotency-key'];
-    if (typeof key !== 'string' || key === '') {
-      throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
-    }
-
+    const key = idempotencyKey(req.headers['idempotency-key']);
     const actor = this.actorFor(req);
+    const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
     const endpoint = `${req.method} ${req.path}`;
-    const requestHash = hashRequest(req.method, req.path, req.body);
+    const requestHash = hashRequest(req.method, req.path, req.body, ctx.sellerId);
 
-    const replay = await this.idempotency.check(key, actor, endpoint, requestHash);
+    // Any selected seller, not only on /v1/seller paths: chat and claims act
+    // as the store from the header with role BUYER. Without standing the
+    // handler runs and decides; where it does not refuse, the existing record
+    // collides at commit and the same-hash response is served after all.
+    const standingSeller = actor.kind === 'ACCOUNT' ? ctx.sellerId : null;
+    const replay = await this.idempotency.check(key, actor, endpoint, requestHash, standingSeller);
     if (replay) {
       res.setHeader('X-Adulis-Idempotent-Replay', 'true');
       res.status(replay.status);
       return replay.body as T;
     }
 
-    const ctx = req.ctx ?? { accountId: null, actorRole: '', sellerId: null };
     let out: Settled<T>;
     try {
       await beforeTransaction?.();
@@ -241,7 +243,8 @@ export class HandlerTransaction {
     } catch (e) {
       // Losing the UNIQUE race to a concurrent twin: our effects rolled
       // back with the transaction; the winner's stored response is the
-      // truthful answer to "did my request succeed?".
+      // truthful answer to "did my request succeed?" -- if it was the same
+      // request. A different body or seller, or an expired record, is 409.
       if (
         typeof e === 'object' &&
         e !== null &&
@@ -249,7 +252,7 @@ export class HandlerTransaction {
         (e as { constraint?: string }).constraint ===
           'idempotency_record_key_actor_kind_actor_id_endpoint_key'
       ) {
-        const winner = await this.idempotency.readWinner(key, actor, endpoint);
+        const winner = await this.idempotency.readWinner(key, actor, endpoint, requestHash);
         if (winner) {
           res.setHeader('X-Adulis-Idempotent-Replay', 'true');
           res.status(winner.status);
@@ -273,10 +276,8 @@ export class HandlerTransaction {
    */
   private actorFor(req: LocalizedRequest): IdempotencyActor {
     if (req.ctx?.accountId) return { kind: 'ACCOUNT', id: req.ctx.accountId };
-    const device = req.headers['x-adulis-device'];
-    if (typeof device === 'string' && device !== '') {
-      return { kind: 'DEVICE', id: device };
-    }
+    const device = deviceHeader(req.headers['x-adulis-device']);
+    if (device) return { kind: 'DEVICE', id: device };
     // A BROWSER HAS NO SUCH HEADER, and after ADU-RUL-03 S2 it must not: its
     // device identity is the httpOnly cookie /v1/bootstrap minted, which
     // JavaScript cannot read and therefore cannot put in a header. Without

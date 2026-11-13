@@ -8,6 +8,10 @@
  * how one of them drifts.
  */
 
+import { AdulisException } from '../errors/adulis-exception';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** The console's session credential (ADU-API-01 S3). */
 export const SESSION_COOKIE = '__Host-adulis_session';
 
@@ -89,13 +93,26 @@ export function requestingDevice(headers: {
   'x-adulis-device'?: string | string[] | undefined;
   'x-adulis-client'?: string | string[] | undefined;
 }): string | null {
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const cookie = readCookie(headers.cookie, BROWSER_DEVICE_COOKIE);
-  const fromCookie = cookie && uuid.test(cookie) ? cookie : null;
+  const fromCookie = cookie && UUID_RE.test(cookie) ? cookie : null;
   if (clientSurface(headers['x-adulis-client']) === 'web') return fromCookie;
   const header = headers['x-adulis-device'];
-  if (typeof header === 'string' && uuid.test(header)) return header;
+  if (typeof header === 'string' && UUID_RE.test(header)) return header;
   // An app that sent no header, or a caller naming no surface, may still be a
   // browser -- the cookie is httpOnly, so its presence is evidence.
   return fromCookie;
+}
+
+/**
+ * The X-Adulis-Device header as sent: null when absent or empty, the id when
+ * it is a uuid, and 400 VALIDATION_FAILED otherwise -- where the value is
+ * used as given rather than resolved by surface, it reaches a uuid column,
+ * and a malformed one used to answer 500 to an anonymous caller.
+ */
+export function deviceHeader(header: unknown): string | null {
+  if (header === undefined || header === '') return null;
+  if (typeof header !== 'string' || !UUID_RE.test(header)) {
+    throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'X-Adulis-Device' } });
+  }
+  return header;
 }

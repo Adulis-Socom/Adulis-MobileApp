@@ -23,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import { IdempotencyService, hashRequest } from '../../common/idempotency/idempotency';
+import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
 import { Public, type AuthedRequest } from '../../common/auth/auth.guard';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { RateLimitService, subjectHash } from '../../common/rate-limit/rate-limit.service';
@@ -264,10 +264,7 @@ export class AuthController {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'audience' } });
     }
     const body = otpVerifyBody.parse(req.body);
-    const key = req.headers['idempotency-key'];
-    if (typeof key !== 'string' || key === '') {
-      throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
-    }
+    const key = idempotencyKey(req.headers['idempotency-key']);
     /**
      * WHICH DEVICE THIS REQUEST SPEAKS FOR -- by WHAT IS PRESENTED, never by
      * a claimed audience (the body no longer carries one to claim).
@@ -298,7 +295,7 @@ export class AuthController {
     }
     const actor = { kind: 'DEVICE' as const, id: effectiveDeviceId };
     const endpoint = `${req.method} ${req.path}`;
-    const requestHash = hashRequest(req.method, req.path, req.body);
+    const requestHash = hashRequest(req.method, req.path, req.body, req.ctx?.sellerId ?? null);
 
     const replay = await this.idempotency.check(key, actor, endpoint, requestHash);
     if (replay) {
