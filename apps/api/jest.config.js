@@ -7,4 +7,8 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: './coverage',
   testEnvironment: 'node',
+  // WO-INFRA-012: refuses any database not marked disposable (test/db-target.ts) before a suite runs.
+  globalSetup: '<rootDir>/test/global-setup.ts',
+  // ...and after the last suite, fails the run on any orphan beyond the known test leaks.
+  globalTeardown: '<rootDir>/test/global-teardown.ts',
 };

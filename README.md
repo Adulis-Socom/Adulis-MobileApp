@@ -87,8 +87,10 @@ fnm install 22 && fnm use 22          # matches .nvmrc
 corepack enable && corepack prepare pnpm@latest --activate
 git clone <this repo> && cd adulis-platform
 pnpm install
-docker compose up -d                   # Postgres 17 + the four extensions
-cp .env.example .env                   # fill local values
+cp .env.example .env                   # fill local values; on a FRESH machine uncomment ADULIS_MINIO_VOLUME
+docker volume create adulis-pgdata     # fresh machine, once: the (empty) legacy volume the MinIO guard reads
+docker compose up -d                   # Postgres 17 + the four extensions, MinIO
+                                       # an installation predating WO-INFRA-015A: docs/infrastructure/MINIO-STARTUP.md first
 pnpm db:verify-extensions              # must print 4 PASSes
 pnpm db:migrate                        # runs db/migrations in order
 pnpm worker:install                    # graphile-worker's tables, as the DDL role

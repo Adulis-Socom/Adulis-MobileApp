@@ -14,127 +14,45 @@
  * therefore ALWAYS reports a difference, on any schema, forever — a check that
  * fails on correct input teaches people to ignore it. Lines beginning with a
  * backslash are psql meta-commands rather than schema, and are excluded.
+ *
+ * A DESTRUCTIVE SCRIPT ASSERTS ITS ENVIRONMENT (T9 S3.3, D-133) AND ITS TARGET
+ * (WO-INFRA-015A). It DROPs and CREATEs databases with `docker exec`, so the
+ * container is never assumed: ADULIS_PG_CONTAINER must name it (test-db.sh env
+ * exports it; CI passes its service container), and lib/disposable-db.mjs must
+ * prove it is the disposable server DATABASE_URL_MIGRATE reaches before the
+ * first statement. There used to be a default container name, and it was the
+ * persistent development server's.
+ *
+ * No entry-point test on purpose: this file always runs, and the logic it runs
+ * is the tested lib/determinism.mjs.
  */
-
 import { spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+import { runDeterminism } from './lib/determinism.mjs';
 
-/**
- * A DESTRUCTIVE SCRIPT ASSERTS ITS ENVIRONMENT (WORK ORDER T9 S3.3, D-133).
- *
- * D-107's exemption covers ops scripts that READ. This one does not read: it
- * DROPs and re-CREATEs two databases. An unset NODE_ENV is refused with everything else,
- * because a process that cannot determine its environment must not pick the
- * permissive default -- which is D-105, the finding this whole tier began
- * with.
- *
- * DUPLICATED, NOT IMPORTED, and deliberately so. Reaching into
- * apps/api/src/common/env.ts would couple an ops script to the API's module
- * graph, which is the coupling D-107 avoided; five lines are cheaper than
- * that, and far cheaper than an unguarded DROP DATABASE.
- */
-const DESTRUCTIVE_ENVS = ['development', 'test'];
-if (!DESTRUCTIVE_ENVS.includes(process.env.NODE_ENV ?? '')) {
-  console.error(
-    `FAIL  NODE_ENV is ${process.env.NODE_ENV ? `'${process.env.NODE_ENV}'` : 'unset'}; ` +
-      `this script runs only under ${DESTRUCTIVE_ENVS.join(' or ')}.`,
-  );
-  console.error('      It DROPs and re-CREATEs two databases, so it refuses an environment it cannot name.');
-  process.exit(2);
-}
-
-const CONTAINER = process.env['ADULIS_PG_CONTAINER'] ?? 'adulis-postgres';
-const ADMIN_URL = process.env['DATABASE_URL_MIGRATE'];
-
-if (!ADMIN_URL) {
-  console.error('FAIL  DATABASE_URL_MIGRATE is not set.');
-  process.exit(2);
-}
-
-const url = new URL(ADMIN_URL);
-const adminUser = decodeURIComponent(url.username);
-const suffix = randomUUID().slice(0, 8).replace(/-/g, '');
-
-const dbs = [`adulis_det_a_${suffix}`, `adulis_det_b_${suffix}`];
-
-/** Run psql/pg_dump inside the container, so no client tooling is required. */
-function inContainer(args, { capture = false } = {}) {
-  const r = spawnSync('docker', ['exec', '-i', CONTAINER, ...args], {
-    encoding: 'utf8',
-    stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+let signal = null;
+for (const sig of ['SIGINT', 'SIGTERM'])
+  process.on(sig, () => {
+    if (!signal) console.error(`\n${sig}: stopping after the current step; the scratch databases are dropped first`);
+    signal ??= sig;
   });
-  if (r.status !== 0 && capture) {
-    console.error(r.stderr);
-    throw new Error(`${args[0]} failed`);
-  }
-  return r.stdout ?? '';
-}
 
-function adminSql(sqlText) {
-  inContainer(['psql', '-U', adminUser, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', sqlText], {
-    capture: true,
-  });
-}
-
-function migrate(dbName) {
-  const target = new URL(ADMIN_URL);
-  target.pathname = `/${dbName}`;
-  const r = spawnSync(
-    process.execPath,
-    [
-      'node_modules/node-pg-migrate/bin/node-pg-migrate.js',
-      '-d', 'DETERMINISM_URL',
-      '-m', 'db/migrations',
-      '-j', 'sql',
-      'up',
-    ],
-    { encoding: 'utf8', env: { ...process.env, DETERMINISM_URL: target.href } },
-  );
-  if (r.status !== 0) {
-    console.error(r.stdout, r.stderr);
-    throw new Error(`migrations failed against ${dbName}`);
-  }
-}
-
-/** Schema only, ownership and privileges excluded, psql meta-commands stripped. */
-function schemaLines(dbName) {
-  const dump = inContainer(
-    ['pg_dump', '-U', adminUser, '-d', dbName, '--schema-only', '--no-owner', '--no-privileges'],
-    { capture: true },
-  );
-  return dump.split('\n').filter((l) => !l.startsWith('\\'));
-}
-
-let failed = false;
-try {
-  for (const d of dbs) {
-    adminSql(`DROP DATABASE IF EXISTS ${d}`);
-    adminSql(`CREATE DATABASE ${d}`);
-    migrate(d);
-  }
-  const [a, b] = dbs.map(schemaLines);
-
-  if (a.length === b.length && a.every((l, i) => l === b[i])) {
-    console.log(`PASS  two clean databases converge on an identical schema (${a.length} lines compared).`);
-  } else {
-    failed = true;
-    console.error('FAIL  migrations are not deterministic. First differences:');
-    let shown = 0;
-    for (let i = 0; i < Math.max(a.length, b.length) && shown < 12; i += 1) {
-      if (a[i] !== b[i]) {
-        console.error(`  ${i + 1}\n    A: ${a[i] ?? '<absent>'}\n    B: ${b[i] ?? '<absent>'}`);
-        shown += 1;
-      }
-    }
-  }
-} finally {
-  for (const d of dbs) {
-    try {
-      adminSql(`DROP DATABASE IF EXISTS ${d}`);
-    } catch {
-      console.error(`warning: could not drop scratch database ${d}`);
-    }
-  }
-}
-
-process.exit(failed ? 1 : 0);
+process.exitCode = await runDeterminism({
+  env: process.env,
+  docker: (args) => spawnSync('docker', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }),
+  migrate: (url) =>
+    spawnSync(
+      process.execPath,
+      ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', '-d', 'DETERMINISM_URL', '-m', 'db/migrations', '-j', 'sql', 'up'],
+      { cwd: root, encoding: 'utf8', env: { ...process.env, DETERMINISM_URL: url } },
+    ),
+  Client: pg.Client,
+  interrupted: () => signal,
+  suffix: () => randomBytes(4).toString('hex'),
+  out: (l) => console.log(l),
+  err: (l) => console.error(l),
+});

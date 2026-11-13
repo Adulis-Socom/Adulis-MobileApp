@@ -50,12 +50,96 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const scope = process.env['ADULIS_SCOPE_FILTER'] ?? '';
+
+/**
+ * A SCOPE THAT CANNOT SHOW IT SELECTED THE RIGHT THINGS RUNS EVERYTHING
+ * (WO-INFRA-004, ISSUE-INFRA-004).
+ *
+ * pnpm exits 0 when a filter matches nothing. So `typecheck`, `build` and `test`
+ * "passed" without running on every push to main -- `...[origin/main]` diffs the
+ * commit against itself -- and on every branch whose changes were root files:
+ * ci.yml, ops/, db/migrations, tsconfig.base.json, the lockfile. Those belong to
+ * the excluded root project, so they select nothing, although every package
+ * builds or tests against them (runs 34129602933 on main and 34147378670). The
+ * three console-dist gates then pass "not selected" on top.
+ *
+ * So the scope is dropped, and the run says so, when a changed file is outside
+ * apps/ and packages/ and is not Markdown (or .claude/ tooling), or when the
+ * filter selects no package at all. docs/ is NOT exempt: the API suite reads
+ * docs/amendments/*.sql. An unrecognised root path counts as an input: the safe
+ * failure is a slower run, never a green one that checked nothing.
+ */
+const SCOPE_TRACKED = /^(apps|packages|\.claude)\/|\.md$/;
+
+/**
+ * FILES A PACKAGE READS WITHOUT DEPENDING ON THEIR PACKAGE (WO-INFRA-015A). The filter follows
+ * package.json dependencies only, so a package that reads another's files from disk is invisible
+ * to it: a change there would select the owner and its dependents, never the reader, and the
+ * reader's assertion would not run. Each entry names the files and the reader that must run when
+ * they change; when the selection lacks the reader, the scope is dropped (a full run).
+ */
+export const UNDECLARED_INPUTS = [
+  // apps/api/test/t6-parked-decisions.spec.ts reads packages/locale/src/en.ts and am.ts from disk.
+  { path: 'packages/locale/', reader: '@adulis/api' },
+];
+
+/** `selectedNames()` lists the packages the filter selects; null when pnpm could not say. */
+export function scopeDecision(raw, changed, selectedNames) {
+  if (!raw) return { scope: '', why: 'none (full run)', selected: [] };
+  const full = (why) => ({ scope: '', why: `UNSCOPED - ${why}`, selected: [] });
+  if (changed === null) return full('git could not list the changed files');
+  const roots = changed.filter((f) => !SCOPE_TRACKED.test(f));
+  if (roots.length > 0) return full(`${roots.length} changed root input(s), e.g. ${roots.slice(0, 3).join(', ')}`);
+  const names = selectedNames();
+  if (names === null) return full(`pnpm could not evaluate ${raw}`);
+  if (names.length === 0) return full(`${raw} selects no package`);
+  const unseen = UNDECLARED_INPUTS.filter(
+    (u) => changed.some((f) => f.startsWith(u.path)) && !names.includes(u.reader),
+  );
+  if (unseen.length)
+    return full(unseen.map((u) => `${u.reader} reads ${u.path} without depending on it`).join('; '));
+  return { scope: raw, why: `${raw} (${names.length} package(s): ${names.join(', ')})`, selected: names };
+}
+
+function resolveScope(raw) {
+  const base = /\[([^\]]+)\]/.exec(raw)?.[1];
+  let changed = []; // a filter with no [base] is not change-based: only the selection check applies
+  if (raw && base) {
+    // --no-renames: a root file moved under apps/ must still show its old path.
+    const r = spawnSync('git', ['diff', '--name-only', '--no-renames', base], { cwd: root, encoding: 'utf8' });
+    changed = r.status === 0 ? r.stdout.split('\n').filter(Boolean) : null;
+  }
+  return scopeDecision(raw, changed, () => {
+    const r = spawnSync('pnpm', ['--filter', raw, '--filter', '!adulis-platform', 'list', '--depth', '-1', '--json'], {
+      cwd: root,
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
+    try {
+      return r.status === 0 ? JSON.parse(r.stdout).map((p) => p.name) : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
+const { scope, why: scopeWhy, selected } = resolveScope(process.env['ADULIS_SCOPE_FILTER'] ?? '');
+
+/**
+ * A gate's `env` is a DEFAULT, never an override (review of WO-INFRA-004). It
+ * says which environment a gate run is when the caller said nothing -- CI, or a
+ * local run whose NODE_ENV=development was dropped above. A caller who set
+ * NODE_ENV=staging or production deliberately keeps it, so the seed, reset and
+ * determinism guards still see it and refuse.
+ */
+export function gateEnv(defaults, base = process.env) {
+  return defaults ? { ...defaults, ...base } : base;
+}
 
 /**
  * NODE_ENV=development IS DROPPED, and this is the first thing this file
@@ -104,10 +188,13 @@ const pnpm = (script, { scoped = false } = {}) =>
  * D-93). Under a scope filter, an absent dist means "not selected" and the
  * gate passes WITH A NOTE; unscoped (every local run), an absent dist is
  * still a hard fail, because an unscoped build always produces one.
+ *
+ * "Not selected" is now checked, not assumed (WO-INFRA-006 review): a scoped
+ * run that DID select @adulis/console and still has no dist is a hard fail.
  */
 function consoleDistAbsent(p) {
   if (existsSync(p)) return null;
-  return scope
+  return scope && !selected.includes('@adulis/console')
     ? { ok: true, detail: `console not selected by the scope filter (${p} absent); asserted on every run that builds it` }
     : { ok: false, detail: `${p} is absent - build first` };
 }
@@ -272,13 +359,23 @@ const GATES = [
    * A STEP, NOT A NEW GATE. ADU-RUL-03 S5.2 cites gates by POSITION, so
    * inserting one here would renumber every gate after it in a governed
    * document this repository does not edit.
+   *
+   * THE SEED STEP DECLARES NODE_ENV=test, AND ONLY THE SEED STEP (WO-INFRA-004).
+   * seed.mjs writes a fixture and refuses anything but development or test;
+   * this file drops NODE_ENV=development and CI sets none, so in CI the seed
+   * refused with "NODE_ENV=unset" and gate `migrate` went red on main from
+   * 2026-09-07 (run 34129602933). Locally it passed only because
+   * `pnpm db:seed` re-reads .env. Same fix as `determinism` and `console-e2e`
+   * below: the caller says which environment a gate run is -- as a DEFAULT
+   * (gateEnv), so a deliberate staging or production still reaches the seed's
+   * guard and is refused. db:migrate gets nothing.
    */
   {
     id: 'migrate',
     title: 'Migrations apply, and the seed the suites read',
     steps: [
       ['pnpm', 'db:migrate'],
-      ['pnpm', 'db:seed'],
+      { cmd: ['pnpm', 'db:seed'], env: { NODE_ENV: 'test' } },
     ],
   },
   { id: 'worker-schema', title: 'The worker queue schema is installed', cmd: ['pnpm', 'worker:install'] },
@@ -496,58 +593,135 @@ const GATES = [
    * limitation rather than implying otherwise.
    */
   { id: 'render-yaml', title: 'The staging blueprint agrees with the repository it deploys', cmd: ['pnpm', 'verify:render-yaml'] },
+
+  /**
+   * APPENDED, for the reason given four times above.
+   *
+   * The runner's own rules, tested: the seed step's environment and the scope
+   * fail-safe above (WO-INFRA-004). Both defects were invisible from inside a
+   * green run -- one only failed in CI, the other made CI pass by checking
+   * nothing -- so they are asserted directly rather than trusted.
+   */
+  { id: 'gate-runner', title: "The gate runner's environment and scope rules hold", cmd: ['node', '--test', 'ops/scripts/gates.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-007).
+   *
+   * The MinIO data move's refusals: the founder-approval guard, a cut-short or
+   * corrupt backup, every kind of object difference, and an anonymous probe
+   * that errors instead of being denied. The docker-driven sequence itself is
+   * rehearsed on disposable copies; these are the decisions that must refuse.
+   */
+  { id: 'minio-migrate', title: 'The MinIO data move refuses what it must', cmd: ['node', '--test', 'ops/scripts/minio-migrate.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-012). The ratchet of the foreign-key audit, tested.
+   *
+   * The AUDIT itself runs inside `test`, as the API suites' Jest globalTeardown
+   * (apps/api/test/global-teardown.ts), and not here: `console-e2e` runs `pnpm db:reset`, so a
+   * gate at the end of this list sees a fresh database and passes whatever the suites left. The
+   * audit checks every foreign key, read-only; five known teardown leaks are named and tolerated
+   * (ISSUE-INFRA-CLOSURE-004), any other orphan fails the API run.
+   */
+  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-015A). The guards of the destructive scripts and of MinIO's data volume:
+   * the shared database-target rules, db-determinism's container binding and failure paths, the
+   * db-reset confirmation, the direct-invocation refusals, the volume guard script and the compose
+   * configuration that wires it. No database is written: the scripts are driven against stubs, or
+   * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
+   */
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
 ];
 
-if (process.argv.includes('--list')) {
-  for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
-  process.exit(0);
-}
+/**
+ * The gates that WRITE to the database (WO-INFRA-012). Before the first of them runs, the database
+ * must carry the disposable mark (ops/scripts/assert-disposable-db.mjs): locally the root .env
+ * points at the persistent development database, and `migrate` (migrations + seed) runs before
+ * `test`, whose own Jest guard would refuse only after the damage. Read-only gates need no mark.
+ */
+export const DB_WRITING_GATES = new Set(['migrate', 'worker-schema', 'test', 'determinism', 'console-e2e']);
 
-const only = process.argv.indexOf('--only');
-const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+export { GATES };
 
 function run(cmd, extraEnv) {
   const r = spawnSync(cmd[0], cmd.slice(1), {
     cwd: root,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+    env: gateEnv(extraEnv),
   });
+  if (r.error) console.error(`      could not start ${cmd[0]}: ${r.error.message}`);
   return r.status === 0;
 }
 
-console.log(
-  `\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)` +
-    (scope ? `\nscope: ${scope}` : '\nscope: none (full run)') +
-    '\n',
-);
+function main() {
+  if (process.argv.includes('--list')) {
+    for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
+    process.exit(0);
+  }
 
-let n = 0;
-for (const gate of GATES) {
-  if (wanted && !wanted.has(gate.id)) continue;
-  n += 1;
-  console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
-  let ok;
-  if (gate.fn) {
-    const r = gate.fn();
-    ok = r.ok;
-    console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.detail}`);
-  } else if (gate.steps) {
-    ok = gate.steps.every((s) => run(s));
-  } else {
-    ok = run(gate.cmd, gate.env);
+  const only = process.argv.indexOf('--only');
+  const wanted = only === -1 ? null : new Set((process.argv[only + 1] ?? '').split(','));
+  // A typo in --only used to run nothing and print "PASS all 0 gates" (WO-INFRA-006 review).
+  const unknown = wanted ? [...wanted].filter((id) => !GATES.some((g) => g.id === id)) : [];
+  if (unknown.length > 0 || wanted?.size === 0) {
+    console.error(`FAIL  --only names no known gate: ${unknown.join(', ') || '(empty)'}. See --list.`);
+    process.exit(2);
   }
-  if (!ok) {
-    console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);
-    console.error(
-      gate.id === 'contract-current'
-        ? '      The committed contract does not match what the code generates.\n' +
-            '      Run: pnpm generate:openapi && pnpm generate:api-client, then COMMIT the result.\n' +
-            '      contracts/openapi.json is tracked and CI-authored: a hand-edited spec is a lie with authority.'
-        : '      Red on any; there is no skip label (ADU-CON-02 S16).',
-    );
-    process.exit(1);
+
+  console.log(`\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)\nscope: ${scopeWhy}\n`);
+
+  let n = 0;
+  let markChecked = false;
+  for (const gate of GATES) {
+    if (wanted && !wanted.has(gate.id)) continue;
+    n += 1;
+    console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
+    let ok;
+    if (DB_WRITING_GATES.has(gate.id) && !markChecked) {
+      const r = spawnSync('node', ['ops/scripts/assert-disposable-db.mjs'], { cwd: root, stdio: 'inherit', env: process.env });
+      markChecked = r.status === 0;
+      if (!markChecked) {
+        const why = r.status === 1 ? 'is not marked disposable (or its configuration is refused)' : 'could not be checked';
+        console.error(`\nFAIL  gate '${gate.id}' writes to the database, which ${why}; nothing was run.`);
+        process.exit(1);
+      }
+    }
+    if (gate.fn) {
+      const r = gate.fn();
+      ok = r.ok;
+      console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.detail}`);
+    } else if (gate.steps) {
+      ok = gate.steps.every((s) => (Array.isArray(s) ? run(s) : run(s.cmd, s.env)));
+    } else {
+      ok = run(gate.cmd, gate.env);
+    }
+    if (!ok) {
+      console.error(`\nFAIL  gate '${gate.id}' (${gate.title}).`);
+      console.error(
+        gate.id === 'contract-current'
+          ? '      The committed contract does not match what the code generates.\n' +
+              '      Run: pnpm generate:openapi && pnpm generate:api-client, then COMMIT the result.\n' +
+              '      contracts/openapi.json is tracked and CI-authored: a hand-edited spec is a lie with authority.'
+          : '      Red on any; there is no skip label (ADU-CON-02 S16).',
+      );
+      process.exit(1);
+    }
   }
+
+  console.log(`\nPASS  all ${n} gates.\n`);
 }
 
-console.log(`\nPASS  all ${n} gates.\n`);
+// Run as a script only: gates.test.mjs imports GATES and scopeDecision. Both sides are
+// realpath'd: through a junction, subst drive or symlink, argv[1] keeps the link path while
+// import.meta.url is resolved, and a plain comparison ran NOTHING and exited 0 (review).
+const self = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+if (process.argv[1] && self(process.argv[1]) === self(fileURLToPath(import.meta.url))) main();

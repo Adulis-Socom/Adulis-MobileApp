@@ -7,6 +7,67 @@
 # This compose file is local only. Production is managed PostgreSQL on Render
 # (Frankfurt, PITR); nothing here provisions anything.
 
+# THE PROJECT NAME IS PINNED (WO-INFRA-002). Compose otherwise takes it from the
+# checkout's directory, so the same file run from a clone named differently was a
+# different project: a container-name clash with the running stack, and a new,
+# empty database volume. `adulis-platform` is the name the existing stack uses.
+# Consequence: `docker compose down -v` from ANY clone deletes the live database
+# volume. Never run it; plain `docker compose down` keeps the volumes.
+name: adulis-platform
+
+# One MinIO build for the server AND the one-shot init (it ships mc and a shell),
+# pinned by digest. Keep it identical to MINIO_IMAGE in .github/workflows/ci.yml.
+x-minio-image: &minio-image cgr.dev/chainguard/minio@sha256:786cb11d340b1a657de8dc899560e36e1d1fb371d3d6f3eb6c903a0bb0cec714
+
+# THE MINIO DATA-VOLUME GUARD (WO-INFRA-015A), run by `/bin/sh -c` before MinIO
+# starts: as the one-shot service `minio-volume-guard` (root, so it can read the
+# legacy volume) and inside the minio service ahead of `minio server`. Inline on
+# purpose: a script bind-mounted from a checkout would make MinIO's restart
+# depend on that checkout still existing. `$$` is compose's escape for `$`.
+# MinIO data = a formatted drive (.minio.sys/format.json); the image ships an
+# empty .minio.sys that Docker copies into every new volume, which is not data.
+# .adulis-migration-complete is written into the new volume by minio-migrate.mjs
+# once the copy is verified, just before the switch; any undo removes it again.
+# Tested in ops/scripts/compose-safety.test.mjs.
+x-minio-volume-guard: &minio-volume-guard |
+  set -eu
+  data=$${MINIO_GUARD_DATA_DIR:-}
+  legacy=/adulis-guard/legacy
+  refuse() {
+    echo "minio-volume-guard: REFUSED: $$1" >&2
+    echo "  Nothing was started. See docs/infrastructure/MINIO-STARTUP.md." >&2
+    exit 1
+  }
+  readable() { ls -a "$$1" > /dev/null 2>&1 && (cd "$$1") 2> /dev/null; }
+  [ -n "$$data" ] || refuse "MINIO_GUARD_DATA_DIR is not set"
+  [ -d "$$data" ] || refuse "the data volume is not mounted at $$data"
+  [ -d "$$legacy" ] || refuse "the legacy volume is not mounted at $$legacy"
+  [ ! "$$data" -ef "$$legacy" ] || refuse "the data volume is the legacy volume adulis-pgdata itself: set ADULIS_MINIO_VOLUME to the new volume"
+  readable "$$data" || refuse "the data volume cannot be read here"
+  # Does adulis-pgdata hold MinIO data? What cannot be read counts as yes.
+  legacy_data=yes
+  if readable "$$legacy"; then
+    if [ ! -e "$$legacy/.minio.sys" ]; then
+      legacy_data=no
+    elif readable "$$legacy/.minio.sys" && [ ! -f "$$legacy/.minio.sys/format.json" ]; then
+      legacy_data=no
+    fi
+  fi
+  if [ -f "$$data/.minio.sys/format.json" ]; then
+    if [ "$$legacy_data" = yes ] && [ ! -f "$$data/.adulis-migration-complete" ]; then
+      refuse "the data volume holds MinIO data, but no completed move from adulis-pgdata is recorded in it (a partial copy, or a store started before the move): the objects are in adulis-pgdata"
+    fi
+    echo "minio-volume-guard: ok: the data volume holds MinIO data"
+  else
+    [ "$$legacy_data" = no ] || refuse "the data volume is empty and adulis-pgdata holds (or may hold) the MinIO objects: move them first (minio-migrate.mjs)"
+    for e in "$$data"/* "$$data"/.[!.]* "$$data"/..?*; do
+      [ -e "$$e" ] || continue
+      [ "$${e##*/}" = .minio.sys ] || refuse "the data volume holds files that are not MinIO data ($${e##*/}): it is not MinIO's volume"
+    done
+    echo "minio-volume-guard: ok: fresh installation (no MinIO data anywhere)"
+  fi
+  if [ "$$#" -gt 0 ]; then exec "$$@"; fi
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -27,7 +88,12 @@ services:
       # 5432 gets a silent shadow: both listen, the local one answers, and the
       # error is an authentication failure that looks nothing like a port clash.
       # Set POSTGRES_HOST_PORT=5433 (and match DATABASE_URL) when that happens.
-      - '${POSTGRES_HOST_PORT:-5432}:5432'
+      #
+      # LOOPBACK BY DEFAULT (WO-INFRA-015A). The superuser and its password above are public (this
+      # repository is), so the port is published on 127.0.0.1 only. The API, the console, the e2e
+      # gate and an Android emulator (10.0.2.2) or a device on `adb reverse` all reach it there.
+      # Deliberate LAN access: ADULIS_BIND_ADDRESS=0.0.0.0 (docs/infrastructure/MINIO-STARTUP.md).
+      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - adulis-pgdata:/var/lib/postgresql/data
       # Runs only on first initialisation of an empty data directory.
@@ -50,11 +116,31 @@ services:
   # container on a developer's loopback, not a secret. Production credentials
   # exist only in the deployment environment (SR-8's class: never in the
   # repository, never in an order, never in a report).
+  #
+  # THE IMAGE (WO-INFRA-003). MinIO stopped publishing community images:
+  # docker.io/minio/minio now answers 404 and quay.io/minio/minio 401, which is
+  # why every CI run from 2026-11-08 died at its first step. Chainguard rebuilds
+  # MinIO from source daily (AGPLv3, non-root, amd64 + arm64). Its free tier
+  # serves only `latest`, so the digest is the pin: update it deliberately, and
+  # in ci.yml in the same commit.
+  #
+  # THE DATA-VOLUME GUARD (WO-INFRA-015A). MinIO starts only through the guard
+  # (x-minio-volume-guard, top of this file), which refuses an empty or
+  # unrecorded data volume while the legacy volume `adulis-pgdata` holds (or may
+  # hold) the objects. The
+  # one-shot service `minio-volume-guard` runs the same check first, as root,
+  # so a refusal leaves MinIO unstarted and `docker compose up` failing. It is
+  # the second line: the first is the required ADULIS_MINIO_VOLUME (volumes,
+  # below), because compose replaces a running container before any check.
   minio:
-    image: minio/minio:latest
+    image: *minio-image
     container_name: adulis-minio
     restart: unless-stopped
-    command: server /data
+    entrypoint: ['/bin/sh', '-c', *minio-volume-guard, 'minio-volume-guard']
+    command: ['/usr/bin/minio', 'server', '/data']
+    depends_on:
+      minio-volume-guard:
+        condition: service_completed_successfully
     environment:
       MINIO_ROOT_USER: adulis-local
       MINIO_ROOT_PASSWORD: adulis-local-secret
@@ -62,10 +148,18 @@ services:
       # are two different failures with one symptom; this is the CORS half).
       # 5173 is dev; 4173 is the e2e harness's preview port.
       MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
+      MINIO_GUARD_DATA_DIR: /data
     ports:
-      - '${MINIO_HOST_PORT:-9000}:9000'
+      # Loopback by default, as postgres above.
+      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${MINIO_HOST_PORT:-9000}:9000'
     volumes:
       - adulis-miniodata:/data
+      - type: volume
+        source: adulis-legacy
+        target: /adulis-guard/legacy
+        read_only: true
+        volume:
+          nocopy: true
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
@@ -73,31 +167,80 @@ services:
       retries: 10
       start_period: 10s
 
+  # One-shot, before MinIO: the data-volume guard above, as root because the
+  # legacy volume is the old PostgreSQL directory (mode 0700, owner postgres).
+  # It mounts the data volume where MinIO does, so a fresh volume is prepared
+  # exactly as MinIO's own first mount would prepare it; it writes nothing.
+  minio-volume-guard:
+    image: *minio-image
+    container_name: adulis-minio-volume-guard
+    user: '0:0'
+    entrypoint: ['/bin/sh', '-c', *minio-volume-guard, 'minio-volume-guard']
+    environment:
+      MINIO_GUARD_DATA_DIR: /data
+    network_mode: none
+    volumes:
+      - adulis-miniodata:/data
+      - type: volume
+        source: adulis-legacy
+        target: /adulis-guard/legacy
+        read_only: true
+        volume:
+          nocopy: true
+
   # One-shot: creates the two buckets and sets their policies, then exits.
-  # TWO BUCKETS, NOT TWO PREFIXES (T19 S3.1 ruling): evidence/raw/ holds a
-  # PLAINTEXT bank screenshot for the window between upload and the commit
-  # that encrypts-and-deletes it, so the public-read policy attaches to the
-  # media bucket ONLY and the evidence bucket has no public policy to
-  # misconfigure. The 1-day expiry on evidence/raw/ is the BACKSTOP for a
-  # commit that died between fetch and delete -- the commit path deletes on
-  # success and S3 lifecycle cannot express hours.
+  # The script, and why there are TWO BUCKETS rather than two prefixes, is
+  # ops/scripts/minio-init.sh -- the same file CI runs.
   minio-init:
-    image: minio/mc:latest
+    image: *minio-image
     container_name: adulis-minio-init
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 adulis-local adulis-local-secret &&
-      (mc mb --ignore-existing local/adulis-media) &&
-      (mc mb --ignore-existing local/adulis-evidence) &&
-      mc anonymous set download local/adulis-media &&
-      mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 ||
-      mc ilm rule ls local/adulis-evidence
-      "
+    environment:
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: adulis-local
+      MINIO_ROOT_PASSWORD: adulis-local-secret
+    volumes:
+      - ./ops/scripts/minio-init.sh:/minio-init.sh:ro
+    entrypoint: ['/bin/sh', '/minio-init.sh']
 
+# EXPLICIT PHYSICAL NAMES, ONE PER SERVICE (WO-INFRA-002, ISSUE-INFRA-001).
+#
+# T20 S4 inserted `adulis-miniodata:` between `adulis-pgdata:` and the
+# `name: adulis-pgdata` line that belonged to it. The name moved to MinIO, so
+# from 2026-09-03 MinIO wrote into the ORIGINAL database volume -- beside the
+# old PostgreSQL data directory -- and PostgreSQL silently started over on a new
+# project-prefixed volume. Both names are now spelled out so neither can drift:
+#
+# - adulis-platform_adulis-pgdata is the volume the database has used since
+#   2026-09-03. Unchanged: nothing moves.
+# - adulis-platform_adulis-miniodata is MinIO's volume from now on. On an
+#   installation that predates it, the objects are still in `adulis-pgdata` and
+#   are NOT moved automatically (docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md).
+# - `adulis-pgdata` is referenced READ-ONLY, by the data-volume guard only (key
+#   `adulis-legacy`), and EXTERNAL: compose never creates it and never deletes
+#   it, `docker compose down -v` included. A fresh machine creates it empty once
+#   (`docker volume create adulis-pgdata`), which the guard reads as "nothing to
+#   move". Never delete it without the founder's decision (ISSUE-INFRA-005): it
+#   holds the old MinIO objects and the pre-2026-09-03 database.
+#
+# THE MINIO VOLUME MUST BE NAMED, OR NOTHING RUNS (WO-INFRA-015A). Compose
+# replaces a running container BEFORE it checks any dependency, so no check
+# inside a container can keep a running MinIO serving: on an installation
+# whose objects were never moved, a plain `docker compose up` would replace it
+# with one on an empty volume. So the name comes from ADULIS_MINIO_VOLUME, with
+# no default: unset, EVERY compose command stops at configuration time and
+# touches nothing. Set it to adulis-platform_adulis-miniodata on a fresh machine
+# or after the move (.env.example carries the line commented out); an
+# installation not yet moved leaves it unset. If it is set too early, the
+# data-volume guard still refuses to start MinIO on the empty volume, or on one
+# that holds no recorded move. Sequences: docs/infrastructure/MINIO-STARTUP.md.
 volumes:
   adulis-pgdata:
+    name: adulis-platform_adulis-pgdata
   adulis-miniodata:
+    name: '${ADULIS_MINIO_VOLUME:?is not set. Before the MinIO move, leave it unset and do not run compose; on a fresh machine or after the move, set ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata. See docs/infrastructure/MINIO-STARTUP.md}'
+  adulis-legacy:
     name: adulis-pgdata
+    external: true

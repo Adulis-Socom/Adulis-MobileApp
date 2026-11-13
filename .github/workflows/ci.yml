@@ -34,6 +34,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# LEAST PRIVILEGE (WO-INFRA-015A). The job checks out and reads; it pushes, comments, releases and
+# publishes nothing, so the token it is given can only read the repository's contents.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: install → typecheck → lint → test → build → gates
@@ -83,7 +88,14 @@ jobs:
       IDENTITY_HASH_KEY_V1: ci-fake-identity-key
 
     steps:
-      - uses: actions/checkout@v4
+      # Majors that run on Node 24 natively (WO-INFRA-009). The v4 majors
+      # targeted Node 20, which GitHub now forces onto Node 24 with a warning.
+      # Release notes checked for this workflow: checkout v6 persists the
+      # credentials to a separate file (nothing here pushes), v7 refuses fork
+      # checkouts only for pull_request_target and workflow_run (not used);
+      # setup-node v6 auto-caches npm only, so `cache: pnpm` stays explicit;
+      # action-setup v6 adds pnpm 11 and still reads packageManager.
+      - uses: actions/checkout@v7
         with:
           # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
           # ref, so `--filter "...[origin/main]"` below would select NOTHING and
@@ -91,9 +103,9 @@ jobs:
           fetch-depth: 0
 
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -105,6 +117,12 @@ jobs:
       # same way docker-compose does locally. This is also section 18 step 1.
       - name: Create the four extensions
         run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -f db/init/00-extensions.sql
+
+      # WO-INFRA-012. The API suites refuse any database not marked disposable
+      # (apps/api/test/db-target.ts). This service database exists for this job
+      # only, so it may say so; locally only ops/scripts/test-db.sh sets the mark.
+      - name: Mark the job's database disposable
+        run: psql "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -c "COMMENT ON DATABASE adulis IS 'adulis:disposable-test-database'"
 
       # graphile-worker's own tables are installed by the DDL role INSIDE the
       # gate run below (`worker:install`), not here: the worker's first
@@ -171,28 +189,38 @@ jobs:
       # is the point: the adapter cannot tell MinIO from Cloudflare R2, so the
       # six values below are the only difference between this and production.
       # They are local-container credentials, not secrets.
+      #
+      # THE IMAGE (WO-INFRA-003). `minio/minio:latest` stopped being pullable --
+      # docker.io/minio/minio answers 404, quay.io/minio/minio 401 -- and every
+      # run from 2026-11-08 died here, before a single gate. Chainguard's build
+      # (from MinIO's source, AGPLv3, non-root) is pinned by digest because its
+      # free tier serves only `latest`. It must stay identical to
+      # x-minio-image in docker-compose.yml.
+      #
+      # THE BUCKETS come from ops/scripts/minio-init.sh, the same file compose
+      # runs. The old inline copy ended in `|| true`, which let a failed bucket
+      # or policy step pass; every step now fails the job.
       # ==================================================================
       - name: Start object storage and create the two buckets
+        env:
+          MINIO_IMAGE: cgr.dev/chainguard/minio@sha256:786cb11d340b1a657de8dc899560e36e1d1fb371d3d6f3eb6c903a0bb0cec714
         run: |
           docker run -d --name adulis-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=adulis-local \
             -e MINIO_ROOT_PASSWORD=adulis-local-secret \
             -e MINIO_API_CORS_ALLOW_ORIGIN='http://localhost:4173,http://localhost:5173' \
-            minio/minio:latest server /data
+            "$MINIO_IMAGE" server /data
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            if curl -fsS --max-time 5 http://localhost:9000/minio/health/ready >/dev/null; then break; fi
             sleep 2
           done
-          curl -fsS http://localhost:9000/minio/health/live >/dev/null
-          # TWO BUCKETS, because evidence/raw/ is plaintext: the media bucket is
-          # public-read and the evidence bucket has no public access at all.
-          docker run --rm --network host --entrypoint sh minio/mc:latest -c "
-            mc alias set local http://localhost:9000 adulis-local adulis-local-secret &&
-            mc mb --ignore-existing local/adulis-media &&
-            mc mb --ignore-existing local/adulis-evidence &&
-            mc anonymous set download local/adulis-media &&
-            mc ilm rule add local/adulis-evidence --prefix 'evidence/raw/' --expire-days 1 || true
-          "
+          curl -fsS --max-time 5 http://localhost:9000/minio/health/ready >/dev/null || { docker logs adulis-minio; exit 1; }
+          docker run --rm --network host \
+            -e MINIO_URL=http://localhost:9000 \
+            -e MINIO_ROOT_USER=adulis-local \
+            -e MINIO_ROOT_PASSWORD=adulis-local-secret \
+            -v "$PWD/ops/scripts/minio-init.sh:/minio-init.sh:ro" \
+            --entrypoint /bin/sh "$MINIO_IMAGE" /minio-init.sh
 
       - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
         run: pnpm ci:local

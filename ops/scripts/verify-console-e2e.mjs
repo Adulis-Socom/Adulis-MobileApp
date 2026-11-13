@@ -52,6 +52,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkDisposable } from './lib/disposable-db.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -64,6 +65,24 @@ if (!DESTRUCTIVE_ENVS.includes(process.env.NODE_ENV ?? '')) {
   console.error('      It resets the database before driving the console, so it refuses an');
   console.error('      environment it cannot name (D-142).');
   process.exit(2);
+}
+
+/**
+ * AND ITS TARGET (WO-INFRA-015A). It resets the database twice, so every URL it
+ * and the API it starts will use must reach a database marked disposable,
+ * checked here, before the first build, reset or seed. gates.mjs checks the
+ * same before its writing gates; this covers `pnpm verify:console-e2e` run on
+ * its own, which with the root .env would otherwise reset the development
+ * database.
+ */
+{
+  const target = await checkDisposable(process.env);
+  for (const line of target.out) console.log(line);
+  if (target.code !== 0) {
+    for (const line of target.err) console.error(line);
+    console.error('      Nothing was built, reset or seeded.');
+    process.exit(target.code);
+  }
 }
 
 const API_PORT = Number(process.env['E2E_API_PORT'] ?? 3000);
