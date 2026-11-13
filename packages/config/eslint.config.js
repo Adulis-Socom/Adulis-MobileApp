@@ -17,6 +17,10 @@ export default tseslint.config(
       'packages/api-client/src/schema.d.ts',
       'contracts/openapi.json',
       '**/openapi.json',
+      // Expo prebuild and cache output under apps/mobile (WO-0b); all gitignored.
+      'apps/mobile/.expo/**',
+      'apps/mobile/android/**',
+      'apps/mobile/ios/**',
     ],
   },
   js.configs.recommended,
@@ -72,6 +76,26 @@ export default tseslint.config(
     // The console runs in a browser.
     files: ['apps/console/**/*.ts', 'apps/console/**/*.tsx'],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // The mobile app runs in Hermes on a device: browser-like globals plus
+    // React Native's __DEV__. Its Node-side scripts (gates, hooks) are .mjs and
+    // take the Node block below. Added by ADU-MOB-WO-01 v1.2 WO-0b.
+    files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
+    languageOptions: { globals: { ...globals.browser, __DEV__: 'readonly' } },
+    rules: {
+      // Metro assets are `require`d by path (fonts, images); expo/types types the
+      // call. Allowed for exactly those extensions, here in the rule rather than
+      // as a disable comment someone can copy -- the apps/api console exemption
+      // above is the same shape.
+      '@typescript-eslint/no-require-imports': ['error', { allow: ['\\.(ttf|otf|png|jpg|webp)$'] }],
+    },
+  },
+  {
+    // Expo loads these two with Node's CommonJS loader; they cannot be ESM.
+    files: ['apps/mobile/metro.config.js', 'apps/mobile/babel.config.js'],
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     // Operational scripts and tool configs: plain Node, not part of a TS project.

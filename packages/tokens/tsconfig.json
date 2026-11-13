@@ -1,5 +1,13 @@
 {
   "extends": "@adulis/config/tsconfig.base.json",
-  "compilerOptions": { "noEmit": true },
+  "//": "bundler resolution with explicit .ts extensions (allowImportingTsExtensions needs noEmit): src/native/* imports ../index.ts by its real name so that Metro, tsc and Node's type stripping (the test runner) all resolve the same file with no per-tool alias.",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "declaration": false,
+    "incremental": false
+  },
   "include": ["src"]
 }

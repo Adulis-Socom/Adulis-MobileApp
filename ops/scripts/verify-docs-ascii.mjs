@@ -85,6 +85,37 @@ const GOVERNED = [
   // transcribes character for character. A mangled byte in a legal
   // attestation is not a typo, it is an attestation to something else.
   'docs/ADU-RUL-03_Console_Blockers_and_the_NODE_ENV_Class.md',
+  // ---------------------------------------------------------------------
+  // THE MOBILE CORPUS, installed at docs/adu/ and GOVERNED FROM ITS FIRST
+  // INSTALLATION -- the same reason ADU-REPO-01 was: until now apps/mobile's
+  // own instruction file cited sixteen documents that lived nowhere in this
+  // tree, so an agent working the workstream could read none of the rules it
+  // was told to obey (D-370, D-371). All sixteen were supplied ASCII and are
+  // enforced rather than carried as debt.
+  //
+  // They sit in a SUBDIRECTORY, which the walker already handles -- ADU-VAL-01
+  // is governed from docs/registers/ on the same footing.
+  // ---------------------------------------------------------------------
+  'docs/adu/ADU-MOB-00_Mobile_Build_Guidelines_v1_1.md',
+  'docs/adu/ADU-MOB-01_Buyer_Mode_System_Design_v1_2.md',
+  'docs/adu/ADU-MOB-02_Buyer_Mode_Content_Architecture_v1_0.md',
+  'docs/adu/ADU-MOB-03_Design_System_and_Component_Inventory_v1_0.md',
+  'docs/adu/ADU-MOB-04_Wireframe_Generation_Brief_v1_0.md',
+  'docs/adu/ADU-MOB-05_Store_Submission_and_Compliance_Dossier_v1_0.md',
+  'docs/adu/ADU-MOB-06_Security_QA_and_Test_Specification_v1_0.md',
+  'docs/adu/ADU-MOB-07_Release_and_Operations_v1_0.md',
+  // ADU-MOB-08 is the AI-Assisted Engineering Manual, registered at this
+  // installation. It was supplied as message text rather than as a file and
+  // carried transit damage in its diagrams; the transcription is recorded in
+  // the defect register with the substitution count.
+  'docs/adu/ADU-MOB-08_AI_Assisted_Engineering_Manual_v1_0.md',
+  'docs/adu/ADU-MOB-PLAN-01_Documentation_Plan_and_Workstream_Register_v1_0.md',
+  'docs/adu/ADU-MOB-AMD-01_Offline_Withdrawal_Amendment_Set_v1_0.md',
+  'docs/adu/ADU-MOB-AMD-02_FYP_Adoption_Amendment_Set_v1_0.md',
+  'docs/adu/ADU-MOB-WO-01_Buyer_Mode_Work_Orders_Tiers_0_to_2_v1_2.md',
+  'docs/adu/ADU-MOB-WO-02_Buyer_Mode_Work_Orders_Tiers_3_to_5_v1_0.md',
+  'docs/adu/ADU-MOB-WO-03_Buyer_Mode_Work_Orders_Tiers_6_to_8_v1_0.md',
+  'docs/adu/ADU-CMP-01_Seller_Companion_Scoping_Record_v0_1.md',
 ];
 
 const scan = (buf) => {

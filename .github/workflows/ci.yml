@@ -295,3 +295,27 @@ jobs:
       #
       # - name: Secret scan
       #   run: <scanner to be selected>
+
+      # --- Mobile: the fourteen grep gates ----------------------------------
+      # LIVE, and NOT here: ADU-MOB-01 S18.1's gates 1-11 and ADU-MOB-03 S8's
+      # 12-14 run INSIDE `pnpm ci:local` above as the gate `mobile-gates`, on
+      # every push whatever changed -- "a gate that runs only when someone
+      # touches apps/mobile is a gate that is off on exactly the push that moves
+      # a forbidden string into a shared package". The mobile package's own
+      # typecheck, lint, test and build join the scoped gates by being real
+      # scripts (ADU-MOB-WO-01 v1.2 WO-0b).
+
+      # --- Mobile: Maestro journeys on an emulator --------------------------
+      # UNBLOCKED BY: ADU-MOB-WO-02 (the first of the five journeys needs
+      # tier 3's screens) and an Android emulator on the runner.
+      #
+      # - name: Maestro journeys (emulator)
+      #   run: pnpm --filter @adulis/mobile maestro
+
+      # --- Mobile: EAS builds and over-the-air publication ------------------
+      # NOT a per-push gate, and never from a developer machine (ADU-MOB-07 O3).
+      # Store builds and OTA updates publish from CI on a TAG, with EXPO_TOKEN
+      # held as a production secret (ADU-MOB-06 T1, T2). The development-client
+      # build that closes the tier 0 gate is run by the operator after
+      # `eas login` (WO-0a) and its result is recorded in
+      # apps/mobile/DEFERRED-GATES.md.

@@ -27,3 +27,22 @@ apps/console/e2e/.auth/
 apps/console/e2e/.walk/
 apps/console/test-results/
 apps/console/playwright-report/
+
+# apps/mobile (ADU-MOB-01 S17.2, landed by WO-0b). Prebuild output, the
+# Expo/Metro cache, the export the `build` gate writes -- and every signing
+# artefact, because a key in git is unrecoverable in the way ADU-MOB-07 O1
+# describes. expo-env.d.ts is TRACKED: tsc in CI needs it without running the CLI.
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/dist/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+credentials.json
+keystore.properties
+google-services.json
+GoogleService-Info.plist

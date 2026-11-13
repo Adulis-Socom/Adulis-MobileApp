@@ -1,0 +1,11 @@
+{
+  "_source": "Gate 7 (ADU-MOB-01 v1.2 S18.1 row 7, S16, S5.1). The catalogue keys a MOBILE session renders are mobile.*, common.* and the error.* set the API sends as message_key. An error.* key whose shared string legitimately carries console language is listed here with the mobile.* key WO-1's error mapper must render instead; gate 7 skips the listed key, scans its replacement as a mobile key, and fails if a listed key no longer exists in en.ts. Adding a row here is a deliberate edit with a reason, reviewed like a dependency.",
+  "overrides": [
+    {
+      "key": "error.seller.tier_limit_reached",
+      "why": "ADU-MOB-01 S5.1: to a MOBILE session TIER_LIMIT_REACHED names the capability and where it is configured and never the tier; the shared string says 'plan', which the console may say and the app may not.",
+      "replacedBy": "mobile.error.tier_limit_reached",
+      "owed": "WO-1 (the error mapper); register D-367"
+    }
+  ]
+}

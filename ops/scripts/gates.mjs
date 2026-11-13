@@ -496,6 +496,21 @@ const GATES = [
    * limitation rather than implying otherwise.
    */
   { id: 'render-yaml', title: 'The staging blueprint agrees with the repository it deploys', cmd: ['pnpm', 'verify:render-yaml'] },
+
+  /**
+   * APPENDED, by the rule ADU-CON-02 v3.2 S16 states: this list is append-only
+   * and gates are cited by NAME.
+   *
+   * THE FOURTEEN MOBILE GATES (ADU-MOB-01 v1.2 S18.1 gates 1-11, ADU-MOB-03
+   * v1.0 S8 gates 12-14), as one script that asserts its own fire before it
+   * scans. They are in THIS list rather than in a mobile-only job because
+   * "a gate that runs only when someone touches apps/mobile is a gate that is
+   * off on exactly the push that moves a forbidden string into a shared
+   * package" -- four of them scan packages/. Landed by ADU-MOB-WO-01 v1.2
+   * WO-0b, before the code any of them guards exists: gate 3 watches a
+   * directory that is empty, gate 10 a feature that was withdrawn.
+   */
+  { id: 'mobile-gates', title: 'ADU-MOB-01 S18.1 - the fourteen mobile grep gates, self-tested, repository-wide', cmd: ['pnpm', 'verify:mobile-gates'] },
 ];
 
 if (process.argv.includes('--list')) {

@@ -1,28 +1,82 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_why": "ADU-REPO-01 v1.2 S8. Read denials are the point, not a bonus: sibling CLAUDE.md files are pulled in ON DEMAND when Claude reads into that directory, so isolation is a consequence of not reaching across rather than a loader guarantee. Denying the read is what makes it one - and it enforces dependency rule 2 at the agent's READ boundary, one layer earlier than dependency-cruiser catches it at the import. Paths are CWD-relative and assume the session started in this directory, which is S8's habit.",
-  "claudeMdExcludes": [
-    "**/apps/api/**",
-    "**/apps/console/**",
-    "**/apps/storefront/**"
-  ],
   "permissions": {
     "deny": [
       "Read(../api/**)",
       "Edit(../api/**)",
-      "Write(../api/**)",
       "Read(../console/**)",
       "Edit(../console/**)",
-      "Write(../console/**)",
       "Read(../storefront/**)",
       "Edit(../storefront/**)",
-      "Write(../storefront/**)",
-      "Edit(../../contracts/openapi.json)",
-      "Write(../../contracts/openapi.json)",
-      "Edit(../../packages/api-client/src/schema.d.ts)",
-      "Write(../../packages/api-client/src/schema.d.ts)",
+      "Read(../../db/**)",
       "Edit(../../db/migrations/**)",
-      "Write(../../db/migrations/**)"
+      "Read(../../.env)",
+      "Read(../../.env.*)",
+      "Read(../../**/*.pem)",
+      "Read(../../**/*.p8)",
+      "Read(../../**/*.p12)",
+      "Read(../../**/*.keystore)",
+      "Read(../../**/*.jks)",
+      "Read(../../**/*.mobileprovision)",
+      "Read(../../**/credentials.json)",
+      "Read(../../**/keystore.properties)",
+      "Read(../../**/google-services.json)",
+      "Read(../../**/GoogleService-Info.plist)",
+      "Read(../../**/.dev-sms.log)",
+      "Edit(../../contracts/openapi.json)",
+      "Edit(../../packages/api-client/src/schema.d.ts)"
+    ],
+    "ask": [
+      "Read(../../packages/**)",
+      "Read(../../contracts/**)",
+      "Edit(../../packages/**)",
+      "Edit(../../contracts/**)"
     ]
-  }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/pre-commit-gate.mjs",
+            "timeout": 900
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/guard-sensitive-writes.mjs",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/post-edit-format.mjs",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
+  },
+  "claudeMdExcludes": [
+    "**/apps/api/**/CLAUDE.md",
+    "**/apps/console/**/CLAUDE.md",
+    "**/apps/storefront/**/CLAUDE.md",
+    "**/db/**/CLAUDE.md"
+  ]
 }

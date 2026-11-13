@@ -5236,3 +5236,314 @@ Response:  FIXED in T26 Phase 1. BUYER_A has their own cart and line; the contro
 Action:    none further. The general lesson is in the file: every case in this class must be checked to FAIL against the pre-fix code, and three of these were not.
 Verification: reverting each fix turns exactly the intended cases red -- 409 for the D-320 rows, REJECTED_SIGNATURE against REJECTED_UNKNOWN_ORDER for D-360, 200 against 409 for D-361.
 Ruling needed: none.
+
+### D-365 - ADU-MOB-01 v1.2 S18.1 gate 10 forbids expo-sqlite under apps/mobile while B6, S3.7, S9.5 and S17.2 of the same document require it
+Severity:  MAJOR (a specification conflict; the literal gate passes only when the one row S9.5 protects is deleted)
+Phase:     MOB WO-0b (ADU-MOB-WO-01 v1.2)
+Source:    ADU-MOB-01 v1.2 S18.1 row 10: "`expo-sqlite`, `expo-background-fetch`, `expo-task-manager`, or any outbox, queue or drain identifier under `apps/mobile` -- 0 (B25)". Against it, in the same revision: S3.7 "`expo-sqlite` | One row: the order-creation idempotency key and its cart hash. Nothing else"; S17.2 "`src/store/` -- SQLite: the order idempotency key. NOTHING ELSE"; S9.5 item 1; and ADU-MOB-WO-01 v1.2 S0b.2 "app.config.ts with the config plugins for secure store, camera, notifications, SQLite and updates".
+Found by:  writing gate 10 as a script, which S0b.4 requires from the first commit
+Effect:    Read literally, the gate fails on the dependency declaration WO-0b itself installs and can only be made green by removing the persisted idempotency key -- the deletion that re-opens ADU-API-01 gap A2 (a duplicate order, a duplicate stock decrement).
+Response:  WORKED AROUND, and RECORDED here per ADU-MOB-00 S2.2 RULE 2. `apps/mobile/scripts/gates/run.mjs` reads B6 as governing: `expo-sqlite`/`SQLite` may appear in apps/mobile/package.json, app.config.ts and src/store/** and nowhere else; the two background modules and every outbox/queue/drain identifier are forbidden everywhere under apps/mobile. The reading is stated in the script's header.
+Action:    ADU-MOB-01 v1.3 S18.1 row 10 should say what the script does. No code change.
+Verification: `node apps/mobile/scripts/gates/run.mjs --self-test` plants `expo-background-fetch` plus `outbox` under src/features/handoff (fires) and `expo-sqlite` under src/store/ (silent).
+Ruling needed: none -- a document correction. If the founder prefers the literal row, B6, S3.7, S9.5 and S17.2 must change with it.
+
+### D-366 - S18.1 gate 11 forbids `audience` anywhere under src/features/auth, and S4.3 requires it on the OTP request
+Severity:  MAJOR (specification conflict; the literal gate fails the correct request body)
+Phase:     MOB WO-0b
+Source:    ADU-MOB-01 v1.2 S18.1 row 11: "`audience` in any request body under `src/features/auth` -- 0 (D-180, S4.3)". S4.3: "POST /v1/auth/otp/request { phone, purpose: "SIGN_IN", audience: "MOBILE" }" and "`verify` rejects `audience` (D-180)".
+Found by:  writing gate 11 as a script
+Effect:    A literal grep forbids the one field the request MUST carry, so WO-2's correct client would fail the gate and the incentive is to weaken the gate at the moment it matters.
+Response:  WORKED AROUND and RECORDED. Gate 11 permits `audience` only in a file whose name contains `otp-request`; anywhere else under src/features/auth (the verify builder above all) it fires. The convention binds WO-2: the request builder is `otp-request*`.
+Action:    ADU-MOB-01 v1.3 S18.1 row 11 should read "`audience` in the verify body" or name the file convention. WO-2's CI half ("a verify body containing `audience` is impossible to construct") remains the stronger check.
+Verification: the self-test plants `audience` in otp-verify.ts (fires) and in otp-request.ts (silent).
+Ruling needed: none.
+
+### D-367 - "mobile keys" in gate 7 is defined nowhere, and the shared TIER_LIMIT_REACHED entry says "plan"
+Severity:  MINOR as a definition; MAJOR as a consequence for WO-1
+Phase:     MOB WO-0b
+Source:    ADU-MOB-01 v1.2 S18.1 row 7: "Price, tier, currency, upgrade, subscribe or billing terms in `packages/locale` mobile keys -- 0". packages/locale/src/en.ts: `'error.seller.tier_limit_reached': 'Your current plan does not include this.'`. ADU-MOB-01 S5.1: TIER_LIMIT_REACHED to a MOBILE session "names the capability and where it is configured and never the tier".
+Found by:  writing gate 7; the catalogue has no mobile namespace and the console's keys legitimately carry tier language
+Effect:    Without a definition the gate either scans nothing or fails on the console's billing strings. And the only catalogue entry a MOBILE session could render today for TIER_LIMIT_REACHED says "plan".
+Response:  FIXED by convention in the gate: a mobile key is one whose first segment is `mobile`; only those are scanned; the term list is in the script (price/pricing/tier/upgrade/subscribe/subscription/billing/invoice/plan and currency marks).
+Action:    WO-1's error mapper renders every mobile-facing error from a `mobile.*` key, TIER_LIMIT_REACHED first. ADU-MOB-01 v1.3 S18.1 should carry the convention.
+Verification: the self-test plants `'mobile.chat.cap': 'Upgrade to the Pro tier...'` (fires) beside `'console.billing.price': 'Price: 1,200 ETB per month'` (silent).
+Ruling needed: none.
+
+### D-368 - B16/D3 bundle three Ethiopic font files that React Native's per-glyph fallback may never reach
+Severity:  QUESTION
+Phase:     MOB WO-0b
+Source:    ADU-MOB-01 v1.2 B16: "both families are bundled; no component ever sets an Ethiopic-only family; the default text style is Inter and the platform's own per-character fallback supplies Ge'ez". ADU-MOB-03 v1.0 D3: "Three font weights, both families ... Six font files against a 30 MB Android download budget".
+Found by:  authoring typography.ts and app/_layout.tsx: the three NotoSansEthiopic files load under names that, by D2, no component may set, so nothing references them
+Effect:    On Android and iOS the per-glyph fallback chain is the SYSTEM's (Android ships Noto Sans Ethiopic; iOS has Kefa), not the app's loaded fonts. The 1.13 MB of bundled Ethiopic may render nothing. This is a device measurement (the tier 0 glyph gate), not something to reason about.
+Response:  PARKED. Built as the documents say -- bundled, loaded under `family.ethiopic`, never set. `apps/mobile/assets/fonts/SOURCES.md` states the question.
+Action:    At the tier 0 device gate, render the placeholder and inspect which Ethiopic face draws. If it is the system's, ADU-MOB-03 v1.1 D3 drops the three files or names a mechanism that does not violate D2.
+Ruling needed: after the measurement.
+
+### D-369 - neutral[500], the console's "lightest text permitted on white", fails 4.5:1 on the raised surface
+Severity:  MINOR (a web finding; the native set does not carry it)
+Phase:     MOB WO-0b
+Source:    packages/tokens/src/index.ts: `500: '#78726a', // lightest text permitted on white (~5.3:1)`; `surface: neutral[50]` (#f7f6f4). ADU-MOB-03 v1.0 S2.2: "4.5:1 for body text".
+Found by:  packages/tokens/test/native-contrast.test.mjs on its first run: text.disabled (neutral[500]) on bg.raised (neutral[50]) measured 4.41:1
+Effect:    The console's `textMuted` on `surface` is the same pair and therefore measures 4.41:1 on every raised card. Nothing measured it before; the console's contrast claim in index.ts is against white only.
+Response:  FIXED in the native set (text.disabled = neutral[600], stated in color.ts). Not touched in the console's set -- ADU-MOB-03 F2/Q5 assign that reconciliation to the console workstream.
+Action:    The console's reconciliation should re-measure textMuted on surface and surfaceMuted.
+Verification: `pnpm --filter @adulis/tokens test` -- the assertion that found it.
+Ruling needed: none.
+
+### D-370 - The Engineering Manual that ADU-MOB-WO-01 v1.2 cites in every slice is installed nowhere
+Severity:  MAJOR (three read-first lists name sections of a document no agent can open)
+Phase:     MOB WO-0b
+Source:    ADU-MOB-WO-01 v1.2 header: "Adulis Mobile AI-Assisted Engineering Manual, 7 September 2026"; S0b.1 "S11, S12, S13, S14, S22, S23"; WO-1 S1.1 "S21, S22, S38"; WO-2 S2.1 "S25, S39"; S0 change A quoting S17.6, S25, S40.
+Found by:  a filesystem search of Documents, Downloads and Desktop for the title and for any document modified since 5 September; only the chatbot engine manuals exist
+Effect:    The agent configuration -- two skills, the subagent brief, the hooks -- was built from the work order's quotations of the manual, not from the manual. Same shape as D-94/D-140: a document cited many times and installed nowhere.
+Response:  WORKED AROUND; MISSING_SOURCE is stated in the reviewer brief and the routing skill.
+Action:    Install the manual under docs/ (ASCII gate, DOCUMENT_AUTHORITY.md) or strike the citations in WO-01 v1.3.
+Ruling needed: none.
+
+### D-371 - The ADU-MOB series is not installed under docs/, so the workstream's own instruction file cites documents an agent cannot read
+Severity:  MAJOR
+Phase:     MOB WO-0b
+Source:    ADU-REPO-01 v1.3 S0.4: "A structure document that governs a tree it does not live in is a document an agent cannot read." apps/mobile/CLAUDE.md: "Governed by ADU-MOB-01 v1.2". `Glob docs/**/ADU-MOB*` returns nothing.
+Found by:  WO-0b's first step. The documents live at `C:\Users\naods\Documents\Business\Adulis\Documentations\Mobile App Documents\` (ADU-MOB-05 under `Chatbot Documents`; WO-01 v1.2 in Downloads).
+Effect:    The routing skill answers MISSING_SOURCE for every mobile question; the product-invariant-reviewer's first run listed fourteen unreadable documents; a session started in apps/mobile cannot verify a single ruling it is told to obey.
+Response:  PARKED. Installing governed documents is its own governance PR under `verify:docs-ascii`, outside WO-0b's touched set.
+Action:    Install ADU-MOB-00 v1.1, -01 v1.2, -02 v1.0, -03 v1.0, -04 v1.0, -05 v1.0, -06 v1.0, -07 v1.0, -PLAN-01 v1.0, -WO-01 v1.2, -WO-02 v1.0, -WO-03 v1.0, -AMD-01 v1.0, -AMD-02 v1.0, ADU-CMP-01 v0.1 and ADU-BOT-19 v1.0 into docs/ and DOCUMENT_AUTHORITY.md, then point apps/mobile/CLAUDE.md's reading-order table at WO-01 v1.2 (it says v1.1).
+Ruling needed: none.
+
+### D-372 - No iOS bundle identifier and no Android package name is ruled; the first EAS build needs both
+Severity:  QUESTION (blocks the deferred tier 0 device gate, not this slice)
+Phase:     MOB WO-0b
+Source:    ADU-MOB-01 v1.2 S18 tier 0 gate: "A development build installs on both reference devices"; app.config.ts carries no `ios.bundleIdentifier` and no `android.package`, on purpose.
+Found by:  authoring app.config.ts. A reverse-domain identifier is a naming decision adjacent to the domain (ADU-MOB-PLAN-01 D3) and appears in no document.
+Effect:    `eas build` refuses without them. After the first store submission they cannot change without a new listing, so a placeholder would become permanent.
+Response:  PARKED; not invented. Stated in app.config.ts's header.
+Action:    none until ruled.
+Ruling needed: YES -- the two identifiers. They need not wait for the domain.
+
+### D-373 - WO-0a's install list omits the Android SDK and emulator, a JDK and eas-cli; the tier 0 gate needs all three
+Severity:  MINOR (document), MAJOR effect (the emulator and EAS halves of every tier 0-2 gate cannot run)
+Phase:     MOB WO-0b
+Source:    ADU-MOB-WO-01 v1.2 S0a.1 installs plugins, MCP servers, typescript-language-server, agent-device and Maestro. S0b.5 requires "an EAS development build completes for both platforms" and an "Emulator half".
+Found by:  the WO-0b environment check on this machine: `adb`, `java`, `eas`, `maestro` and `agent-device` absent; ANDROID_HOME and JAVA_HOME unset; the Expo plugin and MCP not registered.
+Effect:    Nothing in WO-0a produces an emulator or an EAS login, so two halves of the tier 0 gate have nowhere to run even after WO-0a is completed as written.
+Response:  RECORDED in apps/mobile/DEFERRED-GATES.md, per line, with the blocked-on code.
+Action:    WO-01 v1.3 S0a.1 adds Android Studio/SDK with one emulator image, a JDK, and `eas-cli` -- all operator installs, none agent work.
+Ruling needed: none.
+
+### D-374 - pnpm auto-installs expo-router and expo-modules-core peers at versions SDK 57 does not bundle
+Severity:  MINOR
+Phase:     MOB WO-0b
+Source:    `pnpm install` output at WO-0b: react-native-worklets 0.12.1 against expo-modules-core's `^0.10.0`; react-native-reanimated 4.6.0 (which wants worklets 0.12); @react-native/metro-config 0.87.1 against 0.86.3; react-dom 19.2.8 against react 19.2.3. expo@57.0.20's bundledNativeModules.json names 0.10.1, 4.5.1, 0.86.3, 19.2.3.
+Found by:  reading the peer warnings rather than accepting a green install
+Effect:    A dev client built from an unpinned tree would autolink native modules the SDK never tested together.
+Response:  FIXED. Each is declared in apps/mobile/package.json at the SDK-bundled version with its reason in scripts/gates/allowed-dependencies.json (gate 9).
+Action:    Re-check at every SDK move (`npx expo install --check` is the instrument).
+Ruling needed: none.
+
+### D-375 - expo-router 57 carries a 964 KB icon font into the export through @expo/ui
+Severity:  MINOR (budget)
+Phase:     MOB WO-0b
+Source:    `expo export --platform android` asset list: `@expo-google-fonts/material-symbols/.../MaterialSymbols_400Regular.ttf (964KB)`, pulled by expo-router's dependency `@expo/ui`. ADU-MOB-03 D7: "no icon font". ADU-MOB-01 S13: 30 MB Android download budget.
+Found by:  the first `pnpm --filter @adulis/mobile build`; total export 6.1 MB (2.7 MB Hermes bundle, 2.38 MB of our six fonts, the rest dependency assets)
+Effect:    D7 is about controls Adulis draws, so the rule is not broken; the byte cost is real and it is not ours to choose.
+Response:  RECORDED with the measured numbers (apps/mobile/assets/fonts/SOURCES.md carries ours).
+Action:    At WO-3, when navigators exist, check whether expo-router's `@expo/ui` assets can be excluded from the bundle.
+Ruling needed: none.
+
+### D-376 - The previous apps/mobile/.claude/settings.json carried Write(...) deny rules that Claude Code never consults
+Severity:  MINOR
+Phase:     MOB WO-0b
+Source:    Claude Code permissions documentation (read at WO-0b): file writes are checked against `Edit(path)` and `Read(path)` rules only; a `Write(path)` rule is accepted with a startup warning and never consulted. The file WO-0b replaced carried `Write(../api/**)`, `Write(../../contracts/openapi.json)`, `Write(../../packages/api-client/src/schema.d.ts)` and `Write(../../db/migrations/**)`.
+Found by:  merging the founder's supplied settings.json with the repository's
+Effect:    Four denials that looked like a boundary were not one.
+Response:  FIXED in apps/mobile/.claude/settings.json -- Read and Edit rules only, with Edit covering Write.
+Action:    apps/api/.claude/settings.json and apps/console/.claude/settings.json may carry the same shape; check them (not this workstream's files).
+Ruling needed: none.
+
+### D-377 - The product-invariant-reviewer brief paraphrased ADU-MOB-AMD-02 section G wrongly, and its first run said so
+Severity:  MINOR (caught by the gate that exists to catch it)
+Phase:     MOB WO-0b
+Source:    ADU-MOB-WO-01 v1.2 S0b.5 configuration half: "`product-invariant-reviewer` runs against an empty diff and produces a coherent report, which is how you find out its brief is wrong before it matters". The brief as first written listed "the eight in section G" as B28-B30's rules plus the idempotency key, dropping G6 (order-card authority, `confirmed_at`) and G8 (gate 5, the disk rules).
+Found by:  the empty-diff run, which also found: two uninstalled sources cited as if readable; an unnamed method for "written by CI"; an ambiguous `pnpm gates`; no verdict for an empty diff and no severity scale; a filing instruction the read-only agent cannot obey; a routing-skill path that resolved to apps/ rather than the root.
+Effect:    A non-empty FYP review would have checked six of eight items and believed it had checked all.
+Response:  FIXED. The brief now sends the reader to section G rather than listing it, names the `contract-current` gate as the method, uses the register's severity scale, adds a NO CHANGE verdict, and cites the manual as quoted by WO-01 v1.2. The routing skill's path is corrected.
+Action:    Re-run the empty-diff proof from a session started in apps/mobile (DEFERRED-GATES.md).
+Ruling needed: none.
+
+### D-378 - ADU-REPO-01 S6 says packages/* is its own PR and never bundled into an app change; WO-0b S0b.6 accepts packages/tokens inside the app slice
+Severity:  MINOR (governance) and a QUESTION for the founder
+Phase:     MOB WO-0b, the adversarial pass (docs/build-status/reviews/MOB-WO-0-review.md, C10)
+Source:    ADU-REPO-01 v1.3 S6, row `packages/*`: "Its own PR, both owners. Never bundled into an app change"; root CLAUDE.md, the same row. ADU-MOB-WO-01 v1.2 S0b.2 authors packages/tokens inside WO-0 and S0b.6's first box reads "only apps/mobile, packages/tokens and the workspace manifest touched". packages/config/eslint.config.js (the mobile lint block) is touched too and is in neither list.
+Found by:  the review's repo-governance reviewer, confirmed by both refutation lenses
+Effect:    A one-PR landing bundles a shared package with an app change; a two-PR landing follows S6 but S0b.6 does not ask for it. Chosen silently, it is the collision-surface failure S6 exists to prevent.
+Response:  RECORDED, not resolved. The tree is left uncommitted. Recommended landing: PR 1 = packages/tokens (the native sub-entry, its tests, tsconfig, README, exports) + packages/config (the eslint block) + the root gate wiring (package.json, ops/scripts/gates.mjs, .dependency-cruiser.cjs, ops/scripts/verify-deps-fires.sh, .gitignore, .github/workflows/ci.yml) + pnpm-lock.yaml; PR 2 = apps/mobile and docs/build-status on top of it.
+Action:    WO-01 v1.3 S0b.6 to say the packages half is its own PR, or the founder to rule that one owner may bundle (ADU-REPO-01 v1.4 S6).
+Ruling needed: YES, small: one PR or two.
+
+### D-379 - Gate 11 was rooted at src/features/auth, a directory ADU-MOB-01 S17.2's tree does not contain; addendum to D-366
+Severity:  MINOR (specification); the gate is corrected
+Phase:     MOB WO-0b, the adversarial pass (C11)
+Source:    ADU-MOB-01 v1.2 S17.2: `src/session/ # secure store, device id, 401 handling (B4)`, `app/auth/`, and `src/features/` listing storefront, cart, orders, payment, review, claims, chat, follow, handoff -- no auth. S18.1 row 11: "under `src/features/auth`". ADU-MOB-WO-01 v1.2 S1.3: "Isolate the difference in one module ... the OTP client wraps the request and verify calls".
+Found by:  the review's conflicts reviewer; D-366 had recorded the wording conflict and missed the directory one
+Effect:    A gate rooted at a directory the tree never creates watches nothing, and WO-2 would put the OTP client in src/session and pass by accident.
+Response:  FIXED in apps/mobile/scripts/gates/run.mjs: gate 11 scans src/features/auth, src/session and app/auth -- wherever WO-2 puts sign-in. D-366's `otp-request` file convention stands and is compatible with S1.3 when "one module" is a directory (an `otp/` folder with otp-request.ts, otp-verify.ts and an index that wraps both); a single file holding both bodies carries `audience` beside the verify body and fires, which is the point.
+Action:    ADU-MOB-01 v1.3 S17.2 or S18.1 row 11 to name the same directory; WO-01 v1.3 S1.3 to say the module is a directory.
+Ruling needed: none.
+
+### D-380 - D-365 recorded the expo-sqlite contradiction for S18.1 row 10 only; the tier-6 gate in S18 and the S25 release gate carry it too
+Severity:  MINOR; addendum to D-365
+Phase:     MOB WO-0b, the adversarial pass (C12)
+Source:    ADU-MOB-01 v1.2 S18, tier 6 gate: "`grep -rn "expo-sqlite\|BackgroundFetch\|TaskManager" src/` = 0 (B25)". S25: "`find` over the app container returns no scan, no queue file and no SQLite database". Against them, S17.2 `src/store/ # SQLite: the order idempotency key. NOTHING ELSE` and S9.5 item 1.
+Found by:  the review's conflicts reviewer
+Effect:    WO-6's CI half and the release checklist, read literally, fail on the one row that must exist.
+Response:  RECORDED. Gate 10 already reads B6 as governing; WO-6 and the S25 checklist inherit the reading: no SQLite database other than the one row of S9.5.
+Action:    ADU-MOB-01 v1.3 corrects the three sentences together -- S18.1 row 10, the tier-6 grep, S25's line.
+Ruling needed: none.
+
+### D-381 - Two further gate readings, previously stated only in the scanner's header: gate 12 does not scan apps/console, and gates 1, 10, 11 and 14 drop comments while 1 and 14 skip test files
+Severity:  MINOR (readings)
+Phase:     MOB WO-0b, the adversarial pass (two minors)
+Source:    ADU-MOB-03 v1.0 S8 row 12 "a hex colour literal anywhere outside packages/tokens", and its F2/Q5 ("the console's reconciliation... is the console's work"); S18.1 row 14 and WO-0b S0b.2 "includeFontPadding appears nowhere".
+Effect:    A hex literal in apps/console is not this gate's business until the console reconciles onto the token roles; a comment naming `includeFontPadding` in the primitive that obeys D1, and the assertion naming it in the test that proves the absence, are not violations -- a gate that fails on the proof of compliance measures the wrong thing.
+Response:  RECORDED here. The header of apps/mobile/scripts/gates/run.mjs carries the same two paragraphs.
+Action:    ADU-MOB-01 v1.3 S18.1 to state each gate's scan roots and the comment rule; ADU-CON-03 v1.4 to schedule the console's hex reconciliation (ADU-MOB-03 Q5).
+Ruling needed: none.
+
+### D-382 - The pre-commit hook as first written gated only the Bash tool, ran from the current directory, scanned an index a `git add -A && git commit` had not yet filled, and its own test file was a credential on disk
+Severity:  BLOCKER as found -- on Windows the primary shell tool is PowerShell, so a commit typed through it was never gated; FIXED before any commit was made
+Phase:     MOB WO-0b, the adversarial pass (C1, C6, C7, C8, C14, C15)
+Source:    apps/mobile/.claude/settings.json as first written (matcher "Bash", exec-form relative paths); scripts/hooks/pre-commit-gate.mjs (`tool_name === 'Bash'`); scripts/hooks/secret-scan.mjs (`git diff --cached` at PreToolUse time); scripts/hooks/hooks.test.mjs (literal PEM, AKIA and EXPO_TOKEN fixtures). Claude Code hooks reference: Bash and PowerShell are distinct matcher names; a hook runs in the current directory; `$CLAUDE_PROJECT_DIR` is provided for exactly this.
+Found by:  the review's security and agent-config reviewers, each confirmed by both lenses; the fourth by running the scan over the delta
+Effect:    Four ways the commit gate could be green while gating nothing.
+Response:  FIXED. Matcher `Bash|PowerShell` and a SHELL_TOOLS set in the script; shell-form commands through `"$CLAUDE_PROJECT_DIR"`; the scan covers staged, modified and untracked files (`--pending`); fixtures are assembled at test time and the test asserts its own file is clean.
+Verification: stdin JSON with tool_name PowerShell and a planted D1 violation -> exit 2; a clean tree -> exit 0; `--pending` over the 85-file delta -> clean; `pnpm --filter @adulis/mobile precommit` green.
+Action:    the wiring proof from a session started in apps/mobile, through both tools (DEFERRED-GATES.md).
+Ruling needed: none.
+
+### D-383 - Gates 2, 10 and 12 as first written used word boundaries and the long hex form only, and missed `sessionToken`, `scanQueue` and `'#fff'`
+Severity:  MAJOR as found; FIXED
+Phase:     MOB WO-0b, the adversarial pass (C2, C3, C4)
+Source:    ADU-MOB-01 v1.2 S18.1 rows 2 and 10 (the document's checks are substring greps); ADU-MOB-03 v1.0 D5 "no hex literal exists outside this package"; ADU-MOB-06 v1.0 S8 rates the grep gates "complete, not sampled".
+Found by:  the review's gates reviewer, each with a node probe against the regex
+Effect:    The identifiers a TypeScript author actually writes passed the gates that exist to catch them.
+Response:  FIXED -- substring matches in any case (with `queueMicrotask` excluded by name), three- and four-digit hex when quoted, and the self-test now demands every planted file be caught (camelCase identifiers, `'#fff'`, expo-sqlite outside src/store). Gates 4 and 5 scan all of apps/mobile; gate 6's header match is case-insensitive and an undocumented `src/features/seller` exclusion is gone; the code-only stripper is quote-aware and no longer mistakes a generator method for a comment.
+Verification: apps/mobile/scripts/gates/gates.test.mjs, the identifier and term cases; `--self-test`.
+Ruling needed: none.
+
+### D-384 - runtimeVersion policy 'appVersion' contradicted B7 and B21's two-version model
+Severity:  MAJOR as found; FIXED
+Phase:     MOB WO-0b, the adversarial pass (C9)
+Source:    ADU-MOB-01 v1.2 S6.2 RULING B7 (`X-Adulis-Client` carries the bundle version and the binary version); S19.2 RULING B21 (every over-the-air update is a version bump); @expo/config-plugins resolves policy 'appVersion' to `expo.version`.
+Found by:  the review's scaffold reviewer
+Effect:    Every update that bumped `expo.version` would have minted a new runtime version and reached no installed binary -- the update service would have delivered nothing, silently.
+Response:  FIXED -- `runtimeVersion: { policy: 'fingerprint' }`; `expo config --type introspect` shows `EXUpdatesRuntimeVersion: 'file:fingerprint'`. The bundle version travels separately (WO-1's header).
+Action:    ADU-MOB-01 v1.3 S6.2 to say which Expo value carries which of B7's two versions.
+Ruling needed: none.
+
+### D-385 - The camera and secure-store config plugins wrote generic microphone and Face ID purpose strings by default
+Severity:  MAJOR as found (ADU-MOB-05 S4.4: "A generic string is a rejection"); FIXED
+Phase:     MOB WO-0b, the adversarial pass (C16)
+Source:    expo-camera's plugin sets NSMicrophoneUsageDescription unless `microphonePermission: false`; expo-secure-store's sets NSFaceIDUsageDescription unless `faceIDPermission: false`. ADU-MOB-05 v1.0 S4.4: "Every permission the app requests has a purpose string a reviewer can check against a visible feature".
+Response:  FIXED in app.config.ts; introspect shows NSCameraUsageDescription only and no RECORD_AUDIO.
+Action:    WO-2 supplies a Face ID string if biometric unlock (ADU-MOB-01 S4.4) is adopted.
+Ruling needed: none.
+
+### D-386 - The founder's apps/mobile/CLAUDE.md cites WO-01 v1.1, inlines ADU-REPO-01 S5.1 without the [inlined] marker it promises, and its S11 describes two mechanisms where the settings file now has three
+Severity:  MINOR (document), for the founder; transcribed byte-for-byte on purpose
+Phase:     MOB WO-0b
+Source:    apps/mobile/CLAUDE.md S1 table "ADU-MOB-WO-01 v1.1 / -WO-02 / -WO-03"; S10's Prism base-URL sentence; S11 "It sits beside this file and does two things".
+Response:  NOT changed. The repository file is the founder's supplied file, verified identical after line-ending normalisation. apps/mobile/README.md carries the hooks explanation.
+Action:    the founder reissues CLAUDE.md: WO-01 v1.2, the [inlined] marker on S10, S11 gains the hooks.
+Ruling needed: none.
+
+### D-387 - Two notes on settings.json for the founder: the deny paths are anchored to the current directory, and the previous file's `_why` key is outside the declared schema
+Severity:  MINOR
+Phase:     MOB WO-0b, the adversarial pass (two notes)
+Source:    Claude Code permissions reference: a relative `path` in a rule anchors at the current working directory and a `/path` anchors at the settings source; the founder's file (and the previous repository file) use `..`-relative rules. The previous file also carried `_why`, which the schema it declares does not allow.
+Response:  `_why` removed (its content moved to apps/mobile/README.md); the path form left as designed.
+Action:    consider source-anchored rules if `cd` inside a session is a real risk; ADU-REPO-01 v1.4 S8.
+Ruling needed: none.
+
+### D-388 - WO-0b was built from a session started at the repository root, so the guard rails it authored were never active while it worked
+Severity:  MINOR (process), recorded per ADU-MOB-00 S9.1's honesty rule
+Phase:     MOB WO-0b
+Source:    ADU-REPO-01 v1.3 S8: "Start each session from the workstream directory, not the repository root"; apps/mobile/CLAUDE.md S5.
+Found by:  the adversarial pass
+Effect:    The deny rules, claudeMdExcludes and hooks of apps/mobile/.claude/settings.json did not apply during WO-0b. The boundary was kept by discipline -- no file under apps/api, apps/console, apps/storefront or db/ was read -- and each guard rail was proven by direct invocation instead of by the harness.
+Response:  RECORDED; the session-started-here proofs are the last four tier 0 lines of DEFERRED-GATES.md.
+Action:    WO-1 starts from apps/mobile.
+Ruling needed: none.
+
+### D-389 - A stray untracked file, docs/build-status/permission-probe.txt, predates WO-0b and would be swept up by `git add -A`
+Severity:  MINOR
+Phase:     MOB WO-0b
+Source:    `git status` at the start of WO-0b: `?? docs/build-status/permission-probe.txt`, one line ("ok"), modified 7 Sep 2026 11:08, before this session began.
+Response:  NOT touched; not this order's file.
+Action:    the owner deletes or ignores it before committing.
+Ruling needed: none.
+
+### D-390 - The mobile corpus is installed at docs/adu/ and governed; D-370 and D-371 are CLOSED
+Severity:  RESOLUTION (closes two MAJOR entries), plus three findings this installation produced
+Phase:     MOB, governance install, 8 September 2026
+Source:    Founder instruction, 8 September 2026: install the corpus at `docs/adu/`, one file per document, under the repository-wide ASCII gate; register the attached engineering manual as ADU-MOB-08 v1.0; point every document reference in `apps/mobile/CLAUDE.md` at the installed path and cite path and section only.
+Found by:  n/a -- this entry records work, and the three findings below are what doing it produced.
+
+**What was installed.** Sixteen documents at `docs/adu/`, each byte-identical to its source except ADU-MOB-08 (below), renamed to the hyphenated `ADU-<id>_<title>_v<major>_<minor>.md` form the `verify-docs-ascii` family and revision parser require:
+
+  ADU-MOB-00 v1.1, ADU-MOB-01 v1.2, ADU-MOB-02 v1.0, ADU-MOB-03 v1.0, ADU-MOB-04 v1.0,
+  ADU-MOB-05 v1.0, ADU-MOB-06 v1.0, ADU-MOB-07 v1.0, ADU-MOB-08 v1.0, ADU-MOB-PLAN-01 v1.0,
+  ADU-MOB-AMD-01 v1.0, ADU-MOB-AMD-02 v1.0, ADU-MOB-WO-01 v1.2, ADU-MOB-WO-02 v1.0,
+  ADU-MOB-WO-03 v1.0, ADU-CMP-01 v0.1.
+
+All sixteen were supplied ASCII, LF-only, no BOM, and are **GOVERNED rather than carried as debt** -- `ops/scripts/gates.mjs` gate `docs-ascii` now enforces 28 documents and its own list-vs-directory comparator passes. Three source files carried no version in the filename and take their document's own stated version: AMD-01, WO-02 and WO-03 become `_v1_0`.
+
+**CLOSED by this entry:**
+
+  D-370  The Engineering Manual that ADU-MOB-WO-01 v1.2 cites in four read-first lists was
+         installed nowhere. It is `docs/adu/ADU-MOB-08_AI_Assisted_Engineering_Manual_v1_0.md`.
+  D-371  The ADU-MOB series was not under docs/, so apps/mobile/CLAUDE.md cited documents
+         no agent could open. All sixteen are installed and every citation in that file and
+         in `.claude/skills/adulis-routing/SKILL.md` now carries a repository path that
+         resolves. Verified by resolving all 27 cited paths.
+
+**ADU-MOB-08 is a transcription, not a copy, and this is the part to check.** The manual was supplied as message text rather than as a file; no copy exists on disk (that was D-370's finding). The supplied text carried transit damage of exactly the shape A3.5 exists for: every arrow in its diagrams arrived as a broken multi-byte sequence. Transcribed to ASCII as:
+
+  31 vertical-flow arrows -> `v`      (S1 x9, S2 x3, S4 x9, S17.3 x4, S37 x6)
+  12 horizontal arrows    -> `->`     (S11 x4, S13.1 x8)
+
+Nothing else in the body was altered: all 44 sections are present in order. Two header lines were ADDED, because every other ADU document carries them and the file must say what it is: `**Document:** ADU-MOB-08  -  **Version:** 1.0` and `**Encoding:** ASCII.`
+Ruling needed: **YES, small -- confirm the 43 substitutions read the damaged characters correctly.** Context makes a down arrow and a right arrow the only sensible reading, but the original bytes are unrecoverable from here and the founder holds the undamaged source.
+
+### F1 -- apps/mobile/CLAUDE.md was rewritten as citations, and one rule could not be removed
+The instruction was to copy no rule out of a document and cite path and section only. That was applied everywhere except one line. `ADU-REPO-01 v1.3` S8's table names this file's content as *"No price, tier name or billing link anywhere in the bundle -- ADU-API-01 S4.1"*, so removing the In-App Purchase rule would put the file in breach of a binding document. It is kept, marked `[inlined]`, with its three citations beside it. Everything else -- the nine absences, the definition of done, the review checklist, the seam, the operational facts -- is now a path and a section. **Recorded rather than chosen silently** (ADU-MOB-00 S2.2 RULE 2).
+Ruling needed: whether ADU-REPO-01 v1.4 S8 drops that row so the file can become citations only.
+
+### F2 -- the corpus is split across two directories
+The sixteen new documents are at `docs/adu/`; the twenty-two pre-existing ADU documents remain at `docs/`. Nothing was moved: relocating them would break every `GOVERNED` path in `verify-docs-ascii.mjs`, every citation of `docs/ADU-...` across the repository, and `DOCUMENT_AUTHORITY.md`'s own links. The gate handles both locations (it walks `docs/` recursively and already governs ADU-VAL-01 from `docs/registers/`), so the split is cosmetic rather than functional -- but it is a split, and a later consolidation is one mechanical move plus a path sweep.
+Ruling needed: whether the older documents move under `docs/adu/` too.
+
+### F3 -- two superseded revisions exist outside the repository and were not installed
+`ADU-MOB-WO-01 v1.1` and `ADU-MOB-01 v1.0` sit beside the sources at `C:\Users\naods\Documents\Business\Adulis\Documentations\`. Neither was installed. `docs/superseded/` exists for exactly this and holds the older API, AUTH and DB revisions, "because a register entry that cites v1.10 S5.5 needs the text it cited". No register entry cites either mobile revision by section today, so nothing is broken; if one ever does, the text is outside the repository.
+Ruling needed: none, unless a citation to either appears.
+
+**Also discharged, partly.** D-386's first two parts are gone: `apps/mobile/CLAUDE.md` no longer points at the superseded WO-01 v1.1, and it no longer inlines ADU-REPO-01 S5.1 unmarked, because it no longer inlines it at all. D-386's third part is also gone -- S11 described two mechanisms where the settings file has three; the rewritten file names the hooks and points at `apps/mobile/README.md` for what each does. **D-386 is CLOSED.** The file is no longer a byte-identical transcription of the founder's supplied copy, which is what that entry recorded; the founder's copy remains at the source path.
+
+Verification: `pnpm verify:docs-ascii` -- the governed list itself PASSES at 28 documents and every one of the sixteen reports 0 non-ASCII bytes; every `docs/...` path cited in `apps/mobile/CLAUDE.md` (27) and in the routing skill (27) resolves on disk; all sixteen installed documents are cited by full path in CLAUDE.md.
+
+D-379 - SUPERSEDED by D-366 (ADU-MOB-01 v1.3), 2026-09-08.
+Superseded response text: "a single file holding both bodies carries
+`audience` beside the verify body and fires, which is the point."
+Reason: that reading treats co-location of the challenge and verify bodies
+in one module as a violation. Under D-366 it is the REQUIRED shape - S4.3
+mandates `audience` on the challenge request, and the OTP client module
+constructs both calls. The old reading therefore describes a false positive
+as intended behaviour. Gate 11 is re-anchored to read the verify call's body
+literal only. D-379 remains as history; it is not a live rule.
+
+### D-391 - apps/storefront has no `.claude/settings.json`, so a session started there has no deny rules and no hooks
+Severity:  MINOR today, BLOCKER the day the workstream is staffed
+Found by:  the D-25 tooling audit, 9 Sep 2026, while measuring which settings files are in effect
+Source:    `apps/api/.claude/settings.json` and `apps/console/.claude/settings.json` both exist; `apps/storefront/.claude/settings.json` does not. Project settings, hooks and `.mcp.json` load only from the session's primary working directory, so a session started with `cd apps/storefront && claude` -- the command the root `CLAUDE.md` box prints -- loads no permission rules at all: no boundary denials against the other four workstreams, no secret-file denials, no pre-commit gate, no sensitive-write confirmation. The storefront workstream is unstaffed (ADU-REPO-01 S1: owner unassigned), so nothing is exposed today.
+Why it is not urgent: nobody starts sessions there. Why it is recorded: the day someone does, the absence is silent -- there is no error, no warning, and no prompt. It is discovered by not being discovered.
+Response:  RECORDED, NOT FIXED, on the founder's instruction of 9 Sep 2026 ("record, do not act"). Fixing it is one file, modelled on whichever settings file the D-25 ruling leaves canonical. Note that D-25 moves the mobile settings file to the repository root, which does NOT cover `apps/storefront` -- a root settings file does not reach a subdirectory session.

@@ -109,6 +109,17 @@ export const x = boot;" \
   "no-package-to-app" \
   "rule 3: package -> app"
 
+# --- R-6 (ADU-MOB-03 S2.1) -- packages/tokens imports nothing ----------------
+# typescript is a DECLARED devDependency of packages/tokens, so the import
+# resolves and only the tokens rule can catch it. An undeclared name would be
+# caught by not-to-unresolvable instead -- a green rule proven by the wrong
+# mechanism, which is the dist-probe lesson above.
+plant "packages/tokens/src/__depcruise_probe_$$.ts" \
+"import ts from 'typescript';
+export const x = ts;" \
+  "tokens-import-nothing" \
+  "R-6: packages/tokens -> a dependency"
+
 echo
 echo "  --- and the clean tree must pass ---"
 if pnpm exec depcruise apps packages --config .dependency-cruiser.cjs > /dev/null 2>&1; then

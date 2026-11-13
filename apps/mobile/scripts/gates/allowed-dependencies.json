@@ -1,0 +1,115 @@
+{
+  "_source": "ADU-MOB-01 v1.2 S3.7 and S18.1 gate 9, ADU-MOB-WO-01 v1.2 WO-0b S0b.6. Every dependency of apps/mobile is named here with WHY it is present and whether it is a data PROCESSOR (ADU-MOB-01 B2, S20.4; ADU-DPIA-01 S3.2). Gate 9 fails when package.json and this file disagree in either direction, and when any version is a range. A new dependency is a document change, not a code change: it is added here, in the PR, with its reason, before it is installed.",
+  "dependencies": {
+    "@adulis/api-client": {
+      "why": "The seam (ADU-REPO-01 S5.1): types generated from contracts/openapi.json. Never a hand-authored DTO.",
+      "processor": false
+    },
+    "@adulis/locale": {
+      "why": "The typed catalogue (S5.3): a missing Amharic key is a compile error.",
+      "processor": false
+    },
+    "@adulis/tokens": {
+      "why": "Design values (S5.2), consumed directly via @adulis/tokens/native.",
+      "processor": false
+    },
+    "expo": {
+      "why": "The SDK (ADU-MOB-01 S3.1): config plugins, EAS build, the update service. Pinned to SDK 57.",
+      "processor": false
+    },
+    "expo-camera": {
+      "why": "The QR scan, MB-21 (S3.7). Its plugin carries the camera purpose string.",
+      "processor": false
+    },
+    "expo-constants": {
+      "why": "Peer of expo-router; the app config at runtime.",
+      "processor": false
+    },
+    "expo-dev-client": { "why": "Development builds, not Expo Go (B20).", "processor": false },
+    "expo-font": {
+      "why": "Loads the six bundled font files at runtime (B16, ADU-MOB-03 D3).",
+      "processor": false
+    },
+    "expo-linking": {
+      "why": "Peer of expo-router; the scheme and, once the domain exists, App Links.",
+      "processor": false
+    },
+    "expo-notifications": {
+      "why": "FCM and APNs registration, the permission, the tray (S3.7). The push service is the platforms' own -- an existing store relationship, not a new processor (B2).",
+      "processor": false
+    },
+    "expo-router": {
+      "why": "File-based routing: the directory IS the deep-link map (S3.2).",
+      "processor": false
+    },
+    "expo-secure-store": {
+      "why": "Keychain/Keystore for the session token and the device id (S3.7, S14.1).",
+      "processor": false
+    },
+    "expo-splash-screen": {
+      "why": "Holds the splash until the fonts are loaded.",
+      "processor": false
+    },
+    "expo-sqlite": {
+      "why": "ONE row: the order-creation idempotency key and its cart hash, in src/store/ (B6, S9.5, S17.2). Nothing else, ever.",
+      "processor": false
+    },
+    "expo-status-bar": { "why": "Peer of expo-router.", "processor": false },
+    "expo-updates": {
+      "why": "Over-the-air JavaScript releases (S19.2, B21). Publication is CI-only from a tag (ADU-MOB-07 O3).",
+      "processor": false
+    },
+    "react": { "why": "Pinned to the version Expo SDK 57 bundles.", "processor": false },
+    "react-native": { "why": "Pinned to the version Expo SDK 57 bundles.", "processor": false },
+    "react-native-reanimated": {
+      "why": "Required peer of expo-router 57, pinned to the version SDK 57 bundles (4.5.1, which pairs with worklets 0.10.x); pnpm otherwise auto-installs the newest. No Adulis code animates with it (ADU-MOB-03 D8).",
+      "processor": false
+    },
+    "react-native-safe-area-context": {
+      "why": "Peer of expo-router; the safe-area inset is a layout input (ADU-MOB-03 D11).",
+      "processor": false
+    },
+    "react-native-screens": {
+      "why": "Peer of expo-router; native screen containers.",
+      "processor": false
+    }
+  },
+  "devDependencies": {
+    "@adulis/config": { "why": "The shared strict tsconfig.", "processor": false },
+    "@babel/core": {
+      "why": "Required by babel-preset-expo; Metro and Jest transform through it.",
+      "processor": false
+    },
+    "@jest/globals": {
+      "why": "Tests import describe/it/expect explicitly instead of relying on injected globals, so tsc types them without @types/jest.",
+      "processor": false
+    },
+    "@react-native/metro-config": {
+      "why": "Peer of @react-native/community-cli-plugin, pinned to the version SDK 57 bundles (pnpm otherwise resolves the newest, which fails the peer range).",
+      "processor": false
+    },
+    "@testing-library/react-native": {
+      "why": "Renders components in Jest for the CI half of the screen gates.",
+      "processor": false
+    },
+    "@types/react": { "why": "Types for the pinned React.", "processor": false },
+    "jest": { "why": "The unit test runner jest-expo presets.", "processor": false },
+    "jest-expo": {
+      "why": "Expo's Jest preset (S18.1: unit tests in the mobile job).",
+      "processor": false
+    },
+    "react-dom": {
+      "why": "Peer of expo-router (web target, unused here), pinned to the bundled React so the peer range is met; pnpm otherwise auto-installs the newest.",
+      "processor": false
+    },
+    "react-native-worklets": {
+      "why": "Required peer of expo-modules-core 57, pinned to the version SDK 57 bundles (0.10.1); pnpm otherwise auto-installs 0.12.1, which the SDK does not accept.",
+      "processor": false
+    },
+    "react-test-renderer": {
+      "why": "Peer of @testing-library/react-native 13, at the bundled React version.",
+      "processor": false
+    },
+    "typescript": { "why": "Pinned repository-wide.", "processor": false }
+  }
+}

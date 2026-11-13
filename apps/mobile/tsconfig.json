@@ -1,0 +1,14 @@
+{
+  "//": "Two bases, in this order: the shared strict flags (ADU-CON-02 S3.1: strict, no exceptions) and then Expo's, whose module/JSX settings must win for Metro. Nothing here relaxes a strict flag.",
+  "extends": ["@adulis/config/tsconfig.base.json", "expo/tsconfig.base"],
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "declaration": false,
+    "sourceMap": false,
+    "incremental": false,
+    "types": ["react", "react-native"]
+  },
+  "include": ["app", "src", "__tests__", "app.config.ts", "expo-env.d.ts", ".expo/types/**/*.ts"],
+  "exclude": ["node_modules", "dist", "android", "ios", "scripts"]
+}

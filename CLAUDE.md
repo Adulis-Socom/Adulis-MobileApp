@@ -15,9 +15,17 @@ code: it changes in the same PR as any decision that changes it.
 > ```
 > cd apps/api        && claude   # backend + database + migrations
 > cd apps/console    && claude   # seller console PWA
-> cd apps/mobile     && claude
+> cd apps/mobile     && claude   # SUPERSEDED by D-25 -- see below
 > cd apps/storefront && claude   # after the subtree import — ops/runbooks/
 > ```
+>
+> **D-25 -- THE REPOSITORY-ROOT SESSION IS THE MOBILE SESSION.** The mobile workstream
+> legitimately reads `docs/`, `ops/`, `.github/`, `node_modules/` and three root
+> manifests, which is a repo-root-shaped surface that no `../` permission rule can
+> describe, so its settings file and its session both moved to the root; every other
+> workstream still starts from its own directory. `apps/mobile/CLAUDE.md` therefore
+> loads on demand rather than at startup — read a file under `apps/mobile/` before
+> relying on its rules.
 >
 > `/context` lists what actually loaded. **This is the single most consequential
 > operational habit in the repository, it costs nothing, and it is invisible when it

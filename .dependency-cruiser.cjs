@@ -115,6 +115,19 @@ module.exports = {
       from: { path: '^(?:apps|packages)/' },
       to: { couldNotResolve: true },
     },
+    {
+      name: 'tokens-import-nothing',
+      comment:
+        'ADU-MOB-03 v1.0 S2.1 (R-6, owed to ADU-REPO-01 v1.4 S5). packages/tokens ' +
+        'is values only: no React, no platform module, no other package, no node ' +
+        'builtin. A dependency edge leaving packages/tokens/src is the moment the ' +
+        'package stops being something a web button and a React Native button can ' +
+        'both consume. Tests under packages/tokens/test import the runner and are ' +
+        'outside the from-path on purpose. Proven to fire by verify-deps-fires.sh.',
+      severity: 'error',
+      from: { path: '^packages/tokens/src/' },
+      to: { pathNot: '^packages/tokens/src/' },
+    },
   ],
 
   options: {

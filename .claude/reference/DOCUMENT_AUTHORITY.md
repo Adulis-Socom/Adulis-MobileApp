@@ -26,6 +26,43 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 - `ADU-RUL-03_Console_Blockers_and_the_NODE_ENV_Class.md` — **binding rulings**, installed at T8. Unblocks D-101, D-102, D-104; adds the D-105 class finding (a guard on an environment nobody sets is not a guard) and two rules (a verification claim names its instrument; a boot smoke test joins the gates). Its S4 carries the age declaration verbatim.
 - `ADU-PD-01_Adulis_V1_Product_Description_v1_0.md` — descriptive only; never overrides binding documents.
 
+## The mobile corpus — installed at `docs/adu/`, governed from this installation
+
+Sixteen documents, installed together and enforced by `pnpm verify:docs-ascii` from their
+first installation. Until this installation they lived outside the repository, so
+`apps/mobile/CLAUDE.md` cited documents no agent could open (register D-370, D-371).
+Cite them by the paths below; ADU-MOB-08 is the AI-Assisted Engineering Manual, registered
+at this installation.
+
+| Document | Governs at | Path under `docs/adu/` |
+|---|---|---|
+| ADU-MOB-00 | v1.1 | `ADU-MOB-00_Mobile_Build_Guidelines_v1_1.md` — operating guidance, not binding; where it and a binding document disagree, the binding one wins |
+| ADU-MOB-01 | **v1.2** | `ADU-MOB-01_Buyer_Mode_System_Design_v1_2.md` — the binding architecture record for Buyer Mode |
+| ADU-MOB-02 | v1.0 | `ADU-MOB-02_Buyer_Mode_Content_Architecture_v1_0.md` — binding content architecture |
+| ADU-MOB-03 | v1.0 | `ADU-MOB-03_Design_System_and_Component_Inventory_v1_0.md` — binding design system; authors `packages/tokens` |
+| ADU-MOB-04 | v1.0 | `ADU-MOB-04_Wireframe_Generation_Brief_v1_0.md` — an operating brief; binding on nothing |
+| ADU-MOB-05 | v1.0 | `ADU-MOB-05_Store_Submission_and_Compliance_Dossier_v1_0.md` — **its external facts are dated and expire**; re-verify S1, S4 and S5 before submission |
+| ADU-MOB-06 | v1.0 | `ADU-MOB-06_Security_QA_and_Test_Specification_v1_0.md` — ADU-QA-01's mobile chapter |
+| ADU-MOB-07 | v1.0 | `ADU-MOB-07_Release_and_Operations_v1_0.md` — procedures behind ADU-MOB-01 S19 to S21 |
+| **ADU-MOB-08** | **v1.0** | `ADU-MOB-08_AI_Assisted_Engineering_Manual_v1_0.md` — how AI agents, plugins, MCP servers, skills and subagents are used in this workstream |
+| ADU-MOB-PLAN-01 | v1.0 | `ADU-MOB-PLAN-01_Documentation_Plan_and_Workstream_Register_v1_0.md` — a planning record; decides no app behaviour |
+| ADU-MOB-AMD-01 | v1.0 | `ADU-MOB-AMD-01_Offline_Withdrawal_Amendment_Set_v1_0.md` — applied to ADU-MOB-00 v1.1 and ADU-MOB-01 v1.1; still owed by six others |
+| ADU-MOB-AMD-02 | v1.0 | `ADU-MOB-AMD-02_FYP_Adoption_Amendment_Set_v1_0.md` — **the For You Page ruling. Its section G is what must survive it** |
+| ADU-MOB-WO-01 | **v1.2** | `ADU-MOB-WO-01_Buyer_Mode_Work_Orders_Tiers_0_to_2_v1_2.md` — v1.1 is superseded and is NOT installed |
+| ADU-MOB-WO-02 | v1.0 | `ADU-MOB-WO-02_Buyer_Mode_Work_Orders_Tiers_3_to_5_v1_0.md` |
+| ADU-MOB-WO-03 | v1.0 | `ADU-MOB-WO-03_Buyer_Mode_Work_Orders_Tiers_6_to_8_v1_0.md` |
+| ADU-CMP-01 | v0.1 | `ADU-CMP-01_Seller_Companion_Scoping_Record_v0_1.md` — a scoping record, deliberately not a system design |
+
+> **Work orders and briefs are working instruments, not binding records.** Where
+> ADU-MOB-WO-01/02/03 or ADU-MOB-04 disagree with ADU-MOB-01, ADU-MOB-02 or ADU-MOB-03,
+> the latter govern and the instrument is corrected. Each says so in its own header.
+
+> [!] **The corpus is installed; the debt it carries is not discharged by installing it.**
+> ADU-MOB-01 v1.2 contradicts itself in four places the mobile gates had to read around
+> (register D-365, D-366, D-367, D-379, D-380, D-381), and ADU-MOB-PLAN-01 S6 lists
+> thirteen reissue targets across the wider set. Installation makes those readable, not
+> resolved.
+
 ## Authority by question
 
 1. **Product behaviour:** `ADU-PRD-01 v8.5` governs.
@@ -38,6 +75,8 @@ Use exact filenames when locating source documents. Do not infer a newer revisio
 8. **Business doctrine:** `ADU-00 v9.1` governs.
 9. **Build/operations sequencing:** `ADU-CON-02 v3.2` governs unless doing so requires an unreissued dependent specification.
 10. **Repository structure, ownership and the dependency rules:** `ADU-REPO-01 v1.3` governs.
+11. **Mobile workstream:** `ADU-MOB-01 v1.2` governs what the app is and what it must not do; `ADU-MOB-02 v1.0` what the buyer sees; `ADU-MOB-03 v1.0` what it is built from; `ADU-MOB-08 v1.0` how an AI agent is used to build it. All at `docs/adu/`.
+12. **The For You Page:** `ADU-MOB-AMD-02 v1.0` is the ruling in force. A sentence forbidding recommenders in an older document is superseded text to flag for amendment, never grounds to reject the work.
 
 ## Known version gaps — fail closed
 

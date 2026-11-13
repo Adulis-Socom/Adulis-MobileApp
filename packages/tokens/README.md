@@ -8,7 +8,11 @@ more on a placeholder is twenty-two to revisit, so the values are defined now.
 
 ## What is here, and what is deliberately not
 
-- `src/index.ts` -- the values as TypeScript, for React Native and any JS.
+- `src/index.ts` -- the WEB set as TypeScript: the console's role names, rem strings,
+  a font stack. **React Native does not read it**; it reads `src/native/` through
+  `@adulis/tokens/native` (below). Two sentences in `src/index.ts` and in
+  `ops/scripts/verify-tokens.mjs` still say React Native reads this file; they
+  predate the sub-entry and are left for the console's reconciliation pass.
 - `tokens.css` -- the same values as CSS custom properties, for the web
   surfaces. The two are kept in step by hand; a drift between them is a defect
   to fix in **both** until a build step derives one from the other.
@@ -46,3 +50,24 @@ because Amharic runs 30-50% longer.
 The public website keeps its own repository, and this package is **copied
 there** until publishing it is worth the trouble (ADU-CON-02 S12) -- recorded
 and accepted, not an oversight.
+
+## React Native: `@adulis/tokens/native`
+
+Authored at WO-0b from ADU-MOB-03 v1.0 S2 (ADU-MOB-WO-01 v1.2). The app imports
+`@adulis/tokens/native`, never the root entry: the root is web-shaped (rem
+strings, a font stack, the console's role names) and `ops/scripts/verify-tokens.mjs`
+parses it in place against `tokens.css`.
+
+- `src/native/color.ts` -- the S2.2 role table (`bg`, `text`, `border`, `brand`,
+  `state`, `scan`, `skeleton`, `overlay`). **Every hue is a reference into
+  `src/index.ts`**; `test/native-derivation.test.mjs` fails the moment a second
+  palette starts, and `test/native-contrast.test.mjs` measures 4.5:1 / 3:1 / 7:1
+  rather than asserting them.
+- `src/native/typography.ts` -- two families, three weights, seven size tokens.
+  Line heights derive from the **measured** Ethiopic content height (1.362 em).
+- `src/native/space.ts`, `radius.ts`, `motion.ts`, `elevation.ts` -- numbers, in dp
+  and ms. No height token exists (D4).
+
+`pnpm --filter @adulis/tokens test` runs both files on Node's built-in runner.
+**The console's reconciliation onto these role names is the console's work**
+(ADU-MOB-03 F2, Q5) and is not performed here.
