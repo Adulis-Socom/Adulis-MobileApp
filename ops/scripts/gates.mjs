@@ -586,6 +586,16 @@ const GATES = [
    * nothing -- so they are asserted directly rather than trusted.
    */
   { id: 'gate-runner', title: "The gate runner's environment and scope rules hold", cmd: ['node', '--test', 'ops/scripts/gates.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-007).
+   *
+   * The MinIO data move's refusals: the founder-approval guard, a cut-short or
+   * corrupt backup, every kind of object difference, and an anonymous probe
+   * that errors instead of being denied. The docker-driven sequence itself is
+   * rehearsed on disposable copies; these are the decisions that must refuse.
+   */
+  { id: 'minio-migrate', title: 'The MinIO data move refuses what it must', cmd: ['node', '--test', 'ops/scripts/minio-migrate.test.mjs'] },
 ];
 
 export { GATES };
