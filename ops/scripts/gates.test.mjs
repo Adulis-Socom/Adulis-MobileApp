@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 delete process.env['ADULIS_SCOPE_FILTER'];
-const { GATES, scopeDecision, gateEnv } = await import('./gates.mjs');
+const { GATES, scopeDecision, gateEnv, DB_WRITING_GATES } = await import('./gates.mjs');
 const gate = (id) => GATES.find((g) => g.id === id);
 const script = fileURLToPath(new URL('./gates.mjs', import.meta.url));
 
@@ -118,4 +118,18 @@ test('--only with an unknown or empty id fails instead of passing zero gates', (
     assert.equal(r.status, 2, `--only '${arg}'`);
     assert.doesNotMatch(r.stdout, /PASS {2}all/);
   }
+});
+
+test('a gate that writes to the database refuses an unmarked one before it runs (WO-INFRA-012)', () => {
+  // Nothing listens on port 1: the mark cannot be read, so `migrate` must not start at all.
+  const env = { ...process.env, DATABASE_URL_MIGRATE: 'postgres://nobody:none@127.0.0.1:1/none' };
+  const r = spawnSync(process.execPath, [script, '--only', 'migrate'], { encoding: 'utf8', env });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /writes to the database, which is not marked disposable/);
+  assert.doesNotMatch(r.stdout + r.stderr, /node-pg-migrate|PASS {2}all/);
+});
+
+test('the database-writing gates are real gates, the writers among them', () => {
+  for (const id of ['migrate', 'worker-schema', 'test', 'determinism', 'console-e2e']) assert.ok(DB_WRITING_GATES.has(id), id);
+  for (const id of DB_WRITING_GATES) assert.ok(GATES.some((g) => g.id === id), `${id} is not a gate`);
 });

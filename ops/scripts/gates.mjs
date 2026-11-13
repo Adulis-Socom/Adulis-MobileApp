@@ -598,23 +598,24 @@ const GATES = [
   { id: 'minio-migrate', title: 'The MinIO data move refuses what it must', cmd: ['node', '--test', 'ops/scripts/minio-migrate.test.mjs'] },
 
   /**
-   * APPENDED (WO-INFRA-012), and last on purpose: it audits what every earlier gate left behind.
+   * APPENDED (WO-INFRA-012). The ratchet of the foreign-key audit, tested.
    *
-   * `orphan-sweep` above checks the foreign keys into core.seller. This checks ALL of them
-   * (read-only), because a teardown under `replica` orphans children of any parent. A fresh
-   * disposable database holds all of them; after one full API run five break, each a known teardown
-   * (ISSUE-INFRA-CLOSURE-004). Those five are named in fk-audit.mjs and tolerated; any other key
-   * with an orphan fails, so the leak cannot spread while the five are fixed.
+   * The AUDIT itself runs inside `test`, as the API suites' Jest globalTeardown
+   * (apps/api/test/global-teardown.ts), and not here: `console-e2e` runs `pnpm db:reset`, so a
+   * gate at the end of this list sees a fresh database and passes whatever the suites left. The
+   * audit checks every foreign key, read-only; five known teardown leaks are named and tolerated
+   * (ISSUE-INFRA-CLOSURE-004), any other orphan fails the API run.
    */
-  {
-    id: 'fk-integrity',
-    title: 'No foreign key is broken beyond the five known test leaks',
-    steps: [
-      ['node', '--test', 'ops/scripts/fk-audit.test.mjs'],
-      ['node', 'ops/scripts/fk-audit.mjs', '--known-test-leaks'],
-    ],
-  },
+  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs'] },
 ];
+
+/**
+ * The gates that WRITE to the database (WO-INFRA-012). Before the first of them runs, the database
+ * must carry the disposable mark (ops/scripts/assert-disposable-db.mjs): locally the root .env
+ * points at the persistent development database, and `migrate` (migrations + seed) runs before
+ * `test`, whose own Jest guard would refuse only after the damage. Read-only gates need no mark.
+ */
+export const DB_WRITING_GATES = new Set(['migrate', 'worker-schema', 'test', 'determinism', 'console-e2e']);
 
 export { GATES };
 
@@ -647,11 +648,19 @@ function main() {
   console.log(`\nAdulis gates - ${GATES.length} of them, one list (ops/scripts/gates.mjs)\nscope: ${scopeWhy}\n`);
 
   let n = 0;
+  let markChecked = false;
   for (const gate of GATES) {
     if (wanted && !wanted.has(gate.id)) continue;
     n += 1;
     console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
     let ok;
+    if (DB_WRITING_GATES.has(gate.id) && !markChecked) {
+      markChecked = run(['node', 'ops/scripts/assert-disposable-db.mjs']);
+      if (!markChecked) {
+        console.error(`\nFAIL  gate '${gate.id}' writes to the database, which is not marked disposable.`);
+        process.exit(1);
+      }
+    }
     if (gate.fn) {
       const r = gate.fn();
       ok = r.ok;

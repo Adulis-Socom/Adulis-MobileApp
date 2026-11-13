@@ -59,6 +59,19 @@ const VARIANT = 'ffff9999-0000-4000-8000-000000000006';
 const c = new Client({ connectionString: process.env.DATABASE_URL_MIGRATE });
 const results = [];
 
+// WO-INFRA-012: a million synthetic orders with triggers off belong only in a database marked
+// disposable (the mark apps/api/test/db-target.ts checks; ops/scripts/test-db.sh sets it). The
+// root .env points at the persistent development database.
+async function assertDisposable() {
+  const { rows } = await c.query(
+    `SELECT shobj_description(oid, 'pg_database') AS marker FROM pg_database WHERE datname = current_database()`,
+  );
+  if (rows[0]?.marker !== 'adulis:disposable-test-database') {
+    console.error('FAIL  refusing to load: this database is not marked disposable. Run: bash ops/scripts/test-db.sh up');
+    process.exit(2);
+  }
+}
+
 const ms = async (fn) => {
   const t0 = process.hrtime.bigint();
   const out = await fn();
@@ -281,6 +294,7 @@ async function cleanup() {
 
 try {
   await c.connect();
+  await assertDisposable();
   await seedBase();
   await expirySweep();
   await statsTrigger();

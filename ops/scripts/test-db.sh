@@ -66,7 +66,8 @@ case "${1:-}" in
     ;;
   env) env_lines ;;
   down)
-    docker rm -f "$PG" "$S3" >/dev/null 2>&1 || true
+    # -v: the postgres image declares a VOLUME; without it every up/down left an anonymous volume.
+    docker rm -f -v "$PG" "$S3" >/dev/null 2>&1 || true
     echo "test-db: removed $PG and $S3" >&2
     ;;
   *)
