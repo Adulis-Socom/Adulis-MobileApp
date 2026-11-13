@@ -20,7 +20,10 @@ const ok = {
 const fetched = [];
 const serving =
   (status, body = '') =>
-  async (url) => {
+  async (url, opts) => {
+    // The guard must not follow a redirect to some other store, and must not wait forever (review).
+    assert.equal(opts?.redirect, 'manual');
+    assert.ok(opts?.signal instanceof AbortSignal);
     fetched.push(url);
     return { status, text: async () => body };
   };
@@ -60,6 +63,20 @@ test('a store without the marker is refused: the development MinIO answers 404 t
     (await checkDisposableStorage(ok, { fetchImpl: down })).err.join('\n'),
     /did not answer/,
   );
+  // A body that breaks off half-way is "did not answer", not an uncaught rejection (review).
+  const cut = async (_url, opts) => {
+    assert.equal(opts?.redirect, 'manual');
+    return {
+      status: 200,
+      text: async () => {
+        throw new Error('terminated');
+      },
+    };
+  };
+  assert.match(
+    (await checkDisposableStorage(ok, { fetchImpl: cut })).err.join('\n'),
+    /did not answer \(terminated\)/,
+  );
 });
 
 test('configuration refused before any request', async () => {
@@ -71,6 +88,10 @@ test('configuration refused before any request', async () => {
     [{ ...ok, R2_ACCOUNT_ID: 'https://x.r2.cloudflarestorage.com' }, /only a loopback store/],
     [{ ...ok, R2_ACCOUNT_ID: 'http://127.0.0.1' }, /no explicit port/],
     [{ ...ok, R2_ACCOUNT_ID: 'http://u:p@127.0.0.1:59000' }, /carries credentials/],
+    // Spellings `new URL` accepts but the API reads as a Cloudflare account id (review).
+    [{ ...ok, R2_ACCOUNT_ID: 'http:/127.0.0.1:59000' }, /an account id means Cloudflare R2/],
+    [{ ...ok, R2_ACCOUNT_ID: 'http:\\127.0.0.1:59000' }, /an account id means Cloudflare R2/],
+    [{ ...ok, R2_ACCOUNT_ID: ' http://127.0.0.1:59000' }, /an account id means Cloudflare R2/],
     [
       { ...ok, R2_MEDIA_PUBLIC_ORIGIN: 'http://127.0.0.1:9100/adulis-media' },
       /not on http:\/\/127.0.0.1:59000/,

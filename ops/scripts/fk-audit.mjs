@@ -3,7 +3,12 @@
  * ops/scripts/fk-audit.mjs -- every foreign key, checked for rows that break it (WO-INFRA-012/013).
  *
  *   node ops/scripts/fk-audit.mjs [--json <file>]            # strict: any orphan fails
- *   node ops/scripts/fk-audit.mjs --known-test-leaks         # gate `fk-integrity`, after the suites
+ *   node ops/scripts/fk-audit.mjs --known-test-leaks [--baseline <file>]
+ *                                   # the API suites' Jest teardown (apps/api/test/global-teardown.ts)
+ *
+ * --baseline <file>: a --json report taken before the suites (the Jest setup writes it). Only orphan
+ * rows that are not in it are judged, so a second run on the same disposable database is judged on
+ * what THAT run left, not on the total (WO-INFRA-015B review).
  *
  * Connects with DATABASE_URL_MIGRATE, else DATABASE_URL.
  *
@@ -18,7 +23,7 @@
  * Exit 0: every key holds (or, with --known-test-leaks, only the keys below leak). 1: violations.
  * 2: could not audit.
  */
-import { realpathSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
@@ -34,9 +39,10 @@ import pg from 'pg';
 // COUNTED, NOT ONLY NAMED (WO-INFRA-015B). Each known leak carries the most orphaned rows it may
 // leave (`maxRows`): a suite that starts leaking MORE on a known key fails like a new key does.
 // maxRows is the count measured after a full API run on the line with the most suites (the closure
-// line; this line's suites are a subset, so its counts are lower). Never raise it to pass a run.
-// Measured 2026-11-13: one full run on a fresh disposable database left 35 rows; repeated runs on the
-// same database add exactly the same counts again, so they are deterministic.
+// line; this line's suites are a subset, so its counts are no higher). Never raise it to pass a run.
+// Measured 2026-11-13: identical per-key counts (23, 2, 3, 3, 4 = 35 rows) in one local full run on a
+// fresh disposable database and in three closure-line CI runs (43419934139, 43422806778,
+// 43424424106), with different worker counts.
 export const KNOWN_TEST_LEAKS = {
   'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey': {
     reason: '19 suites delete core.otp_challenge, never its delivery attempts',
@@ -89,6 +95,28 @@ export function judge(report, allowed = {}) {
   const seen = new Set(report.map((r) => r.key));
   const gone = Object.keys(allowed).filter((k) => !seen.has(k));
   return { failures, tolerated, lowered, gone };
+}
+
+/**
+ * The orphan rows of `report` that are not in `baseline` (an earlier report of the same database),
+ * matched by key and by the orphan's primary key. Pure. A row present before the suites ran is not
+ * theirs to answer for; a new one is, even on a key that already had orphans.
+ */
+export function sinceBaseline(report, baseline) {
+  if (!Array.isArray(baseline)) throw new Error('the baseline is not a fk-audit --json report');
+  const before = new Map();
+  for (const b of baseline) {
+    const set = before.get(b.key) ?? new Set();
+    for (const o of b.orphans ?? []) set.add(JSON.stringify(o));
+    before.set(b.key, set);
+  }
+  const out = [];
+  for (const r of report) {
+    const seen = before.get(r.key) ?? new Set();
+    const fresh = r.orphans.filter((o) => !seen.has(JSON.stringify(o)));
+    if (fresh.length) out.push({ ...r, count: fresh.length, orphans: fresh });
+  }
+  return out;
 }
 
 const q = (id) => '"' + id.replace(/"/g, '""') + '"';
@@ -170,13 +198,25 @@ async function main() {
   const connection = process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
   const jsonAt = process.argv.indexOf('--json');
   const jsonFile = jsonAt === -1 ? null : process.argv[jsonAt + 1];
-  if (!connection || (jsonAt !== -1 && !jsonFile)) {
+  const baseAt = process.argv.indexOf('--baseline');
+  const baseFile = baseAt === -1 ? null : process.argv[baseAt + 1];
+  if (!connection || (jsonAt !== -1 && !jsonFile) || (baseAt !== -1 && !baseFile)) {
     console.error(
       !connection
         ? 'FAIL  DATABASE_URL_MIGRATE (or DATABASE_URL) is not set.'
-        : 'FAIL  --json needs a file name.',
+        : 'FAIL  --json and --baseline need a file name.',
     );
     process.exit(2);
+  }
+  let baseline = null;
+  if (baseFile) {
+    try {
+      baseline = JSON.parse(readFileSync(baseFile, 'utf8'));
+      sinceBaseline([], baseline); // validates its shape
+    } catch (e) {
+      console.error(`FAIL  could not read the baseline ${baseFile}: ${e.message}`);
+      process.exit(2);
+    }
   }
   let result;
   try {
@@ -186,8 +226,15 @@ async function main() {
     process.exit(2);
   }
   const allowed = process.argv.includes('--known-test-leaks') ? KNOWN_TEST_LEAKS : {};
-  const { failures, tolerated, lowered, gone } = judge(result.report, allowed);
+  const judged = baseline ? sinceBaseline(result.report, baseline) : result.report;
+  const { failures, tolerated, lowered, gone } = judge(judged, allowed);
   console.log(`\nForeign-key audit -- ${result.keys} keys, read-only session\n`);
+  if (baseline) {
+    const total = (list) => list.reduce((n, r) => n + r.count, 0);
+    console.log(
+      `  judged: only the rows added since the baseline (${total(result.report) - total(judged)} older orphan row(s) ignored)\n`,
+    );
+  }
   for (const r of failures)
     console.log(
       r.exceeded === undefined

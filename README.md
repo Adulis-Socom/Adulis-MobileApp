@@ -99,7 +99,7 @@ pnpm db:migrate                        # runs db/migrations in order
 pnpm worker:install                    # graphile-worker's tables, as the DDL role
 pnpm db:check                          # 16 checks, ADU-DB-01 v1.12 Appendix C
 pnpm db:seed                           # one market, one account, one seller
-pnpm test                              # 459 tests; loads .env itself
+pnpm test                              # under test-db.sh only: the suites refuse a non-disposable database or store
 pnpm dev                               # api :3000 - worker - console :5173
 ```
 

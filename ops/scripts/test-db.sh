@@ -54,7 +54,11 @@ case "${1:-}" in
     # A failed step removes what THIS run started, by container ID: a run that loses a race for the
     # names must not remove the other run's containers (WO-INFRA-015A review).
     started=()
-    remove_started() { [ ${#started[@]} -eq 0 ] || docker rm -f -v "${started[@]}" >/dev/null 2>&1; }
+    # Never stops the trap that calls it (set -e): a removal that fails is said, not swallowed.
+    remove_started() {
+      [ ${#started[@]} -eq 0 ] || docker rm -f -v "${started[@]}" >/dev/null 2>&1 ||
+        echo "test-db: could not remove ${started[*]}; run 'bash ops/scripts/test-db.sh down'" >&2
+    }
     trap 'echo "test-db: setup failed; removing the containers this run started" >&2; remove_started' ERR
     # Ctrl+C or a kill during setup used to leave an unmarked pair behind (WO-INFRA-015B).
     trap 'echo "test-db: interrupted; removing the containers this run started" >&2; remove_started; exit 130' INT TERM

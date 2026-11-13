@@ -2,7 +2,7 @@
 // leaks are named AND counted, nothing else passes, and the list only shrinks.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { KNOWN_TEST_LEAKS, judge } from './fk-audit.mjs';
+import { KNOWN_TEST_LEAKS, judge, sinceBaseline } from './fk-audit.mjs';
 
 const row = (constraint, count = 1, table = 'core.device') => ({
   constraint,
@@ -89,4 +89,43 @@ test('the known list names exactly the five measured leaks, each with a reason a
     assert.ok(reason.length > 20, key);
     assert.ok(Number.isInteger(maxRows) && maxRows > 0, `${key}: maxRows must be measured`);
   }
+});
+
+// The baseline (WO-INFRA-015B review): a rerun on the same disposable database is judged on what
+// that run added, not on the total the database has accumulated.
+const orphan = (key, ids) => ({
+  constraint: key.split('.').pop(),
+  key,
+  count: ids.length,
+  child: 'c',
+  parent: 'p',
+  validated: true,
+  orphans: ids.map((id) => ({ id })),
+});
+
+test('since the baseline: only orphan rows that were not there before are judged', () => {
+  const before = [orphan(DEVICE, ['a', 'b', 'c'])];
+  const after = [orphan(DEVICE, ['a', 'b', 'c', 'd', 'e', 'f']), orphan('core.x.new_fkey', ['z'])];
+  const judged = sinceBaseline(after, before);
+  assert.deepEqual(
+    judged.map((r) => [r.key, r.count, r.orphans.map((o) => o.id)]),
+    [
+      [DEVICE, 3, ['d', 'e', 'f']],
+      ['core.x.new_fkey', 1, ['z']],
+    ],
+  );
+  // A second full run that leaks exactly its usual three passes; a fourth new row fails.
+  assert.equal(judge(judged.slice(0, 1), leak(3)).failures.length, 0);
+  assert.equal(
+    judge(sinceBaseline([orphan(DEVICE, ['a', 'b', 'c', 'd', 'e', 'f', 'g'])], before), leak(3))
+      .failures.length,
+    1,
+  );
+});
+
+test('since the baseline: an empty baseline judges everything, and a bad one is refused', () => {
+  const after = [orphan(DEVICE, ['a'])];
+  assert.deepEqual(sinceBaseline(after, []), after);
+  assert.deepEqual(sinceBaseline([], [orphan(DEVICE, ['a'])]), []);
+  for (const bad of [null, {}, 'x', 3]) assert.throws(() => sinceBaseline(after, bad), /baseline/);
 });

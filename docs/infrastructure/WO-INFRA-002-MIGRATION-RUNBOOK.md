@@ -33,7 +33,7 @@ for MinIO, `adulis-platform_adulis-miniodata`, then lets compose recreate MinIO 
    PostgreSQL directory.
 5. **Restore the backup** into a scratch volume and serve it with the exact image the old MinIO runs, on
    a private Docker network. This proves the backup restores.
-6. **Target:** compose creates its volume; a private server on it runs `ops/scripts/minio-init.sh`.
+6. **Target:** the run creates its volume (external since WO-INFRA-015B); a private server on it runs `ops/scripts/minio-init.sh`.
 7. **Copy** the two buckets from the restored backup.
 8. **Verify, all automatically.** The restored backup equals the source inventory (refused if anything
    was written between the inventory and the stop); the target equals the restored backup, object by
@@ -51,9 +51,11 @@ volume is then kept, because it was served. Rehearsed: `WO-INFRA-007-MIGRATION-V
 
 ## Before you start
 
-**Never run `docker compose down -v` with this file.** The project name is pinned, so from any clone that
-command deletes the live database volume `adulis-platform_adulis-pgdata` and the new MinIO volume. Plain
-`docker compose down` keeps both.
+**Never run `docker compose down -v`.** The project name is pinned, so the command acts on the live stack
+from any clone. Since WO-INFRA-015B this file declares every volume external, so through it the command
+deletes no volume, but a checkout with an older compose file still deletes the live database volume
+`adulis-platform_adulis-pgdata` (and, before the move, the MinIO objects in `adulis-pgdata`). Plain
+`docker compose down` keeps them all.
 
 - The founder's approval for ISSUE-INFRA-001.
 - A checkout that has this change, at the repository root. The `minio` container's compose labels will

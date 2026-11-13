@@ -734,7 +734,7 @@ async function plan(cfg) {
     `source ${cfg.srcContainer} on ${cfg.srcVolume} (image ${pre.inspect.Image.slice(7, 19)}), port ${cfg.hostPort}`,
   );
   log(
-    `target ${cfg.dstVolume} (${pre.targetExists ? 'exists, empty' : 'will be created by compose'}), compose project ${cfg.project}, image ${cfg.dstImage}`,
+    `target ${cfg.dstVolume} (${pre.targetExists ? 'exists, empty' : 'will be created by this run (external volume)'}), compose project ${cfg.project}, image ${cfg.dstImage}`,
   );
   const inv = inventory(cfg, pre.server);
   summary('source inventory', inv);
@@ -830,6 +830,9 @@ async function migrate(cfg) {
       { mode: 0o600 },
     );
   save('legacy-container.json', pre.inspect);
+  // Recorded at once (WO-INFRA-015B review): a run that is killed leaves a manifest with neither
+  // finishedAt nor failedAt, which rollback reports as "killed", instead of no record at all.
+  save('manifest.json', manifest);
   // The way back must survive an image prune before anything stops (PHASE-002B-01 review L1): after
   // the switch nothing references the old image, and it can no longer be pulled. Rollback loads it.
   docker(['save', '-o', join(cfg.backupDir, LEGACY_IMAGE_TAR), pre.inspect.Image]);
@@ -934,7 +937,7 @@ async function migrate(cfg) {
       docker(['rm', '-f', cfg.guardContainer], { allowFail: true });
       if (exists('container', cfg.guardContainer)) refuse(`${cfg.guardContainer} could not be removed`);
     }
-    if (!exists('volume', cfg.dstVolume)) refuse(`compose did not create ${cfg.dstVolume}`);
+    if (!exists('volume', cfg.dstVolume)) refuse(`${cfg.dstVolume} does not exist after it was created`);
     if (JSON.parse(docker(['inspect', cfg.srcContainer]))[0].Id !== pre.inspect.Id)
       refuse(`compose replaced ${cfg.srcContainer} before the copy was verified`);
     const target = srv('dst', cfg.dstImage, cfg.dstVolume, cfg.dstCreds);
@@ -987,10 +990,11 @@ async function migrate(cfg) {
       `8/8 switching: compose recreates ${cfg.dstContainer} on ${cfg.dstVolume}; ${cfg.srcVolume} is not touched`,
     );
     undo.length = 0; // pre-switch undo steps no longer apply: the old container is replaced by compose
-    // A step of its own, so it runs even when restoring the old container fails (the undo runs its
-    // steps in reverse, each on its own): no record of a completed move may remain on a volume that
-    // is not serving, whichever branch below ran (PHASE-002B-01 review M1).
-    undo.push(() => clearMoveRecord(cfg));
+    // Two undo steps. The undo runs its steps in REVERSE, each on its own, so the record is cleared
+    // FIRST and even when restoring the old container fails: no record of a completed move may
+    // remain on a volume that is not serving (PHASE-002B-01 review M1). First, not last (WO-INFRA-015B
+    // review): a run killed between the two steps then leaves a MinIO without its record, which its
+    // guard refuses at the next start, instead of a record beside a volume nobody serves.
     undo.push(() => {
       const cur = docker(['inspect', cfg.srcContainer], { allowFail: true });
       if (cur.status === 0 && JSON.parse(cur.stdout)[0].Id === pre.inspect.Id) {
@@ -1004,6 +1008,7 @@ async function migrate(cfg) {
       });
       recreateLegacy(pre.inspect);
     });
+    undo.push(() => clearMoveRecord(cfg)); // pushed last, so it runs first
     // The record the data-volume guard (docker-compose.yml) requires before it serves this volume
     // while adulis-pgdata still holds MinIO data. Written here, after the target was verified equal
     // to the stopped source (step 7), because the switch itself runs the guard; any failure from
@@ -1195,7 +1200,7 @@ async function rollback(cfg) {
   );
   if (cleared.status !== 0)
     refuse(
-      `${made.name} serves ${m.source.volume} again, BUT the move record in ${cfg.dstVolume} could not be cleared: delete /${MOVE_RECORD} in it by hand, and leave ADULIS_MINIO_VOLUME unset, before any compose up`,
+      `${made.name} serves ${m.source.volume} again, BUT the move record in ${cfg.dstVolume} could not be cleared: delete /${MOVE_RECORD} in it by hand, and remove ADULIS_MINIO_VOLUME from .env, before any compose up`,
     );
   const back = inventory(cfg, old);
   const savedInv = {

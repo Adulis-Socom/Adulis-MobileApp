@@ -9,6 +9,15 @@
 set -eu
 
 mc alias set marker "${MINIO_URL:?}" "${MINIO_ROOT_USER:?}" "${MINIO_ROOT_PASSWORD:?}" >/dev/null
+# A throwaway store has just been created: its two buckets are empty. A store holding any object is
+# one somebody keeps, and is never marked (WO-INFRA-015B review). `mc ls` failing stops the script.
+for bucket in adulis-media adulis-evidence; do
+  objects=$(mc ls --recursive "marker/$bucket")
+  if [ -n "$objects" ]; then
+    echo "minio-test-marker: REFUSED: $bucket holds objects; only an empty, throwaway store is marked" >&2
+    exit 1
+  fi
+done
 mc mb --ignore-existing marker/adulis-test-marker >/dev/null
 printf 'adulis:disposable-test-storage' | mc pipe marker/adulis-test-marker/disposable >/dev/null
 # Anonymous GET of the one marker object, nothing else (no listing).

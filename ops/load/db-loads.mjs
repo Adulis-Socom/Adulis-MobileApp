@@ -295,7 +295,9 @@ async function cleanup() {
 
 // The cleanup's replica DELETEs run only on a database the check has passed (review).
 let verified = false;
-let failure = null;
+// A flag, not the error itself: a rejection reason can be falsy (review).
+let failed = false;
+let failure;
 try {
   await c.connect();
   await assertDisposable();
@@ -306,6 +308,7 @@ try {
   await dispatchDraw();
   console.log(JSON.stringify(results, null, 2));
 } catch (e) {
+  failed = true;
   failure = e;
 }
 if (verified) {
@@ -315,9 +318,12 @@ if (verified) {
   } catch (e) {
     // Never replace the run's own failure with the cleanup's (WO-INFRA-015B, PR105-F10): both are
     // reported; the cleanup fails the run by itself only when the run had passed.
-    console.error(`cleanup failed: ${e.message}`);
-    failure ??= e;
+    console.error(`cleanup failed: ${e?.message ?? e}`);
+    if (!failed) {
+      failed = true;
+      failure = e;
+    }
   }
 }
 await c.end().catch(() => {});
-if (failure) throw failure;
+if (failed) throw failure ?? new Error('db-loads failed without a reason');

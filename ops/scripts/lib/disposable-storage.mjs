@@ -43,6 +43,10 @@ export function checkStorageConfig(env) {
       `only some R2_* values are set (${R2_KEYS.filter((k) => !env[k]).join(', ')} unset): set all six or none`,
     );
   const url = (name) => {
+    // The raw text must pass the API's own test first (s3-object-storage.ts: /^https?:\/\//i), or
+    // `new URL` accepts spellings such as `http:/127.0.0.1:59000` that the API reads as an account
+    // id (review): the guard must judge the value the way the API will use it.
+    if (!/^https?:\/\//i.test(env[name])) return null;
     try {
       const u = new URL(env[name]);
       return u.protocol === 'http:' || u.protocol === 'https:' ? u : null;
@@ -74,12 +78,14 @@ export function checkStorageConfig(env) {
 export async function checkStorageMarker(endpoint, fetchImpl = fetch) {
   const where = `${endpoint}/${STORAGE_MARKER.bucket}/${STORAGE_MARKER.key}`;
   let res;
+  let body = '';
   try {
     res = await fetchImpl(where, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+    // Inside the try: a body that fails or times out half-way is "did not answer", not a crash.
+    if (res.status === 200) body = (await res.text()).trim();
   } catch (e) {
     return [`the store at ${endpoint} did not answer (${e.message})`];
   }
-  const body = res.status === 200 ? (await res.text()).trim() : '';
   if (body === STORAGE_MARKER.body) return [];
   return [
     `the store at ${endpoint} does not carry the disposable-storage marker (${where}: HTTP ${res.status}); it may be the development MinIO`,

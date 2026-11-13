@@ -9,6 +9,8 @@
 import { checkContainerTarget } from './disposable-db.mjs';
 
 const DESTRUCTIVE_ENVS = ['development', 'test'];
+// Exit status of a Windows console program ended by Ctrl+C (STATUS_CONTROL_C_EXIT), as minio-migrate.
+const CTRL_C_EXIT = new Set([3221225786, -1073741510]);
 
 /**
  * deps: env, docker(args) -> { status, stdout, stderr, error }, migrate(url) -> { status, stdout,
@@ -50,6 +52,8 @@ export async function runDeterminism({ env, docker, migrate, Client, interrupted
     if (r.error) throw new Error(`${what} failed: ${r.error.message}`);
     // A child ended by a signal is an interrupt (a terminal Ctrl+C reaches it too), never a pass.
     if (r.signal) throw stopped(`${r.signal} (during ${what})`);
+    // On Windows a console Ctrl+C ends the child with STATUS_CONTROL_C_EXIT and no signal (review).
+    if (CTRL_C_EXIT.has(r.status)) throw stopped(`Ctrl+C (during ${what})`);
     if (r.status !== 0)
       throw new Error(`${what} failed: ${`${r.error?.message ?? r.stderr ?? ''}`.trim().slice(-500)}`);
     return `${r.stdout ?? ''}`;
