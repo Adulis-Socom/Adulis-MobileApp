@@ -632,7 +632,7 @@ const GATES = [
    * configuration that wires it. No database is written: the scripts are driven against stubs, or
    * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
-  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
 ];
 
 /**
@@ -725,3 +725,9 @@ const self = (p) => {
   }
 };
 if (process.argv[1] && self(process.argv[1]) === self(fileURLToPath(import.meta.url))) main();
+// Run by name but not recognised as itself: fail loudly. Exiting 0 having run nothing would read as
+// a pass to a caller that checks only the status (WO-INFRA-015B, PR105-F11).
+else if (process.argv[1] && path.basename(process.argv[1]) === 'gates.mjs') {
+  console.error('FAIL  gates.mjs could not recognise itself as the script being run; nothing was checked.');
+  process.exit(2);
+}

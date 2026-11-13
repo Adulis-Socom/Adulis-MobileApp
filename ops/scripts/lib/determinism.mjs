@@ -45,9 +45,12 @@ export async function runDeterminism({ env, docker, migrate, Client, interrupted
     docker(['exec', target.id, 'psql', '-U', target.user, '-d', 'postgres', '-AtX', '-v', 'ON_ERROR_STOP=1', '-c', sqlText]);
   const stopped = (why) => Object.assign(new Error(`interrupted by ${why}`), { interrupted: true });
   const must = (r, what) => {
+    // spawnSync's own errors first: an output overflow (ENOBUFS) or timeout also kills the child
+    // with SIGTERM, which is not an interrupt (PHASE-002B-01 review).
+    if (r.error) throw new Error(`${what} failed: ${r.error.message}`);
     // A child ended by a signal is an interrupt (a terminal Ctrl+C reaches it too), never a pass.
     if (r.signal) throw stopped(`${r.signal} (during ${what})`);
-    if (r.error || r.status !== 0)
+    if (r.status !== 0)
       throw new Error(`${what} failed: ${`${r.error?.message ?? r.stderr ?? ''}`.trim().slice(-500)}`);
     return `${r.stdout ?? ''}`;
   };
@@ -84,6 +87,9 @@ export async function runDeterminism({ env, docker, migrate, Client, interrupted
     );
     await step();
     const [a, b] = lines;
+    // A floor: two empty dumps are identical too (migrations that ran nothing). Review, PHASE-002B-01.
+    if (!a.some((l) => l.startsWith('CREATE TABLE')))
+      throw new Error(`the schema dump of ${dbs[0]} holds no CREATE TABLE: the migrations did not build the schema`);
     if (a.length === b.length && a.every((l, i) => l === b[i])) {
       out(`PASS  two clean databases converge on an identical schema (${a.length} lines compared).`);
     } else {

@@ -19,6 +19,7 @@
  * 2: could not audit.
  */
 import { realpathSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
@@ -29,27 +30,65 @@ import pg from 'pg';
  * ISSUE-INFRA-CLOSURE-004. A ratchet, not an exemption: any OTHER key with an orphan fails the
  * gate, and each line here is deleted when its teardowns are fixed. Never add one to pass a run.
  */
+//
+// COUNTED, NOT ONLY NAMED (WO-INFRA-015B). Each known leak carries the most orphaned rows it may
+// leave (`maxRows`): a suite that starts leaking MORE on a known key fails like a new key does.
+// maxRows is the count measured after a full API run on the line with the most suites (the closure
+// line; this line's suites are a subset, so its counts are lower). Never raise it to pass a run.
+// Measured 2026-11-13: one full run on a fresh disposable database left 35 rows; repeated runs on the
+// same database add exactly the same counts again, so they are deterministic.
 export const KNOWN_TEST_LEAKS = {
-  'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey':
-    '19 suites delete core.otp_challenge, never its delivery attempts',
-  'core.order_state_transition.order_state_transition_order_id_fkey':
-    '8 suites delete core."order" under replica, never its transitions',
-  'core.claim_evidence_item.claim_evidence_item_claim_id_fkey':
-    't6-closure-survives-block deletes core.claim, never its evidence items',
-  'core.device.device_market_id_fkey':
-    'c6-accounts deletes its market under replica; the API created devices in it',
-  'core.notification.notification_recipient_account_id_fkey':
-    't26 and disc-001 delete accounts that still have notifications',
+  'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey': {
+    reason: '19 suites delete core.otp_challenge, never its delivery attempts',
+    maxRows: 23,
+  },
+  'core.order_state_transition.order_state_transition_order_id_fkey': {
+    reason: '8 suites delete core."order" under replica, never its transitions',
+    maxRows: 2,
+  },
+  'core.claim_evidence_item.claim_evidence_item_claim_id_fkey': {
+    reason: 't6-closure-survives-block deletes core.claim, never its evidence items',
+    maxRows: 3,
+  },
+  'core.device.device_market_id_fkey': {
+    reason: 'c6-accounts deletes its market under replica; the API created devices in it',
+    maxRows: 3,
+  },
+  'core.notification.notification_recipient_account_id_fkey': {
+    reason: 't26 and disc-001 delete accounts that still have notifications',
+    maxRows: 4,
+  },
 };
 
-/** Splits a report into failures and tolerated known leaks. Pure, so the ratchet is testable. */
+/**
+ * Splits a report into failures, tolerated known leaks, counts below their maximum, and known keys
+ * with no orphan left. Pure, so the ratchet is testable. A failure is an orphan on a key not in
+ * `allowed`, or more orphans on a known key than its maxRows; an entry without a usable maxRows
+ * tolerates nothing (fails closed).
+ */
 export function judge(report, allowed = {}) {
-  return {
-    // Own keys only (`in` would follow the prototype chain), keyed by schema.table.constraint: a
-    // constraint name is unique per table, not per database (review).
-    failures: report.filter((r) => !Object.hasOwn(allowed, r.key)),
-    tolerated: report.filter((r) => Object.hasOwn(allowed, r.key)),
+  // Own keys only (`in` would follow the prototype chain), keyed by schema.table.constraint: a
+  // constraint name is unique per table, not per database (review).
+  const limit = (r) => {
+    if (!Object.hasOwn(allowed, r.key)) return null;
+    const max = allowed[r.key]?.maxRows;
+    return Number.isInteger(max) && max >= 0 ? max : null;
   };
+  const failures = [];
+  const tolerated = [];
+  const lowered = [];
+  for (const r of report) {
+    const max = limit(r);
+    if (max === null) failures.push(r);
+    else if (r.count > max) failures.push({ ...r, exceeded: max });
+    else {
+      tolerated.push(r);
+      if (r.count < max) lowered.push({ key: r.key, count: r.count, maxRows: max });
+    }
+  }
+  const seen = new Set(report.map((r) => r.key));
+  const gone = Object.keys(allowed).filter((k) => !seen.has(k));
+  return { failures, tolerated, lowered, gone };
 }
 
 const q = (id) => '"' + id.replace(/"/g, '""') + '"';
@@ -147,16 +186,24 @@ async function main() {
     process.exit(2);
   }
   const allowed = process.argv.includes('--known-test-leaks') ? KNOWN_TEST_LEAKS : {};
-  const { failures, tolerated } = judge(result.report, allowed);
+  const { failures, tolerated, lowered, gone } = judge(result.report, allowed);
   console.log(`\nForeign-key audit -- ${result.keys} keys, read-only session\n`);
   for (const r of failures)
     console.log(
-      `  FAIL  ${r.constraint}: ${r.count} row(s) in ${r.child} with no ${r.parent}${r.validated ? ' (marked validated)' : ''}`,
+      r.exceeded === undefined
+        ? `  FAIL  ${r.constraint}: ${r.count} row(s) in ${r.child} with no ${r.parent}${r.validated ? ' (marked validated)' : ''}`
+        : `  FAIL  ${r.constraint}: ${r.count} row(s), more than the ${r.exceeded} this known leak may leave -- a suite now leaks more`,
     );
   for (const r of tolerated)
     console.log(
-      `  KNOWN ${r.constraint}: ${r.count} row(s) -- ${allowed[r.key]} (ISSUE-INFRA-CLOSURE-004)`,
+      `  KNOWN ${r.constraint}: ${r.count} of at most ${allowed[r.key].maxRows} row(s) -- ${allowed[r.key].reason} (ISSUE-INFRA-CLOSURE-004)`,
     );
+  // Informational: a lower count or a vanished key means cleanup improved (or fewer suites ran);
+  // lower maxRows in KNOWN_TEST_LEAKS once the full suite confirms it.
+  for (const l of lowered)
+    console.log(`  NOTE  ${l.key}: ${l.count} row(s), below its maximum of ${l.maxRows}.`);
+  for (const k of gone)
+    console.log(`  NOTE  ${k}: no orphan left; remove it from KNOWN_TEST_LEAKS once confirmed.`);
   if (jsonFile) writeFileSync(jsonFile, JSON.stringify(result.report, null, 2));
   const rows = (list) => list.reduce((s, r) => s + r.count, 0);
   if (failures.length)
@@ -177,3 +224,11 @@ const self = (p) => {
   }
 };
 if (process.argv[1] && self(process.argv[1]) === self(fileURLToPath(import.meta.url))) main();
+// Run by name but not recognised as itself: fail loudly instead of exiting 0 having audited nothing
+// (WO-INFRA-015B, PR105-F11). The Jest teardown also requires the PASS line.
+else if (process.argv[1] && basename(process.argv[1]) === 'fk-audit.mjs') {
+  console.error(
+    'FAIL  fk-audit.mjs could not recognise itself as the script being run; nothing was audited.',
+  );
+  process.exit(2);
+}

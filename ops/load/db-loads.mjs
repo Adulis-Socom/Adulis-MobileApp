@@ -295,6 +295,7 @@ async function cleanup() {
 
 // The cleanup's replica DELETEs run only on a database the check has passed (review).
 let verified = false;
+let failure = null;
 try {
   await c.connect();
   await assertDisposable();
@@ -304,10 +305,19 @@ try {
   await statsTrigger();
   await dispatchDraw();
   console.log(JSON.stringify(results, null, 2));
-} finally {
-  if (verified) {
-    console.log('cleaning up synthetic rows...');
-    await cleanup();
-  }
-  await c.end().catch(() => {});
+} catch (e) {
+  failure = e;
 }
+if (verified) {
+  console.log('cleaning up synthetic rows...');
+  try {
+    await cleanup();
+  } catch (e) {
+    // Never replace the run's own failure with the cleanup's (WO-INFRA-015B, PR105-F10): both are
+    // reported; the cleanup fails the run by itself only when the run had passed.
+    console.error(`cleanup failed: ${e.message}`);
+    failure ??= e;
+  }
+}
+await c.end().catch(() => {});
+if (failure) throw failure;
