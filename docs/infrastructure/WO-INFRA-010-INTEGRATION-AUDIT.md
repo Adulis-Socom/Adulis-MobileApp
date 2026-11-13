@@ -48,8 +48,9 @@ the fail-safe only widens what runs.
 |---|---|---|
 | Candidate into `main` | **clean.** GitHub reports PR #105 `MERGEABLE`, and its CI built and passed the merge commit `f47b5ab` | -- |
 | Candidate x `810fb27` | clean | Duplicate intent: both make a push to `main` run every gate. Redundant, not contradictory |
-| Candidate x `infra/wo-infra-007-009-finalization` | clean | The same infrastructure content cherry-picked (different SHAs, identical bytes) |
-| Candidate x `infra/wo-infra-001-006-stabilization` | conflicts | The candidate holds newer versions. The first branch is superseded; do not merge it |
+| Candidate (`e37d28d`, at the start) x `infra/wo-infra-007-009-finalization` | clean | The same infrastructure content cherry-picked (different SHAs, identical bytes) |
+| Candidate (final, with this batch's commits) x `infra/wo-infra-010-014-closure` | **one conflict: `apps/api/jest.config.js`**, mechanical | The candidate keeps `main`'s config shape plus the WO-INFRA-012 setup and teardown lines; the closure branch also has the mobile line's `testTimeout`. Resolve by keeping the closure branch's version. The closure branch supersedes the finalization branch as the mobile line's merge vehicle |
+| Candidate x `infra/wo-infra-001-006-stabilization` (and, now, the finalization branch) | conflicts | The candidate holds newer versions. Both older branches are superseded; do not merge them |
 | Candidate x WO-022 | clean | But it brings back four API suites without their listen-first fix (ISSUE-INFRA-FOLLOWUP-004) |
 
 **Duplicated content that merges cleanly** (the same patch on both sides):

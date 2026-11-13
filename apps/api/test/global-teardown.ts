@@ -13,8 +13,12 @@ export default function globalTeardown(): void {
     stdio: 'inherit',
     env: process.env,
   });
+  if (r.status === 1)
+    throw new Error(
+      '[fk-audit] the suites left orphaned rows beyond the known test leaks (listed above)',
+    );
   if (r.status !== 0)
     throw new Error(
-      `[fk-audit] the suites left orphaned rows beyond the known test leaks (exit ${r.status ?? r.error?.message})`,
+      `[fk-audit] the foreign-key audit could not run (status ${r.status}, signal ${r.signal}, ${r.error?.message ?? 'see above'})`,
     );
 }

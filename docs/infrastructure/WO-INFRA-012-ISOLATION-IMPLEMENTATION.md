@@ -15,9 +15,9 @@ database they intend to keep. **Never** mark the development database: that woul
 
 | Where | When | Refuses |
 |---|---|---|
-| `apps/api/test/db-target.ts`, from Jest `globalSetup` (`jest.config.js`, `jest.load.config.js`) | before the first suite | `DATABASE_URL` or `DATABASE_URL_MIGRATE` unset; a non-loopback host; URLs naming different databases (host, port and database compared; `DATABASE_URL_JOBS` if set); a query-string `host`, `hostaddr`, `port`, `dbname` or `service`; `NODE_ENV` production or staging; a database whose comment is not the mark exactly; a connection landing on another database |
-| `apps/api/test/global-teardown.ts` | after the last suite | any foreign-key orphan outside the five known test leaks (it runs `ops/scripts/fk-audit.mjs --known-test-leaks`, read-only) |
-| `ops/scripts/gates.mjs`, through `ops/scripts/assert-disposable-db.mjs` | before the first of `migrate`, `worker-schema`, `test`, `determinism`, `console-e2e` | an unmarked database, or one whose mark cannot be read |
+| `apps/api/test/db-target.ts`, from Jest `globalSetup` (`jest.config.js`, `jest.load.config.js`) | before the first suite | `DATABASE_URL` or `DATABASE_URL_MIGRATE` unset; any URL **empty**, without an **explicit port**, or with a non-loopback host; URLs whose text names different databases (`localhost` beside `127.0.0.1` counts as different); a query-string `host`, `hostaddr`, `port`, `dbname` or `service`; `NODE_ENV` production or staging. Then the mark is read **through every URL set**: each connection must land on the named database, and that database's comment must be the mark exactly |
+| `apps/api/test/global-teardown.ts` | after the last suite | any foreign-key orphan outside the five known test leaks: exit 1 means orphans, any other status means the audit could not run. It runs `ops/scripts/fk-audit.mjs --known-test-leaks`, read-only, with `row_security=off`, so row-level security raises instead of hiding rows |
+| `ops/scripts/gates.mjs`, through `ops/scripts/assert-disposable-db.mjs` | before the first of `migrate`, `worker-schema`, `test`, `determinism`, `console-e2e` | the same configuration rules, then the mark read **through every URL** (`console-e2e` starts the API with `DATABASE_URL`). Exit 1: refused. Exit 2: could not check. Either way nothing runs |
 | `ops/load/db-loads.mjs` | before its first write | an unmarked database |
 
 ## Local procedure (developers)
@@ -40,7 +40,7 @@ bash ops/scripts/test-db.sh down            # both containers and their data rem
 **Lifetime:** the containers use `--rm`, have no named volume, and `down` removes their anonymous
 volumes.
 
-**Precedence:** `eval "$(… env)"` sets the database, MinIO and key variables in the shell. The test
+**Precedence:** `eval "$(... env)"` sets the database, MinIO and key variables in the shell. The test
 script still loads the root `.env`, but Node gives the shell's values precedence, so only the settings
 the shell does not set come from `.env`.
 

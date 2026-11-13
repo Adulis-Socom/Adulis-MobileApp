@@ -13,10 +13,18 @@ const reader = (row: { db?: string; marker?: string | null } | undefined) => ():
   query: async () => ({ rows: row ? [row] : [] }),
   end: async () => undefined,
 });
+// A different answer per URL: `pick` sees the URL each connection is opened with.
+const readerBy =
+  (pick: (u: string) => { db?: string; marker?: string | null }) =>
+  (u: string): MarkerReader => ({
+    connect: async () => undefined,
+    query: async () => ({ rows: [pick(u)] }),
+    end: async () => undefined,
+  });
 
 describe('db-target: decided before connecting', () => {
   it('accepts one loopback database named by every URL', () => {
-    expect(resolveTarget(env({ DATABASE_URL_JOBS: url('adulis_jobs', 'localhost') }))).toEqual({
+    expect(resolveTarget(env({ DATABASE_URL_JOBS: url('adulis_jobs') }))).toEqual({
       host: '127.0.0.1',
       port: '55432',
       database: 'adulis',
@@ -62,6 +70,21 @@ describe('db-target: decided before connecting', () => {
       /name different databases/,
     ],
     ['not a URL', { DATABASE_URL: 'adulis' }, /is not a URL/],
+    [
+      'a URL without a port (pg would take PGPORT, another server)',
+      { DATABASE_URL: 'postgres://adulis_app:fake@127.0.0.1/adulis' },
+      /has no explicit port/,
+    ],
+    [
+      'localhost beside 127.0.0.1 (they can reach different servers)',
+      { DATABASE_URL: url('adulis_app', 'localhost') },
+      /name different databases/,
+    ],
+    [
+      'an empty DATABASE_URL_JOBS (libpq defaults)',
+      { DATABASE_URL_JOBS: '' },
+      /DATABASE_URL_JOBS is empty/,
+    ],
   ])('refuses %s', (_name, over, message) => {
     expect(() => resolveTarget(env(over))).toThrow(message);
   });
@@ -86,6 +109,17 @@ describe('db-target: the marker', () => {
     ).rejects.toThrow(/connected to postgres/);
     await expect(assertDisposable(env(), reader(undefined))).rejects.toThrow(
       /connected to nothing/,
+    );
+  });
+
+  it('reads the mark through every URL: one reaching an unmarked database refuses', async () => {
+    const appUnmarked = readerBy((u) =>
+      u.includes('adulis_app')
+        ? { db: 'adulis', marker: null }
+        : { db: 'adulis', marker: DISPOSABLE_MARKER },
+    );
+    await expect(assertDisposable(env(), appUnmarked)).rejects.toThrow(
+      /DATABASE_URL reaches a database not marked disposable/,
     );
   });
 
@@ -115,6 +149,6 @@ describe('db-target: against the real server this run uses', () => {
       DATABASE_URL_MIGRATE: swap(process.env['DATABASE_URL_MIGRATE']),
     };
     delete other['DATABASE_URL_JOBS'];
-    await expect(assertDisposable(other)).rejects.toThrow(/postgres is not marked disposable/);
+    await expect(assertDisposable(other)).rejects.toThrow(/not marked disposable/);
   });
 });
