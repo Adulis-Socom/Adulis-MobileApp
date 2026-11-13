@@ -11,8 +11,10 @@ import {
   guard,
   insideRepo,
   parseInventory,
+  recordedSha,
   ruleSet,
   tarEntries,
+  verifyBackup,
 } from './minio-migrate.mjs';
 
 const refuses = (fn, re) => assert.throws(fn, (e) => e instanceof Refusal && re.test(e.message));
@@ -221,4 +223,32 @@ test('the target must be exactly the two buckets, private evidence, the expiry r
     checkTarget(parseInventory(invText()), src, { ...goodProbes(), mediaSha: 'zzz' }).join(),
     /different bytes/,
   );
+});
+
+test('a recorded checksum is read strictly: BOM, blanks, exact name, real hash', () => {
+  const h = 'a'.repeat(64);
+  assert.equal(recordedSha(`\uFEFF${h} *x.tar\n`, 'x.tar'), h);
+  assert.equal(recordedSha(`  ${h}  x.tar\r\n`, 'x.tar'), h);
+  assert.equal(recordedSha(`${'b'.repeat(64)} *yx.tar\n${h} *x.tar\n`, 'x.tar'), h);
+  refuses(() => recordedSha(`${'b'.repeat(64)} *yx.tar\n`, 'x.tar'), /no well-formed/);
+  refuses(() => recordedSha(`xyz *x.tar\n`, 'x.tar'), /no well-formed/);
+  refuses(() => recordedSha('', 'x.tar'), /no well-formed/);
+});
+
+test('verifying a backup without a recorded hash refuses before reading it', async () => {
+  await assert.rejects(
+    verifyBackup('does-not-matter.tar', ''),
+    (e) => e instanceof Refusal && /no recorded SHA-256/.test(e.message),
+  );
+});
+
+test('the media bucket may grant anonymous GetObject and nothing else', () => {
+  const src = parseInventory(invText());
+  const listable = parseInventory(
+    invText().replace(
+      /P adulis-media .*/,
+      'P adulis-media {"Statement":[{"Action":["s3:GetObject","s3:ListBucket"],"Effect":"Allow"}]}',
+    ),
+  );
+  assert.match(checkTarget(listable, src, goodProbes()).join(), /only s3:GetObject is intended/);
 });

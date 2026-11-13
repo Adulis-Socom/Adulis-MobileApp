@@ -63,6 +63,15 @@ command deletes the live database volume `adulis-platform_adulis-pgdata` and the
   so nothing shows errors for the two minutes MinIO is down.
 - `MINIO_HOST_PORT=9100`: no `.env` sets it today, and MinIO's host port defaults to 9000, which
   `nac-trial-minio` holds. The script refuses without it.
+- **Keep the old MinIO image.** It can no longer be pulled (Docker Hub and quay.io dropped it), and
+  `rollback` recreates the old container from it. Once nothing runs it, `docker image prune -a` or a
+  Docker Desktop clean-up would delete it. Save it first:
+  `docker image save minio/minio:latest -o G:/AdulisDevelopment/minio-move/minio-old-image.tar`.
+  `rollback` refuses, before stopping anything, if the image is missing.
+- **The backup folder is sensitive.** It holds every object, including evidence, and the old
+  container's recorded configuration with its local MinIO credentials. The script creates it
+  owner-only, but exFAT ignores permissions, so keep the SSD to this machine (storage policy, trusted
+  device).
 
 ## Commands (Git Bash, repository root)
 
@@ -87,9 +96,28 @@ probe has already exercised on the same port.
 MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/minio-migrate.mjs rollback
 ```
 
-It stops the new MinIO and renames it aside, recreates the old container from the recorded configuration
-on `adulis-pgdata`, and lists every object written after the switch (those stay in the new volume and in
-the renamed container: nothing is deleted). It never runs `git checkout` and never touches PostgreSQL.
+**Before stopping anything, it checks:**
+- that MinIO really serves the new volume, so a second rollback refuses;
+- that the old image and the old volume still exist;
+- that the run's recorded source is the live volume, in which case `MIGRATE_LIVE=approved` is
+  required whatever `MIGRATE_SRC_VOLUME` says.
+
+**Then it:**
+- stops the new MinIO and renames it aside;
+- recreates the old container from the recorded configuration on `adulis-pgdata`, and logs what that
+  configuration does not carry over;
+- compares the restored store with its inventory at the time of the move. `ROLLED BACK` is printed
+  only if they are identical;
+- lists every object added, changed or deleted after the switch. Those stay in the new volume and the
+  renamed container: nothing is deleted.
+
+**If the old container cannot be recreated,** it puts the new MinIO back and starts it.
+
+**What it never does:** run `git checkout` or touch PostgreSQL.
+
+**The read-only rule:** serving the old volume again necessarily mounts it read-write, as the live
+MinIO does today. The read-only rule applies to the move, not to a rollback.
+
 While rolled back, `docker compose up` fails on the port, deliberately, until the founder decides.
 
 ## Afterwards
