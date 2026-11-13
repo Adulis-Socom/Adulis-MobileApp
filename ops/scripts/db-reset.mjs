@@ -98,6 +98,12 @@ if (['host', 'hostaddr', 'port', 'dbname', 'service'].some((k) => target.searchP
   console.error('FAIL  DATABASE_URL_MIGRATE overrides its target in the query string; nothing was dropped.');
   process.exit(2);
 }
+// An explicit port: without one, pg falls back to PGPORT, and the confirmed target could name a
+// different server from the one reset.
+if (!target.port) {
+  console.error('FAIL  DATABASE_URL_MIGRATE has no explicit port; nothing was dropped.');
+  process.exit(2);
+}
 let identity;
 try {
   identity = await readIdentity(CONNECTION);

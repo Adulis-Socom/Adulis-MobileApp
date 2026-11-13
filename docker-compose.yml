@@ -19,6 +19,55 @@ name: adulis-platform
 # pinned by digest. Keep it identical to MINIO_IMAGE in .github/workflows/ci.yml.
 x-minio-image: &minio-image cgr.dev/chainguard/minio@sha256:786cb11d340b1a657de8dc899560e36e1d1fb371d3d6f3eb6c903a0bb0cec714
 
+# THE MINIO DATA-VOLUME GUARD (WO-INFRA-015A), run by `/bin/sh -c` before MinIO
+# starts: as the one-shot service `minio-volume-guard` (root, so it can read the
+# legacy volume) and inside the minio service ahead of `minio server`. Inline on
+# purpose: a script bind-mounted from a checkout would make MinIO's restart
+# depend on that checkout still existing. `$$` is compose's escape for `$`.
+# MinIO data = a formatted drive (.minio.sys/format.json); the image ships an
+# empty .minio.sys that Docker copies into every new volume, which is not data.
+# .adulis-migration-complete is written into the new volume by minio-migrate.mjs
+# once the copy is verified, just before the switch; any undo removes it again.
+# Tested in ops/scripts/compose-safety.test.mjs.
+x-minio-volume-guard: &minio-volume-guard |
+  set -eu
+  data=$${MINIO_GUARD_DATA_DIR:-}
+  legacy=/adulis-guard/legacy
+  refuse() {
+    echo "minio-volume-guard: REFUSED: $$1" >&2
+    echo "  Nothing was started. See docs/infrastructure/MINIO-STARTUP.md." >&2
+    exit 1
+  }
+  readable() { ls -a "$$1" > /dev/null 2>&1 && (cd "$$1") 2> /dev/null; }
+  [ -n "$$data" ] || refuse "MINIO_GUARD_DATA_DIR is not set"
+  [ -d "$$data" ] || refuse "the data volume is not mounted at $$data"
+  [ -d "$$legacy" ] || refuse "the legacy volume is not mounted at $$legacy"
+  [ ! "$$data" -ef "$$legacy" ] || refuse "the data volume is the legacy volume adulis-pgdata itself: set ADULIS_MINIO_VOLUME to the new volume"
+  readable "$$data" || refuse "the data volume cannot be read here"
+  # Does adulis-pgdata hold MinIO data? What cannot be read counts as yes.
+  legacy_data=yes
+  if readable "$$legacy"; then
+    if [ ! -e "$$legacy/.minio.sys" ]; then
+      legacy_data=no
+    elif readable "$$legacy/.minio.sys" && [ ! -f "$$legacy/.minio.sys/format.json" ]; then
+      legacy_data=no
+    fi
+  fi
+  if [ -f "$$data/.minio.sys/format.json" ]; then
+    if [ "$$legacy_data" = yes ] && [ ! -f "$$data/.adulis-migration-complete" ]; then
+      refuse "the data volume holds MinIO data, but no completed move from adulis-pgdata is recorded in it (a partial copy, or a store started before the move): the objects are in adulis-pgdata"
+    fi
+    echo "minio-volume-guard: ok: the data volume holds MinIO data"
+  else
+    [ "$$legacy_data" = no ] || refuse "the data volume is empty and adulis-pgdata holds (or may hold) the MinIO objects: move them first (minio-migrate.mjs)"
+    for e in "$$data"/* "$$data"/.[!.]* "$$data"/..?*; do
+      [ -e "$$e" ] || continue
+      [ "$${e##*/}" = .minio.sys ] || refuse "the data volume holds files that are not MinIO data ($${e##*/}): it is not MinIO's volume"
+    done
+    echo "minio-volume-guard: ok: fresh installation (no MinIO data anywhere)"
+  fi
+  if [ "$$#" -gt 0 ]; then exec "$$@"; fi
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -75,9 +124,10 @@ services:
   # serves only `latest`, so the digest is the pin: update it deliberately, and
   # in ci.yml in the same commit.
   #
-  # THE DATA-VOLUME GUARD (WO-INFRA-015A). MinIO starts only through
-  # ops/scripts/minio-volume-guard.sh, which refuses an empty data volume while
-  # the legacy volume `adulis-pgdata` holds (or may hold) the objects. The
+  # THE DATA-VOLUME GUARD (WO-INFRA-015A). MinIO starts only through the guard
+  # (x-minio-volume-guard, top of this file), which refuses an empty or
+  # unrecorded data volume while the legacy volume `adulis-pgdata` holds (or may
+  # hold) the objects. The
   # one-shot service `minio-volume-guard` runs the same check first, as root,
   # so a refusal leaves MinIO unstarted and `docker compose up` failing. It is
   # the second line: the first is the required ADULIS_MINIO_VOLUME (volumes,
@@ -86,7 +136,7 @@ services:
     image: *minio-image
     container_name: adulis-minio
     restart: unless-stopped
-    entrypoint: ['/bin/sh', '/adulis-guard/minio-volume-guard.sh']
+    entrypoint: ['/bin/sh', '-c', *minio-volume-guard, 'minio-volume-guard']
     command: ['/usr/bin/minio', 'server', '/data']
     depends_on:
       minio-volume-guard:
@@ -110,7 +160,6 @@ services:
         read_only: true
         volume:
           nocopy: true
-      - ./ops/scripts/minio-volume-guard.sh:/adulis-guard/minio-volume-guard.sh:ro
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
@@ -126,7 +175,7 @@ services:
     image: *minio-image
     container_name: adulis-minio-volume-guard
     user: '0:0'
-    entrypoint: ['/bin/sh', '/adulis-guard/minio-volume-guard.sh']
+    entrypoint: ['/bin/sh', '-c', *minio-volume-guard, 'minio-volume-guard']
     environment:
       MINIO_GUARD_DATA_DIR: /data
     network_mode: none
@@ -138,7 +187,6 @@ services:
         read_only: true
         volume:
           nocopy: true
-      - ./ops/scripts/minio-volume-guard.sh:/adulis-guard/minio-volume-guard.sh:ro
 
   # One-shot: creates the two buckets and sets their policies, then exits.
   # The script, and why there are TWO BUCKETS rather than two prefixes, is
@@ -171,10 +219,11 @@ services:
 #   installation that predates it, the objects are still in `adulis-pgdata` and
 #   are NOT moved automatically (docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md).
 # - `adulis-pgdata` is referenced READ-ONLY, by the data-volume guard only (key
-#   `adulis-legacy`). On a fresh machine compose creates it empty, which the
-#   guard reads as "nothing to move". Never delete it without the founder's
-#   decision (ISSUE-INFRA-005): it holds the old MinIO objects and the
-#   pre-2026-09-03 database.
+#   `adulis-legacy`), and EXTERNAL: compose never creates it and never deletes
+#   it, `docker compose down -v` included. A fresh machine creates it empty once
+#   (`docker volume create adulis-pgdata`), which the guard reads as "nothing to
+#   move". Never delete it without the founder's decision (ISSUE-INFRA-005): it
+#   holds the old MinIO objects and the pre-2026-09-03 database.
 #
 # THE MINIO VOLUME MUST BE NAMED, OR NOTHING RUNS (WO-INFRA-015A). Compose
 # replaces a running container BEFORE it checks any dependency, so no check
@@ -183,9 +232,10 @@ services:
 # with one on an empty volume. So the name comes from ADULIS_MINIO_VOLUME, with
 # no default: unset, EVERY compose command stops at configuration time and
 # touches nothing. Set it to adulis-platform_adulis-miniodata on a fresh machine
-# (.env.example does) or after the move; an installation not yet moved leaves
-# it unset. If it is set too early, the data-volume guard still refuses to
-# start MinIO on the empty volume. Sequences: docs/infrastructure/MINIO-STARTUP.md.
+# or after the move (.env.example carries the line commented out); an
+# installation not yet moved leaves it unset. If it is set too early, the
+# data-volume guard still refuses to start MinIO on the empty volume, or on one
+# that holds no recorded move. Sequences: docs/infrastructure/MINIO-STARTUP.md.
 volumes:
   adulis-pgdata:
     name: adulis-platform_adulis-pgdata
@@ -193,3 +243,4 @@ volumes:
     name: '${ADULIS_MINIO_VOLUME:?is not set. Before the MinIO move, leave it unset and do not run compose; on a fresh machine or after the move, set ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata. See docs/infrastructure/MINIO-STARTUP.md}'
   adulis-legacy:
     name: adulis-pgdata
+    external: true

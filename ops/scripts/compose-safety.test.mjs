@@ -4,7 +4,8 @@
 // ops/scripts/minio-migrate.mjs reads (the /data volume and the published port) unchanged.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -60,14 +61,22 @@ test('PostgreSQL and MinIO publish on loopback only, unless a LAN bind is chosen
   assert.equal(c.services['minio-volume-guard'].network_mode, 'none');
 });
 
-test('MinIO starts only through the guard, after the guard service has accepted', () => {
-  const m = render().services.minio;
-  assert.deepEqual(m.entrypoint, ['/bin/sh', '/adulis-guard/minio-volume-guard.sh']);
+test('MinIO starts only through the inline guard, after the guard service has accepted', () => {
+  const c = render();
+  const m = c.services.minio;
+  const g = c.services['minio-volume-guard'];
+  assert.deepEqual(m.entrypoint.slice(0, 2), ['/bin/sh', '-c']);
+  assert.equal(m.entrypoint[3], 'minio-volume-guard');
+  assert.equal(g.entrypoint[2], m.entrypoint[2], 'both run the same guard');
   assert.deepEqual(m.command, ['/usr/bin/minio', 'server', '/data']);
   assert.equal(m.environment.MINIO_GUARD_DATA_DIR, '/data');
   assert.equal(m.depends_on['minio-volume-guard'].condition, 'service_completed_successfully');
-  assert.ok(existsSync(join(root, 'ops/scripts/minio-volume-guard.sh')));
-  assert.equal(mount(m, '/adulis-guard/minio-volume-guard.sh').read_only, true);
+  // No bind mount: MinIO's restart must not depend on a checkout still existing.
+  for (const s of [m, g]) assert.deepEqual((s.volumes ?? []).filter((v) => v.type === 'bind'), []);
+});
+
+test('the legacy volume is external: compose never creates or deletes it, down -v included', () => {
+  assert.equal(render().volumes['adulis-legacy'].external, true);
 });
 
 test('the guard service reads both volumes as root, and the legacy volume is never writable', () => {
@@ -104,4 +113,98 @@ test('minio-migrate.mjs still finds its target: the /data volume and the publish
   assert.equal(String(minio.ports.find((p) => Number(p.target) === 9000).published), '9100');
   assert.ok(c.services['minio-init'], 'minio-init is still there');
   assert.equal(minio.container_name, 'adulis-minio');
+});
+
+// ---------- the guard's behaviour: the script compose would run, run here with sh ----------
+
+// `config` keeps compose's `$$` escape; a container receives `$` (checked with `docker compose create`).
+const LEGACY_LINE = 'legacy=/adulis-guard/legacy';
+const guardText = (() => {
+  const s = render().services['minio-volume-guard'].entrypoint[2].replaceAll('$$', '$');
+  assert.equal(s.split(LEGACY_LINE).length, 2, 'the guard names its legacy mount exactly once');
+  return s;
+})();
+
+/** Runs the guard against temporary data and legacy directories. */
+function guard({ data = true, legacy = true, dataFormatted = false, dataSkeleton = false, marker = false, foreign = false, legacyFormatted = false, legacyUnreadable = false, sameDir = false, args = [], unsetData = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'adulis-guard-'));
+  const d = join(dir, 'data');
+  const l = sameDir ? d : join(dir, 'legacy');
+  const formatted = (p) => {
+    mkdirSync(join(p, '.minio.sys', 'buckets'), { recursive: true });
+    writeFileSync(join(p, '.minio.sys', 'format.json'), '{"version":"1","format":"xl-single"}');
+  };
+  try {
+    if (data) mkdirSync(d);
+    if (legacy && !sameDir) mkdirSync(l);
+    if (dataFormatted) formatted(d);
+    if (dataSkeleton) mkdirSync(join(d, '.minio.sys', 'config'), { recursive: true });
+    if (marker) writeFileSync(join(d, '.adulis-migration-complete'), '{}');
+    if (foreign) writeFileSync(join(d, 'PG_VERSION'), '17');
+    if (legacyFormatted) formatted(l);
+    if (legacyUnreadable) chmodSync(l, 0o000);
+    const script = guardText.replace(LEGACY_LINE, `legacy='${l.replaceAll('\\', '/')}'`);
+    const env = { ...process.env };
+    if (unsetData) delete env.MINIO_GUARD_DATA_DIR;
+    else env.MINIO_GUARD_DATA_DIR = d.replaceAll('\\', '/');
+    return spawnSync('sh', ['-c', script, 'minio-volume-guard', ...args], { encoding: 'utf8', env });
+  } finally {
+    try {
+      chmodSync(l, 0o755);
+    } catch {
+      /* absent */
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+const refused = (r, re) => {
+  assert.equal(r.status, 1, `expected a refusal, got ${r.status}: ${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, re);
+};
+const accepted = (r, re) => {
+  assert.equal(r.status, 0, `expected acceptance, got ${r.status}: ${r.stderr}`);
+  assert.match(r.stdout, re);
+};
+
+test('guard: a fresh installation starts (no MinIO data anywhere; the image skeleton is not data)', () => {
+  accepted(guard(), /fresh installation/);
+  accepted(guard({ dataSkeleton: true }), /fresh installation/);
+});
+
+test('guard: an empty data volume while adulis-pgdata holds the objects is refused, even with the skeleton', () => {
+  refused(guard({ legacyFormatted: true }), /data volume is empty and adulis-pgdata holds/);
+  refused(guard({ legacyFormatted: true, dataSkeleton: true }), /data volume is empty and adulis-pgdata holds/);
+});
+
+test('guard: a formatted data volume needs the recorded move while adulis-pgdata holds the objects', () => {
+  // A partial copy, or a store started before the move: formatted, but no marker.
+  refused(guard({ legacyFormatted: true, dataFormatted: true }), /no completed move from adulis-pgdata is recorded/);
+  accepted(guard({ legacyFormatted: true, dataFormatted: true, marker: true }), /holds MinIO data/);
+  accepted(guard({ dataFormatted: true }), /holds MinIO data/); // a fresh store that has started once
+});
+
+test('guard: the legacy volume as the data volume, and a data volume that is not MinIO\'s, are refused', () => {
+  refused(guard({ sameDir: true, dataFormatted: true }), /the data volume is the legacy volume adulis-pgdata itself/);
+  refused(guard({ foreign: true }), /holds files that are not MinIO data \(PG_VERSION\)/);
+});
+
+test('guard: missing mounts or settings refuse', () => {
+  refused(guard({ data: false }), /data volume is not mounted/);
+  refused(guard({ legacy: false }), /legacy volume is not mounted/);
+  refused(guard({ unsetData: true }), /MINIO_GUARD_DATA_DIR is not set/);
+});
+
+test('guard: the server command runs only when the guard accepts', () => {
+  const ran = guard({ args: ['sh', '-c', 'echo SERVER STARTED'] });
+  assert.equal(ran.status, 0);
+  assert.match(ran.stdout, /SERVER STARTED/);
+  const not = guard({ legacyFormatted: true, args: ['sh', '-c', 'echo SERVER STARTED'] });
+  assert.equal(not.status, 1);
+  assert.doesNotMatch(not.stdout, /SERVER STARTED/);
+});
+
+test('guard: an unreadable legacy volume counts as holding data (the non-root case)', { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'needs a non-root POSIX user for mode 000' }, () => {
+  refused(guard({ legacyUnreadable: true }), /adulis-pgdata holds \(or may hold\)/);
+  refused(guard({ legacyUnreadable: true, dataFormatted: true }), /no completed move from adulis-pgdata is recorded/);
+  accepted(guard({ legacyUnreadable: true, dataFormatted: true, marker: true }), /holds MinIO data/);
 });

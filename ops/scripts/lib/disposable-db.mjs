@@ -140,7 +140,7 @@ export async function checkContainerTarget({ container, adminUrl, docker, Client
     return refused(1, `DATABASE_URL_MIGRATE reaches database ${overUrl?.db}, which is not marked disposable`);
   if (!overUrl.system_id) return refused(2, 'could not read the server identity through DATABASE_URL_MIGRATE');
 
-  const r = docker(['inspect', container]);
+  const r = docker(['inspect', '--type', 'container', container]);
   if (r.error) return refused(2, `could not run docker: ${r.error.message}`);
   if (r.status !== 0)
     return refused(
@@ -164,6 +164,8 @@ export async function checkContainerTarget({ container, adminUrl, docker, Client
     why.push(
       `${name} keeps data in named volume(s) ${named.map((m) => m.Name).join(', ')}: a disposable server keeps none`,
     );
+  const bindData = (info.Mounts ?? []).filter((m) => m.Type === 'bind' && /^\/var\/lib\/postgresql/.test(m.Destination ?? ''));
+  if (bindData.length) why.push(`${name} keeps its data directory on the host (${bindData[0].Source}): a disposable server does not`);
   const bound = (info.NetworkSettings?.Ports?.['5432/tcp'] ?? []).map((p) => `${p.HostPort}`);
   if (!bound.includes(url.port))
     why.push(`${name} publishes 5432 on [${bound.join(', ') || 'nothing'}], not on ${url.port} (the URL's port)`);

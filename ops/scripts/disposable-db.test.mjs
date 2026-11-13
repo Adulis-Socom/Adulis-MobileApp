@@ -5,7 +5,7 @@
 // stubs record what WOULD have been sent, and the direct runs point at 127.0.0.1 port 1.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -54,7 +54,7 @@ function dockerStub({
     calls.push(args);
     if (engineDown) return { status: 1, stdout: '', stderr: 'Cannot connect to the Docker daemon. Is the docker daemon running?' };
     if (args[0] === 'inspect') {
-      if (missing) return { status: 1, stdout: '[]', stderr: `Error: No such object: ${args[1]}` };
+      if (missing) return { status: 1, stdout: '[]', stderr: `Error: No such object: ${args.at(-1)}` };
       return {
         status: 0,
         stdout: JSON.stringify([{ Id: 'c0ffee'.repeat(10) + 'beef', Name: `/${name}`, State: { Running: running }, Mounts: mounts, NetworkSettings: { Ports: ports } }]),
@@ -135,14 +135,14 @@ test('every URL must reach a marked database: split targets and failed connectio
 test('A5.1 the disposable target: two scratch databases created, compared, dropped, all in that container', async () => {
   const r = await determinism();
   assert.equal(r.code, 0, r.err);
-  assert.match(r.out, /PASS  two clean databases converge/);
+  assert.match(r.out, /PASS {2}two clean databases converge/);
   const id = 'c0ffee'.repeat(10) + 'beef';
   const execs = r.docker.calls.filter((a) => a[0] === 'exec');
   assert.ok(execs.length > 0 && execs.every((a) => a[1] === id), 'every exec goes to the verified container ID');
   const w = r.docker.writes().map((a) => a.at(-1));
   for (const d of ['adulis_det_a_0a1b2c3d', 'adulis_det_b_0a1b2c3d']) {
     assert.ok(w.includes(`CREATE DATABASE ${d}`));
-    assert.equal(w.filter((s) => s === `DROP DATABASE IF EXISTS ${d}`).length, 2); // before, and in cleanup
+    assert.equal(w.filter((s) => s === `DROP DATABASE IF EXISTS ${d} WITH (FORCE)`).length, 2); // before, and in cleanup
   }
 });
 
@@ -224,9 +224,38 @@ test('A5.10 an interrupt mid-run: stops, still drops both scratch databases, nev
   const r = await determinism({ interruptAt: 1 }); // after the first database is created
   assert.equal(r.code, 130);
   assert.match(r.err, /interrupted by SIGINT: stopped; dropping the scratch databases/);
-  assert.doesNotMatch(r.out, /PASS  two clean databases/);
+  assert.doesNotMatch(r.out, /PASS {2}two clean databases/);
   const drops = r.docker.writes().map((a) => a.at(-1)).filter((s) => s.startsWith('DROP'));
-  assert.ok(drops.includes('DROP DATABASE IF EXISTS adulis_det_a_0a1b2c3d') && drops.includes('DROP DATABASE IF EXISTS adulis_det_b_0a1b2c3d'));
+  assert.ok(drops.includes('DROP DATABASE IF EXISTS adulis_det_a_0a1b2c3d WITH (FORCE)') && drops.includes('DROP DATABASE IF EXISTS adulis_det_b_0a1b2c3d WITH (FORCE)'));
+});
+
+test('A5.10b a child ended by a signal (a real Ctrl+C reaches it) is an interrupt, never a pass', async () => {
+  const docker = dockerStub();
+  const out = [];
+  const err = [];
+  const code = await runDeterminism({
+    env: { NODE_ENV: 'test', ADULIS_PG_CONTAINER: 'adulis-test-pg', DATABASE_URL_MIGRATE: URL_OK },
+    docker,
+    migrate: () => ({ status: null, signal: 'SIGINT', stdout: '', stderr: '' }),
+    Client: marked(),
+    interrupted: () => null,
+    suffix: () => '0a1b2c3d',
+    out: (l) => out.push(l),
+    err: (l) => err.push(l),
+  });
+  assert.equal(code, 130);
+  assert.match(err.join('\n'), /interrupted by SIGINT \(during migrations against adulis_det_a_0a1b2c3d\)/);
+  assert.ok(docker.writes().some((a) => a.at(-1) === 'DROP DATABASE IF EXISTS adulis_det_a_0a1b2c3d WITH (FORCE)'));
+});
+
+test('A5.4b a data directory bind-mounted from the host is not a disposable server', async () => {
+  const docker = dockerStub({
+    mounts: [{ Type: 'bind', Source: 'C:\\pgdata', Destination: '/var/lib/postgresql/data' }],
+  });
+  const r = await determinism({ docker });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /keeps its data directory on the host/);
+  assert.equal(docker.writes().length, 0);
 });
 
 test('A5.11 cleanup that fails, or leaves a database behind, fails the run and names it', async () => {
@@ -361,99 +390,3 @@ test('db:seed run directly against a non-local database: refused', () => {
   assert.match(r.stderr, /refusing to seed a non-local database/);
 });
 
-// ---------- the MinIO data-volume guard script ----------
-
-const guardScript = join(root, 'ops/scripts/minio-volume-guard.sh');
-// A formatted MinIO drive has .minio.sys/format.json; the image's skeleton is .minio.sys/{buckets,config}.
-const minioData = (dir) => {
-  mkdirSync(join(dir, '.minio.sys', 'buckets'), { recursive: true });
-  writeFileSync(join(dir, '.minio.sys', 'format.json'), '{"version":"1","format":"xl-single"}');
-};
-const imageSkeleton = (dir) => {
-  mkdirSync(join(dir, '.minio.sys', 'buckets'), { recursive: true });
-  mkdirSync(join(dir, '.minio.sys', 'config'), { recursive: true });
-};
-function guardRun({ data = true, dataSys = false, dataSkeleton = false, legacy = true, legacySys = false, legacySkeleton = false, unreadable = false, args = [], unsetData = false }) {
-  const dir = mkdtempSync(join(tmpdir(), 'adulis-guard-'));
-  try {
-    const d = join(dir, 'data');
-    const l = join(dir, 'legacy');
-    if (data) mkdirSync(d);
-    if (dataSys) minioData(d);
-    if (dataSkeleton) imageSkeleton(d);
-    if (legacy) mkdirSync(l);
-    if (legacySys) minioData(l);
-    if (legacySkeleton) imageSkeleton(l);
-    if (unreadable) chmodSync(l, 0o000);
-    const env = { ...process.env, MINIO_GUARD_LEGACY_DIR: l };
-    if (unsetData) delete env.MINIO_GUARD_DATA_DIR;
-    else env.MINIO_GUARD_DATA_DIR = d;
-    return spawnSync('sh', [guardScript, ...args], { encoding: 'utf8', env });
-  } finally {
-    try {
-      chmodSync(join(dir, 'legacy'), 0o755);
-    } catch {
-      /* not created */
-    }
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-test('the volume guard accepts a data volume that holds MinIO data, whatever the legacy volume holds', () => {
-  const r = guardRun({ dataSys: true, legacySys: true });
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /already holds MinIO data/);
-});
-
-test('the volume guard accepts a fresh installation: no MinIO data anywhere', () => {
-  const r = guardRun({});
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /fresh installation/);
-});
-
-test('the volume guard refuses an empty data volume while the legacy volume holds the objects', () => {
-  const r = guardRun({ legacySys: true, args: ['sh', '-c', 'echo SERVER STARTED'] });
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /REFUSED: the legacy volume adulis-pgdata holds MinIO data/);
-  assert.doesNotMatch(r.stdout, /SERVER STARTED/); // the server command never ran
-});
-
-test('the image skeleton copied into a new volume is not MinIO data (the rehearsal finding)', () => {
-  // Docker copies the image's empty /data/.minio.sys into every new volume: that must still refuse.
-  const r = guardRun({ dataSkeleton: true, legacySys: true });
-  assert.equal(r.status, 1, r.stdout);
-  assert.match(r.stderr, /holds MinIO data and the data volume is empty/);
-  const fresh = guardRun({ dataSkeleton: true, legacySkeleton: true });
-  assert.equal(fresh.status, 0, fresh.stderr);
-  assert.match(fresh.stdout, /fresh installation/);
-});
-
-test('the volume guard refuses the legacy volume as the data volume (ADULIS_MINIO_VOLUME=adulis-pgdata)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'adulis-guard-'));
-  try {
-    minioData(dir);
-    const r = spawnSync('sh', [guardScript], { encoding: 'utf8', env: { ...process.env, MINIO_GUARD_DATA_DIR: dir, MINIO_GUARD_LEGACY_DIR: dir } });
-    assert.equal(r.status, 1, r.stdout);
-    assert.match(r.stderr, /the data volume is the legacy volume adulis-pgdata itself/);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('the volume guard runs the server only when it accepts', () => {
-  const r = guardRun({ args: ['sh', '-c', 'echo SERVER STARTED'] });
-  assert.equal(r.status, 0);
-  assert.match(r.stdout, /SERVER STARTED/);
-});
-
-test('the volume guard fails closed: no data mount, no legacy mount, no setting', () => {
-  assert.match(guardRun({ data: false }).stderr, /data volume is not mounted/);
-  assert.match(guardRun({ legacy: false }).stderr, /legacy volume is not mounted/);
-  assert.match(guardRun({ unsetData: true }).stderr, /MINIO_GUARD_DATA_DIR is not set/);
-});
-
-test('the volume guard refuses when it cannot read the legacy volume (the non-root case)', { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'needs a non-root POSIX user for mode 000' }, () => {
-  const r = guardRun({ unreadable: true });
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /cannot be read here/);
-});

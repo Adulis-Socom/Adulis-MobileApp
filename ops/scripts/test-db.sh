@@ -51,12 +51,14 @@ case "${1:-}" in
       echo "test-db: $PG or $S3 already exists (another run?); run 'bash ops/scripts/test-db.sh down' first" >&2
       exit 1
     fi
-    # A failed step removes what this run started, so the next `up` does not trip on the names.
-    trap 'echo "test-db: setup failed; removing the containers" >&2; docker rm -f -v "$PG" "$S3" >/dev/null 2>&1' ERR
-    docker run -d --rm --name "$PG" -p "127.0.0.1:$PG_PORT:5432" -e POSTGRES_USER=adulis_bootstrap \
-      -e POSTGRES_PASSWORD=ci-password -e POSTGRES_DB=adulis pgvector/pgvector:pg17 >/dev/null
-    docker run -d --rm --name "$S3" -p "127.0.0.1:$S3_PORT:9000" -e MINIO_ROOT_USER=adulis-local \
-      -e MINIO_ROOT_PASSWORD=adulis-local-secret "$MINIO_IMAGE" server /data >/dev/null
+    # A failed step removes what THIS run started, by container ID: a run that loses a race for the
+    # names must not remove the other run's containers (WO-INFRA-015A review).
+    started=()
+    trap 'echo "test-db: setup failed; removing the containers this run started" >&2; [ ${#started[@]} -eq 0 ] || docker rm -f -v "${started[@]}" >/dev/null 2>&1' ERR
+    started+=("$(docker run -d --rm --name "$PG" -p "127.0.0.1:$PG_PORT:5432" -e POSTGRES_USER=adulis_bootstrap \
+      -e POSTGRES_PASSWORD=ci-password -e POSTGRES_DB=adulis pgvector/pgvector:pg17)")
+    started+=("$(docker run -d --rm --name "$S3" -p "127.0.0.1:$S3_PORT:9000" -e MINIO_ROOT_USER=adulis-local \
+      -e MINIO_ROOT_PASSWORD=adulis-local-secret "$MINIO_IMAGE" server /data)")
     eval "$(env_lines)"
     # Ready only once the image's init has finished and restarted the server on its real socket.
     wait_for PostgreSQL docker exec "$PG" psql -U adulis_bootstrap -d adulis -h 127.0.0.1 -c 'select 1'

@@ -105,14 +105,22 @@ const log = (msg) => console.log(`[${new Date().toISOString()}] ${msg}`);
 // Ctrl+C or SIGTERM is never only logged. It aborts the hashing or streaming in progress (their
 // AbortSignal), and every step boundary refuses once it has arrived: a migrate then undoes itself
 // (verified), a rollback stops before its critical section or puts the new MinIO back, and no
-// success line is printed. A docker call in flight gets the terminal's Ctrl+C itself and fails,
-// which refuses too. A second interrupt is acknowledged, never acted on: the undo must finish.
+// success line is printed. Signal handlers run only when the event loop turns, and most steps are
+// synchronous (spawnSync), so every checkpoint first gives the loop a full turn. A docker child
+// ended by a signal, or by a Windows console Ctrl+C, counts as the interrupt itself. The handler
+// never stops the undo; a SECOND terminal Ctrl+C can still end a docker call of the undo, which is
+// then reported (UNDO STEP FAILED / UNDO INCOMPLETE), never hidden.
 export function createInterruption(logFn = log) {
   const controller = new AbortController();
   const state = {
     signal: null,
+    finished: false,
     abortSignal: controller.signal,
     on(sig) {
+      if (state.finished) {
+        logFn(`${sig} after the run had finished: nothing to stop or undo`);
+        return;
+      }
       if (state.signal) {
         logFn(`${sig} again: still stopping safely; wait for the undo to finish`);
         return;
@@ -128,12 +136,19 @@ export function createInterruption(logFn = log) {
   return state;
 }
 const interruption = createInterruption();
-const checkpoint = () => interruption.checkpoint();
-// Rehearsal only (guard() refuses MIGRATE_FAULT on the live volume): an interrupt at a named stage.
+export const turnEventLoop = () => new Promise((r) => setImmediate(() => setImmediate(r)));
+const checkpoint = async () => {
+  await turnEventLoop(); // let a pending SIGINT/SIGTERM handler run first
+  interruption.checkpoint();
+};
+// Exit status of a Windows console program ended by Ctrl+C (STATUS_CONTROL_C_EXIT).
+const CTRL_C_EXIT = new Set([3221225786, -1073741510]);
+// Rehearsal only (guard() refuses MIGRATE_FAULT on the live volume): an interrupt at a named stage,
+// delivered like a real signal: through the event loop, not in the middle of a synchronous step.
 const rehearseInterrupt = (stage) => {
   if (process.env.MIGRATE_FAULT === `interrupt-${stage}`) {
     log(`FAULT INJECTED (rehearsal): interrupt during ${stage}`);
-    interruption.on('SIGINT');
+    setImmediate(() => interruption.on('SIGINT'));
   }
 };
 
@@ -333,6 +348,11 @@ function docker(args, { input, allowFail = false } = {}) {
     maxBuffer: 256 * 1024 * 1024,
   });
   if (r.error) refuse(`could not run docker: ${r.error.message}`);
+  // Ended by a signal, or by a console Ctrl+C on Windows: that IS the interrupt (WO-INFRA-015A).
+  if (r.signal || CTRL_C_EXIT.has(r.status)) {
+    interruption.on(r.signal ?? 'SIGINT');
+    if (!allowFail) refuse(`docker ${args.slice(0, 2).join(' ')} was interrupted`);
+  }
   // Only the first words of the command: later arguments carry MC_HOST URLs with credentials.
   if (r.status !== 0 && !allowFail)
     refuse(
@@ -515,6 +535,8 @@ function resolveConfig(cmd, env) {
     initContainer: init.container_name,
     dstImage: minio.image,
     tarImage: compose.services.postgres?.image ?? 'pgvector/pgvector:pg17',
+    // `compose create minio` also creates its dependency, which mounts the target volume.
+    guardContainer: compose.services['minio-volume-guard']?.container_name ?? null,
     dstCreds: {
       user: minio.environment?.MINIO_ROOT_USER,
       pass: minio.environment?.MINIO_ROOT_PASSWORD,
@@ -572,7 +594,9 @@ function preflight(cfg) {
       '/bin/bash',
       cfg.dstImage,
       '-c',
-      'shopt -s dotglob nullglob; f=(/d/*); echo ${#f[@]}',
+      // The MinIO image's empty .minio.sys skeleton (Docker copies it into a new volume on first
+      // mount, e.g. by a compose run before the move) holds no file and counts as empty.
+      'shopt -s dotglob nullglob globstar; f=(/d/*); if [ ${#f[@]} -eq 1 ] && [ "${f[0]}" = /d/.minio.sys ]; then n=0; for x in /d/.minio.sys/**; do [ -f "$x" ] && n=$((n+1)); done; [ $n -eq 0 ] && { echo 0; exit 0; }; fi; echo ${#f[@]}',
     ]).trim();
     if (n !== '0')
       problems.push(
@@ -643,7 +667,7 @@ async function takeBackup(cfg) {
     ],
     { to: createWriteStream(tar, { mode: 0o600 }) },
   );
-  checkpoint();
+  await checkpoint();
   if (process.env.MIGRATE_FAULT === 'interrupt-hash') setImmediate(() => rehearseInterrupt('hash'));
   const sha = await fileSha256(tar);
   writeFileSync(`${tar}.sha256`, `${sha} *${basename(tar)}\n`, { mode: 0o600 });
@@ -709,8 +733,20 @@ async function plan(cfg) {
   const inv = inventory(cfg, pre.server);
   summary('source inventory', inv);
   fail('the source holds data this migration would not copy', sourceBucketProblems(inv));
-  checkpoint();
+  await checkpoint();
+  interruption.finished = true;
   log('PLAN OK: preflight passed; nothing was changed');
+}
+
+// The record of a completed, verified move, at the root of the new volume (MinIO ignores files at
+// the root: the PostgreSQL files beside its buckets in adulis-pgdata prove it). The data-volume
+// guard in docker-compose.yml serves the new volume beside a legacy volume holding data only with it.
+export const MOVE_RECORD = '.adulis-migration-complete';
+function onTarget(cfg, script, args = [], opts = {}) {
+  return docker(
+    ['run', '--rm', '-v', `${cfg.dstVolume}:/d`, '--entrypoint', 'sh', cfg.tarImage, '-c', script, 'move-record', ...args],
+    opts,
+  );
 }
 
 function recreateLegacy(saved) {
@@ -726,7 +762,8 @@ function recreateLegacy(saved) {
     '--restart',
     c.HostConfig.RestartPolicy?.Name || 'no',
     '-p',
-    `${bind.HostIp ? `${bind.HostIp}:` : ''}${bind.HostPort}:9000`,
+    // Loopback, never every interface (WO-INFRA-015A): the API reaches MinIO on 127.0.0.1.
+    `${bind.HostIp && bind.HostIp !== '0.0.0.0' && bind.HostIp !== '::' ? bind.HostIp : '127.0.0.1'}:${bind.HostPort}:9000`,
   ];
   for (const e of c.Config.Env ?? []) args.push('-e', e);
   for (const m of c.Mounts.filter((x) => x.Type === 'volume'))
@@ -804,13 +841,13 @@ async function migrate(cfg) {
   // Ctrl+C: see createInterruption. The handler is installed by main(); every step boundary checks.
   try {
     rehearseInterrupt('preflight');
-    checkpoint();
+    await checkpoint();
     log('1/8 source inventory, read from the running server');
     const i0 = inventory(cfg, pre.server);
     summary('source', i0);
     // Before anything stops: a bucket this run would not copy refuses it (WO-INFRA-015A).
     fail('the source holds data this migration would not copy', sourceBucketProblems(i0));
-    checkpoint();
+    await checkpoint();
     if (process.env.MIGRATE_FAULT === 'write-source')
       mc(
         cfg,
@@ -820,16 +857,18 @@ async function migrate(cfg) {
       );
 
     log(`2/8 stopping ${cfg.srcContainer}: from here nothing can write to the source`);
-    docker(['stop', cfg.srcContainer]);
+    // Registered BEFORE the stop: a stop interrupted half-way still gets the source started again
+    // (`docker start` on a running container changes nothing).
     undo.push(() => docker(['start', cfg.srcContainer]));
+    docker(['stop', cfg.srcContainer]);
 
-    checkpoint();
+    await checkpoint();
     log('3/8 backup of the stopped source volume, then its checks');
     const backup = await takeBackup(cfg);
     manifest.backup = backup;
     log(`backup ${backup.tar}: ${backup.entries} entries, sha256 ${backup.sha}`);
 
-    checkpoint();
+    await checkpoint();
     log('4/8 restoring the backup into a scratch volume and serving it read-side');
     docker(['volume', 'create', snap]);
     always.push(() => docker(['volume', 'rm', snap], { allowFail: true }));
@@ -854,13 +893,25 @@ async function migrate(cfg) {
     always.push(() => docker(['network', 'rm', net], { allowFail: true }));
     const snapshot = srv('src', pre.inspect.Image, snap, pre.server);
 
-    checkpoint();
+    await checkpoint();
     log(
       `5/8 target volume ${cfg.dstVolume} (created by compose, so compose owns it) and a private target server`,
     );
     if (!pre.targetExists)
-      undo.push(() => docker(['volume', 'rm', cfg.dstVolume], { allowFail: true }));
+      undo.push(() => {
+        // The guard container compose creates holds the volume; remove it first, then verify: a
+        // volume left behind may hold a partial copy (WO-INFRA-015A review).
+        if (cfg.guardContainer) docker(['rm', '-f', cfg.guardContainer], { allowFail: true });
+        docker(['volume', 'rm', cfg.dstVolume], { allowFail: true });
+        if (exists('volume', cfg.dstVolume))
+          refuse(`target volume ${cfg.dstVolume} could not be removed and may hold a partial copy: remove it by hand before any compose up`);
+      });
     docker(['compose', 'create', '--no-recreate', 'minio']);
+    // Not needed until the switch, and it would hold the target volume against the undo.
+    if (cfg.guardContainer) {
+      docker(['rm', '-f', cfg.guardContainer], { allowFail: true });
+      if (exists('container', cfg.guardContainer)) refuse(`${cfg.guardContainer} could not be removed`);
+    }
     if (!exists('volume', cfg.dstVolume)) refuse(`compose did not create ${cfg.dstVolume}`);
     if (JSON.parse(docker(['inspect', cfg.srcContainer]))[0].Id !== pre.inspect.Id)
       refuse(`compose replaced ${cfg.srcContainer} before the copy was verified`);
@@ -876,7 +927,7 @@ async function migrate(cfg) {
       `MINIO_ROOT_PASSWORD=${target.pass}`,
     ]);
 
-    checkpoint();
+    await checkpoint();
     log('6/8 copying the two buckets (never the phantom PostgreSQL directories)');
     rehearseInterrupt('copy');
     mc(cfg, target, BUCKETS.map((b) => `mc mirror --quiet "src/${b}" "dst/${b}"`).join(' && '), [
@@ -885,7 +936,7 @@ async function migrate(cfg) {
     ]);
     await injectFault(cfg, target, i0);
 
-    checkpoint();
+    await checkpoint();
     log('7/8 verification: source unchanged, snapshot = source, target = snapshot, security');
     const i1 = inventory(cfg, snapshot);
     fail(
@@ -909,7 +960,7 @@ async function migrate(cfg) {
       if (exists('container', `${net}-${role}`))
         refuse(`helper ${net}-${role} could not be removed`);
 
-    checkpoint();
+    await checkpoint();
     log(
       `8/8 switching: compose recreates ${cfg.dstContainer} on ${cfg.dstVolume}; ${cfg.srcVolume} is not touched`,
     );
@@ -923,7 +974,16 @@ async function migrate(cfg) {
         allowFail: true,
       });
       recreateLegacy(pre.inspect);
+      // No record of a completed move may remain on a volume that is not serving (guard rule).
+      onTarget(cfg, `rm -f /d/${MOVE_RECORD}`, [], { allowFail: true });
     });
+    // The record the data-volume guard (docker-compose.yml) requires before it serves this volume
+    // while adulis-pgdata still holds MinIO data. Written here, after the target was verified equal
+    // to the stopped source (step 7), because the switch itself runs the guard; any failure from
+    // here on runs the undo above, which removes it again (rehearsed, WO-INFRA-015A round 3).
+    onTarget(cfg, `printf '%s\\n' "$1" > /d/${MOVE_RECORD}`, [
+      JSON.stringify({ run: cfg.run, at: new Date().toISOString(), source: cfg.srcVolume, counts: counts(i2) }),
+    ]);
     docker(['compose', 'up', '-d', 'minio', 'minio-init']);
     rehearseInterrupt('switch');
     const code = docker(['wait', cfg.initContainer]).trim();
@@ -944,7 +1004,8 @@ async function migrate(cfg) {
     const p3 = anonymousProbes(cfg, served, i1);
     fail('served target security', checkTarget(i3, i1, p3));
     // An interrupt during the switch or its verification is honoured: back to the old MinIO.
-    checkpoint();
+    await checkpoint();
+    interruption.finished = true;
     Object.assign(manifest, {
       finishedAt: new Date().toISOString(),
       counts: { source: counts(i0), served: counts(i3) },
@@ -969,19 +1030,18 @@ async function migrate(cfg) {
       }
     }
     // Verified, not assumed: the old MinIO must answer on its port again.
+    let undone;
     try {
       waitReady(cfg, pre.server);
-      log(
-        clean
-          ? `UNDO OK: ${cfg.srcContainer} answers on port ${cfg.hostPort} again`
-          : 'UNDO PARTIAL: MinIO answers, but a step above failed',
-      );
+      undone = clean
+        ? `UNDO OK: ${cfg.srcContainer} answers on port ${cfg.hostPort} again`
+        : 'UNDO PARTIAL: MinIO answers, but a step above failed';
     } catch (w) {
-      log(
-        `UNDO INCOMPLETE: nothing answers on port ${cfg.hostPort} (${w.message}); act by hand (runbook, Rollback)`,
-      );
+      undone = `UNDO INCOMPLETE: nothing answers on port ${cfg.hostPort} (${w.message}); act by hand (runbook, Rollback)`;
     }
-    save('manifest.json', { ...manifest, failedAt: new Date().toISOString(), failure: e.message });
+    log(undone);
+    // The outcome is recorded too: a terminal that lost the output still leaves the file.
+    save('manifest.json', { ...manifest, failedAt: new Date().toISOString(), failure: e.message, undo: undone });
     throw e;
   }
 }
@@ -989,7 +1049,8 @@ async function migrate(cfg) {
 // Rehearsal-only faults, each placed where a real failure of that kind would show up.
 async function injectFault(cfg, target, i0) {
   const f = process.env.MIGRATE_FAULT;
-  if (!f || ['corrupt-backup', 'write-source'].includes(f)) return;
+  // Only the object faults act here; the others are placed where their failure occurs.
+  if (!['touch-source', 'drop-object', 'alter-object', 'alter-metadata', 'public-evidence'].includes(f)) return;
   log(`FAULT INJECTED (rehearsal): ${f}`);
   const key = [...i0.objects.keys()].find((k) => k.startsWith('adulis-media/'));
   const cmds = {
@@ -1052,10 +1113,8 @@ async function rollback(cfg) {
   }
   // Last point where an interrupt changes nothing. From the stop to the old MinIO answering, an
   // interrupt is only recorded (the handler keeps Node alive), and a failure puts the new one back.
-  checkpoint();
-  docker(['stop', cfg.dstContainer]);
+  await checkpoint();
   const kept = `${cfg.dstContainer}-migrated-${m.run}`;
-  docker(['rename', cfg.dstContainer, kept]);
   const envOf = (k) => legacy.Config.Env.find((e) => e.startsWith(`${k}=`))?.slice(k.length + 1);
   const old = {
     network: 'host',
@@ -1064,7 +1123,13 @@ async function rollback(cfg) {
     pass: envOf('MINIO_ROOT_PASSWORD'),
   };
   let made = null;
+  let renamed = false;
   try {
+    // The stop and the rename are inside the recovery too: an interrupted stop still gets the new
+    // MinIO started again (WO-INFRA-015A review).
+    docker(['stop', cfg.dstContainer]);
+    docker(['rename', cfg.dstContainer, kept]);
+    renamed = true;
     made = recreateLegacy(legacy);
     if (process.env.MIGRATE_FAULT === 'fail-rollback') refuse('rehearsal fault: the old MinIO did not come back');
     waitReady(cfg, old);
@@ -1072,7 +1137,7 @@ async function rollback(cfg) {
     // Never leave nothing serving: remove only what this call created, put the new MinIO back,
     // and say whether it answers again (verified, not assumed; WO-INFRA-015A).
     if (made) docker(['rm', '-f', made.id], { allowFail: true });
-    docker(['rename', kept, cfg.dstContainer], { allowFail: true });
+    if (renamed) docker(['rename', kept, cfg.dstContainer], { allowFail: true });
     docker(['start', cfg.dstContainer], { allowFail: true });
     let back = 'and it answers again';
     try {
@@ -1101,6 +1166,11 @@ async function rollback(cfg) {
     `${made.name} serves ${m.source.volume} again, but it differs from its state at the migration`,
     drift,
   );
+  // The move is undone, so its record goes: the guard must not serve the kept volume again.
+  const cleared = onTarget(cfg, `if [ -f /d/${MOVE_RECORD} ]; then mv -f /d/${MOVE_RECORD} /d/.adulis-migration-rolled-back; fi`, [], { allowFail: true });
+  if (cleared.status !== 0)
+    log(`WARNING: the move record in ${cfg.dstVolume} could not be cleared: remove ADULIS_MINIO_VOLUME from .env and do not run compose`);
+  interruption.finished = true;
   log(
     `ROLLED BACK: ${made.name} serves ${m.source.volume} again, identical to its state at the migration (${Object.entries(
       counts(back),

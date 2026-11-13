@@ -301,25 +301,43 @@ test('an interrupt is acted on: every later checkpoint refuses and in-flight str
   assert.match(said.at(-1), /SIGTERM again: still stopping safely/);
 });
 
-test('a real SIGINT keeps Node alive and the next checkpoint refuses', { skip: process.platform === 'win32' && 'Windows cannot deliver SIGINT to another process' }, async () => {
+test('after the run has finished, an interrupt changes nothing and says so', () => {
+  const said = [];
+  const i = createInterruption((m) => said.push(m));
+  i.finished = true;
+  i.on('SIGINT');
+  assert.equal(i.signal, null);
+  i.checkpoint(); // no refusal
+  assert.match(said.at(-1), /after the run had finished: nothing to stop or undo/);
+});
+
+test('a real SIGINT during a synchronous step is seen at the next checkpoint, not lost', { skip: process.platform === 'win32' && 'Windows cannot deliver SIGINT to another process', timeout: 30_000 }, async () => {
   const lib = fileURLToPath(new URL('./minio-migrate.mjs', import.meta.url));
+  // The step is a spawnSync, as every docker call is: the signal arrives while the loop is blocked.
   const child = spawn(
     process.execPath,
     [
       '--input-type=module',
       '-e',
-      `const { createInterruption } = await import(${JSON.stringify(`file://${lib}`)});
+      `const { createInterruption, turnEventLoop } = await import(${JSON.stringify(`file://${lib}`)});
+       const { spawnSync } = await import('node:child_process');
        const i = createInterruption(() => {});
        process.on('SIGINT', () => i.on('SIGINT'));
        console.log('ready');
-       setTimeout(() => { try { i.checkpoint(); console.log('NOT REFUSED'); } catch (e) { console.log('REFUSED ' + e.message); } }, 500);`,
+       spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 1500)']);
+       const before = i.signal;
+       await turnEventLoop();
+       try { i.checkpoint(); console.log('NOT REFUSED'); } catch (e) { console.log('REFUSED before=' + before + ' ' + e.message); }`,
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] },
   );
+  const killer = setTimeout(() => child.kill('SIGKILL'), 25_000);
   let out = '';
   await new Promise((ok) => child.stdout.on('data', (d) => ((out += d), out.includes('ready') && ok())));
   child.kill('SIGINT');
   const code = await new Promise((ok) => child.on('close', ok));
+  clearTimeout(killer);
   assert.equal(code, 0, 'the process survived the signal');
-  assert.match(out, /REFUSED interrupted by SIGINT/);
+  // Not visible before the loop turned; refused right after.
+  assert.match(out, /REFUSED before=null interrupted by SIGINT/);
 });
