@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { ActorRole } from '../../common/auth/auth.guard';
-import { IdempotencyService, hashRequest } from '../../common/idempotency/idempotency';
+import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { HandoffService } from './handoff.service';
@@ -46,14 +46,11 @@ export class HandoffController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
     const body = handoffSyncBody.parse(req.body);
-    const key = req.headers['idempotency-key'];
-    if (typeof key !== 'string' || key === '') {
-      throw new AdulisException('IDEMPOTENCY_KEY_MISSING');
-    }
+    const key = idempotencyKey(req.headers['idempotency-key']);
     const actor = { kind: 'ACCOUNT' as const, id: req.ctx?.accountId ?? '' };
     if (!actor.id) throw new AdulisException('SESSION_EXPIRED');
     const endpoint = `${req.method} ${req.path}`;
-    const requestHash = hashRequest(req.method, req.path, req.body);
+    const requestHash = hashRequest(req.method, req.path, req.body, req.ctx?.sellerId ?? null);
 
     const replay = await this.idempotency.check(key, actor, endpoint, requestHash);
     if (replay) {

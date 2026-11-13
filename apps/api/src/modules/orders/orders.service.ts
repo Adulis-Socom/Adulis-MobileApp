@@ -7,6 +7,7 @@ import { assertPermission } from '../../common/auth/permission';
 import { grantSet, allowedActions } from '../../common/auth/grant-set';
 import { ORDER_BUCKETS, type OrderBucket } from './order-buckets';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { deviceHeader } from '../../common/http/cookies';
 import type {
   AddCartLineBody,
   CreateOrderBody,
@@ -45,9 +46,7 @@ export class OrdersService {
     createIfMissing: boolean,
   ): Promise<CartRow | null> {
     const account = req.ctx?.accountId ?? null;
-    const device = typeof req.headers['x-adulis-device'] === 'string'
-      ? (req.headers['x-adulis-device'] as string)
-      : null;
+    const device = deviceHeader(req.headers['x-adulis-device']);
     if (!account && !device) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'X-Adulis-Device' } });
     }
