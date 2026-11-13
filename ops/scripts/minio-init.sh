@@ -18,7 +18,15 @@ set -eu
 mc alias set local "${MINIO_URL:-http://minio:9000}" "${MINIO_ROOT_USER:?}" "${MINIO_ROOT_PASSWORD:?}"
 mc mb --ignore-existing local/adulis-media
 mc mb --ignore-existing local/adulis-evidence
-mc anonymous set download local/adulis-media
+# Anonymous READ of single media objects, nothing else (WO-INFRA-009, ISSUE-INFRA-013). Media URLs
+# are public by design, but the canned `download` policy also grants ListBucket: anyone who could
+# reach the port (Docker publishes on every interface) could enumerate every key, including the
+# images of unpublished products. Cloudflare R2 does not list either.
+policy=/tmp/adulis-media-read.json
+cat > "$policy" <<'JSON'
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::adulis-media/*"]}]}
+JSON
+mc anonymous set-json "$policy" local/adulis-media
 mc anonymous set none local/adulis-evidence
 
 # Shell patterns, not grep: the MinIO image ships mc and a shell but no grep. "does not exist"

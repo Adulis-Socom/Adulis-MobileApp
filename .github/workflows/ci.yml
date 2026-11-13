@@ -83,7 +83,14 @@ jobs:
       IDENTITY_HASH_KEY_V1: ci-fake-identity-key
 
     steps:
-      - uses: actions/checkout@v4
+      # Majors that run on Node 24 natively (WO-INFRA-009). The v4 majors
+      # targeted Node 20, which GitHub now forces onto Node 24 with a warning.
+      # Release notes checked for this workflow: checkout v6 persists the
+      # credentials to a separate file (nothing here pushes), v7 refuses fork
+      # checkouts only for pull_request_target and workflow_run (not used);
+      # setup-node v6 auto-caches npm only, so `cache: pnpm` stays explicit;
+      # action-setup v6 adds pnpm 11 and still reads packageManager.
+      - uses: actions/checkout@v7
         with:
           # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
           # ref, so `--filter "...[origin/main]"` below would select NOTHING and
@@ -91,9 +98,9 @@ jobs:
           fetch-depth: 0
 
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm

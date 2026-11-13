@@ -33,10 +33,11 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 export const BUCKETS = ['adulis-media', 'adulis-evidence'];
-// Anonymous access the target must show. Listing the media bucket is reported, not enforced: it is
-// the policy decision of ISSUE-INFRA-013, not a migration property.
+// Anonymous access the target must show: single media objects readable, nothing listable or
+// writable (minio-init.sh; listing media was closed by WO-INFRA-009, ISSUE-INFRA-013).
 export const ANON_EXPECT = {
   'read-media': 'ALLOWED',
+  'list-media': 'DENIED',
   'write-media': 'DENIED',
   'list-evidence': 'DENIED',
   'read-evidence': 'DENIED',
@@ -792,7 +793,7 @@ async function migrate(cfg) {
         .map(([b, n]) => `${b}=${n}`)
         .join(
           ' ',
-        )}; anonymous list-media ${p3.results['list-media']}; old volume ${cfg.srcVolume} untouched`,
+        )}; old volume ${cfg.srcVolume} untouched`,
     );
   } catch (e) {
     log(`FAILED, undoing: ${e.message}`);
