@@ -21,6 +21,21 @@ server. **Both were removed afterwards.**
 | F. Refuses when the data differs | the repair run a second time on the repaired copy | refused: "orphan counts changed since the audit: expected {...15...}, found {...0...}"; rolled back |
 | G. Rollback | the archive reloaded into a copy of the repaired database (replica, then `\copy`) | the original state returns exactly: 15 / 3 / 10 / 9 / 155 |
 
+## Second rehearsal, with the script revised after the independent review (WO-INFRA-014)
+
+**What changed in the script:** the parent rows (devices, notifications, delivery attempts) are now
+deleted with **triggers on**, and step 4 checks **every** foreign key touching the five tables. The
+fresh copy came from the same recovery point (`logs/reverify-after-review.log`).
+
+| Step | Result |
+|---|---|
+| Restore as it is | 5 errors, as before |
+| **Fault:** a table referencing an orphaned device, unknown to the script | **raised** `violates foreign key constraint "zz_dev_ref_device_id_fkey"`; rolled back, with all 15 devices and 155 attempts untouched |
+| Clean run | `COMMIT`, 192 rows removed |
+| Re-add the five constraints | exit 0 |
+| Restore of the repaired dump, `--exit-on-error` | exit 0 |
+| `fk-audit`, strict | **PASS all 175 foreign keys hold** |
+
 **Conclusion:** the procedure turns the development database into one whose dump restores with every
 foreign key created and validated, with no constraint missing or accepted silently. It refuses when the
 data is not what the audit found, and it is fully reversible from its archive. **It was not run on the

@@ -122,11 +122,31 @@ test('--only with an unknown or empty id fails instead of passing zero gates', (
 
 test('a gate that writes to the database refuses an unmarked one before it runs (WO-INFRA-012)', () => {
   // Nothing listens on port 1: the mark cannot be read, so `migrate` must not start at all.
-  const env = { ...process.env, DATABASE_URL_MIGRATE: 'postgres://nobody:none@127.0.0.1:1/none' };
+  const dead = 'postgres://nobody:none@127.0.0.1:1/none';
+  const env = { ...process.env, DATABASE_URL: dead, DATABASE_URL_MIGRATE: dead };
+  delete env.DATABASE_URL_JOBS;
   const r = spawnSync(process.execPath, [script, '--only', 'migrate'], { encoding: 'utf8', env });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /writes to the database, which is not marked disposable/);
+  assert.match(r.stderr, /writes to the database, which could not be checked; nothing was run/);
   assert.doesNotMatch(r.stdout + r.stderr, /node-pg-migrate|PASS {2}all/);
+});
+
+test('the mark check refuses a configuration before connecting: unset, empty, remote, portless', () => {
+  const check = fileURLToPath(new URL('./assert-disposable-db.mjs', import.meta.url));
+  const ok = 'postgres://u:p@127.0.0.1:55432/adulis';
+  for (const [over, why] of [
+    [{ DATABASE_URL: undefined }, /DATABASE_URL is not set/],
+    [{ DATABASE_URL_JOBS: '' }, /DATABASE_URL_JOBS is empty/],
+    [{ DATABASE_URL: 'postgres://u:p@db.staging.example:5432/adulis' }, /not a loopback host/],
+    [{ DATABASE_URL_MIGRATE: 'postgres://u:p@127.0.0.1/adulis' }, /no explicit port/],
+  ]) {
+    const env = { ...process.env, DATABASE_URL: ok, DATABASE_URL_MIGRATE: ok, ...over };
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
+    if (!('DATABASE_URL_JOBS' in over)) delete env.DATABASE_URL_JOBS;
+    const r = spawnSync(process.execPath, [check], { encoding: 'utf8', env });
+    assert.equal(r.status, 1, JSON.stringify(over));
+    assert.match(r.stderr, why);
+  }
 });
 
 test('the database-writing gates are real gates, the writers among them', () => {

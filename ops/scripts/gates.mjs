@@ -655,9 +655,11 @@ function main() {
     console.log(`\n--- [${String(n).padStart(2, '0')}] ${gate.title} -------------------------`);
     let ok;
     if (DB_WRITING_GATES.has(gate.id) && !markChecked) {
-      markChecked = run(['node', 'ops/scripts/assert-disposable-db.mjs']);
+      const r = spawnSync('node', ['ops/scripts/assert-disposable-db.mjs'], { cwd: root, stdio: 'inherit', env: process.env });
+      markChecked = r.status === 0;
       if (!markChecked) {
-        console.error(`\nFAIL  gate '${gate.id}' writes to the database, which is not marked disposable.`);
+        const why = r.status === 1 ? 'is not marked disposable (or its configuration is refused)' : 'could not be checked';
+        console.error(`\nFAIL  gate '${gate.id}' writes to the database, which ${why}; nothing was run.`);
         process.exit(1);
       }
     }

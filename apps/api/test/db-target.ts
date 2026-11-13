@@ -45,9 +45,14 @@ export function resolveTarget(env: NodeJS.ProcessEnv): Target {
   const targets: Array<Target & { name: string }> = [];
   for (const name of ['DATABASE_URL', 'DATABASE_URL_MIGRATE', 'DATABASE_URL_JOBS']) {
     const raw = env[name];
-    if (!raw) {
-      // The jobs suites fall back to DATABASE_URL, so an unset DATABASE_URL_JOBS names no new target.
+    if (raw === undefined) {
+      // The jobs harness and runtime throw without DATABASE_URL_JOBS, so unset it names no target.
       if (name !== 'DATABASE_URL_JOBS') problems.push(`${name} is not set: no default is safe`);
+      continue;
+    }
+    if (raw === '') {
+      // `??` passes '' through, and an empty connection string means libpq's defaults (review).
+      problems.push(`${name} is empty: an empty URL means libpq's defaults, some other database`);
       continue;
     }
     let url: URL;
@@ -66,10 +71,14 @@ export function resolveTarget(env: NodeJS.ProcessEnv): Target {
       problems.push(
         `${name} points at ${url.hostname}: only a loopback database can be disposable here`,
       );
+    // No localhost rewrite and no assumed port: pg resolves a missing port from PGPORT, so the text
+    // could name one server while the connection reaches another (review). The mark is read through
+    // every URL below anyway; these are only for the "one database" comparison.
+    if (!url.port) problems.push(`${name} has no explicit port`);
     targets.push({
       name,
-      host: url.hostname === 'localhost' ? '127.0.0.1' : url.hostname,
-      port: url.port || '5432',
+      host: url.hostname,
+      port: url.port,
       database: decodeURIComponent(url.pathname.slice(1)),
     });
   }
@@ -86,29 +95,35 @@ export interface MarkerReader {
   end(): Promise<unknown>;
 }
 
-/** The target, checked for the marker through the migrate credential (it can read pg_database). */
+/**
+ * The target, with the mark read through EVERY URL that is set: each connection must land on the
+ * marked database, whatever the URL text says (any role can read pg_database).
+ */
 export async function assertDisposable(
   env: NodeJS.ProcessEnv = process.env,
   reader: (url: string) => MarkerReader = (url) =>
     new Client({ connectionString: url }) as unknown as MarkerReader,
 ): Promise<Target> {
   const target = resolveTarget(env);
-  const client = reader(env['DATABASE_URL_MIGRATE']!);
-  await client.connect();
-  try {
-    const { rows } = await client.query(
-      `SELECT current_database() AS db, shobj_description(oid, 'pg_database') AS marker
-         FROM pg_database WHERE datname = current_database()`,
-    );
-    const where = `${target.host}:${target.port}/${target.database}`;
-    if (rows[0]?.db !== target.database)
-      refuse([`connected to ${rows[0]?.db ?? 'nothing'}, not ${where}`]);
-    if (rows[0]?.marker !== DISPOSABLE_MARKER)
-      refuse([
-        `${where} is not marked disposable (its comment is ${JSON.stringify(rows[0]?.marker ?? null)})`,
-      ]);
-  } finally {
-    await client.end();
+  const where = `${target.host}:${target.port}/${target.database}`;
+  for (const name of ['DATABASE_URL', 'DATABASE_URL_MIGRATE', 'DATABASE_URL_JOBS']) {
+    if (env[name] === undefined) continue; // resolveTarget refused every empty or missing required one
+    const client = reader(env[name]!);
+    await client.connect();
+    try {
+      const { rows } = await client.query(
+        `SELECT current_database() AS db, shobj_description(oid, 'pg_database') AS marker
+           FROM pg_database WHERE datname = current_database()`,
+      );
+      if (rows[0]?.db !== target.database)
+        refuse([`${name} connected to ${rows[0]?.db ?? 'nothing'}, not ${where}`]);
+      if (rows[0]?.marker !== DISPOSABLE_MARKER)
+        refuse([
+          `${name} reaches a database not marked disposable (${where}; its comment is ${JSON.stringify(rows[0]?.marker ?? null)})`,
+        ]);
+    } finally {
+      await client.end();
+    }
   }
   return target;
 }

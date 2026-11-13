@@ -11,7 +11,9 @@
 --   core.order_state_transition 10 (their orders deleted by teardowns under replica)
 --   core.claim_evidence_item  9  (their claim deleted likewise)
 --   core.otp_delivery_attempt 155 (their challenges deleted by teardowns)
--- Nothing references these rows (checked below), so deleting them orphans nothing.
+-- Nothing referenced these rows on 13 November (step 2 re-checks the known referrers); the deletes of
+-- parent rows run with triggers on, and step 4 checks every key touching the five tables, so an
+-- unforeseen reference raises and rolls everything back rather than leaving a new orphan.
 --
 -- One transaction: any unexpected count or leftover raises and everything rolls back.
 --   docker exec -i adulis-postgres psql -U adulis_bootstrap -d adulis -X -v ON_ERROR_STOP=1 < WO-INFRA-013-repair.sql
@@ -55,36 +57,60 @@ BEGIN
   END IF;
 END $$;
 
--- 3. Delete, counted. order_state_transition and claim_evidence_item are append-only
---    (trg_append_only); replica skips that trigger for THIS transaction only (set_config(..., true)).
---    Deleting a child cannot orphan anything, and step 2 proved nothing references these rows.
+-- 3. Delete, counted. Devices, notifications and delivery attempts go WITH TRIGGERS ON: a device is
+--    also a parent (session, account_device, cart, and fyp_session from migration 0055 on), so any
+--    reference step 2 did not foresee either cascades as its key says or raises, and everything
+--    rolls back. Only order_state_transition and claim_evidence_item need replica: they are
+--    append-only (trg_append_only) and nothing references them. replica holds for THIS transaction
+--    only (set_config(..., true)) and is switched back at once.
 DO $$
 DECLARE n bigint;
 BEGIN
-  PERFORM set_config('session_replication_role', 'replica', true);
   DELETE FROM core.device WHERE id IN (SELECT id FROM r_device);
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 15 THEN RAISE EXCEPTION 'device: deleted %, expected 15', n; END IF;
   DELETE FROM core.notification WHERE id IN (SELECT id FROM r_notification);
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 3 THEN RAISE EXCEPTION 'notification: deleted %, expected 3', n; END IF;
+  DELETE FROM core.otp_delivery_attempt WHERE id IN (SELECT id FROM r_attempt);
+  GET DIAGNOSTICS n = ROW_COUNT; IF n <> 155 THEN RAISE EXCEPTION 'otp_delivery_attempt: deleted %, expected 155', n; END IF;
+  PERFORM set_config('session_replication_role', 'replica', true);
   DELETE FROM core.order_state_transition WHERE id IN (SELECT id FROM r_transition);
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 10 THEN RAISE EXCEPTION 'order_state_transition: deleted %, expected 10', n; END IF;
   DELETE FROM core.claim_evidence_item WHERE id IN (SELECT id FROM r_evidence);
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 9 THEN RAISE EXCEPTION 'claim_evidence_item: deleted %, expected 9', n; END IF;
-  DELETE FROM core.otp_delivery_attempt WHERE id IN (SELECT id FROM r_attempt);
-  GET DIAGNOSTICS n = ROW_COUNT; IF n <> 155 THEN RAISE EXCEPTION 'otp_delivery_attempt: deleted %, expected 155', n; END IF;
   PERFORM set_config('session_replication_role', 'origin', true);
 END $$;
 
--- 4. Every one of the five relations must now hold; otherwise nothing above is kept.
+-- 4. EVERY foreign key whose child or parent is one of the five tables must hold, enumerated from
+--    pg_constraint (column pairs joined on ordinal, MATCH SIMPLE), not listed by hand; otherwise
+--    nothing above is kept.
 DO $$
+DECLARE
+  fk record;
+  bad bigint;
+  five CONSTANT regclass[] := ARRAY['core.device', 'core.notification', 'core.order_state_transition',
+                                    'core.claim_evidence_item', 'core.otp_delivery_attempt']::regclass[];
 BEGIN
-  IF EXISTS (SELECT 1 FROM core.device d WHERE NOT EXISTS (SELECT 1 FROM core.market m WHERE m.id = d.market_id))
-     OR EXISTS (SELECT 1 FROM core.notification n WHERE NOT EXISTS (SELECT 1 FROM core.account a WHERE a.id = n.recipient_account_id))
-     OR EXISTS (SELECT 1 FROM core.order_state_transition t WHERE NOT EXISTS (SELECT 1 FROM core."order" o WHERE o.id = t.order_id))
-     OR EXISTS (SELECT 1 FROM core.claim_evidence_item e WHERE NOT EXISTS (SELECT 1 FROM core.claim c WHERE c.id = e.claim_id))
-     OR EXISTS (SELECT 1 FROM core.otp_delivery_attempt a WHERE NOT EXISTS (SELECT 1 FROM core.otp_challenge c WHERE c.id = a.otp_challenge_id)) THEN
-    RAISE EXCEPTION 'an orphan remains after the repair';
-  END IF;
+  FOR fk IN
+    SELECT con.conname,
+           con.conrelid::regclass AS child,
+           con.confrelid::regclass AS parent,
+           (SELECT string_agg(format('c.%I IS NOT NULL', ca.attname), ' AND ' ORDER BY k.ord)
+              FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.attnum) AS not_null,
+           (SELECT string_agg(format('p.%I = c.%I', pa.attname, ca.attname), ' AND ' ORDER BY k.ord)
+              FROM unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(ck, pk, ord)
+              JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.ck
+              JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = k.pk) AS join_on
+      FROM pg_constraint con
+     WHERE con.contype = 'f' AND con.conparentid = 0
+       AND (con.conrelid = ANY (five) OR con.confrelid = ANY (five))
+  LOOP
+    EXECUTE format('SELECT count(*) FROM %s c WHERE %s AND NOT EXISTS (SELECT 1 FROM %s p WHERE %s)',
+                   fk.child, fk.not_null, fk.parent, fk.join_on) INTO bad;
+    IF bad > 0 THEN
+      RAISE EXCEPTION 'foreign key % (% -> %) has % orphaned row(s) after the repair', fk.conname, fk.child, fk.parent, bad;
+    END IF;
+  END LOOP;
 END $$;
 
 COMMIT;

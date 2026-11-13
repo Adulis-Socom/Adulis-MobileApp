@@ -83,6 +83,10 @@ docker exec adulis-postgres pg_dump -U adulis_bootstrap -Fc -d adulis > $R/aduli
 - **The counts must still match.** If any suite ran against the development database after 13 November,
   the counts differ and the script refuses. Re-audit, then update the expected counts with evidence.
   Since WO-INFRA-012 the suites refuse that database, so this should not happen.
-- **One deliberate trigger bypass.** The script bypasses `trg_append_only` on two tables for its own
-  transaction only. It is the same mechanism that caused the orphans, used here on rows already proven
-  to have no dependents.
+- **One deliberate trigger bypass, as small as it can be** (revised after the independent review). Only
+  the two append-only deletes (`order_state_transition`, `claim_evidence_item`, which nothing
+  references) run under replica, for that one transaction.
+  - Devices, notifications and delivery attempts are deleted with triggers on, so a reference the
+    script did not foresee raises and rolls everything back. This was rehearsed with an injected
+    referrer.
+  - Step 4 then checks every key touching the five tables.

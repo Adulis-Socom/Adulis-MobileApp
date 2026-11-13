@@ -30,23 +30,25 @@ import pg from 'pg';
  * gate, and each line here is deleted when its teardowns are fixed. Never add one to pass a run.
  */
 export const KNOWN_TEST_LEAKS = {
-  otp_delivery_attempt_otp_challenge_id_fkey:
+  'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey':
     '19 suites delete core.otp_challenge, never its delivery attempts',
-  order_state_transition_order_id_fkey:
+  'core.order_state_transition.order_state_transition_order_id_fkey':
     '8 suites delete core."order" under replica, never its transitions',
-  claim_evidence_item_claim_id_fkey:
+  'core.claim_evidence_item.claim_evidence_item_claim_id_fkey':
     't6-closure-survives-block deletes core.claim, never its evidence items',
-  device_market_id_fkey:
+  'core.device.device_market_id_fkey':
     'c6-accounts deletes its market under replica; the API created devices in it',
-  notification_recipient_account_id_fkey:
+  'core.notification.notification_recipient_account_id_fkey':
     't26 and disc-001 delete accounts that still have notifications',
 };
 
 /** Splits a report into failures and tolerated known leaks. Pure, so the ratchet is testable. */
 export function judge(report, allowed = {}) {
   return {
-    failures: report.filter((r) => !(r.constraint in allowed)),
-    tolerated: report.filter((r) => r.constraint in allowed),
+    // Own keys only (`in` would follow the prototype chain), keyed by schema.table.constraint: a
+    // constraint name is unique per table, not per database (review).
+    failures: report.filter((r) => !Object.hasOwn(allowed, r.key)),
+    tolerated: report.filter((r) => Object.hasOwn(allowed, r.key)),
   };
 }
 
@@ -55,7 +57,9 @@ const q = (id) => '"' + id.replace(/"/g, '""') + '"';
 async function audit(connection) {
   const client = new pg.Client({
     connectionString: connection,
-    options: '-c default_transaction_read_only=on',
+    // row_security=off: row-level security makes a query ERROR instead of silently hiding rows from
+    // a non-owner role, so an audit through a restricted credential exits 2, never a false PASS.
+    options: '-c default_transaction_read_only=on -c row_security=off',
   });
   await client.connect();
   try {
@@ -109,6 +113,7 @@ async function audit(connection) {
       if (rows.length)
         report.push({
           constraint: fk.name,
+          key: `${fk.child_schema}.${fk.child_table}.${fk.name}`,
           child: `${fk.child_schema}.${fk.child_table}(${fk.child_cols.join(', ')})`,
           parent: `${fk.parent_schema}.${fk.parent_table}(${fk.parent_cols.join(', ')})`,
           validated: fk.validated,
@@ -150,7 +155,7 @@ async function main() {
     );
   for (const r of tolerated)
     console.log(
-      `  KNOWN ${r.constraint}: ${r.count} row(s) -- ${allowed[r.constraint]} (ISSUE-INFRA-CLOSURE-004)`,
+      `  KNOWN ${r.constraint}: ${r.count} row(s) -- ${allowed[r.key]} (ISSUE-INFRA-CLOSURE-004)`,
     );
   if (jsonFile) writeFileSync(jsonFile, JSON.stringify(result.report, null, 2));
   const rows = (list) => list.reduce((s, r) => s + r.count, 0);
