@@ -55,6 +55,7 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Work order:** WO-INFRA-007
 - **Severity:** P2
 - **Status:** OPEN (guarded)
+- **Update 13 November (closure batch):** partly done. This checkout's untracked `.env` now has `MINIO_HOST_PORT=9100` (WO-INFRA-011). The Work checkout's still lacks it: ISSUE-INFRA-CLOSURE-012.
 - **Description:**
   - **Where 9100 comes from:** the live MinIO runs on 9100, set by a shell variable when the stack was
     started. Neither the Work checkout's `.env` nor this checkout's sets `MINIO_HOST_PORT`, although
@@ -104,6 +105,7 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Work order:** WO-INFRA-008
 - **Severity:** P1
 - **Status:** OPEN
+- **Update 13 November (closure batch):** still a decision. The merge vehicle for the mobile line is now `infra/wo-infra-010-014-closure`, which supersedes the finalization branch (`WO-INFRA-014-MOBILE-READINESS.md`, section 7).
 - **Description:** `1a8c6f7` (WO-INFRA-005) added `app.listen(0, '127.0.0.1')` to five suites. On `main`
   only `t8-device-bootstrap` exists; `cat-001`, `disc-002`, `wo-009-collections` and `wo-sec-001` came
   with the WO-001 to WO-022 line. The integration candidate therefore carries one of the five.
@@ -126,6 +128,7 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Work order:** WO-INFRA-008
 - **Severity:** P2
 - **Status:** OPEN
+- **Update 13 November (closure batch):** the root cause is closed by WO-INFRA-012: the suites, the load tests and the writing gates refuse any unmarked database. The repair of the existing 192 rows is prepared and rehearsed, but BLOCKED pending approval (ISSUE-INFRA-CLOSURE-011).
 - **Description:** restoring the first batch's `adulis.dump` (the live development database) fails to
   re-create five foreign keys:
   - `device_market_id_fkey`;
@@ -159,6 +162,7 @@ Kept current in `OVERNIGHT-INFRA-FOLLOWUP-HANDOFF-2026-11-13.md`, section I.
 - **Work order:** WO-INFRA-008
 - **Severity:** P1
 - **Status:** RESOLVED on the candidate, pending the founder's merge decision
+- **Update 13 November (closure batch):** unchanged. `810b598` is still in the candidate; the candidate's CI on `main` stays green with it (`WO-INFRA-014-FINAL-AUDIT.md`).
 - **Description:** `c1-onboarding.e2e.spec.ts` on `main` stores and expects the override date
   2026-09-11, while the endpoint lists from `CURRENT_DATE`. Since 2026-09-12 the list is empty and the
   test throws `Cannot read properties of undefined (reading 'date')`. `main`'s CI would be red even

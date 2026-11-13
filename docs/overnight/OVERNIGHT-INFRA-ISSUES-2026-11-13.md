@@ -80,6 +80,7 @@ it deletes the live database volume (ISSUE-INFRA-026).
 **Severity:** P0 | **Category:** Docker | **Status:** BLOCKED (live data move)
 
 **Update 13 November (follow-up batch):** BLOCKED, unchanged. WO-INFRA-007 replaced the hand-run runbook with `ops/scripts/minio-migrate.mjs` (fail-closed, self-undoing), rehearsed with a full move, a rollback and ten deliberate failures. The live move still needs the founder's approval: `WO-INFRA-007-CUTOVER-AND-ROLLBACK.md`.
+**Update 13 November (closure batch):** still BLOCKED. The read-only `plan` passed again at 11:29Z (1,568 / 7 objects; the target is absent; the old image and its archive are intact). The live cutover needs a separate approval (ISSUE-INFRA-CLOSURE-003).
 **Discovered at:** 2026-11-12T21:58Z
 **Affected files:** `docker-compose.yml`
 
@@ -228,6 +229,7 @@ root project.
 **Status:** NEEDS FOUNDER DECISION
 
 **Update 13 November (follow-up batch):** NEEDS FOUNDER DECISION, now only about deleting the volume. WO-INFRA-008 recovered the directory from the backup copy (clean shutdown 2026-09-03 10:02:39): migrations 0001-0048 plus the seed fixture, nothing unique. Archived on the SSD with checksums and restore-tested (`WO-INFRA-008-LEGACY-DATABASE-ARCHIVE.md`). The volume is untouched.
+**Update 13 November (closure batch):** unchanged: the deletion decision only. The volume was untouched again.
 **Discovered at:** 2026-11-12T22:00Z
 **Affected files:** Docker volume `adulis-pgdata`
 
@@ -323,6 +325,7 @@ CI gate evidence.
 **Work Order:** WO-INFRA-001 | **Severity:** P3 | **Category:** Other (tooling) | **Status:** OPEN
 
 **Update 13 November (follow-up batch):** OPEN, unchanged: the plugin still fails ("Authorization header is badly formatted"). `gh` was used. Founder action: re-authorise with `/mcp`.
+**Update 13 November (closure batch):** still OPEN. This session's start again reported the GitHub plugin failing ("Authorization header is badly formatted"); `gh` was used, including to open draft PR #105.
 **Discovered at:** 2026-11-12T21:45Z
 
 **Description:** "Authorization header is badly formatted" at session start. The authenticated `gh` CLI
@@ -347,6 +350,7 @@ locally and in CI. **Founder decision required:** NO.
 **Work Order:** WO-INFRA-001 | **Severity:** P3 | **Category:** CI | **Status:** NEEDS FOUNDER DECISION
 
 **Update 13 November (follow-up batch):** NEEDS FOUNDER DECISION, now reconciled. `810fb27` merges clean with both infrastructure branches. The Work checkout's uncommitted `gates.mjs` edit collides only at the end of the gate list. An infrastructure-only candidate on `main` is green. Recommendation: option A (`WO-INFRA-008-MERGE-RECOMMENDATION.md`).
+**Update 13 November (closure batch):** draft PR #105 (the candidate into `main`) is open, `MERGEABLE`, and green on its merge commit. The merge is BLOCKED pending approval (ISSUE-INFRA-CLOSURE-002).
 **Discovered at:** 2026-11-12T21:56Z
 
 **Description:** this batch's `ci.yml` changes overlap two other pieces of work:

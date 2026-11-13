@@ -23,6 +23,7 @@ Evidence paths are under `G:\AdulisDevelopment\WO-INFRA-CLOSURE\` unless stated.
 | ISSUE-INFRA-CLOSURE-010 | 012 | P3 | RESOLVED | `test-db.sh`: no queue schema; a leaked volume per cycle (my own) | No |
 | ISSUE-INFRA-CLOSURE-011 | 013 | P1 | BLOCKED | Repairing the development database's 192 orphaned rows | YES |
 | ISSUE-INFRA-CLOSURE-012 | 010/011 | P2 | OPEN | The Work checkout: unpreserved local work, no `MINIO_HOST_PORT` | YES |
+| ISSUE-INFRA-CLOSURE-013 | 014 | P1 | RESOLVED | The independent reviews found gaps in the guards and the repair script | No |
 
 ## MORNING REVIEW -- FOUNDER ACTIONS REQUIRED
 See `OVERNIGHT-INFRA-CLOSURE-HANDOFF-2026-11-13.md`, section I.
@@ -287,3 +288,38 @@ See `OVERNIGHT-INFRA-CLOSURE-HANDOFF-2026-11-13.md`, section I.
 - **Founder decision required:** YES.
 - **Recommended next action:** commit that work to a local branch and push it; add `MINIO_HOST_PORT=9100`
   to its `.env`.
+
+## ISSUE-INFRA-CLOSURE-013 -- The independent reviews found gaps in the guards and the repair script
+- **Work order:** WO-INFRA-014
+- **Severity:** P1
+- **Status:** RESOLVED
+- **Description:** two read-only reviews (PR Review Toolkit `code-reviewer`, `silent-failure-hunter`)
+  of this batch's code found:
+  - **the repair script** deleted `core.device` under replica, so a referrer missing from its hand list
+    (`core.fyp_session`, migration 0055) would be orphaned silently;
+  - **the Jest guard** read the mark through one URL only, and assumed port 5432 where pg would use
+    `PGPORT`;
+  - **the gate check** read one URL while `console-e2e` uses another;
+  - **lesser items:** an empty `DATABASE_URL_JOBS` read as unset; `db-loads` cleaned up before its
+    check; row-level security could blind the audit; a loose known-leak lookup; misleading messages;
+    `test-db.sh` marking too early.
+- **Expected behavior:** guards that cannot be passed by an ordinary misconfiguration, and a repair that
+  rolls back on anything unforeseen.
+- **Actual behavior:** as described, in the first version.
+- **Root cause:** my own code: hand-enumerated referrers; a single-URL check; text-only target comparison.
+- **Affected files:**
+  - `docs/infrastructure/WO-INFRA-013-repair.sql`;
+  - `apps/api/test/db-target.ts`, `global-teardown.ts`;
+  - `ops/scripts/assert-disposable-db.mjs`, `fk-audit.mjs`, `gates.mjs`, `test-db.sh`;
+  - `ops/load/db-loads.mjs`.
+- **Actions attempted:** every finding fixed (`WO-INFRA-014-FINAL-AUDIT.md`, section 2).
+- **Evidence:** `logs/reverify-after-review.log`.
+- **Verification results:**
+  - **an injected unforeseen referrer:** the repair raises and rolls back;
+  - **the clean repair:** every key validated after a `--exit-on-error` restore;
+  - **a split URL configuration:** refused by the gate check;
+  - **the dev-database refusals:** repeated, with its counts unchanged;
+  - **unit tests:** guard 21, gate-runner 16, fk-audit 3.
+- **Remaining risks:** the object store is unguarded (ISSUE-INFRA-CLOSURE-006).
+- **Founder decision required:** No.
+- **Recommended next action:** none.
