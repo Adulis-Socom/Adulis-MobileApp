@@ -9,7 +9,7 @@ Branch `infra/main-integration-candidate`, based on `main` (`01302cf`). **Not me
 |---|---|---|---|
 | [43384239326](https://github.com/Adulis-Socom/Adulis-MobileApp/actions/runs/43384239326) | `68bbb6d` | `main` + the 6 infrastructure commits | **failure**. Every gate up to `test` passed. In `test`: API 634 of 635; the one failure is `c1-onboarding` "GET lists ascending from today", the 2026-09-11 time bomb (ISSUE-INFRA-FOLLOWUP-006). Pre-existing on `main`, unrelated to infrastructure. Kept as evidence |
 | [43385069084](https://github.com/Adulis-Socom/Adulis-MobileApp/actions/runs/43385069084) | `b3b4e79` | + `810b598` (test-only date fix) | **success**. `scope: UNSCOPED - 5 changed root input(s)`; **`PASS all 30 gates`** (30 gate headers in the log); API 635 of 635 (44 suites); `console-e2e` 88 passed; `gate-runner` 13 of 13; permission matrix 252 cells; dependency rules 6 of 6 probes |
-| Final (this batch's commits added) | see `WO-INFRA-009-FINAL-VERIFICATION.md` | + WO-INFRA-007 to 009 infrastructure commits | recorded there |
+| [43391044138](https://github.com/Adulis-Socom/Adulis-MobileApp/actions/runs/43391044138) | `de1ae19` | + WO-INFRA-007 to 009 infrastructure commits (migration script, reports, Node 24 actions, media policy, review fixes) | **success:** `PASS all 31 gates`; API 635 of 635; `console-e2e` 88; `gate-runner` 13 of 13; `minio-migrate` 11 of 11; 0 Node 20 warnings |
 
 **Mobile on the candidate:** `main`'s `apps/mobile` is still the placeholder, whose test script prints
 "placeholder, no tests". There is no mobile suite to run on `main`; the 520 mobile tests exist only on
@@ -36,7 +36,10 @@ the WO-022 line.
 | Candidate + `810fb27` | clean |
 | Candidate + first infrastructure branch | clean |
 | Candidate + WO-022 | clean, but it reintroduces the four suites without the listen-first fix |
-| Candidate (before this batch) + finalization branch | conflicts in `gates.mjs` and the runbook: closed by adding this batch's commits to the candidate; re-checked in `WO-INFRA-009-FINAL-VERIFICATION.md` |
+| Candidate (before this batch) + finalization branch | conflicts in `gates.mjs` and the runbook |
+| Candidate `de1ae19` + finalization `7418d82` | **clean** (after carrying this batch's commits) |
+| Candidate `de1ae19` + first infrastructure branch | conflicts (`gates.mjs`, `minio-init.sh`, the runbook): the candidate holds newer versions. The first branch is superseded by the finalization branch, which is the vehicle for the mobile line |
+| Candidate `de1ae19` + `810fb27` | clean |
 | Work checkout's uncommitted `ci.yml`, `.dependency-cruiser.cjs`, `gates.mjs` onto the candidate | the first two apply; `gates.mjs` collides at the end of the gate list (keep both gates) |
 
 ## Not executed
