@@ -39,7 +39,12 @@ services:
       # 5432 gets a silent shadow: both listen, the local one answers, and the
       # error is an authentication failure that looks nothing like a port clash.
       # Set POSTGRES_HOST_PORT=5433 (and match DATABASE_URL) when that happens.
-      - '${POSTGRES_HOST_PORT:-5432}:5432'
+      #
+      # LOOPBACK BY DEFAULT (WO-INFRA-015A). The superuser and its password above are public (this
+      # repository is), so the port is published on 127.0.0.1 only. The API, the console, the e2e
+      # gate and an Android emulator (10.0.2.2) or a device on `adb reverse` all reach it there.
+      # Deliberate LAN access: ADULIS_BIND_ADDRESS=0.0.0.0 (docs/infrastructure/MINIO-STARTUP.md).
+      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - adulis-pgdata:/var/lib/postgresql/data
       # Runs only on first initialisation of an empty data directory.
@@ -69,11 +74,23 @@ services:
   # MinIO from source daily (AGPLv3, non-root, amd64 + arm64). Its free tier
   # serves only `latest`, so the digest is the pin: update it deliberately, and
   # in ci.yml in the same commit.
+  #
+  # THE DATA-VOLUME GUARD (WO-INFRA-015A). MinIO starts only through
+  # ops/scripts/minio-volume-guard.sh, which refuses an empty data volume while
+  # the legacy volume `adulis-pgdata` holds (or may hold) the objects. The
+  # one-shot service `minio-volume-guard` runs the same check first, as root,
+  # so a refusal leaves MinIO unstarted and `docker compose up` failing. It is
+  # the second line: the first is the required ADULIS_MINIO_VOLUME (volumes,
+  # below), because compose replaces a running container before any check.
   minio:
     image: *minio-image
     container_name: adulis-minio
     restart: unless-stopped
-    command: server /data
+    entrypoint: ['/bin/sh', '/adulis-guard/minio-volume-guard.sh']
+    command: ['/usr/bin/minio', 'server', '/data']
+    depends_on:
+      minio-volume-guard:
+        condition: service_completed_successfully
     environment:
       MINIO_ROOT_USER: adulis-local
       MINIO_ROOT_PASSWORD: adulis-local-secret
@@ -81,16 +98,47 @@ services:
       # are two different failures with one symptom; this is the CORS half).
       # 5173 is dev; 4173 is the e2e harness's preview port.
       MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
+      MINIO_GUARD_DATA_DIR: /data
     ports:
-      - '${MINIO_HOST_PORT:-9000}:9000'
+      # Loopback by default, as postgres above.
+      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${MINIO_HOST_PORT:-9000}:9000'
     volumes:
       - adulis-miniodata:/data
+      - type: volume
+        source: adulis-legacy
+        target: /adulis-guard/legacy
+        read_only: true
+        volume:
+          nocopy: true
+      - ./ops/scripts/minio-volume-guard.sh:/adulis-guard/minio-volume-guard.sh:ro
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # One-shot, before MinIO: the data-volume guard above, as root because the
+  # legacy volume is the old PostgreSQL directory (mode 0700, owner postgres).
+  # It mounts the data volume where MinIO does, so a fresh volume is prepared
+  # exactly as MinIO's own first mount would prepare it; it writes nothing.
+  minio-volume-guard:
+    image: *minio-image
+    container_name: adulis-minio-volume-guard
+    user: '0:0'
+    entrypoint: ['/bin/sh', '/adulis-guard/minio-volume-guard.sh']
+    environment:
+      MINIO_GUARD_DATA_DIR: /data
+    network_mode: none
+    volumes:
+      - adulis-miniodata:/data
+      - type: volume
+        source: adulis-legacy
+        target: /adulis-guard/legacy
+        read_only: true
+        volume:
+          nocopy: true
+      - ./ops/scripts/minio-volume-guard.sh:/adulis-guard/minio-volume-guard.sh:ro
 
   # One-shot: creates the two buckets and sets their policies, then exits.
   # The script, and why there are TWO BUCKETS rather than two prefixes, is
@@ -119,15 +167,29 @@ services:
 #
 # - adulis-platform_adulis-pgdata is the volume the database has used since
 #   2026-09-03. Unchanged: nothing moves.
-# - adulis-platform_adulis-miniodata is new. The existing objects are still in
-#   the volume called `adulis-pgdata` and are NOT moved automatically: follow
-#   docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md before or right after
-#   the first `docker compose up` with this file, or MinIO starts empty.
-# - `adulis-pgdata` itself is no longer referenced. Never delete it without the
-#   founder's decision (ISSUE-INFRA-005): it holds the old MinIO objects and the
+# - adulis-platform_adulis-miniodata is MinIO's volume from now on. On an
+#   installation that predates it, the objects are still in `adulis-pgdata` and
+#   are NOT moved automatically (docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md).
+# - `adulis-pgdata` is referenced READ-ONLY, by the data-volume guard only (key
+#   `adulis-legacy`). On a fresh machine compose creates it empty, which the
+#   guard reads as "nothing to move". Never delete it without the founder's
+#   decision (ISSUE-INFRA-005): it holds the old MinIO objects and the
 #   pre-2026-09-03 database.
+#
+# THE MINIO VOLUME MUST BE NAMED, OR NOTHING RUNS (WO-INFRA-015A). Compose
+# replaces a running container BEFORE it checks any dependency, so no check
+# inside a container can keep a running MinIO serving: on an installation
+# whose objects were never moved, a plain `docker compose up` would replace it
+# with one on an empty volume. So the name comes from ADULIS_MINIO_VOLUME, with
+# no default: unset, EVERY compose command stops at configuration time and
+# touches nothing. Set it to adulis-platform_adulis-miniodata on a fresh machine
+# (.env.example does) or after the move; an installation not yet moved leaves
+# it unset. If it is set too early, the data-volume guard still refuses to
+# start MinIO on the empty volume. Sequences: docs/infrastructure/MINIO-STARTUP.md.
 volumes:
   adulis-pgdata:
     name: adulis-platform_adulis-pgdata
   adulis-miniodata:
-    name: adulis-platform_adulis-miniodata
+    name: '${ADULIS_MINIO_VOLUME:?is not set. Before the MinIO move, leave it unset and do not run compose; on a fresh machine or after the move, set ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata. See docs/infrastructure/MINIO-STARTUP.md}'
+  adulis-legacy:
+    name: adulis-pgdata

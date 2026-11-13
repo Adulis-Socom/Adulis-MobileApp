@@ -43,12 +43,15 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { readIdentity, recordAdminAction, resetDecision } from './lib/disposable-db.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CONNECTION = process.env.DATABASE_URL_MIGRATE ?? process.env.DATABASE_URL;
+// DATABASE_URL_MIGRATE only (WO-INFRA-015A): the migrate, worker:install and seed steps below use
+// it, so falling back to DATABASE_URL could drop one database and rebuild another.
+const CONNECTION = process.env.DATABASE_URL_MIGRATE;
 
 if (!CONNECTION) {
-  console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: docker compose up -d && cp .env.example .env');
+  console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: cp .env.example .env && docker compose up -d');
   process.exit(2);
 }
 /**
@@ -79,6 +82,45 @@ if (!['localhost', '127.0.0.1', '::1', 'db', 'postgres'].includes(host)) {
   console.error(`FAIL  refusing to reset a non-local database (host: ${host || 'unparseable'}).`);
   console.error('      This script drops every application schema. That is its purpose.');
   process.exit(2);
+}
+
+/**
+ * WHICH DATABASE, PROVEN BEFORE ANYTHING IS DROPPED (WO-INFRA-015A). Tests and
+ * the console e2e gate reset only a database marked disposable. A persistent
+ * development database is reset only when this run names it exactly on the
+ * command line, `pnpm db:reset -- --confirm-target=<database>@<host>:<port>`,
+ * and the reset is recorded first in .adulis-db-admin.log (git-ignored). No
+ * environment variable can stand in for that confirmation, so nothing a shell
+ * or a .env carries can turn a test run into a reset of the wrong database.
+ */
+const target = new URL(CONNECTION);
+if (['host', 'hostaddr', 'port', 'dbname', 'service'].some((k) => target.searchParams.has(k))) {
+  console.error('FAIL  DATABASE_URL_MIGRATE overrides its target in the query string; nothing was dropped.');
+  process.exit(2);
+}
+let identity;
+try {
+  identity = await readIdentity(CONNECTION);
+} catch (e) {
+  console.error(`FAIL  could not read the target database (${e.message}); nothing was dropped.`);
+  process.exit(2);
+}
+const decision = resetDecision({ url: target, identity, argv: process.argv.slice(2) });
+if (!decision.allowed) {
+  console.error(`FAIL  ${decision.reason}`);
+  console.error('      Nothing was dropped.');
+  process.exit(1);
+}
+if (decision.kind === 'confirmed') {
+  try {
+    recordAdminAction(path.join(root, '.adulis-db-admin.log'), 'db:reset', decision.target);
+  } catch (e) {
+    console.error(`FAIL  could not record the reset in .adulis-db-admin.log (${e.message}); nothing was dropped.`);
+    process.exit(2);
+  }
+  console.log(`  CONFIRMED  resetting the persistent database ${decision.target} (recorded in .adulis-db-admin.log)`);
+} else {
+  console.log(`  PASS  ${identity.db} is marked disposable`);
 }
 
 /** Every schema the migrations create. core.* is the bulk; the rest are boundaries. */

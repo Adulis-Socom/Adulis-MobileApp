@@ -76,6 +76,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  */
 const SCOPE_TRACKED = /^(apps|packages|\.claude)\/|\.md$/;
 
+/**
+ * FILES A PACKAGE READS WITHOUT DEPENDING ON THEIR PACKAGE (WO-INFRA-015A). The filter follows
+ * package.json dependencies only, so a package that reads another's files from disk is invisible
+ * to it: a change there would select the owner and its dependents, never the reader, and the
+ * reader's assertion would not run. Each entry names the files and the reader that must run when
+ * they change; when the selection lacks the reader, the scope is dropped (a full run).
+ */
+export const UNDECLARED_INPUTS = [
+  // apps/api/test/t6-parked-decisions.spec.ts reads packages/locale/src/en.ts and am.ts from disk.
+  { path: 'packages/locale/', reader: '@adulis/api' },
+];
+
 /** `selectedNames()` lists the packages the filter selects; null when pnpm could not say. */
 export function scopeDecision(raw, changed, selectedNames) {
   if (!raw) return { scope: '', why: 'none (full run)', selected: [] };
@@ -86,6 +98,11 @@ export function scopeDecision(raw, changed, selectedNames) {
   const names = selectedNames();
   if (names === null) return full(`pnpm could not evaluate ${raw}`);
   if (names.length === 0) return full(`${raw} selects no package`);
+  const unseen = UNDECLARED_INPUTS.filter(
+    (u) => changed.some((f) => f.startsWith(u.path)) && !names.includes(u.reader),
+  );
+  if (unseen.length)
+    return full(unseen.map((u) => `${u.reader} reads ${u.path} without depending on it`).join('; '));
   return { scope: raw, why: `${raw} (${names.length} package(s): ${names.join(', ')})`, selected: names };
 }
 
@@ -607,6 +624,15 @@ const GATES = [
    * (ISSUE-INFRA-CLOSURE-004), any other orphan fails the API run.
    */
   { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs'] },
+
+  /**
+   * APPENDED (WO-INFRA-015A). The guards of the destructive scripts and of MinIO's data volume:
+   * the shared database-target rules, db-determinism's container binding and failure paths, the
+   * db-reset confirmation, the direct-invocation refusals, the volume guard script and the compose
+   * configuration that wires it. No database is written: the scripts are driven against stubs, or
+   * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
+   */
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
 ];
 
 /**

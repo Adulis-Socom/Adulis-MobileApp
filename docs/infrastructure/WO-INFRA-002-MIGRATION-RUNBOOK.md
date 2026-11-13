@@ -77,6 +77,7 @@ command deletes the live database volume `adulis-platform_adulis-pgdata` and the
 
 ```
 export MINIO_HOST_PORT=9100
+export ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata   # WO-INFRA-015A: compose needs it named
 node ops/scripts/minio-migrate.mjs plan          # read-only; must end "PLAN OK"
 
 export MIGRATE_BACKUP_DIR=G:/AdulisDevelopment/minio-move/$(date -u +%Y%m%dT%H%M%SZ)
@@ -85,6 +86,13 @@ MIGRATE_LIVE=approved node ops/scripts/minio-migrate.mjs migrate 2>&1 | tee "$MI
 
 **Success** is the line `MIGRATED: adulis-media=<n> adulis-evidence=<m>` and exit code 0, with the counts
 the plan printed. **Anything else** ends with `REFUSED:` and the reason; the old MinIO is already back.
+
+**Since WO-INFRA-015A:**
+- **Unexpected buckets:** `plan` and `migrate` refuse a source holding any bucket other than the two
+  buckets and the 17 PostgreSQL directories, before anything stops.
+- **Interrupts:** Ctrl+C is honoured at the next step, and the undo runs.
+- **After a success:** put `ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata` in the root `.env`, so
+  later `docker compose` commands keep MinIO on the new volume (`docs/infrastructure/MINIO-STARTUP.md`).
 
 Then start the API and open any product image (the console, or the mobile app against the dev API): media
 URLs use `R2_MEDIA_PUBLIC_ORIGIN` (`http://localhost:9100/adulis-media`), which the script's anonymous read
@@ -119,6 +127,7 @@ MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/mini
 MinIO does today. The read-only rule applies to the move, not to a rollback.
 
 While rolled back, `docker compose up` fails on the port, deliberately, until the founder decides.
+Remove `ADULIS_MINIO_VOLUME` from the root `.env` after a rollback, so compose refuses to run at all.
 
 ## Afterwards
 
