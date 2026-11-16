@@ -22,8 +22,11 @@
 // `pending <run>` before the switch, and the guard accepts a pending record only for that run's own
 // switch (compose receives ADULIS_MINIO_SWITCH_RUN for that one command). Only after the switched
 // MinIO is verified is it rewritten `complete <run>`. An undo, a recover or a rollback renames it
-// aside (verified, with bounded retries). So a record nobody could clear (Docker down, the console
-// closed mid-undo) is still pending, and the guard refuses it on every later start.
+// aside (verified, with bounded retries). The permission is single-use: the switched MinIO's own start
+// rewrites the record `switching <run>`, which every start refuses (review A-H1), so neither a record
+// nobody could clear (Docker down, the console closed mid-undo) nor a restart of the switched container
+// can make MinIO serve an unverified copy. The new MinIO of a failed run is retired (removed, its
+// configuration and logs saved), and what the target received after the switch is measured (A-H2).
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import {

@@ -22,10 +22,12 @@ of MinIO's objects, and how the database scripts decide what they may reset.
      - a data volume holding MinIO data without the record of a completed move
        (`.adulis-migration-complete`). That covers a partial copy, or a store started before the move;
      - a record that is only **pending** (INF-04). `minio-migrate.mjs` writes `pending <run>` once the
-       copy is verified, just before the switch, and the guard accepts that only during that run's own
-       switch. The record becomes `complete <run>` only after the switched MinIO is verified. So a
-       record that an undo could not clear (Docker down, the console closed) stays pending and is
-       refused at every later start;
+       copy is verified, just before the switch. The guard accepts that only during that run's own
+       switch, and **only once**: the switched MinIO's own start rewrites it `switching <run>`, which
+       every start refuses, a restart of that same container included (Docker restart, crash,
+       `docker start`; rehearsed). The record becomes `complete <run>` only after the switched MinIO is
+       verified. So a record that an undo could not clear (Docker down, the console closed) is refused at
+       every later start;
      - a record in any other form, and a data volume holding `.adulis-migration-invalidated` or
        `.adulis-migration-rolled-back` (the names an undo, a recovery or a rollback renames the record
        to).
@@ -72,7 +74,9 @@ This is the state of a machine whose MinIO still runs on `adulis-pgdata`.
   image), in a folder other than the run's `MIGRATE_BACKUP_DIR`, which must start empty.
   `minio-migrate.mjs migrate` saves its own copy into the run's backup folder, where rollback looks.
 - **Starting services:** the running containers restart on their own (`restart: unless-stopped`). To
-  start one by hand, use `docker start adulis-postgres` or `docker start adulis-minio`.
+  start one by hand, use `docker start adulis-postgres` or `docker start adulis-minio`. **Once a move has
+  started** (its backup folder exists), do not start MinIO containers by hand: run `recover` or
+  `rollback` (runbook).
 - **If the variable was set by mistake and compose ran:**
   - the old MinIO container has been replaced, and the guard has kept the new one from starting, so
     nothing serves;
@@ -96,11 +100,16 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
 - **What the undo leaves behind:**
   - Before the switch, the new volume is removed again; if that fails, the undo reports UNDO PARTIAL
     and names the volume to remove.
-  - From the step that writes the record on (even if that write failed), the new volume is kept (it may hold the only copy of later
-    writes). The undo renames the record aside, with up to four attempts, and counts it cleared only
-    when a separate read finds it gone.
-  - If every attempt fails (Docker unavailable, for example), the undo says so (UNDO PARTIAL, MANUAL
-    ACTION REQUIRED), and the record stays **pending**, which the guard refuses at every normal start.
+  - From the step that writes the record on (even if that write failed), the new volume is kept: it may
+    hold the only copy of later writes. The undo renames the record aside, with up to four attempts, and
+    counts it cleared only when a separate read finds it gone.
+  - After the switch, the new MinIO is **retired**: stopped (checked), its configuration and logs saved in
+    the run folder, and the container removed, so no copy of it can be started again. What the target
+    received after the switch is measured and listed; any change makes the outcome UNDO PARTIAL with a
+    MANUAL ACTION.
+  - If every record attempt fails (Docker unavailable, for example), the undo says so (UNDO PARTIAL,
+    MANUAL ACTION REQUIRED, with the state read back). A pending or switching record is refused at every
+    start.
   - It never claims more than it read back. The runbook's "Recovery limits" has the full list.
 - **Ctrl+Break** is treated like Ctrl+C (WO-INFRA-015B).
 - **Closing the console window** is not something the tool can undo in full. Windows ends Node, and the
@@ -108,8 +117,11 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
   a move.
   - If it happened, run `minio-migrate.mjs recover` with the same `MIGRATE_BACKUP_DIR` (approval as for
     the move) before anything else.
-  - It reads what was left, renames any record aside, and brings the old MinIO back on `adulis-pgdata`
+  - It reads what was left and renames any record aside.
+  - It retires a new MinIO it finds serving the target, and brings the old MinIO back on `adulis-pgdata`
     from its recorded configuration.
+  - It **measures what the target received after the switch** and lists every object added, changed or
+    deleted. If there is anything, it ends RECOVERY INCOMPLETE: copy back what must be kept.
   - It never deletes a volume, and running it twice changes nothing.
   - Rehearsed after a real window close (INF-04).
 - **Rollback** loads the old image from the run's backup folder if it was pruned.
