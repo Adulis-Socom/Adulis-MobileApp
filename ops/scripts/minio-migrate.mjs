@@ -514,7 +514,8 @@ function docker(args, { input, allowFail = false, env, timeout } = {}) {
 function exists(kind, name) {
   const r = docker([kind, 'inspect', name], { allowFail: true });
   if (r.status === 0) return true;
-  if (/no such/i.test(`${r.stderr}${r.stdout}`)) return false;
+  // "No such ..." (containers, volumes, images) or "... not found" (networks): absent.
+  if (/no such|not found/i.test(`${r.stderr}${r.stdout}`)) return false;
   refuse(`docker ${kind} inspect ${name} failed: ${`${r.stderr}`.trim().slice(-300)}`);
 }
 
