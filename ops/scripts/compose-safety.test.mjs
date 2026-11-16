@@ -4,7 +4,7 @@
 // ops/scripts/minio-migrate.mjs reads (the /data volume and the published port) unchanged.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -18,7 +18,7 @@ function compose(extraEnv) {
   // Only this file, no .env overrides of the values under test, no COMPOSE_* from the caller.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
-      ([k]) => !/^(COMPOSE_|ADULIS_BIND_ADDRESS|ADULIS_MINIO_VOLUME|POSTGRES_HOST_PORT|MINIO_HOST_PORT)/.test(k),
+      ([k]) => !/^(COMPOSE_|ADULIS_BIND_ADDRESS|ADULIS_MINIO_VOLUME|ADULIS_MINIO_SWITCH_RUN|POSTGRES_HOST_PORT|MINIO_HOST_PORT)/.test(k),
     ),
   );
   return spawnSync(
@@ -53,12 +53,43 @@ test('PostgreSQL and MinIO publish on loopback only, unless a LAN bind is chosen
     assert.equal(c.services[s].ports[0].host_ip, '127.0.0.1', `${s} must bind loopback by default`);
   }
   assert.equal(c.services.postgres.ports[0].published, '5432');
-  assert.equal(c.services.minio.ports[0].published, '9000');
+  // INF-04: the MinIO HOST port defaults to 9100, never 9000 (another project's MinIO commonly listens
+  // there: the NAC stack on the development machine). The container port stays 9000.
+  assert.equal(c.services.minio.ports[0].published, '9100');
+  assert.equal(Number(c.services.minio.ports[0].target), 9000);
   const lan = render({ ADULIS_BIND_ADDRESS: '0.0.0.0', POSTGRES_HOST_PORT: '5434', MINIO_HOST_PORT: '9100' });
   assert.equal(lan.services.minio.ports[0].host_ip, '0.0.0.0');
   assert.equal(lan.services.postgres.ports[0].published, '5434'); // the live ports stay settable
   assert.equal(lan.services.minio.ports[0].published, '9100');
   assert.equal(c.services['minio-volume-guard'].network_mode, 'none');
+});
+
+test('the MinIO host port: 9100 by default, overridable, container port 9000, services on minio:9000 (INF-04)', () => {
+  const c = render();
+  assert.equal(c.services.minio.ports[0].published, '9100');
+  assert.equal(Number(c.services.minio.ports[0].target), 9000);
+  assert.equal(render({ MINIO_HOST_PORT: '19120' }).services.minio.ports[0].published, '19120');
+  assert.equal(c.services['minio-init'].environment.MINIO_URL, 'http://minio:9000');
+  assert.notEqual(c.services.minio.ports[0].published, '9000', 'the default must not be 9000');
+});
+
+test('.env.example points the API at the compose default MinIO port, never 9000 (INF-04)', () => {
+  const ex = readFileSync(join(root, '.env.example'), 'utf8');
+  const value = (k) => ex.match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1];
+  const port = render().services.minio.ports[0].published;
+  assert.equal(new URL(value('R2_ACCOUNT_ID')).port, port);
+  assert.equal(new URL(value('R2_MEDIA_PUBLIC_ORIGIN')).port, port);
+  assert.equal(new URL(value('R2_MEDIA_PUBLIC_ORIGIN')).pathname, `/${value('R2_MEDIA_BUCKET')}`);
+  const settings = ex.split('\n').filter((l) => !l.startsWith('#')).join('\n');
+  assert.doesNotMatch(settings, /localhost:9000\b/);
+});
+
+test('the switch variable reaches both guards, empty unless minio-migrate.mjs sets it for its switch (INF-04)', () => {
+  const c = render();
+  for (const s of ['minio', 'minio-volume-guard']) assert.equal(c.services[s].environment.MINIO_GUARD_SWITCH_RUN, '', s);
+  const sw = render({ ADULIS_MINIO_SWITCH_RUN: '20261116120000-abcd' });
+  for (const s of ['minio', 'minio-volume-guard'])
+    assert.equal(sw.services[s].environment.MINIO_GUARD_SWITCH_RUN, '20261116120000-abcd', s);
 });
 
 test('MinIO starts only through the inline guard, after the guard service has accepted', () => {
@@ -135,8 +166,11 @@ const guardText = (() => {
   return s;
 })();
 
+const RUN = '20261116120000-abcd';
 /** Runs the guard against temporary data and legacy directories. */
-function guard({ data = true, legacy = true, dataFormatted = false, dataSkeleton = false, marker = false, foreign = false, legacyFormatted = false, legacyUnreadable = false, sameDir = false, args = [], unsetData = false } = {}) {
+// `record`: the move record's content (`marker` = a complete one); `undone`: a renamed-aside record
+// beside it; `switchRun`: MINIO_GUARD_SWITCH_RUN (INF-04).
+function guard({ data = true, legacy = true, dataFormatted = false, dataSkeleton = false, marker = false, record = marker ? `complete ${RUN}\n` : null, undone = null, switchRun = null, foreign = false, legacyFormatted = false, legacyUnreadable = false, sameDir = false, args = [], unsetData = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'adulis-guard-'));
   const d = join(dir, 'data');
   const l = sameDir ? d : join(dir, 'legacy');
@@ -149,12 +183,15 @@ function guard({ data = true, legacy = true, dataFormatted = false, dataSkeleton
     if (legacy && !sameDir) mkdirSync(l);
     if (dataFormatted) formatted(d);
     if (dataSkeleton) mkdirSync(join(d, '.minio.sys', 'config'), { recursive: true });
-    if (marker) writeFileSync(join(d, '.adulis-migration-complete'), '{}');
+    if (record !== null) writeFileSync(join(d, '.adulis-migration-complete'), record);
+    if (undone) writeFileSync(join(d, undone), `complete ${RUN}\n`);
     if (foreign) writeFileSync(join(d, 'PG_VERSION'), '17');
     if (legacyFormatted) formatted(l);
     if (legacyUnreadable) chmodSync(l, 0o000);
     const script = guardText.replace(LEGACY_LINE, `legacy='${l.replaceAll('\\', '/')}'`);
     const env = { ...process.env };
+    delete env.MINIO_GUARD_SWITCH_RUN;
+    if (switchRun !== null) env.MINIO_GUARD_SWITCH_RUN = switchRun;
     if (unsetData) delete env.MINIO_GUARD_DATA_DIR;
     else env.MINIO_GUARD_DATA_DIR = d.replaceAll('\\', '/');
     return spawnSync('sh', ['-c', script, 'minio-volume-guard', ...args], { encoding: 'utf8', env });
@@ -191,6 +228,27 @@ test('guard: a formatted data volume needs the recorded move while adulis-pgdata
   refused(guard({ legacyFormatted: true, dataFormatted: true }), /no completed move from adulis-pgdata is recorded/);
   accepted(guard({ legacyFormatted: true, dataFormatted: true, marker: true }), /holds MinIO data/);
   accepted(guard({ dataFormatted: true }), /holds MinIO data/); // a fresh store that has started once
+});
+
+test('guard: a pending record is accepted only for its own switch; a complete one always (INF-04)', () => {
+  const moved = { legacyFormatted: true, dataFormatted: true };
+  accepted(guard({ ...moved, record: `complete ${RUN}\n` }), /holds MinIO data/);
+  accepted(guard({ ...moved, record: `complete ${RUN}` }), /holds MinIO data/); // no final newline
+  refused(guard({ ...moved, record: `pending ${RUN}\n` }), /never verified \(record pending, run 20261116120000-abcd\)/);
+  refused(guard({ ...moved, record: `pending ${RUN}\n`, switchRun: '' }), /never verified/);
+  refused(guard({ ...moved, record: `pending ${RUN}\n`, switchRun: '20261116120000-ffff' }), /never verified/);
+  accepted(guard({ ...moved, record: `pending ${RUN}\n`, switchRun: RUN }), /holds MinIO data/);
+  refused(guard({ ...moved, record: 'pending \n', switchRun: '' }), /never verified/); // an empty run never matches
+});
+
+test('guard: a record this tool does not write, or one beside an undone record, is refused (INF-04)', () => {
+  const moved = { legacyFormatted: true, dataFormatted: true };
+  for (const record of ['{}', '', '{"run":"20261116120000-abcd"}\n', 'COMPLETE x\n', 'done\n'])
+    refused(guard({ ...moved, record }), /not one minio-migrate.mjs writes/);
+  for (const undone of ['.adulis-migration-invalidated', '.adulis-migration-rolled-back'])
+    refused(guard({ ...moved, marker: true, undone }), /undone or rolled back/);
+  // With no MinIO data in adulis-pgdata there is nothing a stale copy could hide: a started store runs.
+  accepted(guard({ dataFormatted: true, record: `pending ${RUN}\n` }), /holds MinIO data/);
 });
 
 test('guard: the legacy volume as the data volume, and a data volume that is not MinIO\'s, are refused', () => {
