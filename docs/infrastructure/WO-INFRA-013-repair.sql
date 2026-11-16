@@ -11,7 +11,7 @@
 --   core.order_state_transition 10 (their orders deleted by teardowns under replica)
 --   core.claim_evidence_item  9  (their claim deleted likewise)
 --   core.otp_delivery_attempt 155 (their challenges deleted by teardowns)
--- Nothing referenced these rows on 13 November (step 2 re-checks the known referrers); the deletes of
+-- Nothing referenced these rows on 13 November (step 2b re-checks EVERY referrer, from pg_constraint); the deletes of
 -- parent rows run with triggers on, and step 4 checks every key touching the five tables, so an
 -- unforeseen reference raises and rolls everything back rather than leaving a new orphan.
 --
@@ -20,47 +20,105 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- 1. The exact rows, frozen.
+-- 1. The exact rows, frozen. A NULL key is not an orphan (MATCH SIMPLE, as fk-audit and step 4 judge it):
+--    a device with no market yet is a normal state (POST /v1/devices), never a repair target (INF-05 review A, H-1).
 CREATE TEMP TABLE r_device ON COMMIT DROP AS
-  SELECT d.id, d.market_id FROM core.device d WHERE NOT EXISTS (SELECT 1 FROM core.market m WHERE m.id = d.market_id);
+  SELECT d.id, d.market_id FROM core.device d WHERE d.market_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.market m WHERE m.id = d.market_id);
 CREATE TEMP TABLE r_notification ON COMMIT DROP AS
-  SELECT n.id, n.recipient_account_id FROM core.notification n WHERE NOT EXISTS (SELECT 1 FROM core.account a WHERE a.id = n.recipient_account_id);
+  SELECT n.id, n.recipient_account_id FROM core.notification n WHERE n.recipient_account_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.account a WHERE a.id = n.recipient_account_id);
 CREATE TEMP TABLE r_transition ON COMMIT DROP AS
-  SELECT t.id FROM core.order_state_transition t WHERE NOT EXISTS (SELECT 1 FROM core."order" o WHERE o.id = t.order_id);
+  SELECT t.id FROM core.order_state_transition t WHERE t.order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core."order" o WHERE o.id = t.order_id);
 CREATE TEMP TABLE r_evidence ON COMMIT DROP AS
-  SELECT e.id FROM core.claim_evidence_item e WHERE NOT EXISTS (SELECT 1 FROM core.claim c WHERE c.id = e.claim_id);
+  SELECT e.id FROM core.claim_evidence_item e WHERE e.claim_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.claim c WHERE c.id = e.claim_id);
 CREATE TEMP TABLE r_attempt ON COMMIT DROP AS
-  SELECT a.id FROM core.otp_delivery_attempt a WHERE NOT EXISTS (SELECT 1 FROM core.otp_challenge c WHERE c.id = a.otp_challenge_id);
+  SELECT a.id FROM core.otp_delivery_attempt a WHERE a.otp_challenge_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.otp_challenge c WHERE c.id = a.otp_challenge_id);
 
--- 2. They must be exactly what the audit found, and nothing may reference them.
+-- 2. They must be exactly the rows the audit found and archived on 13 November: the counts, the fixture parents,
+--    and, for every table, the set of ids itself (md5 of the ids in uuid order, computed from the 13 November
+--    archive CSVs; INF-05 review A, M-1). Equal counts with other rows are refused: changed data needs a new
+--    audit and a new review, never an edited number.
 DO $$
 DECLARE
   expected CONSTANT jsonb := '{"device":15,"notification":3,"transition":10,"evidence":9,"attempt":155}';
+  expected_ids CONSTANT jsonb := '{"device":"63183af3db48c08d6d3b1a8fdd2ba8e1","notification":"7db04e18e49c909c90905da500329855",
+    "transition":"5afe6e883a742adaa8fc9f8d4653fe3a","evidence":"35bb9aa1659313561198c0ac4f4bbca5","attempt":"9f8c1b8217f57aa3d45e02a36a8c1967"}';
   found jsonb := jsonb_build_object(
     'device', (SELECT count(*) FROM r_device), 'notification', (SELECT count(*) FROM r_notification),
     'transition', (SELECT count(*) FROM r_transition), 'evidence', (SELECT count(*) FROM r_evidence),
     'attempt', (SELECT count(*) FROM r_attempt));
+  found_ids jsonb := jsonb_build_object(
+    'device', (SELECT md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM r_device),
+    'notification', (SELECT md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM r_notification),
+    'transition', (SELECT md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM r_transition),
+    'evidence', (SELECT md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM r_evidence),
+    'attempt', (SELECT md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM r_attempt));
 BEGIN
   IF found <> expected THEN
     RAISE EXCEPTION 'orphan counts changed since the audit: expected %, found % -- re-run fk-audit and the plan', expected, found;
   END IF;
-  IF EXISTS (SELECT 1 FROM r_device WHERE market_id <> 'cccc6666-3333-4000-8000-000000000001') THEN
+  IF found_ids <> expected_ids THEN
+    RAISE EXCEPTION 'the orphaned rows are not the ones archived on 13 November (id sets differ: %) -- a new audit and review are needed', found_ids;
+  END IF;
+  IF EXISTS (SELECT 1 FROM r_device WHERE market_id IS DISTINCT FROM 'cccc6666-3333-4000-8000-000000000001') THEN
     RAISE EXCEPTION 'an orphaned device is not on the c6-accounts fixture market';
   END IF;
-  IF EXISTS (SELECT 1 FROM r_notification WHERE recipient_account_id <> '26262626-2626-4000-8000-000000000030') THEN
+  IF EXISTS (SELECT 1 FROM r_notification WHERE recipient_account_id IS DISTINCT FROM '26262626-2626-4000-8000-000000000030') THEN
     RAISE EXCEPTION 'an orphaned notification is not for the t26 fixture account';
-  END IF;
-  IF EXISTS (SELECT 1 FROM core.session s JOIN r_device r ON r.id = s.device_id)
-     OR EXISTS (SELECT 1 FROM core.account_device x JOIN r_device r ON r.id = x.device_id)
-     OR EXISTS (SELECT 1 FROM core.cart x JOIN r_device r ON r.id = x.device_id) THEN
-    RAISE EXCEPTION 'a session, account_device or cart row references an orphaned device';
   END IF;
 END $$;
 
--- 3. Delete, counted. Devices, notifications and delivery attempts go WITH TRIGGERS ON: a device is
---    also a parent (session, account_device, cart, and fyp_session from migration 0055 on), so any
---    reference step 2 did not foresee either cascades as its key says or raises, and everything
---    rolls back. Only order_state_transition and claim_evidence_item need replica: they are
+-- 2b. Nothing may reference a row step 3 deletes. EVERY foreign key INTO the five tables is enumerated from
+--     pg_constraint (INF-05: the hand-written session/account_device/cart list went stale when migrations added
+--     referrers, e.g. fyp_session from 0055). Step 3 deletes with triggers on, so an unlisted ON DELETE CASCADE
+--     key would silently delete more than the 192 rows, and step 4 cannot see a deletion. A key that does not
+--     reference `id` is refused rather than guessed.
+DO $$
+DECLARE
+  fk record;
+  refs bigint;
+  checked int := 0;
+  frozen CONSTANT jsonb := '{"core.device": "r_device", "core.notification": "r_notification",
+    "core.order_state_transition": "r_transition", "core.claim_evidence_item": "r_evidence",
+    "core.otp_delivery_attempt": "r_attempt"}';
+BEGIN
+  FOR fk IN
+    SELECT con.conname,
+           con.conrelid::regclass AS child,
+           pn.nspname || '.' || pc.relname AS parent,
+           (SELECT string_agg(format('c.%I', ca.attname), ', ' ORDER BY k.ord)
+              FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.attnum) AS child_cols,
+           (SELECT string_agg(pa.attname, ', ' ORDER BY k.ord)
+              FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = k.attnum) AS parent_cols
+      FROM pg_constraint con
+      JOIN pg_class pc ON pc.oid = con.confrelid
+      JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+     WHERE con.contype = 'f' AND con.conparentid = 0
+       AND frozen ? (pn.nspname || '.' || pc.relname)
+  LOOP
+    IF fk.parent_cols <> 'id' THEN
+      RAISE EXCEPTION 'foreign key % (% -> %) references (%), not id: re-plan the repair', fk.conname, fk.child, fk.parent, fk.parent_cols;
+    END IF;
+    EXECUTE format('SELECT count(*) FROM %s c WHERE %s IN (SELECT id FROM %I)', fk.child, fk.child_cols, frozen ->> fk.parent)
+      INTO refs;
+    IF refs > 0 THEN
+      RAISE EXCEPTION 'foreign key % (% -> %): % row(s) reference a row this repair would delete -- re-plan', fk.conname, fk.child, fk.parent, refs;
+    END IF;
+    checked := checked + 1;
+    RAISE NOTICE 'step 2b: % (% -> %): no reference to a deleted row', fk.conname, fk.child, fk.parent;
+  END LOOP;
+  -- core.device has referrers in every schema this repair was planned on: none found means another schema.
+  IF checked = 0 THEN
+    RAISE EXCEPTION 'step 2b found no foreign key into the five tables: this is not the schema the repair was planned on';
+  END IF;
+END $$;
+
+-- 3. Delete, counted. Devices, notifications and delivery attempts go WITH TRIGGERS ON: step 2b has
+--    already refused any row referencing them, so a key that would cascade or block cannot fire, and the
+--    triggers stay on as a second line. A referrer written CONCURRENTLY after step 2b is not covered (a
+--    cascading key would still delete it): every writer, the worker included, is stopped first (the plan).
+--    Only order_state_transition and claim_evidence_item need replica: they are
 --    append-only (trg_append_only) and nothing references them. replica holds for THIS transaction
 --    only (set_config(..., true)) and is switched back at once.
 DO $$
