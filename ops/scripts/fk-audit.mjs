@@ -31,42 +31,19 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 /**
- * The five keys today's API suites still leave orphans on, measured on a fresh disposable database
- * (WO-INFRA-012: 201 keys hold before a full run, these five break after it). Each is a teardown
- * that deletes a parent under `replica` without its children; the files are listed in
- * ISSUE-INFRA-CLOSURE-004. A ratchet, not an exemption: any OTHER key with an orphan fails the
- * gate, and each line here is deleted when its teardowns are fixed. Never add one to pass a run.
+ * The keys the API suites may still leave orphans on: none (INF-03). A ratchet, not an exemption:
+ * any key with an orphan the run added fails the gate. Never add one to pass a run; a teardown that
+ * deletes a parent under `replica` deletes its children first.
  */
 //
-// COUNTED, NOT ONLY NAMED (WO-INFRA-015B). Each known leak carries the most orphaned rows it may
-// leave (`maxRows`): a suite that starts leaking MORE on a known key fails like a new key does.
-// maxRows is the count measured after a full API run on the line with the most suites (the closure
-// line; this line's suites are a subset, so its counts are no higher). Never raise it to pass a run.
-// Measured 2026-11-13: identical per-key counts (23, 2, 3, 3, 4 = 35 rows) in one local full run on a
-// fresh disposable database and in three closure-line CI runs (43419934139, 43422806778,
-// 43424424106), with different worker counts.
-export const KNOWN_TEST_LEAKS = {
-  'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey': {
-    reason: '19 suites delete core.otp_challenge, never its delivery attempts',
-    maxRows: 23,
-  },
-  'core.order_state_transition.order_state_transition_order_id_fkey': {
-    reason: '8 suites delete core."order" under replica, never its transitions',
-    maxRows: 2,
-  },
-  'core.claim_evidence_item.claim_evidence_item_claim_id_fkey': {
-    reason: 't6-closure-survives-block deletes core.claim, never its evidence items',
-    maxRows: 3,
-  },
-  'core.device.device_market_id_fkey': {
-    reason: 'c6-accounts deletes its market under replica; the API created devices in it',
-    maxRows: 3,
-  },
-  'core.notification.notification_recipient_account_id_fkey': {
-    reason: 't26 and disc-001 delete accounts that still have notifications',
-    maxRows: 4,
-  },
-};
+// COUNTED, NOT ONLY NAMED (WO-INFRA-015B). An entry carries the most orphaned rows it may leave
+// (`maxRows`); a suite leaking MORE on a known key fails like a new key does. Never raise it.
+// History: WO-INFRA-012/015B measured five leaks (23, 2, 3, 3, 4 = 35 rows; ISSUE-INFRA-CLOSURE-004).
+// INF-03 traced each to its suite and fixed the teardown (otp_delivery_attempt: c6-accounts 11,
+// wo-api-001a 12; order_state_transition and device: c6-accounts; claim_evidence_item:
+// t6-closure-survives-block; notification: t26 1, disc-001 3); two full runs on fresh disposable
+// databases then left 0 orphan rows on all 201 keys.
+export const KNOWN_TEST_LEAKS = {};
 
 /**
  * Splits a report into failures, tolerated known leaks, counts below their maximum, and known keys

@@ -77,17 +77,27 @@ test('lower counts and vanished keys are reported, not failed', () => {
   assert.deepEqual(judge([row('device_market_id_fkey', 5)], leak(5)).lowered, []);
 });
 
-test('the known list names exactly the five measured leaks, each with a reason and a count', () => {
-  assert.deepEqual(Object.keys(KNOWN_TEST_LEAKS).sort(), [
-    'core.claim_evidence_item.claim_evidence_item_claim_id_fkey',
-    DEVICE,
-    'core.notification.notification_recipient_account_id_fkey',
-    'core.order_state_transition.order_state_transition_order_id_fkey',
-    'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey',
-  ]);
+// INF-03: the five measured leaks were fixed and two fresh full runs left 0 orphan rows, so the
+// measured set is empty; any entry added later still needs a reason and a measured count.
+test('the known list names exactly the measured leaks (none since INF-03), each with a reason and a count', () => {
+  assert.deepEqual(Object.keys(KNOWN_TEST_LEAKS).sort(), []);
   for (const [key, { reason, maxRows }] of Object.entries(KNOWN_TEST_LEAKS)) {
     assert.ok(reason.length > 20, key);
     assert.ok(Number.isInteger(maxRows) && maxRows > 0, `${key}: maxRows must be measured`);
+  }
+});
+
+test('the five formerly known keys now fail the teardown like any other orphan', () => {
+  const former = [
+    ['claim_evidence_item_claim_id_fkey', 'core.claim_evidence_item'],
+    ['device_market_id_fkey', 'core.device'],
+    ['notification_recipient_account_id_fkey', 'core.notification'],
+    ['order_state_transition_order_id_fkey', 'core.order_state_transition'],
+    ['otp_delivery_attempt_otp_challenge_id_fkey', 'core.otp_delivery_attempt'],
+  ];
+  for (const [constraint, table] of former) {
+    const { failures, tolerated } = judge([row(constraint, 1, table)], KNOWN_TEST_LEAKS);
+    assert.deepEqual([failures.length, tolerated.length], [1, 0], constraint);
   }
 });
 
