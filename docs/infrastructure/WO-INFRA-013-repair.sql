@@ -11,7 +11,7 @@
 --   core.order_state_transition 10 (their orders deleted by teardowns under replica)
 --   core.claim_evidence_item  9  (their claim deleted likewise)
 --   core.otp_delivery_attempt 155 (their challenges deleted by teardowns)
--- Nothing referenced these rows on 13 November (step 2 re-checks the known referrers); the deletes of
+-- Nothing referenced these rows on 13 November (step 2b re-checks EVERY referrer, from pg_constraint); the deletes of
 -- parent rows run with triggers on, and step 4 checks every key touching the five tables, so an
 -- unforeseen reference raises and rolls everything back rather than leaving a new orphan.
 --
@@ -50,11 +50,46 @@ BEGIN
   IF EXISTS (SELECT 1 FROM r_notification WHERE recipient_account_id <> '26262626-2626-4000-8000-000000000030') THEN
     RAISE EXCEPTION 'an orphaned notification is not for the t26 fixture account';
   END IF;
-  IF EXISTS (SELECT 1 FROM core.session s JOIN r_device r ON r.id = s.device_id)
-     OR EXISTS (SELECT 1 FROM core.account_device x JOIN r_device r ON r.id = x.device_id)
-     OR EXISTS (SELECT 1 FROM core.cart x JOIN r_device r ON r.id = x.device_id) THEN
-    RAISE EXCEPTION 'a session, account_device or cart row references an orphaned device';
-  END IF;
+END $$;
+
+-- 2b. Nothing may reference a row step 3 deletes. EVERY foreign key INTO the five tables is enumerated from
+--     pg_constraint (INF-05: the hand-written session/account_device/cart list went stale when migrations added
+--     referrers, e.g. fyp_session from 0055). Step 3 deletes with triggers on, so an unlisted ON DELETE CASCADE
+--     key would silently delete more than the 192 rows, and step 4 cannot see a deletion. A key that does not
+--     reference `id` is refused rather than guessed.
+DO $$
+DECLARE
+  fk record;
+  refs bigint;
+  frozen CONSTANT jsonb := '{"core.device": "r_device", "core.notification": "r_notification",
+    "core.order_state_transition": "r_transition", "core.claim_evidence_item": "r_evidence",
+    "core.otp_delivery_attempt": "r_attempt"}';
+BEGIN
+  FOR fk IN
+    SELECT con.conname,
+           con.conrelid::regclass AS child,
+           pn.nspname || '.' || pc.relname AS parent,
+           (SELECT string_agg(format('c.%I', ca.attname), ', ' ORDER BY k.ord)
+              FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.attnum) AS child_cols,
+           (SELECT string_agg(pa.attname, ', ' ORDER BY k.ord)
+              FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = k.attnum) AS parent_cols
+      FROM pg_constraint con
+      JOIN pg_class pc ON pc.oid = con.confrelid
+      JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+     WHERE con.contype = 'f' AND con.conparentid = 0
+       AND frozen ? (pn.nspname || '.' || pc.relname)
+  LOOP
+    IF fk.parent_cols <> 'id' THEN
+      RAISE EXCEPTION 'foreign key % (% -> %) references (%), not id: re-plan the repair', fk.conname, fk.child, fk.parent, fk.parent_cols;
+    END IF;
+    EXECUTE format('SELECT count(*) FROM %s c WHERE %s IN (SELECT id FROM %I)', fk.child, fk.child_cols, frozen ->> fk.parent)
+      INTO refs;
+    IF refs > 0 THEN
+      RAISE EXCEPTION 'foreign key % (% -> %): % row(s) reference a row this repair would delete -- re-plan', fk.conname, fk.child, fk.parent, refs;
+    END IF;
+  END LOOP;
 END $$;
 
 -- 3. Delete, counted. Devices, notifications and delivery attempts go WITH TRIGGERS ON: a device is
