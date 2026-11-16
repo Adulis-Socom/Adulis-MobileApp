@@ -10,4 +10,6 @@ module.exports = {
   testRegex: 'loadtest[.]ts$',
   transform: { '^.+[.]ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }] },
   testEnvironment: 'node',
+  // WO-INFRA-012: the load fixtures write hundreds of rows; the same disposable-database check.
+  globalSetup: '<rootDir>/test/global-setup.ts',
 };

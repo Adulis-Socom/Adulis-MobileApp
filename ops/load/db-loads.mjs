@@ -14,7 +14,8 @@
  * session_replication_role = replica (triggers off) EXCEPT where the
  * trigger IS the thing measured, then removed.
  *
- * Run:  node ops/load/db-loads.mjs   (root .env supplies DATABASE_URL_MIGRATE)
+ * Run:  against a disposable database only (it refuses any other, WO-INFRA-012):
+ *        bash ops/scripts/test-db.sh up && eval "$(bash ops/scripts/test-db.sh env)" && node ops/load/db-loads.mjs
  */
 
 import { readFileSync } from 'node:fs';
@@ -58,6 +59,19 @@ const VARIANT = 'ffff9999-0000-4000-8000-000000000006';
 
 const c = new Client({ connectionString: process.env.DATABASE_URL_MIGRATE });
 const results = [];
+
+// WO-INFRA-012: a million synthetic orders with triggers off belong only in a database marked
+// disposable (the mark apps/api/test/db-target.ts checks; ops/scripts/test-db.sh sets it). The
+// root .env points at the persistent development database.
+async function assertDisposable() {
+  const { rows } = await c.query(
+    `SELECT shobj_description(oid, 'pg_database') AS marker FROM pg_database WHERE datname = current_database()`,
+  );
+  if (rows[0]?.marker !== 'adulis:disposable-test-database') {
+    console.error('FAIL  refusing to load: this database is not marked disposable. Run: bash ops/scripts/test-db.sh up');
+    process.exit(2);
+  }
+}
 
 const ms = async (fn) => {
   const t0 = process.hrtime.bigint();
@@ -279,15 +293,37 @@ async function cleanup() {
   await c.query(`SET session_replication_role = DEFAULT`);
 }
 
+// The cleanup's replica DELETEs run only on a database the check has passed (review).
+let verified = false;
+// A flag, not the error itself: a rejection reason can be falsy (review).
+let failed = false;
+let failure;
 try {
   await c.connect();
+  await assertDisposable();
+  verified = true;
   await seedBase();
   await expirySweep();
   await statsTrigger();
   await dispatchDraw();
   console.log(JSON.stringify(results, null, 2));
-} finally {
-  console.log('cleaning up synthetic rows...');
-  await cleanup();
-  await c.end();
+} catch (e) {
+  failed = true;
+  failure = e;
 }
+if (verified) {
+  console.log('cleaning up synthetic rows...');
+  try {
+    await cleanup();
+  } catch (e) {
+    // Never replace the run's own failure with the cleanup's (WO-INFRA-015B, PR105-F10): both are
+    // reported; the cleanup fails the run by itself only when the run had passed.
+    console.error(`cleanup failed: ${e?.message ?? e}`);
+    if (!failed) {
+      failed = true;
+      failure = e;
+    }
+  }
+}
+await c.end().catch(() => {});
+if (failed) throw failure ?? new Error('db-loads failed without a reason');

@@ -71,7 +71,7 @@ if (needsDb) {
     process.env['DATABASE_URL_MIGRATE'] ?? process.env['DATABASE_URL'];
   if (!connectionString) {
     console.error('FAIL  DATABASE_URL is not set, and live database checks are due at this tier.');
-    console.error('      Run:  docker compose up -d  &&  cp .env.example .env');
+    console.error('      Run:  cp .env.example .env  &&  docker compose up -d');
     process.exit(2);
   }
   client = new pg.Client({ connectionString });
