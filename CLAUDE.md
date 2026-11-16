@@ -186,6 +186,15 @@ the default outcome of a merge conflict in these files is a **silent** wrong ans
 | Root `package.json`, `tsconfig.base.json` | Thin and rarely touched. The root exists to delegate |
 | This file | Shared rules only. Anything true of one workstream belongs in that workstream's file |
 
+## Branches (INF-02, founder decision of 2026-11-16)
+
+`main` is **release-only**: no commits, merges, rebases, resets, force-pushes or new PRs into it until the
+founder authorises the final integration. **`dev` is the development integration baseline.** Every work order
+starts from the current verified `origin/dev` on its own `<track>/<work-order>` branch, opens its PR into
+`dev`, and is merged only with CI green. Historical branches are preserved, never deleted or rewritten, and
+never used as a starting point. Automated tests never use a persistent database or object store. Full policy:
+`docs/engineering/DEVELOPMENT-BRANCH-POLICY.md`.
+
 ## Development storage (every work order)
 
 Drive C: on the development machine has run out mid-session (ON-20261111-100). Follow

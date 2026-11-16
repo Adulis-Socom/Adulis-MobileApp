@@ -24,11 +24,15 @@ name: CI
 # S21). What remains is a human habit with a mechanical aid: the badge in
 # README.md points at this workflow's main-branch status, so a red main is
 # one glance away rather than one navigation nobody makes.
+#
+# INF-02: `dev` is the development integration branch and every work order
+# opens its PR into it (docs/engineering/DEVELOPMENT-BRANCH-POLICY.md), so PRs
+# into `dev` get the merge-result run too. `main` stays release-only.
 on:
   push:
     branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}
