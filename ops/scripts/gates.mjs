@@ -632,7 +632,7 @@ const GATES = [
    * configuration that wires it. No database is written: the scripts are driven against stubs, or
    * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
-  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs'] },
 ];
 
 /**

@@ -19,6 +19,12 @@ S3=adulis-test-minio
 PG_PORT=${ADULIS_TEST_PG_PORT:-55432}
 S3_PORT=${ADULIS_TEST_MINIO_PORT:-59000}
 MINIO_IMAGE=$(sed -n 's/^x-minio-image: &minio-image //p' docker-compose.yml)
+# OWNERSHIP (INF-03). `up` labels both containers as disposable and with their owner: by default the
+# checkout that ran it, or ADULIS_TEST_DB_OWNER. `down` removes only containers carrying both labels for
+# this owner and holding no bind mount or named volume. A container is never removed for its name alone.
+OWNER=${ADULIS_TEST_DB_OWNER:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}
+ROLE_LABEL=adulis.test-db.role
+OWNER_LABEL=adulis.test-db.owner
 
 env_lines() {
   cat <<EOF
@@ -63,8 +69,10 @@ case "${1:-}" in
     # Ctrl+C or a kill during setup used to leave an unmarked pair behind (WO-INFRA-015B).
     trap 'echo "test-db: interrupted; removing the containers this run started" >&2; remove_started; exit 130' INT TERM
     started+=("$(docker run -d --rm --name "$PG" -p "127.0.0.1:$PG_PORT:5432" -e POSTGRES_USER=adulis_bootstrap \
+      --label "$ROLE_LABEL=disposable" --label "$OWNER_LABEL=$OWNER" \
       -e POSTGRES_PASSWORD=ci-password -e POSTGRES_DB=adulis pgvector/pgvector:pg17)")
     started+=("$(docker run -d --rm --name "$S3" -p "127.0.0.1:$S3_PORT:9000" -e MINIO_ROOT_USER=adulis-local \
+      --label "$ROLE_LABEL=disposable" --label "$OWNER_LABEL=$OWNER" \
       -e MINIO_ROOT_PASSWORD=adulis-local-secret "$MINIO_IMAGE" server /data)")
     eval "$(env_lines)"
     # Ready only once the image's init has finished and restarted the server on its real socket.
@@ -99,15 +107,54 @@ case "${1:-}" in
     ;;
   env) env_lines ;;
   down)
-    # -v: the postgres image declares a VOLUME; without it every up/down left an anonymous volume.
     docker info >/dev/null 2>&1 || { echo "test-db: docker is not reachable; nothing was removed" >&2; exit 1; }
-    docker rm -f -v "$PG" "$S3" >/dev/null 2>&1 || true
-    names=$(docker ps -a --format '{{.Names}}') || { echo "test-db: docker stopped answering; check by hand" >&2; exit 1; }
-    if grep -qxE "$PG|$S3" <<<"$names"; then
-      echo "test-db: could not remove $PG or $S3" >&2
+    # Two phases: every container is identified first, and if ANY of them cannot be positively identified
+    # as this owner's disposable container, nothing at all is removed (INF-03).
+    ids=()
+    refused=()
+    for name in "$PG" "$S3"; do
+      docker inspect --type container "$name" >/dev/null 2>&1 || continue # absent: nothing to remove
+      # .Name only for volumes: a bind mount has no Name, and reading it fails the whole template.
+      if ! info=$(docker inspect --type container --format \
+        "{{.Id}}|{{index .Config.Labels \"$ROLE_LABEL\"}}|{{index .Config.Labels \"$OWNER_LABEL\"}}|{{range .Mounts}}{{.Type}}:{{if eq .Type \"volume\"}}{{.Name}}{{end}};{{end}}" \
+        "$name" 2>/dev/null); then
+        refused+=("$name exists but could not be inspected")
+        continue
+      fi
+      IFS='|' read -r id role owner mounts <<<"$info"
+      if [ "$role" != disposable ]; then
+        refused+=("$name ($id) has no $ROLE_LABEL=disposable label: not created by this script")
+      elif [ "$owner" != "$OWNER" ]; then
+        refused+=("$name ($id) belongs to '$owner', not '$OWNER': run down from that checkout, or set ADULIS_TEST_DB_OWNER to it deliberately")
+      else
+        # Only anonymous volumes (64 hex characters): a bind mount or a named volume is someone's data.
+        bad=""
+        IFS=';' read -ra list <<<"$mounts"
+        for m in "${list[@]}"; do
+          [ -n "$m" ] || continue
+          [[ "$m" =~ ^volume:[0-9a-f]{64}$ ]] || bad="$bad $m"
+        done
+        if [ -n "$bad" ]; then refused+=("$name ($id) mounts${bad}: not disposable"); else ids+=("$id"); fi
+      fi
+    done
+    if [ ${#refused[@]} -gt 0 ]; then
+      printf 'test-db: REFUSED, nothing was removed:\n' >&2
+      printf '  - %s\n' "${refused[@]}" >&2
       exit 1
     fi
-    echo "test-db: removed $PG and $S3" >&2
+    if [ ${#ids[@]} -eq 0 ]; then
+      echo "test-db: neither $PG nor $S3 exists; nothing to remove" >&2
+      exit 0
+    fi
+    # By ID, never by name; -v: the postgres image declares a VOLUME, which would otherwise be left behind.
+    docker rm -f -v "${ids[@]}" >/dev/null 2>&1 || true
+    for id in "${ids[@]}"; do
+      if docker inspect --type container "$id" >/dev/null 2>&1; then
+        echo "test-db: could not remove $id; check by hand" >&2
+        exit 1
+      fi
+    done
+    echo "test-db: removed ${#ids[@]} container(s) owned by '$OWNER'" >&2
     ;;
   *)
     echo "usage: bash ops/scripts/test-db.sh up | env | down" >&2
