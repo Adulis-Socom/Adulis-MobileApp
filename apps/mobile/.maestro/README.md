@@ -6,9 +6,61 @@ is the authority for what it checks; this file says what each flow needs.
 
 ## Before any flow
 
-**No flow runs without the API.** Every flow waits for an API answer on its first screen. Run the
-real local API (`pnpm dev:api`, NODE_ENV=development) on a DISPOSABLE database loaded with the review
-fixtures (Seller `fixture-weaves`, "Fixture Weaves"). Then:
+**Test devices only.** 28 flows clear the app's data (`clearState: true`) on whatever
+`com.adulis.app` is installed, and none checks that it is a debug build: never run them on a phone
+with a real install.
+
+**No flow runs without the API.** Every flow waits for an API answer on its first screen.
+
+**The fixtures are not in this repository.** Almost every flow asserts named fixture content
+(Seller "Fixture Weaves", `fixture-weaves`, and its Products and Scenes). That data, and every
+backend step between flow parts, lives only in a local review harness outside this repository
+(its location is in the founder's work-order notes):
+
+- the fixture scripts: the catalogue fixtures (Fixture Weaves, its Products and two Scenes, and a
+  second Market, "Market B", with its own `fixture-weaves`), the extra fixtures (three unverified
+  reviews; a second Seller, "Fixture Pottery", with 32 "Shop item NN" Products), and the For You
+  fixtures (twelve Scenes);
+- the Seller-API steps between parts (unpublish, publish, price, stock);
+- the category assignments, the chat assistant intent, the notification rows, the long Product
+  names and the seeded chat messages;
+- the fixture images, written to the development MinIO (host port 9100, bucket `adulis-media`,
+  under fixture prefixes).
+
+Only these flows assert no fixture content (they may still need other setup): `foundation-smoke`,
+`buyer-shell`, the four `buyer-auth-*` flows, `account`, `account-delete`, `shop-offline-1`,
+`shop-no-market-1`. Every other flow needs the harness data.
+
+## The database: two options
+
+**Never the database in the root `.env`** (`adulis`): `.env.example` points it at the persistent
+development database, and the flows create Accounts, saves and messages (`account-delete` really
+deletes an Account).
+
+**Option 1 - the harness path (the only path with fixtures).** The harness drops and rebuilds a
+disposable database, `adulis_gates`, inside the development PostgreSQL cluster, loads the fixtures,
+and starts the API (NODE_ENV=development) against it. Its API launcher refuses any other database.
+Fixture media goes to the development MinIO on host port 9100; those objects stay there, under their
+fixture prefixes, until someone removes them.
+
+**Option 2 - a fully isolated pair, with NO review fixtures.** `ops/scripts/test-db.sh` starts a
+disposable PostgreSQL (port 55432) and MinIO (port 59000), migrated, seeded and marked disposable.
+It holds only migrations and the seed, so every fixture-dependent flow fails. The harness does not
+work with this pair. From the repository root:
+
+```
+set -a; . ./.env; set +a                        # pnpm dev:api does not load .env itself
+bash ops/scripts/test-db.sh up                  # a disposable pair, marked disposable
+eval "$(bash ops/scripts/test-db.sh env)"       # its URLs, in THIS shell, AFTER .env: they win
+node ops/scripts/assert-disposable-db.mjs       # must PASS for every URL before the API starts
+NODE_ENV=development pnpm dev:api               # from the same shell
+```
+
+With option 2 the media origin is `http://127.0.0.1:59000/adulis-media`, so images need
+`adb reverse tcp:59000 tcp:59000` instead of 9100. Remove the pair with
+`bash ops/scripts/test-db.sh down`.
+
+## Then, on the device
 
 1. **The app.** A debug build of `com.adulis.app` whose native dependencies match this branch
    (`apps/mobile/package.json` dependencies and `app.json` unchanged since the build). It loads JS
@@ -18,7 +70,7 @@ fixtures (Seller `fixture-weaves`, "Fixture Weaves"). Then:
    Without the variable every screen shows the generic error. CI mode does not reload: restart
    Metro after a JS change.
 3. **adb reverse.** `adb reverse tcp:3000 tcp:3000` (API), `tcp:8081 tcp:8081` (Metro),
-   `tcp:9100 tcp:9100` (local media).
+   `tcp:9100 tcp:9100` (option 1 media; `tcp:59000` for option 2).
 
 The flows grant `ACCESS_LOCAL_NETWORK` (Android 17 debug builds need it to reach Metro).
 
@@ -26,24 +78,28 @@ The flows grant `ACCESS_LOCAL_NETWORK` (Android 17 debug builds need it to reach
 
 - **`foundation-smoke.yaml` first** after every database rebuild. It clears state, so the app
   registers a new device. Otherwise Home shows "The request is not valid." (a stale device id).
-- **`buyer-for-you.yaml` needs its own rebuilt database** with the For You fixtures. Those fixtures
-  and the catalogue fixtures both create `fixture-weaves`.
+- **`buyer-for-you`, `buyer-for-you-background-1` and `-2` need their own rebuilt database** with
+  the For You fixtures (twelve Scenes, the newest captioned "... (12)"). Those fixtures and the
+  catalogue fixtures both create `fixture-weaves`.
 - A "continues" flow below must run right after the flow it names, without clearing state.
 - A flow that ends on a cleared install leaves a guest: sign in before a signed-in step.
 - `account-delete.yaml` STEP `confirm` really deletes the Account: disposable Accounts only.
 
 ## OTP codes
 
-There is no SMS vendor. In development the API's fake SMS adapter appends every sign-in and
-deletion code to `apps/api/.dev-sms.log` (only when NODE_ENV is exactly `development`; never on
-stdout). Take the newest six-digit code for the phone and pass it as `OTP`. Example (bash, from the
-repository root):
+There is no SMS vendor. The API's fake SMS adapter appends every sign-in and deletion code to
+`apps/api/.dev-sms.log` in the checkout that runs the API (only when NODE_ENV is `development` or
+`staging`; never on stdout). **The file is emptied every time the API starts**: read a code after
+its request and before any API restart. Take the newest six-digit code for the phone and pass it as
+`OTP`. Example (bash, from the root of the checkout that runs the API):
 
 ```
 grep -F "+251911600001" apps/api/.dev-sms.log | tail -1 | grep -oE '"[0-9]{6}"' | tr -d '"'
 ```
 
-Use a new disposable phone (E.164) for every run: a new phone is a new Account (the age
+Each step needs only its own value: the step that requests a code takes `PHONE`, the step that
+enters it takes `OTP` (for example `account-delete` STEP `request` takes `PHONE`, STEP `confirm`
+takes `OTP`). Use a new disposable phone (E.164) for every run: a new phone is a new Account (the age
 declaration appears) and avoids per-phone code limits. Never a real person's number.
 
 ## Variables
@@ -51,7 +107,7 @@ declaration appears) and avoids per-phone code limits. Never a real person's num
 | Variable | Meaning |
 |---|---|
 | `PHONE` | Disposable E.164 phone, for example `+251911600001` |
-| `OTP` | The newest code for that phone from the development SMS log |
+| `OTP` | The newest code for that phone from the SMS log |
 | `DIGITS` | The same phone without `+` (used in `adulis://auth/verify?phone=%2B${DIGITS}`) |
 | `STEP` | Which step of a multi-step flow to run |
 | `REF`, `PRIVATE_REF` | A Scene `public_ref` from the fixtures (see the flow header for which Scene) |
@@ -61,50 +117,50 @@ Command form: `maestro test -e KEY=VALUE --test-output-dir <dir> .maestro/<flow>
 
 ## Flow index
 
-"Between" is a backend step done outside Maestro, on the disposable database or through the Seller API.
+"Between" is a backend step done outside Maestro by the harness, on the disposable database or
+through the Seller API. "Dark + font" means Dark mode and a font scale (for example 1.3) set with
+adb before the step (`adb shell cmd uimode night yes`, `adb shell settings put system font_scale
+1.3`); put both back after.
 
 | Flow(s) | Env | Starts | Needs; between the parts |
 |---|---|---|---|
 | `foundation-smoke` | - | clears state | Run first. Opens the development-only diagnostics. |
-| `buyer-shell` | - | clears state | Guest. |
+| `buyer-shell` | - | clears state | Guest. Sets Dark in the app and back. |
 | `buyer-auth-request` -> `buyer-auth-verify` | `PHONE`; `OTP` | clears state; continues | Between: read the code for `PHONE`. Verify signs in, restores after a cold relaunch, then signs out. |
 | `buyer-auth-verify-link` | `DIGITS` | clears state | Afterwards check the SMS log gained no line for `+DIGITS`. |
 | `buyer-auth-leave-verify` | `DIGITS` | continues `buyer-auth-request` | Same phone as the request. |
-| `buyer-for-you` | - | clears state | Own rebuilt database (For You fixtures). |
-| `buyer-for-you-background-1` -> `-2` | - | clears state; continues | Between: make the newest Scene PRIVATE and stay in the background longer than the freshness interval (5 minutes in a development build). |
+| `buyer-for-you` | - | clears state | For You database (twelve Scenes). |
+| `buyer-for-you-background-1` -> `-2` | - | clears state; continues | For You database (twelve Scenes). Between: make the newest Scene PRIVATE and stay in the background longer than the freshness interval (5 minutes in a development build). |
 | `buyer-scene-explorer` | - | clears state | Guest; catalogue fixtures. |
-| `buyer-scene-explorer-dark` | - | | Run at font scale 1.0 and 1.3. |
-| `buyer-scene-explorer-link` | `REF` | | Cold link and a malformed link. |
+| `buyer-scene-explorer-dark` | - | clears state | Catalogue fixtures. Sets Dark in the app; run at font scale 1.0 and 1.3. |
+| `buyer-scene-explorer-link` | `REF` | clears state | Catalogue fixtures. Cold link and a malformed link. |
 | `buyer-scene-explorer-private-1` -> `-2` | `PRIVATE_REF` | clears state; continues | Between: Coffee tray stock to 0 through the Seller API (the Scene goes PRIVATE). |
 | `buyer-scene-explorer-background-1` -> `-2` | `PRIVATE_REF` | clears state; continues | Between: the same stock change, and stay away past the interval. |
-| `catalogue-product-1` -> `catalogue-product-refresh` -> `catalogue-product-back` | -; `EXPECT`, `SHOT`; - | continues | Before refresh: a Seller API change (stock, price or publication). Before back: unpublish the Product. |
-| `catalogue-product-link` | - | | Malformed, unknown and valid Product links. |
+| `catalogue-product-1` -> `catalogue-product-refresh` -> `catalogue-product-back` | -; `EXPECT`, `SHOT`; - | clears state; continues | Catalogue fixtures including Market B. Before refresh: a Seller API change (stock, price or publication). Before back: unpublish the Product. |
+| `catalogue-product-link` | - | clears state | Malformed, unknown and valid Product links. |
 | `catalogue-signed-in`, `shop-signed-in`, `search-signed-in` | - | continues a sign-in | Start signed in; the first two sign out at the end. |
-| `shop` | - | clears state | Guest. |
-| `shop-refresh-1` -> `-2` -> `-3` | - | continues | Before 2: unpublish the Clay cup. Before 3: republish it and reprice the Woven basket's Small Variant to 950.00. |
+| `shop` | - | clears state | Guest. Catalogue fixtures including Market B, plus the extra fixtures (Fixture Pottery, 32 Products: two pages). |
+| `shop-refresh-1` -> `-2` -> `-3` | - | clears state; continues | Before 2: unpublish the Clay cup. Before 3: republish it and reprice the Woven basket's Small Variant to 950.00. |
 | `shop-offline-1` -> `-2` | - | clears state; continues | Part 1 with the API stopped. Between: start the API. |
 | `shop-no-market-1` -> `-2` | - | clears state; continues | Between: clear the device's Market in the disposable database. |
-| `categories` | `STEP` = `shop`, `search`, `save`, `dark` | | Category fixtures. `save` and `dark` signed in; `dark`: Dark mode and enlarged text set first. |
-| `search` | - | | Guest. |
-| `seller-profile` | - | | Guest. |
-| `seller-profile-private-1` -> `-2` | - | continues | Between: Coffee tray out of stock (the Scene goes PRIVATE). |
-| `seller-reviews-verified` -> `seller-reviews-withdrawn` | - | continues | **STAND-IN RESULTS, never real successes.** Need verified-review fixtures and a payment stand-in switched ON (`wo007a-fixtures`, `wo007a-payment.mjs`); between: stand-in OFF. The backend has no verified payment yet, so without the stand-in no review is public. Those scripts are not in this repository and are currently missing: these flows cannot be reproduced. |
+| `categories` | `STEP` = `shop`, `search`, `save`, `dark` | `shop`, `search` clear state | Catalogue and extra fixtures plus the harness's category assignments. `save` and `dark` signed in; `dark`: Dark + font. |
+| `search` | - | clears state | Guest. Catalogue fixtures including Market B, plus the extra fixtures. |
+| `seller-profile` | - | clears state | Guest. Catalogue fixtures including Market B, plus the extra fixtures (three unverified reviews, never shown). Payment stand-in OFF. |
+| `seller-profile-private-1` -> `-2` | - | clears state; continues | Between: Coffee tray out of stock (the Scene goes PRIVATE). |
+| `seller-reviews-verified` -> `seller-reviews-withdrawn` | - | clears state; continues | **STAND-IN RESULTS, never real successes.** Need verified-review fixtures and a payment stand-in switched ON (`wo007a-fixtures`, `wo007a-payment.mjs`); between: stand-in OFF. The backend has no verified payment yet, so without the stand-in no review is public. Those scripts are not in this repository and are currently missing: these flows cannot be reproduced. |
 | `saved-guest-1` -> `saved-guest-2` -> `saved-collections` | `PHONE`; `OTP`; - | clears state; continues | Between 1 and 2: read the code. |
-| `card-saves-guest` -> `card-saves-guest-2` | `PHONE`; `OTP` | clears state; continues | Between: read the code. |
-| `card-saves` | `STEP` = `shop`, `search`, `seller`, `account-b`, `dark` | continues `card-saves-guest-2` | `account-b`: another Account signed in first; `dark`: Dark mode and enlarged text set first. |
-| `saved-states` | `STEP` = `unavailable`, `signed-out`, `back`, `dark` | | `unavailable`: Woven basket unpublished first. `back`: signed in again on a fresh install. |
-| `account` | `STEP` = `guest`, `signed-in`, `sign-out` | | `signed-in` after a sign-in flow. |
-| `account-delete` | `STEP` = `request`, `cancel`, `confirm`; `PHONE`, `OTP` | signed in | Between `request` and `confirm`: read the deletion code. `confirm` deletes the Account. |
-| `notifications` | `STEP` = `guest`, `read`, `view` | | `read`, `view`: a signed-in Account with notification rows inserted on the disposable database first. **Fixture rows**, not real activity. |
-| `messaging` | `STEP` = `guest`, `open`, `reopen`, `view`, `empty` | | A disposable assistant intent ("Delivery times?") for Fixture Weaves: the automated answer is **fixture-driven**. |
-| `messaging-layout` | `STEP` = `seed`, `view`, `open`, `offline`, `retry` | signed in | After `seed`: 30 history messages written to the conversation. Between `open` and `offline`: stop the API. Before `retry`: start it. |
-| `product-context-messaging` | `STEP` = `guest`, `guest-in`, `c-open`, `ask-a`, `ask-b`, `d-open`, `d-send`, `off-open`, `off-send`, `off-retry`, `view`, `other`; `PHONE`, `OTP` | | Between `d-open` and `d-send`: unpublish the Clay cup. After `off-open`: stop the API. Before `off-retry`: start it. |
-| `conversation-product-selector` | `STEP` = `seed`, `select`, `select2`, `view` | signed in | |
-| `buyer-journeys` | `STEP` = `j1` .. `j5` | signed in (new Account) | |
-| `accessibility-completion` | `STEP` = `shop-open`, `shop-fail`, `shop-retry`, `names`, `seller-tabs`, `collections`, `delete-request`, `delete-preview`; `PHONE`, `OTP` | | `shop-fail` with the API stopped, `shop-retry` with it started. `names`: two fixture Products renamed to long names (English and Ge'ez) first. `delete-preview` cancels; it never deletes. |
-
-"Dark mode and enlarged text set first" means, for example:
-`adb shell cmd uimode night yes` and `adb shell settings put system font_scale 1.3`. Put both back after.
+| `card-saves-guest` -> `card-saves-guest-2` | `PHONE`; `OTP` | clears state; continues | Between: read the code. The header of `card-saves-guest.yaml` names its part 2 as `saved-guest-2.yaml`: stale; part 2 is `card-saves-guest-2.yaml`. |
+| `card-saves` | `STEP` = `shop`, `search`, `seller`, `account-b`, `dark` | continues `card-saves-guest-2` | `account-b`: another Account signed in first; `dark`: Dark + font. |
+| `saved-states` | `STEP` = `unavailable`, `signed-out`, `back`, `dark` | keeps state | `unavailable`: Woven basket unpublished first. `back`: signed in again on a fresh install. `dark`: Dark + font. |
+| `account` | `STEP` = `guest`, `signed-in`, `sign-out` | `guest` clears state | `signed-in` after a sign-in flow. |
+| `account-delete` | `STEP` = `request` (`PHONE`), `cancel`, `confirm` (`OTP`) | signed in | `PHONE` is the signed-in Account's phone. Between `request` and `confirm`: read the deletion code. `confirm` deletes the Account. |
+| `notifications` | `STEP` = `guest`, `read`, `view` | `guest` clears state | `read`, `view`: a signed-in Account with notification rows inserted on the disposable database first. **Fixture rows**, not real activity. `view`: Dark + font. |
+| `messaging` | `STEP` = `guest`, `open`, `reopen`, `view`, `empty` | `guest` clears state | A disposable assistant intent ("Delivery times?") for Fixture Weaves: the automated answer is **fixture-driven**. `view`: Dark + font. |
+| `messaging-layout` | `STEP` = `seed`, `view`, `open`, `offline`, `retry` | signed in | After `seed`: 30 history messages written to the conversation; Dark + font set. Between `open` and `offline`: stop the API. Before `retry`: start it. |
+| `product-context-messaging` | `STEP` = `guest` (`PHONE`), `guest-in` (`OTP`), `c-open`, `ask-a`, `ask-b`, `d-open`, `d-send`, `off-open`, `off-send`, `off-retry`, `view`, `other` | `guest` clears state | Between `d-open` and `d-send`: unpublish the Clay cup. After `off-open`: stop the API. Before `off-retry`: start it. `view`: Dark + font. |
+| `conversation-product-selector` | `STEP` = `seed`, `select`, `select2`, `view` | signed in | `view`: Dark + font. |
+| `buyer-journeys` | `STEP` = `j1` .. `j5` | signed in (new Account) | `j2` needs the harness's category assignments. |
+| `accessibility-completion` | `STEP` = `shop-open`, `shop-fail`, `shop-retry`, `names`, `seller-tabs`, `collections`, `delete-request` (`PHONE`), `delete-preview` (`OTP`) | `collections`, `delete-request`, `delete-preview` start signed in | Font scale and theme set by the harness. `shop-fail` with the API stopped, `shop-retry` with it started. `names`: two fixture Products renamed to long names (English and Ge'ez) first. `delete-preview` cancels; it never deletes. |
 
 ## Results that are not real successes
 
@@ -113,9 +169,6 @@ Command form: `maestro test -e KEY=VALUE --test-output-dir <dir> .maestro/<flow>
 | A public Seller review (`seller-reviews-*`) | Stand-in: needs the payment stand-in |
 | Notification rows (`notifications`) | SQL-inserted fixture rows; one generic sentence |
 | An automated chat answer (`messaging`) | A fixture intent |
-| A sign-in code | Read from the development SMS log; no SMS is sent |
+| Chat history in the messaging flows | SQL-inserted fixture messages, half of them Seller messages no Seller sent |
+| A sign-in code | Read from the SMS log file; no SMS is sent |
 | Anything shown while Metro points at the contract mock (`pnpm mock:api`) | Contract examples |
-
-A local review harness that automates these steps exists outside this repository (example location
-on the founder's machine: `G:\AdulisDevelopment\tools\review\`). It is not required to read or run
-a single flow.
