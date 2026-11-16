@@ -16,4 +16,8 @@ module.exports = {
     "/node_modules/@react-native/babel-preset/"
   ],
   ...(process.env.ADULIS_JEST_CACHE ? { cacheDirectory: process.env.ADULIS_JEST_CACHE } : {}),
+  // INF-06: off CI, Jest's default is one worker per core less one: 19 on the 20-thread, 16 GB development
+  // host, where such a run under memory pressure gave no result for hours (INF-04V, ON-004). Two workers
+  // locally; ADULIS_JEST_WORKERS overrides; CI keeps Jest's default.
+  ...(process.env.CI ? {} : { maxWorkers: process.env.ADULIS_JEST_WORKERS || 2 }),
 };
