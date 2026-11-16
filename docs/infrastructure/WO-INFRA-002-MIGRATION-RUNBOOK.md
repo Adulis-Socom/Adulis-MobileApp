@@ -117,6 +117,13 @@ set MIGRATE_LIVE=approved
 node ops\scripts\minio-migrate.mjs migrate >> G:\AdulisDevelopment\minio-move\<same name>.log 2>&1
 ```
 
+**Check that Ctrl+C works in that console, before the move.**
+- Open it from the Run dialog (Win+R), not from another program. A console started by a script, a scheduler or
+  a background job can inherit "Ctrl+C disabled" from it. Ctrl+C then does nothing at all, and the run simply
+  goes on to its own end (seen in INF-04).
+- In the new console, type `ping -t 127.0.0.1` and press Ctrl+C: it must stop. If it does not, close that
+  console and open another from Win+R.
+
 **One console, one run.**
 - Run `migrate`, `rollback` or `recover` from **one** console only, one at a time. The lock in the backup
   folder stops two runs on the same folder, but not two runs started with different folders.
