@@ -8,7 +8,9 @@
  *
  * --baseline <file>: a --json report taken before the suites (the Jest setup writes it). Only orphan
  * rows that are not in it are judged, so a second run on the same disposable database is judged on
- * what THAT run left, not on the total (WO-INFRA-015B review).
+ * what THAT run left, not on the total (WO-INFRA-015B review). The COUNT lines show both, per key:
+ * the orphans in the database after the run and those the run added; a NOTE says when the baseline
+ * was not empty, i.e. the database was not fresh (INF-03).
  *
  * Connects with DATABASE_URL_MIGRATE, else DATABASE_URL.
  *
@@ -117,6 +119,34 @@ export function sinceBaseline(report, baseline) {
     if (fresh.length) out.push({ ...r, count: fresh.length, orphans: fresh });
   }
   return out;
+}
+
+/**
+ * What the output says before the verdict (INF-03): per key, the orphans in the database after the
+ * run (absolute) and those the run added (the delta the verdict judged), and a NOTE when the database
+ * was not fresh. Pure and informational: the verdict is judge()'s, on `judged` alone. `baseline` is
+ * null when none was given: then nothing tells this run's rows from older ones, and all are judged.
+ */
+export function account(report, judged, baseline) {
+  const sum = (list) => list.reduce((n, r) => n + r.count, 0);
+  const added = new Map(judged.map((r) => [r.key, r.count]));
+  const lines = [];
+  if (baseline?.length)
+    lines.push(
+      `  NOTE  not a fresh database: ${sum(baseline)} orphan row(s) on ${baseline.length} key(s) were already here before this run; only the rows this run added are judged.`,
+    );
+  for (const r of report)
+    lines.push(
+      baseline
+        ? `  COUNT ${r.key}: ${r.count} in the database, ${added.get(r.key) ?? 0} added by this run`
+        : `  COUNT ${r.key}: ${r.count} in the database (no baseline: all judged)`,
+    );
+  lines.push(
+    baseline
+      ? `  COUNT total: ${sum(report)} orphan row(s) in the database after this run, ${sum(judged)} added by it.`
+      : `  COUNT total: ${sum(report)} orphan row(s) in the database (no baseline: all judged).`,
+  );
+  return lines;
 }
 
 const q = (id) => '"' + id.replace(/"/g, '""') + '"';
@@ -235,6 +265,8 @@ async function main() {
       `  judged: only the rows added since the baseline (${total(result.report) - total(judged)} older orphan row(s) ignored)\n`,
     );
   }
+  for (const line of account(result.report, judged, baseline)) console.log(line);
+  console.log('');
   for (const r of failures)
     console.log(
       r.exceeded === undefined
@@ -249,8 +281,14 @@ async function main() {
   // lower maxRows in KNOWN_TEST_LEAKS once the full suite confirms it.
   for (const l of lowered)
     console.log(`  NOTE  ${l.key}: ${l.count} row(s), below its maximum of ${l.maxRows}.`);
+  // `gone` is judged on this run's rows: on a reused database the key may still hold older ones.
+  const older = new Map(result.report.map((r) => [r.key, r.count]));
   for (const k of gone)
-    console.log(`  NOTE  ${k}: no orphan left; remove it from KNOWN_TEST_LEAKS once confirmed.`);
+    console.log(
+      older.has(k)
+        ? `  NOTE  ${k}: this run added none (${older.get(k)} older row(s) still in the database).`
+        : `  NOTE  ${k}: no orphan left; remove it from KNOWN_TEST_LEAKS once confirmed.`,
+    );
   if (jsonFile) writeFileSync(jsonFile, JSON.stringify(result.report, null, 2));
   const rows = (list) => list.reduce((s, r) => s + r.count, 0);
   if (failures.length)

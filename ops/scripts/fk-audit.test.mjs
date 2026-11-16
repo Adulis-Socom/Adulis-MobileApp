@@ -2,7 +2,7 @@
 // leaks are named AND counted, nothing else passes, and the list only shrinks.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { KNOWN_TEST_LEAKS, judge, sinceBaseline } from './fk-audit.mjs';
+import { KNOWN_TEST_LEAKS, account, judge, sinceBaseline } from './fk-audit.mjs';
 
 const row = (constraint, count = 1, table = 'core.device') => ({
   constraint,
@@ -128,4 +128,38 @@ test('since the baseline: an empty baseline judges everything, and a bad one is 
   assert.deepEqual(sinceBaseline(after, []), after);
   assert.deepEqual(sinceBaseline([], [orphan(DEVICE, ['a'])]), []);
   for (const bad of [null, {}, 'x', 3]) assert.throws(() => sinceBaseline(after, bad), /baseline/);
+});
+
+// The account beside the verdict (INF-03): absolute counts, this run's delta, and a reused database
+// made visible. Informational only; the verdict above is judged on the delta alone.
+test("account: on a fresh database every orphan is this run's, and no NOTE is printed", () => {
+  const report = [orphan(DEVICE, ['a', 'b'])];
+  assert.deepEqual(account(report, sinceBaseline(report, []), []), [
+    `  COUNT ${DEVICE}: 2 in the database, 2 added by this run`,
+    '  COUNT total: 2 orphan row(s) in the database after this run, 2 added by it.',
+  ]);
+  assert.deepEqual(account([], [], []), [
+    '  COUNT total: 0 orphan row(s) in the database after this run, 0 added by it.',
+  ]);
+  // No baseline at all: nothing tells this run's rows from older ones, and it says so.
+  assert.deepEqual(account(report, report, null), [
+    `  COUNT ${DEVICE}: 2 in the database (no baseline: all judged)`,
+    '  COUNT total: 2 orphan row(s) in the database (no baseline: all judged).',
+  ]);
+});
+
+test('account: a reused database shows the absolute count beside the delta, with a NOTE', () => {
+  const before = [orphan(DEVICE, ['a', 'b', 'c']), orphan('core.x.healed_fkey', ['h'])];
+  const after = [orphan(DEVICE, ['a', 'b', 'c', 'd', 'e', 'f']), orphan('core.x.new_fkey', ['z'])];
+  const judged = sinceBaseline(after, before);
+  assert.deepEqual(account(after, judged, before), [
+    '  NOTE  not a fresh database: 4 orphan row(s) on 2 key(s) were already here before this run; only the rows this run added are judged.',
+    `  COUNT ${DEVICE}: 6 in the database, 3 added by this run`,
+    '  COUNT core.x.new_fkey: 1 in the database, 1 added by this run',
+    '  COUNT total: 7 orphan row(s) in the database after this run, 4 added by it.',
+  ]);
+  // A second run that adds nothing: the database still holds its orphans, the run added none.
+  assert.deepEqual(account(after, sinceBaseline(after, after), after).slice(-1), [
+    '  COUNT total: 7 orphan row(s) in the database after this run, 0 added by it.',
+  ]);
 });
