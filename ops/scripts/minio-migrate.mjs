@@ -1325,6 +1325,7 @@ async function migrate(cfg) {
     writeRecord(cfg, J, 'pending');
     await pauseAt('before-switch');
     faultAt('before-switch');
+    await checkpoint(); // an interrupt here stops before compose replaces the old container
     J.mark('switch');
     docker(['compose', 'up', '-d', 'minio', 'minio-init'], { env: { ADULIS_MINIO_SWITCH_RUN: cfg.run } });
     rehearseInterrupt('switch');
@@ -1340,6 +1341,7 @@ async function migrate(cfg) {
       refuse(`${cfg.dstContainer} mounts ${mount?.Name} at /data, not ${cfg.dstVolume}`);
     await pauseAt('after-switch');
     faultAt('after-switch');
+    await checkpoint(); // an interrupt here goes straight back to the old MinIO
     J.mark('verify-served');
     const served = { network: 'host', host: `127.0.0.1:${cfg.hostPort}`, ...cfg.dstCreds };
     waitReady(cfg, served);
@@ -1528,7 +1530,12 @@ async function rollback(cfg) {
     failRun(`${cfg.dstContainer} mounts ${current?.mount ?? 'nothing'}, neither ${cfg.dstVolume} nor ${m.source.volume}: nothing to roll back; check by hand (runbook, Rollback)`);
   if (situation !== 'proceed') {
     // A rollback killed part-way (INF01-007): finish what it left, then verify as a full one does.
-    log(`an earlier rollback of run ${m.run} did not finish (${situation}): completing it`);
+    const prior = m.rollbacks.slice(0, -1).find((r) => r.finishedAt);
+    log(
+      situation === 'already-rolled-back' && prior
+        ? `run ${m.run} was already rolled back (${prior.finishedAt}): verifying it again`
+        : `an earlier rollback of run ${m.run} did not finish (${situation}): completing it`,
+    );
     note(`rerun: ${situation}`);
     if ((situation === 'clear-record' || rec.present) && !(await invalidateRecord(cfg, J, ROLLED_BACK_RECORD, `rollback rerun: ${situation}`)))
       failRun(`the move record in ${cfg.dstVolume} could not be cleared: delete /${MOVE_RECORD} in it by hand, and remove ADULIS_MINIO_VOLUME from .env, before any compose up`);
@@ -1751,7 +1758,8 @@ async function recover(cfg) {
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   // Installed for every command, so Node never dies between two steps of a migrate or rollback.
-  // SIGHUP: the console window closed (Node on Windows then has about 10 s); SIGBREAK: Ctrl+Break.
+  // SIGHUP: the console window closed (Windows then ends Node and its docker children about 5 s later,
+  // measured in INF-04: the undo may not finish, and `recover` picks up what it leaves); SIGBREAK: Ctrl+Break.
   // Both used to kill Node between two steps with the source stopped and no undo (review M1).
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) process.on(sig, () => interruption.on(sig));
   try {

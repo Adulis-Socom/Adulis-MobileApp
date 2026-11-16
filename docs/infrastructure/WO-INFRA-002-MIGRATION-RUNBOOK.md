@@ -44,10 +44,20 @@ for MinIO, `adulis-platform_adulis-miniodata`, then lets compose recreate MinIO 
 9. **Switch:** `docker compose up -d minio minio-init`. The init container must exit 0; MinIO must mount
    the new volume; the full inventory and the anonymous probes run again through the published port.
 
-**Any failure from step 3 on undoes itself:** before the switch, the old container is started again and
-the target volume this run created is removed (it was never served); after the switch, the new container
-is renamed aside and the old one recreated from its recorded configuration on `adulis-pgdata`; the target
-volume is then kept, because it was served. Rehearsed: `WO-INFRA-007-MIGRATION-VALIDATION.md`.
+**Before the switch** the run writes the move record as `pending <run>`. **After step 9 passes** it
+rewrites it as `complete <run>`, read back. Only a complete record lets a normal start serve the new volume.
+
+**Any failure from step 3 on undoes itself, as far as Docker lets it.**
+- **Before the switch:** the old container is started again, and the target volume this run created is
+  removed (it was never served).
+- **After the record is written:** the record is renamed aside first, verified, with bounded retries.
+- **After the switch:** the new container is renamed aside (Docker will not restart it), and the old one is
+  recreated from its recorded configuration on `adulis-pgdata`. The target volume is then kept, because it
+  was served.
+- **The outcome:** each step's result goes into `manifest.json`, and the run ends with one of `NOTHING
+  CHANGED`, `UNDO OK`, `UNDO PARTIAL` or `UNDO INCOMPLETE`. See "Recovery limits" below for what each
+  means.
+- **Rehearsed:** `WO-INFRA-007-MIGRATION-VALIDATION.md`; INF-04 for the record and recovery paths.
 
 ## Before you start
 
@@ -63,13 +73,20 @@ deletes no volume, but a checkout with an older compose file still deletes the l
   founder decision (`WO-INFRA-007-CUTOVER-AND-ROLLBACK.md`).
 - Stop the API and the console dev server. Not for consistency (the stop in step 3 guarantees that), but
   so nothing shows errors for the two minutes MinIO is down.
-- `MINIO_HOST_PORT=9100`: no `.env` sets it today, and MinIO's host port defaults to 9000, which
-  `nac-trial-minio` holds. The script refuses without it.
+- `MINIO_HOST_PORT=9100`. Since INF-04, compose's host port default is 9100 too. 9000 is where
+  `nac-trial-minio` listens on this machine. The script refuses if compose would publish MinIO on a
+  port other than the one the source uses.
 - **Keep the old MinIO image.** It can no longer be pulled (Docker Hub and quay.io dropped it), and
   `rollback` recreates the old container from it. Once nothing runs it, `docker image prune -a` or a
-  Docker Desktop clean-up would delete it. Save it first:
-  `docker image save minio/minio:latest -o G:/AdulisDevelopment/minio-move/minio-old-image.tar`.
-  `rollback` refuses, before stopping anything, if the image is missing.
+  Docker Desktop clean-up would delete it.
+  - **Save it first,** and check that the tag is the image the container runs:
+    `docker inspect adulis-minio --format '{{.Image}}'` must equal
+    `docker image inspect minio/minio:latest --format '{{.Id}}'`. Then:
+    `docker image save minio/minio:latest -o G:/AdulisDevelopment/minio-move/minio-old-image.tar`.
+  - Keep its SHA-256 beside it. INF-04 saved and restore-tested such a copy.
+  - `migrate` also saves the image into the run's backup folder. `rollback` and `recover` load it from
+    there if the image was pruned, and refuse before stopping anything if neither the image nor the copy
+    exists.
 - **The backup folder is sensitive.** It holds every object, including evidence, and the old
   container's recorded configuration with its local MinIO credentials. The script creates it
   owner-only, but exFAT ignores permissions, so keep the SSD to this machine (storage policy, trusted
@@ -95,9 +112,13 @@ the plan printed. **Anything else** ends with `REFUSED:` and the reason; the old
 - **Unexpected buckets:** `plan` and `migrate` refuse a source holding any bucket other than the two
   buckets and the 17 PostgreSQL directories, before anything stops.
 - **Interrupts:** Ctrl+C is honoured at the next step, and the undo runs.
-- **The move record:** a verified move writes `.adulis-migration-complete` into the new volume. Without
-  it, the MinIO guard in `docker-compose.yml` refuses to serve the new volume while `adulis-pgdata`
-  holds MinIO data. A failed or undone move never leaves it.
+- **The move record** (`.adulis-migration-complete` in the new volume) is two-phase since INF-04:
+  - **`pending <run>` before the switch.** The MinIO guard in `docker-compose.yml` accepts it only during
+    that run's own switch;
+  - **`complete <run>` after the switched MinIO is verified.** Only this lets a normal start serve the new
+    volume while `adulis-pgdata` holds MinIO data;
+  - **after a failure:** the undo renames the record aside (verified). If the undo cannot (see "A record
+    that could not be cleared"), the record stays pending, and every normal start refuses it.
 - **After a success:** put `ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata` in the root `.env`, so
   later `docker compose` commands keep MinIO on the new volume (`docs/infrastructure/MINIO-STARTUP.md`).
   Not before: after a failure, the variable stays out of `.env`.
@@ -119,7 +140,10 @@ MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/mini
   required whatever `MIGRATE_SRC_VOLUME` says.
 
 **Then it:**
-- stops the new MinIO and renames it aside;
+- **renames the move record aside first** (`.adulis-migration-rolled-back`, read back). If that fails, it
+  refuses with nothing stopped. From here on, no kill can leave a record a later start would serve
+  (INF-04);
+- stops the new MinIO and renames it aside (Docker will not restart it);
 - recreates the old container from the recorded configuration on `adulis-pgdata`, and logs what that
   configuration does not carry over;
 - compares the restored store with its inventory at the time of the move. `ROLLED BACK` is printed
@@ -127,7 +151,17 @@ MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/mini
 - lists every object added, changed or deleted after the switch. Those stay in the new volume and the
   renamed container: nothing is deleted.
 
-**If the old container cannot be recreated,** it puts the new MinIO back and starts it.
+**If the old container cannot be recreated,** it puts the record back (the new MinIO's guard needs it),
+puts the new MinIO back and starts it. If the record cannot be put back either, it does not start the
+new MinIO, and says that nothing serves (manual action).
+
+**A rollback that was interrupted** (a closed window, a killed process) is finished by running `rollback`
+again. It recognises each state a kill can leave:
+- the new MinIO still serving, with the record already renamed;
+- the new one renamed aside, with the old one not yet back;
+- the old one back.
+
+It completes the remaining steps and verifies as a full rollback does.
 
 **What it never does:** run `git checkout` or touch PostgreSQL.
 
@@ -136,6 +170,67 @@ MinIO does today. The read-only rule applies to the move, not to a rollback.
 
 While rolled back, `docker compose up` fails on the port, deliberately, until the founder decides.
 Remove `ADULIS_MINIO_VOLUME` from the root `.env` after a rollback, so compose refuses to run at all.
+
+## After a migrate that did not finish: `recover`
+
+```
+MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/minio-migrate.mjs recover
+```
+
+Use it when `migrate` was killed (a closed console window, a crash, a power cut), or when its undo
+ended `UNDO PARTIAL` or `UNDO INCOMPLETE`.
+- **What it reads first:** the manifest and the live state, which it prints:
+  - which container holds the MinIO name, on which volume;
+  - whether it runs;
+  - the move record.
+- **What it then does, from what it found** (never from assumptions):
+  - renames any move record aside (verified, with bounded retries);
+  - removes only that run's helper containers, network and scratch volume;
+  - brings the old MinIO back on `adulis-pgdata`. It either starts the recorded container, or sets the
+    new one aside and recreates the old one from its recorded configuration, loading the saved image if
+    it was pruned;
+  - verifies that it answers, and compares it with the inventory the run took.
+- **What it never does:** delete a volume. The target volume is kept without a record; remove it by hand
+  before a new run.
+- **A state it does not recognise** is refused, not guessed.
+- **It is repeatable:** a second run finds nothing left to do.
+- **If the run had already committed** (record complete, the new MinIO serving: killed after its verified
+  switch), nothing is undone. The end is recorded, and `rollback` is then the way back.
+
+## A record that could not be cleared
+
+The undo and `recover` print `move record NOT cleared` for each failed attempt, then `MANUAL ACTION
+REQUIRED`.
+- **The record left is pending.** The guard refuses it at every normal start, so it cannot make MinIO
+  serve the copy. But it must still go before the target volume is used:
+  1. Run `recover` again once Docker works.
+  2. Or by hand (the image is the local PostgreSQL one): `docker run --rm -v adulis-platform_adulis-miniodata:/d --entrypoint mv pgvector/pgvector:pg17 /d/.adulis-migration-complete /d/.adulis-migration-invalidated`.
+- **The set-aside failed container** (`adulis-minio-failed-<run>`) still carries that run's switch
+  setting. Never start it by hand; Docker will not restart it.
+
+## Recovery limits (INF-04)
+
+What is automatic, what is partial, and what needs a person.
+
+| Situation | What happens | Automatic? | A person must |
+|---|---|---|---|
+| A failure before the source is stopped (a preflight refusal, a failed image save) | `NOTHING CHANGED`; recorded in `manifest.json` | yes | read the reason |
+| A failure after the stop, Docker healthy | the old MinIO comes back, the record (if written) is renamed aside and read back: `UNDO OK` | yes, verified | nothing |
+| The same, but the record cannot be renamed (four attempts) | `UNDO PARTIAL`, `MANUAL ACTION REQUIRED`; the record stays **pending**, which the guard refuses | the safety yes, the clean-up no | run `recover`, or clear it by hand |
+| An undo step fails, or the old MinIO does not answer | `UNDO PARTIAL` or `UNDO INCOMPLETE`, naming the step | no | run `recover`, or act as the step says |
+| A Ctrl+C (one or two) | the run stops at the next step and undoes itself; a second Ctrl+C that ends one docker call of the undo is retried (the record) or reported | yes (rehearsed with real console Ctrl+C events) | read the outcome |
+| The console window closed, or the process killed | Node ends within seconds; nothing undoes itself | **no** | run `recover` (or `rollback` again, for a rollback) |
+| Docker unavailable during the undo | nothing can be changed; any record stays pending (refused at start) | the safety yes | start Docker, then `recover` |
+| The old image pruned | `rollback`/`recover` load it from the run's backup folder | yes | keep that folder |
+| The backup folder lost as well, and the image gone | refused before anything stops | no | restore the image from the separately saved copy (`docker load`) |
+| The switch back of a rollback fails | the record is restored and the new MinIO restarted, verified; if the record cannot be restored, nothing serves and it says so | partly | act by hand if it says so |
+| A state none of the above produces | refused, never guessed | no | inspect: `manifest.json` records every step, undo step and record attempt |
+
+Recoverable is not the same as available. `recover` brings back the old MinIO, which is the data as it
+was at the stop plus anything written after the undo. The target volume stays as it was.
+
+**What no part of this does:** run the move without the founder's approval, delete a volume, or claim a
+state it did not read back.
 
 ## Afterwards
 
