@@ -23,6 +23,7 @@ import {
   insideRepo,
   parseInventory,
   parseRecord,
+  recordMeaning,
   recordedSha,
   recoveryPlan,
   rollbackRerun,
@@ -310,13 +311,20 @@ test('every INF-04 fault and hard kill is a rehearsal fault, never the live volu
   }
 });
 
-test('the move record: only `pending <run>` and `complete <run>` count; anything else is unknown', () => {
+test('the move record: only `pending|switching|complete <run>` count; anything else is unknown', () => {
   assert.deepEqual(parseRecord('pending 20261116120000-abcd'), { state: 'pending', run: '20261116120000-abcd' });
+  assert.deepEqual(parseRecord('switching 20261116120000-abcd'), { state: 'switching', run: '20261116120000-abcd' });
   assert.deepEqual(parseRecord('complete 20261116120000-abcd\n'), { state: 'complete', run: '20261116120000-abcd' });
   for (const bad of ['', '{}', '{"run":"x"}', 'complete', 'complete x', 'COMPLETE 20261116120000-abcd', 'done 20261116120000-abcd', 'pending 20261116120000-abcd extra', undefined])
     assert.deepEqual(parseRecord(bad), { state: 'unknown', run: null }, String(bad));
   // Distinct names: the guard refuses a volume holding either renamed-aside record beside a record.
   assert.equal(new Set([MOVE_RECORD, INVALIDATED_RECORD, ROLLED_BACK_RECORD]).size, 3);
+});
+
+test('what a record left behind means, by its state (review A-L1)', () => {
+  assert.match(recordMeaning('complete'), /ACCEPTS on every start/);
+  for (const st of ['pending', 'switching']) assert.match(recordMeaning(st), /refuses on every start/);
+  assert.match(recordMeaning(null), /^unreadable: check it by hand/);
 });
 
 test('record clearing is bounded: a few attempts within seconds, never a loop', () => {
@@ -332,9 +340,16 @@ test('the undo verdict never claims more than was verified (INF-04 B5)', () => {
   const stuck = undoVerdict({ ...base, record: 'not-cleared' });
   assert.match(stuck.outcome, /^UNDO PARTIAL/);
   assert.equal(stuck.manualInterventionRequired, true);
-  assert.match(stuck.manual.join('\n'), /PENDING move record could not be cleared/);
+  assert.match(stuck.manual.join('\n'), /could not be cleared from the target volume; read back: unreadable/);
+  // The message follows the state read back (review A-L1): a complete record is said to be ACCEPTED.
+  assert.match(undoVerdict({ ...base, record: 'not-cleared', recordState: 'complete' }).manual.join('\n'), /COMPLETE, which the guard ACCEPTS/);
+  assert.match(undoVerdict({ ...base, record: 'not-cleared', recordState: 'switching' }).manual.join('\n'), /switching, which the guard refuses on every start/);
+  // Writes the target received after the switch always need a person (review A-H2).
+  const written = undoVerdict({ ...base, targetChanges: ['unexpected: adulis-media/new.jpg'] });
+  assert.match(written.outcome, /^UNDO PARTIAL/);
+  assert.match(written.manual.join('\n'), /1 object change\(s\) exist only in the target volume/);
   const dark = undoVerdict({ ...base, answers: false });
-  assert.match(dark.outcome, /^UNDO INCOMPLETE: nothing answers on port 9100/);
+  assert.match(dark.outcome, /^UNDO INCOMPLETE: the old MinIO does not serve its volume on port 9100/);
   assert.equal(dark.manualInterventionRequired, true);
   // A failure before anything changed, with the source no longer answering, is still incomplete.
   assert.match(undoVerdict({ ...base, changed: false, answers: false }).outcome, /^UNDO INCOMPLETE/);
@@ -345,12 +360,13 @@ test('the undo verdict never claims more than was verified (INF-04 B5)', () => {
 
 test('recover: what it does in each state a killed migrate can leave, never deleting a volume', () => {
   const ids = { legacyId: 'L', srcVolume: 'src', dstVolume: 'dst' };
-  const plan = (current, extra = {}) => recoveryPlan({ ...ids, current, recordPresent: false, failedNameTaken: false, ...extra });
+  const plan = (current, extra = {}) => recoveryPlan({ ...ids, current, recordPresent: false, ...extra });
   // Killed before the switch: the old container still exists (stopped or running).
   assert.deepEqual(plan({ id: 'L', mount: 'src', running: false }).actions, ['remove-helpers', 'start-legacy']);
   assert.deepEqual(plan({ id: 'L', mount: 'src', running: true }).actions, ['remove-helpers']);
   // Killed in the switch window with the record pending: compose's new container serves the target.
-  assert.deepEqual(plan({ id: 'N', mount: 'dst', running: true }, { recordPresent: true }).actions, ['invalidate-record', 'remove-helpers', 'stop-new', 'set-aside-new', 'recreate-legacy']);
+  // The new MinIO is retired (stopped, saved, REMOVED: it carries the switch setting, review A-H1).
+  assert.deepEqual(plan({ id: 'N', mount: 'dst', running: true }, { recordPresent: true }).actions, ['invalidate-record', 'remove-helpers', 'retire-new', 'recreate-legacy']);
   // Killed in the undo after the new one was set aside, before the old one came back.
   assert.deepEqual(plan(null).actions, ['remove-helpers', 'recreate-legacy']);
   // An earlier undo or recover already recreated the old one: repeatable, nothing new.
@@ -358,7 +374,10 @@ test('recover: what it does in each state a killed migrate can leave, never dele
   assert.deepEqual(plan({ id: 'R', mount: 'src', running: false }).actions, ['remove-helpers', 'start-legacy']);
   // Unknown shapes are refused, never guessed.
   assert.match(plan({ id: 'X', mount: 'other', running: true }).refuse, /neither the source nor the target/);
-  assert.match(plan({ id: 'N', mount: 'dst', running: true }, { failedNameTaken: true }).refuse, /name for setting it aside is taken/);
+  // An older set-aside container still running on the target is retired first (review A-M4).
+  assert.deepEqual(plan({ id: 'R', mount: 'src', running: true }, { strayRunning: 'minio-failed-x' }).actions, ['remove-helpers', 'retire-stray']);
+  // A record of another run is never acted on (review A-L3).
+  assert.match(plan({ id: 'N', mount: 'dst', running: true }, { recordPresent: true, recordState: 'complete', recordRun: '20261116000000-ffff', run: '20261116120000-abcd' }).refuse, /belongs to run 20261116000000-ffff/);
   for (const r of [plan(null), plan({ id: 'N', mount: 'dst', running: true }, { recordPresent: true })])
     assert.ok(!r.actions.some((a) => /volume|delete|rm/.test(a)), 'recover never deletes a volume');
   // Killed after its verified commit (record complete, the new MinIO serving): migrated, nothing undone.
@@ -383,6 +402,7 @@ test('rollback rerun: a rollback killed part-way is finished, an unknown state i
   assert.equal(rollbackRerun({ ...v, current: { mount: 'dst' }, record: 'complete', kept: false }), 'proceed');
   // Killed after the old MinIO came back but before the record was renamed (the order before INF-04).
   assert.equal(rollbackRerun({ ...v, current: { mount: 'src' }, record: 'complete', kept: true }), 'clear-record');
+  assert.equal(rollbackRerun({ ...v, current: { mount: 'src' }, record: 'switching', kept: true }), 'clear-record');
   assert.equal(rollbackRerun({ ...v, current: { mount: 'src' }, record: 'absent', kept: true }), 'already-rolled-back');
   // Killed after the new one was stopped and renamed, before the old one was recreated.
   assert.equal(rollbackRerun({ ...v, current: null, record: 'absent', kept: true }), 'recreate-legacy');

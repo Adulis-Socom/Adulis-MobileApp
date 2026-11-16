@@ -194,7 +194,13 @@ function guard({ data = true, legacy = true, dataFormatted = false, dataSkeleton
     if (switchRun !== null) env.MINIO_GUARD_SWITCH_RUN = switchRun;
     if (unsetData) delete env.MINIO_GUARD_DATA_DIR;
     else env.MINIO_GUARD_DATA_DIR = d.replaceAll('\\', '/');
-    return spawnSync('sh', ['-c', script, 'minio-volume-guard', ...args], { encoding: 'utf8', env });
+    const r = spawnSync('sh', ['-c', script, 'minio-volume-guard', ...args], { encoding: 'utf8', env });
+    try {
+      r.recordAfter = readFileSync(join(d, '.adulis-migration-complete'), 'utf8');
+    } catch {
+      r.recordAfter = null;
+    }
+    return r;
   } finally {
     try {
       chmodSync(l, 0o755);
@@ -239,6 +245,27 @@ test('guard: a pending record is accepted only for its own switch; a complete on
   refused(guard({ ...moved, record: `pending ${RUN}\n`, switchRun: '20261116120000-ffff' }), /never verified/);
   accepted(guard({ ...moved, record: `pending ${RUN}\n`, switchRun: RUN }), /holds MinIO data/);
   refused(guard({ ...moved, record: 'pending \n', switchRun: '' }), /never verified/); // an empty run never matches
+});
+
+test('guard: the switch uses the pending record up; no later start accepts it (INF-04 review A-H1)', () => {
+  const moved = { legacyFormatted: true, dataFormatted: true, record: `pending ${RUN}\n`, switchRun: RUN };
+  const server = ['sh', '-c', 'echo SERVER STARTED'];
+  // The one-shot service (no server command) checks without using it up.
+  const oneShot = guard(moved);
+  accepted(oneShot, /holds MinIO data/);
+  assert.equal(oneShot.recordAfter, `pending ${RUN}\n`);
+  // The minio service's start uses it up before the server runs.
+  const first = guard({ ...moved, args: server });
+  accepted(first, /SERVER STARTED/);
+  assert.equal(first.recordAfter, `switching ${RUN}\n`);
+  // A restart of that container (same configuration, same switch run) is refused, and so is any other start.
+  for (const switchRun of [RUN, '', null]) {
+    const again = guard({ ...moved, record: `switching ${RUN}\n`, switchRun, args: server });
+    refused(again, /never verified \(record switching, run 20261116120000-abcd\)/);
+    assert.doesNotMatch(again.stdout, /SERVER STARTED/);
+  }
+  // The commit replaces it: complete is accepted on every start.
+  accepted(guard({ ...moved, record: `complete ${RUN}\n`, args: server }), /SERVER STARTED/);
 });
 
 test('guard: a record this tool does not write, or one beside an undone record, is refused (INF-04)', () => {
