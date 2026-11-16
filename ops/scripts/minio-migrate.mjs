@@ -155,10 +155,14 @@ const log = (msg) => console.log(`[${new Date().toISOString()}] ${msg}`);
 // AbortSignal), and every step boundary refuses once it has arrived: a migrate then undoes itself
 // (verified), a rollback stops before its critical section or puts the new MinIO back, and no
 // success line is printed. Signal handlers run only when the event loop turns, and most steps are
-// synchronous (spawnSync), so every checkpoint first gives the loop a full turn. A docker child
-// ended by a signal, or by a Windows console Ctrl+C, counts as the interrupt itself. The handler
-// never stops the undo; a SECOND terminal Ctrl+C can still end a docker call of the undo, which is
-// then reported (UNDO STEP FAILED / UNDO INCOMPLETE), never hidden.
+// synchronous (spawnSync), so every checkpoint first gives the loop a full turn. What a console
+// Ctrl+C does to the docker child in progress (review B, rehearsed d1-d9): an attached `docker run`
+// (every mc, onTarget and waitReady step) forwards it to the container's PID 1, which ignores it, so
+// that step RUNS TO ITS END and the run stops right after it; the streamed backup and hash stop at
+// once (their AbortSignal kills the child). Other docker commands may be cancelled by the CLI itself
+// (a failed step, reported). So a Ctrl+C can take as long as the current step; a closed console
+// (about 5 s of grace) can end Node while it waits, which is what `recover` is for. The handler never
+// stops the undo; any undo step a second Ctrl+C makes fail is retried (the record) or reported.
 export function createInterruption(logFn = log) {
   const controller = new AbortController();
   const state = {
@@ -190,7 +194,8 @@ const checkpoint = async () => {
   await turnEventLoop(); // let a pending SIGINT/SIGTERM handler run first
   interruption.checkpoint();
 };
-// Exit status of a Windows console program ended by Ctrl+C (STATUS_CONTROL_C_EXIT).
+// Exit status of a Windows console program ended by Ctrl+C (STATUS_CONTROL_C_EXIT). docker 29 handles
+// console events itself and was not seen to exit with it (review B-M1); kept for a child that does.
 const CTRL_C_EXIT = new Set([3221225786, -1073741510]);
 // Rehearsal only (guard() refuses MIGRATE_FAULT on the live volume): an interrupt at a named stage,
 // delivered like a real signal: through the event loop, not in the middle of a synchronous step.
@@ -214,6 +219,7 @@ const faultAt = (point) => {
 async function pauseAt(point) {
   const m = /^([a-z-]+):(\d+)$/.exec(process.env.MIGRATE_PAUSE ?? '');
   if (!m || m[1] !== point) return;
+  if (interruption.signal && point !== 'in-undo') return; // already interrupted: no pause (review B-I1)
   log(`PAUSE (rehearsal): ${m[2]} s at ${point}; interrupt now to rehearse this window`);
   await new Promise((done) => {
     const t = setTimeout(done, Number(m[2]) * 1000);
@@ -319,6 +325,16 @@ export function recoveryPlan({ current, legacyId, srcVolume, dstVolume, recordPr
     return { refuse: `the MinIO name is held by a container on ${current.mount ?? 'no volume'}, neither the source nor the target: act by hand` };
   } else actions.push('recreate-legacy');
   return { actions };
+}
+
+// rollback and recover use the port the run used and the old container was bound to, never only
+// what compose renders now (review B-M3).
+export function recordedPortProblem({ recorded, legacyPort, configured }) {
+  if (recorded && String(recorded) !== String(configured))
+    return `that run used MinIO port ${recorded}, but this configuration publishes ${configured}: set MINIO_HOST_PORT=${recorded}`;
+  if (legacyPort && String(legacyPort) !== String(configured))
+    return `the old container was published on ${legacyPort}, but this configuration publishes ${configured}: set MINIO_HOST_PORT=${legacyPort}`;
+  return null;
 }
 
 // What a rollback finds when MinIO is not on the target volume, or the MinIO name is free (INF01-007:
@@ -1163,6 +1179,21 @@ function removeRunHelpers(run) {
   if (left.length) refuse(`helpers of run ${run} are still there: ${left.join(', ')}`);
 }
 
+// Compose replaces a container in steps: it stops the old one, renames it <id>_<name>, creates the new
+// one, then removes the old. A switch cancelled in between leaves the ORIGINAL old container under that
+// temporary name (review B-L1). Found by its recorded ID, it is renamed back and started rather than a
+// second one recreated. Returns whether it did.
+function renameBackLegacy(legacy, name) {
+  const r = docker(['ps', '-a', '--no-trunc', '--filter', `id=${legacy.Id}`, '--format', '{{.Names}}'], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
+  const at = `${r.stdout ?? ''}`.trim();
+  if (r.status !== 0 || !at || at === name) return false;
+  if (containerState(name)) refuse(`the old container survives as ${at}, but ${name} is taken: act by hand`);
+  docker(['rename', at, name], { timeout: CLEANUP_TIMEOUT_S });
+  docker(['start', name], { timeout: CLEANUP_TIMEOUT_S });
+  log(`the original old container was found as ${at} (compose's temporary name): renamed back to ${name} and started`);
+  return true;
+}
+
 // The old MinIO serves the old volume: the container under its name mounts it and runs, and the
 // port answers (review A-M4: an answer alone cannot say which MinIO answered).
 function oldMinioServes(cfg, name, srcVolume, server) {
@@ -1208,7 +1239,8 @@ function retireNewMinio(cfg, journal, run, name) {
 
 // The target's objects, read through a private helper server on the volume (no host port; the new
 // MinIO is already stopped), compared with the run's own inventory of the stopped source: every
-// object added, changed or deleted after the switch, journaled (review A-H2, A-M6). Read-only.
+// object added, changed or deleted after the switch, journaled (review A-H2, A-M6). It changes no object;
+// starting MinIO writes its own system files, and the evidence expiry rule acts as when served (B-I3).
 function measureTarget(cfg, journal, run, label) {
   const invFile = join(cfg.backupDir, 'inventory-source.json');
   if (!exists('volume', cfg.dstVolume)) return { measured: false, why: 'the target volume does not exist' };
@@ -1519,7 +1551,7 @@ async function migrate(cfg) {
           // Stopped (checked), saved, removed: no copy of it, with this run's switch setting, survives.
           retireNewMinio(cfg, J, cfg.run, cfg.srcContainer);
         }
-        recreateLegacy(pre.inspect);
+        if (!renameBackLegacy(pre.inspect, cfg.srcContainer)) recreateLegacy(pre.inspect);
         // What the new MinIO accepted after the switch, measured on the stopped target (review A-H2).
         const t = measureTarget(cfg, J, cfg.run, 'undo after the switch');
         postSwitchChanges = t.measured ? t.changes : [`not measured: ${t.why}`];
@@ -1692,7 +1724,13 @@ function recordedRun(cfg) {
   }
   if (m.target?.volume && m.target.volume !== cfg.dstVolume)
     refuse(`that run moved into ${m.target.volume}, but this configuration names ${cfg.dstVolume}: use the run's environment`);
-  return { m, legacy: JSON.parse(readFileSync(saved, 'utf8')) };
+  const legacy = JSON.parse(readFileSync(saved, 'utf8'));
+  // The port the run used, and the old container's binding: never only what compose renders now, which
+  // could reach another project's MinIO with this one's credentials (review B-M3).
+  const legacyPort = String(legacy.HostConfig?.PortBindings?.['9000/tcp']?.[0]?.HostPort ?? '');
+  const problem = recordedPortProblem({ recorded: m.target?.port, legacyPort, configured: cfg.hostPort });
+  if (problem) refuse(problem);
+  return { m, legacy };
 }
 
 // The rollback's own undo: the record goes back (renamed, read back complete) before the new MinIO
@@ -1804,8 +1842,9 @@ async function rollbackSteps(cfg, J, rb, m, legacy) {
   note('record renamed aside');
   await pauseAt('rollback-after-invalidate');
   faultAt('rollback-after-invalidate');
-  // From the stop to the old MinIO answering, an interrupt is only recorded (the handler keeps Node
-  // alive), and a failure puts the new one back.
+  // From the stop to the old MinIO answering, an interrupt is recorded and the steps go on (the handler
+  // keeps Node alive); a docker step the console event itself cancels fails, and the failure path below
+  // puts the new one back (review B-M1).
   const newId = current.id;
   let made = null;
   let renamed = false;
@@ -1824,18 +1863,29 @@ async function rollbackSteps(cfg, J, rb, m, legacy) {
     // Never leave nothing serving, and never start the wrong container (review A-M5): remove only
     // what this call created (also a container `docker run` created but could not start), put the
     // new MinIO back under its name, and restore its record only if that name now holds IT.
-    const holder = containerState(cfg.dstContainer);
-    if (holder && holder.id !== newId && holder.mount === oldVolume) docker(['rm', '-f', holder.id], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
-    else if (made) docker(['rm', '-f', made.id], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
-    if (renamed && !containerState(cfg.dstContainer)) docker(['rename', kept, cfg.dstContainer], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
-    const back = containerState(cfg.dstContainer);
+    // Nothing in here may throw (review B-M4): a docker error or time-out is reported, never raised.
+    const quiet = (f) => {
+      try {
+        return f();
+      } catch (q) {
+        log(`rollback failure path: ${q.message}`);
+        return undefined;
+      }
+    };
+    const holder = quiet(() => containerState(cfg.dstContainer));
+    if (holder && holder.id !== newId && holder.mount === oldVolume) quiet(() => docker(['rm', '-f', holder.id], { allowFail: true, timeout: CLEANUP_TIMEOUT_S }));
+    else if (made) quiet(() => docker(['rm', '-f', made.id], { allowFail: true, timeout: CLEANUP_TIMEOUT_S }));
+    if (renamed && quiet(() => containerState(cfg.dstContainer)) === null) quiet(() => docker(['rename', kept, cfg.dstContainer], { allowFail: true, timeout: CLEANUP_TIMEOUT_S }));
+    const back = quiet(() => containerState(cfg.dstContainer));
     let msg;
-    if (!back || back.id !== newId || back.mount !== cfg.dstVolume)
+    if (back === undefined)
+      msg = `but ${cfg.dstContainer} could not be inspected: its record was NOT restored and nothing was started; MinIO may be DOWN on port ${cfg.hostPort}; act by hand (runbook, Rollback), or run rollback again`;
+    else if (!back || back.id !== newId || back.mount !== cfg.dstVolume)
       msg = `but the name ${cfg.dstContainer} is held by ${back ? `${back.id.slice(0, 12)} on ${back.mount}` : 'nothing'}, not the new MinIO: its record was NOT restored and nothing was started; NOTHING SERVES on port ${cfg.hostPort}; act by hand (runbook, Rollback)`;
     else if (!restoreRecord(cfg, J))
       msg = `but its move record could not be restored, so it was NOT started (its guard would refuse it): NOTHING SERVES on port ${cfg.hostPort}; act by hand (runbook, Rollback)`;
     else {
-      docker(['start', cfg.dstContainer], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
+      quiet(() => docker(['start', cfg.dstContainer], { allowFail: true, timeout: CLEANUP_TIMEOUT_S }));
       msg = 'and it answers again';
       try {
         waitReady(cfg, served);
@@ -1967,8 +2017,10 @@ async function recover(cfg) {
       else if (a === 'start-legacy') docker(['start', srcName], { timeout: CLEANUP_TIMEOUT_S });
       else if (a === 'retire-new') retireNewMinio(cfg, J, m.run, srcName);
       else if (a === 'recreate-legacy') {
-        ensureLegacyImage(cfg, legacy);
-        recreateLegacy(legacy);
+        if (!renameBackLegacy(legacy, srcName)) {
+          ensureLegacyImage(cfg, legacy);
+          recreateLegacy(legacy);
+        }
       }
       entry.status = 'ok';
     } catch (e) {

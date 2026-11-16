@@ -24,6 +24,7 @@ import {
   parseInventory,
   parseRecord,
   recordMeaning,
+  recordedPortProblem,
   recordedSha,
   recoveryPlan,
   rollbackRerun,
@@ -325,6 +326,13 @@ test('what a record left behind means, by its state (review A-L1)', () => {
   assert.match(recordMeaning('complete'), /ACCEPTS on every start/);
   for (const st of ['pending', 'switching']) assert.match(recordMeaning(st), /refuses on every start/);
   assert.match(recordMeaning(null), /^unreadable: check it by hand/);
+});
+
+test('rollback and recover refuse a port other than the recorded run port and old binding (review B-M3)', () => {
+  assert.equal(recordedPortProblem({ recorded: '9100', legacyPort: '9100', configured: '9100' }), null);
+  assert.match(recordedPortProblem({ recorded: '9100', legacyPort: '9100', configured: '9000' }), /that run used MinIO port 9100, but this configuration publishes 9000/);
+  assert.match(recordedPortProblem({ recorded: undefined, legacyPort: '9100', configured: '9000' }), /old container was published on 9100/);
+  assert.equal(recordedPortProblem({ recorded: 19140, legacyPort: '19140', configured: '19140' }), null);
 });
 
 test('record clearing is bounded: a few attempts within seconds, never a loop', () => {
