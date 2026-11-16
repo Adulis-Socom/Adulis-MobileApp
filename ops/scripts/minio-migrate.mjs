@@ -946,12 +946,13 @@ async function invalidateRecord(cfg, journal, as, why) {
           cfg,
           injected
             ? 'echo "rehearsal fault: the record clear fails" >&2; exit 1'
-            : `if [ -e /d/${MOVE_RECORD} ]; then mv -f /d/${MOVE_RECORD} /d/${as}; fi; [ ! -e /d/${MOVE_RECORD} ]`,
+            : `if [ -e /d/${MOVE_RECORD} ]; then mv -f /d/${MOVE_RECORD} /d/${as} && echo MOVED; else echo ABSENT; fi; [ ! -e /d/${MOVE_RECORD} ]`,
           [],
           { allowFail: true },
         );
         if (r.status !== 0) error = `${r.stderr ?? ''}`.trim().slice(-300) || `exit ${r.status}`;
         else {
+          if (!`${r.stdout ?? ''}`.includes('MOVED')) note = 'there was no record to rename';
           const back = readRecord(cfg);
           if (!back.readable) error = `the read-back failed: ${back.error}`;
           else if (back.present) error = `the read-back still finds the record (${back.state})`;
@@ -962,7 +963,8 @@ async function invalidateRecord(cfg, journal, as, why) {
     }
     journal.record.attempts.push({ at, attempt: i + 1, action: `rename to ${as}`, reason: why, ok: !error, ...(error ? { error } : {}), ...(note ? { note } : {}) });
     if (!error) {
-      journal.record.state = note ? 'absent' : as === ROLLED_BACK_RECORD ? 'rolled-back' : 'invalidated';
+      if (!note) journal.record.state = as === ROLLED_BACK_RECORD ? 'rolled-back' : 'invalidated';
+      else if (journal.record.state === 'absent' || journal.record.state === 'pending' || journal.record.state === 'complete') journal.record.state = 'absent';
       journal.save();
       log(note ? `no move record to clear (${note})` : `move record cleared from ${cfg.dstVolume}: renamed to ${as}, read back absent (attempt ${i + 1})`);
       return true;
@@ -1271,6 +1273,7 @@ async function migrate(cfg) {
         `the source volume changed during the migration (tar ${again} != backup ${backup.sha})`,
       );
     save('inventory-source.json', i1.objects);
+    save('buckets-source.json', { buckets: i1.buckets, policy: i1.policy, lifecycle: i1.lifecycle });
     for (const [, f] of always.splice(0).reverse()) f();
     // A helper still serving the target volume would run beside compose's MinIO on the same data.
     for (const role of ['src', 'dst'])
@@ -1500,7 +1503,9 @@ async function rollback(cfg) {
     refuse(
       m.failedAt
         ? `that run did not finish its switch; its undo ran (${m.outcome ?? m.undo ?? 'outcome not recorded'}). If the undo was incomplete, run recover (same MIGRATE_BACKUP_DIR)`
-        : 'that run neither finished nor recorded a failure (killed?): run recover (same MIGRATE_BACKUP_DIR), which inspects the containers, the volumes and the move record',
+        : m.undo?.length
+          ? `that run failed and was killed during its undo (last undo step: ${m.undo.at(-1).step}): run recover (same MIGRATE_BACKUP_DIR), which inspects the containers, the volumes and the move record`
+          : 'that run neither finished nor recorded a failure (killed?): run recover (same MIGRATE_BACKUP_DIR), which inspects the containers, the volumes and the move record',
     );
   // The recorded source decides, not the environment: MIGRATE_SRC_VOLUME=x must not skip the approval.
   guard('rollback', m.source.volume, process.env);
