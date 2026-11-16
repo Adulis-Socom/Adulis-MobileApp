@@ -395,6 +395,27 @@ test('recover: what it does in each state a killed migrate can leave, never dele
   assert.ok(plan({ id: 'N', mount: 'dst', running: true }, { recordPresent: true, recordState: 'pending' }).actions.includes('recreate-legacy'));
 });
 
+test('recover: the states the final rehearsal never reached on real Docker (INF-04V)', () => {
+  const ids = { legacyId: 'L', srcVolume: 'src', dstVolume: 'dst' };
+  const plan = (current, extra = {}) => recoveryPlan({ ...ids, current, recordPresent: true, ...extra });
+  const noDelete = (r) => assert.ok(!r.actions.some((a) => /volume|delete|rm/.test(a)), 'recover never deletes a volume');
+  // B-L1: compose renamed the old container (<id>_adulis-minio) and died before creating the new one, so the
+  // MinIO name is free while a pending or switching record sits in the target: invalidate it, bring the old back.
+  for (const recordState of ['pending', 'switching']) {
+    const r = plan(null, { recordState });
+    assert.deepEqual(r.actions, ['invalidate-record', 'remove-helpers', 'recreate-legacy'], recordState);
+    noDelete(r);
+  }
+  // The switched MinIO exists on the target but is stopped (crash, or paused/restarting then stopped; A-N9):
+  // it is retired BEFORE the old one is recreated, so two servers never share the target.
+  const stopped = plan({ id: 'N', mount: 'dst', running: false }, { recordState: 'switching' });
+  assert.deepEqual(stopped.actions, ['invalidate-record', 'remove-helpers', 'retire-new', 'recreate-legacy']);
+  assert.ok(stopped.actions.indexOf('retire-new') < stopped.actions.indexOf('recreate-legacy'));
+  noDelete(stopped);
+  // An unreadable record is still a record: it is invalidated first, never trusted.
+  assert.equal(plan(null, { recordState: 'unknown' }).actions[0], 'invalidate-record');
+});
+
 test('MIGRATE_FAULT may combine faults; each must be known, and none reaches the live volume', () => {
   assert.equal(guard('migrate', 'infra-rh-src', { MIGRATE_FAULT: 'fail-before-switch,fail-clear-record-all' }), false);
   assert.equal(guard('migrate', 'infra-rh-src', { MIGRATE_FAULT: ' fail-after-switch , fail-clear-record-2 ' }), false);
@@ -416,6 +437,8 @@ test('rollback rerun: a rollback killed part-way is finished, an unknown state i
   assert.equal(rollbackRerun({ ...v, current: null, record: 'absent', kept: true }), 'recreate-legacy');
   assert.equal(rollbackRerun({ ...v, current: null, record: 'absent', kept: false }), 'refuse');
   assert.equal(rollbackRerun({ ...v, current: { mount: 'other' }, record: 'absent', kept: true }), 'refuse');
+  // A rollback killed after the old MinIO came back but with the record still pending is finished (INF-04V).
+  assert.equal(rollbackRerun({ ...v, current: { mount: 'src' }, record: 'pending', kept: true }), 'clear-record');
 });
 
 test('the interrupt and partial-rollback rehearsal faults exist and never reach the live volume', () => {
