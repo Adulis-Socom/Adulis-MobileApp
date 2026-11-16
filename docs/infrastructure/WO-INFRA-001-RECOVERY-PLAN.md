@@ -34,8 +34,12 @@ These are commands for a person to run deliberately. Nothing restores automatica
 
 ```
 docker exec adulis-postgres createdb -U adulis_bootstrap <name>
-docker exec -i adulis-postgres pg_restore -U adulis_bootstrap -d <name> --no-owner < adulis.dump
+docker exec -i adulis-postgres pg_restore -U adulis_bootstrap -d <name> --no-owner --exit-on-error --single-transaction < adulis.dump
 ```
+
+One transaction (INF-05): an interrupted or failed restore leaves `<name>` empty -- drop it and retry; the
+original database is never touched. A dump with the historical orphans (WO-INFRA-013) stops at their five
+foreign keys under `--exit-on-error`: restore such a dump into a disposable server, never here.
 
 Restoring over `adulis` itself means dropping it first. That is destructive and needs the founder.
 

@@ -34,10 +34,22 @@ those tables can see rows that should not exist.
 ## Live procedure (after approval), Git Bash on the development machine
 
 ```
-# 0. Writers stopped (API, console). Recovery point: a fresh dump, checksummed.
-R=G:/AdulisDevelopment/db-repair-$(date -u +%Y%m%dT%H%M%SZ); mkdir -p $R
-docker exec adulis-postgres pg_dump -U adulis_bootstrap -Fc -d adulis > $R/adulis-before.dump
-(cd $R && sha256sum adulis-before.dump > SHA256SUMS.txt)
+# 0. EVERY writer stopped: the API, the worker (dev:worker: graphile-worker cron writes with nobody using the
+#    app), the console, any mobile client. Prove it -- no other session on either database (expect 0):
+docker exec adulis-postgres psql -U adulis_bootstrap -d adulis -XAtc "SELECT count(*) FROM pg_stat_activity WHERE datname IN ('adulis','adulis_gates') AND pid <> pg_backend_pid()"
+#    Recovery point (INF-05): written to an NTFS folder only this user can read -- G: is exFAT, without
+#    permissions -- under a .partial name renamed only on success; the checksums last; then verified offline.
+set -euo pipefail
+R=$HOME/adulis-db-backups/db-repair-$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$R"
+icacls "$(cygpath -w "$R")" /inheritance:r /grant:r "$USERNAME:(OI)(CI)F" > /dev/null
+for db in adulis adulis_gates; do
+  docker exec adulis-postgres pg_dump -U adulis_bootstrap -Fc -d $db > "$R/$db.dump.partial" && mv "$R/$db.dump.partial" "$R/$db.dump"
+done
+docker exec adulis-postgres pg_dumpall -U adulis_bootstrap --globals-only --no-role-passwords > "$R/globals.sql.partial" && mv "$R/globals.sql.partial" "$R/globals.sql"
+(cd "$R" && sha256sum adulis.dump adulis_gates.dump globals.sql > SHA256SUMS.txt)
+node ops/scripts/db-backup-verify.mjs "$R" --target-major 17       # must print PASS: reads every data block
+#    A copy off this machine is encrypted first (GnuPG ships with Git for Windows); only the .gpg goes to G::
+#    tar -C "$R" -cf - . | gpg --symmetric --cipher-algo AES256 -o G:/AdulisDevelopment/backups/$(basename "$R").tar.gpg
 
 # 1. Confirm the audit still matches the script's expected counts (15/3/10/9/155):
 node --env-file=.env ops/scripts/fk-audit.mjs
@@ -49,11 +61,11 @@ while IFS='|' read -r t q; do
     psql -U adulis_bootstrap -d adulis -X -c "\\copy ($q) TO STDOUT CSV HEADER" > $R/archive-$t.csv
   echo "$t: $(( $(wc -l < $R/archive-$t.csv) - 1 )) rows"
 done <<'EOF'
-device|SELECT d.* FROM core.device d WHERE NOT EXISTS (SELECT 1 FROM core.market m WHERE m.id=d.market_id)
-notification|SELECT n.* FROM core.notification n WHERE NOT EXISTS (SELECT 1 FROM core.account a WHERE a.id=n.recipient_account_id)
-order_state_transition|SELECT t.* FROM core.order_state_transition t WHERE NOT EXISTS (SELECT 1 FROM core."order" o WHERE o.id=t.order_id)
-claim_evidence_item|SELECT e.* FROM core.claim_evidence_item e WHERE NOT EXISTS (SELECT 1 FROM core.claim c WHERE c.id=e.claim_id)
-otp_delivery_attempt|SELECT a.* FROM core.otp_delivery_attempt a WHERE NOT EXISTS (SELECT 1 FROM core.otp_challenge c WHERE c.id=a.otp_challenge_id)
+device|SELECT d.* FROM core.device d WHERE d.market_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.market m WHERE m.id=d.market_id)
+notification|SELECT n.* FROM core.notification n WHERE n.recipient_account_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.account a WHERE a.id=n.recipient_account_id)
+order_state_transition|SELECT t.* FROM core.order_state_transition t WHERE t.order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core."order" o WHERE o.id=t.order_id)
+claim_evidence_item|SELECT e.* FROM core.claim_evidence_item e WHERE e.claim_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.claim c WHERE c.id=e.claim_id)
+otp_delivery_attempt|SELECT a.* FROM core.otp_delivery_attempt a WHERE a.otp_challenge_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.otp_challenge c WHERE c.id=a.otp_challenge_id)
 EOF
 (cd $R && sha256sum archive-*.csv >> SHA256SUMS.txt)          # expect 15, 3, 10, 9, 155
 
@@ -61,14 +73,14 @@ EOF
 docker exec -i adulis-postgres psql -U adulis_bootstrap -d adulis -X -v ON_ERROR_STOP=1 < docs/infrastructure/WO-INFRA-013-repair.sql
 
 # 4. Verify: every foreign key holds (strict, read-only), and a dump restores cleanly.
-node --env-file=.env ops/scripts/fk-audit.mjs                       # expect: PASS all 175 foreign keys hold
+node --env-file=.env ops/scripts/fk-audit.mjs                       # expect: PASS all N foreign keys hold (201 at migration 0062)
 docker exec adulis-postgres pg_dump -U adulis_bootstrap -Fc -d adulis > $R/adulis-after.dump
 #    then restore adulis-after.dump into a disposable PostgreSQL with pg_restore --exit-on-error (exit 0).
 ```
 
 **What proves success:**
 - the script's own final check (an orphan raises and rolls back);
-- `fk-audit`: `PASS all 175 foreign keys hold`;
+- `fk-audit`: `PASS all N foreign keys hold` (201 at migration 0062);
 - the after-dump restores with `--exit-on-error`.
 
 ## Restoring the previous state
@@ -77,7 +89,7 @@ docker exec adulis-postgres pg_dump -U adulis_bootstrap -Fc -d adulis > $R/aduli
 |---|---|
 | The script failed | nothing to do: it is one transaction and rolled back |
 | A removed row is wanted back | re-insert it from its CSV: `SET session_replication_role = replica;` then `\copy core.<table> FROM '<csv>' CSV HEADER` (rehearsed: the archive restores exactly 15/3/10/9/155) |
-| Everything back | restore `adulis-before.dump` into a new database and swap, or `pg_restore --clean` into `adulis` (stop writers first) |
+| Everything back | restore `adulis.dump` into a NEW database (`pg_restore --exit-on-error --single-transaction`), verify it, then swap names with every writer stopped (a founder decision). Never `pg_restore --clean` into `adulis` |
 
 ## Remaining risks
 - **The counts must still match.** If any suite ran against the development database after 13 November,

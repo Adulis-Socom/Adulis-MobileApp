@@ -1,20 +1,25 @@
 #!/usr/bin/env node
 // INF-05: verifies a development-database backup folder WITHOUT a server and without writing anything.
 //
-//   node ops/scripts/db-backup-verify.mjs <backup-dir> [--target-major <n>] [--pg-restore <path>]
+//   node ops/scripts/db-backup-verify.mjs <backup-dir> --target-major <n> [--pg-restore <path>]
 //
 // The folder holds `adulis.dump` and `adulis_gates.dump` (pg_dump -Fc), `globals.sql` (pg_dumpall
 // --globals-only) and `SHA256SUMS.txt` (sha256sum format, `*name` or ` name`), as the WO-INFRA backup and
 // docs/infrastructure/WO-INFRA-013-REPAIR-PLAN.md produce. It checks, and says which check failed:
-//   1. every expected file exists and is non-empty, and every file is listed in SHA256SUMS.txt;
+//   1. every expected file exists and is non-empty; every file in the folder is listed in SHA256SUMS.txt
+//      (an unlisted file is refused) and is a regular file (a symlink is refused);
 //   2. every listed file exists and matches its SHA-256 (a corrupt or swapped file is refused);
-//   3. each dump is a readable archive: `pg_restore --list` (reads the file only, needs no server);
-//   4. each dump's "Dumped from database version" major is not newer than --target-major (the server it
-//      would be restored into: a newer dump does not restore into an older server);
+//   3. each dump's table of contents is readable (`pg_restore --list`) AND every data block reads to the
+//      end (`pg_restore -f -`, output discarded): --list alone passes an archive cut after its TOC or
+//      mid-data, which is what a pg_dump killed part-way leaves (INF-05 review B, F1). Neither needs a server;
+//   4. each dump's "Dumped from" server major AND "Dumped by" pg_dump major are not newer than --target-major
+//      (the server it would be restored into): neither restores reliably into an older server (F3);
 //   5. each dump has table data, and globals.sql creates roles.
+// PASS means the files are intact and readable offline. It is NOT a restore test: only a restore into a
+// disposable server proves that (a dump holding the historical orphans stops at five foreign keys).
 // Exit 0 = every check passed, 1 = a check failed, 2 = usage.
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -52,11 +57,13 @@ export function parseListHeader(text) {
   };
 }
 
-/** Why a dump made from server `fromMajor` cannot go into server `targetMajor`, or null. */
-export function compatProblem(fromMajor, targetMajor) {
+/** Why a dump made from server `fromMajor` by pg_dump `byMajor` cannot go into server `targetMajor`, or null. */
+export function compatProblem(fromMajor, targetMajor, byMajor = fromMajor) {
   if (fromMajor == null) return 'the archive header has no "Dumped from database version"';
+  if (byMajor == null) return 'the archive header has no "Dumped by pg_dump version"';
   if (targetMajor == null) return null;
   if (fromMajor > targetMajor) return `dumped from PostgreSQL ${fromMajor}, newer than the target server ${targetMajor}: it will not restore there`;
+  if (byMajor > targetMajor) return `written by pg_dump ${byMajor}, newer than the target server ${targetMajor}: not guaranteed to restore there (use pg_dump ${targetMajor})`;
   return null;
 }
 
@@ -66,16 +73,30 @@ export async function sha256File(path) {
   return h.digest('hex');
 }
 
+const TIMEOUT_MS = 15 * 60 * 1000;
+
 export function defaultList(pgRestore) {
   return (file) => {
-    const r = spawnSync(pgRestore, ['--list', file], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const r = spawnSync(pgRestore, ['--list', file], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: TIMEOUT_MS });
     if (r.error) return { status: null, stdout: '', stderr: String(r.error.message) };
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };
   };
 }
 
-/** Verifies `dir`. `list(file)` returns { status, stdout, stderr } like `pg_restore --list`. Never writes. */
-export async function verifyBackup(dir, { list, targetMajor = null } = {}) {
+/** Reads every data block: `pg_restore -f -` with its SQL output discarded. Needs no server. */
+export function defaultReadAll(pgRestore) {
+  return (file) => {
+    const r = spawnSync(pgRestore, ['-f', '-', file], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: TIMEOUT_MS });
+    if (r.error) return { status: null, stderr: String(r.error.message) };
+    return { status: r.status, stderr: r.stderr };
+  };
+}
+
+/**
+ * Verifies `dir`. `list(file)` returns { status, stdout, stderr } like `pg_restore --list`; `readAll(file)`
+ * returns { status, stderr } like `pg_restore -f -`. Never writes.
+ */
+export async function verifyBackup(dir, { list, readAll, targetMajor = null } = {}) {
   const problems = [];
   const passed = [];
   if (!existsSync(dir) || !statSync(dir).isDirectory()) return { problems: [`not a folder: ${dir}`], passed };
@@ -89,9 +110,15 @@ export async function verifyBackup(dir, { list, targetMajor = null } = {}) {
     else if (statSync(p).size === 0) problems.push(`${name} is empty`);
     if (!entries.has(name)) problems.push(`${name} is not listed in ${SUMS}`);
   }
+  for (const name of readdirSync(dir)) {
+    const st = lstatSync(join(dir, name));
+    if (st.isSymbolicLink()) problems.push(`${name} is a symbolic link, not a file of the backup`);
+    else if (name !== SUMS && !entries.has(name)) problems.push(`${name} is in the folder but not listed in ${SUMS}`);
+  }
   for (const [name, want] of entries) {
     const p = join(dir, name);
     if (!existsSync(p)) { problems.push(`${SUMS} lists ${name}, which is missing`); continue; }
+    if (lstatSync(p).isSymbolicLink() || !statSync(p).isFile()) continue; // reported above, or a folder: never hashed
     const got = await sha256File(p);
     if (got !== want) problems.push(`${name}: SHA-256 ${got.slice(0, 16)}... does not match ${SUMS} (${want.slice(0, 16)}...)`);
     else passed.push(`${name}: SHA-256 matches`);
@@ -102,10 +129,12 @@ export async function verifyBackup(dir, { list, targetMajor = null } = {}) {
     const r = list(p);
     if (r.status !== 0) { problems.push(`${name}: not a readable archive (pg_restore --list exit ${r.status}: ${(r.stderr || '').trim().split('\n')[0]})`); continue; }
     const h = parseListHeader(r.stdout);
-    const c = compatProblem(h.dumpedFromMajor, targetMajor);
+    const c = compatProblem(h.dumpedFromMajor, targetMajor, h.dumpedByMajor);
     if (c) problems.push(`${name}: ${c}`);
     if (h.tableData === 0) problems.push(`${name}: the archive holds no TABLE DATA entries`);
-    if (!c && h.tableData > 0) passed.push(`${name}: readable; dumped from PostgreSQL ${h.dumpedFromMajor} by pg_dump ${h.dumpedByMajor}; ${h.tableData} table-data entries`);
+    const all = readAll(p);
+    if (all.status !== 0) problems.push(`${name}: a data block does not read to the end (pg_restore -f - exit ${all.status}: ${(all.stderr || '').trim().split('\n')[0]}) -- truncated or corrupt`);
+    if (!c && h.tableData > 0 && all.status === 0) passed.push(`${name}: every data block reads; dumped from PostgreSQL ${h.dumpedFromMajor} by pg_dump ${h.dumpedByMajor}; ${h.tableData} table-data entries`);
   }
   const g = join(dir, 'globals.sql');
   if (existsSync(g) && statSync(g).size > 0) {
@@ -115,7 +144,7 @@ export async function verifyBackup(dir, { list, targetMajor = null } = {}) {
   return { problems, passed };
 }
 
-const USAGE = 'usage: node ops/scripts/db-backup-verify.mjs <backup-dir> [--target-major <n>] [--pg-restore <path>]';
+const USAGE = 'usage: node ops/scripts/db-backup-verify.mjs <backup-dir> --target-major <n> [--pg-restore <path>]';
 
 async function main(argv) {
   const args = [...argv];
@@ -128,11 +157,11 @@ async function main(argv) {
     else if (!dir && !a.startsWith('-')) dir = a;
     else { console.error(`unknown argument: ${a}\n${USAGE}`); return 2; }
   }
-  if (!dir) { console.error(USAGE); return 2; }
-  const { problems, passed } = await verifyBackup(dir, { list: defaultList(pgRestore), targetMajor });
+  if (!dir || targetMajor == null) { console.error(USAGE); return 2; }
+  const { problems, passed } = await verifyBackup(dir, { list: defaultList(pgRestore), readAll: defaultReadAll(pgRestore), targetMajor });
   for (const p of passed) console.log(`  PASS  ${p}`);
   for (const p of problems) console.log(`  FAIL  ${p}`);
-  console.log(problems.length ? `FAIL  ${problems.length} problem(s) in ${dir}` : `PASS  backup verified: ${dir}${targetMajor == null ? ' (no --target-major: version compatibility not judged)' : ''}`);
+  console.log(problems.length ? `FAIL  ${problems.length} problem(s) in ${dir}` : `PASS  backup intact and readable offline (not a restore test): ${dir}`);
   return problems.length ? 1 : 0;
 }
 
