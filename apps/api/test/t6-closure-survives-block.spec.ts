@@ -188,6 +188,8 @@ describe('T6 / G1.3 -- closure stays open while deletion is blocked', () => {
     await admin.query(`DELETE FROM core.idempotency_record WHERE actor_id = $1`, [OWNER]);
     await admin.query(`DELETE FROM billing.subscription WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM billing.price_schedule WHERE id = $1`, [PS]);
+    // INF-03: the claim's open trigger attached an evidence bundle; replica mode skips its FK.
+    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id = $1`, [CLAIM]);
     await admin.query(`DELETE FROM core.claim WHERE id = $1`, [CLAIM]);
     await admin.query(`DELETE FROM core."order" WHERE seller_id = $1`, [SELLER]);
     await admin.query(`DELETE FROM core.step_up_challenge WHERE account_id = $1`, [OWNER]);

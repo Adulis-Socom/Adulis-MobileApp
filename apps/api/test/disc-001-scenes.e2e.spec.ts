@@ -325,7 +325,8 @@ describe('WO-DISC-001 -- Scene domain foundation', () => {
     await app?.close();
     await admin.query(`SET session_replication_role = replica`);
     for (const q of [
-      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${OWNER_B}')`,
+      // INF-03: every account deleted below; each session left a NEW_DEVICE_SIGNIN notice.
+      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER}','${CAMPAIGN}','${INVENTORY}','${ANALYST}','${STRANGER}','${OWNER_B}')`,
       `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER}','${CAMPAIGN}','${INVENTORY}','${ANALYST}','${STRANGER}','${OWNER_B}')`,
       `DELETE FROM core.scene_post_transition WHERE seller_id IN ('${SELLER}','${SELLER_B}')`,
       `DELETE FROM core.scene_post_product WHERE seller_id IN ('${SELLER}','${SELLER_B}')`,

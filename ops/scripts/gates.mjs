@@ -31,11 +31,11 @@
  * ------------------------------------------------------------------------
  * THE ONE PARAMETER.
  *
- * CI scopes typecheck, build and test to the packages that changed plus
- * their dependents (ADU-REPO-01 S7). A developer wants the whole thing.
- * That is a real difference and it is expressed ONCE, as
- * ADULIS_SCOPE_FILTER, rather than as two lists that happen to differ in
- * three rows. Unset -- the local default -- means no scoping.
+ * ADU-REPO-01 S7 lets CI scope typecheck, build and test to the packages that
+ * changed plus their dependents, while a developer runs the whole thing. That
+ * difference is expressed ONCE, as ADULIS_SCOPE_FILTER, rather than as two
+ * lists that differ in three rows. Unset means no scoping -- the local default,
+ * and since INF-03 CI's too (ci.yml explains why it no longer scopes).
  *
  * ADU-REPO-01 S11.2's two foot-guns travel with it, in CI's own comments:
  * fetch-depth 0, or `origin/main` is not a ref and NOTHING is selected; and
@@ -620,10 +620,10 @@ const GATES = [
    * The AUDIT itself runs inside `test`, as the API suites' Jest globalTeardown
    * (apps/api/test/global-teardown.ts), and not here: `console-e2e` runs `pnpm db:reset`, so a
    * gate at the end of this list sees a fresh database and passes whatever the suites left. The
-   * audit checks every foreign key, read-only; five known teardown leaks are named and tolerated
-   * (ISSUE-INFRA-CLOSURE-004), any other orphan fails the API run.
+   * audit checks every foreign key, read-only. Since INF-03 no test leak is tolerated (the five of
+   * ISSUE-INFRA-CLOSURE-004 were fixed in their teardowns): any orphan fails the API run.
    */
-  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs'] },
+  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs', 'ops/scripts/fk-teardown-verdict.test.mjs'] },
 
   /**
    * APPENDED (WO-INFRA-015A). The guards of the destructive scripts and of MinIO's data volume:
@@ -632,7 +632,7 @@ const GATES = [
    * configuration that wires it. No database is written: the scripts are driven against stubs, or
    * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
-  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs'] },
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs'] },
 ];
 
 /**

@@ -8,7 +8,9 @@
  *
  * --baseline <file>: a --json report taken before the suites (the Jest setup writes it). Only orphan
  * rows that are not in it are judged, so a second run on the same disposable database is judged on
- * what THAT run left, not on the total (WO-INFRA-015B review).
+ * what THAT run left, not on the total (WO-INFRA-015B review). The COUNT lines show both, per key:
+ * the orphans in the database after the run and those the run added; a NOTE says when the baseline
+ * was not empty, i.e. the database was not fresh (INF-03).
  *
  * Connects with DATABASE_URL_MIGRATE, else DATABASE_URL.
  *
@@ -29,42 +31,19 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 /**
- * The five keys today's API suites still leave orphans on, measured on a fresh disposable database
- * (WO-INFRA-012: 201 keys hold before a full run, these five break after it). Each is a teardown
- * that deletes a parent under `replica` without its children; the files are listed in
- * ISSUE-INFRA-CLOSURE-004. A ratchet, not an exemption: any OTHER key with an orphan fails the
- * gate, and each line here is deleted when its teardowns are fixed. Never add one to pass a run.
+ * The keys the API suites may still leave orphans on: none (INF-03). A ratchet, not an exemption:
+ * any key with an orphan the run added fails the gate. Never add one to pass a run; a teardown that
+ * deletes a parent under `replica` deletes its children first.
  */
 //
-// COUNTED, NOT ONLY NAMED (WO-INFRA-015B). Each known leak carries the most orphaned rows it may
-// leave (`maxRows`): a suite that starts leaking MORE on a known key fails like a new key does.
-// maxRows is the count measured after a full API run on the line with the most suites (the closure
-// line; this line's suites are a subset, so its counts are no higher). Never raise it to pass a run.
-// Measured 2026-11-13: identical per-key counts (23, 2, 3, 3, 4 = 35 rows) in one local full run on a
-// fresh disposable database and in three closure-line CI runs (43419934139, 43422806778,
-// 43424424106), with different worker counts.
-export const KNOWN_TEST_LEAKS = {
-  'core.otp_delivery_attempt.otp_delivery_attempt_otp_challenge_id_fkey': {
-    reason: '19 suites delete core.otp_challenge, never its delivery attempts',
-    maxRows: 23,
-  },
-  'core.order_state_transition.order_state_transition_order_id_fkey': {
-    reason: '8 suites delete core."order" under replica, never its transitions',
-    maxRows: 2,
-  },
-  'core.claim_evidence_item.claim_evidence_item_claim_id_fkey': {
-    reason: 't6-closure-survives-block deletes core.claim, never its evidence items',
-    maxRows: 3,
-  },
-  'core.device.device_market_id_fkey': {
-    reason: 'c6-accounts deletes its market under replica; the API created devices in it',
-    maxRows: 3,
-  },
-  'core.notification.notification_recipient_account_id_fkey': {
-    reason: 't26 and disc-001 delete accounts that still have notifications',
-    maxRows: 4,
-  },
-};
+// COUNTED, NOT ONLY NAMED (WO-INFRA-015B). An entry carries the most orphaned rows it may leave
+// (`maxRows`); a suite leaking MORE on a known key fails like a new key does. Never raise it.
+// History: WO-INFRA-012/015B measured five leaks (23, 2, 3, 3, 4 = 35 rows; ISSUE-INFRA-CLOSURE-004).
+// INF-03 traced each to its suite and fixed the teardown (otp_delivery_attempt: c6-accounts 11,
+// wo-api-001a 12; order_state_transition and device: c6-accounts; claim_evidence_item:
+// t6-closure-survives-block; notification: t26 1, disc-001 3); two full runs on fresh disposable
+// databases then left 0 orphan rows on all 201 keys.
+export const KNOWN_TEST_LEAKS = {};
 
 /**
  * Splits a report into failures, tolerated known leaks, counts below their maximum, and known keys
@@ -117,6 +96,34 @@ export function sinceBaseline(report, baseline) {
     if (fresh.length) out.push({ ...r, count: fresh.length, orphans: fresh });
   }
   return out;
+}
+
+/**
+ * What the output says before the verdict (INF-03): per key, the orphans in the database after the
+ * run (absolute) and those the run added (the delta the verdict judged), and a NOTE when the database
+ * was not fresh. Pure and informational: the verdict is judge()'s, on `judged` alone. `baseline` is
+ * null when none was given: then nothing tells this run's rows from older ones, and all are judged.
+ */
+export function account(report, judged, baseline) {
+  const sum = (list) => list.reduce((n, r) => n + r.count, 0);
+  const added = new Map(judged.map((r) => [r.key, r.count]));
+  const lines = [];
+  if (baseline?.length)
+    lines.push(
+      `  NOTE  not a fresh database: ${sum(baseline)} orphan row(s) on ${baseline.length} key(s) were already here before this run; only the rows this run added are judged.`,
+    );
+  for (const r of report)
+    lines.push(
+      baseline
+        ? `  COUNT ${r.key}: ${r.count} in the database, ${added.get(r.key) ?? 0} added by this run`
+        : `  COUNT ${r.key}: ${r.count} in the database (no baseline: all judged)`,
+    );
+  lines.push(
+    baseline
+      ? `  COUNT total: ${sum(report)} orphan row(s) in the database after this run, ${sum(judged)} added by it.`
+      : `  COUNT total: ${sum(report)} orphan row(s) in the database (no baseline: all judged).`,
+  );
+  return lines;
 }
 
 const q = (id) => '"' + id.replace(/"/g, '""') + '"';
@@ -235,6 +242,8 @@ async function main() {
       `  judged: only the rows added since the baseline (${total(result.report) - total(judged)} older orphan row(s) ignored)\n`,
     );
   }
+  for (const line of account(result.report, judged, baseline)) console.log(line);
+  console.log('');
   for (const r of failures)
     console.log(
       r.exceeded === undefined
@@ -249,15 +258,24 @@ async function main() {
   // lower maxRows in KNOWN_TEST_LEAKS once the full suite confirms it.
   for (const l of lowered)
     console.log(`  NOTE  ${l.key}: ${l.count} row(s), below its maximum of ${l.maxRows}.`);
+  // `gone` is judged on this run's rows: on a reused database the key may still hold older ones.
+  const older = new Map(result.report.map((r) => [r.key, r.count]));
   for (const k of gone)
-    console.log(`  NOTE  ${k}: no orphan left; remove it from KNOWN_TEST_LEAKS once confirmed.`);
+    console.log(
+      older.has(k)
+        ? `  NOTE  ${k}: this run added none (${older.get(k)} older row(s) still in the database).`
+        : `  NOTE  ${k}: no orphan left; remove it from KNOWN_TEST_LEAKS once confirmed.`,
+    );
   if (jsonFile) writeFileSync(jsonFile, JSON.stringify(result.report, null, 2));
   const rows = (list) => list.reduce((s, r) => s + r.count, 0);
+  // On a reused database the PASS is about this run's rows only; say so on the line itself (INF-03
+  // review). The teardown verdict anchors only the prefix, so the suffix never changes the outcome.
+  const leftOver = rows(result.report) - rows(judged);
   if (failures.length)
     console.log(`\nFAIL  ${rows(failures)} orphaned row(s) across ${failures.length} key(s).`);
   else
     console.log(
-      `PASS  all ${result.keys} foreign keys hold${tolerated.length ? `, apart from ${tolerated.length} known test leak(s) (${rows(tolerated)} rows)` : ''}.`,
+      `PASS  all ${result.keys} foreign keys hold${tolerated.length ? `, apart from ${tolerated.length} known test leak(s) (${rows(tolerated)} rows)` : ''}${leftOver > 0 ? ` for the rows this run added (${leftOver} older orphan row(s) remain in this database)` : ''}.`,
     );
   process.exit(failures.length ? 1 : 0);
 }

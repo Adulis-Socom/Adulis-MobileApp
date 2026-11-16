@@ -314,6 +314,8 @@ const browserCookie = async (): Promise<string> => {
       `DELETE FROM core.reservation WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core.order_payout_snapshot WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
       `DELETE FROM core.notification WHERE recipient_account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
+      // INF-03: the cancels above logged transitions; replica mode skips their FK, so they go first.
+      `DELETE FROM core.order_state_transition WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
       `DELETE FROM core.cart_line WHERE cart_id IN (SELECT id FROM core.cart WHERE seller_id IN ('${SELLER}','${DELSELLER}'))`,
       `DELETE FROM core.cart WHERE seller_id IN ('${SELLER}','${DELSELLER}')`,
@@ -355,10 +357,14 @@ const browserCookie = async (): Promise<string> => {
       `DELETE FROM core.step_up_challenge WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.session WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.account_device WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
-      `DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519114417%' OR phone_e164 LIKE '+2519114418%'`,
+      // INF-03: replica mode skips the attempts' ON DELETE CASCADE, so they go first. Only this
+      // suite's phones (+251911441701..707, +251911441801..804): t12-d89/d101 use +251911441890..895.
+      `DELETE FROM core.otp_delivery_attempt WHERE otp_challenge_id IN (SELECT id FROM core.otp_challenge WHERE phone_e164 LIKE '+25191144170_' OR phone_e164 LIKE '+25191144180_')`,
+      `DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+25191144170_' OR phone_e164 LIKE '+25191144180_'`,
       `DELETE FROM core.idempotency_record WHERE actor_id::text LIKE 'cccc6666%' OR actor_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.buyer_profile WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
-      `DELETE FROM core.device WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}') OR id='${DEVICE}'`,
+      // INF-03: OR market_id -- the anonymous devices the API placed in this market.
+      `DELETE FROM core.device WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}') OR id='${DEVICE}' OR market_id='${M}'`,
       `DELETE FROM core.phone_reuse_block WHERE market_id='${M}'`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.ladder_config WHERE market_id='${M}'`,
