@@ -117,8 +117,14 @@ set MIGRATE_LIVE=approved
 node ops\scripts\minio-migrate.mjs migrate >> G:\AdulisDevelopment\minio-move\<same name>.log 2>&1
 ```
 
+**One console, one run.**
+- Run `migrate`, `rollback` or `recover` from **one** console only, one at a time. The lock in the backup
+  folder stops two runs on the same folder, but not two runs started with different folders.
+- In cmd, `set MIGRATE_LIVE=approved` lasts for the whole console session. **Close that console when the run
+  ends** (or `set MIGRATE_LIVE=`), so the approval never carries over to a later command.
+
 **Follow the log from a second window:**
-`powershell -Command "Get-Content -Wait G:\AdulisDevelopment\minio-move\<same name>.log"`.
+`powershell -Command "Get-Content -Wait -Encoding UTF8 G:\AdulisDevelopment\minio-move\<same name>.log"`.
 
 The output goes straight to the file, so a Ctrl+C, or a closed console, cannot lose the undo's output. The
 outcome is also written into `manifest.json` and `journal.jsonl` in the backup folder.
@@ -280,7 +286,7 @@ What is automatic, what is partial, and what needs a person.
 | The same, but the target received writes after the switch | `UNDO PARTIAL`, the changes listed in `journal.jsonl` | the safety yes | copy back what must be kept |
 | The record cannot be renamed (four attempts) | `UNDO PARTIAL`, `MANUAL ACTION REQUIRED` with the state read back; pending or switching is refused at every start | the safety yes, the clean-up no | run `recover`, or clear it by hand |
 | An undo step fails, or the old MinIO does not serve its volume | `UNDO PARTIAL` or `UNDO INCOMPLETE`, naming the step | no | run `recover`, or act as the step says |
-| A Ctrl+C (one or two) | the run stops at the next step and undoes itself. A docker step in progress (inventory, copy, readiness wait) finishes first; the backup and hash stop at once. A second Ctrl+C is acknowledged; the undo goes on | yes: rehearsed with real console control events in a classic console (conhost + cmd.exe); not in Git Bash or Windows Terminal | read the outcome |
+| A Ctrl+C (one or two) | the run stops once the docker step in progress has finished (an inventory, the copy, a readiness wait: seconds on the live store; the streamed backup and hash stop at once), then undoes itself. A second Ctrl+C is acknowledged and the undo goes on; rehearsed while the undo was between docker steps, and during a docker step it can make that step fail (retried or reported) | yes: rehearsed with real console control events in a classic console (conhost + cmd.exe); not a physical key press, not Git Bash or Windows Terminal | read the outcome |
 | The console window closed, or the process killed | Windows ends Node about 5 s later; the undo may stop part-way | **no** | run `recover` (or `rollback` again, for a rollback) |
 | The switched MinIO restarted before `recover` (Docker restart, crash, `docker start`) | its guard refuses (`switching`): MinIO is down, never stale | the safety yes | run `recover` |
 | Docker unavailable during the undo | nothing can be changed; a pending or switching record is refused at start | the safety yes | start Docker, then `recover` |
