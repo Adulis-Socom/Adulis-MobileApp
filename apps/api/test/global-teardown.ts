@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { teardownVerdict } from './fk-teardown-verdict';
 
 /**
  * After the last suite, no foreign key may be broken beyond the known test leaks (WO-INFRA-012).
@@ -10,7 +11,8 @@ import { resolve } from 'node:path';
  * ops/scripts/fk-audit.mjs. It judges only the rows added since the baseline global-setup.ts took.
  *
  * Status 0 alone is not a pass (WO-INFRA-015B, PR105-F11): the audit's own PASS line must be in its
- * output, and a status 1 without its banner is a crash, not orphans.
+ * output, and a status 1 without its banner is a crash, not orphans. The decision is the pure
+ * teardownVerdict() (INF-03), tested in ops/scripts/fk-teardown-verdict.test.mjs.
  */
 export default function globalTeardown(): void {
   const audit = resolve(__dirname, '../../../ops/scripts/fk-audit.mjs');
@@ -24,15 +26,11 @@ export default function globalTeardown(): void {
   if (baseline) rmSync(baseline, { force: true });
   const out = r.stdout ?? '';
   process.stdout.write(out);
-  const audited = out.includes('Foreign-key audit -- ');
-  if (r.status === 1 && audited)
-    throw new Error(
-      '[fk-audit] the suites left orphaned rows beyond the known test leaks, or more rows on a known leak than it may leave (listed above)',
-    );
-  if (r.status !== 0 || !audited)
-    throw new Error(
-      `[fk-audit] the foreign-key audit did not run to its verdict (status ${r.status}, signal ${r.signal}, ${r.error?.message ?? 'see above'})`,
-    );
-  if (!/^PASS {2}all \d+ foreign keys hold/m.test(out))
-    throw new Error('[fk-audit] the foreign-key audit exited 0 without its PASS line');
+  const verdict = teardownVerdict({
+    status: r.status,
+    signal: r.signal,
+    error: r.error,
+    stdout: out,
+  });
+  if (!verdict.ok) throw new Error(verdict.message);
 }

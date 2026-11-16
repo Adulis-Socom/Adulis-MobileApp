@@ -156,13 +156,15 @@ jobs:
       # legitimately between a service container and docker-compose and
       # cannot fail because someone wrote something wrong.
       #
-      # ADULIS_SCOPE_FILTER is the one difference, expressed once: CI scopes
-      # typecheck/build/test to changed packages plus dependents
-      # (ADU-REPO-01 S7); a developer runs everything. S11.2's two foot-guns
-      # travel with it - fetch-depth 0 above, or `origin/main` is not a ref
-      # and NOTHING is selected; and the script's own `!adulis-platform`,
-      # because the workspace root is selectable and its scripts are
-      # `pnpm -r`, so a filtered run re-enters unfiltered.
+      # ADULIS_SCOPE_FILTER (ADU-REPO-01 S7) is deliberately NOT set: CI runs
+      # every gate on every package, like `pnpm ci:local` (INF-03). It used
+      # to be '...[origin/main]', but `dev` is now the integration line
+      # (docs/engineering/DEVELOPMENT-BRANCH-POLICY.md) and main is frozen:
+      # every dev-based run was already UNSCOPED only because ~70 root inputs
+      # differ from main, and once main catches up with dev a PR into dev
+      # that reverts a package to main's version would select nothing in it.
+      # A scoped run must diff against the PR's own base, and push and PR
+      # runs share this check's name; until both are handled, full runs.
       # ==================================================================
       # Migration 01 creates every role NOLOGIN, because a password in a
       # migration is a secret in git. So the runtime roles cannot be given a
@@ -241,7 +243,7 @@ jobs:
       - name: Gates (ops/scripts/gates.mjs - the same list `pnpm ci:local` runs)
         run: pnpm ci:local
         env:
-          ADULIS_SCOPE_FILTER: '...[origin/main]'
+          # No ADULIS_SCOPE_FILTER: a full run (see the note above, INF-03).
           # The six values the object-store adapter reads. A bare account id
           # would be treated as Cloudflare's; a URL is used verbatim with
           # path-style addressing, which is what MinIO needs.

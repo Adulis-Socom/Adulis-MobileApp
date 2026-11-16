@@ -51,8 +51,14 @@ The repository's default branch stays `main`, unless the founder decides otherwi
 
 ## Notes
 
-- **CI scope:** CI's package scope is computed against `origin/main` (`ADULIS_SCOPE_FILTER` in
-  `.github/workflows/ci.yml`). While `dev` is ahead of `main`, that selects at least every package changed on
-  `dev`. It can only test more than a `dev`-based scope would, never less.
-- **Branch protection for `dev`:** pull-request reviews, the CI check required, no force-push, no deletion. The
-  founder configures it; the proposed settings are in the INF-02 founder handoff.
+- **CI scope:** CI runs every gate on every package, on every push and every pull request (INF-03). It no
+  longer scopes against `origin/main`: once `main` catches up with `dev`, a PR that reverted a package to
+  `main`'s version would have selected nothing in it. Scoping can return only if it diffs against the PR's own
+  base and the push and PR runs stop sharing one required check name.
+- **Branch protection for `dev` (applied in INF-03):**
+  - a pull request is required, with 0 approvals (one GitHub account cannot approve its own PR);
+  - the CI check is required, and the branch must be up to date;
+  - administrators are included; no force-push; no deletion; conversations must be resolved.
+  - Raise the approval count to 1 once a second reviewer account exists.
+- **Recovery tags:** `dev-baseline-*` and `recovery/**` tags cannot be deleted or moved (repository ruleset
+  `protect-recovery-tags`). New ones can still be created.

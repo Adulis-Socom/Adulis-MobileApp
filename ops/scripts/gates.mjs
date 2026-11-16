@@ -623,7 +623,7 @@ const GATES = [
    * audit checks every foreign key, read-only; five known teardown leaks are named and tolerated
    * (ISSUE-INFRA-CLOSURE-004), any other orphan fails the API run.
    */
-  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs'] },
+  { id: 'fk-integrity', title: "The foreign-key audit's ratchet holds", cmd: ['node', '--test', 'ops/scripts/fk-audit.test.mjs', 'ops/scripts/fk-teardown-verdict.test.mjs'] },
 
   /**
    * APPENDED (WO-INFRA-015A). The guards of the destructive scripts and of MinIO's data volume:

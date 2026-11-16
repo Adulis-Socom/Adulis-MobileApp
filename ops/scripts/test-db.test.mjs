@@ -51,7 +51,10 @@ function down(containers, extra = {}) {
     writeFileSync(log, '');
     writeFileSync(join(dir, 'fake-docker.mjs'), FAKE);
     const shim = join(dir, 'docker');
-    writeFileSync(shim, `#!/bin/sh\nexec node "${join(dir, 'fake-docker.mjs').replaceAll('\\', '/')}" "$@"\n`);
+    writeFileSync(
+      shim,
+      `#!/bin/sh\nexec node "${join(dir, 'fake-docker.mjs').replaceAll('\\', '/')}" "$@"\n`,
+    );
     chmodSync(shim, 0o755);
     const r = spawnSync('bash', ['ops/scripts/test-db.sh', 'down'], {
       cwd: root,
@@ -89,7 +92,7 @@ test('nothing present: exits 0 and removes nothing', () => {
   assert.match(r.err, /nothing to remove/);
 });
 
-test('this owner\'s disposable pair is removed, by container ID and never by name', () => {
+test("this owner's disposable pair is removed, by container ID and never by name", () => {
   const r = down({ 'adulis-test-pg': owned('pg111'), 'adulis-test-minio': owned('s3222', []) });
   assert.equal(r.status, 0, r.err);
   assert.equal(r.rm, 'rm pg111 s3222');
@@ -108,14 +111,14 @@ test('a container without the disposable label refuses, and NOTHING is removed',
   assert.deepEqual(r.left.sort(), ['adulis-test-minio', 'adulis-test-pg']);
 });
 
-test('another owner\'s pair refuses (another worktree or work order)', () => {
+test("another owner's pair refuses (another worktree or work order)", () => {
   const r = down({ 'adulis-test-pg': { ...owned('pg111'), owner: 'C:/other/worktree' } });
   assert.equal(r.status, 1);
   assert.match(r.err, /belongs to 'C:\/other\/worktree', not 'inf-03-test-owner'/);
   assert.equal(r.rm, '');
 });
 
-test('a named volume or a bind mount refuses: that is someone\'s data', () => {
+test("a named volume or a bind mount refuses: that is someone's data", () => {
   for (const mounts of [
     [{ type: 'volume', name: 'adulis-platform_adulis-pgdata' }],
     [{ type: 'bind' }],
