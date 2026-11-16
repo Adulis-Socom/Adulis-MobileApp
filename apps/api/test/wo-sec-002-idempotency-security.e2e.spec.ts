@@ -3,7 +3,7 @@ import { Controller, Module, Post, Req, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
 import request from 'supertest';
 import type { Response } from 'express';
 import { AppModule } from '../src/app.module';
@@ -65,6 +65,9 @@ const TRANSFER = `${P}1c`;
 const ACCOUNTS = [OWNER, OTHER, MEMBER_R, MEMBER_S, MEMBER_R2, MEMBER_S2];
 const SELLERS = [SELLER_A, SELLER_B, SELLER_C, SELLER_D];
 const MARKER = 'wo-sec-002:';
+// INF-03 F2: the latched probes' advisory locks, pg_advisory_xact_lock(namespace, body.latch).
+const LATCH_TWIN = 0x5ec002; // taken first in the handler: a twin queues here after its own lookup
+const LATCH_GATE = 0x5ec003; // held by the test: the first request waits here, marker written, no record yet
 
 const SELLER_PATH = '/v1/seller/wo-sec-002-probe';
 const BUYER_PATH = '/v1/wo-sec-002-buyer-probe';
@@ -105,12 +108,12 @@ class WoSec002Probe {
 
   private async execute(trx: Transaction<Database>, req: LocalizedRequest): Promise<unknown> {
     const key = req.headers['idempotency-key'] as string;
+    const latch = (req.body as { latch?: number } | undefined)?.latch;
     executions.set(key, (executions.get(key) ?? 0) + 1);
+    if (latch !== undefined) await sql`SELECT pg_advisory_xact_lock(${LATCH_TWIN}, ${latch})`.execute(trx);
     await sql`INSERT INTO core.rate_limit_bucket (subject_kind, subject_id, bucket_key, window_start)
               VALUES ('ACCOUNT', ${req.ctx?.accountId}, ${MARKER + key}, clock_timestamp())`.execute(trx);
-    if ((req.body as { slow?: boolean } | undefined)?.slow === true) {
-      await sql`SELECT pg_sleep(1.5)`.execute(trx);
-    }
+    if (latch !== undefined) await sql`SELECT pg_advisory_xact_lock(${LATCH_GATE}, ${latch})`.execute(trx);
     if (failNext.delete(key)) throw new AdulisException('ILLEGAL_TRANSITION');
     return { seller_id: req.ctx?.sellerId ?? null, body: req.body, run: randomUUID() };
   }
@@ -120,10 +123,6 @@ class WoSec002Probe {
 class WoSec002Module {}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const waitForExecution = async (key: string, n = 1): Promise<void> => {
-  for (let i = 0; i < 300 && (executions.get(key) ?? 0) < n; i++) await sleep(20);
-  expect(executions.get(key) ?? 0).toBeGreaterThanOrEqual(n);
-};
 
 /** The one error envelope, refusing with a non-retryable 4xx. */
 const expectProblem = (r: request.Response, status: number, code: string, path?: string): void => {
@@ -273,6 +272,44 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
   /** Starts the request now (supertest is lazy until awaited). */
   const start = (t: request.Test): Promise<request.Response> => t.then((r) => r);
 
+  /**
+   * INF-03 F2: the latch of the concurrency tests, in place of a pg_sleep window. The test holds the
+   * gate on its own connection; a probe sent with body.latch takes the TWIN lock, writes its marker,
+   * then waits for the gate, its transaction open and no record written. Progress is read from
+   * pg_locks, never from elapsed time.
+   */
+  const holdGate = async (latch: number): Promise<{ open: () => Promise<void> }> => {
+    const c = new Client({ connectionString: ADMIN });
+    await c.connect();
+    await c.query('SELECT pg_advisory_lock($1, $2)', [LATCH_GATE, latch]);
+    let opened = false;
+    return {
+      open: async () => {
+        if (opened) return;
+        opened = true;
+        await c.query('SELECT pg_advisory_unlock($1, $2)', [LATCH_GATE, latch]);
+        await c.end();
+      },
+    };
+  };
+  /** Resolves once some session waits for advisory lock (ns, latch): proof a request got that far. */
+  const waitsOn = async (ns: number, latch: number): Promise<void> => {
+    for (let i = 0; i < 500; i++) {
+      const r = await admin.query(
+        `SELECT count(*)::int AS n FROM pg_locks
+          WHERE locktype = 'advisory' AND classid = $1::oid AND objid = $2::oid AND objsubid = 2
+            AND NOT granted`,
+        [ns, latch],
+      );
+      if (r.rows[0].n > 0) return;
+      await sleep(20);
+    }
+    throw new Error(`no session waits on advisory lock (${ns}, ${latch})`);
+  };
+  const storedBody = async (key: string): Promise<unknown> =>
+    (await admin.query(`SELECT response_body FROM core.idempotency_record WHERE key = $1`, [key])).rows[0]
+      ?.response_body;
+
   const records = async (key: string): Promise<number> =>
     Number((await admin.query(`SELECT count(*) FROM core.idempotency_record WHERE key = $1`, [key])).rows[0].count);
   const markers = async (key: string): Promise<number> =>
@@ -414,33 +451,54 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
   });
 
   describe('C2 -- the unique-collision path and expired records', () => {
+    // Latched (INF-03 F2): the loser's lookup provably runs while the winner's transaction is open and
+    // unrecorded, so the loser always reaches the unique-collision path -- never a plain replay.
     it('concurrent identical requests: the winner executes, the loser rolls back and replays it', async () => {
       const key = randomUUID();
-      const winner = start(sellerPost(S_OWNER, SELLER_A, key, { n: 11, slow: true }));
-      await waitForExecution(key, 1);
-      const loser = start(sellerPost(S_OWNER, SELLER_A, key, { n: 11, slow: true }));
-      const [w, l] = await Promise.all([winner, loser]);
-      expect(w.status).toBe(201);
-      expect(w.headers['x-adulis-idempotent-replay']).toBeUndefined();
-      expect(l.status).toBe(201);
-      expect(l.headers['x-adulis-idempotent-replay']).toBe('true');
-      expect(l.body).toEqual(w.body);
-      expect(executions.get(key)).toBe(2); // both ran...
-      expect(await markers(key)).toBe(1); // ...and only the winner's effects stand
-      expect(await records(key)).toBe(1);
+      const body = { n: 11, latch: 11 };
+      const gate = await holdGate(11);
+      try {
+        const winner = start(sellerPost(S_OWNER, SELLER_A, key, body));
+        await waitsOn(LATCH_GATE, 11); // the winner: marker written, transaction open, no record
+        const loser = start(sellerPost(S_OWNER, SELLER_A, key, body));
+        await waitsOn(LATCH_TWIN, 11); // the loser: its lookup found no record, its handler runs
+        await gate.open();
+        const [w, l] = await Promise.all([winner, loser]);
+        expect(w.status).toBe(201); // and so neither is a 500
+        expect(w.headers['x-adulis-idempotent-replay']).toBeUndefined();
+        expect(l.status).toBe(201);
+        expect(l.headers['x-adulis-idempotent-replay']).toBe('true');
+        expect(l.body).toEqual(w.body); // the winner's response, its run id included
+        expect(await storedBody(key)).toEqual(w.body); // the winner is the one whose response is stored
+        expect(executions.get(key)).toBe(2); // both ran...
+        expect(await markers(key)).toBe(1); // ...and only the winner's effects stand
+        expect(await records(key)).toBe(1);
+      } finally {
+        await gate.open();
+      }
     });
 
     it('concurrent requests with different bodies: one 201, the other 409, never the other body', async () => {
       const key = randomUUID();
-      const winner = start(sellerPost(S_OWNER, SELLER_A, key, { n: 41, slow: true }));
-      await waitForExecution(key, 1);
-      const loser = start(sellerPost(S_OWNER, SELLER_A, key, { n: 42, slow: true }));
-      const [w, l] = await Promise.all([winner, loser]);
-      expect(w.status).toBe(201);
-      expect(w.body.body).toEqual({ n: 41, slow: true });
-      expectProblem(l, 409, 'IDEMPOTENCY_KEY_REUSED');
-      expect(executions.get(key)).toBe(2);
-      expect(await markers(key)).toBe(1);
+      const gate = await holdGate(41);
+      try {
+        const winner = start(sellerPost(S_OWNER, SELLER_A, key, { n: 41, latch: 41 }));
+        await waitsOn(LATCH_GATE, 41);
+        const loser = start(sellerPost(S_OWNER, SELLER_A, key, { n: 42, latch: 41 }));
+        await waitsOn(LATCH_TWIN, 41);
+        await gate.open();
+        const [w, l] = await Promise.all([winner, loser]);
+        expect(w.status).toBe(201);
+        expect(w.body.body).toEqual({ n: 41, latch: 41 });
+        expectProblem(l, 409, 'IDEMPOTENCY_KEY_REUSED');
+        expect(JSON.stringify(l.body)).not.toContain(w.body.run);
+        expect(await storedBody(key)).toEqual(w.body);
+        expect(executions.get(key)).toBe(2);
+        expect(await markers(key)).toBe(1); // the loser's effect rolled back: no duplicate
+        expect(await records(key)).toBe(1);
+      } finally {
+        await gate.open();
+      }
     });
 
     it('an expired record not yet purged is refused, never served', async () => {
@@ -456,15 +514,21 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
 
     it('an expired record met on the collision path is refused too, and the work rolls back', async () => {
       const key = randomUUID();
-      const body = { n: 13, slow: true };
-      const pending = start(sellerPost(S_OWNER, SELLER_A, key, body));
-      await waitForExecution(key, 1);
-      await insertRecord(key, OWNER, `POST ${SELLER_PATH}`, hashRequest('POST', SELLER_PATH, body, SELLER_A),
-        { stale: true }, true);
-      const r = await pending;
-      expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
-      expect(JSON.stringify(r.body)).not.toContain('stale');
-      expect(await markers(key)).toBe(0);
+      const body = { n: 13, latch: 13 };
+      const gate = await holdGate(13);
+      try {
+        const pending = start(sellerPost(S_OWNER, SELLER_A, key, body));
+        await waitsOn(LATCH_GATE, 13); // past its lookup, its record not yet written
+        await insertRecord(key, OWNER, `POST ${SELLER_PATH}`, hashRequest('POST', SELLER_PATH, body, SELLER_A),
+          { stale: true }, true);
+        await gate.open();
+        const r = await pending;
+        expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
+        expect(JSON.stringify(r.body)).not.toContain('stale');
+        expect(await markers(key)).toBe(0);
+      } finally {
+        await gate.open();
+      }
     });
 
     it('a handler that fails writes no record, and the retry executes afresh', async () => {
