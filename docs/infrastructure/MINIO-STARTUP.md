@@ -20,9 +20,17 @@ of MinIO's objects, and how the database scripts decide what they may reset.
    - **What it refuses** while the legacy volume `adulis-pgdata` holds MinIO data (or cannot be read):
      - an empty data volume;
      - a data volume holding MinIO data without the record of a completed move
-       (`.adulis-migration-complete`, written by `minio-migrate.mjs` once the copy is verified, just
-       before the switch, and removed by any undo). That
-       covers a partial copy, or a store started before the move.
+       (`.adulis-migration-complete`). That covers a partial copy, or a store started before the move;
+     - a record that is only **pending** (INF-04). `minio-migrate.mjs` writes `pending <run>` once the
+       copy is verified, just before the switch. The guard accepts that only during that run's own
+       switch, and **only once**: the switched MinIO's own start rewrites it `switching <run>`, which
+       every start refuses, a restart of that same container included (Docker restart, crash,
+       `docker start`; rehearsed). The record becomes `complete <run>` only after the switched MinIO is
+       verified. So a record that an undo could not clear (Docker down, the console closed) is refused at
+       every later start;
+     - a record in any other form, and a data volume holding `.adulis-migration-invalidated` or
+       `.adulis-migration-rolled-back` (the names an undo, a recovery or a rollback renames the record
+       to).
    - **What it refuses always:**
      - the legacy volume itself used as the data volume;
      - a data volume holding files that are not MinIO's.
@@ -37,6 +45,12 @@ of MinIO's objects, and how the database scripts decide what they may reset.
      the one that created the running stack) still deletes the live database volume and
      `adulis-pgdata` with it, and the command stops the live containers from any checkout. Use
      plain `docker compose down`.
+
+**MinIO's host port defaults to 9100** (INF-04; it was 9000). 9000 is where another project's MinIO
+often listens: on the development machine it is the Nehemiah Autism Center stack, so a 9000 default
+could point the API at the wrong store. `MINIO_HOST_PORT` still overrides it, and `.env.example`'s
+`R2_ACCOUNT_ID` and `R2_MEDIA_PUBLIC_ORIGIN` use 9100 to match. Inside Docker, MinIO still listens on
+9000 (`http://minio:9000`).
 
 Both ports are published on **127.0.0.1 only** by default. That covers:
 - the API;
@@ -60,7 +74,9 @@ This is the state of a machine whose MinIO still runs on `adulis-pgdata`.
   image), in a folder other than the run's `MIGRATE_BACKUP_DIR`, which must start empty.
   `minio-migrate.mjs migrate` saves its own copy into the run's backup folder, where rollback looks.
 - **Starting services:** the running containers restart on their own (`restart: unless-stopped`). To
-  start one by hand, use `docker start adulis-postgres` or `docker start adulis-minio`.
+  start one by hand, use `docker start adulis-postgres` or `docker start adulis-minio`. **Once a move has
+  started** (its backup folder exists), do not start MinIO containers by hand: run `recover` or
+  `rollback` (runbook).
 - **If the variable was set by mistake and compose ran:**
   - the old MinIO container has been replaced, and the guard has kept the new one from starting, so
     nothing serves;
@@ -79,19 +95,41 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
 - `ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata` is exported in that shell only.
 - `plan` and `migrate` refuse, before anything stops, if the source holds a bucket the move would not
   copy. The PostgreSQL directories that share the volume are expected.
-- **An interrupt (Ctrl+C)** stops the run at the next step, and the old MinIO is put back. No success
+- **An interrupt (Ctrl+C)** stops the run once the step in progress ends, and the old MinIO is put back. No success
   line is printed for a run that was interrupted.
-- **What the undo leaves behind:** before the switch, the new volume is removed again; if that fails,
-  the undo reports UNDO PARTIAL and names the volume to remove. After the switch has begun, the new
-  volume is kept (it may hold the only copy of later writes), and the undo removes the move record in
-  every case, verified, so the guard never serves a copy that is not current (WO-INFRA-015B).
+- **What the undo leaves behind:**
+  - Before the switch, the new volume is removed again; if that fails, the undo reports UNDO PARTIAL
+    and names the volume to remove.
+  - From the step that writes the record on (even if that write failed), the new volume is kept: it may
+    hold the only copy of later writes. The undo renames the record aside, with up to four attempts, and
+    counts it cleared only when a separate read finds it gone.
+  - After the switch, the new MinIO is **retired**: stopped (checked), its configuration and logs saved in
+    the run folder, and the container removed, so no copy of it can be started again. What the target
+    received after the switch is measured and listed; any change makes the outcome UNDO PARTIAL with a
+    MANUAL ACTION.
+  - If every record attempt fails (Docker unavailable, for example), the undo says so (UNDO PARTIAL,
+    MANUAL ACTION REQUIRED, with the state read back). A pending or switching record is refused at every
+    start.
+  - It never claims more than it read back. The runbook's "Recovery limits" has the full list.
 - **Ctrl+Break** is treated like Ctrl+C (WO-INFRA-015B).
-- **Closing the console window** is handled the same way, but only as far as Windows allows: it ends
-  Node about 10 seconds later, and the docker commands with the console, so the undo may stop half-way.
-  Do not close the window during a move. If it happened, check by hand which MinIO serves which volume
-  and where the move record is (runbook, Rollback) before anything else.
+- **Closing the console window** is not something the tool can undo in full. Windows ends Node, and the
+  docker commands with it, within seconds, so the undo may stop part-way. Do not close the window during
+  a move.
+  - If it happened, run `minio-migrate.mjs recover` with the same `MIGRATE_BACKUP_DIR` (approval as for
+    the move) before anything else.
+  - It reads what was left and renames any record aside.
+  - It retires a new MinIO it finds serving the target, and brings the old MinIO back on `adulis-pgdata`
+    from its recorded configuration.
+  - It **measures what the target received after the switch** and lists every object added, changed or
+    deleted. If there is anything, it ends RECOVERY INCOMPLETE: copy back what must be kept.
+  - It never deletes a volume, and running it twice changes nothing.
+  - Rehearsed after a real window close (INF-04).
 - **Rollback** loads the old image from the run's backup folder if it was pruned.
-- **Logging:** pipe the run through `tee -i`, so a Ctrl+C does not end the logger.
+- **Where and how:** in a classic console window (`conhost.exe cmd.exe`), with the output going to a file
+  (runbook, Commands). That is the only terminal the real interruption rehearsals validated; Git Bash, Windows
+  Terminal and the VS Code terminal were not.
+- **An interrupt takes effect after the docker step in progress** (seconds on the live store); the streamed
+  backup and hash stop at once.
 
 ### 3. After a successful move
 
@@ -101,16 +139,21 @@ ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata
 ```
 From then on, `docker compose up -d && docker compose wait minio-init` is the normal command (see
 "Checking that the buckets were set up" below):
-- the guard finds MinIO data and the move record in the data volume, and accepts;
+- the guard finds MinIO data and a **complete** move record in the data volume, and accepts;
 - `adulis-pgdata` stays mounted read-only by the guard only;
 - it is kept until the founder decides otherwise.
 
-The first `compose up` after the move also recreates `adulis-postgres` once, because its port is now
-published on 127.0.0.1 only. Its data volume is kept.
+The first `compose up` after the move:
+- **recreates `adulis-postgres` once,** because its port is now published on 127.0.0.1 only. Its data
+  volume is kept;
+- **recreates `adulis-minio` once,** because the switch variable the move used is gone. The guard
+  accepts the complete record (rehearsed, INF-04).
 
 ### 4. A rollback
 
-Follow the runbook's Rollback section. It clears the move record in the new volume. Afterwards:
+Follow the runbook's Rollback section. It renames the move record aside, verified, **before** it stops
+anything, so even a rollback that is killed part-way never leaves a record a later start could serve.
+A rerun finishes a rollback that was interrupted. Afterwards:
 - remove `ADULIS_MINIO_VOLUME` from the root `.env`;
 - the old MinIO serves `adulis-pgdata` again, published on 127.0.0.1;
 - any compose command refuses until the next move.

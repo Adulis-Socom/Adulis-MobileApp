@@ -29,8 +29,17 @@ x-minio-image: &minio-image cgr.dev/chainguard/minio@sha256:786cb11d340b1a657de8
 # depend on that checkout still existing. `$$` is compose's escape for `$`.
 # MinIO data = a formatted drive (.minio.sys/format.json); the image ships an
 # empty .minio.sys that Docker copies into every new volume, which is not data.
-# .adulis-migration-complete is written into the new volume by minio-migrate.mjs
-# once the copy is verified, just before the switch; any undo removes it again.
+# .adulis-migration-complete is the move record minio-migrate.mjs writes into
+# the new volume. TWO-PHASE (INF-04): `pending <run>` once the copy is verified,
+# just before the switch, accepted only while MINIO_GUARD_SWITCH_RUN names that
+# run (set for the switch's own `compose up`, from ADULIS_MINIO_SWITCH_RUN), and
+# used up by that start: the minio service's guard rewrites it `switching <run>`,
+# which every start refuses, so no restart of the switched container (Docker
+# restart, crash, `docker start`) accepts it again (INF-04 review A-H1);
+# `complete <run>` once the switched MinIO is verified, accepted always. An
+# undo, recover or rollback renames it aside (.adulis-migration-invalidated or
+# .adulis-migration-rolled-back), and either of those refuses too. So a record
+# an undo could not clear stays pending, and every later start refuses it.
 # Tested in ops/scripts/compose-safety.test.mjs.
 x-minio-volume-guard: &minio-volume-guard |
   set -eu
@@ -57,8 +66,27 @@ x-minio-volume-guard: &minio-volume-guard |
     fi
   fi
   if [ -f "$$data/.minio.sys/format.json" ]; then
-    if [ "$$legacy_data" = yes ] && [ ! -f "$$data/.adulis-migration-complete" ]; then
-      refuse "the data volume holds MinIO data, but no completed move from adulis-pgdata is recorded in it (a partial copy, or a store started before the move): the objects are in adulis-pgdata"
+    if [ "$$legacy_data" = yes ]; then
+      [ -f "$$data/.adulis-migration-complete" ] || refuse "the data volume holds MinIO data, but no completed move from adulis-pgdata is recorded in it (a partial copy, or a store started before the move): the objects are in adulis-pgdata"
+      for undone in .adulis-migration-invalidated .adulis-migration-rolled-back; do
+        [ ! -e "$$data/$$undone" ] || refuse "the move into the data volume was undone or rolled back ($$undone is there): the objects are in adulis-pgdata"
+      done
+      state=
+      run=
+      read -r state run rest < "$$data/.adulis-migration-complete" || :
+      case "$$state" in
+        complete) ;;
+        pending)
+          [ -n "$$run" ] && [ "$$run" = "$${MINIO_GUARD_SWITCH_RUN:-}" ] || refuse "the move into the data volume was never verified (record pending, run $$run): a failed or interrupted switch. Run minio-migrate.mjs recover; the objects are in adulis-pgdata"
+          # The switch's own start (the minio service, about to run the server) uses the permission
+          # up: any later start of this container meets 'switching' and is refused (INF-04 A-H1).
+          if [ "$$#" -gt 0 ]; then
+            { printf 'switching %s\n' "$$run" > "$$data/.adulis-migration-record.tmp" && mv -f "$$data/.adulis-migration-record.tmp" "$$data/.adulis-migration-complete"; } || refuse "the switch could not mark its move record as used: nothing was started"
+          fi
+          ;;
+        switching) refuse "the move into the data volume was never verified (record switching, run $$run): MinIO started once for that switch, and a switch is never accepted twice. Run minio-migrate.mjs recover; the objects are in adulis-pgdata" ;;
+        *) refuse "the move record in the data volume is not one minio-migrate.mjs writes: inspect it; the objects are in adulis-pgdata" ;;
+      esac
     fi
     echo "minio-volume-guard: ok: the data volume holds MinIO data"
   else
@@ -152,9 +180,15 @@ services:
       # 5173 is dev; 4173 is the e2e harness's preview port.
       MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
       MINIO_GUARD_DATA_DIR: /data
+      # Empty except for minio-migrate.mjs's own switch (see the guard at the top of this file).
+      MINIO_GUARD_SWITCH_RUN: '${ADULIS_MINIO_SWITCH_RUN:-}'
     ports:
-      # Loopback by default, as postgres above.
-      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${MINIO_HOST_PORT:-9000}:9000'
+      # Loopback by default, as postgres above. HOST port 9100 (INF-04): 9000 is
+      # where another project's MinIO commonly listens (on the development
+      # machine, the Nehemiah Autism Center stack), so a default of 9000 could
+      # point the API at the wrong store. The container port stays 9000, and
+      # services reach MinIO as http://minio:9000. MINIO_HOST_PORT overrides it.
+      - '${ADULIS_BIND_ADDRESS:-127.0.0.1}:${MINIO_HOST_PORT:-9100}:9000'
     volumes:
       - adulis-miniodata:/data
       - type: volume
@@ -181,6 +215,7 @@ services:
     entrypoint: ['/bin/sh', '-c', *minio-volume-guard, 'minio-volume-guard']
     environment:
       MINIO_GUARD_DATA_DIR: /data
+      MINIO_GUARD_SWITCH_RUN: '${ADULIS_MINIO_SWITCH_RUN:-}'
     network_mode: none
     volumes:
       - adulis-miniodata:/data

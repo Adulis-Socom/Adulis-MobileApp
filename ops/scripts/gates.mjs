@@ -656,7 +656,29 @@ function run(cmd, extraEnv) {
   return r.status === 0;
 }
 
+export const USAGE = `usage: node ops/scripts/gates.mjs [--list | --only <id,id,...> | --help]
+  (no argument)  run every gate
+  --list         print the gate ids and titles
+  --only         run only the named gates (ids from --list)
+  --help         this text`;
+
+// INF-04 (INF03-002): an unknown argument used to be ignored, so `--help` started a full gate run.
+export function argProblem(args) {
+  const bad = args.filter((a, i) => !['--list', '--only', '--help', '-h'].includes(a) && args[i - 1] !== '--only');
+  return bad.length ? `FAIL  unknown argument(s): ${bad.join(' ')}\n${USAGE}` : null;
+}
+
 function main() {
+  const args = process.argv.slice(2);
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  const problem = argProblem(args);
+  if (problem) {
+    console.error(problem);
+    process.exit(2);
+  }
   if (process.argv.includes('--list')) {
     for (const g of GATES) console.log(`${g.id.padEnd(18)} ${g.title}`);
     process.exit(0);

@@ -112,6 +112,21 @@ test('run as a script, it actually runs: --list prints every gate (junction-safe
   );
 });
 
+test('--help prints the usage and runs nothing; an unknown argument fails before any gate (INF-04)', () => {
+  for (const flag of ['--help', '-h']) {
+    const r = spawnSync(process.execPath, [script, flag], { encoding: 'utf8' });
+    assert.equal(r.status, 0, flag);
+    assert.match(r.stdout, /usage: node ops\/scripts\/gates\.mjs/);
+    assert.doesNotMatch(r.stdout, /Adulis gates - /, `${flag} must not start a run`);
+  }
+  for (const args of [['--hepl'], ['--list', '--verbose'], ['--only', 'migrate', 'extra'], ['typecheck']]) {
+    const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /unknown argument/);
+    assert.doesNotMatch(r.stdout, /Adulis gates - /);
+  }
+});
+
 test('--only with an unknown or empty id fails instead of passing zero gates', () => {
   for (const arg of ['no-such-gate', '']) {
     const r = spawnSync(process.execPath, [script, '--only', arg], { encoding: 'utf8' });
