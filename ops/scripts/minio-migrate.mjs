@@ -531,10 +531,11 @@ function docker(args, { input, allowFail = false, env, timeout } = {}) {
 }
 // Absent only when docker says so; any other inspect failure refuses rather than reading as "absent".
 function exists(kind, name) {
-  const r = docker([kind, 'inspect', name], { allowFail: true });
+  const r = docker([kind, 'inspect', name], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
   if (r.status === 0) return true;
-  // "No such ..." (containers, volumes, images) or "... not found" (networks): absent.
-  if (/no such|not found/i.test(`${r.stderr}${r.stdout}`)) return false;
+  // Docker's own words for absent: "No such container/volume/image/object" and "network <name> not
+  // found"; any other error (a missing CLI context, a dead engine) refuses (review A-N3).
+  if (/no such (container|volume|image|object)|network \S+ not found/i.test(`${r.stderr}${r.stdout}`)) return false;
   refuse(`docker ${kind} inspect ${name} failed: ${`${r.stderr}`.trim().slice(-300)}`);
 }
 
@@ -1036,7 +1037,12 @@ async function invalidateRecord(cfg, journal, as, why) {
     journal.save();
     log(`move record NOT cleared, attempt ${i + 1} of ${CLEAR_DELAYS_S.length}: ${error}`);
   }
-  const last = readRecord(cfg);
+  let last;
+  try {
+    last = readRecord(cfg);
+  } catch (e) {
+    last = { readable: false, error: e.message };
+  }
   journal.record.state = 'not-cleared';
   journal.record.lastReadBack = last.readable ? last.state : 'unreadable';
   journal.save();
@@ -1158,7 +1164,7 @@ function ensureLegacyImage(cfg, legacy) {
   const tar = join(cfg.backupDir, LEGACY_IMAGE_TAR);
   if (existsSync(tar)) {
     log(`the old image ${legacy.Image} is gone (pruned?): loading the copy migrate saved`);
-    docker(['load', '-i', tar]);
+    docker(['load', '-i', tar], { timeout: 600 });
   }
   if (!exists('image', legacy.Image))
     refuse(`the old image ${legacy.Image} is gone and no saved copy restores it: docker load it first`);
@@ -1245,15 +1251,21 @@ function measureTarget(cfg, journal, run, label) {
   const invFile = join(cfg.backupDir, 'inventory-source.json');
   if (!exists('volume', cfg.dstVolume)) return { measured: false, why: 'the target volume does not exist' };
   if (!existsSync(invFile)) return { measured: false, why: 'the run stopped before its own inventory: compare the target with the old MinIO by hand' };
+  // Never a second server beside a running one (review A-N1): that volume may hold the only copy of
+  // post-switch uploads.
+  const users = docker(['ps', '-q', '--filter', `volume=${cfg.dstVolume}`, '--filter', 'status=running'], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
+  if (users.status !== 0) return { measured: false, why: `could not check that nothing runs on ${cfg.dstVolume}: not measured` };
+  if (`${users.stdout ?? ''}`.trim()) return { measured: false, why: `a container still runs on ${cfg.dstVolume}, so it was not measured (no second MinIO beside it): stop it, then run recover again` };
   const name = `minio-migrate-${run}-measure`;
   const clean = () => {
     docker(['rm', '-f', name], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
     docker(['network', 'rm', name], { allowFail: true, timeout: CLEANUP_TIMEOUT_S });
   };
   clean();
+  let result;
   try {
-    docker(['network', 'create', '--internal', name]);
-    docker(['run', '-d', '--name', name, '--network', name, '-e', `MINIO_ROOT_USER=${cfg.dstCreds.user}`, '-e', `MINIO_ROOT_PASSWORD=${cfg.dstCreds.pass}`, '-v', `${cfg.dstVolume}:/data`, cfg.dstImage, 'server', '/data']);
+    docker(['network', 'create', '--internal', name], { timeout: CLEANUP_TIMEOUT_S });
+    docker(['run', '-d', '--name', name, '--network', name, '-e', `MINIO_ROOT_USER=${cfg.dstCreds.user}`, '-e', `MINIO_ROOT_PASSWORD=${cfg.dstCreds.pass}`, '-v', `${cfg.dstVolume}:/data`, cfg.dstImage, 'server', '/data'], { timeout: CLEANUP_TIMEOUT_S });
     const s = { user: cfg.dstCreds.user, pass: cfg.dstCreds.pass, network: name, host: `${name}:9000` };
     waitReady(cfg, s);
     const now = inventory(cfg, s);
@@ -1263,12 +1275,21 @@ function measureTarget(cfg, journal, run, label) {
     log(
       `${cfg.dstVolume} measured (${label}): ${now.objects.size} objects; changes since the stopped source ("unexpected" = added, "missing" = deleted, "differs" = changed): ${changes.length}${changes.length ? `\n  ${changes.slice(0, 20).join('\n  ')}` : ''}`,
     );
-    return { measured: true, objects: now.objects.size, changes };
+    result = { measured: true, objects: now.objects.size, changes };
   } catch (e) {
-    return { measured: false, why: `the target could not be read (${e.message}): compare it with the old MinIO by hand` };
+    result = { measured: false, why: `the target could not be read (${e.message}): compare it with the old MinIO by hand` };
   } finally {
     clean();
   }
+  // The helper must be gone: a MinIO left on the target is what A-N1 guards against.
+  let left = true;
+  try {
+    left = exists('container', name) || exists('network', name);
+  } catch {
+    /* unknown: counted as left */
+  }
+  if (left) result.helperLeft = `the measuring helper ${name} may still exist: remove it before anything starts on ${cfg.dstVolume}`;
+  return result;
 }
 
 function recreateLegacy(saved) {
@@ -1306,7 +1327,7 @@ function recreateLegacy(saved) {
     'compose labels',
   ];
   log(`recreating ${name} from its recorded configuration; not carried over: ${left.join(', ')}`);
-  const id = docker([...args, c.Image, ...(c.Config.Cmd ?? [])]).trim();
+  const id = docker([...args, c.Image, ...(c.Config.Cmd ?? [])], { timeout: CLEANUP_TIMEOUT_S }).trim();
   return { name, id };
 }
 
@@ -1368,6 +1389,7 @@ async function migrate(cfg) {
   let recordCleared = null;
   let failureMsg = '';
   let postSwitchChanges = []; // what the target received after the switch, measured by the undo
+  let targetProblem = null; // why it could not be measured, if so
   // Ctrl+C: see createInterruption. The handler is installed by main(); every step boundary checks.
   try {
     // The way back must survive an image prune before anything stops (PHASE-002B-01 review L1): after
@@ -1554,7 +1576,9 @@ async function migrate(cfg) {
         if (!renameBackLegacy(pre.inspect, cfg.srcContainer)) recreateLegacy(pre.inspect);
         // What the new MinIO accepted after the switch, measured on the stopped target (review A-H2).
         const t = measureTarget(cfg, J, cfg.run, 'undo after the switch');
-        postSwitchChanges = t.measured ? t.changes : [`not measured: ${t.why}`];
+        if (t.measured) postSwitchChanges = t.changes;
+        else targetProblem = t.why;
+        if (t.helperLeft) targetProblem = t.helperLeft;
       },
     ]);
     undo.push([
@@ -1643,6 +1667,7 @@ async function migrate(cfg) {
       J.event('undo-step', entry);
       J.save();
     }
+    if (targetProblem) failedSteps.push(`measure the target: ${targetProblem}`);
     // Verified, not assumed: the old container serves the old volume and answers (review A-M4).
     let answers = false;
     try {
@@ -2039,7 +2064,12 @@ async function recover(cfg) {
   }
   const envOf = (k) => legacy.Config.Env.find((e) => e.startsWith(`${k}=`))?.slice(k.length + 1);
   const old = { network: 'host', host: `127.0.0.1:${cfg.hostPort}`, user: envOf('MINIO_ROOT_USER'), pass: envOf('MINIO_ROOT_PASSWORD') };
-  const answers = oldMinioServes(cfg, srcName, m.source.volume, old);
+  let answers = false;
+  try {
+    answers = oldMinioServes(cfg, srcName, m.source.volume, old);
+  } catch (e) {
+    log(`the old MinIO could not be checked: ${e.message}`);
+  }
   if (!answers) manual.push(`the old MinIO does not serve ${m.source.volume} on port ${cfg.hostPort}`);
   else {
     const back = inventory(cfg, old);
@@ -2054,11 +2084,14 @@ async function recover(cfg) {
     } else log('the run stopped before its verification step: no inventory of its own to compare with; the counts above are what the old MinIO serves');
   }
   // What the target received after the switch, measured with no MinIO serving it (review A-H2).
-  const reachedSwitch = (m.steps ?? []).some((s) => ['switch', 'verify-served', 'commit'].includes(s.step));
+  // Measured whenever there is a target and an inventory, not only when the journal shows the switch:
+  // the journal may have stopped being written (review A-N4).
+  const reachedSwitch = (m.steps ?? []).some((s) => ['switch', 'verify-served', 'commit'].includes(s.step)) || current?.mount === cfg.dstVolume;
   let targetChanges = 0;
-  if (reachedSwitch) {
+  if (exists('volume', cfg.dstVolume) && existsSync(join(cfg.backupDir, 'inventory-source.json'))) {
     const t = measureTarget(cfg, J, m.run, 'recover');
     rc.targetAfterSwitch = t.measured ? { objects: t.objects, changes: t.changes.length } : { measured: false, why: t.why };
+    if (t.helperLeft) manual.push(t.helperLeft);
     if (!t.measured) manual.push(`the target was not measured: ${t.why}`);
     else if (t.changes.length) {
       targetChanges = t.changes.length;
