@@ -553,7 +553,8 @@ describe('T26 Phase 1 -- a foreign object and a nonexistent one are indistinguis
       `DELETE FROM core.cart WHERE id IN ('${B_CART}','${A_CART}')`,
       `DELETE FROM core.seller_company_detail WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
       `DELETE FROM core.account_device WHERE id='${B_ACCOUNT_DEVICE}'`,
-      `DELETE FROM core.notification WHERE recipient_account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${B_TEAM_ACCOUNT}')`,
+      // INF-03: A_STAFF too -- its session's NEW_DEVICE_SIGNIN notice outlived the account.
+      `DELETE FROM core.notification WHERE recipient_account_id IN ('${A_OWNER}','${B_OWNER}','${BUYER_A}','${BUYER_B}','${COURIER}','${B_TEAM_ACCOUNT}','${A_STAFF}')`,
       `DELETE FROM core.seller_courier_invite WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.seller_courier WHERE seller_id='${SELLER_B}'`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,

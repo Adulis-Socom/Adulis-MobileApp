@@ -213,6 +213,10 @@ describe('WO-API-001A -- session security and account context', () => {
       await q(`DELETE FROM core.${child} WHERE seller_id = ANY($1::uuid[])`, [[SELLER, DELETED_SELLER]]);
     }
     await q(`DELETE FROM core.seller WHERE market_id = $1`, [M]);
+    // INF-03: replica mode skips the attempts' ON DELETE CASCADE, so they go first.
+    const challenges = `SELECT id FROM core.otp_challenge WHERE phone_e164 = ANY($1::text[]) OR id = $2`;
+    await q(`DELETE FROM core.otp_delivery_attempt WHERE otp_challenge_id IN (${challenges})`,
+      [[...signInPhones, P_OWNER], OTP_FIX]);
     await q(`DELETE FROM core.otp_challenge WHERE phone_e164 = ANY($1::text[]) OR id = $2`,
       [[...signInPhones, P_OWNER], OTP_FIX]);
     await q(`DELETE FROM core.device WHERE id = ANY($1::uuid[]) OR id = $2 OR account_id IN (${accounts})`,
