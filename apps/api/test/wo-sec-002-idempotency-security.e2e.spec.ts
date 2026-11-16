@@ -62,7 +62,18 @@ const SELLER_D = `${P}19`; // owned by OWNER; transferred to OTHER during the ru
 const OTP_CH = `${P}1a`;
 const STEP_UP = `${P}1b`;
 const TRANSFER = `${P}1c`;
-const ACCOUNTS = [OWNER, OTHER, MEMBER_R, MEMBER_S, MEMBER_R2, MEMBER_S2];
+// INF-03 F1: seller-side claims evidence (a non-/v1/seller path; seller.claims:read is CONSOLE-only).
+const MEMBER_R3 = `${P}1d`; // ADMIN of SELLER_A, revoked during the run
+const MEMBER_S3 = `${P}1e`; // ADMIN of SELLER_A, suspended during the run
+const TM_R3 = `${P}1f`;
+const TM_S3 = `${P}20`;
+const S_MEMBER_R3 = `${P}21`; // CONSOLE sessions
+const S_MEMBER_S3 = `${P}22`;
+const S_MEMBER_S3_LATER = `${P}23`;
+const ORDER = `${P}24`; // SELLER_A's order to OTHER as buyer
+const CLAIM = `${P}25`; // OTHER's claim on it
+const CONSOLE_ORIGIN = 'http://localhost:5173';
+const ACCOUNTS = [OWNER, OTHER, MEMBER_R, MEMBER_S, MEMBER_R2, MEMBER_S2, MEMBER_R3, MEMBER_S3];
 const SELLERS = [SELLER_A, SELLER_B, SELLER_C, SELLER_D];
 const MARKER = 'wo-sec-002:';
 // INF-03 F2: the latched probes' advisory locks, pg_advisory_xact_lock(namespace, body.latch).
@@ -222,6 +233,35 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
       `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id) VALUES ($1,$2,$3,$4)`,
       [CONV, SELLER_A, OTHER, M],
     );
+    // INF-03 F1 fixtures: two more ADMINs of SELLER_A, on CONSOLE, and OTHER's claim on SELLER_A's order.
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status)
+       VALUES ($1,'+251911462011',$3,'ACTIVE'), ($2,'+251911462012',$3,'ACTIVE')`,
+      [MEMBER_R3, MEMBER_S3, M],
+    );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+       VALUES ($1,$3,$4,'ADMIN'), ($2,$3,$5,'ADMIN')`,
+      [TM_R3, TM_S3, SELLER_A, MEMBER_R3, MEMBER_S3],
+    );
+    await admin.query(
+      `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
+       VALUES ($1,$3,'CONSOLE',$5, now()+interval '12 hours', now()),
+              ($2,$4,'CONSOLE',$5, now()+interval '12 hours', now())`,
+      [S_MEMBER_R3, S_MEMBER_S3, MEMBER_R3, MEMBER_S3, DEVICE],
+    );
+    await armFixtureSessions(admin, [S_MEMBER_R3, S_MEMBER_S3]);
+    await admin.query(
+      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at,
+         clock_stopped_at, total_minor, total_currency, display_currency)
+       VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB')`,
+      [ORDER, M, SELLER_A, OTHER],
+    );
+    await admin.query(
+      `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id, trigger, state)
+       VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE')`,
+      [CLAIM, ORDER, OTHER],
+    );
     const perm = await admin.query(
       `SELECT p.code FROM core.permission p
         WHERE 'MOBILE' = ANY(p.surfaces) AND NOT p.requires_step_up
@@ -243,6 +283,13 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
     await app?.close();
     const accounts = ACCOUNTS.map((a) => `'${a}'`).join(',');
     const sellers = SELLERS.map((s) => `'${s}'`).join(',');
+    // The claim's evidence items are append-only by trigger (and its open trigger made three):
+    // replica mode, children before parents.
+    await admin.query(`SET session_replication_role = replica`);
+    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id = $1`, [CLAIM]);
+    await admin.query(`DELETE FROM core.claim WHERE id = $1`, [CLAIM]);
+    await admin.query(`DELETE FROM core."order" WHERE id = $1`, [ORDER]);
+    await admin.query(`SET session_replication_role = DEFAULT`);
     for (const q of [
       `DELETE FROM core.idempotency_record WHERE actor_id IN (${accounts},'${ANON_DEVICE}','${DEVICE}')`,
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
@@ -740,6 +787,60 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
       expect(again.headers['x-adulis-idempotent-replay']).toBe('true');
       expect(again.body).toEqual(first.body);
       expect(executions.get(key)).toBe(1);
+    });
+  });
+
+  describe('INF-03 F1 -- seller-side claims evidence: standing outside /v1/seller', () => {
+    /** The seller side of a claim, acting as the store from the header (seller.claims:read, CONSOLE). */
+    const evidence = (session: string, key: string, ref: string) =>
+      http().post(`/v1/claims/${CLAIM}/evidence`)
+        .set('Cookie', `__Host-adulis_session=${sessionToken(session)}`).set('Origin', CONSOLE_ORIGIN)
+        .set('X-Adulis-Seller', SELLER_A).set('Idempotency-Key', key)
+        .send({ kind: 'BANK_RECORD', reference_id: ref });
+    const bankRecords = async (ref: string): Promise<number> =>
+      Number((await admin.query(
+        `SELECT count(*) FROM core.claim_evidence_item
+          WHERE claim_id = $1 AND kind = 'BANK_RECORD' AND reference_id = $2`,
+        [CLAIM, ref])).rows[0].count);
+
+    it('seller-side claims: a revoked member is not served the stored response; the handler answers 403', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const first = await evidence(S_MEMBER_R3, key, ref);
+      expect(first.status).toBe(201);
+      expect(first.body).toMatchObject({ kind: 'BANK_RECORD' });
+      // Control: while the member stands, the retry is the stored response.
+      const again = await evidence(S_MEMBER_R3, key, ref);
+      expect(again.status).toBe(201);
+      expect(again.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(again.body).toEqual(first.body);
+      await admin.query(`UPDATE core.seller_team_member SET revoked_at = now() WHERE id = $1`, [TM_R3]);
+      const r = await evidence(S_MEMBER_R3, key, ref);
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.evidence_item_id);
+      expect(await bankRecords(ref)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('seller-side claims: a suspended member, signed in again, is not served the stored response', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const first = await evidence(S_MEMBER_S3, key, ref);
+      expect(first.status).toBe(201);
+      // Suspension also revokes live sessions (hygiene trigger); the refusal must not depend on
+      // that, so the member signs in again afterwards.
+      await admin.query(`UPDATE core.seller_team_member SET suspended_at = now() WHERE id = $1`, [TM_S3]);
+      await admin.query(
+        `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
+         VALUES ($1,$2,'CONSOLE',$3, now()+interval '12 hours', now())`,
+        [S_MEMBER_S3_LATER, MEMBER_S3, DEVICE],
+      );
+      await armFixtureSessions(admin, [S_MEMBER_S3_LATER]);
+      const r = await evidence(S_MEMBER_S3_LATER, key, ref);
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.evidence_item_id);
+      expect(await bankRecords(ref)).toBe(1);
+      expect(await records(key)).toBe(1);
     });
   });
 });
