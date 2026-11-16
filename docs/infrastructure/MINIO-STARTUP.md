@@ -95,7 +95,7 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
 - `ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata` is exported in that shell only.
 - `plan` and `migrate` refuse, before anything stops, if the source holds a bucket the move would not
   copy. The PostgreSQL directories that share the volume are expected.
-- **An interrupt (Ctrl+C)** stops the run at the next step, and the old MinIO is put back. No success
+- **An interrupt (Ctrl+C)** stops the run once the step in progress ends, and the old MinIO is put back. No success
   line is printed for a run that was interrupted.
 - **What the undo leaves behind:**
   - Before the switch, the new volume is removed again; if that fails, the undo reports UNDO PARTIAL
@@ -125,7 +125,11 @@ Follow `docs/infrastructure/WO-INFRA-002-MIGRATION-RUNBOOK.md`. It needs the fou
   - It never deletes a volume, and running it twice changes nothing.
   - Rehearsed after a real window close (INF-04).
 - **Rollback** loads the old image from the run's backup folder if it was pruned.
-- **Logging:** pipe the run through `tee -i`, so a Ctrl+C does not end the logger.
+- **Where and how:** in a classic console window (`conhost.exe cmd.exe`), with the output going to a file
+  (runbook, Commands). That is the only terminal the real interruption rehearsals validated; Git Bash, Windows
+  Terminal and the VS Code terminal were not.
+- **An interrupt takes effect after the docker step in progress** (seconds on the live store); the streamed
+  backup and hash stop at once.
 
 ### 3. After a successful move
 

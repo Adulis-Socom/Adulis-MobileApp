@@ -94,21 +94,48 @@ deletes no volume, but a checkout with an older compose file still deletes the l
   owner-only, but exFAT ignores permissions, so keep the SSD to this machine (storage policy, trusted
   device).
 
-## Commands (Git Bash, repository root)
+## Commands (a classic Windows console, repository root)
+
+**Where to run it (INF-04, review B-H1).** Run the move in a **classic console window**: press Win+R and type
+`conhost.exe cmd.exe`. That is the combination the real Ctrl+C and window-close rehearsals validated, with
+cmd.exe and the output going to a file.
+
+Not validated, so do not use them for the live move:
+- Git Bash / mintty: its Ctrl+C reaches a Windows program differently, and may end it without its undo;
+- Windows Terminal;
+- the VS Code terminal.
 
 ```
-export MINIO_HOST_PORT=9100
-export ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata   # WO-INFRA-015A: compose needs it named
-node ops/scripts/minio-migrate.mjs plan          # read-only; must end "PLAN OK"
+cd /d <the chosen checkout>
+set MINIO_HOST_PORT=9100
+set ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata
+node ops\scripts\minio-migrate.mjs plan
+rem the line above is read-only and must end "PLAN OK"
 
-export MIGRATE_BACKUP_DIR=G:/AdulisDevelopment/minio-move/$(date -u +%Y%m%dT%H%M%SZ)
-MIGRATE_LIVE=approved node ops/scripts/minio-migrate.mjs migrate 2>&1 | tee -i "$MIGRATE_BACKUP_DIR.log"
+set MIGRATE_BACKUP_DIR=G:\AdulisDevelopment\minio-move\<UTC date and time, e.g. 20261120T090000Z>
+set MIGRATE_LIVE=approved
+node ops\scripts\minio-migrate.mjs migrate >> G:\AdulisDevelopment\minio-move\<same name>.log 2>&1
 ```
-(`tee -i`: a Ctrl+C must not end the logger, or the undo's output would be lost. The undo's outcome is
-also written into `manifest.json`.)
 
-**Success** is the line `MIGRATED: adulis-media=<n> adulis-evidence=<m>` and exit code 0, with the counts
-the plan printed. **Anything else** ends with `REFUSED:` and the reason; the old MinIO is already back.
+**Follow the log from a second window:**
+`powershell -Command "Get-Content -Wait G:\AdulisDevelopment\minio-move\<same name>.log"`.
+
+The output goes straight to the file, so a Ctrl+C, or a closed console, cannot lose the undo's output. The
+outcome is also written into `manifest.json` and `journal.jsonl` in the backup folder.
+
+**Success** is the line `MIGRATED: adulis-media=<n> adulis-evidence=<m>` and exit code 0, with the counts the
+plan printed. **Anything else** ends with `REFUSED:` and the reason; read the outcome line before it
+(`UNDO OK` / `UNDO PARTIAL` / `UNDO INCOMPLETE` / `NOTHING CHANGED`).
+
+**When a Ctrl+C takes effect (rehearsed):**
+- **The streamed backup and its hashing** stop at once.
+- **A docker step in progress** (an inventory, the copy, a readiness wait) runs to its end, then the run stops.
+  On the live store each takes seconds.
+- **A second Ctrl+C** is acknowledged ("still stopping safely") and does not stop the undo. It was rehearsed
+  while the undo was between docker steps. During a docker step it can make that step fail, which is
+  retried (the record) or reported.
+- **Do not close the window to "speed it up":** that ends the process within about 5 s, and leaves a run for
+  `recover`.
 
 **Since WO-INFRA-015A:**
 - **Unexpected buckets:** `plan` and `migrate` refuse a source holding any bucket other than the two
@@ -132,7 +159,10 @@ probe has already exercised on the same port.
 ## Rollback
 
 ```
-MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/minio-migrate.mjs rollback
+rem in the same kind of console, with MINIO_HOST_PORT and ADULIS_MINIO_VOLUME set as for the move
+set MIGRATE_LIVE=approved
+set MIGRATE_BACKUP_DIR=<the same folder>
+node ops/scripts/minio-migrate.mjs rollback >> <the same folder>-rollback.log 2>&1
 ```
 
 **Before stopping anything, it checks:**
@@ -180,7 +210,10 @@ Remove `ADULIS_MINIO_VOLUME` from the root `.env` after a rollback, so compose r
 ## After a migrate that did not finish: `recover`
 
 ```
-MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/minio-migrate.mjs recover
+rem in the same kind of console, with MINIO_HOST_PORT and ADULIS_MINIO_VOLUME set as for the move
+set MIGRATE_LIVE=approved
+set MIGRATE_BACKUP_DIR=<the same folder>
+node ops/scripts/minio-migrate.mjs recover >> <the same folder>-recover.log 2>&1
 ```
 
 Use it when `migrate` was killed (a closed console window, a crash, a power cut), or when its undo ended
@@ -247,7 +280,7 @@ What is automatic, what is partial, and what needs a person.
 | The same, but the target received writes after the switch | `UNDO PARTIAL`, the changes listed in `journal.jsonl` | the safety yes | copy back what must be kept |
 | The record cannot be renamed (four attempts) | `UNDO PARTIAL`, `MANUAL ACTION REQUIRED` with the state read back; pending or switching is refused at every start | the safety yes, the clean-up no | run `recover`, or clear it by hand |
 | An undo step fails, or the old MinIO does not serve its volume | `UNDO PARTIAL` or `UNDO INCOMPLETE`, naming the step | no | run `recover`, or act as the step says |
-| A Ctrl+C (one or two) | the run stops at the next step and undoes itself. During an `mc` step (inventory, copy) that step finishes first; during the backup or hash it stops at once. A second Ctrl+C is acknowledged; the undo goes on | yes (rehearsed with real console Ctrl+C events) | read the outcome |
+| A Ctrl+C (one or two) | the run stops at the next step and undoes itself. A docker step in progress (inventory, copy, readiness wait) finishes first; the backup and hash stop at once. A second Ctrl+C is acknowledged; the undo goes on | yes: rehearsed with real console control events in a classic console (conhost + cmd.exe); not in Git Bash or Windows Terminal | read the outcome |
 | The console window closed, or the process killed | Windows ends Node about 5 s later; the undo may stop part-way | **no** | run `recover` (or `rollback` again, for a rollback) |
 | The switched MinIO restarted before `recover` (Docker restart, crash, `docker start`) | its guard refuses (`switching`): MinIO is down, never stale | the safety yes | run `recover` |
 | Docker unavailable during the undo | nothing can be changed; a pending or switching record is refused at start | the safety yes | start Docker, then `recover` |
