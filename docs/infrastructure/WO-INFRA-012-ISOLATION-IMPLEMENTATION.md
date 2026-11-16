@@ -29,6 +29,12 @@ pnpm --filter @adulis/api test              # or pnpm ci:local, or the load test
 bash ops/scripts/test-db.sh down            # both containers and their data removed
 ```
 
+**Ownership (INF-03):** `up` labels both containers `adulis.test-db.role=disposable` and
+`adulis.test-db.owner=<this checkout>` (or `ADULIS_TEST_DB_OWNER`). `down` removes only containers it can prove
+are this owner's disposable ones (labels, no bind mount, no named volume), by ID, and refuses and removes
+nothing otherwise, including on any docker error. A pair started before INF-03 is unlabelled and must be
+checked (ports 55432/59000, no named volume) and removed by hand once.
+
 **What `up` does:** it mirrors CI.
 - `pgvector/pgvector:pg17` on `127.0.0.1:55432`, the pinned MinIO on `127.0.0.1:59000`;
 - the four extensions, the migrations, the queue schema (`worker:install`), the runtime-role passwords

@@ -105,9 +105,10 @@ jobs:
         with:
           # Nothing after the checkout needs git credentials: do not leave the token in the clone.
           persist-credentials: false
-          # ADU-REPO-01 v1.2 S11.2. The default depth-1 clone has no origin/main
-          # ref, so `--filter "...[origin/main]"` below would select NOTHING and
-          # the scoped steps would silently pass without running.
+          # ADU-REPO-01 v1.2 S11.2: full history and every branch ref. CI no
+          # longer scopes (INF-03), but a depth-1 clone has no origin/main or
+          # origin/dev, and any change-based filter would then select NOTHING
+          # and silently pass; keep the full clone so that can never recur.
           fetch-depth: 0
 
 

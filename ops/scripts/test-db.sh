@@ -25,6 +25,10 @@ MINIO_IMAGE=$(sed -n 's/^x-minio-image: &minio-image //p' docker-compose.yml)
 OWNER=${ADULIS_TEST_DB_OWNER:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}
 ROLE_LABEL=adulis.test-db.role
 OWNER_LABEL=adulis.test-db.owner
+# `down` splits the inspected fields on | and ; (review A): an owner holding either, or a newline, is refused.
+case "$OWNER" in
+  *'|'* | *';'* | *$'\n'* | '') echo "test-db: the owner '$OWNER' must be non-empty and contain no | ; or newline" >&2; exit 2 ;;
+esac
 
 env_lines() {
   cat <<EOF
@@ -113,17 +117,28 @@ case "${1:-}" in
     ids=()
     refused=()
     for name in "$PG" "$S3"; do
-      docker inspect --type container "$name" >/dev/null 2>&1 || continue # absent: nothing to remove
+      # Absent ONLY on a successful, empty listing: a docker error is never read as "absent" (review A).
+      if ! found=$(docker ps -a --no-trunc -q --filter "name=^/${name}"'$' 2>/dev/null); then
+        refused+=("$name could not be listed (docker error): check it by hand")
+        continue
+      fi
+      [ -n "$found" ] || continue # absent: nothing to remove
+      if [[ ! "$found" =~ ^[0-9a-f]{64}$ ]]; then
+        refused+=("$name: unexpected listing '$found'")
+        continue
+      fi
       # .Name only for volumes: a bind mount has no Name, and reading it fails the whole template.
       if ! info=$(docker inspect --type container --format \
         "{{.Id}}|{{index .Config.Labels \"$ROLE_LABEL\"}}|{{index .Config.Labels \"$OWNER_LABEL\"}}|{{range .Mounts}}{{.Type}}:{{if eq .Type \"volume\"}}{{.Name}}{{end}};{{end}}" \
-        "$name" 2>/dev/null); then
-        refused+=("$name exists but could not be inspected")
+        "$found" 2>/dev/null); then
+        refused+=("$name ($found) exists but could not be inspected")
         continue
       fi
       IFS='|' read -r id role owner mounts <<<"$info"
-      if [ "$role" != disposable ]; then
-        refused+=("$name ($id) has no $ROLE_LABEL=disposable label: not created by this script")
+      if [ "$id" != "$found" ]; then
+        refused+=("$name: inspected id '$id' is not the listed $found")
+      elif [ "$role" != disposable ]; then
+        refused+=("$name ($id) has no $ROLE_LABEL=disposable label: not created by this script (a pair started before INF-03 is unlabelled: confirm it is the old disposable pair -- ports 55432/59000, no named volume -- and remove it by hand)")
       elif [ "$owner" != "$OWNER" ]; then
         refused+=("$name ($id) belongs to '$owner', not '$OWNER': run down from that checkout, or set ADULIS_TEST_DB_OWNER to it deliberately")
       else
@@ -148,8 +163,13 @@ case "${1:-}" in
     fi
     # By ID, never by name; -v: the postgres image declares a VOLUME, which would otherwise be left behind.
     docker rm -f -v "${ids[@]}" >/dev/null 2>&1 || true
+    # Removed ONLY on a successful, empty listing by ID: a failed listing is not proof (review A).
     for id in "${ids[@]}"; do
-      if docker inspect --type container "$id" >/dev/null 2>&1; then
+      if ! left=$(docker ps -a --no-trunc -q --filter "id=$id" 2>/dev/null); then
+        echo "test-db: docker stopped answering; check $id by hand" >&2
+        exit 1
+      fi
+      if [ -n "$left" ]; then
         echo "test-db: could not remove $id; check by hand" >&2
         exit 1
       fi

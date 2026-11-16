@@ -357,9 +357,10 @@ const browserCookie = async (): Promise<string> => {
       `DELETE FROM core.step_up_challenge WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.session WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.account_device WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
-      // INF-03: replica mode skips the attempts' ON DELETE CASCADE, so they go first.
-      `DELETE FROM core.otp_delivery_attempt WHERE otp_challenge_id IN (SELECT id FROM core.otp_challenge WHERE phone_e164 LIKE '+2519114417%' OR phone_e164 LIKE '+2519114418%')`,
-      `DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+2519114417%' OR phone_e164 LIKE '+2519114418%'`,
+      // INF-03: replica mode skips the attempts' ON DELETE CASCADE, so they go first. Only this
+      // suite's phones (+251911441701..707, +251911441801..804): t12-d89/d101 use +251911441890..895.
+      `DELETE FROM core.otp_delivery_attempt WHERE otp_challenge_id IN (SELECT id FROM core.otp_challenge WHERE phone_e164 LIKE '+25191144170_' OR phone_e164 LIKE '+25191144180_')`,
+      `DELETE FROM core.otp_challenge WHERE phone_e164 LIKE '+25191144170_' OR phone_e164 LIKE '+25191144180_'`,
       `DELETE FROM core.idempotency_record WHERE actor_id::text LIKE 'cccc6666%' OR actor_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       `DELETE FROM core.buyer_profile WHERE account_id IN (SELECT id FROM core.account WHERE market_id='${M}')`,
       // INF-03: OR market_id -- the anonymous devices the API placed in this market.

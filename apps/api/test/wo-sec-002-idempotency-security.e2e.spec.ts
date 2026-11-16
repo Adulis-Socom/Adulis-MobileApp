@@ -340,8 +340,10 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
     };
   };
   /** Resolves once some session waits for advisory lock (ns, latch): proof a request got that far. */
+  // A deadline, not an iteration count: two waits in one test stay inside Jest's 30 s timeout, so a
+  // stuck latch fails with this message rather than a generic timeout (INF-03 review).
   const waitsOn = async (ns: number, latch: number): Promise<void> => {
-    for (let i = 0; i < 500; i++) {
+    for (const until = Date.now() + 8_000; Date.now() < until; ) {
       const r = await admin.query(
         `SELECT count(*)::int AS n FROM pg_locks
           WHERE locktype = 'advisory' AND classid = $1::oid AND objid = $2::oid AND objsubid = 2

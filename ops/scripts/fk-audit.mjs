@@ -268,11 +268,14 @@ async function main() {
     );
   if (jsonFile) writeFileSync(jsonFile, JSON.stringify(result.report, null, 2));
   const rows = (list) => list.reduce((s, r) => s + r.count, 0);
+  // On a reused database the PASS is about this run's rows only; say so on the line itself (INF-03
+  // review). The teardown verdict anchors only the prefix, so the suffix never changes the outcome.
+  const leftOver = rows(result.report) - rows(judged);
   if (failures.length)
     console.log(`\nFAIL  ${rows(failures)} orphaned row(s) across ${failures.length} key(s).`);
   else
     console.log(
-      `PASS  all ${result.keys} foreign keys hold${tolerated.length ? `, apart from ${tolerated.length} known test leak(s) (${rows(tolerated)} rows)` : ''}.`,
+      `PASS  all ${result.keys} foreign keys hold${tolerated.length ? `, apart from ${tolerated.length} known test leak(s) (${rows(tolerated)} rows)` : ''}${leftOver > 0 ? ` for the rows this run added (${leftOver} older orphan row(s) remain in this database)` : ''}.`,
     );
   process.exit(failures.length ? 1 : 0);
 }
