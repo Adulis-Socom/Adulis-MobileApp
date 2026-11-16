@@ -33,7 +33,7 @@ for MinIO, `adulis-platform_adulis-miniodata`, then lets compose recreate MinIO 
    PostgreSQL directory.
 5. **Restore the backup** into a scratch volume and serve it with the exact image the old MinIO runs, on
    a private Docker network. This proves the backup restores.
-6. **Target:** compose creates its volume; a private server on it runs `ops/scripts/minio-init.sh`.
+6. **Target:** the run creates its volume (external since WO-INFRA-015B); a private server on it runs `ops/scripts/minio-init.sh`.
 7. **Copy** the two buckets from the restored backup.
 8. **Verify, all automatically.** The restored backup equals the source inventory (refused if anything
    was written between the inventory and the stop); the target equals the restored backup, object by
@@ -51,9 +51,11 @@ volume is then kept, because it was served. Rehearsed: `WO-INFRA-007-MIGRATION-V
 
 ## Before you start
 
-**Never run `docker compose down -v` with this file.** The project name is pinned, so from any clone that
-command deletes the live database volume `adulis-platform_adulis-pgdata` and the new MinIO volume. Plain
-`docker compose down` keeps both.
+**Never run `docker compose down -v`.** The project name is pinned, so the command acts on the live stack
+from any clone. Since WO-INFRA-015B this file declares every volume external, so through it the command
+deletes no volume, but a checkout with an older compose file still deletes the live database volume
+`adulis-platform_adulis-pgdata` (and, before the move, the MinIO objects in `adulis-pgdata`). Plain
+`docker compose down` keeps them all.
 
 - The founder's approval for ISSUE-INFRA-001.
 - A checkout that has this change, at the repository root. The `minio` container's compose labels will
@@ -77,14 +79,28 @@ command deletes the live database volume `adulis-platform_adulis-pgdata` and the
 
 ```
 export MINIO_HOST_PORT=9100
+export ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata   # WO-INFRA-015A: compose needs it named
 node ops/scripts/minio-migrate.mjs plan          # read-only; must end "PLAN OK"
 
 export MIGRATE_BACKUP_DIR=G:/AdulisDevelopment/minio-move/$(date -u +%Y%m%dT%H%M%SZ)
-MIGRATE_LIVE=approved node ops/scripts/minio-migrate.mjs migrate 2>&1 | tee "$MIGRATE_BACKUP_DIR.log"
+MIGRATE_LIVE=approved node ops/scripts/minio-migrate.mjs migrate 2>&1 | tee -i "$MIGRATE_BACKUP_DIR.log"
 ```
+(`tee -i`: a Ctrl+C must not end the logger, or the undo's output would be lost. The undo's outcome is
+also written into `manifest.json`.)
 
 **Success** is the line `MIGRATED: adulis-media=<n> adulis-evidence=<m>` and exit code 0, with the counts
 the plan printed. **Anything else** ends with `REFUSED:` and the reason; the old MinIO is already back.
+
+**Since WO-INFRA-015A:**
+- **Unexpected buckets:** `plan` and `migrate` refuse a source holding any bucket other than the two
+  buckets and the 17 PostgreSQL directories, before anything stops.
+- **Interrupts:** Ctrl+C is honoured at the next step, and the undo runs.
+- **The move record:** a verified move writes `.adulis-migration-complete` into the new volume. Without
+  it, the MinIO guard in `docker-compose.yml` refuses to serve the new volume while `adulis-pgdata`
+  holds MinIO data. A failed or undone move never leaves it.
+- **After a success:** put `ADULIS_MINIO_VOLUME=adulis-platform_adulis-miniodata` in the root `.env`, so
+  later `docker compose` commands keep MinIO on the new volume (`docs/infrastructure/MINIO-STARTUP.md`).
+  Not before: after a failure, the variable stays out of `.env`.
 
 Then start the API and open any product image (the console, or the mobile app against the dev API): media
 URLs use `R2_MEDIA_PUBLIC_ORIGIN` (`http://localhost:9100/adulis-media`), which the script's anonymous read
@@ -119,6 +135,7 @@ MIGRATE_LIVE=approved MIGRATE_BACKUP_DIR=<the same folder> node ops/scripts/mini
 MinIO does today. The read-only rule applies to the move, not to a rollback.
 
 While rolled back, `docker compose up` fails on the port, deliberately, until the founder decides.
+Remove `ADULIS_MINIO_VOLUME` from the root `.env` after a rollback, so compose refuses to run at all.
 
 ## Afterwards
 

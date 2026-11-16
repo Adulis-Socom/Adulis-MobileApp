@@ -2,17 +2,23 @@
 // are rehearsed end to end on disposable copies (docs/infrastructure/WO-INFRA-007-MIGRATION-VALIDATION.md);
 // these tests pin the decisions that must refuse.
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   BACKUP_MUST_HOLD,
+  BUCKETS,
+  POSTGRES_DIRS,
   Refusal,
   checkTarget,
   compareObjects,
+  createInterruption,
   guard,
   insideRepo,
   parseInventory,
   recordedSha,
   ruleSet,
+  sourceBucketProblems,
   tarEntries,
   verifyBackup,
 } from './minio-migrate.mjs';
@@ -251,4 +257,87 @@ test('the media bucket may grant anonymous GetObject and nothing else', () => {
     ),
   );
   assert.match(checkTarget(listable, src, goodProbes()).join(), /only s3:GetObject is intended/);
+});
+
+// ---------- WO-INFRA-015A ----------
+
+test('the live source shape passes: the two buckets plus the 17 PostgreSQL directories (19 on the server)', () => {
+  assert.equal(POSTGRES_DIRS.length, 17);
+  const live = { buckets: [...BUCKETS, ...POSTGRES_DIRS] };
+  assert.equal(live.buckets.length, 19);
+  assert.deepEqual(sourceBucketProblems(live), []);
+  assert.deepEqual(sourceBucketProblems({ buckets: ['adulis-media'] }), []); // a missing bucket loses nothing
+});
+
+test('any other bucket on the source refuses, named, and is never deleted', () => {
+  const p = sourceBucketProblems({ buckets: [...BUCKETS, 'base', 'adulis-legacy-uploads', 'tmp'] });
+  assert.equal(p.length, 2);
+  assert.match(p[0], /unexpected bucket adulis-legacy-uploads .*left behind.*nothing was deleted/);
+  assert.match(p[1], /unexpected bucket tmp /);
+  // Case and look-alikes are not the PostgreSQL directories.
+  assert.equal(sourceBucketProblems({ buckets: ['Base', 'pg_wal2', 'adulis-media-old'] }).length, 3);
+});
+
+test('the interrupt and partial-rollback rehearsal faults exist and never reach the live volume', () => {
+  for (const f of ['interrupt-preflight', 'interrupt-backup', 'interrupt-hash', 'interrupt-copy', 'interrupt-switch', 'fail-rollback', 'fail-before-switch']) {
+    assert.equal(guard('migrate', 'infra-rh-src', { MIGRATE_FAULT: f }), false, f);
+    refuses(() => guard('migrate', 'adulis-pgdata', { MIGRATE_LIVE: 'approved', MIGRATE_FAULT: f }), /rehearsals only/);
+  }
+});
+
+test('an interrupt is acted on: every later checkpoint refuses and in-flight streams abort', () => {
+  const said = [];
+  const i = createInterruption((m) => said.push(m));
+  i.checkpoint(); // nothing yet: no refusal
+  assert.equal(i.abortSignal.aborted, false);
+  i.on('SIGINT');
+  assert.equal(i.signal, 'SIGINT');
+  assert.equal(i.abortSignal.aborted, true);
+  assert.ok(i.abortSignal.reason instanceof Refusal);
+  refuses(() => i.checkpoint(), /interrupted by SIGINT: stopped before the next step/);
+  refuses(() => i.checkpoint(), /interrupted by SIGINT/); // and keeps refusing
+  i.on('SIGTERM'); // a second one is acknowledged, never acted on
+  assert.equal(i.signal, 'SIGINT');
+  assert.match(said.at(-1), /SIGTERM again: still stopping safely/);
+});
+
+test('after the run has finished, an interrupt changes nothing and says so', () => {
+  const said = [];
+  const i = createInterruption((m) => said.push(m));
+  i.finished = true;
+  i.on('SIGINT');
+  assert.equal(i.signal, null);
+  i.checkpoint(); // no refusal
+  assert.match(said.at(-1), /after the run had finished: nothing to stop or undo/);
+});
+
+test('a real SIGINT during a synchronous step is seen at the next checkpoint, not lost', { skip: process.platform === 'win32' && 'Windows cannot deliver SIGINT to another process', timeout: 30_000 }, async () => {
+  const lib = fileURLToPath(new URL('./minio-migrate.mjs', import.meta.url));
+  // The step is a spawnSync, as every docker call is: the signal arrives while the loop is blocked.
+  const child = spawn(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `const { createInterruption, turnEventLoop } = await import(${JSON.stringify(`file://${lib}`)});
+       const { spawnSync } = await import('node:child_process');
+       const i = createInterruption(() => {});
+       process.on('SIGINT', () => i.on('SIGINT'));
+       console.log('ready');
+       spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 1500)']);
+       const before = i.signal;
+       await turnEventLoop();
+       try { i.checkpoint(); console.log('NOT REFUSED'); } catch (e) { console.log('REFUSED before=' + before + ' ' + e.message); }`,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  const killer = setTimeout(() => child.kill('SIGKILL'), 25_000);
+  let out = '';
+  await new Promise((ok) => child.stdout.on('data', (d) => ((out += d), out.includes('ready') && ok())));
+  child.kill('SIGINT');
+  const code = await new Promise((ok) => child.on('close', ok));
+  clearTimeout(killer);
+  assert.equal(code, 0, 'the process survived the signal');
+  // Not visible before the loop turned; refused right after.
+  assert.match(out, /REFUSED before=null interrupted by SIGINT/);
 });

@@ -21,7 +21,7 @@ import pg from 'pg';
 
 const CONNECTION = process.env.DATABASE_URL_MIGRATE ?? process.env.DATABASE_URL;
 if (!CONNECTION) {
-  console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: docker compose up -d && cp .env.example .env');
+  console.error('FAIL  DATABASE_URL_MIGRATE is not set. Run: cp .env.example .env && docker compose up -d');
   process.exit(2);
 }
 /*
@@ -53,6 +53,28 @@ if (!SEEDABLE.includes(process.env.NODE_ENV ?? '')) {
     '      A real environment gets its market from ops/runbooks/activate-market.md.',
   );
   process.exit(2);
+}
+/*
+ * AND THE TARGET IS LOCAL (WO-INFRA-015A). NODE_ENV says what this process
+ * believes; the URL says where the fixture lands. A staging database reached
+ * with NODE_ENV=development set by mistake is refused here too: the same hosts
+ * db-reset.mjs accepts, and no query-string override of the target.
+ */
+{
+  let u = null;
+  try {
+    u = new URL(CONNECTION);
+  } catch {
+    /* refused below */
+  }
+  if (!u || !['localhost', '127.0.0.1', '::1', '[::1]', 'db', 'postgres'].includes(u.hostname)) {
+    console.error(`FAIL  refusing to seed a non-local database (host: ${u?.hostname || 'unparseable'}).`);
+    process.exit(2);
+  }
+  if (['host', 'hostaddr', 'port', 'dbname', 'service'].some((k) => u.searchParams.has(k))) {
+    console.error('FAIL  the database URL overrides its target in the query string; refusing to seed.');
+    process.exit(2);
+  }
 }
 
 const M = '5eed0000-0000-4000-8000-000000000001';

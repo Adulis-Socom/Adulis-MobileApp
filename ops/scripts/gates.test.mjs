@@ -153,3 +153,27 @@ test('the database-writing gates are real gates, the writers among them', () => 
   for (const id of ['migrate', 'worker-schema', 'test', 'determinism', 'console-e2e']) assert.ok(DB_WRITING_GATES.has(id), id);
   for (const id of DB_WRITING_GATES) assert.ok(GATES.some((g) => g.id === id), `${id} is not a gate`);
 });
+
+// WO-INFRA-015A: apps/api reads packages/locale from disk without depending on it.
+test('a locale-only change runs the API suite: without @adulis/api selected, the scope is dropped', () => {
+  const d = scopeDecision(RAW, ['packages/locale/src/en.ts'], () => ['@adulis/locale', '@adulis/console']);
+  assert.equal(d.scope, '');
+  assert.match(d.why, /UNSCOPED - @adulis\/api reads packages\/locale\//);
+});
+
+test('a locale change whose selection already holds @adulis/api keeps its scope', () => {
+  const d = scopeDecision(RAW, ['packages/locale/src/am.ts'], () => ['@adulis/locale', '@adulis/api']);
+  assert.equal(d.scope, RAW);
+});
+
+test('a change outside the undeclared inputs is not affected', () => {
+  const d = scopeDecision(RAW, ['packages/tokens/src/index.ts'], () => ['@adulis/tokens', '@adulis/console']);
+  assert.equal(d.scope, RAW);
+});
+
+test('the storage guards are a gate, and they are not a database-writing one', () => {
+  const g = GATES.find((x) => x.id === 'storage-guards');
+  assert.ok(g, 'storage-guards is not a gate');
+  assert.ok(g.cmd.includes('ops/scripts/disposable-db.test.mjs') && g.cmd.includes('ops/scripts/compose-safety.test.mjs'));
+  assert.ok(!DB_WRITING_GATES.has('storage-guards'));
+});
