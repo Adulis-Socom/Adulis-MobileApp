@@ -4,8 +4,10 @@ import 'reflect-metadata';
 import './build-tool-env';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { NestFactory } from '@nestjs/core';
+import type { Type } from '@nestjs/common';
+import { ModulesContainer, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { LEGACY_COMMERCE_CONTROLLERS, applyGuardSecurity } from './common/http/openapi-security';
 
 
 /**
@@ -56,6 +58,12 @@ async function generate(): Promise<void> {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
+
+  // Security comes from the guard's own @Public metadata, not from per-route decorators.
+  const controllers = [...app.get(ModulesContainer).values()].flatMap((m) =>
+    [...m.controllers.values()].map((w) => w.metatype).filter((t): t is Type => typeof t === 'function'),
+  );
+  applyGuardSecurity(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
 
   const paths: Record<string, unknown> = {};
   for (const key of Object.keys(document.paths).sort()) {

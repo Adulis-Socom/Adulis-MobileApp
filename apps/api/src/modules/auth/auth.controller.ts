@@ -67,6 +67,7 @@ import {
   stepUpRequestBody,
   stepUpVerifyBody,
 } from './auth.schemas';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /** C6 — identity and session (ADU-API-01 v1.6 section 12.2). */
 
@@ -423,6 +424,7 @@ export class AuthController {
     );
   }
 
+  @ApiIdempotencyKey()
   @Post('auth/step-up/request')
   @HttpCode(202)
   @ApiOperation({ summary: 'The SMS names the action (4.4); binds action and target (9.2).' })
@@ -497,6 +499,7 @@ export class AuthController {
     return this.tx.run(req as LocalizedRequest, (trx) => this.auth.patchDevice(trx, req, id, body));
   }
 
+  @ApiIdempotencyKey()
   @Post('auth/recovery')
   @Public()
   @HttpCode(202)

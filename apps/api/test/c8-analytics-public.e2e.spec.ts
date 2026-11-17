@@ -9,6 +9,7 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from '../src/modules/catalogue/post-link.adapter';
+import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
@@ -523,6 +524,8 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('Cookie', cookie(OWNER_S))
         .set('X-Adulis-Seller', SELLER)
         .expect(200);
+      expectConforms(buyer, 'get', '/v1/notifications', true);
+      expectConforms(seller, 'get', '/v1/notifications', true);
       expect(seller.body.data.map((n: { id: string }) => n.id)).toContain(NOTIF_DEVICE);
     });
 
@@ -601,6 +604,7 @@ describe('C8 — analytics, notifications, reports, events, public', () => {
         .set('X-Adulis-Device', DEVICE)
         .set('Idempotency-Key', key())
         .expect(200);
+      expectConforms(read, 'post', '/v1/notifications/{id}/read', true);
       expect(read.body.read_at).toBeTruthy();
       const all = await http()
         .post('/v1/notifications/read-all')

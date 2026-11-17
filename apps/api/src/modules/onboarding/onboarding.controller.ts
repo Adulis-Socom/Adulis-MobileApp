@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import type { Transaction } from 'kysely';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -29,6 +29,7 @@ import {
   patchProfileBody,
   socialAccountBody,
 } from './onboarding.schemas';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /**
  * C1 — onboarding and verification (ADU-API-01 v1.6 section 12.9).
@@ -50,6 +51,7 @@ export class OnboardingController {
     private readonly svc: OnboardingService,
   ) {}
 
+  @ApiIdempotencyKey()
   @Post('seller')
   @ApiOperation({ summary: 'Create the seller. The first eligibility evaluation runs inline.' })
   async createSeller(
@@ -106,6 +108,7 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.getSocialAccounts(trx, req));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/social-accounts')
   @ApiOperation({ summary: 'Link a social account; issues the account-control code.' })
   async createSocialAccount(
@@ -118,6 +121,8 @@ export class OnboardingController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'The verification attempt is recorded.' })
   @Post('seller/social-accounts/:id/verify')
   @ApiOperation({ summary: 'Fetch and match; captures the follower count at verification.' })
   async verifySocialAccount(
@@ -141,6 +146,7 @@ export class OnboardingController {
    * No @ActorRole, no seller header, no fn_has_permission: the gate is
    * write_attestation's derivation from core.operator_grant.
    */
+  @ApiIdempotencyKey()
   @Post('seller/identity-verification')
   @ApiOperation({
     summary:
@@ -169,6 +175,8 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.putAvailability(trx, req, body));
   }
 
+  @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. Earliest closure date to list. Default: today.' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
   @Get('seller/availability-overrides')
   async getOverrides(
     @Req() req: LocalizedRequest,

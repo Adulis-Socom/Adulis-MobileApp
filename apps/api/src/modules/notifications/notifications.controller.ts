@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiOkResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { sql, type Transaction } from 'kysely';
 import { z } from 'zod';
@@ -8,6 +8,8 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { NotificationPageDto, NotificationReadDto } from './notifications.dto';
 
 /**
  * C8 — notifications (ADU-API-01 v1.6 section 12.14).
@@ -74,6 +76,9 @@ export class NotificationsController {
     OR n.template_key = 'notification.chat.escalated'
     OR n.template_key LIKE 'SCENE_BECAME_%')`;
 
+  @ApiQuery({ name: 'seller_id', required: false, description: 'Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
+  @ApiOkResponse({ type: NotificationPageDto })
   @Get('notifications')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.' })
   async list(
@@ -136,6 +141,8 @@ export class NotificationsController {
     };
   }
 
+  @ApiIdempotencyKey()
+  @ApiOkResponse({ type: NotificationReadDto })
   @Post('notifications/:id/read')
   @HttpCode(200)
   @ApiOperation({ summary: 'Read state syncs across surfaces — one list, two clients.' })
@@ -159,6 +166,7 @@ export class NotificationsController {
     });
   }
 
+  @ApiIdempotencyKey()
   @Post('notifications/read-all')
   @HttpCode(200)
   async readAll(
