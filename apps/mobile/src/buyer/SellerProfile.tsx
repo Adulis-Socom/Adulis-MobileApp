@@ -174,7 +174,7 @@ function TabBar({ tab, onTab, focusRequest }: { tab: Tab; onTab: (t: Tab) => voi
             testID={`seller-tab-${key}`}
             style={{
               ...layout.tab,
-              minHeight: 44,
+              minHeight: theme.touchTarget,
               alignItems: 'center',
               justifyContent: 'center',
               borderBottomWidth: 2,
