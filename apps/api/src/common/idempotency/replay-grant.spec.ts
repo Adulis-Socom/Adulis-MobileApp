@@ -1,28 +1,39 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import * as ts from 'typescript';
 import { requiresSellerContext } from '../auth/auth.guard';
 
 /**
- * SEC-003 -- every seller-acting idempotent POST declares @ReplayGrant.
+ * SEC-003 -- the replay re-check cannot be skipped by omission.
  *
  * The idempotency lookup serves a stored response only while the caller's
- * CURRENT role still holds the route's declared permission code(s) on the
- * presenting surface. A route that declares nothing keeps the older,
- * standing-only check, so a forgotten decorator would silently weaken the
- * replay rule for that route. This suite is what makes it not silent.
+ * CURRENT role still holds the route's @ReplayGrant code(s) on the presenting
+ * surface. A route that declares nothing keeps the older standing-only
+ * check, so the declarations are this control's only input.
  *
- * LEXICAL, like no-nested-pool-acquisition.spec.ts: it reads the controller
- * sources, never builds the app, and needs no database.
+ * LEXICAL, like no-nested-pool-acquisition.spec.ts: it reads sources, never
+ * builds the app, and needs no database. What it GUARANTEES:
  *
- *  - Every @Post whose path is a section 4.2 seller-context path (the guard's
- *    own requiresSellerContext decides, exemptions included), plus the routes
- *    that act as the store from X-Adulis-Seller outside /v1/seller, must
- *    carry @ReplayGrant with at least one code.
- *  - Every declared code must be one of the seeded permissions, and must be
- *    named in the route's own module or in a migration (the database
- *    function that asserts it) -- a cheap guard against a valid but foreign
- *    code pasted onto the wrong route.
+ *  1. Every controller method, under any HTTP verb, whose body calls
+ *     runIdempotent on a seller-acting route (a section 4.2 seller-context
+ *     path, as the guard's own requiresSellerContext decides, or one of the
+ *     listed routes that act as the store from X-Adulis-Seller elsewhere)
+ *     carries @ReplayGrant with at least one code -- and no other method
+ *     carries one.
+ *  2. Every call to IdempotencyService.check() is either runIdempotent's,
+ *     which passes the route's grants and the session audience, or one of
+ *     the allow-listed manual sites, each on a route that is not seller-acting.
+ *  3. Every declared code is a seeded permission, and is REACHED from that
+ *     route: it appears in the route method, in a module method that route
+ *     calls (followed three calls deep through this.x(...) / this.y.x(...)),
+ *     or in a database function one of those bodies names.
+ *
+ * What it does NOT guarantee: that a code is asserted rather than merely
+ * mentioned on that path; routes on paths it cannot read (non-literal
+ * decorator arguments, aliased decorator imports, files not named
+ * *.controller.ts under src/modules); or a new store-side route outside
+ * /v1/seller that is missing from STORE_SIDE_ROUTES. The e2e suite
+ * (test/wo-sec-003-replay-authorization.e2e.spec.ts) proves the behaviour.
  */
 
 const SRC = join(__dirname, '..', '..');
@@ -31,14 +42,31 @@ const SEED_SQL = join(REPO, 'docs', 'amendments', 'ADU-AUTH-01_v2_4_permission_s
 const MIGRATIONS = join(REPO, 'db', 'migrations');
 
 /** Seller-side writes outside /v1/seller: the side is chosen by X-Adulis-Seller. */
-const SELLER_SIDE_OUTSIDE_SELLER_PATHS = new Set([
-  'POST /v1/conversations/:id/messages',
-  'POST /v1/claims/:id/evidence',
+const STORE_SIDE_ROUTES = new Set(['POST /v1/conversations/:id/messages', 'POST /v1/claims/:id/evidence']);
+
+/** check() callers outside runIdempotent, each on a route that never acts as a store. */
+const MANUAL_CHECK_SITES = new Map([
+  ['auth.controller.ts', 'POST /v1/auth/otp/verify'],
+  ['deletion.controller.ts', 'POST /v1/deletion/confirm'],
+  ['handoff.controller.ts', 'POST /v1/handoffs/sync'],
 ]);
 
-export interface PostRoute {
+const VERBS = new Map([
+  ['Get', 'GET'],
+  ['Post', 'POST'],
+  ['Put', 'PUT'],
+  ['Patch', 'PATCH'],
+  ['Delete', 'DELETE'],
+  ['All', 'ALL'],
+]);
+
+export interface Route {
   readonly route: string;
+  readonly method: string;
+  readonly path: string;
   readonly grants: readonly string[] | null;
+  readonly idempotent: boolean;
+  readonly body: string;
 }
 
 const decoratorCall = (d: ts.Decorator): { name: string; args: string[] } | null => {
@@ -49,23 +77,37 @@ const decoratorCall = (d: ts.Decorator): { name: string; args: string[] } | null
   };
 };
 
-/** Every @Post in one controller source, with its @ReplayGrant codes (null when absent). */
-export function postRoutes(fileName: string, text: string): PostRoute[] {
+/** The route a controller method serves, or null when it has no HTTP-verb decorator. */
+function routeOf(member: ts.MethodDeclaration): Route | null {
+  const cls = member.parent;
+  const prefix = ts.isClassDeclaration(cls)
+    ? ((ts.getDecorators(cls) ?? []).map(decoratorCall).find((c) => c?.name === 'Controller')?.args[0] ?? '')
+    : '';
+  const decos = (ts.getDecorators(member) ?? []).map(decoratorCall);
+  const verb = decos.find((c) => c !== null && VERBS.has(c.name));
+  if (!verb) return null;
+  const method = VERBS.get(verb.name) as string;
+  const path = '/v1/' + [prefix, verb.args[0] ?? ''].filter((p) => p !== '').join('/');
+  const grant = decos.find((c) => c?.name === 'ReplayGrant');
+  const body = member.body?.getText() ?? '';
+  return {
+    route: `${method} ${path}`,
+    method,
+    path,
+    grants: grant ? grant.args : null,
+    idempotent: /\.runIdempotent\s*\(/.test(body),
+    body,
+  };
+}
+
+/** Every routed method in one controller source. */
+export function routes(fileName: string, text: string): Route[] {
   const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
-  const out: PostRoute[] = [];
+  const out: Route[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isClassDeclaration(node)) {
-      const calls = (ts.getDecorators(node) ?? []).map(decoratorCall);
-      const prefix = calls.find((c) => c?.name === 'Controller')?.args[0] ?? '';
-      for (const member of node.members) {
-        if (!ts.isMethodDeclaration(member)) continue;
-        const decos = (ts.getDecorators(member) ?? []).map(decoratorCall);
-        const post = decos.find((c) => c?.name === 'Post');
-        if (!post) continue;
-        const grant = decos.find((c) => c?.name === 'ReplayGrant');
-        const path = [prefix, post.args[0] ?? ''].filter((p) => p !== '').join('/');
-        out.push({ route: `POST /v1/${path}`, grants: grant ? grant.args : null });
-      }
+    if (ts.isMethodDeclaration(node)) {
+      const r = routeOf(node);
+      if (r) out.push(r);
     }
     ts.forEachChild(node, visit);
   };
@@ -73,14 +115,67 @@ export function postRoutes(fileName: string, text: string): PostRoute[] {
   return out;
 }
 
-const mustDeclare = (route: string): boolean =>
-  SELLER_SIDE_OUTSIDE_SELLER_PATHS.has(route) || requiresSellerContext(route.slice('POST '.length), 'POST');
+export const sellerActing = (r: Pick<Route, 'route' | 'method' | 'path'>): boolean =>
+  STORE_SIDE_ROUTES.has(r.route) || requiresSellerContext(r.path, r.method);
 
-function controllers(dir: string): string[] {
+export const mustDeclare = (r: Route): boolean => r.idempotent && sellerActing(r);
+
+/** Every method body in a set of sources, by method name (collisions keep every body). */
+export function methodIndex(sources: ReadonlyArray<[string, string]>): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const [name, text] of sources) {
+    const sf = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (ts.isMethodDeclaration(node) && node.body && ts.isIdentifier(node.name)) {
+        index.set(node.name.text, [...(index.get(node.name.text) ?? []), node.body.getText()]);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+  }
+  return index;
+}
+
+/** Database function bodies by qualified name; a later migration's definition wins. */
+export function functionBodies(sqlFiles: readonly string[]): Map<string, string> {
+  const bodies = new Map<string, string>();
+  const re = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.[a-z0-9_]+)\s*\([\s\S]*?\bAS\s+\$(\w*)\$([\s\S]*?)\$\2\$/gi;
+  for (const text of sqlFiles) {
+    for (const m of text.matchAll(re)) bodies.set((m[1] as string).toLowerCase(), m[3] as string);
+  }
+  return bodies;
+}
+
+/** The text a route reaches: its body, module methods it calls (3 deep), and database functions named there. */
+export function reachedText(route: Route, index: Map<string, string[]>, fns: Map<string, string>): string {
+  const seen = new Set<string>([route.body]);
+  let frontier = [route.body];
+  for (let depth = 0; depth < 3; depth += 1) {
+    const next: string[] = [];
+    for (const text of frontier) {
+      for (const m of text.matchAll(/this\.(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*\(/g)) {
+        for (const body of index.get(m[1] as string) ?? []) {
+          if (!seen.has(body)) {
+            seen.add(body);
+            next.push(body);
+          }
+        }
+      }
+    }
+    frontier = next;
+  }
+  const code = [...seen].join('\n');
+  const named = [...code.matchAll(/\b((?:core|billing|financial|verification)\.fn_[a-z0-9_]+)\s*\(/gi)].map((m) =>
+    (m[1] as string).toLowerCase(),
+  );
+  return [code, ...named.map((n) => fns.get(n) ?? '')].join('\n');
+}
+
+function files(dir: string, keep: (name: string) => boolean): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name);
-    if (e.isDirectory()) return controllers(p);
-    return e.name.endsWith('.controller.ts') ? [p] : [];
+    if (e.isDirectory()) return files(p, keep);
+    return keep(e.name) ? [p] : [];
   });
 }
 
@@ -92,87 +187,164 @@ function seededCodes(): Set<string> {
   return codes;
 }
 
-describe('every seller-acting idempotent POST declares @ReplayGrant (SEC-003)', () => {
-  const files = controllers(join(SRC, 'modules'));
-  const all = files.flatMap((f) =>
-    postRoutes(f, readFileSync(f, 'utf8')).map((r) => ({ ...r, file: f })),
+interface CheckCall {
+  readonly file: string;
+  readonly args: string[];
+  readonly route: string | null;
+}
+
+/** Every IdempotencyService.check(...) call in one source, with the route of its enclosing method. */
+export function checkCalls(fileName: string, text: string): CheckCall[] {
+  const sf = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+  const out: CheckCall[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      /(^|\.)idempotency\.check$/.test(node.expression.getText().replace(/\s+/g, ''))
+    ) {
+      let m: ts.Node | undefined = node.parent;
+      while (m && !ts.isMethodDeclaration(m)) m = m.parent;
+      out.push({
+        file: basename(fileName),
+        args: node.arguments.map((a) => a.getText()),
+        route: m ? (routeOf(m as ts.MethodDeclaration)?.route ?? null) : null,
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+describe('the replay re-check cannot be skipped by omission (SEC-003)', () => {
+  const controllerFiles = files(join(SRC, 'modules'), (n) => n.endsWith('.controller.ts'));
+  const all = controllerFiles.flatMap((f) =>
+    routes(f, readFileSync(f, 'utf8')).map((r) => ({ ...r, file: f })),
   );
 
-  it('finds the controllers it is meant to read', () => {
-    expect(files.length).toBeGreaterThan(20);
-    expect(all.some((r) => r.route === 'POST /v1/seller/payout')).toBe(true);
+  it('finds the controllers and routes it is meant to read', () => {
+    expect(controllerFiles.length).toBeGreaterThan(20);
+    expect(all.some((r) => r.route === 'POST /v1/seller/payout' && r.idempotent)).toBe(true);
+    expect(all.some((r) => r.method === 'DELETE')).toBe(true);
   });
 
-  it('no seller route is missing its declaration', () => {
+  it('no idempotent seller-acting route, under any verb, is missing its declaration', () => {
     const missing = all
-      .filter((r) => mustDeclare(r.route) && (r.grants === null || r.grants.length === 0))
+      .filter((r) => mustDeclare(r) && (r.grants === null || r.grants.length === 0))
       .map((r) => `${relative(SRC, r.file)}: ${r.route}`);
     expect(missing).toEqual([]);
   });
 
   it('covers the 31 seller-context routes and the 2 store-side routes outside /v1/seller', () => {
-    const declared = all.filter((r) => mustDeclare(r.route)).map((r) => r.route);
+    const declared = all.filter(mustDeclare).map((r) => r.route);
     expect(declared).toHaveLength(33);
     expect(new Set(declared).size).toBe(33);
-    for (const r of SELLER_SIDE_OUTSIDE_SELLER_PATHS) expect(declared).toContain(r);
+    for (const r of STORE_SIDE_ROUTES) expect(declared).toContain(r);
   });
 
-  it('the exempt seller paths and buyer routes stay undeclared', () => {
+  it('declarations sit only where the lookup evaluates them', () => {
     const route = (r: string) => all.find((x) => x.route === r);
     expect(route('POST /v1/seller')?.grants).toBeNull();
     expect(route('POST /v1/seller/identity-verification')?.grants).toBeNull();
     expect(route('POST /v1/orders')?.grants).toBeNull();
-    // Declarations sit only where the rule applies.
-    const stray = all.filter((r) => r.grants !== null && !mustDeclare(r.route)).map((r) => r.route);
+    const stray = all.filter((r) => r.grants !== null && !mustDeclare(r)).map((r) => r.route);
     expect(stray).toEqual([]);
   });
 
-  it('every declared code is seeded and asserted by the route module or a migration', () => {
+  it('every check() call passes the route grants, or is an allow-listed manual site off the seller routes', () => {
+    const calls = files(SRC, (n) => n.endsWith('.ts') && !n.endsWith('.spec.ts')).flatMap((f) =>
+      checkCalls(f, readFileSync(f, 'utf8')),
+    );
+    const viaRunIdempotent = calls.filter((c) => c.file === 'handler-transaction.ts');
+    expect(viaRunIdempotent).toHaveLength(1);
+    expect(viaRunIdempotent[0]?.args.join(' ')).toMatch(/replayGrants[\s\S]*audience/);
+    const manual = calls.filter((c) => c.file !== 'handler-transaction.ts');
+    expect(manual.map((c) => `${c.file} ${c.route}`).sort()).toEqual(
+      [...MANUAL_CHECK_SITES].map(([f, r]) => `${f} ${r}`).sort(),
+    );
+    for (const c of manual) {
+      const [method, path] = (c.route as string).split(' ') as [string, string];
+      expect(sellerActing({ route: c.route as string, method, path })).toBe(false);
+    }
+  });
+
+  it('every declared code is seeded and reached from its own route', () => {
     const seeded = seededCodes();
-    const migrations = readdirSync(MIGRATIONS)
-      .filter((f) => f.endsWith('.sql'))
-      .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8'))
-      .join('\n');
+    const fns = functionBodies(
+      readdirSync(MIGRATIONS)
+        .filter((f) => f.endsWith('.sql'))
+        .sort()
+        .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8')),
+    );
+    const indexes = new Map<string, Map<string, string[]>>();
     const problems: string[] = [];
     for (const r of all.filter((x) => x.grants !== null)) {
-      const moduleDir = join(r.file, '..');
-      const moduleText = readdirSync(moduleDir)
-        .filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))
-        .map((f) => readFileSync(join(moduleDir, f), 'utf8'))
-        .join('\n');
+      const dir = join(r.file, '..');
+      if (!indexes.has(dir)) {
+        indexes.set(
+          dir,
+          methodIndex(
+            readdirSync(dir)
+              .filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))
+              .map((f): [string, string] => [f, readFileSync(join(dir, f), 'utf8')]),
+          ),
+        );
+      }
+      const reached = reachedText(r, indexes.get(dir) as Map<string, string[]>, fns);
       for (const code of r.grants ?? []) {
         if (!seeded.has(code)) problems.push(`${r.route}: '${code}' is not a seeded permission`);
-        else if (!moduleText.includes(`'${code}'`) && !migrations.includes(`'${code}'`)) {
-          problems.push(`${r.route}: '${code}' is asserted nowhere in its module or the migrations`);
-        }
+        else if (!reached.includes(`'${code}'`)) problems.push(`${r.route}: '${code}' is not reached from the route`);
       }
     }
     expect(problems).toEqual([]);
   });
 
-  it('the reader catches a seller route without a declaration, and reads prefixes and multiple codes', () => {
+  it('the readers: verbs, prefixes, idempotency, call chains and check() callers', () => {
     const src = `
       @Controller()
       class A {
         @Post('seller/thing')
-        async a() {}
-        @Post('seller/other')
+        async a() { return this.tx.runIdempotent(req, res, 201, (trx) => this.svc.doThing(trx)); }
+        @Delete('seller/thing/:id')
         @ReplayGrant('seller.store:write', 'seller.media:write')
-        async b() {}
+        async b() { return this.tx.runIdempotent(req, res, 200, (trx) => this.svc.other(trx)); }
         @Get('seller/read')
-        async c() {}
+        async c() { return this.tx.run(req, (trx) => this.svc.doThing(trx)); }
       }
       @Controller('bootstrap')
       class B {
         @Post('x')
-        async d() {}
+        async d() { await this.idempotency.check(k, a, e, h); }
+      }
+      class Svc {
+        async doThing(trx) { await this.inner(trx); }
+        async inner(trx) { await sql\`SELECT core.fn_do_thing(\${x})\`; }
+        async other(trx) { await assertPermission(trx, req, 'seller.store:write'); }
       }`;
-    expect(postRoutes('fixture.ts', src)).toEqual([
-      { route: 'POST /v1/seller/thing', grants: null },
-      { route: 'POST /v1/seller/other', grants: ['seller.store:write', 'seller.media:write'] },
-      { route: 'POST /v1/bootstrap/x', grants: null },
+    const rs = routes('fixture.ts', src);
+    expect(rs.map((r) => [r.route, r.grants, r.idempotent])).toEqual([
+      ['POST /v1/seller/thing', null, true],
+      ['DELETE /v1/seller/thing/:id', ['seller.store:write', 'seller.media:write'], true],
+      ['GET /v1/seller/read', null, false],
+      ['POST /v1/bootstrap/x', null, false],
     ]);
-    expect(mustDeclare('POST /v1/seller/thing')).toBe(true);
-    expect(mustDeclare('POST /v1/bootstrap/x')).toBe(false);
+    expect(rs.filter(mustDeclare).map((r) => r.route)).toEqual(['POST /v1/seller/thing', 'DELETE /v1/seller/thing/:id']);
+
+    const index = methodIndex([['fixture.ts', src]]);
+    const fns = functionBodies([
+      `CREATE FUNCTION core.fn_do_thing(p uuid) RETURNS void LANGUAGE plpgsql AS $fn$
+         BEGIN PERFORM core.fn_has_permission(a, s, 'seller.products:write', 'CONSOLE'); END $fn$;`,
+    ]);
+    const thing = rs[0] as Route;
+    const del = rs[1] as Route;
+    // Reached through a module method two calls deep, then the database function it names.
+    expect(reachedText(thing, index, fns)).toContain(`'seller.products:write'`);
+    expect(reachedText(del, index, fns)).toContain(`'seller.store:write'`);
+    // A valid code that the route never reaches is caught.
+    expect(reachedText(del, index, fns)).not.toContain(`'seller.media:write'`);
+
+    expect(checkCalls('x.controller.ts', src)).toEqual([
+      { file: 'x.controller.ts', args: ['k', 'a', 'e', 'h'], route: 'POST /v1/bootstrap/x' },
+    ]);
   });
 });
