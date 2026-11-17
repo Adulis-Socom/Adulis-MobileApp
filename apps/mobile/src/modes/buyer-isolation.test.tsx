@@ -114,6 +114,8 @@ describe('a guest on an Account-bound route', () => {
 
 // A store the Account would see if the Seller gate ever let a request through.
 const STORE = { id: 'aaaaaaaa-0000-4000-8000-00000000000a', handle: 'store-a', store_name: 'Store A', status: 'ACTIVE', role: 'OWNER', created_at: '2026-11-01T08:00:00.000Z' };
+// The second Account's own store, with a different id.
+const STORE_B = { id: 'bbbbbbbb-0000-4000-8000-00000000000b', handle: 'store-b', store_name: 'Store B', status: 'ACTIVE', role: 'OWNER', created_at: '2026-11-02T08:00:00.000Z' };
 
 /** The server's side of one Account: whether it may use the Seller Companion, whether Courier is on. */
 function installAccount({ seller, courier = false }: { seller: boolean; courier?: boolean }) {
@@ -351,17 +353,17 @@ const TIMES = { created_at: '2026-11-11T08:00:00.000000Z', updated_at: '2026-11-
  * Two Accounts that share one device, one after the other. Each has its own named Collection and
  * conversation; the first may hold a store. A bearer the server does not know is a dead session.
  */
-function installTwoAccounts({ firstHasStore = false }: { firstHasStore?: boolean } = {}) {
-  const accounts: Record<string, { collection: string; store: string; seller: boolean }> = {
-    [A]: { collection: 'Only A', store: 'First Account store', seller: firstHasStore },
-    [B]: { collection: 'Only B', store: 'Second Account store', seller: false },
+function installTwoAccounts({ firstHasStore = false, secondHasStore = false }: { firstHasStore?: boolean; secondHasStore?: boolean } = {}) {
+  const accounts: Record<string, { collection: string; store: string; seller: boolean; sellerStore: typeof STORE }> = {
+    [A]: { collection: 'Only A', store: 'First Account store', seller: firstHasStore, sellerStore: STORE },
+    [B]: { collection: 'Only B', store: 'Second Account store', seller: secondHasStore, sellerStore: STORE_B },
   };
   const dead = { value: false };
   const mine = (call: Recorded) => (dead.value ? undefined : accounts[call.headers.Authorization ?? '']);
   const refuse = (call: Recorded): Reply | null => (call.headers.Authorization && !mine(call) ? problem(401, 'SESSION_REVOKED', 'auth') : null);
-  const asAccount = (read: (account: (typeof accounts)[string]) => Reply) => (call: Recorded) => {
+  const asAccount = (read: (account: (typeof accounts)[string], call: Recorded) => Reply) => (call: Recorded) => {
     const account = mine(call);
-    if (account) return read(account);
+    if (account) return read(account, call);
     return refuse(call) ?? problem(401, 'SESSION_EXPIRED', 'auth');
   };
   api.on('GET /v1/bootstrap', (call) => {
@@ -393,8 +395,9 @@ function installTwoAccounts({ firstHasStore = false }: { firstHasStore?: boolean
       }),
     ),
   );
-  api.on('GET /v1/seller/list', asAccount((account) => (account.seller ? ok({ data: [STORE] }) : problem(403, 'PERMISSION_DENIED', 'auth'))));
-  api.on('GET /v1/seller/orders', asAccount(() => ok({ data: [], has_more: false, next_cursor: null })));
+  api.on('GET /v1/seller/list', asAccount((account) => (account.seller ? ok({ data: [account.sellerStore] }) : problem(403, 'PERMISSION_DENIED', 'auth'))));
+  // Like the server: a store the Account does not hold is a 404.
+  api.on('GET /v1/seller/orders', asAccount((account, call) => (call.headers['X-Adulis-Seller'] === account.sellerStore.id ? ok({ data: [], has_more: false, next_cursor: null }) : problem(404, 'NOT_FOUND', 'request'))));
   api.on('GET /v1/notifications', asAccount(() => ok({ data: [], next_cursor: null })));
   api.on('POST /v1/auth/otp/verify', (call) =>
     call.body?.code === SIGN_IN_CODE
@@ -506,7 +509,7 @@ describe('a different Account on the same device', () => {
       expect(later.every((c) => c.headers.Authorization === B)).toBe(true);
     }));
 
-  it('does not inherit the first Account store, its screens or its store header', () =>
+  it('an Account without Seller access that signs in after one with a store gets the closed gate and no Seller request', () =>
     asRelease(async () => {
       signedIn();
       installTwoAccounts({ firstHasStore: true });
@@ -531,6 +534,33 @@ describe('a different Account on the same device', () => {
       expect(screen.queryByText(STORE.store_name)).not.toBeOnTheScreen();
       expect(sellerCalls().length).toBe(sellerBefore);
       expect(afterSignOut().filter(sellerScoped)).toEqual([]);
+    }));
+
+  it('an Account with its own store reads only that store: nothing after the switch names the first Account store', () =>
+    asRelease(async () => {
+      signedIn();
+      installTwoAccounts({ firstHasStore: true, secondHasStore: true });
+      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
+      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+      // The first Account really did read its own store, so the check below can see a leak.
+      expect(api.calls.some((c) => c.headers['X-Adulis-Seller'] === STORE.id)).toBe(true);
+      await open('/account');
+      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+      expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
+
+      await signInAsSecondAccount();
+      expect(await screen.findByRole('button', { name: en['seller.mode.switch_to_seller'] })).toBeOnTheScreen();
+      await open('/seller/orders');
+      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+      await open('/seller/notifications');
+      await quiet();
+
+      const later = afterSignOut();
+      expect(later.filter((c) => JSON.stringify([c.path, c.query, c.headers]).includes(STORE.id))).toEqual([]);
+      const reads = later.filter((c) => (c.path.startsWith('/v1/seller') && c.path !== '/v1/seller/list') || c.query.as === 'seller');
+      expect(reads.length).toBeGreaterThan(0);
+      for (const call of reads) expect(call.headers['X-Adulis-Seller']).toBe(STORE_B.id);
+      expect(later.filter((c) => c.headers.Authorization !== undefined).every((c) => c.headers.Authorization === B)).toBe(true);
     }));
 });
 
