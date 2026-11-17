@@ -71,6 +71,31 @@ test('three or more startups in the interval are a suspected restart loop', () =
   assert.ok(r.restartLoop);
 });
 
+test('review A, M-1: a crash-restart, corruption, "in recovery mode" and repeated recoveries are FAILED', () => {
+  const crash = [
+    L('LOG:  server process (PID 812) was terminated by signal 9: Killed'),
+    L('LOG:  terminating any other active server processes'),
+    L('LOG:  all server processes terminated; reinitializing'),
+    L('LOG:  database system was interrupted; last known up at 2026-11-17 08:28:01 UTC'),
+  ].join('\n');
+  // Stuck after a backend crash: reinitialised, never ready again.
+  assert.equal(classify(`${RECOVERY}\n${crash}`).verdict, 'FAILED');
+  // A crash-restart that did become ready again is still FAILED (a backend crashed).
+  assert.equal(classify(`${RECOVERY}\n${crash}\n${L('LOG:  database system is ready to accept connections')}`).verdict, 'FAILED');
+  // Corruption reported as ERROR lines.
+  for (const bad of ['ERROR:  invalid page in block 4 of relation base/16384/16385', 'ERROR:  could not read block 2 in file "base/16384/16390": read only 0 of 8192 bytes', 'WARNING:  page verification failed, calculated checksum 1234 but expected 5678\n' + L('ERROR:  invalid page in block 7 of relation base/1/2')]) {
+    assert.equal(classify(`${RECOVERY}\n${L(bad)}`).verdict, 'FAILED', bad);
+  }
+  // Clients told "in recovery mode" means the server was recovering from a crashed process.
+  assert.equal(classify(`${RECOVERY}\n${L('FATAL:  the database system is in recovery mode')}`).verdict, 'FAILED');
+  // Two container starts, each a crash recovery: repeated unclean stops.
+  assert.equal(classify(`${RECOVERY}\n${RECOVERY}`).verdict, 'FAILED');
+  // A query ERROR that is not corruption does not fail it.
+  assert.equal(classify(`${RECOVERY}\n${L('ERROR:  duplicate key value violates unique constraint "x"')}`).verdict, 'RECOVERED');
+  // A crash recovery followed by a clean restart is fine.
+  assert.equal(classify([RECOVERY, L('LOG:  starting PostgreSQL 17.11'), L('LOG:  database system was shut down at 2026-11-17 09:00:00 UTC'), L('LOG:  database system is ready to accept connections')].join('\n')).verdict, 'RECOVERED');
+});
+
 test('a log without any startup is UNKNOWN, never a pass', () => {
   assert.equal(classify('').verdict, 'UNKNOWN');
   assert.equal(classify(L('LOG:  checkpoint starting: time')).verdict, 'UNKNOWN');
