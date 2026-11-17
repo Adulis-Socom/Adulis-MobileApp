@@ -85,13 +85,41 @@ describe('parseReturnTo', () => {
     ['an uppercase Scene word', `/Scenes/${SCENE_REF}`],
     ['nothing', ''],
     ['only a slash', '/'],
+    // Look-alikes, control characters and invisible characters around an allowed shape.
+    ['a fullwidth solidus for the first slash', '\uff0fsaved'],
+    ['a division slash inside a Product path', '/product\u2215a\u2215b'],
+    ['a fraction slash between Product parts', '/product/a\u2044b'],
+    ['a Cyrillic letter in a tab name', '/s\u0430ved'],
+    ['a Kelvin sign in a Product handle', '/product/\u212a/b'],
+    ['a long s in a Product slug', '/product/a/\u017f'],
+    ['a percent-encoded letter', '/%73eller'],
+    ['a leading tab', '\t/saved'],
+    ['a trailing tab', '/saved\t'],
+    ['a trailing carriage return', '/saved\r'],
+    ['a trailing non-breaking space', '/saved\u00a0'],
+    ['a trailing zero-width space', '/saved\u200b'],
+    ['a leading zero-width space', '\u200b/saved'],
+    ['a leading byte order mark', '\ufeff/saved'],
+    ['a trailing line separator', '/saved\u2028'],
+    ['a trailing paragraph separator', '/saved\u2029'],
+    ['a right-to-left override', '/saved\u202e'],
+    ['a trailing newline on a Product', '/product/a/b\n'],
+    ['a trailing carriage return on a Product', '/product/a/b\r'],
+    ['a trailing line separator on a Product', '/product/a/b\u2028'],
+    ['a newline inside a Product handle', '/product/a\n/b'],
+    ['a trailing newline on a Scene', `/scenes/${SCENE_REF}\n`],
+    ['a trailing carriage return on a Scene', `/scenes/${SCENE_REF}\r`],
+    ['a trailing line separator on a Scene', `/scenes/${SCENE_REF}\u2028`],
+    ['an inherited property name', '__proto__'],
+    ['a very long Product handle', `/product/${'a'.repeat(100_000)}/b`],
+    ['a very long run of segments', `/${'seller/'.repeat(10_000)}`],
   ];
 
   it.each(hostile)('turns %s (%j) into You', (_what, value) => {
     expect(parseReturnTo(value)).toBe(YOU);
   });
 
-  it.each([[undefined], [null], [0], [1], [true], [false], [{}], [{ toString: () => '/seller' }], [{ toString: () => '/product/a/b' }], [['/product/a/b']], [['/saved']], [['/seller']], [['/saved', '/seller']], [[]], [() => '/saved'], [Symbol('x')]])(
+  it.each([[undefined], [null], [0], [1], [true], [false], [{}], [{ toString: () => '/seller' }], [{ toString: () => '/product/a/b' }], [['/product/a/b']], [['/saved']], [['/seller']], [['/saved', '/seller']], [[]], [() => '/saved'], [Symbol('x')], [new String('/saved')], [new String('/product/a/b')]])(
     'turns the non-string %p into You',
     (value) => {
       expect(parseReturnTo(value)).toBe(YOU);
@@ -99,7 +127,7 @@ describe('parseReturnTo', () => {
   );
 
   it('never returns anything but the input unchanged or You, whatever the pieces of a link are', () => {
-    const prefixes = ['', ' ', '\n', '/', '//', '\\', '/\\', 'http:', 'https:', 'javascript:', 'adulis://', '%2F', '/%2F', '/.', '/..', './', '../'];
+    const prefixes = ['', ' ', '\n', '/', '//', '\\', '/\\', 'http:', 'https:', 'javascript:', 'adulis://', '%2F', '/%2F', '/.', '/..', './', '../', '\uff0f', '\u200b', '\ufeff'];
     const targets = [
       'seller',
       'seller/orders/x',
@@ -114,7 +142,7 @@ describe('parseReturnTo', () => {
       'product/a/b',
       `scenes/${SCENE_REF}`,
     ];
-    const suffixes = ['', '/', '?x=1', '#f', '%00', ' ', '\n', '/..', '/../seller', '/./', '%2e%2e', '\\'];
+    const suffixes = ['', '/', '?x=1', '#f', '%00', ' ', '\n', '/..', '/../seller', '\r', '/./', '%2e%2e', '\\', '\u2028', '\u00a0', '\u202e'];
     const allowed = [
       /^\/(home\/for-you|saved|orders|account|notifications|messages)$/,
       /^\/product\/[a-z0-9][a-z0-9-]{0,119}\/[a-z0-9][a-z0-9-]{0,119}$/,
