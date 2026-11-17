@@ -119,7 +119,7 @@ function SceneContent({
         accessibilityLabel={fillSlots(t('buyer.scene.seller'), { store }) ?? store}
         accessibilityHint={fillSlots(t('buyer.seller.view'), { store }) ?? undefined}
         onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: scene.seller.handle } })}
-        style={{ minHeight: 44, justifyContent: 'center' }}
+        style={{ minHeight: theme.touchTarget, justifyContent: 'center' }}
         testID="scene-seller"
       >
         <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{store}</AppText>
