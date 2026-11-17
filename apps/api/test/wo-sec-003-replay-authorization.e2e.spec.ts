@@ -18,10 +18,16 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  * SEC-003 -- a stored response is replayed only to the caller's CURRENT
  * authorisation, and seller deletion authorises before it answers.
  *
- *  F1  the route's declared permission is re-tested against the caller's
- *      current role before a replay is served;
+ *  F1  the route's declared permission(s), every one, are re-tested against
+ *      the caller's current role before a replay is served, and an account
+ *      with a due, unactivated ownership transfer away from the store is not
+ *      served through any of its roles there;
  *  F2  ...and against the presenting session's surface;
  *  F4  POST /v1/seller/deletion checks seller.account:delete first.
+ *
+ * Also pinned: the 409 outcomes on a declared route with the permission held
+ * and lost, the re-run a too-strict declaration costs, and one recorded
+ * residual on the buyer side of claims evidence.
  *
  * The harness is WO-SEC-002's (wo-sec-002-idempotency-security.e2e.spec.ts):
  * probes call the production HandlerTransaction exactly as handlers do, and
@@ -71,13 +77,31 @@ const CLAIM = `${P}21`; // OTHER's open claim on it (a second blocker)
 const OTP_CH = `${P}22`;
 const STEP_UP = `${P}23`;
 const TRANSFER = `${P}24`;
+// Review round (A-1, A-5, B-4).
+const MEMBER_13 = `${P}25`; // ADMIN of SELLER_A, re-invited as INVENTORY
+const MEMBER_15 = `${P}26`; // ADMIN of SELLER_A, re-invited as ANALYST
+const TM_13 = `${P}27`;
+const TM_15 = `${P}28`;
+const S_M13 = `${P}29`; // MOBILE
+const S_M15 = `${P}2a`; // MOBILE
+const SELLER_G = `${P}2b`; // owned by OWNER, who also holds a membership in it; transferred to OTHER
+const TM_G = `${P}2c`; // OWNER's ADMIN membership of SELLER_G
+const OTP_CH2 = `${P}2d`;
+const STEP_UP2 = `${P}2e`;
+const TRANSFER2 = `${P}2f`;
+const SELLER_H = `${P}30`; // owned by OTHER
+const S_OTHER = `${P}31`; // MOBILE
 const CONSOLE_ORIGIN = 'http://localhost:5173';
-const ACCOUNTS = [OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7];
-const SELLERS = [SELLER_A, SELLER_E, SELLER_F];
+const ACCOUNTS = [
+  OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7, MEMBER_13, MEMBER_15,
+];
+const SELLERS = [SELLER_A, SELLER_E, SELLER_F, SELLER_G, SELLER_H];
 const MARKER = 'wo-sec-003:';
 
 /** Held by OWNER, ADMIN and SALES_SUPPORT; not by ANALYST, INVENTORY or CAMPAIGN_MANAGER. Both surfaces. */
 const GRANT = 'seller.orders:respond';
+/** Held by OWNER, ADMIN, SALES_SUPPORT and INVENTORY. Both surfaces. */
+const READY_GRANT = 'seller.order_ready:update';
 /** CONSOLE only; held by ADMIN. */
 const CONSOLE_GRANT = 'seller.products:write';
 
@@ -102,10 +126,26 @@ class WoSec003Probe {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, CONSOLE_GRANT));
   }
 
-  private async authorised(trx: Transaction<Database>, req: LocalizedRequest, code: string): Promise<unknown> {
-    await sql`SELECT core.fn_has_permission(
-      ${req.ctx?.accountId}, ${req.ctx?.sellerId}, ${code},
-      ${req.auth?.audience ?? ''}::core.session_audience)`.execute(trx);
+  /** Two declared permissions, both asserted, as on the scene and chat routes. */
+  @Post('seller/wo-sec-003-two-code-probe')
+  @ReplayGrant(READY_GRANT, GRANT)
+  async twoCodeProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
+    return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, READY_GRANT, GRANT));
+  }
+
+  /** A declaration stricter than what the handler asserts: the lookup withholds, the handler passes. */
+  @Post('seller/wo-sec-003-strict-probe')
+  @ReplayGrant(CONSOLE_GRANT)
+  async strictProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
+    return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, GRANT));
+  }
+
+  private async authorised(trx: Transaction<Database>, req: LocalizedRequest, ...codes: string[]): Promise<unknown> {
+    for (const code of codes) {
+      await sql`SELECT core.fn_has_permission(
+        ${req.ctx?.accountId}, ${req.ctx?.sellerId}, ${code},
+        ${req.auth?.audience ?? ''}::core.session_audience)`.execute(trx);
+    }
     const key = req.headers['idempotency-key'] as string;
     executions.set(key, (executions.get(key) ?? 0) + 1);
     await sql`INSERT INTO core.rate_limit_bucket (subject_kind, subject_id, bucket_key, window_start)
@@ -178,14 +218,22 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type, store_name, handle, status)
        VALUES ($1,$4,$5,'INDIVIDUAL','A','sec003-a','ACTIVE'),
               ($2,$4,$5,'INDIVIDUAL','E','sec003-e','ACTIVE'),
-              ($3,$4,$5,'INDIVIDUAL','F','sec003-f','ACTIVE')`,
-      [SELLER_A, SELLER_E, SELLER_F, M, OWNER],
+              ($3,$4,$5,'INDIVIDUAL','F','sec003-f','ACTIVE'),
+              ($6,$4,$5,'INDIVIDUAL','G','sec003-g','ACTIVE'),
+              ($7,$4,$8,'INDIVIDUAL','H','sec003-h','ACTIVE')`,
+      [SELLER_A, SELLER_E, SELLER_F, M, OWNER, SELLER_G, SELLER_H, OTHER],
     );
     await admin.query(
       `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
        VALUES ($1,$7,$8,'ADMIN'), ($2,$7,$9,'ADMIN'), ($3,$7,$10,'ADMIN'),
               ($4,$7,$11,'SALES_SUPPORT'), ($5,$7,$12,'ADMIN'), ($6,$7,$13,'ADMIN')`,
       [TM_1, TM_2, TM_4, TM_5, TM_6, TM_7, SELLER_A, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7],
+    );
+    // TM_G: an Owner who also holds a membership row in their own store (the R12 fixture state).
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+       VALUES ($1,$4,$5,'ADMIN'), ($2,$4,$6,'ADMIN'), ($3,$7,$8,'ADMIN')`,
+      [TM_13, TM_15, TM_G, SELLER_A, MEMBER_13, MEMBER_15, SELLER_G, OWNER],
     );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     const sessions: Array<[string, string, 'MOBILE' | 'CONSOLE']> = [
@@ -199,6 +247,9 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [S_M5, MEMBER_5, 'MOBILE'],
       [S_M6_C, MEMBER_6, 'CONSOLE'],
       [S_M7_C, MEMBER_7, 'CONSOLE'],
+      [S_M13, MEMBER_13, 'MOBILE'],
+      [S_M15, MEMBER_15, 'MOBILE'],
+      [S_OTHER, OTHER, 'MOBILE'],
     ];
     for (const [id, account, audience] of sessions) {
       await admin.query(
@@ -246,9 +297,9 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
       `DELETE FROM chat.message WHERE conversation_id = '${CONV}'`,
       `DELETE FROM chat.conversation WHERE id = '${CONV}'`,
-      `DELETE FROM core.seller_ownership_transfer WHERE seller_id = '${SELLER_E}'`,
-      `DELETE FROM core.step_up_challenge WHERE id = '${STEP_UP}'`,
-      `DELETE FROM core.otp_challenge WHERE id = '${OTP_CH}'`,
+      `DELETE FROM core.seller_ownership_transfer WHERE seller_id IN ('${SELLER_E}','${SELLER_G}')`,
+      `DELETE FROM core.step_up_challenge WHERE id IN ('${STEP_UP}','${STEP_UP2}')`,
+      `DELETE FROM core.otp_challenge WHERE id IN ('${OTP_CH}','${OTP_CH2}')`,
       `DELETE FROM core.notification WHERE recipient_account_id IN (${accounts})`,
       `DELETE FROM core.session WHERE account_id IN (${accounts})`,
       `DELETE FROM core.seller_team_member WHERE seller_id IN (${sellers})`,
@@ -281,6 +332,39 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [randomUUID(), SELLER_A, account, role],
     );
   };
+  /** A due, unactivated transfer of `seller` from OWNER to OTHER, leaving OWNER the ANALYST residual. */
+  const dueTransfer = async (otp: string, stepUp: string, transfer: string, seller: string): Promise<void> => {
+    await admin.query(
+      `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash, expires_at, consumed_at, step_up_action)
+       VALUES ($1,'STEP_UP','+251911463001', decode('00','hex'), now() + interval '1 hour', now(), 'OWNERSHIP_TRANSFER')`,
+      [otp],
+    );
+    await admin.query(
+      `INSERT INTO core.step_up_challenge (id, account_id, action, otp_challenge_id, satisfied_at, expires_at)
+       VALUES ($1,$2,'OWNERSHIP_TRANSFER',$3, now(), now() + interval '1 hour')`,
+      [stepUp, OWNER, otp],
+    );
+    await admin.query(
+      `INSERT INTO core.seller_ownership_transfer
+         (id, seller_id, from_account_id, to_account_id, step_up_challenge_id, activates_at, residual_role)
+       VALUES ($1,$2,$3,$4,$5, now() - interval '1 minute', 'ANALYST')`,
+      [transfer, seller, OWNER, OTHER, stepUp],
+    );
+  };
+  /** The transfer's outcome: activated, the store's Owner, and OWNER's live roles there. */
+  const transferOutcome = async (transfer: string) =>
+    (
+      await admin.query(
+        `SELECT t.activated_at, s.owner_account_id,
+                ARRAY(SELECT tm.role::text FROM core.seller_team_member tm
+                       WHERE tm.seller_id = s.id AND tm.account_id = $2 AND tm.revoked_at IS NULL) AS roles
+           FROM core.seller_ownership_transfer t JOIN core.seller s ON s.id = t.seller_id
+          WHERE t.id = $1`,
+        [transfer, OWNER],
+      )
+    ).rows[0];
+  const expire = (key: string) =>
+    admin.query(`UPDATE core.idempotency_record SET expires_at = now() - interval '1 minute' WHERE key = $1`, [key]);
 
   describe('F1 -- the current role must still hold the route permission', () => {
     it('R1: a member re-invited at a role without the permission is not served the stored response', async () => {
@@ -311,40 +395,92 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       const key = randomUUID();
       const first = await probe(S_OWNER, SELLER_E, key, { n: 3 });
       expect(first.status).toBe(201);
-      await admin.query(
-        `INSERT INTO core.otp_challenge (id, purpose, phone_e164, code_hash, expires_at, consumed_at, step_up_action)
-         VALUES ($1,'STEP_UP','+251911463001', decode('00','hex'), now() + interval '1 hour', now(), 'OWNERSHIP_TRANSFER')`,
-        [OTP_CH],
-      );
-      await admin.query(
-        `INSERT INTO core.step_up_challenge (id, account_id, action, otp_challenge_id, satisfied_at, expires_at)
-         VALUES ($1,$2,'OWNERSHIP_TRANSFER',$3, now(), now() + interval '1 hour')`,
-        [STEP_UP, OWNER, OTP_CH],
-      );
-      await admin.query(
-        `INSERT INTO core.seller_ownership_transfer
-           (id, seller_id, from_account_id, to_account_id, step_up_challenge_id, activates_at, residual_role)
-         VALUES ($1,$2,$3,$4,$5, now() - interval '1 minute', 'ANALYST')`,
-        [TRANSFER, SELLER_E, OWNER, OTHER, STEP_UP],
-      );
+      await dueTransfer(OTP_CH, STEP_UP, TRANSFER, SELLER_E);
       // The first retry activates the due transfer and is judged as ANALYST.
       expectProblem(await probe(S_OWNER, SELLER_E, key, { n: 3 }), 403, 'PERMISSION_DENIED');
-      const after = await admin.query(
-        `SELECT t.activated_at, s.owner_account_id,
-                (SELECT tm.role::text FROM core.seller_team_member tm
-                  WHERE tm.seller_id = s.id AND tm.account_id = $2 AND tm.revoked_at IS NULL) AS residual
-           FROM core.seller_ownership_transfer t JOIN core.seller s ON s.id = t.seller_id
-          WHERE t.id = $1`,
-        [TRANSFER, OWNER],
-      );
-      expect(after.rows[0].activated_at).not.toBeNull();
-      expect(after.rows[0].owner_account_id).toBe(OTHER);
-      expect(after.rows[0].residual).toBe('ANALYST');
+      const after = await transferOutcome(TRANSFER);
+      expect(after.activated_at).not.toBeNull();
+      expect(after.owner_account_id).toBe(OTHER);
+      expect(after.roles).toEqual(['ANALYST']);
       // Now a live member: the stored Owner-era response is still not served.
       const r = await probe(S_OWNER, SELLER_E, key, { n: 3 });
       expectProblem(r, 403, 'PERMISSION_DENIED');
       expect(JSON.stringify(r.body)).not.toContain(first.body.run);
       expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R12: an outgoing Owner who also holds a membership is not served while the transfer is due', async () => {
+      const key = randomUUID();
+      const first = await probe(S_OWNER, SELLER_G, key, { n: 12 });
+      expect(first.status).toBe(201);
+      expectReplay(await probe(S_OWNER, SELLER_G, key, { n: 12 }), 201, first.body); // control: no transfer
+      await dueTransfer(OTP_CH2, STEP_UP2, TRANSFER2, SELLER_G);
+      // Due but not activated: neither the Owner arm nor the ADMIN membership stands; the handler
+      // activates, and the account is judged by the residual role activation leaves it.
+      const r = await probe(S_OWNER, SELLER_G, key, { n: 12 });
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      const after = await transferOutcome(TRANSFER2);
+      expect(after.activated_at).not.toBeNull();
+      expect(after.owner_account_id).toBe(OTHER);
+      expect(after.roles).toEqual(['ANALYST']); // the ADMIN membership was revoked by activation
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R13: every declared permission must still be held: one of two is not enough', async () => {
+      const key = randomUUID();
+      const post = () =>
+        http().post('/v1/seller/wo-sec-003-two-code-probe').set(bearer(S_M13)).set('X-Adulis-Seller', SELLER_A)
+          .set('Idempotency-Key', key).send({ n: 13 });
+      const first = await post();
+      expect(first.status).toBe(201);
+      expectReplay(await post(), 201, first.body); // control: ADMIN holds both
+      await reinvite(TM_13, MEMBER_13, 'INVENTORY'); // holds READY_GRANT, not GRANT
+      const r = await post();
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R14: with the permission held, a different body is still 409 and an expired record is still refused', async () => {
+      const key = randomUUID();
+      const first = await probe(S_OWNER, SELLER_A, key, { n: 14 });
+      expect(first.status).toBe(201);
+      expectProblem(await probe(S_OWNER, SELLER_A, key, { n: 140 }), 409, 'IDEMPOTENCY_KEY_REUSED');
+      await expire(key);
+      const r = await probe(S_OWNER, SELLER_A, key, { n: 14 });
+      expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R15: with the permission lost, a different body and an expired record both get the handler 403', async () => {
+      const kExpired = randomUUID();
+      const kOther = randomUUID();
+      expect((await probe(S_M15, SELLER_A, kExpired, { n: 15 })).status).toBe(201);
+      expect((await probe(S_M15, SELLER_A, kOther, { n: 151 })).status).toBe(201);
+      await expire(kExpired);
+      await reinvite(TM_15, MEMBER_15, 'ANALYST');
+      expectProblem(await probe(S_M15, SELLER_A, kExpired, { n: 15 }), 403, 'PERMISSION_DENIED');
+      expectProblem(await probe(S_M15, SELLER_A, kOther, { n: 152 }), 403, 'PERMISSION_DENIED');
+      expect([executions.get(kExpired), executions.get(kOther)]).toEqual([1, 1]);
+      expect([await records(kExpired), await records(kOther)]).toEqual([1, 1]);
+    });
+
+    it('R16: a declaration stricter than its handler costs a re-run, still answers the stored response, and commits once', async () => {
+      const key = randomUUID();
+      const post = () =>
+        http().post('/v1/seller/wo-sec-003-strict-probe').set(bearer(S_OWNER)).set('X-Adulis-Seller', SELLER_A)
+          .set('Idempotency-Key', key).send({ n: 16 });
+      const first = await post();
+      expect(first.status).toBe(201);
+      expectReplay(await post(), 201, first.body);
+      expect(executions.get(key)).toBe(2); // the handler ran again...
+      expect(await markers(key)).toBe(1); // ...and its run rolled back
       expect(await records(key)).toBe(1);
     });
   });
@@ -400,6 +536,29 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       const r = await attach();
       expectProblem(r, 403, 'PERMISSION_DENIED');
       expect(JSON.stringify(r.body)).not.toContain(first.body.evidence_item_id);
+      const items = await admin.query(
+        `SELECT count(*)::int AS n FROM core.claim_evidence_item
+          WHERE claim_id = $1 AND kind = 'BANK_RECORD' AND reference_id = $2`,
+        [CLAIM, ref],
+      );
+      expect(items.rows[0].n).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    // Recorded residual, pinned as today's behaviour so a change to it is
+    // deliberate: a buyer-side evidence retry that carries X-Adulis-Seller for another store is
+    // judged against that store's grants (claims:read is CONSOLE-only, so on MOBILE no role holds
+    // it); the buyer-side re-run then meets the evidence uniqueness first. Nothing is duplicated.
+    it('R17: buyer-side evidence retried with a header naming another store: 409, attached once', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const attach = () =>
+        http().post(`/v1/claims/${CLAIM}/evidence`).set(bearer(S_OTHER)).set('X-Adulis-Seller', SELLER_H)
+          .set('Idempotency-Key', key).send({ kind: 'BANK_RECORD', reference_id: ref });
+      const first = await attach();
+      expect(first.status).toBe(201);
+      const again = await attach();
+      expectProblem(again, 409, 'IDEMPOTENCY_KEY_REUSED');
       const items = await admin.query(
         `SELECT count(*)::int AS n FROM core.claim_evidence_item
           WHERE claim_id = $1 AND kind = 'BANK_RECORD' AND reference_id = $2`,
