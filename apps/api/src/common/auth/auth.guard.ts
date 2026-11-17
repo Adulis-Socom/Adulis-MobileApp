@@ -229,7 +229,10 @@ export class AuthGuard implements CanActivate {
       sellerId = sellerHeader;
     } else if (typeof sellerHeader === 'string' && UUID_RE.test(sellerHeader)) {
       // A buyer-group call may still carry it (a seller browsing as buyer
-      // does); it is recorded for the context and decides nothing.
+      // does). Nothing here authorises with it, but it is not inert: chat
+      // and claims act as that store when it names the resource's seller,
+      // and the idempotency layer scopes the request hash, replay standing
+      // and @ReplayGrant check by it (WO-SEC-002, SEC-003).
       sellerId = sellerHeader;
     }
 
