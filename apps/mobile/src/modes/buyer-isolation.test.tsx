@@ -56,11 +56,13 @@ const sellerScoped = (c: Recorded) => c.headers['X-Adulis-Seller'] !== undefined
 /** A link into the app: it opens at once when the app starts on it, and later when it is running. */
 const open = (path: string) => act(() => router.push(path as never));
 
-/** A guest's session may only ever talk to these: registering the install, bootstrap, public Home. */
-const GUEST_CALLS = ['GET /v1/bootstrap', 'GET /v1/fyp', 'POST /v1/devices'];
+/** All a session on Buyer Home needs: registering the install, bootstrap (with or without a session), the public feed. */
+const HOME_CALLS = ['GET /v1/bootstrap', 'GET /v1/fyp', 'POST /v1/devices'];
+/** Every request since the `from`th that is not one of those, whatever its path is called. */
+const unexpectedCalls = (from = 0) => api.calls.slice(from).map((c) => `${c.method} ${c.path}`).filter((c) => !HOME_CALLS.includes(c));
 function expectGuestOnly() {
   expect(api.calls.filter((c) => c.headers.Authorization !== undefined)).toEqual([]);
-  expect(api.calls.map((c) => `${c.method} ${c.path}`).filter((c) => !GUEST_CALLS.includes(c))).toEqual([]);
+  expect(unexpectedCalls()).toEqual([]);
 }
 
 beforeEach(() => {
@@ -140,6 +142,37 @@ function expectNoSellerTraffic() {
 const SELLER_ROUTES = ['/seller', '/seller/orders', `/seller/orders/${ORDER}`, '/seller/messages', `/seller/messages/${REF}`, '/seller/notifications'];
 const HIDDEN_ROUTES = ['/courier', '/dev', '/_sitemap'];
 
+describe('a guest on a Seller, Courier or diagnostics route, on a release build', () => {
+  const ROUTES = [...SELLER_ROUTES, ...HIDDEN_ROUTES];
+  // The server would serve a store to anyone who asked, so a request from a guest would show.
+  beforeEach(() => installAccount({ seller: true, courier: true }));
+
+  it.each(ROUTES)('%s opened cold lands on Buyer Home and sends nothing authenticated', (path) =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: path });
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      await quiet();
+      expectGuestOnly();
+      expectNoSellerTraffic();
+    }),
+  );
+
+  it.each(ROUTES)('%s arriving as a link into a running app does the same', (path) =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/home/for-you' });
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      await open(path);
+      // Home was already on screen, so let the redirect finish before looking at where the link ended.
+      await quiet();
+      expect(screen).toHavePathname('/home/for-you');
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expectGuestOnly();
+      expectNoSellerTraffic();
+    }),
+  );
+});
+
 describe('a signed-in Buyer without Seller access, on a release build', () => {
   beforeEach(() => {
     signedIn();
@@ -195,7 +228,9 @@ describe('a signed-in Buyer without Seller access, on a release build', () => {
       expect(screen).toHavePathname('/home/for-you');
       expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
       expect(useUiStore.getState().activeMode).toBe('buyer');
-      expect(api.calls.filter((c) => /courier/i.test(c.path))).toEqual([]);
+      // Nothing was asked of any API for the hidden screen, whatever its path would be called.
+      await quiet();
+      expect(unexpectedCalls()).toEqual([]);
     }),
   );
 
@@ -203,10 +238,14 @@ describe('a signed-in Buyer without Seller access, on a release build', () => {
     asRelease(async () => {
       await renderRouter(APP_DIR, { initialUrl: '/account' });
       expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      await quiet();
+      const before = api.calls.length;
       await open(path);
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(screen).toHavePathname('/home/for-you');
       expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
+      await quiet();
+      expect(unexpectedCalls(before)).toEqual([]);
     }),
   );
 });
@@ -235,12 +274,15 @@ describe('a signed-in Buyer with Seller access, on a release build', () => {
       expect(scoped.length).toBeGreaterThan(0);
       for (const call of scoped) expect(call.headers['X-Adulis-Seller']).toBe(STORE.id);
 
+      await quiet();
+      const before = api.calls.length;
       await open('/courier');
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       await open('/dev');
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
-      expect(api.calls.filter((c) => /courier/i.test(c.path))).toEqual([]);
+      await quiet();
+      expect(unexpectedCalls(before)).toEqual([]);
     }));
 
   it('shows Switch to Seller on You, and no Courier control', () =>
