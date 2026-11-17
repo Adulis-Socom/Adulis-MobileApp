@@ -254,7 +254,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     for (const [id, account, audience] of sessions) {
       await admin.query(
         `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
-         VALUES ($1,$2,$3,$4, now() + CASE WHEN $3 = 'CONSOLE' THEN interval '12 hours'
+         VALUES ($1,$2,$3::core.session_audience,$4, now() + CASE WHEN $3::core.session_audience = 'CONSOLE' THEN interval '12 hours'
                                           ELSE interval '30 days' END, now())`,
         [id, account, audience, DEVICE],
       );
