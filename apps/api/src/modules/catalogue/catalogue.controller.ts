@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
@@ -64,6 +65,7 @@ export class CatalogueController {
   ) {}
 
   @Post('seller/products')
+  @ReplayGrant('seller.products:write')
   async createProduct(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -179,6 +181,7 @@ export class CatalogueController {
   }
 
   @Post('seller/products/:id/publish')
+  @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: '409 with readiness items[] where blocked.' })
   async publishProduct(
     @Req() req: LocalizedRequest,
@@ -192,6 +195,7 @@ export class CatalogueController {
   }
 
   @Post('seller/products/:id/unpublish')
+  @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: 'Removes from the storefront; keeps the row.' })
   async unpublishProduct(
     @Req() req: LocalizedRequest,
@@ -212,6 +216,7 @@ export class CatalogueController {
   }
 
   @Post('seller/products/:id/variants')
+  @ReplayGrant('seller.products:write')
   async createVariant(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -253,6 +258,7 @@ export class CatalogueController {
    * actually refuses a request; this is the description of it.
    */
   @Post('seller/products/:id/images')
+  @ReplayGrant('seller.media:write')
   @ApiOperation({ summary: 'Signed upload then commit \u2014 one catalogued path, two actions.' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({
@@ -376,6 +382,7 @@ export class CatalogueController {
   }
 
   @Post('seller/products/:id/video')
+  @ReplayGrant('seller.media:write')
   async video(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,
@@ -396,6 +403,7 @@ export class CatalogueController {
   }
 
   @Post('seller/products/:id/social-posts')
+  @ReplayGrant('seller.products:write')
   @ApiOperation({ summary: 'Canonical id resolved server-side; never the URL string.' })
   async attachSocialPost(
     @Req() req: LocalizedRequest,
@@ -410,6 +418,7 @@ export class CatalogueController {
   }
 
   @Post('seller/variants/:id/stock')
+  @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Writes a StockEvent. Never a direct count set.' })
   async writeStock(
     @Req() req: LocalizedRequest,
@@ -424,6 +433,7 @@ export class CatalogueController {
   }
 
   @Post('seller/variants/:id/confirm-stock')
+  @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Resets stock_confirmed_at (S13.3).' })
   async confirmStock(
     @Req() req: LocalizedRequest,

@@ -3,7 +3,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ChatService } from './chat.service';
@@ -90,6 +90,7 @@ export class ChatController {
   }
 
   @Post('conversations/:id/messages')
+  @ReplayGrant('seller.messages:read', 'seller.messages:send')
   @ApiOperation({ summary: 'text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.' })
   async postMessage(
     @Req() req: AuthedRequest,

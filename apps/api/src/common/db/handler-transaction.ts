@@ -217,8 +217,18 @@ export class HandlerTransaction {
     // as the store from the header with role BUYER. Without standing the
     // handler runs and decides; where it does not refuse, the existing record
     // collides at commit and the same-hash response is served after all.
+    // The route's @ReplayGrant codes are re-tested against the CURRENT role
+    // and the session's surface (SEC-003).
     const standingSeller = actor.kind === 'ACCOUNT' ? ctx.sellerId : null;
-    const replay = await this.idempotency.check(key, actor, endpoint, requestHash, standingSeller);
+    const replay = await this.idempotency.check(
+      key,
+      actor,
+      endpoint,
+      requestHash,
+      standingSeller,
+      req.replayGrants ?? [],
+      req.auth?.audience ?? null,
+    );
     if (replay) {
       res.setHeader('X-Adulis-Idempotent-Replay', 'true');
       res.status(replay.status);

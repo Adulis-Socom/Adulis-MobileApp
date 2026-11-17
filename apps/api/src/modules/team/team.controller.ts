@@ -12,7 +12,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { phone } from '../auth/auth.schemas';
@@ -45,6 +45,7 @@ export class TeamController {
   }
 
   @Post('seller/team')
+  @ReplayGrant('seller.staff:admin')
   @ApiOperation({ summary: 'Invite by phone; the member signs in with their own OTP.' })
   async invite(
     @Req() req: AuthedRequest,

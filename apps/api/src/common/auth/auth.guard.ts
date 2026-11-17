@@ -39,10 +39,25 @@ const ACTOR_ROLE_KEY = 'adulis:actor-role';
 export const ActorRole = (role: 'BUYER' | 'SELLER' | 'COURIER') =>
   SetMetadata(ACTOR_ROLE_KEY, role);
 
+export const REPLAY_GRANT_KEY = 'adulis:replay-grant';
+/**
+ * The permission code(s) the route's handler asserts through
+ * fn_has_permission (SEC-003). It AUTHORISES NOTHING: the idempotency lookup
+ * reads it to decide whether a stored response may be replayed to the
+ * caller's CURRENT role and surface; when it may not, the handler runs and
+ * fn_has_permission answers exactly as for a fresh request. A route without
+ * it keeps the standing-only replay check, and
+ * idempotency/replay-grant.spec.ts fails the build for any seller route
+ * that leaves it out.
+ */
+export const ReplayGrant = (...codes: string[]) => SetMetadata(REPLAY_GRANT_KEY, codes);
+
 export interface AuthedRequest extends Request {
   requestId?: string;
   auth?: SessionContext;
   ctx?: RequestContext;
+  /** The route's @ReplayGrant codes; empty when it declares none. */
+  replayGrants?: readonly string[];
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -88,7 +103,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * list endpoint additionally does its own filtering by account, so the role
  * decides nothing there.
  */
-function requiresSellerContext(rawPath: string, method: string): boolean {
+export function requiresSellerContext(rawPath: string, method: string): boolean {
   // LOWERCASED ONCE, and this is a fix rather than a nicety (T18 Phase 3 pass).
   // Express routes case-INSENSITIVELY -- neither configure-app.ts nor main.ts
   // sets 'case sensitive routing', so GET /v1/SELLER/payout reaches the payout
@@ -223,6 +238,11 @@ export class AuthGuard implements CanActivate {
     >(ACTOR_ROLE_KEY, [context.getHandler(), context.getClass()]);
     const actorRole =
       declaredRole ?? (requiresSellerContext(req.path, req.method) ? 'SELLER' : 'BUYER');
+    req.replayGrants =
+      this.reflector.getAllAndOverride<string[] | undefined>(REPLAY_GRANT_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? [];
 
     req.auth = session;
     req.ctx = { accountId: session.accountId, actorRole, sellerId, audience: session.audience };

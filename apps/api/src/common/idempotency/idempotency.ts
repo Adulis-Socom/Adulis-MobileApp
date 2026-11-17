@@ -121,6 +121,14 @@ export class IdempotencyService {
    * and decides (fn_has_permission's 403 or 404 on a seller-authorised
    * path); were it to pass, the existing record still refuses a second
    * commit (the unique-collision path).
+   *
+   * `grants` (the route's @ReplayGrant codes, SEC-003) and `audience` (the
+   * presenting session's): standing must also be in a role that still holds
+   * every one of those codes on that surface -- fn_has_permission's role and
+   * surface step, read-only and without raising. A member demoted since the
+   * first request, or a session on a surface the permission does not reach,
+   * is not served; the handler runs and fn_has_permission refuses exactly as
+   * it would a fresh request. No grants: standing alone, as before.
    */
   async check(
     key: string,
@@ -128,26 +136,40 @@ export class IdempotencyService {
     endpoint: string,
     requestHash: Buffer,
     standingSeller: string | null = null,
+    grants: readonly string[] = [],
+    audience: string | null = null,
   ): Promise<StoredResponse | null> {
     const r = await sql<RecordRow & { standing: boolean }>`
       SELECT r.request_hash, r.response_status, r.response_body,
              r.expires_at > now() AS live,
              (${standingSeller}::uuid IS NULL
-              OR EXISTS (SELECT 1 FROM core.seller s
-                          WHERE s.id = ${standingSeller}::uuid
-                            AND s.owner_account_id = ${actor.id}::uuid
-                            AND NOT EXISTS (
-                              SELECT 1 FROM core.seller_ownership_transfer t
-                               WHERE t.seller_id = s.id
-                                 AND t.from_account_id = ${actor.id}::uuid
-                                 AND t.activates_at <= now()
-                                 AND t.activated_at IS NULL
-                                 AND t.cancelled_at IS NULL))
-              OR EXISTS (SELECT 1 FROM core.seller_team_member tm
-                          WHERE tm.seller_id = ${standingSeller}::uuid
-                            AND tm.account_id = ${actor.id}::uuid
-                            AND tm.suspended_at IS NULL
-                            AND tm.revoked_at IS NULL)) AS standing
+              OR EXISTS (
+                SELECT 1 FROM (
+                  SELECT 'OWNER'::core.team_role AS role
+                    FROM core.seller s
+                   WHERE s.id = ${standingSeller}::uuid
+                     AND s.owner_account_id = ${actor.id}::uuid
+                     AND NOT EXISTS (
+                       SELECT 1 FROM core.seller_ownership_transfer t
+                        WHERE t.seller_id = s.id
+                          AND t.from_account_id = ${actor.id}::uuid
+                          AND t.activates_at <= now()
+                          AND t.activated_at IS NULL
+                          AND t.cancelled_at IS NULL)
+                  UNION ALL
+                  SELECT tm.role FROM core.seller_team_member tm
+                   WHERE tm.seller_id = ${standingSeller}::uuid
+                     AND tm.account_id = ${actor.id}::uuid
+                     AND tm.suspended_at IS NULL
+                     AND tm.revoked_at IS NULL) standing_role
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM unnest(${sql.val(grants)}::text[]) AS g(code)
+                   WHERE NOT EXISTS (
+                     SELECT 1 FROM core.role_permission rp
+                       JOIN core.permission p ON p.code = rp.permission_code
+                      WHERE rp.role = standing_role.role
+                        AND rp.permission_code = g.code
+                        AND ${audience}::core.session_audience = ANY(p.surfaces))))) AS standing
         FROM core.idempotency_record r
        WHERE r.key = ${key} AND r.actor_kind = ${actor.kind}
          AND r.actor_id = ${actor.id} AND r.endpoint = ${endpoint}`.execute(this.db);
