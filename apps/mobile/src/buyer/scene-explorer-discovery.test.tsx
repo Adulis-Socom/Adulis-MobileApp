@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('opening a Scene cold', () => {
-  it('a link in the app\'s own scheme reaches the Scene for a guest, with Home under it for Back', async () => {
+  it('the declared scheme and the router\'s own path extraction reach the Scene for a guest, with Home under it for Back', async () => {
     const { scheme } = appConfig.expo;
     expect(scheme).toBe('adulis');
     // The path Expo Router takes from the link: the host of the link is the first segment.

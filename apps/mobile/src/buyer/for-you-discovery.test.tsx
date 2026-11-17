@@ -443,7 +443,7 @@ describe('a Scene that goes private while the app is away', () => {
     });
   });
 
-  it('is gone from the open Explorer and, on Back, from the feed: neither shows it as public', async () => {
+  it('the open Explorer says the Scene is not available once the server answers so, and the feed session that replaces the old one no longer lists it', async () => {
     const reads = [ok(publicScene(1, { caption: 'The Scene, as read' })), problem(404, 'NOT_FOUND', 'request')];
     let sceneReads = 0;
     api.on(`GET /v1/scene-posts/${fypUnit(1).public_ref}`, () => reads[Math.min(sceneReads++, 1)]!);
