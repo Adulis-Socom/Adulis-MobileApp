@@ -3,7 +3,15 @@
 // repository; no database is read or written (the history is injected).
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -12,11 +20,13 @@ import {
   DEFAULT_DIR,
   DEFAULT_MANIFEST,
   MIGRATION_NAME,
+  RUNNER_PATH,
   buildManifest,
   checkDirectory,
   checkHistory,
   checkManifest,
   checkSource,
+  recordedName,
   up,
   verify,
   write,
@@ -42,6 +52,8 @@ function fixture(names = NAMES) {
   };
 }
 const quiet = () => {};
+/** Names as pgmigrations records them: the file name without .sql. */
+const rec = (names) => names.map((n) => n.replace(/\.sql$/, ''));
 const captured = () => {
   const lines = [];
   return { lines, log: (l) => lines.push(l) };
@@ -54,7 +66,7 @@ async function runUp(f, applied, extra = {}) {
   const code = await up(
     { dir: f.dir, manifestPath: f.manifestPath, root: f.root, log: out.log, ...extra },
     {
-      readApplied: async () => applied,
+      readApplied: async () => rec(applied),
       run: () => {
         started += 1;
         return 0;
@@ -134,20 +146,49 @@ test('an empty directory is refused (every pinned file is missing)', () => {
   }
 });
 
-test('the database history must be exactly the first N pinned names, in order', () => {
+test('the database history must be exactly the first N pinned names, in order (as pgmigrations records them, without .sql)', () => {
   const m = { version: 1, files: NAMES.map((name) => ({ name, sha256: 'a'.repeat(64) })) };
   assert.deepEqual(checkHistory([], m), { problems: [], pending: NAMES });
-  assert.deepEqual(checkHistory(NAMES.slice(0, 3), m).pending, NAMES.slice(3));
-  assert.deepEqual(checkHistory(NAMES, m), { problems: [], pending: [] });
-  const unknown = checkHistory([...NAMES.slice(0, 2), '0003_something_else.sql'], m);
+  assert.deepEqual(checkHistory(rec(NAMES.slice(0, 3)), m).pending, NAMES.slice(3));
+  assert.deepEqual(checkHistory(rec(NAMES), m), { problems: [], pending: [] });
+  const unknown = checkHistory(rec([...NAMES.slice(0, 2), '0003_something_else.sql']), m);
   assert.match(unknown.problems[0], /HISTORY MISMATCH at position 3/);
-  const skipped = checkHistory([NAMES[0], NAMES[2]], m);
+  const skipped = checkHistory(rec([NAMES[0], NAMES[2]]), m);
   assert.match(skipped.problems[0], /HISTORY MISMATCH at position 2/);
-  const reordered = checkHistory([NAMES[1], NAMES[0]], m);
+  const reordered = checkHistory(rec([NAMES[1], NAMES[0]]), m);
   assert.equal(reordered.problems.length, 2);
-  const ahead = checkHistory([...NAMES, '0006_future.sql'], m);
-  assert.match(ahead.problems[0], /APPLIED but not pinned: 0006_future\.sql/);
+  const ahead = checkHistory(rec([...NAMES, '0006_future.sql']), m);
+  assert.match(ahead.problems[0], /APPLIED but not pinned: 0006_future/);
   assert.deepEqual(ahead.pending, []);
+});
+
+test('the recorded-name contract: pgmigrations holds names WITHOUT .sql, so a history written with the extension does not match', () => {
+  assert.equal(recordedName('0053_session_token_hash.sql'), '0053_session_token_hash');
+  const m = { version: 1, files: NAMES.map((name) => ({ name, sha256: 'a'.repeat(64) })) };
+  assert.deepEqual(checkHistory(['0001_foundation'], m).problems, []);
+  assert.match(
+    checkHistory(['0001_foundation.sql'], m).problems[0],
+    /HISTORY MISMATCH at position 1/,
+  );
+  // the names the real database recorded (live pgmigrations, 17 Nov 2026), against the real manifest
+  const real = JSON.parse(readFileSync(DEFAULT_MANIFEST, 'utf8'));
+  const live = [
+    '0001_foundation',
+    '0002_markets_and_configuration',
+    '0003_accounts_sessions_and_step_up',
+  ];
+  assert.deepEqual(checkHistory(live, real).problems, []);
+  assert.deepEqual(
+    checkHistory(
+      live.map((n) => `${n}.sql`),
+      real,
+    ).problems.length,
+    3,
+  );
+});
+
+test('the runner is found by path, as pnpm db:migrate does (its package exports map hides the bin from require.resolve)', () => {
+  assert.ok(existsSync(RUNNER_PATH), `the migration runner must be installed at ${RUNNER_PATH}`);
 });
 
 test('a database history that disagrees with the manifest is refused before the runner', async () => {

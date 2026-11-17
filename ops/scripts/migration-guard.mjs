@@ -24,7 +24,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -113,21 +112,28 @@ export function checkDirectory(dir, manifest) {
   return problems;
 }
 
-/** The database history against the manifest: exactly the first N pinned names, in order. Returns { problems, pending }. */
+/** node-pg-migrate records an SQL migration by its file name WITHOUT the .sql extension (pgmigrations.name). */
+export const recordedName = (fileName) => fileName.replace(/\.sql$/, '');
+
+/**
+ * The database history against the manifest: exactly the first N pinned names, in order.
+ * `applied` holds names as pgmigrations records them (no .sql). Returns { problems, pending } (pending as file names).
+ */
 export function checkHistory(applied, manifest) {
   const problems = [];
-  const names = manifest.files.map((f) => f.name);
+  const files = manifest.files.map((f) => f.name);
+  const recorded = files.map(recordedName);
   applied.forEach((name, i) => {
-    if (i >= names.length)
+    if (i >= recorded.length)
       problems.push(
         `APPLIED but not pinned: ${name} (position ${i + 1}); the database is ahead of this checkout`,
       );
-    else if (name !== names[i])
+    else if (name !== recorded[i])
       problems.push(
-        `HISTORY MISMATCH at position ${i + 1}: the database has ${name}, the manifest expects ${names[i]} (an unknown, skipped or re-ordered version)`,
+        `HISTORY MISMATCH at position ${i + 1}: the database has ${name}, the manifest expects ${recorded[i]} (an unknown, skipped or re-ordered version)`,
       );
   });
-  return { problems, pending: problems.length === 0 ? names.slice(applied.length) : [] };
+  return { problems, pending: problems.length === 0 ? files.slice(applied.length) : [] };
 }
 
 function git(root, args) {
@@ -261,11 +267,25 @@ export async function up(
   return run({ dir });
 }
 
+/** The runner, by path as `pnpm db:migrate` does: the package's exports map does not expose its bin to require.resolve. */
+export const RUNNER_PATH = path.join(
+  REPO_ROOT,
+  'node_modules',
+  'node-pg-migrate',
+  'bin',
+  'node-pg-migrate.js',
+);
+
 function defaultRun({ dir }) {
-  const bin = createRequire(import.meta.url).resolve('node-pg-migrate/bin/node-pg-migrate.js');
+  if (!existsSync(RUNNER_PATH)) {
+    console.log(
+      `REFUSED: the migration runner is not installed (${RUNNER_PATH}); nothing was applied`,
+    );
+    return 1;
+  }
   const r = spawnSync(
     process.execPath,
-    [bin, '-d', 'DATABASE_URL_MIGRATE', '-m', dir, '-j', 'sql', 'up'],
+    [RUNNER_PATH, '-d', 'DATABASE_URL_MIGRATE', '-m', dir, '-j', 'sql', 'up'],
     { stdio: 'inherit', env: process.env },
   );
   return r.status ?? 1;
