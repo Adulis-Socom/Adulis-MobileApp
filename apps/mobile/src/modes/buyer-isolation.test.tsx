@@ -276,6 +276,71 @@ describe('a link that asks sign-in to return somewhere else', () => {
     }));
 });
 
+/** On the sign-in screen: the phone, then Send code. Leaves the code entry open. */
+async function requestCode() {
+  await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+  await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+  await screen.findByLabelText(en['auth.code.label']);
+}
+
+/** On the code entry: the code, then Verify. */
+async function enterCode() {
+  await fireEvent.changeText(screen.getByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+  await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+}
+
+describe('a guest who signs in from a link that names a return destination', () => {
+  // A destination that is not allow-listed ends on You; an allow-listed one is followed. The Seller,
+  // Courier, diagnostics, Delete Account and conversation routes the links name are never opened.
+  const CASES = [
+    ['/seller', '/account'],
+    ['/seller/orders', '/account'],
+    ['/courier', '/account'],
+    ['/dev', '/account'],
+    ['/account/delete', '/account'],
+    [`/chat/${REF}`, '/account'],
+    ['https://evil.example', '/account'],
+    ['/saved', '/saved'],
+    ['/orders', '/orders'],
+  ] as const;
+  const landing = (lands: (typeof CASES)[number][1]) =>
+    lands === '/saved'
+      ? screen.findByText(en['buyer.saved.private'])
+      : lands === '/orders'
+        ? screen.findByText(en['buyer.orders.coming'])
+        : screen.findByRole('button', { name: en['common.signOut'] });
+
+  it.each(CASES)('returnTo=%s ends on %s, with no Seller or conversation request', (target, lands) =>
+    asRelease(async () => {
+      installAccount({ seller: true, courier: true });
+      await renderRouter(APP_DIR, { initialUrl: `/auth/sign-in?returnTo=${encodeURIComponent(target)}` });
+      await requestCode();
+      // The code screen is handed the checked destination, never the link's own value.
+      expect(screen).toHaveSearchParams({ phone: PHONE, returnTo: lands });
+      await enterCode();
+      expect(await landing(lands)).toBeOnTheScreen();
+      expect(screen).toHavePathname(lands);
+      await quiet();
+      expectNoSellerTraffic();
+      expect(api.calls.filter((c) => c.path.startsWith('/v1/conversations'))).toEqual([]);
+    }),
+  );
+
+  it('a link that rewrites the destination of the open code screen is checked again when sign-in finishes', () =>
+    asRelease(async () => {
+      installAccount({ seller: true });
+      await renderRouter(APP_DIR, { initialUrl: '/auth/sign-in' });
+      await requestCode();
+      await act(() => router.setParams({ returnTo: '/seller/orders' }));
+      expect(screen).toHaveSearchParams({ phone: PHONE, returnTo: '/seller/orders' });
+      await enterCode();
+      expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      expect(screen).toHavePathname('/account');
+      await quiet();
+      expectNoSellerTraffic();
+    }));
+});
+
 const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name });
 
 const CONVERSATION_ID = 'c0000000-0000-4000-8000-000000000001';
@@ -347,10 +412,8 @@ function installTwoAccounts({ firstHasStore = false }: { firstHasStore?: boolean
 /** From a guest prompt: Sign in, the second Account's phone and code. Returns to where the prompt came from. */
 async function signInAsSecondAccount() {
   await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
-  await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
-  await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
-  await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
-  await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+  await requestCode();
+  await enterCode();
 }
 
 /** The requests made after the one that signed the first Account out. */
