@@ -67,7 +67,7 @@ const FIXED_HEIGHTS = [
   ['buyer/ProductPicker.tsx', 'height: 56', 'product thumbnail (image)'],
   ['buyer/ProductPicker.tsx', 'height: 56', 'product thumbnail placeholder (empty)'],
   ['buyer/ProductPicker.tsx', 'minHeight: 64', 'a minimum, grows with the name and availability'],
-  ['buyer/SceneCard.tsx', 'height: theme.touchTarget', 'seller avatar: at most two initials, never wrapped text'],
+  ['buyer/SceneCard.tsx', 'height: theme.touchTarget', 'seller avatar: a fixed circle holding at most two initials'],
   ['buyer/SceneExplorer.tsx', 'height: PREVIEW_SIZE', 'product preview (image)'],
   ['buyer/SceneExplorer.tsx', 'minHeight: 28', 'a minimum for the number badge, grows'],
   ['buyer/SearchResults.tsx', 'height: theme.touchTarget * 1.25', 'result thumbnail (image)'],
@@ -146,7 +146,8 @@ describe('text clamps', () => {
 /**
  * Motion the app itself starts. Spinners and pull-to-refresh are drawn by the platform, scrolling to a
  * channel is not animated, and screen transitions are the navigator's. The Product picker's modal slide
- * is the one transition the app asks for by name; anything new must say how it follows the reduced-motion setting.
+ * (animationType) is the one transition the app asks for by name, and a Modal opened with a presentation style is
+ * drawn by the platform; anything new must say how it follows the reduced-motion setting.
  */
 const MOTION = [['buyer/ProductPicker.tsx', 'animationType="slide"', 'Modal presentation drawn by the platform']] as const;
 

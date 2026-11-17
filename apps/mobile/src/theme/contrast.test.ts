@@ -58,7 +58,7 @@ const STATE_PAIRS: readonly Pair[] = [
   ['textSecondary', 'surface', 'the inactive tab icon'],
 ];
 
-/** Separators and resting outlines: no contrast target has been set for these by a token decision. */
+/** Separators and resting outlines: these roles are not asserted against a contrast target here; the target is a token decision. */
 const OUTLINE_ROLES: readonly Role[] = ['border', 'borderStrong', 'infoBorder'];
 
 const MODES = ['light', 'dark'] as const;
