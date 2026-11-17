@@ -469,7 +469,7 @@ function afterSignOut() {
 }
 
 describe('signing out', () => {
-  it('turns every screen opened earlier into its guest state, and Back reveals nothing of the Account', () =>
+  it('turns the tabs and the Messages list opened earlier into their guest state, and Back reveals nothing of the Account through them', () =>
     asRelease(async () => {
       signedIn();
       installTwoAccounts();
