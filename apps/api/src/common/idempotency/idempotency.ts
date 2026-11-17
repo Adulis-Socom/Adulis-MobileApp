@@ -115,9 +115,11 @@ export class IdempotencyService {
    * `standingSeller` (the selected seller of an account request): the replay
    * is served only while the account still stands in that seller -- its
    * Owner, or a team member neither suspended nor revoked, the predicate
-   * fn_has_permission reads. An Owner whose ownership transfer is due but not
-   * yet activated does not stand: activation happens only inside a handler
-   * transaction, which a replay never opens. Otherwise null: the handler runs
+   * fn_has_permission reads. An account with an ownership transfer away from
+   * that seller that is due but not yet activated does not stand at all,
+   * through either arm: activation happens only inside a handler transaction,
+   * which a replay never opens, and it can change every role the account
+   * holds there (SEC-003 review A-1). Otherwise null: the handler runs
    * and decides (fn_has_permission's 403 or 404 on a seller-authorised
    * path); were it to pass, the existing record still refuses a second
    * commit (the unique-collision path).
@@ -143,33 +145,33 @@ export class IdempotencyService {
       SELECT r.request_hash, r.response_status, r.response_body,
              r.expires_at > now() AS live,
              (${standingSeller}::uuid IS NULL
-              OR EXISTS (
-                SELECT 1 FROM (
-                  SELECT 'OWNER'::core.team_role AS role
-                    FROM core.seller s
-                   WHERE s.id = ${standingSeller}::uuid
-                     AND s.owner_account_id = ${actor.id}::uuid
-                     AND NOT EXISTS (
-                       SELECT 1 FROM core.seller_ownership_transfer t
-                        WHERE t.seller_id = s.id
-                          AND t.from_account_id = ${actor.id}::uuid
-                          AND t.activates_at <= now()
-                          AND t.activated_at IS NULL
-                          AND t.cancelled_at IS NULL)
-                  UNION ALL
-                  SELECT tm.role FROM core.seller_team_member tm
-                   WHERE tm.seller_id = ${standingSeller}::uuid
-                     AND tm.account_id = ${actor.id}::uuid
-                     AND tm.suspended_at IS NULL
-                     AND tm.revoked_at IS NULL) standing_role
-                WHERE NOT EXISTS (
-                  SELECT 1 FROM unnest(${sql.val(grants)}::text[]) AS g(code)
-                   WHERE NOT EXISTS (
-                     SELECT 1 FROM core.role_permission rp
-                       JOIN core.permission p ON p.code = rp.permission_code
-                      WHERE rp.role = standing_role.role
-                        AND rp.permission_code = g.code
-                        AND ${audience}::core.session_audience = ANY(p.surfaces))))) AS standing
+              OR (NOT EXISTS (
+                    SELECT 1 FROM core.seller_ownership_transfer t
+                     WHERE t.seller_id = ${standingSeller}::uuid
+                       AND t.from_account_id = ${actor.id}::uuid
+                       AND t.activates_at <= now()
+                       AND t.activated_at IS NULL
+                       AND t.cancelled_at IS NULL)
+                  AND EXISTS (
+                    SELECT 1 FROM (
+                      SELECT 'OWNER'::core.team_role AS role
+                        FROM core.seller s
+                       WHERE s.id = ${standingSeller}::uuid
+                         AND s.owner_account_id = ${actor.id}::uuid
+                      UNION ALL
+                      SELECT tm.role FROM core.seller_team_member tm
+                       WHERE tm.seller_id = ${standingSeller}::uuid
+                         AND tm.account_id = ${actor.id}::uuid
+                         AND tm.suspended_at IS NULL
+                         AND tm.revoked_at IS NULL) standing_role
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM unnest(${sql.val(grants)}::text[]) AS g(code)
+                       WHERE NOT EXISTS (
+                         SELECT 1 FROM core.role_permission rp
+                           JOIN core.permission p ON p.code = rp.permission_code
+                          WHERE rp.role = standing_role.role
+                            AND rp.permission_code = g.code
+                            AND ${audience}::core.session_audience = ANY(p.surfaces)))))) AS standing
         FROM core.idempotency_record r
        WHERE r.key = ${key} AND r.actor_kind = ${actor.kind}
          AND r.actor_id = ${actor.id} AND r.endpoint = ${endpoint}`.execute(this.db);
