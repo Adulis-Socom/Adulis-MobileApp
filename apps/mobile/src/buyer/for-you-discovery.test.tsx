@@ -29,6 +29,21 @@ import { resetSecureStore } from '../testing/secure-store-mock';
 const APP_DIR = 'src/app';
 
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
+// FlashList collapses cards that share a key when it draws them, so a Scene listed twice would
+// never show in the rendered text: the list's own data is recorded here and judged instead.
+jest.mock('@shopify/flash-list', () => {
+  const actual = jest.requireActual('@shopify/flash-list');
+  const react = jest.requireActual('react');
+  const recorded = { data: [] as unknown[] };
+  return {
+    ...actual,
+    recorded,
+    FlashList: (props: { data?: readonly unknown[]; testID?: string }) => {
+      if (props.testID === 'for-you-list') recorded.data = [...(props.data ?? [])];
+      return react.createElement(actual.FlashList, props);
+    },
+  };
+});
 jest.setTimeout(60_000);
 
 const FEED = 'GET /v1/fyp';
@@ -61,7 +76,12 @@ const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'bu
 const channel = (name: string) => screen.getByRole('tab', { name });
 const pullToRefresh = () =>
   act(() => (screen.getByTestId('for-you-list').props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
-/** The Scene cards drawn, in order: a short feed draws all of them, so a repeat would show. */
+const flashList = () => jest.requireMock('@shopify/flash-list') as { recorded: { data: FypUnit[] } };
+/** The Scenes the list was given, in order: what it would draw if it drew them all. */
+const listed = () => flashList().recorded.data.map((unit) => unit.public_ref);
+const refsOf = (...numbers: number[]) => numbers.map((n) => fypUnit(n).public_ref);
+const tallRefs = (...extra: number[]) => [...firstPage.map((unit) => unit.public_ref), ...refsOf(...extra)];
+/** The Scene cards drawn, in order (the short feeds draw them all). */
 const stores = () => screen.queryAllByText(/^Store \d+$/).map((node) => node.props.children as string);
 const loadMoreButton = () => screen.getByRole('button', { name: en['buyer.for_you.load_more'] });
 const pressLoadMore = async () => {
@@ -80,6 +100,7 @@ const openTallFeed = async () => {
 };
 
 beforeEach(() => {
+  flashList().recorded.data = [];
   jest.clearAllMocks();
   resetSecureStore();
   api = installFakeApi();
@@ -98,6 +119,7 @@ describe('paging a feed whose pages repeat or run dry', () => {
     await renderRouter(APP_DIR);
     expect(await screen.findByText('Store 4')).toBeOnTheScreen();
     await settle();
+    expect(listed()).toEqual(refsOf(1, 2, 3, 4));
     expect(stores()).toEqual(['Store 1', 'Store 2', 'Store 3', 'Store 4']);
     expect(screen.getByText(en['buyer.for_you.end'])).toBeOnTheScreen();
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-B' }, { cursor: 'cursor-C' }]);
@@ -116,9 +138,11 @@ describe('paging a feed whose pages repeat or run dry', () => {
       expect(feedCalls().at(-1)?.query).toEqual({ cursor });
       expect(screen.queryByText(en['buyer.for_you.end'])).not.toBeOnTheScreen();
       expect(loadMoreButton()).toBeEnabled();
+      expect(listed()).toEqual(tallRefs());
     }
     await pressLoadMore();
     expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs(21));
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-B' }, { cursor: 'cursor-C' }]);
   });
 
@@ -133,6 +157,7 @@ describe('paging a feed whose pages repeat or run dry', () => {
     expect(screen.queryByRole('button', { name: en['buyer.for_you.load_more'] })).not.toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.for_you.empty'])).not.toBeOnTheScreen();
     expect(screen.queryByText(new RegExp(en['buyer.for_you.more_failed']))).not.toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs());
     expect(screen.getByText('Store 1')).toBeOnTheScreen();
     await settle();
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }]);
@@ -151,10 +176,11 @@ describe('paging a feed whose pages repeat or run dry', () => {
     await settle();
     // The same failure again: the cards and the way to try again are both still there.
     expect(await screen.findByText(failed)).toBeOnTheScreen();
-    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs());
     expect(retryButton()).toBeEnabled();
     await fireEvent.press(retryButton());
     expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs(21));
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-A' }, { cursor: 'cursor-A' }]);
   });
 
@@ -169,9 +195,10 @@ describe('paging a feed whose pages repeat or run dry', () => {
     expect(
       await screen.findByText(`${en['buyer.for_you.more_failed']} ${en['common.offline']}`, {}, { timeout: 10_000 }),
     ).toBeOnTheScreen();
-    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs());
     await fireEvent.press(retryButton());
     expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs(21));
     expect(queries()).toHaveLength(5);
   });
 
@@ -187,9 +214,11 @@ describe('paging a feed whose pages repeat or run dry', () => {
       await settle();
       expect(feedCalls()).toHaveLength(1); // paused, not spent
       expect(screen.queryByText(en['buyer.for_you.end'])).not.toBeOnTheScreen();
+      expect(listed()).toEqual(tallRefs());
       await act(async () => onlineManager.setOnline(true));
       expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
       await settle();
+      expect(listed()).toEqual(tallRefs(21));
       expect(queries()).toEqual([{}, { cursor: 'cursor-A' }]);
     } finally {
       await act(async () => onlineManager.setOnline(true));
@@ -208,10 +237,11 @@ describe('paging a feed whose pages repeat or run dry', () => {
     });
     await renderRouter(APP_DIR);
     await screen.findByText('Store 3');
-    expect(stores()).toEqual(['Store 1', 'Store 2', 'Store 3']);
+    expect(listed()).toEqual(refsOf(1, 2, 3));
     await pullToRefresh();
     expect(await screen.findByText('Store 4')).toBeOnTheScreen();
     await settle();
+    expect(listed()).toEqual(refsOf(2, 3, 4));
     expect(stores()).toEqual(['Store 2', 'Store 3', 'Store 4']);
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }, {}, { cursor: 'cursor-B' }]);
   });
@@ -239,6 +269,7 @@ describe('leaving For You and coming back', () => {
     expect(await screen.findByText(en['buyer.for_you.end'], {}, { timeout: 5000 })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
     expect(screen.queryByRole('button', { name: en['buyer.for_you.load_more'] })).not.toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs(21, 22));
     expect(screen.getByText('Store 1')).toBeOnTheScreen();
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }]);
   });
@@ -262,6 +293,7 @@ describe('leaving For You and coming back', () => {
     await fireEvent.press(bottomTab(en['buyer.tab.home']));
     expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: en['buyer.for_you.load_more'] })).not.toBeOnTheScreen();
+    expect(listed()).toEqual(tallRefs(21));
     expect(screen.getByText('Store 1')).toBeOnTheScreen();
     expect(queries()).toEqual([{}, { cursor: 'cursor-A' }]);
   });
@@ -345,6 +377,7 @@ describe('only Scenes, and only what the server sent', () => {
     await renderRouter(APP_DIR);
     expect(await screen.findByText('Store 2')).toBeOnTheScreen();
     await settle();
+    expect(listed()).toEqual(refsOf(1, 2));
     expect(stores()).toEqual(['Store 1', 'Store 2']);
     for (const n of [5, 6, 7, 8, 9]) expect(screen.queryByText(new RegExp(`Item ${n}`))).not.toBeOnTheScreen();
   });
@@ -431,6 +464,7 @@ describe('a Scene that goes private while the app is away', () => {
     await settle();
     expect(await screen.findByText('Store 2', {}, { timeout: 5000 })).toBeOnTheScreen();
     expect(r.getPathname()).toBe('/home/for-you');
+    expect(listed()).toEqual(refsOf(2));
     expect(stores()).toEqual(['Store 2']);
     // One new feed session, started with no cursor: the old one was not continued.
     expect(queries()).toEqual([{}, {}]);

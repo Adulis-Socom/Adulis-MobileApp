@@ -190,6 +190,28 @@ describe('the tagged Products, read again', () => {
     expect(row('Clay jebena')).not.toBeChecked();
     expect(screen.getAllByRole('button', { name: en['buyer.product.view'] })).toHaveLength(1);
   });
+
+  it('a Scene the server serves with every Product unavailable still shows each one, labelled, with nothing to buy: only the server decides what is public', async () => {
+    const soldOut = publicScene(1, {
+      caption: CAPTION,
+      products: [
+        sceneProduct(1, 'woven-basket', 'Woven basket', { available: false, ...price(90000) }),
+        sceneProduct(2, 'cotton-scarf', 'Cotton scarf', { available: false, price_min_minor: null, price_max_minor: null, price_currency: null }),
+      ],
+    });
+    serve(SCENE, ok(soldOut));
+    await openCold();
+    expect(await screen.findByText(CAPTION)).toBeOnTheScreen();
+    const labels = screen.getAllByRole('radio').map((node) => node.props.accessibilityLabel as string);
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).toMatch(/^1\. Woven basket, .+, currently unavailable$/);
+    expect(labels[1]).toBe('2. Cotton scarf, currently unavailable');
+    expect(screen.getAllByText(en['buyer.product.unavailable'])).toHaveLength(2);
+    expect(screen.queryByText(en['buyer.scene.no_products'])).not.toBeOnTheScreen();
+    for (const action of ['Add to cart', 'Buy now', 'Checkout', 'Order']) {
+      expect(screen.queryByRole('button', { name: action })).not.toBeOnTheScreen();
+    }
+  });
 });
 
 describe('the Explorer\'s own states', () => {
