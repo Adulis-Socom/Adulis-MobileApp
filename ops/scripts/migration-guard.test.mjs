@@ -26,6 +26,7 @@ import {
   checkHistory,
   checkManifest,
   checkSource,
+  parseArgs,
   recordedName,
   up,
   verify,
@@ -412,6 +413,62 @@ test('up with --expect-commit refuses on a wrong commit before the runner', asyn
     assert.equal(started, 0);
     assert.match(out.lines.join('\n'), /HEAD is/);
   } finally {
+    f.cleanup();
+  }
+});
+
+test('the command line is strict: a typo never turns a dry run into an apply, a missing value never skips the source check', () => {
+  const sha = 'd45c6e4';
+  assert.deepEqual(parseArgs(['up', '--expect-commit', sha]).flags, { '--expect-commit': sha });
+  assert.deepEqual(parseArgs(['up', '--expect-commit', sha, '--dry-run']).flags, {
+    '--expect-commit': sha,
+    '--dry-run': true,
+  });
+  assert.equal(parseArgs(['up', '--no-source-check']).error, undefined);
+  assert.equal(parseArgs(['verify']).error, undefined);
+  assert.equal(parseArgs(['verify', '--db', '--expect-commit', sha]).error, undefined);
+  assert.equal(parseArgs(['write']).error, undefined);
+  const refused = {
+    'a typo of --dry-run': ['up', '--expect-commit', sha, '--dryrun'],
+    'a typo of --expect-commit': ['up', '--expect-comit', sha],
+    'up without any source rule': ['up'],
+    'up with only --dry-run': ['up', '--dry-run'],
+    'a missing value': ['up', '--expect-commit'],
+    'a value that is a flag': ['up', '--expect-commit', '--dry-run'],
+    'both source rules': ['up', '--expect-commit', sha, '--no-source-check'],
+    'a repeated flag': ['up', '--expect-commit', sha, '--expect-commit', sha],
+    'a flag of another command': ['verify', '--dry-run'],
+    'an argument to write': ['write', '--force'],
+    'an unknown command': ['apply'],
+    'no command': [],
+  };
+  for (const [label, argv] of Object.entries(refused)) {
+    assert.ok(parseArgs(argv).error, `${label} must be refused`);
+  }
+});
+
+test('up refuses when DATABASE_URL_MIGRATE is not set and no history reader is injected', async () => {
+  const f = fixture();
+  const saved = process.env.DATABASE_URL_MIGRATE;
+  delete process.env.DATABASE_URL_MIGRATE;
+  try {
+    write({ dir: f.dir, manifestPath: f.manifestPath, log: quiet });
+    let started = 0;
+    const out = captured();
+    const code = await up(
+      { dir: f.dir, manifestPath: f.manifestPath, root: f.root, log: out.log },
+      {
+        run: () => {
+          started += 1;
+          return 0;
+        },
+      },
+    );
+    assert.equal(code, 1);
+    assert.equal(started, 0);
+    assert.match(out.lines.join('\n'), /DATABASE_URL_MIGRATE is not set/);
+  } finally {
+    if (saved !== undefined) process.env.DATABASE_URL_MIGRATE = saved;
     f.cleanup();
   }
 });

@@ -37,6 +37,10 @@ pnpm db:migrate:guarded --expect-commit <sha>             # every check, then no
 `pnpm db:migrate` is unchanged and unguarded (CI and local development use it on fresh databases). A
 persistent database is upgraded with `db:migrate:guarded`.
 
+The command line is strict. An unknown or repeated flag, a flag without its value, and an `up` without
+`--expect-commit <sha>` (or an explicit `--no-source-check`, for a throwaway database) are refusals with
+exit 2, never defaults: a typo such as `--dryrun` must not turn a dry run into a real apply.
+
 ## Adding a migration
 
 A new migration is pinned in the same change: `node ops/scripts/migration-guard.mjs write`, then commit the

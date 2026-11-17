@@ -325,13 +325,59 @@ export function write({
   return 0;
 }
 
-async function main(argv) {
+const COMMANDS = {
+  verify: { bool: ['--db'], value: ['--expect-commit'] },
+  up: { bool: ['--dry-run', '--no-source-check'], value: ['--expect-commit'] },
+  write: { bool: [], value: [] },
+};
+
+/**
+ * The command line, strictly. An unknown flag, a repeated flag, a flag without its value, and an `up` without
+ * --expect-commit (or an explicit --no-source-check) are refusals, never defaults: a typo such as --dryrun must
+ * not turn a dry run into a real apply, and a missing value must not skip the source check.
+ */
+export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
-  const flag = (n) => rest.includes(n);
-  const val = (n) => {
-    const i = rest.indexOf(n);
-    return i >= 0 ? rest[i + 1] : null;
-  };
+  const spec = COMMANDS[cmd];
+  if (!spec) return { error: `unknown command ${JSON.stringify(cmd ?? null)}` };
+  const flags = {};
+  for (let i = 0; i < rest.length; i += 1) {
+    const a = rest[i];
+    const isBool = spec.bool.includes(a);
+    if (!isBool && !spec.value.includes(a))
+      return { error: `unknown argument ${JSON.stringify(a)} for ${cmd}` };
+    if (a in flags) return { error: `${a} is given twice` };
+    if (isBool) {
+      flags[a] = true;
+    } else {
+      const v = rest[i + 1];
+      if (v === undefined || v.startsWith('--')) return { error: `${a} needs a value` };
+      flags[a] = v;
+      i += 1;
+    }
+  }
+  if (cmd === 'up') {
+    const has = flags['--expect-commit'] !== undefined;
+    if (!has && !flags['--no-source-check'])
+      return { error: 'up needs --expect-commit <sha>, or an explicit --no-source-check' };
+    if (has && flags['--no-source-check'])
+      return { error: '--expect-commit and --no-source-check exclude each other' };
+  }
+  return { cmd, flags };
+}
+
+async function main(argv) {
+  const parsed = parseArgs(argv);
+  if (parsed.error) {
+    console.log(`REFUSED: ${parsed.error}; nothing was applied`);
+    console.log(
+      'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
+    );
+    return 2;
+  }
+  const { cmd, flags } = parsed;
+  const flag = (n) => flags[n] === true;
+  const val = (n) => flags[n] ?? null;
   if (cmd === 'write') return write();
   if (cmd === 'up')
     return up({ expectedCommit: val('--expect-commit'), dryRun: flag('--dry-run') });
