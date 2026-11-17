@@ -203,6 +203,10 @@ export class IdempotencyService {
   /**
    * After losing the commit race: the winner's response, which now exists,
    * served only if it answers THIS request (same hash, not expired).
+   *
+   * INVARIANT: this re-tests no standing and no grant, and must stay reachable only from the unique-violation
+   * path of runIdempotent. That path is entered after the handler ran to its insert in THIS attempt, i.e. after the
+   * handler's own permission statement passed in the same transaction. A caller whose handler refused never gets here.
    */
   async readWinner(
     key: string,

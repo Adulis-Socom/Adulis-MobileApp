@@ -3,7 +3,7 @@ import { Controller, Module, Post, Req, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
 import request from 'supertest';
 import type { Response } from 'express';
 import { AppModule } from '../src/app.module';
@@ -91,10 +91,17 @@ const STEP_UP2 = `${P}2e`;
 const TRANSFER2 = `${P}2f`;
 const SELLER_H = `${P}30`; // owned by OTHER
 const S_OTHER = `${P}31`; // MOBILE
+// Review round 2 (B-02): the race test.
+const MEMBER_16 = `${P}32`; // ADMIN of SELLER_A, demoted while a request of theirs is in flight
+const TM_16 = `${P}33`;
+const S_M16 = `${P}34`; // MOBILE
 const CONSOLE_ORIGIN = 'http://localhost:5173';
 const ACCOUNTS = [
   OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7, MEMBER_13, MEMBER_15,
+  MEMBER_16,
 ];
+/** The latched probe's gate, as in WO-SEC-002's harness: pg_advisory_xact_lock(LATCH_GATE, body.latch). */
+const LATCH_GATE = 0x5ec303;
 const SELLERS = [SELLER_A, SELLER_E, SELLER_F, SELLER_G, SELLER_H];
 const MARKER = 'wo-sec-003:';
 
@@ -150,6 +157,9 @@ class WoSec003Probe {
     executions.set(key, (executions.get(key) ?? 0) + 1);
     await sql`INSERT INTO core.rate_limit_bucket (subject_kind, subject_id, bucket_key, window_start)
               VALUES ('ACCOUNT', ${req.ctx?.accountId}, ${MARKER + key}, clock_timestamp())`.execute(trx);
+    // A latched request waits here, permission passed and marker written, its transaction open and no record yet.
+    const latch = (req.body as { latch?: number } | undefined)?.latch;
+    if (latch !== undefined) await sql`SELECT pg_advisory_xact_lock(${LATCH_GATE}, ${latch})`.execute(trx);
     return { seller_id: req.ctx?.sellerId ?? null, body: req.body, run: randomUUID() };
   }
 }
@@ -235,6 +245,10 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
        VALUES ($1,$4,$5,'ADMIN'), ($2,$4,$6,'ADMIN'), ($3,$7,$8,'ADMIN')`,
       [TM_13, TM_15, TM_G, SELLER_A, MEMBER_13, MEMBER_15, SELLER_G, OWNER],
     );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role) VALUES ($1,$2,$3,'ADMIN')`,
+      [TM_16, SELLER_A, MEMBER_16],
+    );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     const sessions: Array<[string, string, 'MOBILE' | 'CONSOLE']> = [
       [S_OWNER, OWNER, 'MOBILE'],
@@ -250,6 +264,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [S_M13, MEMBER_13, 'MOBILE'],
       [S_M15, MEMBER_15, 'MOBILE'],
       [S_OTHER, OTHER, 'MOBILE'],
+      [S_M16, MEMBER_16, 'MOBILE'],
     ];
     for (const [id, account, audience] of sessions) {
       await admin.query(
@@ -365,6 +380,39 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     ).rows[0];
   const expire = (key: string) =>
     admin.query(`UPDATE core.idempotency_record SET expires_at = now() - interval '1 minute' WHERE key = $1`, [key]);
+
+  // The latch of the race test (WO-SEC-002's harness, INF-03 F2): the test holds the gate on its own connection; a probe
+  // sent with body.latch waits for it after its permission check and marker, its transaction open and no record written.
+  // Progress is read from pg_locks, never from elapsed time.
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  const start = (t: request.Test): Promise<request.Response> => t.then((r) => r);
+  const holdGate = async (latch: number): Promise<{ open: () => Promise<void> }> => {
+    const c = new Client({ connectionString: ADMIN });
+    await c.connect();
+    await c.query('SELECT pg_advisory_lock($1, $2)', [LATCH_GATE, latch]);
+    let opened = false;
+    return {
+      open: async () => {
+        if (opened) return;
+        opened = true;
+        await c.query('SELECT pg_advisory_unlock($1, $2)', [LATCH_GATE, latch]);
+        await c.end();
+      },
+    };
+  };
+  /** Resolves once some session waits for the gate: proof the request got that far. A deadline, not an iteration count. */
+  const waitsOnGate = async (latch: number): Promise<void> => {
+    for (const until = Date.now() + 8_000; Date.now() < until; ) {
+      const r = await admin.query(
+        `SELECT count(*)::int AS n FROM pg_locks
+          WHERE locktype = 'advisory' AND classid = $1::oid AND objid = $2::oid AND objsubid = 2 AND NOT granted`,
+        [LATCH_GATE, latch],
+      );
+      if (r.rows[0].n > 0) return;
+      await sleep(20);
+    }
+    throw new Error(`no session waits on advisory lock (${LATCH_GATE}, ${latch})`);
+  };
 
   describe('F1 -- the current role must still hold the route permission', () => {
     it('R1: a member re-invited at a role without the permission is not served the stored response', async () => {
@@ -545,10 +593,12 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       expect(await records(key)).toBe(1);
     });
 
-    // Recorded residual, pinned as today's behaviour so a change to it is
-    // deliberate: a buyer-side evidence retry that carries X-Adulis-Seller for another store is
-    // judged against that store's grants (claims:read is CONSOLE-only, so on MOBILE no role holds
-    // it); the buyer-side re-run then meets the evidence uniqueness first. Nothing is duplicated.
+    // A CHANGE from the behaviour before this work, pinned so it stays visible until it is decided (an open
+    // product decision: accept it with the client rule "send X-Adulis-Seller only on store-side calls", or
+    // have the check resolve which side a request acts as). Before, the stored 201 was replayed. Now a
+    // buyer-side evidence retry that carries X-Adulis-Seller for a store is judged against that store's
+    // grants (claims:read is CONSOLE-only, so on MOBILE no role holds it); the buyer-side re-run then
+    // meets the evidence uniqueness first and answers 409. Nothing is duplicated.
     it('R17: buyer-side evidence retried with a header naming another store: 409, attached once', async () => {
       const key = randomUUID();
       const ref = randomUUID();
@@ -566,6 +616,36 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       );
       expect(items.rows[0].n).toBe(1);
       expect(await records(key)).toBe(1);
+    });
+  });
+
+  describe('a retry that races an in-flight original is judged on the CURRENT role (review B-02)', () => {
+    it('T1: original in flight, its member demoted, then the same-key retry: 403 and no stored body; the original commits once; a later retry is 403 too', async () => {
+      const key = randomUUID();
+      const body = { n: 71, latch: 71 };
+      const gate = await holdGate(71);
+      try {
+        const original = start(probe(S_M16, SELLER_A, key, body));
+        await waitsOnGate(71); // the original: its permission check passed, marker written, transaction open, no record
+        await reinvite(TM_16, MEMBER_16, 'ANALYST'); // now demoted to a role without the permission
+        const retry = await probe(S_M16, SELLER_A, key, body);
+        expectProblem(retry, 403, 'PERMISSION_DENIED'); // not the original's response (it does not exist yet), not a second run
+        await gate.open();
+        const first = await original;
+        expect(first.status).toBe(201); // the original had passed its own check; the demotion came after
+        expect(first.headers['x-adulis-idempotent-replay']).toBeUndefined();
+        expect(JSON.stringify(retry.body)).not.toContain(first.body.run);
+        expect(executions.get(key)).toBe(1); // the retry was refused before its handler counted an execution
+        expect(await markers(key)).toBe(1);
+        expect(await records(key)).toBe(1);
+        // After the commit the stored response exists; the demoted caller still does not get it.
+        const later = await probe(S_M16, SELLER_A, key, body);
+        expectProblem(later, 403, 'PERMISSION_DENIED');
+        expect(JSON.stringify(later.body)).not.toContain(first.body.run);
+        expect(executions.get(key)).toBe(1);
+      } finally {
+        await gate.open();
+      }
     });
   });
 

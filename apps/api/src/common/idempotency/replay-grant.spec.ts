@@ -27,9 +27,17 @@ import { requiresSellerContext } from '../auth/auth.guard';
  *     route: it appears in the route method, in a module method that route
  *     calls (followed three calls deep through this.x(...) / this.y.x(...)),
  *     or in a database function one of those bodies names.
+ *  4. The declared set of EVERY seller-acting route is exactly the reviewed one
+ *     (EXPECTED_REPLAY_GRANTS): a code added to a handler without being declared
+ *     here, a code dropped from a declaration, or a route added or removed,
+ *     fails until the table is edited on purpose. Item 3 alone only proves a
+ *     declared code is reachable, not that every code a handler asserts is
+ *     declared, and a declaration weaker than its handler would let a demoted
+ *     caller be served.
  *
  * What it does NOT guarantee: that a code is asserted rather than merely
- * mentioned on that path; routes on paths it cannot read (non-literal
+ * mentioned on that path; that a table entry equals what its handler asserts
+ * (reviewed by hand, and by the behavioural suite on four real routes); routes on paths it cannot read (non-literal
  * decorator arguments, aliased decorator imports, files not named
  * *.controller.ts under src/modules); or a new store-side route outside
  * /v1/seller that is missing from STORE_SIDE_ROUTES. The e2e suite
@@ -43,6 +51,47 @@ const MIGRATIONS = join(REPO, 'db', 'migrations');
 
 /** Seller-side writes outside /v1/seller: the side is chosen by X-Adulis-Seller. */
 const STORE_SIDE_ROUTES = new Set(['POST /v1/conversations/:id/messages', 'POST /v1/claims/:id/evidence']);
+
+/**
+ * Every seller-acting idempotent route and the exact permission codes its handler asserts, as declared
+ * with @ReplayGrant, reviewed route by route (SEC-003 review). Edit it on purpose, in the change that
+ * edits the route: it is the one place where a declaration weaker than its handler would be noticed.
+ */
+const EXPECTED_REPLAY_GRANTS: Readonly<Record<string, readonly string[]>> = {
+  'POST /v1/billing/mark-transferred': ['seller.subscription:update'],
+  'POST /v1/billing/purchase-intent': ['seller.subscription:update'],
+  'POST /v1/claims/:id/evidence': ['seller.claims:read'],
+  'POST /v1/conversations/:id/messages': ['seller.messages:read', 'seller.messages:send'],
+  'POST /v1/seller/claims/:id/remedy': ['seller.claims:respond'],
+  'POST /v1/seller/closure': ['seller.store:write'],
+  'POST /v1/seller/couriers': ['seller.couriers:manage'],
+  'POST /v1/seller/deletion': ['seller.account:delete'],
+  'POST /v1/seller/orders/:id/courier-assignment': ['seller.couriers:manage'],
+  'POST /v1/seller/orders/:id/custody-transfer': ['seller.handoff:custody_transfer'],
+  'POST /v1/seller/orders/:id/payment/confirm': ['seller.payment:confirm'],
+  'POST /v1/seller/orders/:id/payment/reject': ['seller.payment:confirm'],
+  'POST /v1/seller/orders/:id/ready': ['seller.order_ready:update'],
+  'POST /v1/seller/orders/:id/refunds': ['seller.refunds:report'],
+  'POST /v1/seller/orders/:id/reissue-instructions': ['seller.orders:reissue_instructions'],
+  'POST /v1/seller/orders/:id/reservations/:rid/cancel': ['seller.orders:respond'],
+  'POST /v1/seller/ownership-transfer': ['seller.ownership:transfer'],
+  'POST /v1/seller/payout': ['seller.payout:update'],
+  'POST /v1/seller/products': ['seller.products:write'],
+  'POST /v1/seller/products/:id/images': ['seller.media:write'],
+  'POST /v1/seller/products/:id/publish': ['seller.products:publish'],
+  'POST /v1/seller/products/:id/social-posts': ['seller.products:write'],
+  'POST /v1/seller/products/:id/unpublish': ['seller.products:publish'],
+  'POST /v1/seller/products/:id/variants': ['seller.products:write'],
+  'POST /v1/seller/products/:id/video': ['seller.media:write'],
+  'POST /v1/seller/scene-posts': ['seller.broadcasts:send', 'seller.media:write'],
+  'POST /v1/seller/scene-posts/:id/image-uploads': ['seller.broadcasts:send', 'seller.media:write'],
+  'POST /v1/seller/scene-posts/:id/publish': ['seller.broadcasts:send', 'seller.media:write'],
+  'POST /v1/seller/social-accounts': ['seller.store:write'],
+  'POST /v1/seller/social-accounts/:id/verify': ['seller.store:write'],
+  'POST /v1/seller/team': ['seller.staff:admin'],
+  'POST /v1/seller/variants/:id/confirm-stock': ['seller.stock:write'],
+  'POST /v1/seller/variants/:id/stock': ['seller.stock:write'],
+};
 
 /** check() callers outside runIdempotent, each on a route that never acts as a store. */
 const MANUAL_CHECK_SITES = new Map([
@@ -240,6 +289,22 @@ describe('the replay re-check cannot be skipped by omission (SEC-003)', () => {
     expect(declared).toHaveLength(33);
     expect(new Set(declared).size).toBe(33);
     for (const r of STORE_SIDE_ROUTES) expect(declared).toContain(r);
+  });
+
+  it('the declared set of every seller-acting route is exactly the reviewed one, in both directions', () => {
+    const actual = Object.fromEntries(
+      all
+        .filter(mustDeclare)
+        .map((r) => [r.route, [...(r.grants ?? [])].sort()] as const)
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+    const expected = Object.fromEntries(
+      Object.entries(EXPECTED_REPLAY_GRANTS)
+        .map(([route, codes]) => [route, [...codes].sort()] as const)
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+    expect(actual).toEqual(expected);
+    expect(Object.keys(EXPECTED_REPLAY_GRANTS)).toHaveLength(33);
   });
 
   it('declarations sit only where the lookup evaluates them', () => {
