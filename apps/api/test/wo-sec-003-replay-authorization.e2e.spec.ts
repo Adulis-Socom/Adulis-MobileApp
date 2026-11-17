@@ -91,7 +91,7 @@ const STEP_UP2 = `${P}2e`;
 const TRANSFER2 = `${P}2f`;
 const SELLER_H = `${P}30`; // owned by OTHER
 const S_OTHER = `${P}31`; // MOBILE
-// Review round 2 (B-02): the race test.
+// The race test: a member demoted while a request of theirs is in flight.
 const MEMBER_16 = `${P}32`; // ADMIN of SELLER_A, demoted while a request of theirs is in flight
 const TM_16 = `${P}33`;
 const S_M16 = `${P}34`; // MOBILE
@@ -619,7 +619,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     });
   });
 
-  describe('a retry that races an in-flight original is judged on the CURRENT role (review B-02)', () => {
+  describe('a retry that races an in-flight original is judged on the CURRENT role', () => {
     it('T1: original in flight, its member demoted, then the same-key retry: 403 and no stored body; the original commits once; a later retry is 403 too', async () => {
       const key = randomUUID();
       const body = { n: 71, latch: 71 };

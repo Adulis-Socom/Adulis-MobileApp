@@ -119,7 +119,7 @@ export class IdempotencyService {
    * that seller that is due but not yet activated does not stand at all,
    * through either arm: activation happens only inside a handler transaction,
    * which a replay never opens, and it can change every role the account
-   * holds there (SEC-003 review A-1). Otherwise null: the handler runs
+   * holds there (SEC-003). Otherwise null: the handler runs
    * and decides (fn_has_permission's 403 or 404 on a seller-authorised
    * path); were it to pass, the existing record still refuses a second
    * commit (the unique-collision path).
