@@ -102,7 +102,9 @@ describe('applyGuardSecurity', () => {
   it('declares the credentials the guard accepts', () => {
     const document = build();
     applyGuardSecurity(document, CONTROLLERS);
-    expect(document.paths['/mixed/closed']?.get?.security).toEqual(GUARD_SECURITY);
+    // Written out, not compared with the constant under test: either credential authenticates (cookie or bearer).
+    expect(document.paths['/mixed/closed']?.get?.security).toEqual([{ cookie: [] }, { bearer: [] }]);
+    expect(GUARD_SECURITY).toEqual([{ cookie: [] }, { bearer: [] }]);
   });
 
   it('keeps the security a route already declares', () => {

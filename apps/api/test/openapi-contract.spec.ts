@@ -23,6 +23,14 @@ const op = (r: Route) => {
 };
 const label = (r: Route) => `${r.http.toUpperCase()} ${r.path}`;
 
+/** The guard accepts a session cookie (console) or a bearer token (mobile): either one authenticates. Written out, not imported, so the test cannot agree with a changed constant. */
+const EITHER_CREDENTIAL = [{ cookie: [] }, { bearer: [] }];
+/** Operations that declare their own security, kept as authored: Collections (bearer) and the seller scene posts (cookie). */
+const OWN_SECURITY: ReadonlyArray<readonly [RegExp, object[]]> = [
+  [/^\w+ \/v1\/collections(\/|:|$)/, [{ bearer: [] }]],
+  [/^\w+ \/v1\/seller\/scene-posts(\/|$)/, [{ cookie: [] }]],
+];
+
 describe('contracts/openapi.json against the controllers', () => {
   it('lists exactly the controller routes', () => {
     const declared = Object.entries(contract.paths).flatMap(([p, item]) => Object.keys(item).map((m) => `${m} ${p}`));
@@ -55,10 +63,24 @@ describe('contracts/openapi.json against the controllers', () => {
     const wrong = inScope.flatMap((r) => {
       const security = op(r).security;
       if (r.isPublic) return security ? [`${label(r)} is public and declares security`] : [];
-      const schemes = (security ?? []).flatMap((s) => Object.keys(s));
-      return schemes.length > 0 && schemes.every((s) => s === 'bearer' || s === 'cookie') ? [] : [`${label(r)} is protected and declares ${JSON.stringify(security)}`];
+      const expected = OWN_SECURITY.find(([re]) => re.test(label(r)))?.[1] ?? EITHER_CREDENTIAL;
+      return JSON.stringify(security) === JSON.stringify(expected) ? [] : [`${label(r)} declares ${JSON.stringify(security)}, expected ${JSON.stringify(expected)}`];
     });
     expect(wrong).toEqual([]);
+  });
+
+  it('pins the exact security shapes: 69 operations accept either credential, 9 only a bearer token, 6 only the session cookie', () => {
+    const shapes = new Map<string, number>();
+    for (const [, item] of Object.entries(contract.paths)) {
+      for (const o of Object.values(item)) {
+        if (o.security) shapes.set(JSON.stringify(o.security), (shapes.get(JSON.stringify(o.security)) ?? 0) + 1);
+      }
+    }
+    expect(Object.fromEntries(shapes)).toEqual({
+      [JSON.stringify(EITHER_CREDENTIAL)]: 69,
+      [JSON.stringify([{ bearer: [] }])]: 9,
+      [JSON.stringify([{ cookie: [] }])]: 6,
+    });
   });
 
   it('keeps a query parameter required only where the handler refuses its absence', () => {
