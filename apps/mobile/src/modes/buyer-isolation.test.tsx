@@ -110,3 +110,167 @@ describe('a guest on an Account-bound route', () => {
     expect(memory.has(TOKEN_KEY)).toBe(false);
   });
 });
+
+// A store the Account would see if the Seller gate ever let a request through.
+const STORE = { id: 'aaaaaaaa-0000-4000-8000-00000000000a', handle: 'store-a', store_name: 'Store A', status: 'ACTIVE', role: 'OWNER', created_at: '2026-11-01T08:00:00.000Z' };
+
+/** The server's side of one Account: whether it may use the Seller Companion, whether Courier is on. */
+function installAccount({ seller, courier = false }: { seller: boolean; courier?: boolean }) {
+  api.on('GET /v1/bootstrap', (call) => {
+    if (!call.headers.Authorization) return ok(bootstrapBody());
+    return ok(bootstrapBody({ account_context: { ...SIGNED_IN_CONTEXT, seller_companion: { available: seller }, courier: { available: courier } } }));
+  });
+  api.on('GET /v1/seller/list', () => ok({ data: [STORE] }));
+  api.on('GET /v1/seller/orders', () => ok({ data: [], has_more: false, next_cursor: null }));
+  api.on('GET /v1/conversations', () => ok({ data: [], next_cursor: null }));
+  api.on('GET /v1/notifications', () => ok({ data: [], next_cursor: null }));
+}
+
+function expectNoSellerTraffic() {
+  expect(sellerCalls()).toEqual([]);
+  expect(api.calls.filter(sellerScoped)).toEqual([]);
+  expect(screen.queryByText(STORE.store_name)).not.toBeOnTheScreen();
+  expect(screen.queryByText(en['seller.title'])).not.toBeOnTheScreen();
+  expect(useUiStore.getState().activeMode).not.toBe('seller');
+}
+
+const SELLER_ROUTES = ['/seller', '/seller/orders', `/seller/orders/${ORDER}`, '/seller/messages', `/seller/messages/${REF}`, '/seller/notifications'];
+const HIDDEN_ROUTES = ['/courier', '/dev', '/_sitemap'];
+
+describe('a signed-in Buyer without Seller access, on a release build', () => {
+  beforeEach(() => {
+    signedIn();
+    installAccount({ seller: false });
+  });
+
+  it.each(SELLER_ROUTES)('%s opened cold fails closed: no Seller screen and no Seller request', (path) =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: path });
+      expect(await screen.findByText(en['seller.gate.unavailable'])).toBeOnTheScreen();
+      await quiet();
+      expectNoSellerTraffic();
+    }),
+  );
+
+  it.each(SELLER_ROUTES)('%s arriving as a link into a running app fails closed too', (path) =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      await open(path);
+      expect(await screen.findByText(en['seller.gate.unavailable'])).toBeOnTheScreen();
+      await quiet();
+      expectNoSellerTraffic();
+    }),
+  );
+
+  it('offers no way into Seller mode from You, and a leftover active mode does not add one', () =>
+    asRelease(async () => {
+      useUiStore.setState({ activeMode: 'seller' });
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: en['seller.mode.switch_to_seller'] })).not.toBeOnTheScreen();
+      expect(screen.queryByText(/Seller Companion|Courier|Developer diagnostics/)).not.toBeOnTheScreen();
+      await quiet();
+      expectNoSellerTraffic();
+    }));
+
+  it('leaves the gate to Buyer Home with Switch to Buyer, and the Buyer tabs keep working', () =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
+      await fireEvent.press(await screen.findByRole('button', { name: en['seller.mode.switch_to_buyer'] }));
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      expect(useUiStore.getState().activeMode).toBe('buyer');
+      expectNoSellerTraffic();
+    }));
+
+  it.each(HIDDEN_ROUTES)('%s lands on Buyer Home even when the server also says Courier is available', (path) =>
+    asRelease(async () => {
+      installAccount({ seller: false, courier: true });
+      await renderRouter(APP_DIR, { initialUrl: path });
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
+      expect(useUiStore.getState().activeMode).toBe('buyer');
+      expect(api.calls.filter((c) => /courier/i.test(c.path))).toEqual([]);
+    }),
+  );
+
+  it.each(HIDDEN_ROUTES)('%s arriving as a link into a running app lands on Buyer Home too', (path) =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      await open(path);
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
+    }),
+  );
+});
+
+describe('a signed-in Buyer with Seller access, on a release build', () => {
+  beforeEach(() => {
+    signedIn();
+    installAccount({ seller: true, courier: true });
+  });
+
+  it('still reaches the nested Seller routes, every request scoped to its store, and never Courier or diagnostics', () =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/seller/orders' });
+      expect(await screen.findByText(en['seller.orders.read_only'])).toBeOnTheScreen();
+
+      await open('/seller/messages');
+      expect(await screen.findByText(en['seller.messages.note'])).toBeOnTheScreen();
+      await open('/seller/notifications');
+      await waitFor(() => expect(api.callsTo('GET /v1/notifications').length).toBeGreaterThan(0));
+      await open(`/seller/orders/${ORDER}`);
+      expect(await screen.findByText(en['seller.order.gone'])).toBeOnTheScreen();
+
+      expect(useUiStore.getState().activeMode).toBe('seller');
+      // The list asks which stores there are; every other Seller read names the one store it was read for.
+      const scoped = api.calls.filter((c) => sellerScoped(c) || (c.path.startsWith('/v1/seller') && c.path !== '/v1/seller/list'));
+      expect(scoped.length).toBeGreaterThan(0);
+      for (const call of scoped) expect(call.headers['X-Adulis-Seller']).toBe(STORE.id);
+
+      await open('/courier');
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      await open('/dev');
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen.queryByText(/foundation ready|Developer diagnostics/)).not.toBeOnTheScreen();
+      expect(api.calls.filter((c) => /courier/i.test(c.path))).toEqual([]);
+    }));
+
+  it('shows Switch to Seller on You, and no Courier control', () =>
+    asRelease(async () => {
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      expect(await screen.findByRole('button', { name: en['seller.mode.switch_to_seller'] })).toBeOnTheScreen();
+      expect(screen.queryByText(/Courier|Developer diagnostics/)).not.toBeOnTheScreen();
+    }));
+});
+
+describe('a link that asks sign-in to return somewhere else', () => {
+  it.each(['/seller', '/seller/orders', '/courier', '/dev', '/account/delete', `/chat/${REF}`, 'https://evil.example'])(
+    'returnTo=%s sends a signed-in Buyer to You, never there',
+    (target) =>
+      asRelease(async () => {
+        signedIn();
+        installAccount({ seller: true });
+        await renderRouter(APP_DIR, { initialUrl: `/auth/sign-in?returnTo=${encodeURIComponent(target)}` });
+        expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+        expect(screen).toHavePathname('/account');
+        await quiet();
+        expectNoSellerTraffic();
+        expect(api.calls.filter((c) => c.path.startsWith('/v1/conversations'))).toEqual([]);
+      }),
+  );
+
+  it('an unsafe returnTo on Verify is dropped for a signed-in Buyer as well', () =>
+    asRelease(async () => {
+      signedIn();
+      installAccount({ seller: true });
+      await renderRouter(APP_DIR, { initialUrl: `/auth/verify?phone=${encodeURIComponent(PHONE)}&returnTo=%2Fseller` });
+      expect(await screen.findByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      expect(screen).toHavePathname('/account');
+      expectNoSellerTraffic();
+    }));
+});
