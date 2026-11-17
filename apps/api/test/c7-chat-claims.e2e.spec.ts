@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
+import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
@@ -293,6 +294,7 @@ describe('C7 — chat, claims, reviews', () => {
       const a = await buyerReq('post', '/v1/conversations')
         .send({ seller_id: SELLER })
         .expect(201);
+      expectConforms(a, 'post', '/v1/conversations', true);
       conversationId = a.body.conversation_id;
       const b = await buyerReq('post', '/v1/conversations')
         .send({ seller_id: SELLER })
@@ -304,6 +306,7 @@ describe('C7 — chat, claims, reviews', () => {
       const r = await buyerReq('post', `/v1/conversations/${conversationId}/messages`)
         .send({ text: 'can you engrave initials on the lamp' })
         .expect(201);
+      expectConforms(r, 'post', '/v1/conversations/{id}/messages', true);
       expect(r.body.bot.resolution_path).toBe('ESCALATED');
       const bot = await admin.query(
         `SELECT m.body, bt.escalated FROM chat.message m
@@ -325,6 +328,7 @@ describe('C7 — chat, claims, reviews', () => {
       const chip = await buyerReq('post', `/v1/conversations/${conversationId}/messages`)
         .send({ chip_id: INTENT_PLAIN })
         .expect(201);
+      expectConforms(chip, 'post', '/v1/conversations/{id}/messages', true);
       expect(chip.body.bot).toMatchObject({
         resolution_path: 'CHIP',
         template_key: 'chat.answer.delivery_offered',
@@ -332,6 +336,7 @@ describe('C7 — chat, claims, reviews', () => {
       const kw = await buyerReq('post', `/v1/conversations/${conversationId}/messages`)
         .send({ text: 'Do You Deliver' })
         .expect(201);
+      expectConforms(kw, 'post', '/v1/conversations/{id}/messages', true);
       expect(kw.body.bot.resolution_path).toBe('KEYWORD');
     });
 
@@ -349,16 +354,22 @@ describe('C7 — chat, claims, reviews', () => {
       const r = await buyerReq('post', `/v1/conversations/${open.body.conversation_id}/messages`)
         .send({ text: 'do you deliver' })
         .expect(201);
+      expectConforms(r, 'post', '/v1/conversations/{id}/messages', true);
       expect(r.body.bot).toBeNull();
     });
 
     it('the seller reads and replies through the seller scope; a stranger sees nothing', async () => {
       const list = await sellerReq('get', `/v1/conversations?as=seller&seller_id=${SELLER}`).expect(200);
+      expectConforms(list, 'get', '/v1/conversations', true);
       expect(list.body.data.length).toBeGreaterThan(0);
+      const mine = await buyerReq('get', '/v1/conversations?as=buyer').expect(200);
+      expectConforms(mine, 'get', '/v1/conversations', true);
+      expect(mine.body.data.length).toBeGreaterThan(0);
       await sellerReq('post', `/v1/conversations/${conversationId}/messages`)
         .send({ text: 'Yes, we can engrave initials.' })
         .expect(201);
       const messages = await buyerReq('get', `/v1/conversations/${conversationId}/messages`).expect(200);
+      expectConforms(messages, 'get', '/v1/conversations/{id}/messages', true);
       const kinds = messages.body.data.map((m: { sender_kind: string }) => m.sender_kind);
       expect(kinds).toContain('SELLER');
       const bot = messages.body.data.find((m: { sender_kind: string }) => m.sender_kind === 'BOT');
@@ -371,6 +382,7 @@ describe('C7 — chat, claims, reviews', () => {
 
     it('explicit escalation is free and needs no failed cascade first', async () => {
       const r = await buyerReq('post', `/v1/conversations/${conversationId}/escalate`).expect(200);
+      expectConforms(r, 'post', '/v1/conversations/{id}/escalate', true);
       expect(r.body.escalated).toBe(true);
     });
   });

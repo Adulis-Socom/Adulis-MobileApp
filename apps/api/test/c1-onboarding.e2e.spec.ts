@@ -8,6 +8,7 @@ import {
   FakeSocialPlatformAdapter,
   SOCIAL_PLATFORM_ADAPTER,
 } from '../src/modules/onboarding/social-platform.adapter';
+import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
@@ -572,6 +573,7 @@ describe('C1 — onboarding and verification', () => {
         .set('X-Adulis-Seller', sellerId)
         .send({})
         .expect(200);
+      expectConforms(r, 'post', '/v1/seller/social-accounts/{id}/verify');
       expect(r.body.status).toBe('VERIFIED');
       expect(r.body.follower_count_at_verification).toBe(5000);
       expect(r.body.eligibility.outcome).toBe('SATISFIED');
