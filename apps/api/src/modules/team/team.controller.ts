@@ -17,6 +17,7 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { phone } from '../auth/auth.schemas';
 import { TeamService } from './team.service';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /** C6 — team (ADU-API-01 v1.6 section 12.12). Step-up TEAM_CHANGE on writes. */
 
@@ -44,6 +45,7 @@ export class TeamController {
     return this.tx.run(req as LocalizedRequest, (trx) => this.svc.list(trx, req));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/team')
   @ApiOperation({ summary: 'Invite by phone; the member signs in with their own OTP.' })
   async invite(

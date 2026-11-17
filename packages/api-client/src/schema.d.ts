@@ -2277,6 +2277,52 @@ export interface components {
              */
             server_time: string;
         };
+        BotMessageDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description How the bot arrived at it.
+             * @enum {string|null}
+             */
+            resolution_path: "STRUCTURE" | "CHIP" | "KEYWORD" | "EMBEDDING" | "CLASSIFIER" | "ESCALATED" | null;
+            /** @enum {string} */
+            sender_kind: "BOT";
+            /** Format: date-time */
+            sent_at: string;
+            /** @description Always empty today: a template with slots is escalated, not sent. */
+            slots: {
+                [key: string]: unknown;
+            };
+            /** @description The answer template, or the catalogue key chat.bot.escalated. */
+            template_key: string;
+        };
+        BotTurnDto: {
+            /**
+             * Format: uuid
+             * @description The bot message the turn wrote.
+             */
+            bot_message_id: string;
+            /** @enum {string} */
+            resolution_path: "CHIP" | "KEYWORD" | "EMBEDDING" | "CLASSIFIER" | "ESCALATED";
+            /** @description Always empty today; absent when the turn escalated. */
+            slots?: {
+                [key: string]: unknown;
+            };
+            /** @description The answer template; absent when the turn escalated. */
+            template_key?: string;
+        };
+        BuyerConversationDto: {
+            handle: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_message_at: string;
+            /** Format: uuid */
+            seller_id: string;
+            /** Format: date-time */
+            started_at: string;
+            store_name: string;
+        };
         CategoryDto: {
             /** @description Stable machine-readable code (FASHION, COSMETICS, ELECTRONICS): the Shop and Search filter value. */
             code: string;
@@ -2392,10 +2438,82 @@ export interface components {
             /** @enum {string} */
             type: "PRODUCT_POST" | "SCENE_POST";
         };
+        ConversationEscalatedDto: {
+            /**
+             * Format: uuid
+             * @description The escalation message the bot wrote.
+             */
+            bot_message_id: string;
+            /** @enum {boolean} */
+            escalated: true;
+        };
+        ConversationOpenedDto: {
+            /**
+             * Format: uuid
+             * @description The one conversation of this Buyer and Seller, created now or returned.
+             */
+            conversation_id: string;
+        };
+        ConversationPageDto: {
+            /** @description as=buyer lists BuyerConversationDto, as=seller lists SellerConversationDto. Most recent message first. */
+            data: (components["schemas"]["BuyerConversationDto"] | components["schemas"]["SellerConversationDto"])[];
+            /** @description Pass as cursor for the next page; null at the end. */
+            next_cursor: string | null;
+        };
         CreateScenePostBodyDto: {
             caption?: string;
             /** @description Products of the same Seller, in presentation order. */
             product_ids?: string[];
+        };
+        DeletionBlockerDto: {
+            /** @description The blocker, e.g. NON_TERMINAL_RESERVATIONS. */
+            code: string;
+            message_key: string;
+            resolving_action: components["schemas"]["DeletionResolvingActionDto"];
+            slots: components["schemas"]["DeletionBlockerSlotsDto"];
+            /** @description The store it concerns; absent for an Account-level blocker. */
+            subject?: components["schemas"]["DeletionBlockerSubjectDto"];
+        };
+        DeletionBlockerSlotsDto: {
+            /** @description How many rows block the deletion. */
+            count: number;
+        };
+        DeletionBlockerSubjectDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "SELLER";
+        };
+        DeletionConfirmedDto: {
+            /** @enum {boolean} */
+            deleted: true;
+        };
+        DeletionEffectDto: {
+            code: string;
+            message_key: string;
+        };
+        DeletionPreviewDto: {
+            effects: components["schemas"]["DeletionEffectDto"][];
+            /** @description Empty when nothing blocks the deletion. */
+            items: components["schemas"]["DeletionBlockerDto"][];
+        };
+        DeletionResolvingActionDto: {
+            /** @description A stable key the client localises. */
+            kind: string;
+        };
+        DeletionTicketDto: {
+            /**
+             * Format: date-time
+             * @description Fifteen minutes after it was issued.
+             */
+            expires_at: string;
+            /** @enum {string} */
+            scope: "ACCOUNT_DELETION";
+            /**
+             * Format: uuid
+             * @description Sent as Authorization: Ticket <ticket> to preview and confirm.
+             */
+            ticket: string;
         };
         DevicePatchBodyDto: {
             /** @enum {string} */
@@ -2442,8 +2560,87 @@ export interface components {
             /** @description Product route: /v1/storefronts/{handle}/products/{slug}. */
             slug: string;
         };
+        HumanMessageDto: {
+            body: string;
+            /** Format: uuid */
+            id: string;
+            /** @description The locale it was written in. */
+            locale: string;
+            /**
+             * Format: uuid
+             * @description The Order the message is about.
+             */
+            order_id: string | null;
+            /**
+             * Format: uuid
+             * @description The Product the message is about.
+             */
+            product_id: string | null;
+            /** Format: date-time */
+            read_at: string | null;
+            /** @enum {string} */
+            sender_kind: "BUYER" | "SELLER" | "TEAM_MEMBER";
+            /** Format: date-time */
+            sent_at: string;
+        };
+        MessagePageDto: {
+            /** @description Newest first. */
+            data: (components["schemas"]["BotMessageDto"] | components["schemas"]["HumanMessageDto"])[];
+            /** @description Pass as cursor for the next page; null at the end. */
+            next_cursor: string | null;
+        };
+        MessageSentDto: {
+            /** @description null when the bot did not run: a Seller-side message, or a Seller whose plan has no chatbot. */
+            bot: components["schemas"]["BotTurnDto"] | null;
+            /** Format: uuid */
+            message_id: string;
+        };
         ModeAvailabilityDto: {
             available: boolean;
+        };
+        NotificationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description The locale the notification was enqueued in. */
+            locale: string;
+            /**
+             * Format: uuid
+             * @description The Order it is about, when it is about one.
+             */
+            order_id: string | null;
+            /**
+             * Format: date-time
+             * @description null until it is read.
+             */
+            read_at: string | null;
+            /**
+             * Format: date-time
+             * @description When it was due to be sent; the list is ordered by it, newest first.
+             */
+            scheduled_for: string;
+            /** @description Typed values for the template; never pre-formatted text. */
+            slots: {
+                [key: string]: unknown;
+            };
+            /** @description false: it cannot be switched off by a notification preference. */
+            suppressible: boolean;
+            /** @description The message template; the client renders it from its own catalogue. */
+            template_key: string;
+        };
+        NotificationPageDto: {
+            data: components["schemas"]["NotificationDto"][];
+            /**
+             * Format: date-time
+             * @description Pass as cursor for the next page; null at the end.
+             */
+            next_cursor: string | null;
+        };
+        NotificationReadDto: {
+            /**
+             * Format: date-time
+             * @description When it was first read; a repeat call keeps the original time.
+             */
+            read_at: string;
         };
         OtpRequestBodyDto: {
             /**
@@ -2773,6 +2970,16 @@ export interface components {
             payload: components["schemas"]["SearchSellerDto"];
             /** @enum {string} */
             type: "SELLER";
+        };
+        SellerConversationDto: {
+            /** Format: uuid */
+            buyer_account_id: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_message_at: string;
+            /** Format: date-time */
+            started_at: string;
         };
         SellerSceneDto: {
             /** @description Caption excerpt (140 graphemes). */
@@ -3245,7 +3452,9 @@ export interface operations {
     AuthController_recovery: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3373,7 +3582,9 @@ export interface operations {
     AuthController_stepUpRequest: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3966,8 +4177,10 @@ export interface operations {
         parameters: {
             query: {
                 as: string;
-                cursor: string;
-                seller_id: string;
+                /** @description next_cursor of the previous page. */
+                cursor?: string;
+                /** @description Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer. */
+                seller_id?: string;
             };
             header?: never;
             path?: never;
@@ -3979,14 +4192,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConversationPageDto"];
+                };
             };
         };
     };
     ChatController_open: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3996,14 +4213,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConversationOpenedDto"];
+                };
             };
         };
     };
     ChatController_escalate: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -4015,14 +4236,17 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConversationEscalatedDto"];
+                };
             };
         };
     };
     ChatController_messages: {
         parameters: {
-            query: {
-                cursor: string;
+            query?: {
+                /** @description next_cursor of the previous page. */
+                cursor?: string;
             };
             header?: never;
             path: {
@@ -4036,14 +4260,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessagePageDto"];
+                };
             };
         };
     };
     ChatController_postMessage: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -4055,7 +4283,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageSentDto"];
+                };
             };
         };
     };
@@ -4117,7 +4347,9 @@ export interface operations {
     DeletionController_confirm: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4127,14 +4359,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeletionConfirmedDto"];
+                };
             };
         };
     };
     DeletionController_otpRequest: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4144,7 +4380,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EmptyResponseDto"];
+                };
             };
         };
     };
@@ -4161,7 +4399,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeletionTicketDto"];
+                };
             };
         };
     };
@@ -4178,7 +4418,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeletionPreviewDto"];
+                };
             };
         };
     };
@@ -4253,7 +4495,9 @@ export interface operations {
     AnalyticsController_postEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4324,8 +4568,10 @@ export interface operations {
         parameters: {
             query: {
                 as: string;
-                cursor: string;
-                seller_id: string;
+                /** @description next_cursor of the previous page. */
+                cursor?: string;
+                /** @description Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer. */
+                seller_id?: string;
             };
             header?: never;
             path?: never;
@@ -4337,14 +4583,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationPageDto"];
+                };
             };
         };
     };
     NotificationsController_markRead: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -4356,14 +4606,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationReadDto"];
+                };
             };
         };
     };
     NotificationsController_readAll: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4571,7 +4825,9 @@ export interface operations {
     StorefrontController_resolve: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4599,7 +4855,9 @@ export interface operations {
     ReportsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4703,7 +4961,9 @@ export interface operations {
     OnboardingController_createSeller: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4719,9 +4979,11 @@ export interface operations {
     };
     AnalyticsController_full: {
         parameters: {
-            query: {
-                from: string;
-                to: string;
+            query?: {
+                /** @description YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today). */
+                from?: string;
+                /** @description YYYY-MM-DD. Last day of the window. Default: today. */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -4739,9 +5001,11 @@ export interface operations {
     };
     AnalyticsController_overview: {
         parameters: {
-            query: {
-                from: string;
-                to: string;
+            query?: {
+                /** @description YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today). */
+                from?: string;
+                /** @description YYYY-MM-DD. Last day of the window. Default: today. */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -4793,9 +5057,11 @@ export interface operations {
     };
     OnboardingController_getOverrides: {
         parameters: {
-            query: {
-                from: string;
-                limit: string;
+            query?: {
+                /** @description YYYY-MM-DD. Earliest closure date to list. Default: today. */
+                from?: string;
+                /** @description Page size, 1-50. Default 20. */
+                limit?: string;
             };
             header?: never;
             path?: never;
@@ -4890,7 +5156,9 @@ export interface operations {
     DeletionController_enterClosure: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4994,7 +5262,9 @@ export interface operations {
     DeletionController_deleteSeller: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5062,7 +5332,9 @@ export interface operations {
     OnboardingController_identityVerification: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5395,7 +5667,9 @@ export interface operations {
     OwnershipController_request: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5496,9 +5770,11 @@ export interface operations {
     };
     CatalogueController_listProducts: {
         parameters: {
-            query: {
-                cursor: string;
-                limit: string;
+            query?: {
+                /** @description next_cursor of the previous page. */
+                cursor?: string;
+                /** @description Page size, 1-50. Default 20. */
+                limit?: string;
             };
             header?: never;
             path?: never;
@@ -5550,7 +5826,9 @@ export interface operations {
     CatalogueController_createProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5624,7 +5902,9 @@ export interface operations {
     CatalogueController_images: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5741,7 +6021,9 @@ export interface operations {
     CatalogueController_publishProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5749,7 +6031,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            /** @description The Product is published. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5760,7 +6043,9 @@ export interface operations {
     CatalogueController_attachSocialPost: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5779,7 +6064,9 @@ export interface operations {
     CatalogueController_unpublishProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5787,7 +6074,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            /** @description The Product is unpublished; the row is kept. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5798,7 +6086,9 @@ export interface operations {
     CatalogueController_createVariant: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5817,7 +6107,9 @@ export interface operations {
     CatalogueController_video: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -5825,6 +6117,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description REQUEST_UPLOAD: the signed upload. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description COMMIT: the video is registered. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -6159,7 +6459,9 @@ export interface operations {
     OnboardingController_createSocialAccount: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6176,7 +6478,9 @@ export interface operations {
     OnboardingController_verifySocialAccount: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -6184,7 +6488,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            /** @description The verification attempt is recorded. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6212,7 +6517,9 @@ export interface operations {
     TeamController_invite: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6286,7 +6593,9 @@ export interface operations {
     CatalogueController_confirmStock: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -6294,7 +6603,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: {
+            /** @description Stock confirmed; stock_confirmed_at is reset. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6305,7 +6615,9 @@ export interface operations {
     CatalogueController_writeStock: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -6323,9 +6635,11 @@ export interface operations {
     };
     CatalogueController_listStockEvents: {
         parameters: {
-            query: {
-                cursor: string;
-                limit: string;
+            query?: {
+                /** @description next_cursor of the previous page. */
+                cursor?: string;
+                /** @description Page size, 1-50. Default 20. */
+                limit?: string;
             };
             header?: never;
             path: {

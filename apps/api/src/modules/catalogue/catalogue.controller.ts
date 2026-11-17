@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
@@ -28,6 +28,7 @@ import {
   stockBody,
   videoBody,
 } from './catalogue.schemas';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /** C2 — catalogue, media and stock (ADU-API-01 v1.6 section 12.10). */
 
@@ -63,6 +64,7 @@ export class CatalogueController {
     private readonly svc: CatalogueService,
   ) {}
 
+  @ApiIdempotencyKey()
   @Post('seller/products')
   async createProduct(
     @Req() req: LocalizedRequest,
@@ -85,6 +87,8 @@ export class CatalogueController {
    * there and fails in front of a seller", in the words of the sibling comment
    * below that made the same fix for the image bodies.
    */
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @Get('seller/products')
   @ApiOperation({
     summary: 'The seller list. Carries the card image key and the resolved publication cap.',
@@ -178,6 +182,8 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.patchProduct(trx, req, id, body));
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'The Product is published.' })
   @Post('seller/products/:id/publish')
   @ApiOperation({ summary: '409 with readiness items[] where blocked.' })
   async publishProduct(
@@ -191,6 +197,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.' })
   @Post('seller/products/:id/unpublish')
   @ApiOperation({ summary: 'Removes from the storefront; keeps the row.' })
   async unpublishProduct(
@@ -211,6 +219,7 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.deleteProduct(trx, req, id));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/variants')
   async createVariant(
     @Req() req: LocalizedRequest,
@@ -252,6 +261,7 @@ export class CatalogueController {
    * two ever disagree the zod schema governs, because it is the one that
    * actually refuses a request; this is the description of it.
    */
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/images')
   @ApiOperation({ summary: 'Signed upload then commit \u2014 one catalogued path, two actions.' })
   @ApiParam({ name: 'id', format: 'uuid' })
@@ -375,6 +385,9 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.reorderImages(trx, req, id, body));
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'REQUEST_UPLOAD: the signed upload.' })
+  @ApiResponse({ status: 201, description: 'COMMIT: the video is registered.' })
   @Post('seller/products/:id/video')
   async video(
     @Req() req: LocalizedRequest,
@@ -395,6 +408,7 @@ export class CatalogueController {
     await this.tx.run(req, (trx) => this.svc.deleteVideo(trx, req, id));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/social-posts')
   @ApiOperation({ summary: 'Canonical id resolved server-side; never the URL string.' })
   async attachSocialPost(
@@ -409,6 +423,7 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/variants/:id/stock')
   @ApiOperation({ summary: 'Writes a StockEvent. Never a direct count set.' })
   async writeStock(
@@ -423,6 +438,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.' })
   @Post('seller/variants/:id/confirm-stock')
   @ApiOperation({ summary: 'Resets stock_confirmed_at (S13.3).' })
   async confirmStock(
@@ -436,6 +453,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @Get('seller/variants/:id/stock-events')
   async listStockEvents(
     @Req() req: LocalizedRequest,
