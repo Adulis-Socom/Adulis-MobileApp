@@ -18,8 +18,12 @@ import { CardSaveButton } from './CardSaveButton';
 import { PublicListView, useLargeText } from './PublicListView';
 import { ProductTile } from './SellerProfile';
 
-/** The result types this screen can draw; one a newer server adds is left out, never guessed at. */
-const DRAWN = new Set<string>(['PRODUCT_POST', 'SELLER', 'SCENE_POST']);
+/**
+ * The result types this screen can draw, one entry per member of the generated union (the compiler
+ * refuses a missing or an extra one); a type a newer server adds is left out, never guessed at.
+ */
+export const DRAWN_TYPES = { PRODUCT_POST: true, SELLER: true, SCENE_POST: true } satisfies Record<SearchItem['type'], true>;
+const DRAWN = new Set<string>(Object.keys(DRAWN_TYPES));
 
 /** One result, as a stable key: a type and its public identity. */
 export const searchKey = (item: SearchItem) =>

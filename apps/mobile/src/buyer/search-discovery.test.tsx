@@ -58,8 +58,8 @@ const scene = (n: number, caption: string): SearchItem => {
   const s = sellerScene(n);
   return { type: 'SCENE_POST', payload: { public_ref: s.public_ref, caption, caption_truncated: false, image: s.image, seller: { handle: 'seller-1', store_name: 'Store 1' } } };
 };
-const page = (type: SearchType, items: SearchItem[], next: string | null = null, resolved = true): Reply =>
-  ok({ market_resolved: resolved, type, algorithm_version: 'lexical-trgm-v1', items: resolved ? items : [], next_cursor: next } satisfies SearchPage);
+const page = (type: SearchType, items: SearchItem[], next: string | null = null): Reply =>
+  ok({ market_resolved: true, type, algorithm_version: 'lexical-trgm-v1', items, next_cursor: next } satisfies SearchPage);
 type Ask = { type: SearchType; q: string; cursor: string | undefined; category: string | undefined; authorized: boolean };
 function serve(answer: (ask: Ask) => Reply | Promise<Reply>) {
   api.on(SEARCH, (call) =>

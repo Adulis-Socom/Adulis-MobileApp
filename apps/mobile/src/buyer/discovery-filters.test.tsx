@@ -3,10 +3,11 @@ import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-librar
 
 import { createApiClient } from '../api/client';
 import { useUiStore } from '../state/ui-store';
-import { claimsIn, renderedText } from '../testing/discovery-rules';
-import { installFakeApi, shopProduct, type Reply } from '../testing/fake-api';
+import { claimsIn, controlsShown, renderedText, type Control } from '../testing/discovery-rules';
+import { installFakeApi, sellerScene, shopProduct, type Reply } from '../testing/fake-api';
 import { resetSecureStore } from '../testing/secure-store-mock';
 import { productionSources, repoFile } from '../testing/source-scan';
+import { DRAWN_TYPES } from './SearchResults';
 
 /**
  * The supported-filter matrix as tests: the controls Shop and Search show are exactly the
@@ -19,9 +20,16 @@ jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store
 jest.setTimeout(60_000);
 
 type Parameter = { name: string; in: string; required?: boolean; schema?: { enum?: string[] } };
-type Contract = { paths: Record<string, { get?: { parameters?: Parameter[] } }> };
+type Schema = { properties?: Record<string, { enum?: string[]; items?: { oneOf?: { $ref: string }[] } }> };
+type Contract = { paths: Record<string, { get?: { parameters?: Parameter[] } }>; components: { schemas: Record<string, Schema | undefined> } };
 const contract = JSON.parse(repoFile('contracts/openapi.json')) as Contract;
-const parameters = (path: string) => contract.paths[path]?.get?.parameters ?? [];
+/** A path that is renamed or removed fails every test that reads it, loudly, never as an empty list. */
+const operation = (path: string) => {
+  const op = contract.paths[path]?.get;
+  if (!op) throw new Error(`the contract has no GET ${path}`);
+  return op;
+};
+const parameters = (path: string) => operation(path).parameters ?? [];
 const queryNames = (path: string) => parameters(path).filter((p) => p.in === 'query').map((p) => p.name).sort();
 
 describe('what the contract supports', () => {
@@ -37,7 +45,20 @@ describe('what the contract supports', () => {
   });
 
   it('the category list takes no parameter: the Market is the server\'s', () => {
-    expect(parameters('/v1/categories')).toEqual([]);
+    expect(operation('/v1/categories').parameters).toEqual([]);
+  });
+
+  it('every result type in the Search union is drawn, or listed as deliberately not drawn', () => {
+    const schemas = contract.components.schemas;
+    const refs = schemas['SearchResponseDto']?.properties?.['items']?.items?.oneOf ?? [];
+    const types = refs.map((ref) => schemas[ref.$ref.split('/').pop() ?? '']?.properties?.['type']?.enum?.[0]);
+    expect(types.length).toBeGreaterThan(0);
+    expect(types.every((type) => typeof type === 'string')).toBe(true);
+    // A type recorded as a decision not to draw (none today): to add one, list it here and say why.
+    const deliberatelyUndrawn: readonly string[] = [];
+    expect(types.filter((type) => !(String(type) in DRAWN_TYPES) && !deliberatelyUndrawn.includes(String(type)))).toEqual([]);
+    // And nothing is drawn that the contract no longer has.
+    expect(Object.keys(DRAWN_TYPES).filter((type) => !types.includes(type))).toEqual([]);
   });
 });
 
@@ -62,6 +83,7 @@ describe('what the client sends', () => {
     await c.categories();
     for (const route of ['GET /v1/shop/products', 'GET /v1/search', 'GET /v1/categories']) {
       const allowed = new Set(queryNames(route.slice(4)));
+      expect(api.callsTo(route).length).toBeGreaterThan(0);
       for (const call of api.callsTo(route)) for (const name of Object.keys(call.query)) expect(allowed.has(name)).toBe(true);
     }
   });
@@ -146,6 +168,90 @@ describe('what the screens show', () => {
     const shown = renderedText(screen.getByTestId('search-results-PRODUCT_POST')).join(' | ');
     for (const word of ['Sort', 'Filter', 'Price', 'Available only', 'Nearby', 'Discounts', 'Locally Made', 'Market']) {
       expect(shown).not.toContain(word);
+    }
+  });
+
+  // The controls a Buyer can reach, as a CLOSED list: every press, tab, link or toggle on screen must be
+  // one of these, found by behaviour (a chip with no role is found too). A control not listed here is a
+  // decision: it needs a contract parameter (see the matrix) before it is added to the list.
+  type Allowed = { role: string; testID: string; name: RegExp };
+  const exactly = (text: string) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  const TILE: Allowed[] = [
+    { role: 'button', testID: 'product-tile', name: /^(Plain mug|Clay cup), / },
+    { role: 'button', testID: 'card-save', name: /^Save (Plain mug|Clay cup|Morning light)$/ },
+    { role: 'link', testID: 'product-tile-seller', name: /^Sold by Store seller-\d$/ },
+  ];
+  const CATEGORY_TABS: Allowed[] = [
+    { role: 'tab', testID: 'category-tab-ALL', name: exactly(en['buyer.shop.all']) },
+    { role: 'tab', testID: 'category-tab-FASHION', name: exactly(en['catalogue.category.fashion']) },
+    { role: 'tab', testID: 'category-tab-ELECTRONICS', name: exactly(en['catalogue.category.electronics']) },
+  ];
+  const BOTTOM_BAR: Allowed[] = [en['buyer.tab.home'], en['buyer.tab.shop'], en['buyer.tab.saved'], en['buyer.tab.orders'], en['buyer.tab.you']].map(
+    (name) => ({ role: 'undefined', testID: 'undefined', name: exactly(name) }),
+  );
+  const SEARCH: Allowed[] = [
+    ...TILE,
+    ...CATEGORY_TABS,
+    { role: 'undefined', testID: 'search-input', name: exactly(en['buyer.search.input']) },
+    { role: 'button', testID: 'search-clear', name: exactly(en['buyer.search.clear']) },
+    { role: 'tab', testID: 'search-tab-TOP', name: exactly(en['buyer.search.tab.top']) },
+    { role: 'tab', testID: 'search-tab-PRODUCT_POST', name: exactly(en['buyer.search.tab.products']) },
+    { role: 'tab', testID: 'search-tab-SCENE_POST', name: exactly(en['buyer.search.tab.scenes']) },
+    { role: 'tab', testID: 'search-tab-SELLER', name: exactly(en['buyer.search.tab.sellers']) },
+    { role: 'button', testID: 'search-product', name: /^(Plain mug|Clay cup), .*Sold by Store seller-\d$/ },
+    { role: 'button', testID: 'search-seller', name: /^Basket House, @basket-house(, Trust level: Established)?$/ },
+    { role: 'button', testID: 'search-scene', name: exactly('Scene: Morning light, Scene by Store 1') },
+    { role: 'button', testID: 'search-scene-tile', name: exactly('Scene: Morning light, Scene by Store 1') },
+  ];
+  const unlisted = (controls: Control[], allowed: Allowed[]) =>
+    controls
+      .filter((c) => !allowed.some((a) => a.role === c.role && a.testID === c.testID && a.name.test(c.name)))
+      .map((c) => `${c.role} ${c.testID}: ${c.name}`);
+
+  it('the Shop: every control on screen is a category tab, a Product, its Seller or its Save, or the tab bar -- nothing else, with or without a role', async () => {
+    api.on('GET /v1/shop/products', () => ({
+      status: 200,
+      body: { market_resolved: true, data: [shopProduct('mug', 'Plain mug'), shopProduct('cup', 'Clay cup', 'seller-2', { available: false })], next_cursor: null },
+    }));
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    await screen.findByLabelText(/^Plain mug,/);
+    await screen.findByTestId('category-tab-FASHION');
+    const shown = controlsShown();
+    expect(unlisted(shown, [...TILE, ...CATEGORY_TABS, ...BOTTOM_BAR])).toEqual([]);
+    // The scan is not empty: the controls the Shop is meant to have are in it.
+    expect(shown.filter((c) => c.role === 'tab').map((c) => c.name)).toEqual(['All Products', 'Fashion', 'Electronics']);
+    expect(shown.filter((c) => c.testID === 'product-tile')).toHaveLength(2);
+    expect(shown.filter((c) => c.testID === 'product-tile-seller')).toHaveLength(2);
+  });
+
+  it('Search: on every tab, every control on screen is the field, its clear control, a result tab, a category tab, a result or its Save -- nothing else, with or without a role', async () => {
+    const scene = sellerScene(1);
+    api.on('GET /v1/search', (call) => ({
+      status: 200,
+      body: {
+        market_resolved: true,
+        type: call.query['type'] ?? 'TOP',
+        algorithm_version: 'lexical-trgm-v1',
+        items: [
+          { type: 'PRODUCT_POST', payload: shopProduct('mug', 'Plain mug') },
+          { type: 'SELLER', payload: { handle: 'basket-house', store_name: 'Basket House', trust_level: 'ESTABLISHED' } },
+          { type: 'SCENE_POST', payload: { public_ref: scene.public_ref, caption: 'Morning light', caption_truncated: false, image: scene.image, seller: { handle: 'seller-1', store_name: 'Store 1' } } },
+        ],
+        next_cursor: null,
+      },
+    }));
+    await renderRouter(APP_DIR, { initialUrl: '/search' });
+    await fireEvent.changeText(await screen.findByLabelText(en['buyer.search.input']), 'mug');
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    await screen.findByLabelText(/^Plain mug,/);
+    for (const type of ['TOP', 'PRODUCT_POST', 'SCENE_POST', 'SELLER']) {
+      await fireEvent.press(screen.getByTestId(`search-tab-${type}`));
+      await act(() => jest.advanceTimersByTimeAsync(1000));
+      await screen.findByTestId(`search-results-${type}`);
+      const shown = controlsShown();
+      expect({ type, unlisted: unlisted(shown, SEARCH) }).toEqual({ type, unlisted: [] });
+      expect(shown.filter((c) => c.testID.startsWith('search-tab-'))).toHaveLength(4);
+      expect(shown.some((c) => c.testID === 'search-input')).toBe(true);
     }
   });
 });
