@@ -4,7 +4,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { assertTarget, REQUIRED } from '../lib/guard.mjs';
-import { apiEnvProblems, ROLES } from '../lib/identity.mjs';
+import {
+  apiEnvProblems,
+  containerProblems,
+  networkProblems,
+  ROLES,
+  volumeProblems,
+} from '../lib/identity.mjs';
 import { buildApiEnv } from '../lib/api.mjs';
 import { LABEL, PORT_BLOCK } from '../lib/protected.mjs';
 import { id64, makeIo, refusal, world } from './fakes.mjs';
@@ -100,6 +106,35 @@ test('a database host other than the literal 127.0.0.1 is refused before connect
     w.m.db.host = host;
     await refuses(w, 'DB-WRITE', 'ID-09', { beforeConnect: true });
   }
+});
+
+test('protected container, volume and network names are refused on their own, even if the manifest named them', () => {
+  const w = world();
+  const info = w.d.containers[w.m.containers.postgres.id];
+  w.m.names.pg = 'adulis-postgres';
+  info.Name = '/adulis-postgres';
+  const c = containerProblems(w.m, 'postgres', info).map((x) => x.msg);
+  assert.ok(
+    c.some((x) => /protected container/.test(x)),
+    c.join(),
+  );
+  w.m.names.pgVolume = 'adulis-pgdata';
+  const v = volumeProblems(w.m, 'postgres', { Name: 'adulis-pgdata', Labels: info.Config.Labels });
+  assert.ok(
+    v.some((x) => /protected volume/.test(x.msg)),
+    JSON.stringify(v),
+  );
+  w.m.names.network = 'adulis-platform_default';
+  const n = networkProblems(w.m, {
+    Id: w.m.network.id,
+    Name: 'adulis-platform_default',
+    Labels: {},
+    Containers: {},
+  });
+  assert.ok(
+    n.some((x) => /protected network/.test(x.msg)),
+    JSON.stringify(n),
+  );
 });
 
 test('the persistent PostgreSQL container, named in the manifest, is refused (name, volume, port, labels)', async () => {
