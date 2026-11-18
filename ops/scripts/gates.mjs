@@ -629,10 +629,11 @@ const GATES = [
    * APPENDED (WO-INFRA-015A). The guards of the destructive scripts and of MinIO's data volume:
    * the shared database-target rules, db-determinism's container binding and failure paths, the
    * db-reset confirmation, the direct-invocation refusals, the volume guard script and the compose
-   * configuration that wires it. No database is written: the scripts are driven against stubs, or
-   * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
+   * configuration that wires it, and the native test harness's identity, cleanup, API, device and
+   * command-line refusals (ops/native/test, driven by doubles). No database is written: the scripts are
+   * driven against stubs, or against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
-  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs', 'ops/scripts/db-backup-verify.test.mjs', 'ops/scripts/pg-recovery-verdict.test.mjs', 'ops/scripts/mobile-runtime-deps.test.mjs'] },
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs', 'ops/scripts/db-backup-verify.test.mjs', 'ops/scripts/pg-recovery-verdict.test.mjs', 'ops/scripts/mobile-runtime-deps.test.mjs', 'ops/native/test/identity.test.mjs', 'ops/native/test/cleanup.test.mjs', 'ops/native/test/api.test.mjs', 'ops/native/test/device.test.mjs', 'ops/native/test/harness.test.mjs', 'ops/native/test/cli.test.mjs', 'ops/native/test/up.test.mjs', 'ops/native/test/guard.test.mjs', 'ops/native/test/s3.test.mjs'] },
 
   /**
    * APPENDED (DB-LIVE-02). The migration-file guard: an incomplete, renamed, duplicated or
