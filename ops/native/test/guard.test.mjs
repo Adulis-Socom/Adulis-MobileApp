@@ -93,3 +93,13 @@ test('with the right identity the same load commits exactly once, guard first', 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the run-setting term of the guard is pinned byte for byte (the model cannot evaluate its inner SELECT)', () => {
+  const { m } = world();
+  const flat = guardSql(m).replace(/\s+/g, ' ');
+  const inner =
+    "coalesce((SELECT substr(s, length('adulis.native_run=') + 1) FROM pg_db_role_setting r, unnest(r.setconfig) s " +
+    'WHERE r.setdatabase = (SELECT oid FROM pg_database WHERE datname = current_database()) ' +
+    "AND r.setrole = 0 AND starts_with(s, 'adulis.native_run=') LIMIT 1), '')";
+  assert.ok(flat.includes(inner), flat);
+});

@@ -57,6 +57,15 @@ export function isMutatingDocker(args, opts = {}) {
   return true;
 }
 export const isMutatingAdb = (args) => args.includes('reverse') && !args.includes('--list');
+// `docker run` can create a container and fail to start it, and `docker rm -f` can stop one and fail
+// to remove it: a non-zero exit does not prove either changed nothing.
+const CHANGED_WHATEVER_THE_EXIT = new Set(['run', 'rm']);
+/** An HTTP request that makes the API write: any method but GET or HEAD, or one that carries a device id. */
+export function isMutatingRequest(opts = {}) {
+  const method = `${opts.method ?? 'GET'}`.toUpperCase();
+  const headers = Object.keys(opts.headers ?? {}).map((k) => k.toLowerCase());
+  return (method !== 'GET' && method !== 'HEAD') || headers.includes('x-adulis-device');
+}
 
 /** Wraps the effects: `mark(what)` runs when a call that changes something went out. */
 export function trackIo(io, mark) {
@@ -66,9 +75,17 @@ export function trackIo(io, mark) {
       const r = await io.docker(args, opts);
       // A command that definitively failed (non-zero exit) changed nothing; a success or an
       // unknown outcome (timeout, killed) may have.
-      if (isMutatingDocker(args, opts) && (r.error || r.status === 0))
+      if (
+        isMutatingDocker(args, opts) &&
+        (r.error || r.status === 0 || CHANGED_WHATEVER_THE_EXIT.has(args[0]))
+      )
         mark(`docker ${args.slice(0, args[0] === 'exec' ? 1 : 2).join(' ')}`);
       return r;
+    },
+    // The mark comes BEFORE the request: the API may have written even if the answer never arrives.
+    fetch: (url, opts) => {
+      if (isMutatingRequest(opts)) mark('API request');
+      return io.fetch(url, opts);
     },
     adb: async (args) => {
       const r = await io.adb(args);
@@ -273,6 +290,8 @@ export async function main(
           log: (s) => say(`up: ${s}`),
           onRun: (x) => {
             runId = x;
+            // The run directory exists from here on, whatever happens next.
+            mutations.push('run directory');
           },
         });
         for (const x of r.results) say(`  ${x.verdict}  ${x.id} ${CHECKS[x.id]}`);

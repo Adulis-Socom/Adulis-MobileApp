@@ -385,7 +385,13 @@ test("the API canary reads the API's own write back from this run's database, an
   try {
     assert.equal(await c.run('api', 'canary', '--run', w.m.run), 0);
     w.pg.canary = 'f';
-    assert.equal(await c.run('api', 'canary', '--run', w.m.run), 1);
+    // The request makes the API write a device row: even a refused canary changed something.
+    assert.equal(await c.run('api', 'canary', '--run', w.m.run), 3);
+    assert.match(
+      c.lines.at(-1),
+      /^HARNESS INCOMPLETE - ID-04 API instance refused after 1 change\(s\) \(API request\); /,
+    );
+    assert.doesNotMatch(c.lines.at(-1), /NO RESOURCE WAS CHANGED/);
   } finally {
     c.done();
   }

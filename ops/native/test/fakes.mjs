@@ -356,7 +356,12 @@ async function fetchFake(w, url, opts) {
       return w.api.health === null
         ? Promise.reject(new Error('ECONNREFUSED'))
         : res(200, w.api.health);
-    if (u.pathname === '/v1/bootstrap') return res(200, w.api.bootstrap);
+    if (u.pathname === '/v1/bootstrap') {
+      // The canary's request carries a device id: tests may make the API answer it with an error.
+      if (opts.headers?.['X-Adulis-Device'] && w.api.deviceStatus)
+        return res(w.api.deviceStatus, {});
+      return res(200, w.api.bootstrap);
+    }
   }
   return Promise.reject(new Error(`unexpected request ${url}`));
 }

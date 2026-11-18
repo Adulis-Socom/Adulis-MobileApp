@@ -82,7 +82,27 @@ One scheme for every command. The last line of every command is its status line.
 Only `up` and a full `verify` print READY, and READY names what was verified. `status`, `env`, `plan`,
 `preflight`, `down` and `purge` verify nothing about the stack and print `HARNESS OK`.
 `NO RESOURCE WAS CHANGED` is printed only when no call that creates, removes, starts or stops anything
-was made by that command.
+was made by that command. Counted as changes: every Docker call that is not a plain read (`run` and `rm`
+whatever their exit code), `adb reverse`, stopping or starting a process (the API, its build, the
+migration and seed children), deleting a run directory, an HTTP request that makes the API write
+(`api canary`, marked before it is sent), and the run directory `up` creates. The manifest, logs and
+evidence files the harness keeps for itself in an existing run directory are not counted.
+`HARNESS SELFTEST FAILED` (exit 2) is what `selftest` prints when a test fails.
+
+## After a Docker reset or reinstall
+
+Every run records the Docker engine it was created in, and `down`, `verify` and `purge` refuse to work in
+any other engine, with no override: in a different engine every lookup would say "no such object" and a
+run could look cleaned while its resources still exist. After Docker Desktop is reset or reinstalled (or the
+context is switched), `down` therefore refuses and `preflight` keeps naming the old run. To recover:
+
+1. Switch back to the original context if it was only switched (`docker context use <name>`), and run
+   `down` and `purge` as usual.
+2. If the engine really was reset, its containers, volumes and networks are gone with it; check with
+   `docker ps -a`, `docker volume ls` and `docker network ls` that nothing named `adulis-native-<run8>-...`
+   is left in the new engine.
+3. Only then remove the run directory (`<ADULIS_NATIVE_ROOT>/runs/<run>`) by hand. Nothing in Docker is
+   touched by this.
 
 Not included: the worker process (no Buyer flow needs it; `/healthz` then reports `degraded` with
 HTTP 200, and the harness requires only `db: up`), device settings changes, Maestro runs.

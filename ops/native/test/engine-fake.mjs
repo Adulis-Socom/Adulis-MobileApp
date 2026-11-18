@@ -127,6 +127,7 @@ export function engineWorld(opts = {}) {
     if (a === 'info')
       return ok(args.includes('--format') ? `${st.engine.id}|${st.clock}` : '29.0.0');
     if (a === 'context' && b === 'show') return ok(st.engine.context);
+    if (a === 'ps' && opts.failList) return fail('Error: cannot list containers');
     if (a === 'ps')
       return filterIds(
         st.containers,

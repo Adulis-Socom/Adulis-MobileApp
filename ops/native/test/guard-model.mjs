@@ -3,6 +3,12 @@
 // RAISE or a guard that is not first changes the result). It understands exactly the guard's shape
 // and throws on anything else: a reworded guard fails the tests until this model is updated on
 // purpose. The real statement is executed against a disposable PostgreSQL by guard-live.test.mjs.
+//
+// What the model covers: the connective (OR, AND precedence), each IS [NOT] DISTINCT FROM, the compared
+// constants, the RAISE and that the guard is the script's first statement. What it does NOT cover is how
+// PostgreSQL evaluates the inner SELECT of the run-setting term (the pg_db_role_setting predicates, the
+// substr offset): that text is PINNED byte for byte in guard.test.mjs, and its behaviour is proven only
+// by the opt-in live test and by a live run.
 
 const FIRST_STATEMENT = /^\s*(?:--[^\n]*\n\s*)*DO\s+\$guard\$([\s\S]*?)\$guard\$\s*;/;
 

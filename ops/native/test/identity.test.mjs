@@ -16,7 +16,14 @@ import {
 import { buildApiEnv } from '../lib/api.mjs';
 import { checkFacts } from '../lib/identity.mjs';
 import { namePrefix } from '../lib/protected.mjs';
-import { LABEL, PORT_BLOCK, PROTECTED_PORTS } from '../lib/protected.mjs';
+import {
+  isProtectedContainer,
+  isProtectedNetwork,
+  isProtectedVolume,
+  LABEL,
+  PORT_BLOCK,
+  PROTECTED_PORTS,
+} from '../lib/protected.mjs';
 import { id64, makeIo, refusal, world } from './fakes.mjs';
 
 /** Refused with `id`; no mutating call; optionally zero calls of any kind (refused before connecting). */
@@ -738,4 +745,35 @@ test('a store that answers the run credentials with a non-200 is refused even if
   const r = checkFacts(w.m, facts, ['ID-06']).find((x) => x.id === 'ID-06');
   assert.equal(r.verdict, 'FAIL');
   assert.match(r.detail, /rejected the run's credentials/);
+});
+
+test('the deny-lists are pinned: an entry that disappears fails here (the derived loops would not notice)', () => {
+  assert.deepEqual(
+    [...PROTECTED_PORTS].sort((a, b) => a - b),
+    [1025, 3000, 5050, 5432, 5433, 5434, 6379, 8025, 9000, 9001, 9100, 55432, 55444, 59000],
+  );
+  for (const n of [
+    'adulis-postgres',
+    'adulis-minio',
+    'adulis-minio-init',
+    'adulis-minio-volume-guard',
+    'adulis-final-check',
+    'adulis-test-pg',
+    'adulis-test-minio',
+    'welcome-to-docker',
+    'nac-trial-anything',
+    'adulis-platform_anything',
+  ])
+    assert.equal(isProtectedContainer(n), true, n);
+  for (const n of [
+    'adulis-pgdata',
+    'adulis-platform_adulis-pgdata',
+    'adulis-platform_adulis-miniodata',
+    'nac-trial_anything',
+  ])
+    assert.equal(isProtectedVolume(n), true, n);
+  for (const n of ['adulis-platform_default', 'bridge', 'host', 'none', 'nac-trial_default'])
+    assert.equal(isProtectedNetwork(n), true, n);
+  for (const n of ['adulis-native-0a1b2c3d-pg', 'unrelated-db-1'])
+    assert.equal(isProtectedContainer(n), false, n);
 });

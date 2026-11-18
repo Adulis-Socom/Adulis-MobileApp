@@ -11,6 +11,7 @@ import {
   EXIT,
   isMutatingAdb,
   isMutatingDocker,
+  isMutatingRequest,
   main,
   rootProblem,
   STATUS,
@@ -393,8 +394,14 @@ test('a docker call that definitively failed changed nothing; an unknown outcome
     { docker: async () => ({ status: 1, stdout: '', stderr: 'x', error: null }) },
     (w) => mutations.push(w),
   );
-  await fails.docker(['rm', '-f', 'x']);
+  await fails.docker(['volume', 'create', 'x']);
+  await fails.docker(['network', 'create', 'x']);
   assert.deepEqual(mutations, []);
+  // `run` can create a container and fail to start it; `rm -f` can stop one and fail to remove it.
+  await fails.docker(['run', '-d', 'img']);
+  await fails.docker(['rm', '-f', 'x']);
+  assert.equal(mutations.length, 2);
+  mutations.length = 0;
   const unknown = trackIo(
     { docker: async () => ({ status: null, stdout: '', stderr: '', error: new Error('timeout') }) },
     (w) => mutations.push(w),
@@ -649,5 +656,76 @@ test('reverify refuses a tampered or wrongly staged run before PostgreSQL is con
     } finally {
       c.done();
     }
+  }
+});
+
+/* ---- a request that makes the API write is a change, marked before it is sent ---- */
+
+test('only a request that can make the API write is a change', () => {
+  assert.equal(isMutatingRequest({ headers: { 'X-Adulis-Device': 'u' } }), true);
+  assert.equal(isMutatingRequest({ headers: { 'x-adulis-device': 'u' } }), true);
+  assert.equal(isMutatingRequest({ method: 'POST' }), true);
+  assert.equal(isMutatingRequest({ method: 'delete' }), true);
+  assert.equal(isMutatingRequest({}), false);
+  assert.equal(
+    isMutatingRequest({ method: 'GET', headers: { 'X-Adulis-Client': 'android/0.0.0' } }),
+    false,
+  );
+  assert.equal(isMutatingRequest({ method: 'HEAD' }), false);
+  assert.equal(isMutatingRequest(), false);
+});
+
+test('the request is marked before it is sent, so an answer that never arrives still counts', async () => {
+  const marks = [];
+  const io = trackIo({ fetch: async () => Promise.reject(new Error('socket hang up')) }, (w) =>
+    marks.push(w),
+  );
+  await assert.rejects(
+    io.fetch('http://127.0.0.1:1/x', { headers: { 'X-Adulis-Device': 'u' } }),
+    /socket hang up/,
+  );
+  assert.deepEqual(marks, ['API request']);
+  await assert.rejects(io.fetch('http://127.0.0.1:1/x'), /socket hang up/);
+  assert.equal(marks.length, 1, 'a plain GET is not a change');
+});
+
+test('a canary that the API answers with an error is INCOMPLETE as well, and the read-only probes never mark', async () => {
+  const w = world({ api: true });
+  w.api.deviceStatus = 500;
+  const c = cli(w);
+  try {
+    assert.equal(await c.run('verify', '--run', w.m.run), EXIT.OK, 'the identity probes are reads');
+    assert.equal(c.last(), STATUS.READY_API);
+    assert.equal(await c.run('api', 'canary', '--run', w.m.run), EXIT.INCOMPLETE);
+    assert.match(
+      c.last(),
+      /^HARNESS INCOMPLETE - bootstrap answered 500 after 1 change\(s\) \(API request\); /,
+    );
+  } finally {
+    c.done();
+  }
+});
+
+test('up that stops after it created its run directory says so (the next preflight asks for down)', async () => {
+  const e = engineWorld({ failList: true });
+  const root = mkdtempSync(join(tmpdir(), 'native-cli-'));
+  const lines = [];
+  try {
+    const io = { ...e.io, git: gitFake() };
+    const code = await main(['up', '--checkout', repo, '--sha', SHA], {
+      io,
+      env: { ADULIS_NATIVE_ROOT: root },
+      out: (s) => lines.push(s),
+      preflight: async () => [],
+    });
+    assert.equal(code, EXIT.INCOMPLETE);
+    assert.match(
+      lines.at(-1),
+      /^HARNESS INCOMPLETE - .* after 1 change\(s\) \(run directory\); run `down --run native-\d{8}-[0-9a-f]{8}`/,
+    );
+    assert.doesNotMatch(lines.at(-1), /NO RESOURCE WAS CHANGED/);
+    assert.deepEqual(e.st.events, [], 'no Docker resource was created');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
