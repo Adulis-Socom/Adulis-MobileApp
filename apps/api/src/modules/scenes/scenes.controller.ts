@@ -28,6 +28,7 @@ import { createScenePostBody, patchScenePostDraftBody } from './scenes.schemas';
 import { ScenesService } from './scenes.service';
 import { requesterMarket } from '../storefront/requester-market';
 import { ApiGate } from '../../common/http/api-gate';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * Scene Posts (ADU-SCN-01 v3.2 S45; WO-DISC-001 S20-S22). Seller management
@@ -208,6 +209,7 @@ export class ScenesController {
     return view;
   }
 
+  @ApiDeviceHeaders()
   @Get('scene-posts/:publicRef')
   @Public()
   @ApiOperation({

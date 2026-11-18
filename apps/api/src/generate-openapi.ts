@@ -67,6 +67,18 @@ async function generate(): Promise<void> {
     // Opaque random credentials, not JWTs (AUTH-02 v3.3 S43; register API-2).
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'opaque' }, 'bearer')
     .addCookieAuth('__Host-adulis_session', { type: 'apiKey', in: 'cookie' }, 'cookie')
+    // Not a session: the single-use ticket the web deletion flow holds. A header parameter cannot be
+    // named Authorization in OpenAPI 3.0, so the scheme is the only legal way to declare it.
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'Authorization',
+        description:
+          'Authorization: Ticket <ticket>, the ticket from POST /v1/deletion/otp/verify (valid 15 minutes). A bearer token is refused.',
+      },
+      'deletionTicket',
+    )
     .build();
 
   // ProblemDto is registered here as well as by the controllers that decorate it, so the problem

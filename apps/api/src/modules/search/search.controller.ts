@@ -29,6 +29,7 @@ import {
   type NormalizedQuery,
   type Ranked,
 } from './search.logic';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * GET /v1/search -- Marketplace Search (ADU-SRC-01 v3.2; WORK ORDER WO-008): Product Posts,
@@ -117,6 +118,7 @@ export class SearchController {
     private readonly rateLimit: RateLimitService,
   ) {}
 
+  @ApiDeviceHeaders()
   @Get('search')
   @Public()
   @ApiOperation({

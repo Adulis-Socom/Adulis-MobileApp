@@ -9,6 +9,7 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { ChatService } from './chat.service';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { BotMessageDto, BuyerConversationDto, ConversationEscalatedDto, ConversationOpenedDto, ConversationPageDto, HumanMessageDto, MessagePageDto, MessageSentDto, SellerConversationDto } from './chat.dto';
+import { ApiOptionalSellerHeader } from '../../common/http/api-headers';
 
 /** C7 — chat (ADU-API-01 v1.7 section 12.7). */
 
@@ -72,6 +73,7 @@ export class ChatController {
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @ApiExtraModels(BuyerConversationDto, SellerConversationDto)
   @ApiOkResponse({ type: ConversationPageDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id.')
   @Get('conversations')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default.' })
   async list(
@@ -88,6 +90,7 @@ export class ChatController {
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @ApiExtraModels(BotMessageDto, HumanMessageDto)
   @ApiOkResponse({ type: MessagePageDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.')
   @Get('conversations/:id/messages')
   async messages(
     @Req() req: AuthedRequest,
@@ -102,6 +105,7 @@ export class ChatController {
 
   @ApiIdempotencyKey()
   @ApiCreatedResponse({ type: MessageSentDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.')
   @Post('conversations/:id/messages')
   @ApiOperation({ summary: 'text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.' })
   async postMessage(
@@ -119,6 +123,7 @@ export class ChatController {
 
   @ApiIdempotencyKey()
   @ApiOkResponse({ type: ConversationEscalatedDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.')
   @Post('conversations/:id/escalate')
   @HttpCode(200)
   @ApiOperation({ summary: 'Free escalation — S15.1 layer 5 on request.' })

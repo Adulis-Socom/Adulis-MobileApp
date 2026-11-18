@@ -1,6 +1,6 @@
 import { LEGACY_COMMERCE_CONTROLLERS } from '../src/common/http/openapi-security';
 import { guardDemandsSeller, loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
-import { deriveGate } from './gate-support';
+import { SELLER_SIDE_ONLY, deriveGate, scanGates } from './gate-support';
 
 /**
  * contracts/openapi.json against the controllers it is generated from: the
@@ -30,10 +30,11 @@ const EITHER_CREDENTIAL = [{ cookie: [] }, { bearer: [] }];
 const COOKIE_ONLY = [{ cookie: [] }];
 /** A public route honours a credential when one is presented and refuses a dead one, so it accepts either or none. */
 const OPTIONAL_CREDENTIAL = [{}, { cookie: [] }, { bearer: [] }];
-/** Operations that declare their own security, kept as authored: Collections (bearer) and the seller scene posts (cookie). */
+/** Operations that declare their own security, kept as authored: Collections (bearer), the seller scene posts (cookie), the deletion ticket routes. */
 const OWN_SECURITY: ReadonlyArray<readonly [RegExp, object[]]> = [
   [/^\w+ \/v1\/collections(\/|:|$)/, [{ bearer: [] }]],
   [/^\w+ \/v1\/seller\/scene-posts(\/|$)/, [{ cookie: [] }]],
+  [/^(GET \/v1\/deletion\/preview|POST \/v1\/deletion\/confirm)$/, [{ deletionTicket: [] }]],
 ];
 
 describe('contracts/openapi.json against the controllers', () => {
@@ -74,7 +75,7 @@ describe('contracts/openapi.json against the controllers', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('pins the exact security shapes: 25 operations accept either credential, 9 only a bearer token, 50 only the session cookie, 23 take an optional credential', () => {
+  it('pins the exact security shapes: 25 operations accept either credential, 9 only a bearer token, 50 only the session cookie, 21 take an optional credential, 2 the deletion ticket', () => {
     const shapes = new Map<string, number>();
     for (const [, item] of Object.entries(contract.paths)) {
       for (const o of Object.values(item)) {
@@ -85,7 +86,8 @@ describe('contracts/openapi.json against the controllers', () => {
       [JSON.stringify(EITHER_CREDENTIAL)]: 25,
       [JSON.stringify([{ bearer: [] }])]: 9,
       [JSON.stringify(COOKIE_ONLY)]: 50,
-      [JSON.stringify(OPTIONAL_CREDENTIAL)]: 23,
+      [JSON.stringify(OPTIONAL_CREDENTIAL)]: 21,
+      [JSON.stringify([{ deletionTicket: [] }])]: 2,
     });
   });
 
@@ -138,6 +140,68 @@ describe('contracts/openapi.json against the controllers', () => {
     ];
     const missing = calls.filter(([m, p, s]) => !contract.paths[p]?.[m]?.responses[String(s)]?.content?.['application/json']?.schema);
     expect(missing).toEqual([]);
+  });
+});
+
+describe('the headers and credentials the code reads are declared', () => {
+  const gateOf = (r: Route) => {
+    const g = scanGates().get(`${r.controller}.${r.handler}`);
+    if (!g) throw new Error(`${label(r)}: no controller method found in the source`);
+    return g;
+  };
+  const header = (r: Route, name: string) => (op(r).parameters ?? []).find((p) => p.in === 'header' && p.name.toLowerCase() === name.toLowerCase());
+
+  it('declares X-Adulis-Device and X-Adulis-Client, optional, on every public route that reads the device', () => {
+    const wrong = inScope
+      .filter((r) => r.isPublic && (gateOf(r).readsDevice || gateOf(r).keyed))
+      .flatMap((r) => {
+        const problems: string[] = [];
+        for (const name of ['X-Adulis-Device', 'X-Adulis-Client']) {
+          const h = header(r, name);
+          if (!h) problems.push(`${label(r)} reads the device and does not declare ${name}`);
+          else if (h.required) problems.push(`${label(r)} declares ${name} as required`);
+        }
+        return problems;
+      });
+    expect(wrong).toEqual([]);
+  });
+
+  it('declares the device header only where the code reads it, and never on sign-in verification', () => {
+    const wrong = inScope
+      .filter((r) => header(r, 'X-Adulis-Device'))
+      .filter((r) => !(gateOf(r).readsDevice || gateOf(r).keyed))
+      .map(label);
+    expect(wrong).toEqual([]);
+    const verify = inScope.find((r) => label(r) === 'POST /v1/auth/otp/verify') as Route;
+    expect((op(verify).parameters ?? []).filter((p) => p.in === 'header').map((p) => p.name)).toEqual(['Idempotency-Key']);
+  });
+
+  it('declares the deletion ticket, and no session credential, on exactly the routes that read it', () => {
+    const wrong = inScope.flatMap((r) => {
+      const reads = gateOf(r).readsTicket;
+      const security = JSON.stringify(op(r).security);
+      if (reads) return security === JSON.stringify([{ deletionTicket: [] }]) ? [] : [`${label(r)} reads the ticket and declares ${security}`];
+      return security?.includes('deletionTicket') ? [`${label(r)} declares the ticket and does not read it`] : [];
+    });
+    expect(wrong).toEqual([]);
+    expect(contract.components.securitySchemes?.['deletionTicket']).toMatchObject({ type: 'apiKey', in: 'header', name: 'Authorization' });
+  });
+
+  it('declares X-Adulis-Seller, optional, on the routes where it selects the side the caller acts on', () => {
+    const wrong = inScope
+      .filter((r) => SELLER_SIDE_ONLY.has(label(r)))
+      .flatMap((r) => {
+        const h = header(r, 'X-Adulis-Seller');
+        return h && h.required === false ? [] : [`${label(r)} does not declare an optional X-Adulis-Seller`];
+      });
+    expect(wrong).toEqual([]);
+  });
+
+  it('says once, in the document description, the headers and the Origin rule no single operation carries', () => {
+    const text = contract.info?.description ?? '';
+    for (const word of ['X-Adulis-Request-Id', 'Content-Language', 'Accept-Language', 'X-Adulis-Idempotent-Replay', 'Retry-After', 'Origin']) {
+      expect(text).toContain(word);
+    }
   });
 });
 

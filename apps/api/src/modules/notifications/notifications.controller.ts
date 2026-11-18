@@ -11,6 +11,7 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { NotificationPageDto, NotificationReadDto } from './notifications.dto';
 import { ApiGate } from '../../common/http/api-gate';
+import { ApiOptionalSellerHeader } from '../../common/http/api-headers';
 
 /**
  * C8 — notifications (ADU-API-01 v1.6 section 12.14).
@@ -80,6 +81,7 @@ export class NotificationsController {
   @ApiQuery({ name: 'seller_id', required: false, description: 'Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @ApiOkResponse({ type: NotificationPageDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id.')
   @Get('notifications')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.' })
   async list(

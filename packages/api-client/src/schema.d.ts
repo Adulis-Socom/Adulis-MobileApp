@@ -3600,6 +3600,10 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
             };
             path?: never;
             cookie?: never;
@@ -3851,7 +3855,12 @@ export interface operations {
     BootstrapController_bootstrap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3951,7 +3960,12 @@ export interface operations {
     StorefrontController_categories: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4373,7 +4387,10 @@ export interface operations {
                 /** @description Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer. */
                 seller_id?: string;
             };
-            header?: never;
+            header?: {
+                /** @description The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id. */
+                "X-Adulis-Seller"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4433,6 +4450,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer. */
+                "X-Adulis-Seller"?: string;
             };
             path: {
                 id: string;
@@ -4466,7 +4485,10 @@ export interface operations {
                 /** @description next_cursor of the previous page. */
                 cursor?: string;
             };
-            header?: never;
+            header?: {
+                /** @description The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer. */
+                "X-Adulis-Seller"?: string;
+            };
             path: {
                 id: string;
             };
@@ -4498,6 +4520,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer. */
+                "X-Adulis-Seller"?: string;
             };
             path: {
                 id: string;
@@ -4615,6 +4639,10 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
             };
             path?: never;
             cookie?: never;
@@ -4643,7 +4671,12 @@ export interface operations {
     DeletionController_otpVerify: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4701,6 +4734,10 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
             };
             path?: never;
             cookie?: never;
@@ -4801,6 +4838,8 @@ export interface operations {
                 limit?: number;
             };
             header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
                 /** @description App guests: the registered device id (required without a bearer). Browsers are identified by cookie instead. */
                 "X-Adulis-Device"?: string;
             };
@@ -4854,7 +4893,10 @@ export interface operations {
                 /** @description Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer. */
                 seller_id?: string;
             };
-            header?: never;
+            header?: {
+                /** @description The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id. */
+                "X-Adulis-Seller"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5135,6 +5177,10 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5217,7 +5263,12 @@ export interface operations {
     ScenesController_publicDetail: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Scene public_ref (22 characters). */
                 publicRef: string;
@@ -5259,7 +5310,12 @@ export interface operations {
                 /** @description Default TOP. */
                 type?: "TOP" | "PRODUCT_POST" | "SELLER" | "SCENE_POST";
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7564,7 +7620,12 @@ export interface operations {
             query: {
                 q: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7597,7 +7658,12 @@ export interface operations {
                 /** @description Page size, 1-50 (default 30). */
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7628,7 +7694,12 @@ export interface operations {
                 /** @description true: a technical re-read of a profile already on screen; the server records no storefront_viewed (the OVN-073 principle, as on the Product read). Omit it for an opening. */
                 revalidate?: "true";
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;
@@ -7664,7 +7735,12 @@ export interface operations {
                 /** @description Page size, 1-100 (default 100). */
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;
@@ -7698,7 +7774,12 @@ export interface operations {
                 /** @description true: a technical re-read of a Product already on screen (a pull, a return from the background), not a new opening; the server then records no product_viewed (founder ruling OVN-073). It can only withhold the event, never create one. Omit it for an opening. */
                 revalidate?: "true";
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;
@@ -7736,7 +7817,12 @@ export interface operations {
                 /** @description Page size, 1-50 (default 25). */
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;
@@ -7772,7 +7858,12 @@ export interface operations {
                 /** @description Page size, 1-50 (default 20). */
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;
@@ -7806,7 +7897,12 @@ export interface operations {
                 /** @description 1-200 characters; matched in name and description. */
                 q: string;
             };
-            header?: never;
+            header?: {
+                /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
+                "X-Adulis-Client"?: string;
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                "X-Adulis-Device"?: string;
+            };
             path: {
                 /** @description The Seller public handle. */
                 handle: string;

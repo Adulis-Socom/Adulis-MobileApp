@@ -18,6 +18,7 @@ import {
   readCookie,
   sessionHostCookie,
 } from '../../common/http/cookies';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * GET /v1/bootstrap (ADU-API-01 v1.6 section 3.1). Client version is
@@ -91,6 +92,7 @@ export class BootstrapController {
   ) {}
 
   @Public()
+  @ApiDeviceHeaders()
   @Get()
   @ApiOperation({ summary: 'Client floor, market configuration and the clock reference.' })
   @ApiOkResponse({ type: BootstrapResponseDto })

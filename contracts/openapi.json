@@ -251,6 +251,25 @@
         "operationId": "AuthController_recovery",
         "parameters": [
           {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
@@ -599,7 +618,27 @@
     "/v1/bootstrap": {
       "get": {
         "operationId": "BootstrapController_bootstrap",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -714,7 +753,27 @@
     "/v1/categories": {
       "get": {
         "operationId": "StorefrontController_categories",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1454,6 +1513,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1502,6 +1571,16 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -1570,6 +1649,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1615,6 +1704,16 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2). Optional: send the Seller that owns the conversation to act as the store; without it the request acts as the Buyer.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -1762,18 +1861,14 @@
             }
           }
         },
+        "security": [
+          {
+            "deletionTicket": []
+          }
+        ],
         "summary": "Requires explicit acknowledgement; irreversible.",
         "tags": [
           "Deletion"
-        ],
-        "security": [
-          {},
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
         ]
       }
     },
@@ -1781,6 +1876,25 @@
       "post": {
         "operationId": "DeletionController_otpRequest",
         "parameters": [
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -1831,7 +1945,27 @@
     "/v1/deletion/otp/verify": {
       "post": {
         "operationId": "DeletionController_otpVerify",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1894,18 +2028,14 @@
             }
           }
         },
+        "security": [
+          {
+            "deletionTicket": []
+          }
+        ],
         "summary": "Blockers as items[] and what deletion does, before confirm.",
         "tags": [
           "Deletion"
-        ],
-        "security": [
-          {},
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
         ]
       }
     },
@@ -1920,6 +2050,25 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -2106,6 +2255,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2188,6 +2346,16 @@
             "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "description": "The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -2583,6 +2751,25 @@
         "operationId": "StorefrontController_resolve",
         "parameters": [
           {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
@@ -2717,6 +2904,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2807,6 +3013,25 @@
             "required": false,
             "in": "query",
             "description": "WO-010: a category code from GET /v1/categories, with type=PRODUCT_POST only (else VALIDATION_FAILED); must be enabled in the requester's Market. Narrows Product results; ranking is unchanged.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -6862,6 +7087,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6921,6 +7165,25 @@
             "required": false,
             "in": "query",
             "description": "A category code from GET /v1/categories (e.g. FASHION); must be enabled in the requester's Market.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -6985,6 +7248,25 @@
               "enum": [
                 "true"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -7053,6 +7335,25 @@
             "required": false,
             "in": "query",
             "description": "Page size, 1-100 (default 100).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -7128,6 +7429,25 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7194,6 +7514,25 @@
             "required": false,
             "in": "query",
             "description": "Page size, 1-50 (default 25).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -7266,6 +7605,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7323,6 +7681,25 @@
             "required": true,
             "in": "query",
             "description": "1-200 characters; matched in name and description.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Device",
+            "in": "header",
+            "description": "App clients: the registered device id. Browsers are identified by cookie instead.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Client",
+            "in": "header",
+            "description": "<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -7385,6 +7762,12 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-adulis_session"
+      },
+      "deletionTicket": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Authorization: Ticket <ticket>, the ticket from POST /v1/deletion/otp/verify (valid 15 minutes). A bearer token is refused."
       }
     },
     "schemas": {

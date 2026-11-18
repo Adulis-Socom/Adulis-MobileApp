@@ -69,6 +69,7 @@ import {
 } from './auth.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { ApiGate } from '../../common/http/api-gate';
+import { ApiDeviceHeaders, CLIENT_HEADER, DEVICE_HEADER } from '../../common/http/api-headers';
 
 /** C6 — identity and session (ADU-API-01 v1.6 section 12.2). */
 
@@ -82,17 +83,6 @@ const IDEMPOTENCY_KEY_HEADER = {
   name: 'Idempotency-Key',
   required: true,
   schema: { type: 'string', format: 'uuid' },
-} as const;
-const DEVICE_HEADER = {
-  name: 'X-Adulis-Device',
-  required: false,
-  description: 'App clients: the registered device id. Browsers are identified by cookie instead.',
-  schema: { type: 'string', format: 'uuid' },
-} as const;
-const CLIENT_HEADER = {
-  name: 'X-Adulis-Client',
-  required: false,
-  description: '<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.',
 } as const;
 
 @Controller()
@@ -465,6 +455,7 @@ export class AuthController {
     );
   }
 
+  @ApiDeviceHeaders()
   @Post('devices')
   @Public()
   @HttpCode(201)
@@ -501,6 +492,7 @@ export class AuthController {
   }
 
   @ApiIdempotencyKey()
+  @ApiDeviceHeaders()
   @Post('auth/recovery')
   @Public()
   @HttpCode(202)

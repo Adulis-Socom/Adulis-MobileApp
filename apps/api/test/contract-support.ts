@@ -53,8 +53,9 @@ interface Operation {
   responses: Record<string, { content?: Record<string, { schema?: Schema }> }>;
 }
 export interface Contract {
+  info?: { description?: string };
   paths: Record<string, Record<string, Operation>>;
-  components: { schemas: Record<string, Schema> };
+  components: { schemas: Record<string, Schema>; securitySchemes?: Record<string, Record<string, unknown>> };
 }
 
 let contract: Contract | undefined;

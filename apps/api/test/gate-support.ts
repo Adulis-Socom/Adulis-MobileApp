@@ -30,6 +30,11 @@ export type Surface = 'MOBILE' | 'CONSOLE';
 /** `'seller.x:y'` as a value. A quoted key (`'seller.x:y': true`) is a lookup table, not a gate. */
 const PERMISSION_LITERAL = /'(seller\.[a-z_.]+:[a-z_]+)'(?!\s*:)/g;
 const CONSOLE_CHECK = /audience\s*!==\s*'CONSOLE'/;
+/** The request's Market comes from the account, else from the device named by X-Adulis-Device. */
+const DEVICE_READ = /\brequesterMarket\(|\brequestingDevice\(|\bdeviceHeader\(|x-adulis-device/i;
+const KEYED = /\.runIdempotent\(/;
+/** The deletion ticket is read from `Authorization: Ticket <id>`. */
+const TICKET_READ = /startsWith\('Ticket '\)/;
 
 export function permissionSurfaces(): Map<string, Surface[]> {
   const seed = readFileSync(SEED, 'utf8');
@@ -73,6 +78,12 @@ export interface RouteGate {
   permissions: string[];
   /** The code refuses a session whose audience is not CONSOLE (it may do so for one case only). */
   consoleCheck: boolean;
+  /** The code reads X-Adulis-Device: the Market of an anonymous or app request is the device's. */
+  readsDevice: boolean;
+  /** The code runs through runIdempotent, whose actor is the device when nobody is signed in. */
+  keyed: boolean;
+  /** The code reads the deletion ticket from the Authorization header. */
+  readsTicket: boolean;
 }
 
 function sourceFiles(dir: string): string[] {
@@ -108,7 +119,7 @@ export function scanGates(): Map<string, RouteGate> {
     });
   }
 
-  const reach = (cls: string, method: string, seen: Set<string>, acc: { permissions: Set<string>; consoleCheck: boolean }, depth: number): void => {
+  const reach = (cls: string, method: string, seen: Set<string>, acc: { permissions: Set<string>; consoleCheck: boolean; readsDevice: boolean; keyed: boolean; readsTicket: boolean }, depth: number): void => {
     const info = classes.get(cls);
     const node = info?.methods.get(method);
     if (!info || !node || seen.has(`${cls}.${method}`)) return;
@@ -118,6 +129,9 @@ export function scanGates(): Map<string, RouteGate> {
     for (const m of text.matchAll(PERMISSION_LITERAL)) acc.permissions.add(m[1] as string);
     for (const m of text.matchAll(/\bcore\.(fn_\w+)/g)) for (const p of sqlFunctionPermissions(m[1] as string)) acc.permissions.add(p);
     if (CONSOLE_CHECK.test(text)) acc.consoleCheck = true;
+    if (DEVICE_READ.test(text)) acc.readsDevice = true;
+    if (KEYED.test(text)) acc.keyed = true;
+    if (TICKET_READ.test(text)) acc.readsTicket = true;
     const visit = (x: ts.Node): void => {
       if (ts.isCallExpression(x)) {
         const callee = x.expression.getText();
@@ -137,9 +151,9 @@ export function scanGates(): Map<string, RouteGate> {
   const out = new Map<string, RouteGate>();
   for (const cls of controllers) {
     for (const method of classes.get(cls)?.methods.keys() ?? []) {
-      const acc = { permissions: new Set<string>(), consoleCheck: false };
+      const acc = { permissions: new Set<string>(), consoleCheck: false, readsDevice: false, keyed: false, readsTicket: false };
       reach(cls, method, new Set(), acc, 0);
-      out.set(`${cls}.${method}`, { permissions: [...acc.permissions].sort(), consoleCheck: acc.consoleCheck });
+      out.set(`${cls}.${method}`, { permissions: [...acc.permissions].sort(), consoleCheck: acc.consoleCheck, readsDevice: acc.readsDevice, keyed: acc.keyed, readsTicket: acc.readsTicket });
     }
   }
   cached = out;
