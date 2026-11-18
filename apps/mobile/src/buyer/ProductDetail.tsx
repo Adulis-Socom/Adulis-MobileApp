@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +13,7 @@ import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i1
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { MessageSellerButton } from './MessageSellerButton';
+import { NO_VARIANT, chosenVariant, isSelectable, transition } from './product-variants';
 import { isPathName, isPublicRef, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
 import { SaveButton } from './SaveButton';
@@ -32,8 +33,12 @@ import { SaveButton } from './SaveButton';
  *   Product says "Currently unavailable" and can still be saved.
  * - An attribute shows only when the catalogue can say it in words (OVN-075): a code is
  *   never Buyer copy.
- * - Revalidated on opening, on returning from the background and on a pull; a 404 clears it.
- *   Only the opening counts as a view (OVN-073).
+ * - Options are chosen one at a time (product-variants.ts): only an option the server offers now
+ *   can be chosen, and the choice is checked against every new answer, so it never outlives the
+ *   server's say-so. The chosen option's own price is the one shown; nothing is bought by it.
+ * - Revalidated on opening, on returning from the background, on returning from another screen
+ *   (the Seller, the conversation, sign-in) and on a pull; a 404 clears it. Only the opening
+ *   counts as a view (OVN-073).
  */
 export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: unknown; from?: unknown }) {
   const { api } = useSession();
@@ -41,6 +46,16 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
   const read = usePublicRead(
     ['product', valid ? handle : '', valid ? slug : ''],
     valid ? (revalidation) => api.product(handle, slug, revalidation) : null,
+  );
+  // Coming back to this screen asks again, so price and availability follow the server rather
+  // than what was on screen when the Buyer left; the first focus is the opening read.
+  const { revalidate } = read;
+  const opened = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (opened.current && valid) revalidate();
+      opened.current = true;
+    }, [revalidate, valid]),
   );
   if (read.value === undefined) {
     return (
@@ -86,12 +101,21 @@ function ProductContent({
   const locale = useLocale();
   const router = useRouter();
   const money = (minor: number, currency: string) => formatMinor(locale, minor, currency);
-  // The server's span of the ACTIVE Variants' prices; null is "no current price", never the seed.
-  const price = formatPriceSpan(locale, t, {
-    min: product.price_min_minor,
-    max: product.price_max_minor,
-    currency: product.price_currency,
-  });
+  // The option the Buyer chose, re-checked against this answer on every render: one the server no
+  // longer offers is dropped here and stays dropped.
+  const [selection, setSelection] = useState(NO_VARIANT);
+  const checked = transition(selection, { type: 'PROJECT' }, product);
+  if (checked !== selection) setSelection(checked);
+  const chosen = chosenVariant(checked, product);
+  // The chosen option's own price; else the server's span of the ACTIVE Variants' prices. Null
+  // is "no current price", never the seed.
+  const price = chosen
+    ? money(chosen.price_minor, chosen.price_currency)
+    : formatPriceSpan(locale, t, {
+        min: product.price_min_minor,
+        max: product.price_max_minor,
+        currency: product.price_currency,
+      });
   const details = readableAttributes(product.attributes, t);
   const availability = (available: boolean) =>
     t(available ? 'buyer.product.available' : 'buyer.product.unavailable');
@@ -116,7 +140,9 @@ function ProductContent({
         {product.name}
       </AppText>
       {price === null ? null : (
-        <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{price}</AppText>
+        <AppText testID="product-price" style={{ fontWeight: theme.fontWeight.semibold }}>
+          {price}
+        </AppText>
       )}
       <AppText
         style={{
@@ -165,19 +191,21 @@ function ProductContent({
       ) : null}
 
       {product.variants.length > 0 ? (
-        <View style={{ gap: theme.space.xs }}>
+        <View accessibilityRole="radiogroup" testID="product-options" style={{ gap: theme.space.xs }}>
           <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
             {t('buyer.product.options')}
           </AppText>
           {product.variants.map((v) => {
             const price = money(v.price_minor, v.price_currency);
-            // The server's per-option answer (OVN-074): never true while the Product is not.
-            const optionAvailable = v.available;
-            const state = availability(optionAvailable);
+            // The server's per-option answer (OVN-074), never true here while the Product is not.
+            const selectable = isSelectable(product, v);
+            const state = availability(selectable);
+            const selected = chosen?.id === v.id;
             return (
-              <View
-                key={v.variant_key}
-                accessible
+              <Pressable
+                key={v.id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected, disabled: !selectable }}
                 accessibilityLabel={
                   fillSlots(t('buyer.product.option'), {
                     option: v.variant_key,
@@ -185,9 +213,13 @@ function ProductContent({
                     availability: state,
                   }) ?? v.variant_key
                 }
+                disabled={!selectable}
+                onPress={() => setSelection((s) => transition(s, { type: 'SELECT', id: v.id }, product))}
+                testID="product-option"
                 style={{
-                  borderWidth: 1,
-                  borderColor: theme.color.border,
+                  minHeight: theme.touchTarget,
+                  borderWidth: selected ? 2 : 1,
+                  borderColor: selected ? theme.color.accent : theme.color.border,
                   borderRadius: theme.radius.md,
                   padding: theme.space.sm,
                   backgroundColor: theme.color.surface,
@@ -197,12 +229,12 @@ function ProductContent({
                 <AppText>{price}</AppText>
                 <AppText
                   style={{
-                    color: optionAvailable ? theme.color.text : theme.color.textSecondary,
+                    color: selectable ? theme.color.text : theme.color.textSecondary,
                   }}
                 >
                   {state}
                 </AppText>
-              </View>
+              </Pressable>
             );
           })}
         </View>
