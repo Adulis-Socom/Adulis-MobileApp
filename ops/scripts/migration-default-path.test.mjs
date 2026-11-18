@@ -36,6 +36,21 @@ const RAW_RUNNER = new RegExp(
   ].join('|'),
   'm',
 );
+/**
+ * A runner start that is BUILT instead of written out: `join(repo, 'node_modules', 'node-pg-migrate', 'bin', ...)`,
+ * `path.resolve(root, 'node-pg-migrate')`, a template such as `${root}/node_modules/node-pg-migrate/dist/cli.js`.
+ * No single string holds `node-pg-migrate/bin`, so RAW_RUNNER cannot see it. In code, the runner's package or bin
+ * name is never a quoted string of its own and never a path segment, except in the guard.
+ */
+const BT = String.fromCharCode(96); // a backtick, which cannot sit inside the template literals below
+const BUILT_RUNNER = new RegExp(
+  [
+    `['"${BT}]node-pg-migrate(?:\\.js)?['"${BT}]`,
+    `[\\\\/]node-pg-migrate(?:\\.js)?[\\\\/'"${BT}]`,
+  ].join('|'),
+  'm',
+);
+const CODE = /\.(mjs|cjs|js|ts|mts|cts|tsx|sh|ps1|cmd|bat)$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.expo', '.next']);
 const TEXT =
   /\.(mjs|cjs|js|ts|mts|cts|tsx|json|toml|ya?ml|sh|ps1|cmd|bat|md)$|(^|\/)(Dockerfile[^/]*|docker-compose[^/]*|Makefile)$/;
@@ -156,6 +171,49 @@ test('no script, workflow, runbook or doc outside the guard starts the raw runne
   for (const f of SCANNED.filter((f) => f.endsWith('package.json')))
     for (const [n, cmd] of Object.entries(JSON.parse(read(f)).scripts ?? {}))
       assert.doesNotMatch(cmd, /node-pg-migrate/, `${f} script ${n}`);
+});
+
+test('the built-path pattern recognises a runner start assembled from segments, and not prose or the guard script', () => {
+  const built = [
+    "join(repo, 'node_modules', 'node-pg-migrate', 'bin', 'node-pg-migrate.js'),",
+    "path.resolve(root, 'node-pg-migrate')",
+    "const bin = ['node_modules', 'node-pg-migrate', 'bin', 'node-pg-migrate.js'].join('/');",
+    '`${root}/node_modules/node-pg-migrate/dist/cli.js`',
+    "const p = 'C:\\x\\node_modules\\node-pg-migrate\\bin';",
+    "['node-pg-migrate.js', 'seed.mjs']",
+  ];
+  for (const x of built) assert.match(x, BUILT_RUNNER, x);
+  const fine = [
+    '// node-pg-migrate applies whatever the directory holds',
+    "join(repo, 'ops', 'scripts', 'migration-guard.mjs')",
+    "[guard, 'up', '--expect-commit', sha]",
+    'node-pg-migrate-compat is not the runner',
+  ];
+  for (const x of fine) assert.doesNotMatch(x, BUILT_RUNNER, x);
+});
+
+test('no code file outside the guard builds a path to the raw runner (ops/native and every other directory included)', () => {
+  const scanned = SCANNED.filter((f) => CODE.test(f) && f !== GUARD && f !== SELF);
+  assert.ok(
+    scanned.some((f) => f.startsWith('ops/native/')),
+    'the scan must reach ops/native',
+  );
+  assert.ok(scanned.length > 100, `the scan must reach the code (${scanned.length})`);
+  const offenders = scanned.filter((f) =>
+    BUILT_RUNNER.test(readFileSync(path.join(ROOT, f), 'utf8')),
+  );
+  assert.deepEqual(
+    offenders,
+    [],
+    'only the guard starts node-pg-migrate, however its path is spelled',
+  );
+});
+
+test('the native harness migrates only through the guard, with the verified commit', () => {
+  const stack = read('ops/native/lib/stack.mjs');
+  assert.match(stack, /migration-guard\.mjs/);
+  assert.match(stack, /'--expect-commit'/);
+  assert.doesNotMatch(stack, /--no-source-check/);
 });
 
 test('every db:migrate reference in workflows, scripts and docs resolves to a script that runs the guard', () => {
