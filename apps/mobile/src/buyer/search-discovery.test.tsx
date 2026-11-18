@@ -147,9 +147,10 @@ describe('typing and submitting', () => {
     expect(screen.queryByLabelText(label('Woven basket'))).not.toBeOnTheScreen();
   });
 
-  it('leaving Search while the answer is on its way: the late answer changes nothing and nothing breaks', async () => {
+  it('leaving Search while the answer is on its way: the late answer is not kept, and opening Search again asks again', async () => {
     const held = deferred();
-    serve(() => held.promise);
+    let asked = 0;
+    serve(({ type }) => (asked++ === 0 ? held.promise : page(type, [product('basket', 'Woven basket')])));
     api.on('GET /v1/fyp', () => ok({ feed_session_id: null, algorithm_version: null, items: [], next_cursor: null }));
     const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
@@ -162,10 +163,16 @@ describe('typing and submitting', () => {
       await act(() => router.back());
       await settle();
       expect(r.getPathname()).toBe('/home/for-you');
-      await act(async () => held.resolve(page('TOP', [product('basket', 'Woven basket')])));
+      await act(async () => held.resolve(page('TOP', [product('stale', 'Stale answer')])));
       await settle();
       expect(screen.getByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
-      expect(screen.queryByLabelText(label('Woven basket'))).not.toBeOnTheScreen();
+      expect(screen.queryByLabelText(label('Stale answer'))).not.toBeOnTheScreen();
+      // Search opened again is a new screen: the answer that landed late was not kept for it.
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.search'] }));
+      await typeQuery('basket');
+      expect(await screen.findByLabelText(label('Woven basket'))).toBeOnTheScreen();
+      expect(screen.queryByLabelText(label('Stale answer'))).not.toBeOnTheScreen();
+      expect(calls()).toHaveLength(2);
       expect(errors).not.toHaveBeenCalled();
     } finally {
       errors.mockRestore();
