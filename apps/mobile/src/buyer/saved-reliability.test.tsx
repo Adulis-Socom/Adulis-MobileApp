@@ -37,6 +37,8 @@ const timeOut = () => act(() => jest.advanceTimersByTimeAsync(11_000));
 const flush = async () => {
   for (let i = 0; i < 20; i++) await act(() => Promise.resolve());
 };
+// Time passes, so the turn that dispatches a failed Save has run while the read after it is still held.
+const settle = () => act(() => jest.advanceTimersByTimeAsync(100));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -293,7 +295,7 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
     await renderRouter(APP_DIR, { initialUrl: PRODUCT });
     await fireEvent.press(await saveButton());
     await waitFor(() => expect(stateCalls().length).toBeGreaterThanOrEqual(2));
-    await flush();
+    await settle();
     expect(notChanged()).toBeNull();
     expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeOnTheScreen();
     await act(async () => gate.release());
@@ -313,7 +315,7 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
     await renderRouter(APP_DIR, { initialUrl: PRODUCT });
     await fireEvent.press(await saveButton());
     await waitFor(() => expect(stateCalls().length).toBeGreaterThanOrEqual(2));
-    await flush();
+    await settle();
     expect(notChanged()).toBeNull();
     await act(async () => gate.release());
     expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
@@ -425,7 +427,7 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
       await openShop();
       await fireEvent.press(card());
       await waitFor(() => expect(api.callsTo('POST /v1/collections/saved-state:batch').length).toBeGreaterThanOrEqual(2));
-      await flush();
+      await settle();
       expect(alert).not.toHaveBeenCalled();
       expect(isOn()).toBe(false);
       await act(async () => gate.release());
@@ -450,7 +452,7 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
       await openShop();
       await fireEvent.press(card());
       await waitFor(() => expect(api.callsTo('POST /v1/collections/saved-state:batch').length).toBeGreaterThanOrEqual(2));
-      await flush();
+      await settle();
       expect(alert).not.toHaveBeenCalled();
       await act(async () => gate.release());
       await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.failed'], expect.stringMatching(/./)));
