@@ -1,4 +1,5 @@
 import { en } from '@adulis/locale/mobile';
+import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { useUiStore } from '../state/ui-store';
@@ -280,6 +281,47 @@ describe('the Buyer inbox', () => {
     expect(await screen.findByText(en['buyer.notifications.read_state'])).toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.notifications.unread'])).toBeNull();
     expect(inboxCalls().at(-1)?.headers.Authorization).toBe(`Bearer ${OTHER_TOKEN}`);
+  });
+
+  it('a page for the first Account that lands after the second one signed in is never shown, and nothing is asked under the first credential again', async () => {
+    signedIn();
+    api.on('GET /v1/bootstrap', (call) =>
+      call.headers.Authorization ? { status: 200, body: bootstrapBody({ account_context: SIGNED_IN_CONTEXT }) } : { status: 200, body: bootstrapBody() },
+    );
+    api.on('POST /v1/auth/otp/verify', (call) =>
+      call.body?.code === SIGN_IN_CODE
+        ? { status: 200, body: { account_id: '0b6f1a3e-3333-4333-8333-333333333333', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: OTHER_TOKEN } }
+        : problem(401, 'OTP_INVALID', 'auth'),
+    );
+    installInbox({
+      [`Bearer ${GOOD_TOKEN}`]: [row(1), row(2), row(3)],
+      [`Bearer ${OTHER_TOKEN}`]: [row(9, { read_at: hoursAgo(1) })],
+    });
+    const { gate, release } = held();
+    api.on('GET /v1/notifications', async (call) => {
+      if (call.headers.Authorization === `Bearer ${GOOD_TOKEN}`) {
+        await gate;
+        return page([row(1), row(2), row(3)]);
+      }
+      return page([row(9, { read_at: hoursAgo(1) })]);
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/notifications' });
+    await waitFor(() => expect(inboxCalls()).toHaveLength(1));
+    await act(() => router.push('/account' as never));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911000002');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await waitFor(() => expect(inboxCalls().some((c) => c.headers.Authorization === `Bearer ${OTHER_TOKEN}`)).toBe(true));
+    await act(async () => release());
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    await act(() => router.push('/notifications' as never));
+    expect(await screen.findByText(en['buyer.notifications.read_state'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.notifications.unread'])).toBeNull();
+    const logout = api.calls.findIndex((c) => c.path === '/v1/auth/logout');
+    expect(api.calls.slice(logout + 1).filter((c) => c.headers.Authorization === `Bearer ${GOOD_TOKEN}`)).toEqual([]);
   });
 
   it('10. a notification the server does not find for this Account fails safely', async () => {

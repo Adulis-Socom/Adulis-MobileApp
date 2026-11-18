@@ -23,7 +23,7 @@ export interface Recorded {
 }
 
 /** `unreadable`: the body is not JSON (a proxy's HTML page, a cut-off answer): reading it throws (WO-022). */
-export type Reply = { status: number; body?: unknown; unreadable?: true } | 'offline' | 'hang';
+export type Reply = { status: number; body?: unknown; unreadable?: true; headers?: Record<string, string> } | 'offline' | 'hang';
 // A promise lets a test hold a reply and release it later (a response that lands late).
 export type Handler = (call: Recorded) => Reply | Promise<Reply>;
 
@@ -260,8 +260,10 @@ export function installFakeApi() {
         init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))),
       );
     }
+    const replyHeaders = Object.fromEntries(Object.entries(reply.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
     return {
       status: reply.status,
+      headers: { get: (name: string) => replyHeaders[name.toLowerCase()] ?? null },
       json: async () => {
         if (reply.unreadable) throw new SyntaxError('Unexpected token < in JSON');
         return reply.body;
