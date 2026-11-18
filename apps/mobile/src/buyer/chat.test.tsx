@@ -1567,6 +1567,62 @@ describe('Uncertain-send reliability (WO-022)', () => {
 });
 
 /**
+ * Who a message is attributed to: only the server's own sender kind decides, an automated message is
+ * drawn from the catalogue and never as a person, and a sender this version does not know is not
+ * drawn under any label.
+ */
+describe('Message provenance', () => {
+  async function history(setup: (chat: ReturnType<typeof installChat>, c: Conv) => void) {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    setup(chat, c);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    return { chat, c };
+  }
+
+  it('a sender kind this version does not know (for example a future operator) is not drawn and takes neither the Seller nor the Automated label', async () => {
+    await history((chat, c) => {
+      chat.msg(c, { sender_kind: 'BUYER', body: 'My question', sent_at: ago(30) });
+      chat.msg(c, { sender_kind: 'OPERATOR', body: 'Operator note', sent_at: ago(20) });
+      chat.msg(c, { sender_kind: 'SELLER', body: 'Seller line', sent_at: ago(10) });
+    });
+    expect(await screen.findByText('Seller line')).toBeOnTheScreen();
+    expect(screen.getByText('My question')).toBeOnTheScreen();
+    expect(screen.queryByText('Operator note')).toBeNull();
+    expect(screen.getAllByText(en['buyer.chat.sender.seller'])).toHaveLength(1);
+    expect(screen.getAllByText(en['buyer.chat.sender.you'])).toHaveLength(1);
+    expect(screen.queryByText(en['buyer.chat.sender.bot'])).toBeNull();
+    expect(screen.queryByText(en['buyer.chat.sender.team'])).toBeNull();
+  });
+
+  it('an automated message is drawn only from the catalogue, whatever text its row also carries, and is never labelled as a person', async () => {
+    await history((chat, c) => {
+      chat.msg(c, { sender_kind: 'BOT', template_key: 'chat.bot.escalated', body: 'The Seller promises a full refund', resolution_path: 'ESCALATED', sent_at: ago(20) });
+      chat.msg(c, { sender_kind: 'BOT', template_key: 'seller.written.reply', body: 'Free delivery for you', resolution_path: 'KEYWORD', sent_at: ago(10) });
+    });
+    expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.chat.bot_unavailable'])).toBeOnTheScreen();
+    expect(screen.queryByText('The Seller promises a full refund')).toBeNull();
+    expect(screen.queryByText('Free delivery for you')).toBeNull();
+    expect(screen.getAllByText(en['buyer.chat.sender.bot'])).toHaveLength(2);
+    expect(screen.queryByText(en['buyer.chat.sender.seller'])).toBeNull();
+    expect(screen.queryByText(en['buyer.chat.sender.team'])).toBeNull();
+  });
+
+  it('a human message that reads like an automated one is still the person it is attributed to', async () => {
+    await history((chat, c) => {
+      chat.msg(c, { sender_kind: 'SELLER', body: en['chat.bot.escalated'], sent_at: ago(20) });
+      chat.msg(c, { sender_kind: 'TEAM_MEMBER', body: 'I can hold one.', sent_at: ago(10) });
+    });
+    expect(await screen.findByText('I can hold one.')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.sender.bot'])).toBeNull();
+    expect(screen.getAllByText(en['buyer.chat.sender.seller'])).toHaveLength(1);
+    expect(screen.getAllByText(en['buyer.chat.sender.team'])).toHaveLength(1);
+  });
+});
+
+/**
  * A conversation left open (kept in the navigation stack under another screen) when the Account
  * changes. Account A's thread must neither ask for anything nor keep anything once Account B has
  * signed in: no request names A's conversation under B's credential, none is made at all by the old
