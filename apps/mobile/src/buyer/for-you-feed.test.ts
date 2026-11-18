@@ -7,6 +7,9 @@ import {
   freshnessIntervalMs,
   mediaUrl,
   needsForegroundRevalidation,
+  noWithdrawals,
+  withdrawFrom,
+  withdrawnIn,
 } from './for-you-feed';
 
 describe('needsForegroundRevalidation (WO-DISC-002A, ADU-MOB-02 S185)', () => {
@@ -71,6 +74,41 @@ describe('feedUnits', () => {
     // The pages themselves still carry it, and their cursors, as served.
     expect(pages.map((p) => p.next_cursor)).toEqual(['c1', 'c2']);
     expect(pages[0]!.items).toHaveLength(3);
+  });
+});
+
+describe('the record of withdrawn Scenes', () => {
+  const ref = (n: number) => fypUnit(n).public_ref;
+
+  it('hides a Scene only from the session it was found for, and gathers several for that session', () => {
+    const session = {};
+    const record = withdrawFrom(withdrawFrom(noWithdrawals, session, ref(1)), session, ref(2));
+    expect([...(withdrawnIn(record, session) ?? [])]).toEqual([ref(1), ref(2)]);
+    // Another session, with an identical first page or not, is not this one.
+    expect(withdrawnIn(record, {})).toBeUndefined();
+    expect(withdrawnIn(record, undefined)).toBeUndefined();
+  });
+
+  it('holds one session, however many go by: a newer session replaces it, and nothing loaded records nothing', () => {
+    let record = noWithdrawals;
+    for (let n = 1; n <= 1000; n++) record = withdrawFrom(record, {}, ref(n));
+    expect(record.refs.size).toBe(1);
+    expect(withdrawFrom(noWithdrawals, undefined, ref(1))).toBe(noWithdrawals);
+    const first = {};
+    const kept = withdrawFrom(noWithdrawals, first, ref(1));
+    // A repeat for the session already held adds no entry.
+    expect(withdrawFrom(kept, first, ref(1)).refs.size).toBe(1);
+    expect(withdrawnIn(withdrawFrom(kept, {}, ref(2)), first)).toBeUndefined();
+  });
+
+  it('a record made for a session that is no longer shown says nothing about the next one, even after the key is reused', () => {
+    // The same feed key can name a new server session (sign out, sign in): only the first page tells them apart.
+    const earlier = fypPage([fypUnit(1)], null);
+    const later = fypPage([fypUnit(1)], null);
+    expect(earlier).toEqual(later);
+    const record = withdrawFrom(noWithdrawals, earlier, ref(1));
+    expect(withdrawnIn(record, earlier)?.has(ref(1))).toBe(true);
+    expect(withdrawnIn(record, later)).toBeUndefined();
   });
 });
 

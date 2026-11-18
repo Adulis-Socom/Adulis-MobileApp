@@ -8,6 +8,8 @@ import type { FypUnit } from '../api/client';
 import { useUiStore } from '../state/ui-store';
 import { claimsIn, elementsUnder, overlaysIn, renderedText } from '../testing/discovery-rules';
 import {
+  GOOD_TOKEN,
+  SIGN_IN_CODE,
   bootstrapBody,
   fypPage,
   fypUnit,
@@ -16,7 +18,7 @@ import {
   publicScene,
   type Reply,
 } from '../testing/fake-api';
-import { resetSecureStore } from '../testing/secure-store-mock';
+import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
  * What the For You feed does when pages repeat or run dry, when the Buyer leaves and comes
@@ -682,5 +684,77 @@ describe('a Scene the server stops serving', () => {
     expect(await screen.findByText('Store 4')).toBeOnTheScreen();
     expect(listed()).toEqual(refsOf(3, 1, 4));
     expect(queries()).toEqual([{}, {}]);
+  });
+
+  it('a feed session that is still loading when the 404 arrives is the server\'s to decide: it lists the Scene if the server does', async () => {
+    const refreshed = held();
+    api.on(FEED, () => (feedCalls().length === 1 ? ok(fypPage([fypUnit(1), fypUnit(2), fypUnit(3)])) : refreshed.reply));
+    api.on(sceneRead(3), notAvailable);
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 3');
+    await pullToRefresh();
+    await waitFor(() => expect(feedCalls()).toHaveLength(2));
+
+    await exploreCard(2);
+    expect(await screen.findByText(en['buyer.scene.gone'])).toBeOnTheScreen();
+    await backToFeed();
+    // The old session's cards stand in while the new one loads, without the Scene...
+    expect(listed()).toEqual(refsOf(1, 2));
+
+    // ...and the new session, started before the answer and answered after it, is the server's word.
+    await refreshed.release(ok(fypPage([fypUnit(3), fypUnit(1), fypUnit(2)])));
+    expect(await screen.findByText('Store 3')).toBeOnTheScreen();
+    expect(listed()).toEqual(refsOf(3, 1, 2));
+  });
+
+  it('a Scene taken out for one Account is listed again for the next Account that signs in on the same mounted feed', async () => {
+    // Signed in as the first Account. The server lists both Scenes in every session, whoever asks.
+    resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
+    api.on(FEED, () => ok(fypPage([fypUnit(1), fypUnit(2)])));
+    api.on(sceneRead(1), notAvailable);
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 2');
+    await exploreCard(0);
+    expect(await screen.findByText(en['buyer.scene.gone'])).toBeOnTheScreen();
+    await backToFeed();
+    expect(listed()).toEqual(refsOf(2));
+
+    // Sign out: the guest session is a new one and lists the Scene.
+    await fireEvent.press(bottomTab(en['buyer.tab.you']));
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await fireEvent.press(bottomTab(en['buyer.tab.home']));
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    expect(listed()).toEqual(refsOf(1, 2));
+    expect(feedCalls().at(-1)?.headers.Authorization).toBeUndefined();
+
+    // Another Account signs in on the same, still mounted feed: a new Account session, which lists it too.
+    await fireEvent.press(bottomTab(en['buyer.tab.orders']));
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911234567');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await screen.findByText(en['buyer.orders.coming']);
+    await fireEvent.press(bottomTab(en['buyer.tab.home']));
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    expect(feedCalls().at(-1)?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`);
+    expect(listed()).toEqual(refsOf(1, 2));
+  });
+
+  it('a 404 that is not the server\'s own problem document (a proxy\'s page) is a failure, not "not available", and the card stays', async () => {
+    api.on(FEED, () => ok(fypPage([fypUnit(1), fypUnit(2)])));
+    api.on(sceneRead(1), (): Reply => ({ status: 404, unreadable: true }));
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 2');
+    await exploreCard(0);
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['common.retry'] })).toBeEnabled();
+    expect(screen.queryByText(en['buyer.scene.gone'])).not.toBeOnTheScreen();
+
+    await backToFeed();
+    expect(await screen.findByText('Store 2')).toBeOnTheScreen();
+    expect(listed()).toEqual(refsOf(1, 2));
+    expect(stores()).toEqual(['Store 1', 'Store 2']);
   });
 });
