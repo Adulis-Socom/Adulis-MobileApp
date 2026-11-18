@@ -67,11 +67,12 @@ export type SessionList = Json<paths['/v1/auth/sessions']['get']['responses'][20
 export type AccountSession = SessionList['data'][number];
 export type ProblemItem = NonNullable<Problem['items']>[number];
 
+/** `retryAfterSeconds`: the wait the server or an intermediary asked for (Retry-After, else the problem's slot). */
 export type ApiFailure =
   | { kind: 'offline' }
   | { kind: 'timeout' }
-  | { kind: 'problem'; status: number; problem: Problem }
-  | { kind: 'unexpected'; status: number };
+  | { kind: 'problem'; status: number; problem: Problem; retryAfterSeconds?: number }
+  | { kind: 'unexpected'; status: number; retryAfterSeconds?: number };
 
 export class ApiError extends Error {
   constructor(readonly failure: ApiFailure) {
@@ -116,6 +117,41 @@ export function problemCode(error: unknown): Problem['code'] | null {
 }
 
 const TIMEOUT_MS = 10_000;
+const MAX_RETRY_AFTER_SECONDS = 3600;
+const HTTP_DATE = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
+const clampWait = (seconds: number) => Math.min(Math.max(Math.ceil(seconds), 0), MAX_RETRY_AFTER_SECONDS);
+
+/**
+ * A Retry-After value as whole seconds, 0 to an hour: delta-seconds or an HTTP-date (the two forms
+ * the header has in current use). Anything else is ignored, never guessed: a loose date parser would
+ * read "1.5" as a day in 2001.
+ */
+export function parseRetryAfter(value: string | null, now = Date.now()): number | null {
+  const v = value?.trim() ?? '';
+  if (/^\d{1,9}$/.test(v)) return clampWait(Number(v));
+  if (!HTTP_DATE.test(v)) return null;
+  const at = Date.parse(v);
+  return Number.isNaN(at) ? null : clampWait((at - now) / 1000);
+}
+
+/** How long to wait before another attempt, from a failed answer's Retry-After; null when none was given. */
+export function retryAfterMs(error: unknown): number | null {
+  if (!(error instanceof ApiError)) return null;
+  const { failure } = error;
+  return (failure.kind === 'problem' || failure.kind === 'unexpected') && failure.retryAfterSeconds !== undefined
+    ? failure.retryAfterSeconds * 1000
+    : null;
+}
+
+/** The header first (it is what an intermediary can set), else the API's own slot. */
+function waitAsked(res: Response, problem: Problem | null): { retryAfterSeconds?: number } {
+  const slot = problem?.slots?.retry_after_seconds;
+  const seconds =
+    parseRetryAfter(res.headers.get('Retry-After')) ?? (typeof slot === 'number' && Number.isFinite(slot) ? clampWait(slot) : null);
+  return seconds === null ? {} : { retryAfterSeconds: seconds };
+}
+
 const SELLER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // `<surface>/<version>` (the contract's X-Adulis-Client): the version the bootstrap floor reads.
@@ -222,7 +258,8 @@ export function createApiClient(deps: ApiDeps) {
       }
     }
     const problem = await readProblem(res);
-    if (!problem) throw new ApiError({ kind: 'unexpected', status: res.status });
+    const asked = waitAsked(res, problem);
+    if (!problem) throw new ApiError({ kind: 'unexpected', status: res.status, ...asked });
     if (
       sessionToken &&
       res.status === 401 &&
@@ -230,7 +267,7 @@ export function createApiClient(deps: ApiDeps) {
     ) {
       deps.onSessionEnded(sessionToken);
     }
-    throw new ApiError({ kind: 'problem', status: res.status, problem });
+    throw new ApiError({ kind: 'problem', status: res.status, problem, ...asked });
   }
 
   return {
