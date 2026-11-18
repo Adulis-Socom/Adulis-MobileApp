@@ -76,6 +76,13 @@ describe('judging a failed send', () => {
     expect(judgeFailure(codeOnly(503, 9), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: 9_000 });
   });
 
+  it('a wait of zero seconds is no wait', () => {
+    expect(judgeFailure(gateway(429, 0), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
+    expect(judgeFailure(envelope(503, 'INTERNAL', undefined, 0), fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    expect(waitBeforeRetryMs(gateway(429, 0))).toBeNull();
+    expect(waitBeforeRetryMs(gateway(429, 1))).toBe(1000);
+  });
+
   it('a 429 without any wait given holds nothing, and a wait on any other status is not a hold', () => {
     expect(judgeFailure(gateway(429), fresh, NOW).holdMs).toBeNull();
     expect(judgeFailure(envelope(429, 'RATE_LIMITED'), fresh, NOW).holdMs).toBeNull();

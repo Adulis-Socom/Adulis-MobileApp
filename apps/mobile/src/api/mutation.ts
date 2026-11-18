@@ -35,5 +35,8 @@ export const keyConflict = (failure: unknown): boolean => problemCode(failure) =
 export function waitBeforeRetryMs(failure: unknown): number | null {
   if (!(failure instanceof ApiError)) return null;
   const f = failure.failure;
-  return (f.kind === 'problem' || f.kind === 'unexpected') && (f.status === 429 || f.status === 503) ? retryAfterMs(failure) : null;
+  if (!((f.kind === 'problem' || f.kind === 'unexpected') && (f.status === 429 || f.status === 503))) return null;
+  const ms = retryAfterMs(failure);
+  // A wait of zero seconds is no wait.
+  return ms !== null && ms > 0 ? ms : null;
 }
