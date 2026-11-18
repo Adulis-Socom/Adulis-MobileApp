@@ -19,7 +19,7 @@
   --adu-neutral-100: #eceae6;
   --adu-neutral-200: #dbd8d2;
   --adu-neutral-300: #c1bdb4;
-  --adu-neutral-400: #9c968b;
+  --adu-neutral-400: #8a847b;
   --adu-neutral-500: #78726a;
   --adu-neutral-600: #57524b;
   --adu-neutral-700: #3d3a34;
@@ -32,7 +32,7 @@
   --adu-color-surface-muted: var(--adu-neutral-100);
   --adu-color-surface-sunk: var(--adu-neutral-100);
   --adu-color-border: var(--adu-neutral-200);
-  --adu-color-border-strong: var(--adu-neutral-300);
+  --adu-color-border-strong: var(--adu-neutral-400);
   --adu-color-text-muted: var(--adu-neutral-500);
   --adu-color-text-secondary: var(--adu-neutral-700);
   --adu-color-text: var(--adu-neutral-900);
@@ -145,7 +145,7 @@
   --adu-neutral-100: #26231e;
   --adu-neutral-200: #332f28;
   --adu-neutral-300: #453f36;
-  --adu-neutral-400: #5c554a;
+  --adu-neutral-400: #746d61;
   --adu-neutral-500: #8b8478;
   --adu-neutral-600: #a9a296;
   --adu-neutral-700: #c8c2b7;
@@ -181,7 +181,7 @@
   --adu-neutral-100: #26231e;
   --adu-neutral-200: #332f28;
   --adu-neutral-300: #453f36;
-  --adu-neutral-400: #5c554a;
+  --adu-neutral-400: #746d61;
   --adu-neutral-500: #8b8478;
   --adu-neutral-600: #a9a296;
   --adu-neutral-700: #c8c2b7;

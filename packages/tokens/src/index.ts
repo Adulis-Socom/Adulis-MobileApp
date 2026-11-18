@@ -41,7 +41,7 @@ export const neutral = {
   100: '#eceae6',
   200: '#dbd8d2',
   300: '#c1bdb4',
-  400: '#9c968b',
+  400: '#8a847b', // the edge of a control: at least 3:1 on the page and on a card
   500: '#78726a', // lightest text permitted on white (~5.3:1)
   600: '#57524b',
   700: '#3d3a34',
@@ -55,7 +55,9 @@ export const color = {
   surfaceMuted: neutral[100], // the console already referenced this; now defined
   surfaceSunk: neutral[100],
   border: neutral[200],
-  borderStrong: neutral[300],
+  // The boundary of a control with no other outline (a field, a quiet button, an unchosen
+  // option, an unchecked box) is how it is found, so it clears 3:1; `border` only separates.
+  borderStrong: neutral[400],
   textMuted: neutral[500],
   textSecondary: neutral[700],
   text: neutral[900],
@@ -108,7 +110,7 @@ export const neutralDark = {
   100: '#26231e',
   200: '#332f28', // border
   300: '#453f36',
-  400: '#5c554a',
+  400: '#746d61', // the edge of a control: at least 3:1 on the page and on a raised surface
   500: '#8b8478', // lightest text permitted on the page (~4.9:1)
   600: '#a9a296',
   700: '#c8c2b7',
@@ -141,7 +143,7 @@ export const colorDark = {
   surfaceMuted: neutralDark[100],
   surfaceSunk: neutralDark[100],
   border: neutralDark[200],
-  borderStrong: neutralDark[300],
+  borderStrong: neutralDark[400],
   textMuted: neutralDark[500],
   textSecondary: neutralDark[700],
   text: neutralDark[900],
