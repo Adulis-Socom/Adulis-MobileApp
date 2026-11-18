@@ -889,11 +889,11 @@ test('db:reset of a persistent database proves the authorization before it drops
   assert.match(src, /--expect-commit=/);
   assert.match(
     src,
-    /run\('pnpm', \['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=\$\{decision\.target\}`\]\)/,
+    /if \(approvedSha\) run\('pnpm', \['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=\$\{decision\.target\}`\]\)/,
   );
   assert.match(
     src,
-    /run\('pnpm', \['db:migrate'\]\)/,
+    /else run\('pnpm', \['db:migrate'\]\)/,
     'a disposable database still migrates with the ordinary command',
   );
 });
