@@ -182,7 +182,9 @@ test('preflight blocks on low memory, low disk, another test pair, an uncleaned 
       [],
     );
     assert.match(
-      (await preflightProblems(okDocker(), { root, freeBytes: 0.5 * GB, diskBytes: 50 * GB })).join(),
+      (
+        await preflightProblems(okDocker(), { root, freeBytes: 0.5 * GB, diskBytes: 50 * GB })
+      ).join(),
       /free memory/,
     );
     assert.match(

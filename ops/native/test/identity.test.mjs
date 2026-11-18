@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { assertTarget, REQUIRED } from '../lib/guard.mjs';
 import { apiEnvProblems, ROLES } from '../lib/identity.mjs';
 import { buildApiEnv } from '../lib/api.mjs';
-import { LABEL } from '../lib/protected.mjs';
+import { LABEL, PORT_BLOCK } from '../lib/protected.mjs';
 import { id64, makeIo, refusal, world } from './fakes.mjs';
 
 /** Refused with `id`; no mutating call; optionally zero calls of any kind (refused before connecting). */
@@ -53,6 +53,36 @@ test('every protected port is refused for PostgreSQL, MinIO and the API, before 
       w.m.ports[key] = port;
       await refuses(w, 'STACK', 'ID-09', { beforeConnect: true });
     }
+  }
+});
+
+test('the protected-port list refuses on its own, even if the reserved block were widened', async () => {
+  const saved = { ...PORT_BLOCK };
+  try {
+    PORT_BLOCK.from = 1;
+    PORT_BLOCK.to = 65535;
+    for (const port of [5434, 9100, 3000, 55432, 59000]) {
+      const w = world();
+      w.m.ports.pg = port;
+      await refuses(w, 'DB-WRITE', 'ID-09', { beforeConnect: true });
+    }
+  } finally {
+    Object.assign(PORT_BLOCK, saved);
+  }
+});
+
+test('a required check that produced no result counts as UNKNOWN, never as a pass', async () => {
+  REQUIRED['TEST-ONLY'] = ['ID-00', 'ID-99'];
+  try {
+    const w = world();
+    await refusal(
+      assert,
+      assertTarget(w.m, 'TEST-ONLY', makeIo(w), { states: ['ready'] }),
+      'ID-99',
+      2,
+    );
+  } finally {
+    delete REQUIRED['TEST-ONLY'];
   }
 });
 
