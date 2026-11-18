@@ -55,6 +55,7 @@ export function PublicListView<I>({
   blocked,
   emptyState,
   saves,
+  bounded = false,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -76,6 +77,8 @@ export function PublicListView<I>({
    * and the list's surface. Saved state is then read once per page and given to the cards.
    */
   saves?: ListSaves<I>;
+  /** A capped answer that has no next page and no end: it never claims to be everything there is (Search Top). */
+  bounded?: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -149,7 +152,7 @@ export function PublicListView<I>({
         </View>
       }
       ListFooterComponent={
-        list.items.length === 0 ? null : (
+        list.items.length === 0 || bounded ? null : (
           <LoadMoreFooter
             paging={{ ...list, count: list.items.length, pageCount: list.pages.length }}
             keys={{ load: 'buyer.list.load_more', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
