@@ -410,6 +410,18 @@ describe('result types', () => {
     expect(screen.queryByTestId('search-scene')).not.toBeOnTheScreen();
   });
 
+  it('Top is a bounded set: it never says that is everything, while a tab says it at its real end', async () => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket'), seller('basket-house', 'Basket House')]));
+    await openSearch();
+    await typeQuery('basket');
+    await screen.findByLabelText(label('Woven basket'));
+    expect(screen.queryByText(en['buyer.list.end'])).not.toBeOnTheScreen();
+    expect(screen.queryByTestId('load-more')).not.toBeOnTheScreen();
+    await fireEvent.press(tab('PRODUCT_POST'));
+    await screen.findByLabelText(label('Woven basket'));
+    expect(screen.getByText(en['buyer.list.end'])).toBeOnTheScreen();
+  });
+
   it('a query with no results says so with the query and invents no suggestion', async () => {
     serve(({ type }) => page(type, []));
     await openSearch();

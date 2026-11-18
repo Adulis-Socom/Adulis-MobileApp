@@ -96,6 +96,7 @@ export function SearchResults({
         )
       }
       numColumns={grid ? 2 : 1}
+      bounded={tab === 'TOP'}
       saves={{ surface: 'SEARCH', target: searchTarget }}
       empty="buyer.search.loading"
       emptyState={
