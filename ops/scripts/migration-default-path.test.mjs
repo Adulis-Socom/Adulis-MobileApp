@@ -129,6 +129,7 @@ test('the raw-runner pattern recognises every way of starting it, and not a sent
     'pnpm exec node-pg-migrate up',
     'pnpm dlx node-pg-migrate up',
     'pnpm node-pg-migrate up',
+    'pnpm node-pg-migrate -d DATABASE_URL_MIGRATE -m db/migrations up',
     'npx node-pg-migrate up',
     'yarn node-pg-migrate up',
     '        run: node-pg-migrate up -d DATABASE_URL_MIGRATE',
