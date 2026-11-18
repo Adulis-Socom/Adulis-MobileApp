@@ -137,6 +137,17 @@ test('protected container, volume and network names are refused on their own, ev
   );
 });
 
+test('a container whose full id is not the recorded one is refused on its own, even when everything else matches', () => {
+  const w = world();
+  const info = w.d.containers[w.m.containers.postgres.id];
+  assert.deepEqual(containerProblems(w.m, 'postgres', info), []);
+  const other = containerProblems(w.m, 'postgres', { ...info, Id: id64() }).map((x) => x.msg);
+  assert.ok(
+    other.some((x) => /not the recorded/.test(x)),
+    other.join(),
+  );
+});
+
 test('the persistent PostgreSQL container, named in the manifest, is refused (name, volume, port, labels)', async () => {
   const w = world();
   const persistent = id64();
