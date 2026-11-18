@@ -65,6 +65,22 @@ const settle = () => act(() => jest.advanceTimersByTimeAsync(1000));
  * no role would be listed too).
  */
 const controlsOnScreen = () => controlsShown().map((control) => control.name);
+/**
+ * Every sentence and label drawn on a channel, in order: the wordmark, the five channel labels, the
+ * channel's own sentence, the five tab labels. Anything else a channel drew (a note, a count, an
+ * item) would be listed, so the panel is exactly its one sentence. Icon glyphs are not text.
+ */
+const textsOnChannel = (sentence: string) => [
+  en['buyer.wordmark'],
+  ...CHANNEL_LABELS,
+  sentence,
+  ...TAB_LABELS,
+];
+const visibleTexts = () =>
+  screen
+    .queryAllByText(/[\s\S]+/)
+    .map((node) => node.props.children as unknown)
+    .filter((text): text is string => typeof text === 'string');
 
 let api: ReturnType<typeof installFakeApi>;
 
@@ -98,6 +114,7 @@ describe.each(AUDIENCES)('%s on the four channels', (_audience, isSignedIn) => {
     expect(r.getPathname()).toBe(path);
     expect(tab(en[label])).toBeSelected();
     expect(controlsOnScreen()).toEqual(HOME_CONTROLS);
+    expect(visibleTexts()).toEqual(textsOnChannel(en[coming]));
     expect(rolesOnScreen().slice(0, 7)).toEqual(['button', 'button', 'tab', 'tab', 'tab', 'tab', 'tab']);
     // For You is still mounted underneath (hidden, not gone), so the absence checks below mean it is not showing.
     expect(screen.queryByTestId('for-you-state', { includeHiddenElements: true })).not.toBeNull();
@@ -152,6 +169,7 @@ describe('what a channel may and may not read', () => {
       expect(await screen.findByText(en[coming])).toBeOnTheScreen();
       await settle();
       expect(controlsOnScreen()).toEqual(HOME_CONTROLS);
+      expect(visibleTexts()).toEqual(textsOnChannel(en[coming]));
     }
     expect(api.calls.slice(before).map((call) => `${call.method} ${call.path}`)).toEqual([]);
   });
