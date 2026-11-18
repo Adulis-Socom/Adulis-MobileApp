@@ -49,7 +49,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const changing = useRef(false);
   // A Rename or Delete in flight (ManageCollection's), for the disabled states.
   const [managing, setManaging] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ item: string; text: string } | null>(null);
   const list = usePublicList({
     resource: ['collection', valid ? collectionRef : '', tab],
     read: valid && priv ? (cursor) => keepIfCurrent(priv, (a) => a.collection(collectionRef, tab, cursor)) : null,
@@ -80,12 +80,19 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
       // Cards in other tabs stay mounted: they read their saved state again (WO-009A).
       void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
-      if (priv.isCurrent()) setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
+      if (priv.isCurrent()) {
+        setFailure({ item: item.ref, text: `${t('buyer.collection.action_failed')} ${failureMessage(t, error)}` });
+        // The answer may have been lost after the server removed it: read the Collection again.
+        list.refresh();
+      }
     } finally {
       changing.current = false;
       setRemoving(null);
     }
   };
+
+  // Said only while the item is still there: the list read again may show that the Remove took effect.
+  const failureText = failure && list.items.some((i) => i.ref === failure.item) ? failure.text : null;
 
   const header = (
     <View style={{ gap: theme.space.md, paddingHorizontal: theme.space.xs, paddingBottom: theme.space.sm }}>
@@ -111,7 +118,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
           ) : null}
         </>
       ) : null}
-      {failure ? <AlertText>{failure}</AlertText> : null}
+      {failureText ? <AlertText>{failureText}</AlertText> : null}
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} label={t('buyer.saved.tabs')} />
     </View>
   );
@@ -184,7 +191,10 @@ function ManageCollection({
       onRenamed();
     } catch (failure) {
       if (!priv.isCurrent()) return;
-      setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
+      const refused = problemCode(failure) === 'VALIDATION_FAILED';
+      setError(refused ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
+      // The answer may have been lost after the rename was stored, or the Collection may be gone: read it again.
+      if (!refused) onRenamed();
     } finally {
       lock.current = false;
       setBusy(false);
