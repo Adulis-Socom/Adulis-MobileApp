@@ -50,6 +50,8 @@ The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the s
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database, and the command
 refuses if the variable is not set. It upgrades whatever that variable names, so a `.env` that points at a
 persistent database makes `pnpm db:migrate` upgrade that database, now only ever from the pinned set.
+Before it reads anything it prints `target: host:port/database` (never the credentials), so a run against
+an unintended database is visible at once.
 
 The command line is strict. An unknown or repeated flag, a flag without its value, and an `up` without
 `--expect-commit <sha>` or an explicit `--no-source-check` are refusals with exit 2, never defaults: a typo

@@ -195,6 +195,16 @@ export async function readApplied(connectionString) {
   }
 }
 
+/** host:port/database of a connection string, never its credentials or options. */
+export function describeTarget(connectionString) {
+  try {
+    const u = new URL(connectionString);
+    return `${u.hostname}:${u.port || '5432'}${u.pathname}`;
+  } catch {
+    return '(DATABASE_URL_MIGRATE is not a URL)';
+  }
+}
+
 /** Everything, fail-closed. `applied` is an array of names, or null when the database history is not being checked. */
 export function verify({
   dir = DEFAULT_DIR,
@@ -243,6 +253,8 @@ export async function up(
     log('REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied');
     return 1;
   }
+  // The only target there is: say where it points, never the credentials.
+  if (!deps.readApplied) log(`target: ${describeTarget(process.env.DATABASE_URL_MIGRATE)}`);
   let applied;
   try {
     applied = await readApplied_();

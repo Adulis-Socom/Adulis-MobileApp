@@ -17,7 +17,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { up, write } from './migration-guard.mjs';
+import { describeTarget, up, write } from './migration-guard.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -235,4 +235,27 @@ test('a run without a source rule says so in its output', async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('the ordinary command names its one target (host, port, database) before it reads anything, and never prints the credentials', () => {
+  assert.equal(
+    describeTarget('postgres://u:pw@db.example:6543/app?sslmode=require'),
+    'db.example:6543/app',
+  );
+  assert.equal(describeTarget('postgres://u:pw@localhost/app'), 'localhost:5432/app');
+  assert.match(describeTarget('not a url'), /not a URL/);
+  const clean = {
+    ...process.env,
+    DATABASE_URL_MIGRATE: 'postgres://someuser:s3cretpw@127.0.0.1:1/target_db',
+  };
+  // port 1 refuses the connection at once: the run ends on the unreadable history, after naming the target
+  const r = spawnSync(process.execPath, [...scriptArgv('db:migrate')], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: clean,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^target: 127\.0\.0\.1:1\/target_db$/m);
+  assert.match(r.stdout, /the migration history cannot be read/);
+  assert.doesNotMatch(r.stdout + r.stderr, /s3cretpw|someuser/);
 });
