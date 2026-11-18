@@ -1,6 +1,6 @@
 import { en } from '@adulis/locale/mobile';
 
-import { ApiError, createApiClient, isTransient, newIdempotencyKey, wasAnswered } from './client';
+import { ApiError, createApiClient, isTransient, newIdempotencyKey, parseRetryAfter, retryAfterMs, wasAnswered } from './client';
 import { failureMessage } from './messages';
 import { GOOD_TOKEN, installFakeApi, problem, publicScene, storefrontProduct } from '../testing/fake-api';
 
@@ -178,5 +178,85 @@ describe('failure messages', () => {
     }
     await expect(api.scene('')).rejects.toThrow('invalid path parameter');
     expect(fake.calls).toHaveLength(before);
+  });
+});
+
+describe('retry hints on a failed answer', () => {
+  const REF = 'c0000000-0000-4000-8000-000000000001';
+  const send = (api: ReturnType<typeof client>['api']) => api.sendMessage(REF, 'Hello', 'k');
+  const failureFor = async (reply: Parameters<ReturnType<typeof installFakeApi>['on']>[1]) => {
+    installFakeApi().on(`POST /v1/conversations/${REF}/messages`, reply);
+    return (await failureOf(send(client(GOOD_TOKEN).api))) as ApiError;
+  };
+
+  it('reads Retry-After from the API problem answer, and the header wins over the problem slot', async () => {
+    const limited = problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 10 });
+    const error = await failureFor(() => ({ ...limited, headers: { 'Retry-After': '30' } }));
+    expect(error.failure).toMatchObject({ kind: 'problem', status: 429, retryAfterSeconds: 30 });
+    expect(retryAfterMs(error)).toBe(30_000);
+  });
+
+  it('falls back to the problem slot when no header came', async () => {
+    const error = await failureFor(() => problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 12 }));
+    expect(retryAfterMs(error)).toBe(12_000);
+  });
+
+  it('reads Retry-After from a gateway answer that is not the API problem (header only, header name in any case)', async () => {
+    const error = await failureFor(() => ({ status: 503, unreadable: true, headers: { 'retry-after': '5' } }));
+    expect(error.failure).toEqual({ kind: 'unexpected', status: 503, retryAfterSeconds: 5 });
+    expect(retryAfterMs(error)).toBe(5_000);
+  });
+
+  it('has no wait when the answer asked for none, and for anything that is not an API failure', async () => {
+    const error = await failureFor(() => problem(503, 'INTERNAL', 'request'));
+    expect(retryAfterMs(error)).toBeNull();
+    expect('retryAfterSeconds' in (error.failure as object)).toBe(false);
+    expect(retryAfterMs(new ApiError({ kind: 'offline' }))).toBeNull();
+    expect(retryAfterMs(new ApiError({ kind: 'timeout' }))).toBeNull();
+    expect(retryAfterMs(new Error('x'))).toBeNull();
+  });
+
+  it('parses delta-seconds and an HTTP-date, clamps to an hour, and ignores anything else', () => {
+    const now = Date.parse('2026-11-18T10:00:00.000Z');
+    expect(parseRetryAfter('0', now)).toBe(0);
+    expect(parseRetryAfter(' 45 ', now)).toBe(45);
+    expect(parseRetryAfter('999999', now)).toBe(3600);
+    expect(parseRetryAfter('Wed, 18 Nov 2026 10:01:30 GMT', now)).toBe(90);
+    // A date already past is no wait; a far one is the ceiling.
+    expect(parseRetryAfter('Wed, 18 Nov 2026 09:00:00 GMT', now)).toBe(0);
+    expect(parseRetryAfter('Fri, 18 Dec 2026 10:00:00 GMT', now)).toBe(3600);
+    for (const garbage of [null, '', 'soon', '1.5', '-5', '30s', '1e3', '12 34', 'Wed 18 Nov 2026']) {
+      expect(parseRetryAfter(garbage, now)).toBeNull();
+    }
+    // A run of digits of any length is a wait, clamped to the hour; it is never ignored.
+    expect(parseRetryAfter('9999999999', now)).toBe(3600);
+    expect(parseRetryAfter('99999999999999', now)).toBe(3600);
+    expect(parseRetryAfter('9'.repeat(400), now)).toBe(3600);
+    expect(parseRetryAfter('0007', now)).toBe(7);
+  });
+
+  it('never puts the header or the slot in the error message', async () => {
+    const limited = problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 777 });
+    const error = await failureFor(() => ({ ...limited, headers: { 'Retry-After': '888' } }));
+    expect(error.message).toBe('api problem 429 RATE_LIMITED');
+  });
+
+  it('classifies a lost keyed send as a timeout at ten seconds, never earlier', async () => {
+    jest.useFakeTimers();
+    try {
+      installFakeApi().on(`POST /v1/conversations/${REF}/messages`, () => 'hang');
+      const pending = failureOf(send(client(GOOD_TOKEN).api));
+      await jest.advanceTimersByTimeAsync(9_999);
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await jest.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      const error = (await pending) as ApiError;
+      expect(error.failure).toEqual({ kind: 'timeout' });
+      expect(isTransient(error)).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
