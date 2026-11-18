@@ -25,8 +25,9 @@ import { canaryDeviceId, loadSet, SETS } from './fixtures/index.mjs';
 
 export const READY = 'HARNESS READY - NATIVE EXECUTION NOT PERFORMED';
 const GB = 1024 ** 3;
-// Free memory the stack needs (PostgreSQL, MinIO, API build and run); a device session needs far more.
-export const MIN_FREE = { stack: 1.5 * GB, device: 6 * GB };
+// Free memory a run needs. The containers live in the Docker VM; the host side is the API build
+// (the largest step) and the API. A device session adds an emulator and needs far more.
+export const MIN_FREE = { stack: 1.0 * GB, device: 6 * GB };
 const MIN_DISK = 5 * GB;
 
 class Blocked extends Error {}
