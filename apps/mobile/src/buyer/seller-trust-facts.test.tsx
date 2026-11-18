@@ -47,14 +47,14 @@ describe('Trust facts', () => {
     ['NEW', 'Trust level: New'],
     ['ESTABLISHED', 'Trust level: Established'],
     ['TRUSTED', 'Trust level: Trusted'],
-  ] as const)('the server’s level %s is shown in words, and the handoff count exactly as sent', async (level, words) => {
+  ] as const)('the server\u2019s level %s is shown in words, and the handoff count exactly as sent', async (level, words) => {
     profile({ stats: { ...STATS, level, completed_handoff_count: 31 } });
     await open();
     expect(screen.getByText(words)).toBeOnTheScreen();
     expect(screen.getByText('Completed handoffs: 31')).toBeOnTheScreen();
   });
 
-  it('a Seller with nothing completed says zero, which is the server’s fact', async () => {
+  it('a Seller with nothing completed says zero, which is the server\u2019s fact', async () => {
     profile({ stats: { ...STATS, level: 'NEW', completed_handoff_count: 0 } });
     await open();
     expect(screen.getByText('Completed handoffs: 0')).toBeOnTheScreen();
@@ -76,7 +76,7 @@ describe('Trust facts', () => {
     expect(screen.getByText('Completed handoffs: 5')).toBeOnTheScreen();
   });
 
-  it('rates, claim counts, missed windows and the Seller’s status are never drawn, on the profile or in About', async () => {
+  it('rates, claim counts, missed windows and the Seller\u2019s status are never drawn, on the profile or in About', async () => {
     profile({
       status: 'BILLING_SUSPENDED',
       stats: {
@@ -96,7 +96,7 @@ describe('Trust facts', () => {
     expect(renderedText(screen.getByTestId('seller-about')).join(' | ')).not.toMatch(forbidden);
   });
 
-  it('the rating is the server’s average and count in words, never a bare score; no review means no score', async () => {
+  it('the rating is the server\u2019s average and count in words, never a bare score; no review means no score', async () => {
     profile({ review_summary: { count: 7, average_rating: 4.3, basis_counts: { FINAL_HANDOFF: 7, VERIFIED_ORDER_FAILURE: 0 } } });
     await open();
     expect(screen.getByText('Seller service: 4.3 out of 5 from 7 reviews')).toBeOnTheScreen();
@@ -106,7 +106,7 @@ describe('Trust facts', () => {
     profile({ stats: null, review_summary: NO_REVIEWS, description: null });
     await open();
     expect(screen.getByText(en['buyer.seller.no_reviews'])).toBeOnTheScreen();
-    expect(everything()).not.toMatch(/\d\s*(sold|sales|orders|followers)|★|stars?|verified|top|best|discount|% off/i);
+    expect(everything()).not.toMatch(/\d\s*(sold|sales|orders|followers)|\u2605|stars?|verified|top|best|discount|% off/i);
   });
 });
 
@@ -121,7 +121,7 @@ describe('contact and storefront facts', () => {
     }
   });
 
-  it('About states open or closed from the server’s derivation, each fulfilment method in words, and leaves out a method it cannot name', async () => {
+  it('About states open or closed from the server\u2019s derivation, each fulfilment method in words, and leaves out a method it cannot name', async () => {
     profile({
       availability: { is_open: false, reason: 'OUT_OF_HOURS', note: 'Back at nine' },
       fulfilment_methods: ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY', 'DRONE_DELIVERY' as never],

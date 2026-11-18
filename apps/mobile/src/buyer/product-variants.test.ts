@@ -55,7 +55,7 @@ describe('choosing an option', () => {
 });
 
 describe('a new answer arrives', () => {
-  it('keeps a choice the answer still offers, and the shown option is the new answer’s (its new price)', () => {
+  it('keeps a choice the answer still offers, and the shown option is the new answer\u2019s (its new price)', () => {
     const held = at(SMALL);
     const next = product([option(SMALL, { price_minor: 90000 }), option(LARGE)]);
     expect(project(held, next)).toBe(held);

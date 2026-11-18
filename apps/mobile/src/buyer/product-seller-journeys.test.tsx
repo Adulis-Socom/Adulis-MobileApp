@@ -127,11 +127,11 @@ describe('moving between the Seller profile, the Product and the Scene', () => {
     await screen.findByRole('header', { name: 'Store 1' });
     await back();
     expect(await screen.findByLabelText(`Small, ${etb(90000)}, Currently unavailable`)).toBeOnTheScreen();
-    expect(screen.getByText(`${etb(90000)} – ${etb(95000)}`)).toBeOnTheScreen();
+    expect(screen.getByText(`${etb(90000)} \u2013 ${etb(95000)}`)).toBeOnTheScreen();
     expect(screen.queryByLabelText(`Small, ${etb(85000)}, Available`)).not.toBeOnTheScreen();
   });
 
-  it('Scene -> Product opens the tagged Product of that Scene’s Seller; Back is the Scene', async () => {
+  it('Scene -> Product opens the tagged Product of that Scene\u2019s Seller; Back is the Scene', async () => {
     const ref = fypUnit(1).public_ref;
     api.on(`GET /v1/scene-posts/${ref}`, () => ok(publicScene(1, { seller: { handle: HANDLE, store_name: 'Store 1' }, products: [{ position: 1, slug: 'basket', name: 'Woven basket', base_price_minor: 1, base_price_currency: 'ETB', price_min_minor: 80000, price_max_minor: 80000, price_currency: 'ETB', image_key: null, available: true }] })));
     const r = await renderRouter(APP_DIR, { initialUrl: `/scenes/${ref}` });
@@ -157,7 +157,7 @@ describe('moving between the Seller profile, the Product and the Scene', () => {
     expect(r.getPathname()).toBe(`/sellers/${HANDLE}`);
   });
 
-  it('Product -> Ask the Seller about this Product opens the one conversation by the Seller’s id; Back is the Product', async () => {
+  it('Product -> Ask the Seller about this Product opens the one conversation by the Seller\u2019s id; Back is the Product', async () => {
     signedIn();
     api.on('POST /v1/conversations', () => ({ status: 201, body: { conversation_id: CONVERSATION } }));
     api.onPattern('GET', /^\/v1\/conversations\/[^/]+\/messages$/, () => ok({ data: [], next_cursor: null }));
@@ -284,7 +284,7 @@ describe('the Account changes while a Product or a Seller profile is kept in the
   };
   const mentions = (needle: string) => (c: Recorded) => c.path.includes(needle) || JSON.stringify(c.query).includes(needle) || JSON.stringify(c.body ?? {}).includes(needle);
 
-  it('a kept Product shows the second Account’s Save state, never the first Account’s, and nothing under the second credential names the first Account’s Save', async () => {
+  it('a kept Product shows the second Account\u2019s Save state, never the first Account\u2019s, and nothing under the second credential names the first Account\u2019s Save', async () => {
     accounts();
     let release!: () => void;
     await renderRouter(APP_DIR, { initialUrl: PRODUCT_PATH });
@@ -323,7 +323,7 @@ describe('the Account changes while a Product or a Seller profile is kept in the
     expect(calls('POST /v1/conversations')[0]?.body).toEqual({ seller_id: SELLER_ID });
   });
 
-  it('an unconfirmed Ask the Seller of the first Account is not repeated under the second Account’s credential or its idempotency key', async () => {
+  it('an unconfirmed Ask the Seller of the first Account is not repeated under the second Account\u2019s credential or its idempotency key', async () => {
     accounts();
     let first = true;
     api.on('POST /v1/conversations', (call) => {

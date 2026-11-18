@@ -91,7 +91,7 @@ describe('the options on the Product', () => {
     expect(screen.getByTestId('product-options').props.accessibilityRole).toBe('radiogroup');
     expect(screen.getAllByRole('radio')).toHaveLength(2);
     for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
   });
 
   it('choosing an available option checks it and shows its own price; choosing another moves the check', async () => {
@@ -113,7 +113,7 @@ describe('the options on the Product', () => {
     expect(choice('Large', UNAVAILABLE)).toBeDisabled();
     await fireEvent.press(choice('Large', UNAVAILABLE));
     expect(choice('Large', UNAVAILABLE)).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
     await fireEvent.press(choice('Small', AVAILABLE));
     await fireEvent.press(choice('Large', UNAVAILABLE));
     expect(choice('Small', AVAILABLE)).toBeChecked();
@@ -131,7 +131,7 @@ describe('the options on the Product', () => {
     expect(screen.queryByText(AVAILABLE)).not.toBeOnTheScreen();
   });
 
-  it('show a price in the option’s own currency when it is chosen, and no span where the server gives none', async () => {
+  it('show a price in the option\u2019s own currency when it is chosen, and no span where the server gives none', async () => {
     const usd = formatMinor('en', 1000, 'USD');
     serve(
       BASKET,
@@ -164,7 +164,7 @@ describe('the options on the Product', () => {
 });
 
 describe('a new answer from the server', () => {
-  it('shows the chosen option’s new price and keeps the choice while the option is still offered', async () => {
+  it('shows the chosen option\u2019s new price and keeps the choice while the option is still offered', async () => {
     serve(BASKET, ok(BOTH()), ok(basket([option(SMALL, { price_minor: 90000 }), option(LARGE)])));
     await open();
     await fireEvent.press(choice('Small', AVAILABLE));
@@ -187,10 +187,10 @@ describe('a new answer from the server', () => {
     await pull();
     expect(choice('Small', UNAVAILABLE)).toBeDisabled();
     expect(choice('Small', UNAVAILABLE)).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
     await pull();
     expect(choice('Small', AVAILABLE)).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
   });
 
   it('drops the choice when the option is no longer listed, and leaves the other options alone', async () => {
@@ -233,7 +233,7 @@ describe('a new answer from the server', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
     for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
   });
 
   it('a Product that is no longer public clears the options and the choice', async () => {
@@ -259,7 +259,7 @@ describe('moving away and coming back', () => {
     await settle();
     expect(choice('Small', UNAVAILABLE)).toBeDisabled();
     expect(choice('Small', UNAVAILABLE)).not.toBeChecked();
-    expect(headline()).toBe(`${etb(85000)} – ${etb(95000)}`);
+    expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
   });
 
   it('reopening the Product starts with no choice', async () => {
