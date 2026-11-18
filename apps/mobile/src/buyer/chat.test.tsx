@@ -2052,6 +2052,40 @@ describe('Message send reconciliation', () => {
     expect(keys()[2]).not.toBe(keys()[0]);
   });
 
+  it('an unconfirmed send is announced when it happens, not again at every refresh of the conversation', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Announce once');
+      await maybe();
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.maybe_not_sent'])).toHaveLength(1);
+      // Two refreshes of the history (the 30 second poll) change nothing about the message.
+      await advance(65_000);
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.maybe_not_sent'])).toHaveLength(1);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('a key withdrawn at the press is announced, since nothing else about the screen changes', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Announce the withdrawal');
+      await maybe();
+      announce.mockClear();
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await fireEvent.press(retryButton());
+      await advance(1000);
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.maybe_not_sent'])).toHaveLength(1);
+      expect(sends()).toHaveLength(1);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
   it('a key older than a day is never sent again, even to a server that would answer 409', async () => {
     const { chat } = await open();
     idempotent(chat, [{ lose: 'offline' }]);

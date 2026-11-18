@@ -136,16 +136,20 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   });
   const askIntent = useRef<{ forMessage: string; key: string; startedAt: number } | null>(null);
 
-  // The alert role alone is not spoken on Android: announce what happened to the message.
+  // The alert role alone is not spoken on Android: announce what happened to the message. The effect
+  // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
+  // withdrawn at a press (the state does not change then).
+  const announcement =
+    state === 'sending'
+      ? t('buyer.chat.sending')
+      : state === 'unknown'
+        ? t('buyer.chat.maybe_not_sent')
+        : state === 'failed'
+          ? t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent')
+          : null;
   useEffect(() => {
-    if (state === 'sending') AccessibilityInfo.announceForAccessibility(t('buyer.chat.sending'));
-    if (state === 'unknown') AccessibilityInfo.announceForAccessibility(t('buyer.chat.maybe_not_sent'));
-    if (state === 'failed') {
-      AccessibilityInfo.announceForAccessibility(
-        t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent'),
-      );
-    }
-  }, [state, notFound, t]);
+    if (announcement !== null) AccessibilityInfo.announceForAccessibility(announcement);
+  }, [announcement, keyLost]);
   useEffect(() => {
     if (hold === null) return;
     AccessibilityInfo.announceForAccessibility(hold.text);
