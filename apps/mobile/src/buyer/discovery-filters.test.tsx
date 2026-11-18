@@ -95,7 +95,7 @@ describe('what the screens show', () => {
     useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
   });
 
-  it('the Shop: the server order label, the server categories and Search -- no sort, filter, price, availability or Market control, and no claim', async () => {
+  it('the Shop: the server order label and the server categories -- no sort, filter, price, availability or Market control, and no claim', async () => {
     api.on('GET /v1/shop/products', () => ({
       status: 200,
       body: { market_resolved: true, data: [shopProduct('mug', 'Plain mug'), shopProduct('cup', 'Clay cup', 'seller-2', { available: false })], next_cursor: null },
@@ -105,7 +105,6 @@ describe('what the screens show', () => {
     await screen.findByTestId('category-tab-FASHION');
     expect(screen.getAllByRole('tab').map((t) => t.props.accessibilityLabel)).toEqual(['All Products', 'Fashion', 'Electronics']);
     expect(screen.getByText(en['buyer.shop.order'])).toBeOnTheScreen();
-    expect(screen.getAllByRole('button', { name: en['buyer.search'] })).toHaveLength(1);
     noWidgets();
     expect(claimsIn(renderedText(screen.getByTestId('shop-products')))).toEqual([]);
     const shown = renderedText(screen.getByTestId('shop-products')).join(' | ');

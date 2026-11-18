@@ -1,7 +1,5 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../../../api/bootstrap';
@@ -35,7 +33,6 @@ const saveTarget = (product: ShopProduct) => ({ type: 'PRODUCT_POST' as const, r
 export default function Shop() {
   const t = useT();
   const theme = useTheme();
-  const router = useRouter();
   const { api } = useSession();
   const bootstrap = useBootstrap();
   // The Market comes from a successful bootstrap (it registers a new install's device). Until one
@@ -99,22 +96,9 @@ export default function Shop() {
               gap: theme.space.xs,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <AppText variant="heading" accessibilityRole="header" style={{ flex: 1 }}>
-                {t('buyer.tab.shop')}
-              </AppText>
-              {/* The Shop serves a Buyer who arrives with intent: Search is one tap away, as on Home. */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('buyer.search')}
-                onPress={() => router.push('/search')}
-                hitSlop={theme.space.xs}
-                style={{ minWidth: theme.touchTarget, minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center' }}
-                testID="shop-search"
-              >
-                <Ionicons name="search-outline" size={theme.fontSize.xl} color={theme.color.text} importantForAccessibility="no" accessibilityElementsHidden />
-              </Pressable>
-            </View>
+            <AppText variant="heading" accessibilityRole="header">
+              {t('buyer.tab.shop')}
+            </AppText>
             <AppText style={{ color: theme.color.textSecondary }}>{t('buyer.shop.order')}</AppText>
             {placed && !blocked && (categories.categories.length > 0 || categories.isError) ? (
               <CategoryTabs

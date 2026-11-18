@@ -1,6 +1,5 @@
 import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
-import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { AccessibilityInfo, AppState, type AppStateStatus } from 'react-native';
 
@@ -312,22 +311,5 @@ describe('pages that repeat what is shown', () => {
     expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
     expect(announce).toHaveBeenCalledWith('Loaded 1 more, just above.');
     expect(calls().map((c) => c.query['cursor'])).toEqual([undefined, 'p-2', 'p-3']);
-  });
-});
-
-describe('Search from the Shop', () => {
-  it('the Shop offers Search by name; it opens Search, and Back returns to the same Shop without reading it again', async () => {
-    api.on(SHOP, () => page([MUG]));
-    const r = await openShop();
-    await screen.findByLabelText(label('Plain mug'));
-    await fireEvent.press(screen.getByRole('button', { name: en['buyer.search'] }));
-    expect(await screen.findByLabelText(en['buyer.search.input'])).toBeOnTheScreen();
-    expect(r.getPathname()).toBe('/search');
-    await act(() => router.back());
-    await settle();
-    expect(r.getPathname()).toBe('/shop');
-    expect(screen.getByLabelText(label('Plain mug'))).toBeOnTheScreen();
-    expect(tab('ALL')).toBeSelected();
-    expect(calls()).toHaveLength(1);
   });
 });

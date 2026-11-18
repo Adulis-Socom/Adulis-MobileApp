@@ -1,8 +1,8 @@
 # Buyer Shop (WO-007) against the real local API, as a guest: the Shop tab lists the Market's
 # PUBLISHED Products newest first under an honest label, with the server's price span and
 # availability; a tile opens the Product, its Seller line the Seller Profile, and Back returns
-# to the Shop where it was; scrolling pages by the server cursor to the end. The header offers Search
-# (the Home entry's label); there is no sort, filter, Market switch or cart. WO-007A (ON-048): every tile's Seller line reads
+# to the Shop where it was; scrolling pages by the server cursor to the end. No categories, sort,
+# filter, Search entry of its own, or cart. WO-007A (ON-048): every tile's Seller line reads
 # "Sold by <store>" in words, including cells FlashList recycled while scrolling.
 #
 # Needs the WO-CAT-001 native fixtures (Seller "Fixture Weaves": Woven basket 900.00-1,200.00,
