@@ -17,7 +17,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { describeTarget, up, write } from './migration-guard.mjs';
+import { checkDirectory, checkTarget, resolveTarget, up, write } from './migration-guard.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -25,12 +25,20 @@ const pkg = JSON.parse(read('package.json'));
 const GUARD = 'ops/scripts/migration-guard.mjs';
 const SELF = 'ops/scripts/migration-default-path.test.mjs';
 
-/** Every way of naming the raw runner on a command line or in code (not a mention in prose). */
-const RAW_RUNNER =
-  /node-pg-migrate\/bin|bin\/node-pg-migrate|(?:exec|dlx|npx|yarn)\s+node-pg-migrate|(?:from|require\()\s*['"]node-pg-migrate['"]/;
+/** Every way of starting the raw runner, on a command line or in code (not a mention in prose). */
+const RAW_RUNNER = new RegExp(
+  [
+    'node-pg-migrate/bin',
+    'bin/node-pg-migrate',
+    String.raw`(?:exec|dlx|npx|yarn|pnpm)\s+node-pg-migrate`,
+    String.raw`(?:^|[\s;&|(])node-pg-migrate\s+(?:up|down|redo|create)\b`,
+    String.raw`(?:from|require\(|import\()\s*['"]node-pg-migrate['"]`,
+  ].join('|'),
+  'm',
+);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.expo', '.next']);
 const TEXT =
-  /\.(mjs|cjs|js|ts|tsx|json|ya?ml|sh|ps1|md)$|(^|\/)(Dockerfile[^/]*|docker-compose[^/]*)$/;
+  /\.(mjs|cjs|js|ts|mts|cts|tsx|json|toml|ya?ml|sh|ps1|cmd|bat|md)$|(^|\/)(Dockerfile[^/]*|docker-compose[^/]*|Makefile)$/;
 
 function walk(rel, out = []) {
   const abs = path.join(ROOT, rel);
@@ -71,6 +79,28 @@ function scriptArgv(name) {
   return tokens.slice(1);
 }
 
+/** The real CLI as a package script spells it, without a database variable unless the test gives one. */
+function cli(script, extra = [], env = {}) {
+  const base = { ...process.env };
+  delete base.DATABASE_URL_MIGRATE;
+  return spawnSync(process.execPath, [...scriptArgv(script), ...extra], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...base, ...env },
+  });
+}
+
+/** A one-migration scratch tree, pinned. */
+function scratch(files = { '0001_a.sql': 'SELECT 1;\n' }) {
+  const root = mkdtempSync(path.join(tmpdir(), 'migpath-'));
+  const dir = path.join(root, 'migrations');
+  mkdirSync(dir);
+  for (const [n, body] of Object.entries(files)) writeFileSync(path.join(dir, n), body);
+  const manifestPath = path.join(root, 'manifest.json');
+  return { root, dir, manifestPath, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+}
+const quiet = () => {};
+
 test('the ordinary command runs the guard, and every db:migrat* script goes through it', () => {
   assert.equal(
     pkg.scripts['db:migrate'].replace(/\s--env-file\S+/, ''),
@@ -92,7 +122,32 @@ test('the ordinary command runs the guard, and every db:migrat* script goes thro
   assert.equal(pkg.scripts['db:migration-pin'], `node ${GUARD} write`);
 });
 
-test('no script, workflow, runbook or doc outside the guard names the raw runner', () => {
+test('the raw-runner pattern recognises every way of starting it, and not a sentence that mentions it', () => {
+  const starts = [
+    'node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js -d DATABASE_URL_MIGRATE -m db/migrations -j sql up',
+    'node_modules/.bin/node-pg-migrate up',
+    'pnpm exec node-pg-migrate up',
+    'pnpm dlx node-pg-migrate up',
+    'pnpm node-pg-migrate up',
+    'npx node-pg-migrate up',
+    'yarn node-pg-migrate up',
+    '        run: node-pg-migrate up -d DATABASE_URL_MIGRATE',
+    'RUN node-pg-migrate down 1',
+    "const { runner } = await import('node-pg-migrate');",
+    "import runner from 'node-pg-migrate';",
+    "const r = require('node-pg-migrate');",
+  ];
+  for (const s of starts) assert.match(s, RAW_RUNNER, s);
+  const prose = [
+    '`node-pg-migrate` will not re-run a file it has recorded',
+    'node-pg-migrate ... up exit 0, 0001_foundation through 0050',
+    'node-pg-migrate applies whatever the migrations directory holds',
+    "on node-pg-migrate's own tracking table",
+  ];
+  for (const s of prose) assert.doesNotMatch(s, RAW_RUNNER, s);
+});
+
+test('no script, workflow, runbook or doc outside the guard starts the raw runner', () => {
   const offenders = SCANNED.filter(
     (f) => f !== GUARD && f !== SELF && RAW_RUNNER.test(readFileSync(path.join(ROOT, f), 'utf8')),
   );
@@ -142,22 +197,36 @@ test('CI, the gate list, the disposable pair, db:reset and the deploy blueprint 
   );
 });
 
+test('the disposable pair discards the guard progress but keeps stderr, where every refusal is written', () => {
+  const line = read('ops/scripts/test-db.sh')
+    .split('\n')
+    .find((l) => /pnpm -s db:migrate\b/.test(l));
+  assert.match(line, /^\s*pnpm -s db:migrate >\/dev\/null\s*$/, 'stdout may be discarded');
+  assert.doesNotMatch(
+    line,
+    /2>|&>|\|/,
+    'stderr must stay visible: a refusal is the only explanation',
+  );
+});
+
 test('the documented commands exist: the migration docs name the ordinary command, the strict one and the pin command', () => {
   const doc = read('docs/infrastructure/MIGRATION-FILE-GUARD.md');
-  for (const name of ['db:migrate', 'db:migrate:guarded', 'db:migration-guard', 'db:migration-pin'])
+  const names = ['db:migrate', 'db:migrate:guarded', 'db:migration-guard', 'db:migration-pin'];
+  for (const name of names) {
     assert.ok(pkg.scripts[name], `${name} is a script`);
-  for (const name of [
-    'pnpm db:migrate',
-    'pnpm db:migrate:guarded',
-    'pnpm db:migration-guard',
-    'pnpm db:migration-pin',
-  ])
-    assert.ok(doc.includes(name), `MIGRATION-FILE-GUARD.md documents ${name}`);
+    // a name followed by more of a name does not count (db:migrate is a prefix of db:migrate:guarded)
+    assert.match(
+      doc,
+      new RegExp(`pnpm ${name}(?![:\\w-])`),
+      `MIGRATION-FILE-GUARD.md documents pnpm ${name}`,
+    );
+  }
   assert.match(
     doc,
     /node-pg-migrate directly/i,
     'the doc says the raw runner is not a way to migrate',
   );
+  assert.match(doc, /without a prompt/, 'the doc says a pinned pending migration applies at once');
   assert.ok(
     read('apps/api/CLAUDE.md').includes('pnpm db:migration-pin'),
     'the migration authoring rules name the pin command',
@@ -165,97 +234,277 @@ test('the documented commands exist: the migration docs name the ordinary comman
 });
 
 test('the ordinary command, as the package script spells it, refuses without a database and on a mistyped flag, and never applies', () => {
-  const run = (extra, env = {}) => {
-    const clean = { ...process.env };
-    delete clean.DATABASE_URL_MIGRATE;
-    return spawnSync(process.execPath, [...scriptArgv('db:migrate'), ...extra], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      env: { ...clean, ...env },
-    });
-  };
-  const noDb = run([]);
+  const noDb = cli('db:migrate');
   assert.equal(noDb.status, 1);
-  assert.match(noDb.stdout, /REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied/);
+  assert.match(noDb.stderr, /REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied/);
+  assert.doesNotMatch(noDb.stdout, /REFUSED/, 'a refusal is written to stderr, never to stdout');
   // a typo of --dry-run must not become a real apply, and the source rules cannot be mixed
-  const typo = run(['--dryrun'], { DATABASE_URL_MIGRATE: 'postgres://x:y@127.0.0.1:1/none' });
+  const target = { DATABASE_URL_MIGRATE: 'postgres://x:y@127.0.0.1:1/none' };
+  const typo = cli('db:migrate', ['--dryrun'], target);
   assert.equal(typo.status, 2);
-  assert.match(typo.stdout, /unknown argument "--dryrun"/);
-  const mixed = run(['--expect-commit', 'abc1234'], {
-    DATABASE_URL_MIGRATE: 'postgres://x:y@127.0.0.1:1/none',
-  });
+  assert.match(typo.stderr, /unknown argument "--dryrun"/);
+  assert.doesNotMatch(typo.stdout, /REFUSED/);
+  const mixed = cli('db:migrate', ['--expect-commit', 'abc1234'], target);
   assert.equal(mixed.status, 2);
-  assert.match(mixed.stdout, /exclude each other/);
-  // the strict script is `up` alone: it must name its source rule
-  const strict = spawnSync(process.execPath, scriptArgv('db:migrate:guarded'), {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
+  assert.match(mixed.stderr, /exclude each other/);
+  // the strict script is `up` alone: it must name its source rule (and never reaches a database)
+  const strict = cli('db:migrate:guarded');
   assert.equal(strict.status, 2);
-  assert.match(strict.stdout, /up needs --expect-commit/);
+  assert.match(strict.stderr, /up needs --expect-commit/);
 });
 
 test('an unpinned new migration is refused with the pin command, and pinning it makes the same set apply', async () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'migpath-'));
+  const s = scratch();
   try {
-    const dir = path.join(root, 'migrations');
-    mkdirSync(dir);
-    writeFileSync(path.join(dir, '0001_a.sql'), 'SELECT 1;\n');
-    const manifestPath = path.join(root, 'manifest.json');
-    assert.equal(write({ dir, manifestPath, log: () => {} }), 0);
-    writeFileSync(path.join(dir, '0002_b.sql'), 'SELECT 2;\n');
+    assert.equal(write({ dir: s.dir, manifestPath: s.manifestPath, log: quiet }), 0);
+    writeFileSync(path.join(s.dir, '0002_b.sql'), 'SELECT 2;\n');
     let started = 0;
     const deps = { readApplied: async () => ['0001_a'], run: () => ((started += 1), 0) };
     const lines = [];
-    const refused = await up({ dir, manifestPath, root, log: (l) => lines.push(l) }, deps);
-    assert.equal(refused, 1);
+    const o = { dir: s.dir, manifestPath: s.manifestPath, root: s.root };
+    assert.equal(await up({ ...o, log: (l) => lines.push(l) }, deps), 1);
     assert.equal(started, 0);
     assert.match(lines.join('\n'), /UNEXPECTED file .*0002_b\.sql.*pnpm db:migration-pin/);
-    assert.equal(write({ dir, manifestPath, log: () => {} }), 0);
-    const applied = await up({ dir, manifestPath, root, log: () => {} }, deps);
-    assert.equal(applied, 0);
+    assert.equal(write({ dir: s.dir, manifestPath: s.manifestPath, log: quiet }), 0);
+    assert.equal(await up({ ...o, log: quiet }, deps), 0);
     assert.equal(started, 1);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    s.cleanup();
+  }
+});
+
+test('an unmerged migration edited after it was pinned: refused, and deleting its own manifest entry lets it be pinned again', async () => {
+  const s = scratch({ '0001_a.sql': 'SELECT 1;\n', '0002_b.sql': 'SELECT 2;\n' });
+  try {
+    const o = { dir: s.dir, manifestPath: s.manifestPath };
+    assert.equal(write({ ...o, log: quiet }), 0);
+    writeFileSync(path.join(s.dir, '0002_b.sql'), 'SELECT 22;\n');
+    const deps = { readApplied: async () => ['0001_a'], run: () => 0 };
+    const lines = [];
+    assert.equal(await up({ ...o, root: s.root, log: (l) => lines.push(l) }, deps), 1);
+    assert.match(lines.join('\n'), /CHANGED migration 0002_b\.sql/);
+    const refused = [];
+    assert.equal(write({ ...o, log: (l) => refused.push(l) }), 1);
+    assert.match(
+      refused.join('\n'),
+      /pinned 0002_b\.sql has changed; write does not re-pin history/,
+    );
+    // the documented way out, for an entry that was never merged: drop that last entry and pin again
+    const m = JSON.parse(readFileSync(s.manifestPath, 'utf8'));
+    m.files.pop();
+    writeFileSync(s.manifestPath, JSON.stringify(m));
+    assert.equal(write({ ...o, log: quiet }), 0);
+    assert.equal(await up({ ...o, root: s.root, log: quiet }, deps), 0);
+    // ...and it never re-pins an entry that is not the last one
+    writeFileSync(path.join(s.dir, '0001_a.sql'), 'SELECT 11;\n');
+    assert.equal(write({ ...o, log: quiet }), 1);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test('a new migration with CRLF line endings is refused at pin time, and a pinned file that is now CRLF says so', async () => {
+  const s = scratch({ '0001_a.sql': 'SELECT 1;\n' });
+  try {
+    const o = { dir: s.dir, manifestPath: s.manifestPath };
+    assert.equal(write({ ...o, log: quiet }), 0);
+    const before = readFileSync(s.manifestPath, 'utf8');
+    writeFileSync(path.join(s.dir, '0002_b.sql'), 'SELECT 2;\r\nSELECT 3;\r\n');
+    const out = [];
+    assert.equal(write({ ...o, log: (l) => out.push(l) }), 1);
+    assert.match(out.join('\n'), /0002_b\.sql has CRLF line endings; migrations are LF/);
+    assert.equal(readFileSync(s.manifestPath, 'utf8'), before, 'nothing was pinned');
+    writeFileSync(path.join(s.dir, '0002_b.sql'), 'SELECT 2;\nSELECT 3;\n');
+    assert.equal(write({ ...o, log: quiet }), 0, 'the same file as LF pins');
+    // a pinned LF file that an editor rewrote as CRLF: CHANGED, with the reason
+    writeFileSync(path.join(s.dir, '0001_a.sql'), 'SELECT 1;\r\n');
+    const manifest = JSON.parse(readFileSync(s.manifestPath, 'utf8'));
+    assert.match(
+      checkDirectory(s.dir, manifest).join('\n'),
+      /CHANGED migration 0001_a\.sql.*CRLF line endings/,
+    );
+    // no committed migration has a CR (git stores them as LF: .gitattributes eol=lf)
+    const real = path.join(ROOT, 'db', 'migrations');
+    for (const n of readdirSync(real).filter((n) => n.endsWith('.sql')))
+      assert.ok(!readFileSync(path.join(real, n)).includes(0x0d), `${n} has no CR`);
+  } finally {
+    s.cleanup();
   }
 });
 
 test('a run without a source rule says so in its output', async () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'migpath-'));
+  const s = scratch();
   try {
-    const dir = path.join(root, 'migrations');
-    mkdirSync(dir);
-    writeFileSync(path.join(dir, '0001_a.sql'), 'SELECT 1;\n');
-    const manifestPath = path.join(root, 'manifest.json');
-    write({ dir, manifestPath, log: () => {} });
+    write({ dir: s.dir, manifestPath: s.manifestPath, log: quiet });
     const deps = { readApplied: async () => ['0001_a'], run: () => 0 };
     const lines = [];
-    await up({ dir, manifestPath, root, log: (l) => lines.push(l) }, deps);
+    await up(
+      { dir: s.dir, manifestPath: s.manifestPath, root: s.root, log: (l) => lines.push(l) },
+      deps,
+    );
     assert.match(lines.join('\n'), /source check: skipped/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    s.cleanup();
   }
 });
 
-test('the ordinary command names its one target (host, port, database) before it reads anything, and never prints the credentials', () => {
-  assert.equal(
-    describeTarget('postgres://u:pw@db.example:6543/app?sslmode=require'),
-    'db.example:6543/app',
-  );
-  assert.equal(describeTarget('postgres://u:pw@localhost/app'), 'localhost:5432/app');
-  assert.match(describeTarget('not a url'), /not a URL/);
-  const clean = {
-    ...process.env,
-    DATABASE_URL_MIGRATE: 'postgres://someuser:s3cretpw@127.0.0.1:1/target_db',
+test('refusals go to the error stream and progress to the output stream, so a caller that discards stdout still sees why', async () => {
+  const s = scratch();
+  try {
+    write({ dir: s.dir, manifestPath: s.manifestPath, log: quiet });
+    const o = { dir: s.dir, manifestPath: s.manifestPath, root: s.root };
+    const deps = { readApplied: async () => ['0001_a'], run: () => 0 };
+    const sinks = () => {
+      const r = { out: [], err: [] };
+      return { r, log: (l) => r.out.push(l), err: (l) => r.err.push(l) };
+    };
+    const ok = sinks();
+    assert.equal(await up({ ...o, log: ok.log, err: ok.err }, deps), 0);
+    assert.deepEqual(ok.r.err, []);
+    assert.match(ok.r.out.join('\n'), /^OK: /);
+    writeFileSync(path.join(s.dir, '0002_unpinned.sql'), 'SELECT 2;\n');
+    const bad = sinks();
+    assert.equal(await up({ ...o, log: bad.log, err: bad.err }, deps), 1);
+    assert.match(bad.r.err.join('\n'), /REFUSED: the migration set is not the pinned one/);
+    assert.match(bad.r.err.join('\n'), /UNEXPECTED file/);
+    assert.doesNotMatch(bad.r.out.join('\n'), /REFUSED|UNEXPECTED/);
+    // the other two places a refusal is written: an unreadable history, an unreadable manifest
+    const noHistory = sinks();
+    await up(
+      { ...o, log: noHistory.log, err: noHistory.err },
+      {
+        readApplied: async () => {
+          throw Object.assign(new Error('x'), { code: 'ECONNREFUSED' });
+        },
+      },
+    );
+    assert.match(noHistory.r.err.join('\n'), /history cannot be read/);
+    assert.doesNotMatch(noHistory.r.out.join('\n'), /REFUSED/);
+    const noManifest = sinks();
+    await up(
+      {
+        ...o,
+        manifestPath: path.join(s.root, 'missing.json'),
+        log: noManifest.log,
+        err: noManifest.err,
+      },
+      deps,
+    );
+    assert.match(noManifest.r.err.join('\n'), /manifest cannot be read/);
+    assert.doesNotMatch(noManifest.r.out.join('\n'), /REFUSED/);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test('the target is a plain postgres URL or it is refused before anything connects, and it is named without credentials', () => {
+  const ok = {
+    'postgres://u:pw@db.example:6543/app?sslmode=require': 'db.example:6543/app',
+    'postgresql://u:pw@localhost/app_2.test-x': 'localhost:5432/app_2.test-x',
+    'postgres://adulis_bootstrap:ci-password@127.0.0.1:55432/adulis': '127.0.0.1:55432/adulis',
   };
-  // port 1 refuses the connection at once: the run ends on the unreadable history, after naming the target
-  const r = spawnSync(process.execPath, [...scriptArgv('db:migrate')], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    env: clean,
+  for (const [url, target] of Object.entries(ok)) assert.deepEqual(checkTarget(url), { target });
+  const refused = {
+    'not a url': /not a URL/,
+    '': /not a URL/,
+    'mysql://u:pw@h/db': /not a postgres/,
+    'postgres:/user:secretpw@host/db': /no host/,
+    'postgres://user:12/34@host/db': /not one plain database name/,
+    'postgres://u:pw@h/db/extra': /not one plain database name/,
+    'postgres://u:pw@h': /not one plain database name/,
+    'postgres://u:pw@h/db%20x': /not one plain database name/,
+    'postgres://u:pw@h/db?host=elsewhere': /sets host as a query option/,
+    'postgres://u:pw@h/db?port=1&dbname=other': /sets port, dbname as a query option/,
+  };
+  for (const [url, why] of Object.entries(refused)) {
+    const r = checkTarget(url);
+    assert.match(r.error, why, url);
+    assert.equal(r.target, undefined);
+    assert.ok(!/secretpw|12\/34/.test(r.error), 'the reason never repeats the string');
+  }
+  const saved = process.env.DATABASE_URL_MIGRATE;
+  try {
+    for (const bad of [undefined, 'not a url', 'postgres:/user:secretpw@host/db']) {
+      const lines = [];
+      if (bad === undefined) delete process.env.DATABASE_URL_MIGRATE;
+      else process.env.DATABASE_URL_MIGRATE = bad;
+      const url = resolveTarget(process.env, {
+        log: (l) => lines.push(`out ${l}`),
+        err: (l) => lines.push(`err ${l}`),
+      });
+      assert.equal(url, null);
+      assert.equal(lines.length, 1);
+      assert.match(lines[0], /^err REFUSED: DATABASE_URL_MIGRATE is not (set|usable)/);
+      assert.doesNotMatch(lines[0], /secretpw/);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.DATABASE_URL_MIGRATE;
+    else process.env.DATABASE_URL_MIGRATE = saved;
+  }
+});
+
+test('the ordinary command names its one target before it reads anything, never prints the credentials, and refuses a malformed one without connecting', async () => {
+  // in process: the target line comes before the history read
+  const s = scratch();
+  const saved = process.env.DATABASE_URL_MIGRATE;
+  try {
+    write({ dir: s.dir, manifestPath: s.manifestPath, log: quiet });
+    process.env.DATABASE_URL_MIGRATE = 'postgres://someuser:s3cretpw@127.0.0.1:1/target_db';
+    const lines = [];
+    const code = await up(
+      { dir: s.dir, manifestPath: s.manifestPath, root: s.root, log: (l) => lines.push(l) },
+      { run: () => assert.fail('the runner must not start') },
+    );
+    assert.equal(code, 1);
+    const at = (re) => lines.findIndex((l) => re.test(l));
+    assert.ok(at(/^target: 127\.0\.0\.1:1\/target_db$/) >= 0, 'the target is named');
+    assert.ok(at(/history cannot be read/) > at(/^target: /), 'the target line comes first');
+  } finally {
+    if (saved === undefined) delete process.env.DATABASE_URL_MIGRATE;
+    else process.env.DATABASE_URL_MIGRATE = saved;
+    s.cleanup();
+  }
+  // the real command line: port 1 refuses at once, after the target is named; credentials are never printed
+  const r = cli('db:migrate', [], {
+    DATABASE_URL_MIGRATE: 'postgres://someuser:s3cretpw@127.0.0.1:1/target_db',
   });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /^target: 127\.0\.0\.1:1\/target_db$/m);
-  assert.match(r.stdout, /the migration history cannot be read/);
+  assert.match(r.stderr, /the migration history cannot be read/);
   assert.doesNotMatch(r.stdout + r.stderr, /s3cretpw|someuser/);
+  // a malformed target never reaches a connection (and its credentials are not echoed)
+  for (const bad of [
+    'postgres:/someuser:s3cretpw@host/db',
+    'postgres://someuser:12/34@host/db',
+    'not a url',
+  ]) {
+    const m = cli('db:migrate', [], { DATABASE_URL_MIGRATE: bad });
+    assert.equal(m.status, 1, bad);
+    assert.match(m.stderr, /REFUSED: DATABASE_URL_MIGRATE is not usable/);
+    assert.doesNotMatch(m.stderr, /history cannot be read/, 'it must not have connected');
+    assert.doesNotMatch(m.stdout + m.stderr, /s3cretpw|someuser|12\/34/);
+    assert.doesNotMatch(m.stdout, /^target:/m);
+  }
+});
+
+test('verify --db refuses without a target, names the target it reads, and writes its refusals to stderr', () => {
+  const none = cli('db:migration-guard', ['--db']);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /REFUSED: DATABASE_URL_MIGRATE is not set/);
+  assert.doesNotMatch(none.stdout, /REFUSED/);
+  const unreachable = cli('db:migration-guard', ['--db'], {
+    DATABASE_URL_MIGRATE: 'postgres://someuser:s3cretpw@127.0.0.1:1/verify_db',
+  });
+  assert.equal(unreachable.status, 1);
+  assert.match(unreachable.stdout, /^target: 127\.0\.0\.1:1\/verify_db$/m);
+  assert.doesNotMatch(unreachable.stdout + unreachable.stderr, /s3cretpw|someuser/);
+  const bad = cli('db:migration-guard', ['--db'], {
+    DATABASE_URL_MIGRATE: 'postgres://someuser:s3cretpw@host/db?host=elsewhere',
+  });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /is not usable/);
+  // without --db it reads no database and needs no variable
+  const files = cli('db:migration-guard');
+  assert.equal(files.status, 0);
+  assert.match(files.stdout, /^OK: \d+ pinned migrations match$/m);
 });

@@ -45,17 +45,15 @@ process.exitCode = await runDeterminism({
   env: process.env,
   docker: (args) => spawnSync('docker', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }),
   // Through the migration-file guard, the only code that starts the runner: the scratch URL goes in as
-  // DATABASE_URL_MIGRATE. The guard reports a refusal on stdout, which the failure message would not show.
-  migrate: (url) => {
-    const r = spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', 'up', '--no-source-check'], {
+  // DATABASE_URL_MIGRATE. The guard reports a refusal on stderr, which the failure message shows.
+  migrate: (url) =>
+    spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', 'up', '--no-source-check'], {
       // The runner echoes every migration; the 1 MiB default would kill it (ENOBUFS).
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 256 * 1024 * 1024,
       env: { ...process.env, DATABASE_URL_MIGRATE: url },
-    });
-    return r.status === 0 ? r : { ...r, stderr: `${r.stderr ?? ''}${r.stdout ?? ''}` };
-  },
+    }),
   Client: pg.Client,
   interrupted: () => signal,
   suffix: () => randomBytes(4).toString('hex'),
