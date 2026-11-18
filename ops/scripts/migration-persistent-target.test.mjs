@@ -69,17 +69,27 @@ test('every alias of the protected development port is PERSISTENT-DEV by its por
   ];
   for (const h of hosts) {
     for (const portText of ['5434', '05434']) {
-      const r = await classify(`postgres://u:p@${h}:${portText}/adulis`, { marker: DISPOSABLE_MARKER });
+      const r = await classify(`postgres://u:p@${h}:${portText}/adulis`, {
+        marker: DISPOSABLE_MARKER,
+      });
       assert.equal(r.kind, 'PERSISTENT-DEV', `${h}:${portText}`);
-      assert.equal(r.asked, 0, `${h}:${portText} must not read a mark (a mark on the protected port is not accepted)`);
+      assert.equal(
+        r.asked,
+        0,
+        `${h}:${portText} must not read a mark (a mark on the protected port is not accepted)`,
+      );
     }
   }
   assert.ok(PERSISTENT_DEV_PORTS.has(5434));
-  for (const p of PERSISTENT_DEV_PORTS) assert.ok(PROTECTED_PORTS.has(p), `${p} is also protected in the native harness`);
+  for (const p of PERSISTENT_DEV_PORTS)
+    assert.ok(PROTECTED_PORTS.has(p), `${p} is also protected in the native harness`);
 });
 
 test('a URL without a port takes PGPORT: PGPORT=5434 is the protected cluster, and no port at all is never disposable', async () => {
-  const viaEnv = await classify('postgres://u:p@127.0.0.1/adulis', { env: { PGPORT: '5434' }, marker: DISPOSABLE_MARKER });
+  const viaEnv = await classify('postgres://u:p@127.0.0.1/adulis', {
+    env: { PGPORT: '5434' },
+    marker: DISPOSABLE_MARKER,
+  });
   assert.equal(viaEnv.kind, 'PERSISTENT-DEV');
   assert.equal(viaEnv.t.port, 5434);
   assert.equal(viaEnv.asked, 0);
@@ -92,10 +102,24 @@ test('a URL without a port takes PGPORT: PGPORT=5434 is the protected cluster, a
 });
 
 test('a host that is not exactly a loopback name is UNKNOWN even when its port is a disposable one and it would be marked', async () => {
-  for (const h of ['127.1', '127.0.0.2', '0.0.0.0', 'LOCALHOST', 'localhost.', '192.168.1.3', 'db.example', '[::ffff:127.0.0.1]', 'host.docker.internal']) {
+  for (const h of [
+    '127.1',
+    '127.0.0.2',
+    '0.0.0.0',
+    'LOCALHOST',
+    'localhost.',
+    '192.168.1.3',
+    'db.example',
+    '[::ffff:127.0.0.1]',
+    'host.docker.internal',
+  ]) {
     const r = await classify(`postgres://u:p@${h}:55432/adulis`, { marker: DISPOSABLE_MARKER });
     assert.equal(r.kind, 'UNKNOWN', h);
-    assert.equal(r.asked, 0, `${h}: no mark is read through a host that is not a plain loopback name`);
+    assert.equal(
+      r.asked,
+      0,
+      `${h}: no mark is read through a host that is not a plain loopback name`,
+    );
   }
 });
 
@@ -105,16 +129,34 @@ test('DISPOSABLE needs a loopback host, an explicit port that is not the protect
     assert.equal(full.kind, 'DISPOSABLE', h);
     assert.equal(full.asked, 1);
   }
-  assert.equal((await classify('postgres://u:p@127.0.0.1:55432/adulis', { marker: DISPOSABLE_SETUP_MARKER })).kind, 'DISPOSABLE');
+  assert.equal(
+    (await classify('postgres://u:p@127.0.0.1:55432/adulis', { marker: DISPOSABLE_SETUP_MARKER }))
+      .kind,
+    'DISPOSABLE',
+  );
   // anything else read back is a database nobody proved disposable
-  for (const marker of [null, '', 'adulis:disposable-test-database ', 'ADULIS:DISPOSABLE-TEST-DATABASE', 'adulis:disposable-test', 'production', `${DISPOSABLE_MARKER}:other`]) {
+  for (const marker of [
+    null,
+    '',
+    'adulis:disposable-test-database ',
+    'ADULIS:DISPOSABLE-TEST-DATABASE',
+    'adulis:disposable-test',
+    'production',
+    `${DISPOSABLE_MARKER}:other`,
+  ]) {
     const r = await classify('postgres://u:p@127.0.0.1:55432/adulis', { marker });
     assert.equal(r.kind, 'PERSISTENT-DEV', JSON.stringify(marker));
   }
   // the compose default port of a developer's own database, unmarked: protected, not disposable
-  assert.equal((await classify('postgres://u:p@localhost:5432/adulis', { marker: null })).kind, 'PERSISTENT-DEV');
+  assert.equal(
+    (await classify('postgres://u:p@localhost:5432/adulis', { marker: null })).kind,
+    'PERSISTENT-DEV',
+  );
   // but CI's database, marked first, is disposable on the same port
-  assert.equal((await classify('postgres://u:p@localhost:5432/adulis', { marker: DISPOSABLE_MARKER })).kind, 'DISPOSABLE');
+  assert.equal(
+    (await classify('postgres://u:p@localhost:5432/adulis', { marker: DISPOSABLE_MARKER })).kind,
+    'DISPOSABLE',
+  );
 });
 
 test('a mark that cannot be read is UNKNOWN, never disposable', async () => {
@@ -189,17 +231,28 @@ test('a persistent target with the commit but no confirmation, a wrong confirmat
   for (const c of wrong) {
     const r = await authorize({ expectedCommit: SHA, confirmTarget: c });
     assert.equal(r.ok, false, c);
-    assert.match(r.text, /--confirm-target names .* but this run would apply to adulis@127\.0\.0\.1:55432/, c);
+    assert.match(
+      r.text,
+      /--confirm-target names .* but this run would apply to adulis@127\.0\.0\.1:55432/,
+      c,
+    );
     assert.deepEqual(r.calls.records, []);
   }
-  const badSource = await authorize({ expectedCommit: SHA, confirmTarget: 'adulis@127.0.0.1:55432', source: ['SOURCE: HEAD is 123456789abc, not the approved aaaaaaaaaaaa'] });
+  const badSource = await authorize({
+    expectedCommit: SHA,
+    confirmTarget: 'adulis@127.0.0.1:55432',
+    source: ['SOURCE: HEAD is 123456789abc, not the approved aaaaaaaaaaaa'],
+  });
   assert.equal(badSource.ok, false);
   assert.match(badSource.text, /SOURCE: HEAD is 123456789abc/);
   assert.deepEqual(badSource.calls.records, []);
 });
 
 test('the commit and the confirmation together authorize it, and the authorization is recorded before anything is applied', async () => {
-  const r = await authorize({ expectedCommit: SHA.toUpperCase(), confirmTarget: 'adulis@127.0.0.1:55432' });
+  const r = await authorize({
+    expectedCommit: SHA.toUpperCase(),
+    confirmTarget: 'adulis@127.0.0.1:55432',
+  });
   assert.equal(r.ok, true, r.text);
   assert.equal(r.calls.records.length, 1);
   const [file, action, target, at, extra] = r.calls.records[0];
@@ -210,19 +263,38 @@ test('the commit and the confirmation together authorize it, and the authorizati
   assert.deepEqual(extra, { commit: SHA });
   assert.match(r.text, /authorized: adulis@127\.0\.0\.1:55432 at aaaaaaaaaaaa/);
   // a record that cannot be written stops it
-  const unrecorded = await authorize({ expectedCommit: SHA, confirmTarget: 'adulis@127.0.0.1:55432', recordFails: true });
+  const unrecorded = await authorize({
+    expectedCommit: SHA,
+    confirmTarget: 'adulis@127.0.0.1:55432',
+    recordFails: true,
+  });
   assert.equal(unrecorded.ok, false);
-  assert.match(unrecorded.text, /could not record the upgrade in \.adulis-db-admin\.log \(EACCES\); nothing was applied/);
+  assert.match(
+    unrecorded.text,
+    /could not record the upgrade in \.adulis-db-admin\.log \(EACCES\); nothing was applied/,
+  );
 });
 
 test('an UNKNOWN target is held to the same rule as a persistent one, and PGPORT cannot move the confirmation', async () => {
-  const unreadable = await authorize({ url: 'postgres://u:p@db.example:5432/app', expectedCommit: SHA });
+  const unreadable = await authorize({
+    url: 'postgres://u:p@db.example:5432/app',
+    expectedCommit: SHA,
+  });
   assert.equal(unreadable.ok, false);
   assert.match(unreadable.text, /the target db\.example:5432\/app is UNKNOWN/);
-  const allowed = await authorize({ url: 'postgres://u:p@db.example:5432/app', expectedCommit: SHA, confirmTarget: 'app@db.example:5432' });
+  const allowed = await authorize({
+    url: 'postgres://u:p@db.example:5432/app',
+    expectedCommit: SHA,
+    confirmTarget: 'app@db.example:5432',
+  });
   assert.equal(allowed.ok, true, allowed.text);
   // a URL with no port: the confirmation must name the port pg will use
-  const viaEnv = await authorize({ url: 'postgres://u:p@db.example/app', env: { PGPORT: '6543' }, expectedCommit: SHA, confirmTarget: 'app@db.example:5432' });
+  const viaEnv = await authorize({
+    url: 'postgres://u:p@db.example/app',
+    env: { PGPORT: '6543' },
+    expectedCommit: SHA,
+    confirmTarget: 'app@db.example:5432',
+  });
   assert.equal(viaEnv.ok, false);
   assert.match(viaEnv.text, /would apply to app@db\.example:6543/);
 });
@@ -236,14 +308,25 @@ test('a dry run is allowed on any target: it names the classification and the co
     const r = await authorize({ url, marker, dryRun: true });
     assert.equal(r.ok, true, url);
     assert.match(r.text, /classification: (PERSISTENT-DEV|UNKNOWN)/);
-    assert.match(r.text, /dry run: applying here would need pnpm db:migrate:guarded --expect-commit/);
+    assert.match(
+      r.text,
+      /dry run: applying here would need pnpm db:migrate:guarded --expect-commit/,
+    );
     assert.deepEqual(r.calls.records, []);
   }
 });
 
 test('an unusable target is refused by the authorization too, and the string is never repeated', async () => {
-  for (const url of ['postgres://u:secretpw@127.0.0.1:55432/adulis?options=-c%20x', 'postgres://u:secretpw@127.0.0.1:55432/adulis?port=5434', 'postgres:/u:secretpw@h/db']) {
-    const r = await authorize({ url, expectedCommit: SHA, confirmTarget: 'adulis@127.0.0.1:55432' });
+  for (const url of [
+    'postgres://u:secretpw@127.0.0.1:55432/adulis?options=-c%20x',
+    'postgres://u:secretpw@127.0.0.1:55432/adulis?port=5434',
+    'postgres:/u:secretpw@h/db',
+  ]) {
+    const r = await authorize({
+      url,
+      expectedCommit: SHA,
+      confirmTarget: 'adulis@127.0.0.1:55432',
+    });
     assert.equal(r.ok, false, url);
     assert.match(r.text, /the target is not usable/);
     assert.doesNotMatch(r.text, /secretpw/);
@@ -289,13 +372,23 @@ test('a temporary repository: the exact HEAD with a clean tree passes; a changed
     assert.deepEqual(checkApprovedSource({ root: dir, expectedCommit: head }), []);
     // a changed tracked file ANYWHERE, the guard itself included, is not the approved source
     writeFileSync(path.join(dir, 'guard.mjs'), 'export const weaker = true;\n');
-    assert.match(checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'), /uncommitted changes to tracked files[^]*guard\.mjs/);
+    assert.match(
+      checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'),
+      /uncommitted changes to tracked files[^]*guard\.mjs/,
+    );
     git('checkout', '--', 'guard.mjs');
     writeFileSync(path.join(dir, 'a.txt'), 'two\n');
     git('add', 'a.txt'); // staged but not committed
-    assert.match(checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'), /uncommitted changes/);
+    assert.match(
+      checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'),
+      /uncommitted changes/,
+    );
     git('commit', '-q', '-m', 'two');
-    assert.match(checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'), /HEAD is/, 'the old commit is no longer HEAD');
+    assert.match(
+      checkApprovedSource({ root: dir, expectedCommit: head }).join('\n'),
+      /HEAD is/,
+      'the old commit is no longer HEAD',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -307,7 +400,12 @@ function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'migpers-'));
   const dir = path.join(root, 'migrations');
   mkdirSync(dir);
-  return { root, dir, manifestPath: path.join(root, 'manifest.json'), cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  return {
+    root,
+    dir,
+    manifestPath: path.join(root, 'manifest.json'),
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
 }
 
 async function runUp({ applied = ['0001_a'], authorize: gate, dryRun = false } = {}) {
@@ -321,7 +419,14 @@ async function runUp({ applied = ['0001_a'], authorize: gate, dryRun = false } =
     const errs = [];
     const gateCalls = [];
     const code = await up(
-      { dir: f.dir, manifestPath: f.manifestPath, root: f.root, dryRun, log: (l) => out.push(l), err: (l) => errs.push(l) },
+      {
+        dir: f.dir,
+        manifestPath: f.manifestPath,
+        root: f.root,
+        dryRun,
+        log: (l) => out.push(l),
+        err: (l) => errs.push(l),
+      },
       {
         readApplied: async () => applied,
         run: () => ((started += 1), 0),
@@ -335,40 +440,76 @@ async function runUp({ applied = ['0001_a'], authorize: gate, dryRun = false } =
 }
 
 test('up: a refusal by the gate stops the runner and goes to the error stream; an allowance starts it', async () => {
-  const refused = await runUp({ authorize: () => ({ ok: false, log: ['classification: PERSISTENT-DEV (x)'], refusals: ['REFUSED: not allowed'] }) });
+  const refused = await runUp({
+    authorize: () => ({
+      ok: false,
+      log: ['classification: PERSISTENT-DEV (x)'],
+      refusals: ['REFUSED: not allowed'],
+    }),
+  });
   assert.equal(refused.code, 1);
   assert.equal(refused.started, 0, 'the runner must not start');
   assert.match(refused.err, /REFUSED: not allowed/);
   assert.match(refused.out, /classification: PERSISTENT-DEV/);
   assert.doesNotMatch(refused.out, /REFUSED/);
-  const allowed = await runUp({ authorize: () => ({ ok: true, log: ['classification: DISPOSABLE (marked)'] }) });
+  const allowed = await runUp({
+    authorize: () => ({ ok: true, log: ['classification: DISPOSABLE (marked)'] }),
+  });
   assert.equal(allowed.code, 0);
   assert.equal(allowed.started, 1);
   assert.deepEqual(allowed.gateCalls, [{ dryRun: false }]);
 });
 
 test('up: the gate is not asked when nothing is pending, and a dry run asks it only for the classification', async () => {
-  const nothing = await runUp({ applied: ['0001_a', '0002_b'], authorize: () => assert.fail('nothing to apply: no authorization is needed') });
+  const nothing = await runUp({
+    applied: ['0001_a', '0002_b'],
+    authorize: () => assert.fail('nothing to apply: no authorization is needed'),
+  });
   assert.equal(nothing.code, 0);
   assert.match(nothing.out, /nothing to apply/);
-  const dry = await runUp({ dryRun: true, authorize: () => ({ ok: true, log: ['classification: PERSISTENT-DEV (x)', 'dry run: applying here would need y'] }) });
+  const dry = await runUp({
+    dryRun: true,
+    authorize: () => ({
+      ok: true,
+      log: ['classification: PERSISTENT-DEV (x)', 'dry run: applying here would need y'],
+    }),
+  });
   assert.equal(dry.code, 0);
   assert.equal(dry.started, 0);
   assert.deepEqual(dry.gateCalls, [{ dryRun: true }]);
-  assert.match(dry.out, /classification: PERSISTENT-DEV[^]*dry run: applying here would need y[^]*dry run: the runner was not started/);
+  assert.match(
+    dry.out,
+    /classification: PERSISTENT-DEV[^]*dry run: applying here would need y[^]*dry run: the runner was not started/,
+  );
 });
 
 test('the command line takes --confirm-target as one name=value argument, once, and only where it means something', () => {
-  assert.deepEqual(parseArgs(['up', '--expect-commit', SHA, '--confirm-target=adulis@127.0.0.1:5434']).flags, {
-    '--expect-commit': SHA,
-    '--confirm-target': 'adulis@127.0.0.1:5434',
-  });
-  assert.match(parseArgs(['up', '--no-source-check', '--confirm-target=a@b:1', '--confirm-target=a@b:1']).error, /--confirm-target is given twice/);
-  assert.match(parseArgs(['up', '--no-source-check', '--confirm-target=']).error, /--confirm-target needs a value/);
-  assert.match(parseArgs(['up', '--no-source-check', '--confirm-target', 'a@b:1']).error, /unknown argument "--confirm-target"/);
+  assert.deepEqual(
+    parseArgs(['up', '--expect-commit', SHA, '--confirm-target=adulis@127.0.0.1:5434']).flags,
+    {
+      '--expect-commit': SHA,
+      '--confirm-target': 'adulis@127.0.0.1:5434',
+    },
+  );
+  assert.match(
+    parseArgs(['up', '--no-source-check', '--confirm-target=a@b:1', '--confirm-target=a@b:1'])
+      .error,
+    /--confirm-target is given twice/,
+  );
+  assert.match(
+    parseArgs(['up', '--no-source-check', '--confirm-target=']).error,
+    /--confirm-target needs a value/,
+  );
+  assert.match(
+    parseArgs(['up', '--no-source-check', '--confirm-target', 'a@b:1']).error,
+    /unknown argument "--confirm-target"/,
+  );
   assert.match(parseArgs(['verify', '--confirm-target=a@b:1']).error, /unknown argument/);
   assert.match(parseArgs(['write', '--confirm-target=a@b:1']).error, /unknown argument/);
-  assert.equal(parseArgs(['authorize', '--expect-commit', SHA, '--confirm-target=a@b:1']).error, undefined);
+  assert.equal(
+    parseArgs(['authorize', '--expect-commit', SHA, '--confirm-target=a@b:1']).error,
+    undefined,
+  );
   assert.match(parseArgs(['authorize', '--dry-run']).error, /unknown argument "--dry-run"/);
 });
 
@@ -416,7 +557,11 @@ function fakePg({ names = [], marker = null, failMark = false }) {
       }
       send('D', Buffer.concat(parts));
     };
-    const error = (message) => send('E', Buffer.concat([cstr('SERROR'), cstr('C0A000'), cstr(`M${message}`), Buffer.from([0])]));
+    const error = (message) =>
+      send(
+        'E',
+        Buffer.concat([cstr('SERROR'), cstr('C0A000'), cstr(`M${message}`), Buffer.from([0])]),
+      );
     sock.on('error', () => {});
     sock.on('data', (d) => {
       buf = Buffer.concat([buf, d]);
@@ -470,7 +615,14 @@ function fakePg({ names = [], marker = null, failMark = false }) {
     });
   });
   return new Promise((resolve) =>
-    server.listen(0, '127.0.0.1', () => resolve({ port: server.address().port, seen, state, close: () => new Promise((r) => server.close(r)) })),
+    server.listen(0, '127.0.0.1', () =>
+      resolve({
+        port: server.address().port,
+        seen,
+        state,
+        close: () => new Promise((r) => server.close(r)),
+      }),
+    ),
   );
 }
 
@@ -479,7 +631,10 @@ function guardCli(args, env) {
   return new Promise((resolve) => {
     const base = { ...process.env };
     for (const k of ['DATABASE_URL_MIGRATE', 'PGPORT', 'PGOPTIONS']) delete base[k];
-    const child = spawn(process.execPath, [GUARD, ...args], { cwd: ROOT, env: { ...base, ...env } });
+    const child = spawn(process.execPath, [GUARD, ...args], {
+      cwd: ROOT,
+      env: { ...base, ...env },
+    });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
@@ -488,7 +643,9 @@ function guardCli(args, env) {
   });
 }
 
-const ALL = JSON.parse(read('ops/migrations.manifest.json')).files.map((f) => f.name.replace(/\.sql$/, ''));
+const ALL = JSON.parse(read('ops/migrations.manifest.json')).files.map((f) =>
+  f.name.replace(/\.sql$/, ''),
+);
 /** The only two statements the guard sends. Anything else reaching the database (a runner start) fails a test. */
 const GUARD_QUERIES = /FROM pgmigrations|shobj_description/;
 
@@ -503,13 +660,22 @@ async function cli(args, pg, extraEnv = {}) {
 test('real command line: an unmarked loopback database with pending migrations is refused, nothing is written, the runner never starts', async () => {
   const pg = await fakePg({ names: ALL.slice(0, 3), marker: null });
   try {
-    for (const args of [['up', '--no-source-check'], ['up', '--expect-commit', SHA]]) {
+    for (const args of [
+      ['up', '--no-source-check'],
+      ['up', '--expect-commit', SHA],
+    ]) {
       const r = await cli(args, pg);
       assert.equal(r.status, 1, args.join(' '));
       assert.match(r.stdout, /^target: 127\.0\.0\.1:\d+\/fakedb$/m);
       if (args.includes('--no-source-check')) {
-        assert.match(r.stdout, /^classification: PERSISTENT-DEV \(it carries no disposable mark\)$/m);
-        assert.match(r.stderr, /REFUSED: the target 127\.0\.0\.1:\d+\/fakedb is PERSISTENT-DEV, not a disposable database; nothing was applied/);
+        assert.match(
+          r.stdout,
+          /^classification: PERSISTENT-DEV \(it carries no disposable mark\)$/m,
+        );
+        assert.match(
+          r.stderr,
+          /REFUSED: the target 127\.0\.0\.1:\d+\/fakedb is PERSISTENT-DEV, not a disposable database; nothing was applied/,
+        );
         assert.match(r.stderr, /--expect-commit <full sha>/);
         assert.match(r.stderr, /--confirm-target=fakedb@127\.0\.0\.1:\d+/);
       } else {
@@ -517,9 +683,15 @@ test('real command line: an unmarked loopback database with pending migrations i
       }
       assert.doesNotMatch(r.stdout, /nothing to apply/);
     }
-    assert.ok(pg.seen.every((q) => GUARD_QUERIES.test(q)), `only the guard's two reads reached the database: ${pg.seen.join(' | ')}`);
+    assert.ok(
+      pg.seen.every((q) => GUARD_QUERIES.test(q)),
+      `only the guard's two reads reached the database: ${pg.seen.join(' | ')}`,
+    );
     // the full authorization on a wrong confirmation is still refused
-    const wrong = await cli(['up', '--expect-commit', SHA, '--confirm-target=fakedb@localhost:1'], pg);
+    const wrong = await cli(
+      ['up', '--expect-commit', SHA, '--confirm-target=fakedb@localhost:1'],
+      pg,
+    );
     assert.equal(wrong.status, 1);
     assert.doesNotMatch(wrong.stdout, /authorized:/);
   } finally {
@@ -551,7 +723,11 @@ test('real command line: a dry run is allowed on every classification, names it,
       assert.equal(r.status, 0, `${kind}: ${r.stderr}`);
       assert.match(r.stdout, new RegExp(`^classification: ${kind} `, 'm'));
       assert.match(r.stdout, /dry run: the runner was not started/);
-      if (kind !== 'DISPOSABLE') assert.match(r.stdout, /dry run: applying here would need pnpm db:migrate:guarded --expect-commit/);
+      if (kind !== 'DISPOSABLE')
+        assert.match(
+          r.stdout,
+          /dry run: applying here would need pnpm db:migrate:guarded --expect-commit/,
+        );
       assert.ok(pg.seen.every((q) => GUARD_QUERIES.test(q)));
     } finally {
       await pg.close();
@@ -609,11 +785,19 @@ test('test-db.sh marks the pair with the setup mark before it migrates, and with
   assert.ok(setup > 0 && migrate > 0 && final > 0, 'all three lines exist');
   assert.ok(setup < migrate, 'the setup mark comes before the migration');
   assert.ok(migrate < final, 'the final mark comes last');
-  assert.match(lines[setup - 1], /docker exec "\$PG" psql -U adulis_bootstrap -d adulis -v ON_ERROR_STOP=1/, 'it is set inside the container just proven');
+  assert.match(
+    lines[setup - 1],
+    /docker exec "\$PG" psql -U adulis_bootstrap -d adulis -v ON_ERROR_STOP=1/,
+    'it is set inside the container just proven',
+  );
   // after the identity proof: the setup mark is only written to the server just started
   assert.ok(at(/is not \$PG \(another server answers there\)/) < setup);
   assert.equal(DISPOSABLE_SETUP_MARKER, 'adulis:disposable-test-database:setup');
-  assert.notEqual(DISPOSABLE_SETUP_MARKER, DISPOSABLE_MARKER, 'the guards that compare with the final mark do not accept it');
+  assert.notEqual(
+    DISPOSABLE_SETUP_MARKER,
+    DISPOSABLE_MARKER,
+    'the guards that compare with the final mark do not accept it',
+  );
 });
 
 test('db:determinism marks each scratch database before it migrates it', async () => {
@@ -625,12 +809,24 @@ test('db:determinism marks each scratch database before it migrates it', async (
     if (args[0] === 'inspect')
       return {
         status: 0,
-        stdout: JSON.stringify([{ Id: 'c0ffee'.repeat(10) + 'beef', Name: '/adulis-test-pg', State: { Running: true }, Mounts: [], NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '55432' }] } } }]),
+        stdout: JSON.stringify([
+          {
+            Id: 'c0ffee'.repeat(10) + 'beef',
+            Name: '/adulis-test-pg',
+            State: { Running: true },
+            Mounts: [],
+            NetworkSettings: {
+              Ports: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '55432' }] },
+            },
+          },
+        ]),
         stderr: '',
       };
-    if (text.includes('pg_control_system')) return { status: 0, stdout: `7|${DISPOSABLE_MARKER}\n`, stderr: '' };
+    if (text.includes('pg_control_system'))
+      return { status: 0, stdout: `7|${DISPOSABLE_MARKER}\n`, stderr: '' };
     if (text.includes('SELECT datname')) return { status: 0, stdout: '', stderr: '' };
-    if (args[2] === 'pg_dump') return { status: 0, stdout: 'CREATE TABLE core.x (id uuid);\n', stderr: '' };
+    if (args[2] === 'pg_dump')
+      return { status: 0, stdout: 'CREATE TABLE core.x (id uuid);\n', stderr: '' };
     return { status: 0, stdout: '', stderr: '' };
   };
   class Client {
@@ -641,15 +837,25 @@ test('db:determinism marks each scratch database before it migrates it', async (
     async end() {}
   }
   const code = await runDeterminism({
-    env: { NODE_ENV: 'test', ADULIS_PG_CONTAINER: 'adulis-test-pg', DATABASE_URL_MIGRATE: 'postgres://adulis_bootstrap:x@127.0.0.1:55432/adulis' },
+    env: {
+      NODE_ENV: 'test',
+      ADULIS_PG_CONTAINER: 'adulis-test-pg',
+      DATABASE_URL_MIGRATE: 'postgres://adulis_bootstrap:x@127.0.0.1:55432/adulis',
+    },
     docker: (a) => {
       const r = docker(a);
       const t = a.join(' ');
       if (/CREATE DATABASE/.test(t)) events.push(`create ${t.match(/adulis_det_[ab]_\w+/)[0]}`);
-      if (/COMMENT ON DATABASE/.test(t)) events.push(`mark ${t.match(/adulis_det_[ab]_\w+/)[0]} with ${t.includes(`'${DISPOSABLE_MARKER}'`) ? 'the disposable mark' : 'something else'}`);
+      if (/COMMENT ON DATABASE/.test(t))
+        events.push(
+          `mark ${t.match(/adulis_det_[ab]_\w+/)[0]} with ${t.includes(`'${DISPOSABLE_MARKER}'`) ? 'the disposable mark' : 'something else'}`,
+        );
       return r;
     },
-    migrate: (url) => (events.push(`migrate ${new URL(url).pathname.slice(1)}`), { status: 0, stdout: '', stderr: '' }),
+    migrate: (url) => (
+      events.push(`migrate ${new URL(url).pathname.slice(1)}`),
+      { status: 0, stdout: '', stderr: '' }
+    ),
     Client,
     interrupted: () => null,
     suffix: () => '0a1b2c3d',
@@ -658,8 +864,13 @@ test('db:determinism marks each scratch database before it migrates it', async (
   });
   assert.equal(code, 0);
   for (const d of ['adulis_det_a_0a1b2c3d', 'adulis_det_b_0a1b2c3d']) {
-    const order = ['create', 'mark', 'migrate'].map((w) => events.findIndex((e) => e.startsWith(`${w} ${d}`)));
-    assert.ok(order.every((i) => i >= 0), `${d}: ${events.join(' | ')}`);
+    const order = ['create', 'mark', 'migrate'].map((w) =>
+      events.findIndex((e) => e.startsWith(`${w} ${d}`)),
+    );
+    assert.ok(
+      order.every((i) => i >= 0),
+      `${d}: ${events.join(' | ')}`,
+    );
     assert.ok(order[0] < order[1] && order[1] < order[2], `${d}: create, then mark, then migrate`);
     assert.ok(events.includes(`mark ${d} with the disposable mark`));
   }
@@ -669,13 +880,22 @@ test('db:reset of a persistent database proves the authorization before it drops
   const src = read('ops/scripts/db-reset.mjs');
   const pre = src.indexOf("'authorize'");
   const firstDrop = src.indexOf('DROP SCHEMA');
-  const record = src.indexOf("recordAdminAction(path.join(root, '.adulis-db-admin.log'), 'db:reset'");
+  const record = src.indexOf(
+    "recordAdminAction(path.join(root, '.adulis-db-admin.log'), 'db:reset'",
+  );
   assert.ok(pre > 0 && firstDrop > 0 && record > 0);
   assert.ok(pre < record, 'the preflight comes before the reset is recorded');
   assert.ok(pre < firstDrop, 'the preflight comes before the first drop');
   assert.match(src, /--expect-commit=/);
-  assert.match(src, /run\('pnpm', \['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=\$\{decision\.target\}`\]\)/);
-  assert.match(src, /run\('pnpm', \['db:migrate'\]\)/, 'a disposable database still migrates with the ordinary command');
+  assert.match(
+    src,
+    /run\('pnpm', \['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=\$\{decision\.target\}`\]\)/,
+  );
+  assert.match(
+    src,
+    /run\('pnpm', \['db:migrate'\]\)/,
+    'a disposable database still migrates with the ordinary command',
+  );
 });
 
 test('the guard document states the rule: proven disposable, or the commit and the named confirmation; the ordinary command refuses the rest', () => {
@@ -686,7 +906,11 @@ test('the guard document states the rule: proven disposable, or the commit and t
   assert.match(doc, /--confirm-target=<database>@<host>:<port>/);
   assert.match(doc, /disposable-test-database:setup/);
   assert.match(doc, /dry run is allowed on every target/i);
-  assert.doesNotMatch(doc, /without a prompt, to whatever/, 'the old statement that anything is applied at once is gone');
+  assert.doesNotMatch(
+    doc,
+    /without a prompt, to whatever/,
+    'the old statement that anything is applied at once is gone',
+  );
 });
 
 test('the administrative log keeps the optional commit beside the target, one JSON line per authorised upgrade', async () => {
@@ -694,11 +918,23 @@ test('the administrative log keeps the optional commit beside the target, one JS
   const dir = mkdtempSync(path.join(tmpdir(), 'migrec-'));
   try {
     const file = path.join(dir, '.adulis-db-admin.log');
-    recordAdminAction(file, 'db:migrate', 'adulis@localhost:5434', new Date('2026-11-19T00:00:00Z'), { commit: SHA });
+    recordAdminAction(
+      file,
+      'db:migrate',
+      'adulis@localhost:5434',
+      new Date('2026-11-19T00:00:00Z'),
+      { commit: SHA },
+    );
     recordAdminAction(file, 'db:reset', 'adulis@localhost:5434', new Date('2026-11-19T00:00:01Z'));
-    const lines = readFileSync(file, 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l));
+    const lines = readFileSync(file, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => JSON.parse(l));
     assert.equal(lines.length, 2);
-    assert.deepEqual([lines[0].action, lines[0].target, lines[0].commit, lines[0].at], ['db:migrate', 'adulis@localhost:5434', SHA, '2026-11-19T00:00:00.000Z']);
+    assert.deepEqual(
+      [lines[0].action, lines[0].target, lines[0].commit, lines[0].at],
+      ['db:migrate', 'adulis@localhost:5434', SHA, '2026-11-19T00:00:00.000Z'],
+    );
     assert.equal(lines[1].commit, undefined, 'a reset record is unchanged');
   } finally {
     rmSync(dir, { recursive: true, force: true });

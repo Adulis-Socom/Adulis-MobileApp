@@ -390,7 +390,10 @@ export async function classifyTarget(t, { readMark: read }) {
       why: `${t.host} is not a plain loopback host, so no disposable mark is accepted`,
     };
   if (!t.explicitPort)
-    return { kind: 'UNKNOWN', why: 'the URL has no explicit port, so no disposable mark is accepted' };
+    return {
+      kind: 'UNKNOWN',
+      why: 'the URL has no explicit port, so no disposable mark is accepted',
+    };
   let mark;
   try {
     mark = await read();
@@ -400,7 +403,8 @@ export async function classifyTarget(t, { readMark: read }) {
       why: `the database mark could not be read (${e.code ?? 'connection failed'})`,
     };
   }
-  if (DISPOSABLE_MARKS.has(mark)) return { kind: 'DISPOSABLE', why: 'the database is marked disposable' };
+  if (DISPOSABLE_MARKS.has(mark))
+    return { kind: 'DISPOSABLE', why: 'the database is marked disposable' };
   return {
     kind: 'PERSISTENT-DEV',
     why: mark ? 'its comment is not the disposable mark' : 'it carries no disposable mark',
@@ -710,7 +714,9 @@ export function parseArgs(argv) {
     if (CONFIRMS.has(cmd) && a.startsWith('--confirm-target=')) {
       if ('--confirm-target' in flags) return { error: '--confirm-target is given twice' };
       if (a === '--confirm-target=')
-        return { error: '--confirm-target needs a value: --confirm-target=<database>@<host>:<port>' };
+        return {
+          error: '--confirm-target needs a value: --confirm-target=<database>@<host>:<port>',
+        };
       flags['--confirm-target'] = a.slice('--confirm-target='.length);
       continue;
     }

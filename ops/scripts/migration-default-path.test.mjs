@@ -285,7 +285,11 @@ test('the documented commands exist: the migration docs name the ordinary comman
     /node-pg-migrate directly/i,
     'the doc says the raw runner is not a way to migrate',
   );
-  assert.match(doc, /Which database is this/, 'the doc says which targets the ordinary command applies to');
+  assert.match(
+    doc,
+    /Which database is this/,
+    'the doc says which targets the ordinary command applies to',
+  );
   assert.ok(
     read('apps/api/CLAUDE.md').includes('pnpm db:migration-pin'),
     'the migration authoring rules name the pin command',
