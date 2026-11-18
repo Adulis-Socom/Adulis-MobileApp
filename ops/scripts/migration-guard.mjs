@@ -182,15 +182,40 @@ export function checkSource({
 /** A git ref the check may hand to git: no leading dash (an option), no spaces or other shell-looking characters. */
 const PLAIN_REF = /^[A-Za-z0-9][A-Za-z0-9._/@^~-]*$/;
 
-/** The manifest as committed at `ref`: { manifest } (null when that commit has none yet) or { problems }. */
-export function readBaseManifest(root, ref, manifestRel = 'ops/migrations.manifest.json') {
+/**
+ * The manifest as committed at `ref`: { manifest } (null when that commit has none yet) or { problems }.
+ * "No manifest yet" is claimed only when git LISTS the commit's tree successfully and the path is not in it. Any other
+ * outcome (an unreadable or missing object, a shallow or damaged clone, git not starting) refuses: a failed read is
+ * never read as an empty base. (`git cat-file -e ref:path` cannot be used for this: it exits 128 both for a path that
+ * is absent from a good commit and for a broken repository.) `runGit` is injectable for the tests.
+ */
+export function readBaseManifest(
+  root,
+  ref,
+  manifestRel = 'ops/migrations.manifest.json',
+  runGit = git,
+) {
   if (!PLAIN_REF.test(ref))
     return { problems: [`BASE ${JSON.stringify(ref)} is not a plain git ref`] };
-  if (git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).status !== 0)
+  if (runGit(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).status !== 0)
     return { problems: [`BASE ${ref} is not a commit in this clone (fetch it first)`] };
-  if (git(root, ['cat-file', '-e', `${ref}:${manifestRel}`]).status !== 0)
-    return { manifest: null };
-  const shown = git(root, ['show', `${ref}:${manifestRel}`]);
+  const listed = runGit(root, ['ls-tree', '--name-only', ref, '--', manifestRel]);
+  if (listed.status !== 0)
+    return {
+      problems: [
+        `BASE ${ref}: git could not read the committed tree (${listed.err || 'git failed'})`,
+      ],
+    };
+  if (listed.out === '') return { manifest: null };
+  if (listed.out !== manifestRel)
+    return { problems: [`BASE ${ref}: git listed an unexpected entry for the manifest path`] };
+  const shown = runGit(root, ['show', `${ref}:${manifestRel}`]);
+  if (shown.status !== 0)
+    return {
+      problems: [
+        `BASE ${ref}: git could not read the committed manifest (${shown.err || 'git failed'})`,
+      ],
+    };
   try {
     return { manifest: JSON.parse(shown.out) };
   } catch {
@@ -247,6 +272,23 @@ export async function readApplied(connectionString) {
 /** Query options that would send the connection somewhere other than the URL says (pg reads them over the URL). */
 const RETARGETING = ['host', 'hostaddr', 'port', 'dbname', 'database', 'service'];
 
+/**
+ * The only query keys a migration URL may carry. Everything else is refused, so a key the driver or a later consumer
+ * reads as configuration (`connectionString`, `user`, `password`, `statement_timeout`, `search_path`, a certificate
+ * path, ...) can never change what the guard checked.
+ */
+export const ALLOWED_QUERY_KEYS = [
+  'sslmode',
+  'ssl',
+  'uselibpqcompat',
+  'application_name',
+  'connect_timeout',
+];
+
+/** Tab, newline, space and every other control character: the URL parser silently drops some of them, the driver does not. */
+const hasControlOrSpace = (s) =>
+  [...s].some((c) => c.charCodeAt(0) <= 0x20 || c.charCodeAt(0) === 0x7f);
+
 /** A host is a plain name or address: a percent-encoded or control character would let the printed line differ from where pg connects. */
 const PLAIN_HOST = /^[A-Za-z0-9._[\]:-]+$/;
 
@@ -268,6 +310,8 @@ export function checkTarget(connectionString, env = process.env) {
   }
   if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:')
     return { error: 'it is not a postgres:// or postgresql:// URL' };
+  if (hasControlOrSpace(connectionString))
+    return { error: 'it contains a control or whitespace character' };
   if (u.hostname === '') return { error: 'it names no host' };
   if (!PLAIN_HOST.test(u.hostname)) return { error: 'its host is not a plain name or address' };
   const database = u.pathname.slice(1);
@@ -281,6 +325,13 @@ export function checkTarget(connectionString, env = process.env) {
   if (u.searchParams.has('options'))
     return {
       error: 'it sets options as a query option, which could replace the read-only session',
+    };
+  const unknown = [...new Set(u.searchParams.keys())].filter(
+    (k) => !ALLOWED_QUERY_KEYS.includes(k),
+  );
+  if (unknown.length)
+    return {
+      error: `it sets ${unknown.join(', ')} as a query option; only ${ALLOWED_QUERY_KEYS.join(', ')} are allowed`,
     };
   const port = u.port || env.PGPORT || '5432';
   if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)

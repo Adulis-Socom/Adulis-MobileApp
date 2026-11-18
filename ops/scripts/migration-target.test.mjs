@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import ConnectionParameters from 'pg/lib/connection-parameters';
 
 import {
+  ALLOWED_QUERY_KEYS,
   checkAppendOnly,
   checkTarget,
   readBaseManifest,
@@ -288,19 +289,21 @@ test('verify --base through the command line: bad ref refused before git, a miss
   assert.match(ok.stdout, /^OK: \d+ pinned migrations match; append-only against HEAD$/m);
 });
 
-test('CI checks the append-only rule on pull requests, with the base branch passed through the environment', () => {
+test('CI checks the append-only rule on every push and pull request, with the base passed through the environment', () => {
   const ci = read('.github/workflows/ci.yml');
   const step = ci
     .split('\n      - name: ')
     .find((s) => s.startsWith('The migration manifest only appends'));
   assert.ok(step, 'the CI step exists');
-  assert.match(step, /if: github\.event_name == 'pull_request'/);
-  assert.match(step, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
-  assert.match(
-    step,
-    /run: node ops\/scripts\/migration-guard\.mjs verify --base "origin\/\$BASE_REF"/,
-  );
-  assert.doesNotMatch(step.split('run:')[1], /\$\{\{/, 'no expression inside the script text');
+  const header = step.split('run:')[0];
+  assert.doesNotMatch(header, /^\s+if:/m, 'no condition: both same-named runs carry the step');
+  assert.match(header, /EVENT_NAME: \$\{\{ github\.event_name \}\}/);
+  assert.match(header, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
+  const script = step.split('run: |')[1] ?? '';
+  assert.match(script, /if \[ "\$EVENT_NAME" = pull_request \]; then\s+BASE="origin\/\$BASE_REF"/);
+  assert.match(script, /else\s+BASE="\$\(git merge-base origin\/dev HEAD\)"/);
+  assert.match(script, /node ops\/scripts\/migration-guard\.mjs verify --base "\$BASE"/);
+  assert.doesNotMatch(script, /\$\{\{/, 'no expression inside the script text');
 });
 
 test('the guard document describes the base check, the effective port and the refused options', () => {
@@ -308,4 +311,142 @@ test('the guard document describes the base check, the effective port and the re
   assert.match(doc, /pnpm db:migration-guard --base <ref>|db:migration-guard -- --base/);
   assert.match(doc, /PGPORT/);
   assert.match(doc, /`options`/);
+});
+
+test('only the query keys on the allow-list are accepted; a key the driver or a later consumer reads as configuration is refused whatever its value', () => {
+  for (const key of ALLOWED_QUERY_KEYS)
+    assert.ok(checkTarget(`postgres://u:p@h:1/app?${key}=x`, {}).target, key);
+  assert.ok(
+    checkTarget('postgres://u:p@h:1/app?sslmode=require&application_name=x&connect_timeout=5', {})
+      .target,
+  );
+  const refused = [
+    'connectionString',
+    'user',
+    'password',
+    'statement_timeout',
+    'search_path',
+    'client_encoding',
+    'sslcert',
+    'sslkey',
+    'sslrootcert',
+    'replication',
+    'binary',
+    'fallback_application_name',
+    'lock_timeout',
+    'target_session_attrs',
+    'Host',
+    'PORT',
+    'x',
+  ];
+  for (const key of refused) {
+    const r = checkTarget(`postgres://u:s3cretpw@h:1/app?${key}=y`, {});
+    assert.match(r.error, /as a query option; only sslmode/, key);
+    assert.equal(r.target, undefined);
+    assert.ok(!r.error.includes('s3cretpw'), 'the reason never repeats the string');
+  }
+  // a nested connection string would re-target a consumer that parses the raw string
+  const nested =
+    'postgres://u:p@localhost:55432/adulis?connectionString=postgres%3A%2F%2Fh%3A5434%2Fdb';
+  assert.match(checkTarget(nested, {}).error, /sets connectionString as a query option/);
+  // one refused key among accepted ones refuses the whole URL
+  assert.match(
+    checkTarget('postgres://u:p@h:1/app?sslmode=require&user=x', {}).error,
+    /sets user as a query option/,
+  );
+  // through the real command line: refused before any connection, nothing echoed
+  const cli = guard(['up', '--no-source-check', '--dry-run'], {
+    DATABASE_URL_MIGRATE: `postgres://u:s3cretpw@127.0.0.1:55432/app?connectionString=x`,
+  });
+  assert.equal(cli.status, 1);
+  assert.match(cli.stderr, /is not usable \(it sets connectionString as a query option/);
+  assert.doesNotMatch(cli.stdout, /^target:/m);
+  assert.doesNotMatch(cli.stdout + cli.stderr, /s3cretpw|history cannot be read/);
+});
+
+test('a control or whitespace character anywhere in the string is refused, including the ones the URL parser silently drops', () => {
+  const base = 'postgres://u:s3cretpw@127.0.0.1:55432/app';
+  assert.ok(checkTarget(base, {}).target, 'the plain string is accepted');
+  // the parser strips these and would accept what is left; the driver would not
+  const stripped = {
+    tab: base.replace('127', '1\t27'),
+    newline: `${base}\n`,
+    'carriage return': `${base}\r`,
+    'trailing space': `${base} `,
+    'leading space': ` ${base}`,
+    'tab in the query': `${base}?sslmode=\trequire`,
+  };
+  for (const [label, url] of Object.entries(stripped)) {
+    const r = checkTarget(url, {});
+    assert.match(r.error, /control or whitespace character/, label);
+    assert.equal(r.target, undefined, label);
+    assert.ok(!r.error.includes('s3cretpw'));
+  }
+  // the rest are refused by one rule or another; none yields a target
+  const others = {
+    nul: `${base}\0`,
+    delete: `${base}\x7f`,
+    'newline in the path': 'postgres://u:s3cretpw@127.0.0.1:55432/a\npp',
+    'space in the host': 'postgres://u:s3cretpw@127.0.0.1 :55432/app',
+  };
+  for (const [label, url] of Object.entries(others)) {
+    const r = checkTarget(url, {});
+    assert.ok(r.error, label);
+    assert.equal(r.target, undefined, label);
+  }
+  const cli = guard(['up', '--no-source-check', '--dry-run'], {
+    DATABASE_URL_MIGRATE: `${base}\n`,
+  });
+  assert.equal(cli.status, 1);
+  assert.match(cli.stderr, /is not usable \(it contains a control or whitespace character/);
+  assert.doesNotMatch(cli.stdout, /^target:/m);
+});
+
+test('a git failure while reading the base is a refusal, never "no manifest yet"', () => {
+  const ok = (out = '') => ({ status: 0, out, err: '' });
+  const failed = (status, err = 'fatal: x') => ({ status, out: '', err });
+  const MANIFEST = 'ops/migrations.manifest.json';
+  /** git answering rev-parse, ls-tree and show as given. */
+  const git =
+    (listed, shown = ok(JSON.stringify(BASE))) =>
+    (_root, args) =>
+      args[0] === 'rev-parse' ? ok('abc') : args[0] === 'ls-tree' ? listed : shown;
+  const readWith = (g) => readBaseManifest('/unused', 'origin/dev', MANIFEST, g);
+  // the only way to "no manifest yet": git listed the tree fine and the path is not in it
+  assert.deepEqual(readWith(git(ok(''))), { manifest: null });
+  assert.deepEqual(readWith(git(ok(MANIFEST))).manifest, BASE);
+  // every failure of the listing refuses, whatever the status (128 fatal, 1, 255, git not starting)
+  for (const status of [128, 1, 255, null])
+    assert.match(
+      readWith(git(failed(status))).problems.join('\n'),
+      /git could not read the committed tree/,
+      `status ${status}`,
+    );
+  assert.match(readWith(git(ok('some/other/path'))).problems.join('\n'), /unexpected entry/);
+  assert.match(
+    readWith(git(ok(MANIFEST), failed(128))).problems.join('\n'),
+    /git could not read the committed manifest/,
+  );
+  assert.match(
+    readWith(git(ok(MANIFEST), failed(null, ''))).problems.join('\n'),
+    /git could not read the committed manifest/,
+  );
+  assert.match(
+    readWith(git(ok(MANIFEST), ok('{not json'))).problems.join('\n'),
+    /the committed manifest is not JSON/,
+  );
+});
+
+test('a damaged repository: a commit whose tree object is gone refuses instead of reading as an empty base', () => {
+  const r = repoWith(JSON.stringify(BASE));
+  try {
+    assert.deepEqual(readBaseManifest(r.dir, 'HEAD').manifest, BASE);
+    const tree = r.git('rev-parse', 'HEAD^{tree}');
+    rmSync(path.join(r.dir, '.git', 'objects', tree.slice(0, 2), tree.slice(2)), { force: true });
+    const damaged = readBaseManifest(r.dir, 'HEAD');
+    assert.equal(damaged.manifest, undefined, 'it must not claim an empty base');
+    assert.match(damaged.problems.join('\n'), /git could not read the committed tree/);
+  } finally {
+    r.cleanup();
+  }
 });

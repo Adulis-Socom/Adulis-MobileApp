@@ -56,9 +56,12 @@ only with `pnpm db:migrate:guarded --expect-commit <sha>` from a committed, revi
 The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
 the variable is not set, or is not a plain `postgres://` or `postgresql://` URL (a plain host name or address, and one
-plain database name as the whole path, no `host`, `port`, `dbname` or `options` query option); a malformed string is
-refused before anything connects. A percent-encoded host is refused, and so is an `options` query parameter: the
-driver lets the URL's value replace the read-only startup option the guard sets for its history read. A `.env` that points at a persistent database makes `pnpm db:migrate` upgrade that
+plain database name as the whole path, and no query key other than `sslmode`, `ssl`, `uselibpqcompat`, `application_name`
+and `connect_timeout`); a malformed string is refused before anything connects. A percent-encoded host is refused, so is
+any control or whitespace character anywhere in the string (the URL parser silently drops some of them, the driver does
+not), and so is every other query key: `host`, `port` and `dbname` would re-target the connection, `options` would
+replace the read-only startup option the guard sets for its history read, and a key such as `connectionString` would be
+read as configuration by anything that parses the raw string. A `.env` that points at a persistent database makes `pnpm db:migrate` upgrade that
 database, now only ever from the pinned set. Before it reads anything, `up` and `verify --db` print
 `target: host:port/database` (never the credentials), so a run against an unintended database is visible at
 once. The port printed is the one the driver will use: the URL's own, else `PGPORT`, else 5432 (a `PGPORT` that is
@@ -74,9 +77,11 @@ such as `--dryrun` must not turn a dry run into a real apply, and the two source
 `pnpm db:migration-guard --base <ref>` compares the manifest with the one committed at `<ref>` (for example
 `origin/dev`) and refuses if any entry that was there is now missing, renamed, reordered or has a different hash.
 A new migration appends; nothing else changes. This is what catches a merged migration that was edited together
-with its manifest line, which every other check accepts. CI runs it on every pull request against the base branch
-(the step "The migration manifest only appends to the base branch's"). A push to a branch without a pull request
-is not checked, and neither is a base that this clone has not fetched (the command refuses that case).
+with its manifest line, which every other check accepts. CI runs it on every push and every pull request (the step
+"The migration manifest only appends to the base branch's"): a pull request is compared with its base branch, a push
+with the commit where the pushed branch left `dev`. The comparison fails closed: a base that this clone has not fetched,
+a commit whose tree git cannot read, a shallow or damaged clone and git failing to start all refuse. Only a commit whose
+tree git lists successfully, without a manifest in it, counts as "no manifest yet".
 
 ## Every way a migration runs
 
@@ -134,7 +139,7 @@ Three situations have an exit that does not touch history:
 - The ordinary command has no source check and no prompt (see Use); persistent databases rely on the
   recommended rule above.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
-  its manifest line passes them; `--base` (run by CI on pull requests) refuses it, and review is the check for a
-  change that never goes through a pull request.
+  its manifest line passes them; `--base` (run by CI on pushes and pull requests) refuses it, and review is the check for a
+  change that is never pushed to the repository.
 - It cannot stop a direct run of the installed node-pg-migrate program (see above).
 - A restore is the only way back from an applied migration (the down migrations raise); the guard does not change that.
