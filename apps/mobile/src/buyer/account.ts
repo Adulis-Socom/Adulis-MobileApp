@@ -14,9 +14,9 @@ import { keepIfCurrent } from './saved';
  * session is refused, never shown under another Account) and cleared with the whole cache by
  * clearSession.
  *
- * Deletion: the existing deletion-ticket flow (ADU-API-01 v1.11 S12.18). The contract publishes
- * no schemas for it (ON-20261111-135), so each answer is checked here and anything else is a
- * contract failure, never a guess. The ticket lives in the flow's memory only.
+ * Deletion: the existing deletion-ticket flow (ADU-API-01 v1.11 S12.18). Each answer is checked
+ * here, whatever the contract's type says, and anything else is a contract failure, never a guess.
+ * The ticket lives in the flow's memory only.
  */
 
 const SESSIONS = 'account-sessions';

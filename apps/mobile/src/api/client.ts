@@ -66,6 +66,19 @@ export type ItemFilter = 'ALL' | SaveTarget['type'];
 export type SessionList = Json<paths['/v1/auth/sessions']['get']['responses'][200]>;
 export type AccountSession = SessionList['data'][number];
 export type ProblemItem = NonNullable<Problem['items']>[number];
+// The contract's answers for chat, notifications and Account deletion (what the server sends).
+// Each is still checked at its boundary (src/buyer/chat.ts, notifications.ts, account.ts): a body that
+// arrives over a radio link, or from a gateway, is not the server's, and a newer server may add a value.
+type ConversationOpened = Json<paths['/v1/conversations']['post']['responses'][201]>;
+type ConversationListPage = Json<paths['/v1/conversations']['get']['responses'][200]>;
+type MessageHistoryPage = Json<paths['/v1/conversations/{id}/messages']['get']['responses'][200]>;
+type MessageSent = Json<paths['/v1/conversations/{id}/messages']['post']['responses'][201]>;
+type ConversationEscalated = Json<paths['/v1/conversations/{id}/escalate']['post']['responses'][200]>;
+type NotificationListPage = Json<paths['/v1/notifications']['get']['responses'][200]>;
+type NotificationRead = Json<paths['/v1/notifications/{id}/read']['post']['responses'][200]>;
+type DeletionTicketIssued = Json<paths['/v1/deletion/otp/verify']['post']['responses'][200]>;
+type DeletionPreviewed = Json<paths['/v1/deletion/preview']['get']['responses'][200]>;
+type DeletionConfirmed = Json<paths['/v1/deletion/confirm']['post']['responses'][200]>;
 
 /** `retryAfterSeconds`: the wait the server or an intermediary asked for (Retry-After, else the problem's slot). */
 export type ApiFailure =
@@ -421,27 +434,26 @@ export function createApiClient(deps: ApiDeps) {
     /**
      * Account deletion (WO-011) on the existing deletion-ticket flow (ADU-API-01 v1.11 S12.18).
      * Anonymous by design: the phone's OTP mints a fifteen-minute TICKET, never a session, and
-     * no bearer is ever sent with these calls. The contract publishes no schemas for them
-     * (ON-20261111-135), so their answers are `unknown` here and are checked at the boundary
-     * (src/buyer/account.ts) rather than typed by hand.
+     * no bearer is ever sent with these calls. The answers are the contract's types and are still
+     * checked at the boundary (src/buyer/account.ts).
      */
     requestDeletionOtp: (phone: string, idempotencyKey: string) =>
       call<void>('POST', '/v1/deletion/otp/request', { body: { phone }, idempotencyKey, bearer: false, ok: 202 }),
     verifyDeletionOtp: (phone: string, code: string) =>
-      call<unknown>('POST', '/v1/deletion/otp/verify', { body: { phone, code }, bearer: false, ok: 200 }),
-    deletionPreview: (ticket: string) => call<unknown>('GET', '/v1/deletion/preview', { ticket, ok: 200 }),
+      call<DeletionTicketIssued>('POST', '/v1/deletion/otp/verify', { body: { phone, code }, bearer: false, ok: 200 }),
+    deletionPreview: (ticket: string) => call<DeletionPreviewed>('GET', '/v1/deletion/preview', { ticket, ok: 200 }),
     confirmDeletion: (ticket: string, idempotencyKey: string) =>
-      call<unknown>('POST', '/v1/deletion/confirm', { body: { acknowledge: true }, ticket, idempotencyKey, ok: 200 }),
+      call<DeletionConfirmed>('POST', '/v1/deletion/confirm', { body: { acknowledge: true }, ticket, idempotencyKey, ok: 200 }),
 
     /**
      * The Buyer inbox (WO-012): GET /v1/notifications?as=buyer, 25 per page, newest first. `as=buyer`
-     * is the server's scope rule (R10): Seller-side and Seller-class rows are never in it. No schema
-     * is published (ON-20261111-140), so the page is checked at the boundary (src/buyer/notifications.ts).
+     * is the server's scope rule (R10): Seller-side and Seller-class rows are never in it. The page is
+     * checked at the boundary (src/buyer/notifications.ts).
      * There is deliberately no read-all here: the server's marks the WHOLE Account read, Seller
      * notifications included (ON-20261111-139).
      */
     notifications: (cursor: string | null) =>
-      call<unknown>('GET', '/v1/notifications', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
+      call<NotificationListPage>('GET', '/v1/notifications', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
     /**
      * A store's inbox (WO-020): GET /v1/notifications?as=seller&seller_id=, with X-Adulis-Seller equal to
      * seller_id (the server refuses a mismatch). Same page shape as the Buyer inbox, checked at the boundary.
@@ -450,7 +462,7 @@ export function createApiClient(deps: ApiDeps) {
       call<unknown>('GET', '/v1/notifications', { seller, query: { as: 'seller', seller_id: seller, cursor: cursor ?? undefined }, ok: 200 }),
     /** POST /v1/notifications/{id}/read: one of the Account's notifications; read_at is set once. */
     markNotificationRead: (id: string, idempotencyKey: string) =>
-      call<unknown>('POST', '/v1/notifications/{id}/read', { params: { id }, idempotencyKey, ok: 200 }),
+      call<NotificationRead>('POST', '/v1/notifications/{id}/read', { params: { id }, idempotencyKey, ok: 200 }),
 
     /**
      * Seller Companion reads (WO-020; ADU-API-01 S12.11, S12.13: marked M, MOBILE-reachable). No response
@@ -473,26 +485,26 @@ export function createApiClient(deps: ApiDeps) {
     /**
      * Buyer messaging (WO-013): the existing Chat API, Buyer side (ADU-API-01 S12.7). One
      * conversation per Buyer, Seller and Market, created or returned by POST /v1/conversations
-     * (idempotent). `as=buyer` is the server's scope rule (R10). No schemas are published
-     * (ON-20261111-150), so the answers are checked at the boundary (src/buyer/chat.ts). A message
+     * (idempotent). `as=buyer` is the server's scope rule (R10). The answers are checked at the
+     * boundary (src/buyer/chat.ts). A message
      * may carry one Product anchor (WO-014): the id of a Product the app has just read publicly; the
      * server checks it is the conversation Seller's and PUBLISHED. No Order or Scene anchor is sent.
      */
     openConversation: (sellerId: string, idempotencyKey: string) =>
-      call<unknown>('POST', '/v1/conversations', { body: { seller_id: sellerId }, idempotencyKey, ok: 201 }),
+      call<ConversationOpened>('POST', '/v1/conversations', { body: { seller_id: sellerId }, idempotencyKey, ok: 201 }),
     conversations: (cursor: string | null) =>
-      call<unknown>('GET', '/v1/conversations', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
+      call<ConversationListPage>('GET', '/v1/conversations', { query: { as: 'buyer', cursor: cursor ?? undefined }, ok: 200 }),
     conversationMessages: (id: string, cursor: string | null) =>
-      call<unknown>('GET', '/v1/conversations/{id}/messages', { params: { id }, query: { cursor: cursor ?? undefined }, ok: 200 }),
+      call<MessageHistoryPage>('GET', '/v1/conversations/{id}/messages', { params: { id }, query: { cursor: cursor ?? undefined }, ok: 200 }),
     sendMessage: (id: string, text: string, idempotencyKey: string, productId: string | null = null) =>
-      call<unknown>('POST', '/v1/conversations/{id}/messages', {
+      call<MessageSent>('POST', '/v1/conversations/{id}/messages', {
         params: { id },
         body: productId === null ? { text } : { text, product_id: productId },
         idempotencyKey,
         ok: 201,
       }),
     escalateConversation: (id: string, idempotencyKey: string) =>
-      call<unknown>('POST', '/v1/conversations/{id}/escalate', { params: { id }, idempotencyKey, ok: 200 }),
+      call<ConversationEscalated>('POST', '/v1/conversations/{id}/escalate', { params: { id }, idempotencyKey, ok: 200 }),
 
     /**
      * Seller-side Chat (WO-021): the same conversations, read and answered by the active store. Every
