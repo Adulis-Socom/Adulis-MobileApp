@@ -66,7 +66,9 @@ export function idempotencyKey(header: unknown): string {
  * seller the hash is byte-identical to the one stored before the seller was
  * added (JSON.stringify never emits a raw newline, so the suffix cannot
  * collide with a body). Lower-cased, as the database spells a uuid, so a
- * retry that only changes the header's letter case is the same request.
+ * retry that only changes the header's letter case is the same request. The
+ * guard now lower-cases the header once for every consumer; it stays here so
+ * a caller that hashes a raw value still gets the same bytes.
  */
 export function hashRequest(
   method: string,
@@ -207,6 +209,10 @@ export class IdempotencyService {
    * INVARIANT: this re-tests no standing and no grant, and must stay reachable only from the unique-violation
    * path of runIdempotent. That path is entered after the handler ran to its insert in THIS attempt, i.e. after the
    * handler's own permission statement passed in the same transaction. A caller whose handler refused never gets here.
+   * "Passed" must mean passed on the SAME SIDE as the winner: on a route a Buyer and a store share, the side follows
+   * the store header, which is part of the hash, so an equal hash is an equal header. That holds only because the guard
+   * gives every consumer one spelling of the header (lower case); a consumer that compared it as typed could classify
+   * a retry as the other side while the hash still matched the winner's.
    */
   async readWinner(
     key: string,

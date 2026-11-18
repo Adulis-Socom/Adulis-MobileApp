@@ -54,7 +54,7 @@ const STORE_SIDE_ROUTES = new Set(['POST /v1/conversations/:id/messages', 'POST 
 
 /**
  * Every seller-acting idempotent route and the exact permission codes its handler asserts, as declared
- * with @ReplayGrant, reviewed route by route (SEC-003 review). Edit it on purpose, in the change that
+ * with @ReplayGrant, reviewed route by route. Edit it on purpose, in the change that
  * edits the route: it is the one place where a declaration weaker than its handler would be noticed.
  */
 const EXPECTED_REPLAY_GRANTS: Readonly<Record<string, readonly string[]>> = {

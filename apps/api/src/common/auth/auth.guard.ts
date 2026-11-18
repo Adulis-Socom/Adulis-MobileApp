@@ -215,6 +215,13 @@ export class AuthGuard implements CanActivate {
     // actually holds the seller is NOT decided here: that is
     // fn_has_permission's U0002, a 404 from below the endpoint, so this
     // header's presence check can never become a relationship oracle.
+    //
+    // THE ID IS LOWER-CASED HERE, ONCE: the form the database spells a uuid
+    // and the request hash already uses. Chat and claims choose the acting
+    // side by comparing it with the resource's store, so a spelling that
+    // differs only in case must not be able to pick a different side than the
+    // same request in lower case (which hashes alike and reaches the same
+    // stored response).
     let sellerId: string | null = null;
     const sellerHeader = req.headers['x-adulis-seller'];
     if (requiresSellerContext(req.path, req.method)) {
@@ -226,14 +233,14 @@ export class AuthGuard implements CanActivate {
           slots: { path: 'X-Adulis-Seller' },
         });
       }
-      sellerId = sellerHeader;
+      sellerId = sellerHeader.toLowerCase();
     } else if (typeof sellerHeader === 'string' && UUID_RE.test(sellerHeader)) {
       // A buyer-group call may still carry it (a seller browsing as buyer
       // does). Nothing here authorises with it, but it is not inert: chat
       // and claims act as that store when it names the resource's seller,
       // and the idempotency layer scopes the request hash, replay standing
-      // and @ReplayGrant check by it (WO-SEC-002, SEC-003).
-      sellerId = sellerHeader;
+      // and @ReplayGrant check by it.
+      sellerId = sellerHeader.toLowerCase();
     }
 
     const declaredRole = this.reflector.getAllAndOverride<

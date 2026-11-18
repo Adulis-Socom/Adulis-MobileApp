@@ -32,7 +32,7 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  * dual-side routes (chat messages, claims evidence) do for a buyer, a store
  * member and an account that is both -- with and without X-Adulis-Seller.
  *
- * The harness is WO-SEC-002's (wo-sec-002-idempotency-security.e2e.spec.ts):
+ * The harness is the idempotency security suite's (wo-sec-002-idempotency-security.e2e.spec.ts):
  * probes call the production HandlerTransaction exactly as handlers do, and
  * every authorised execution writes one marker row, so a rolled-back run is
  * visible as a counted execution with no surviving marker. The real-route
@@ -80,7 +80,7 @@ const CLAIM = `${P}21`; // OTHER's open claim on it (a second blocker)
 const OTP_CH = `${P}22`;
 const STEP_UP = `${P}23`;
 const TRANSFER = `${P}24`;
-// Review round (A-1, A-5, B-4).
+// Members whose roles change during the run, and an Owner who also holds a membership.
 const MEMBER_13 = `${P}25`; // ADMIN of SELLER_A, re-invited as INVENTORY
 const MEMBER_15 = `${P}26`; // ADMIN of SELLER_A, re-invited as ANALYST
 const TM_13 = `${P}27`;
@@ -101,12 +101,25 @@ const S_M16 = `${P}34`; // MOBILE
 // The dual-side routes: a thread whose buyer owns no store, and one whose buyer owns the store it talks to.
 const CONV_B = `${P}35`; // SELLER_A <-> STRANGER as buyer
 const CONV_SELF = `${P}36`; // SELLER_A <-> OWNER as buyer (OWNER also owns SELLER_A)
+// Accounts that are the Buyer of a SELLER_A thread or claim AND an ADMIN of SELLER_A, demoted during the run.
+const MEMBER_17 = `${P}37`; // chat
+const TM_17 = `${P}38`;
+const S_M17 = `${P}39`; // MOBILE
+const CONV_D = `${P}3a`; // SELLER_A <-> MEMBER_17 as buyer
+const MEMBER_18 = `${P}3b`; // claims evidence
+const TM_18 = `${P}3c`;
+const S_M18_C = `${P}3d`; // CONSOLE
+const ORDER_D = `${P}3e`; // SELLER_A's order to MEMBER_18
+const CLAIM_D = `${P}3f`; // MEMBER_18's open claim on it
+const MEMBER_19 = `${P}40`; // a store-side route, same letter-case variant
+const TM_19 = `${P}41`;
+const S_M19 = `${P}42`; // MOBILE
 const CONSOLE_ORIGIN = 'http://localhost:5173';
 const ACCOUNTS = [
   OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7, MEMBER_13, MEMBER_15,
-  MEMBER_16,
+  MEMBER_16, MEMBER_17, MEMBER_18, MEMBER_19,
 ];
-/** The latched probe's gate, as in WO-SEC-002's harness: pg_advisory_xact_lock(LATCH_GATE, body.latch). */
+/** The latched probe's gate, as in the idempotency security suite's harness: pg_advisory_xact_lock(LATCH_GATE, body.latch). */
 const LATCH_GATE = 0x5ec303;
 const SELLERS = [SELLER_A, SELLER_E, SELLER_F, SELLER_G, SELLER_H];
 const MARKER = 'wo-sec-003:';
@@ -255,6 +268,11 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       `INSERT INTO core.seller_team_member (id, seller_id, account_id, role) VALUES ($1,$2,$3,'ADMIN')`,
       [TM_16, SELLER_A, MEMBER_16],
     );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+       VALUES ($1,$4,$5,'ADMIN'), ($2,$4,$6,'ADMIN'), ($3,$4,$7,'ADMIN')`,
+      [TM_17, TM_18, TM_19, SELLER_A, MEMBER_17, MEMBER_18, MEMBER_19],
+    );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     const sessions: Array<[string, string, 'MOBILE' | 'CONSOLE']> = [
       [S_OWNER, OWNER, 'MOBILE'],
@@ -271,6 +289,9 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [S_M15, MEMBER_15, 'MOBILE'],
       [S_OTHER, OTHER, 'MOBILE'],
       [S_M16, MEMBER_16, 'MOBILE'],
+      [S_M17, MEMBER_17, 'MOBILE'],
+      [S_M18_C, MEMBER_18, 'CONSOLE'],
+      [S_M19, MEMBER_19, 'MOBILE'],
     ];
     for (const [id, account, audience] of sessions) {
       await admin.query(
@@ -301,11 +322,26 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
        VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE')`,
       [CLAIM, ORDER, OTHER],
     );
+    await admin.query(
+      `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id) VALUES ($1,$2,$3,$4)`,
+      [CONV_D, SELLER_A, MEMBER_17, M],
+    );
+    await admin.query(
+      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at,
+         clock_stopped_at, total_minor, total_currency, display_currency)
+       VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB')`,
+      [ORDER_D, M, SELLER_A, MEMBER_18],
+    );
+    await admin.query(
+      `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id, trigger, state)
+       VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE')`,
+      [CLAIM_D, ORDER_D, MEMBER_18],
+    );
 
     const moduleRef = await Test.createTestingModule({ imports: [WoSec003Module] }).compile();
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
-    await app.listen(0, '127.0.0.1'); // listen first (WO-INFRA-005)
+    await app.listen(0, '127.0.0.1'); // listen first
   });
 
   afterAll(async () => {
@@ -314,15 +350,15 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     const sellers = SELLERS.map((s) => `'${s}'`).join(',');
     // The claim's evidence items are append-only by trigger: replica mode, children before parents.
     await admin.query(`SET session_replication_role = replica`);
-    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id = $1`, [CLAIM]);
-    await admin.query(`DELETE FROM core.claim WHERE id = $1`, [CLAIM]);
-    await admin.query(`DELETE FROM core."order" WHERE id = $1`, [ORDER]);
+    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id IN ($1,$2)`, [CLAIM, CLAIM_D]);
+    await admin.query(`DELETE FROM core.claim WHERE id IN ($1,$2)`, [CLAIM, CLAIM_D]);
+    await admin.query(`DELETE FROM core."order" WHERE id IN ($1,$2)`, [ORDER, ORDER_D]);
     await admin.query(`SET session_replication_role = DEFAULT`);
     for (const q of [
       `DELETE FROM core.idempotency_record WHERE actor_id IN (${accounts})`,
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
-      `DELETE FROM chat.message WHERE conversation_id IN ('${CONV}','${CONV_B}','${CONV_SELF}')`,
-      `DELETE FROM chat.conversation WHERE id IN ('${CONV}','${CONV_B}','${CONV_SELF}')`,
+      `DELETE FROM chat.message WHERE conversation_id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}')`,
+      `DELETE FROM chat.conversation WHERE id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}')`,
       `DELETE FROM core.seller_ownership_transfer WHERE seller_id IN ('${SELLER_E}','${SELLER_G}')`,
       `DELETE FROM core.step_up_challenge WHERE id IN ('${STEP_UP}','${STEP_UP2}')`,
       `DELETE FROM core.otp_challenge WHERE id IN ('${OTP_CH}','${OTP_CH2}')`,
@@ -392,7 +428,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
   const expire = (key: string) =>
     admin.query(`UPDATE core.idempotency_record SET expires_at = now() - interval '1 minute' WHERE key = $1`, [key]);
 
-  // The latch of the race test (WO-SEC-002's harness, INF-03 F2): the test holds the gate on its own connection; a probe
+  // The latch of the race test (the idempotency security suite's harness): the test holds the gate on its own connection; a probe
   // sent with body.latch waits for it after its permission check and marker, its transaction open and no record written.
   // Progress is read from pg_locks, never from elapsed time.
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -779,6 +815,91 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       expect(r.body.message_id).toBe(stored.rows[0].id);
       expect(await said(CONV_B, text)).toBe(1);
       expect(await records(key)).toBe(1);
+    });
+
+    // A store id spelled in capitals is the same store, the same request hash and the same side as in lower case.
+    // These cases are accounts that are BOTH the Buyer of a thread or claim and a member of its store, which is
+    // where a spelling that picked the other side would matter.
+    const CAPS = SELLER_A.toUpperCase();
+
+    it('R27: a store message stored under the lower-case header is not served to a demoted member who retries it in capitals', async () => {
+      const key = randomUUID();
+      const text = `r27-${key}`;
+      const first = await say(S_M17, CONV_D, key, text, SELLER_A);
+      expect(first.status).toBe(201);
+      expectReplay(await say(S_M17, CONV_D, key, text, SELLER_A), 201, first.body); // control
+      await reinvite(TM_17, MEMBER_17, 'ANALYST'); // no longer holds the messaging permissions
+      for (const header of [CAPS, SELLER_A]) {
+        const r = await say(S_M17, CONV_D, key, text, header);
+        expectProblem(r, 403, 'PERMISSION_DENIED');
+        expect(JSON.stringify(r.body)).not.toContain(first.body.message_id);
+      }
+      expect(await said(CONV_D, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R28: store-side claims evidence stored under the lower-case header is not served to a demoted member who retries it in capitals', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const attachAs = (header: string) =>
+        http().post(`/v1/claims/${CLAIM_D}/evidence`).set(cookie(S_M18_C)).set('X-Adulis-Seller', header)
+          .set('Idempotency-Key', key).send({ kind: 'BANK_RECORD', reference_id: ref });
+      const first = await attachAs(SELLER_A);
+      expect(first.status).toBe(201);
+      expectReplay(await attachAs(SELLER_A), 201, first.body); // control
+      await reinvite(TM_18, MEMBER_18, 'INVENTORY'); // no longer holds claims access
+      for (const header of [CAPS, SELLER_A]) {
+        const r = await attachAs(header);
+        expectProblem(r, 403, 'PERMISSION_DENIED');
+        expect(JSON.stringify(r.body)).not.toContain(first.body.evidence_item_id);
+      }
+      const items = await admin.query(
+        `SELECT count(*)::int AS n FROM core.claim_evidence_item WHERE claim_id = $1 AND reference_id = $2`,
+        [CLAIM_D, ref],
+      );
+      expect(items.rows[0].n).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R29: a store-side route: a demoted member retrying under the capitalised header is refused, not served', async () => {
+      const key = randomUUID();
+      const first = await probe(S_M19, SELLER_A, key, { n: 29 });
+      expect(first.status).toBe(201);
+      await reinvite(TM_19, MEMBER_19, 'ANALYST'); // no longer holds the permission
+      const r = await probe(S_M19, CAPS, key, { n: 29 });
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R30: a capitalised header acts as the store exactly as lower case does, and is the same request', async () => {
+      const key = randomUUID();
+      const text = `r30-${key}`;
+      // OWNER is the Buyer of CONV_SELF and the Owner of its store: the header alone decides the side.
+      const first = await say(S_OWNER, CONV_SELF, key, text, CAPS);
+      expect(first.status).toBe(201);
+      const sent = await admin.query(
+        `SELECT sender_kind::text AS kind FROM chat.message WHERE conversation_id = $1 AND body = $2`,
+        [CONV_SELF, text],
+      );
+      expect(sent.rows.map((m) => m.kind)).toEqual(['SELLER']);
+      expectReplay(await say(S_OWNER, CONV_SELF, key, text, SELLER_A), 201, first.body);
+      expectReplay(await say(S_OWNER, CONV_SELF, key, text, CAPS), 201, first.body);
+      expect(await said(CONV_SELF, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R31: the store list scopes accept the store id in either spelling and still refuse another store', async () => {
+      const get = (path: string, header: string, param: string) =>
+        http().get(path).query({ as: 'seller', seller_id: param }).set(bearer(S_OWNER)).set('X-Adulis-Seller', header);
+      for (const path of ['/v1/conversations', '/v1/notifications']) {
+        for (const [header, param] of [[SELLER_A, SELLER_A], [CAPS, CAPS], [SELLER_A, CAPS], [CAPS, SELLER_A]] as const) {
+          const r = await get(path, header, param);
+          expect([path, header, param, r.status]).toEqual([path, header, param, 200]);
+        }
+        expectProblem(await get(path, CAPS, SELLER_F), 400, 'SCOPE_PARAMETER_REQUIRED');
+      }
     });
   });
 
