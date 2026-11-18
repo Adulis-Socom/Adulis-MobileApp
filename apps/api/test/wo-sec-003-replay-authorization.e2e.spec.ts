@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { request as rawRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { Controller, Module, Post, Req, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
@@ -26,8 +28,9 @@ import { armFixtureSessions, sessionToken } from './session-fixture';
  *  F4  POST /v1/seller/deletion checks seller.account:delete first.
  *
  * Also pinned: the 409 outcomes on a declared route with the permission held
- * and lost, the re-run a too-strict declaration costs, and one recorded
- * residual on the buyer side of claims evidence.
+ * and lost, the re-run a too-strict declaration costs, and what the two
+ * dual-side routes (chat messages, claims evidence) do for a buyer, a store
+ * member and an account that is both -- with and without X-Adulis-Seller.
  *
  * The harness is WO-SEC-002's (wo-sec-002-idempotency-security.e2e.spec.ts):
  * probes call the production HandlerTransaction exactly as handlers do, and
@@ -95,6 +98,9 @@ const S_OTHER = `${P}31`; // MOBILE
 const MEMBER_16 = `${P}32`; // ADMIN of SELLER_A, demoted while a request of theirs is in flight
 const TM_16 = `${P}33`;
 const S_M16 = `${P}34`; // MOBILE
+// The dual-side routes: a thread whose buyer owns no store, and one whose buyer owns the store it talks to.
+const CONV_B = `${P}35`; // SELLER_A <-> STRANGER as buyer
+const CONV_SELF = `${P}36`; // SELLER_A <-> OWNER as buyer (OWNER also owns SELLER_A)
 const CONSOLE_ORIGIN = 'http://localhost:5173';
 const ACCOUNTS = [
   OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7, MEMBER_13, MEMBER_15,
@@ -280,6 +286,11 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [CONV, SELLER_A, OTHER, M],
     );
     await admin.query(
+      `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id)
+       VALUES ($1,$3,$4,$6), ($2,$3,$5,$6)`,
+      [CONV_B, CONV_SELF, SELLER_A, STRANGER, OWNER, M],
+    );
+    await admin.query(
       `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at,
          clock_stopped_at, total_minor, total_currency, display_currency)
        VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB')`,
@@ -310,8 +321,8 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     for (const q of [
       `DELETE FROM core.idempotency_record WHERE actor_id IN (${accounts})`,
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
-      `DELETE FROM chat.message WHERE conversation_id = '${CONV}'`,
-      `DELETE FROM chat.conversation WHERE id = '${CONV}'`,
+      `DELETE FROM chat.message WHERE conversation_id IN ('${CONV}','${CONV_B}','${CONV_SELF}')`,
+      `DELETE FROM chat.conversation WHERE id IN ('${CONV}','${CONV_B}','${CONV_SELF}')`,
       `DELETE FROM core.seller_ownership_transfer WHERE seller_id IN ('${SELLER_E}','${SELLER_G}')`,
       `DELETE FROM core.step_up_challenge WHERE id IN ('${STEP_UP}','${STEP_UP2}')`,
       `DELETE FROM core.otp_challenge WHERE id IN ('${OTP_CH}','${OTP_CH2}')`,
@@ -593,12 +604,13 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       expect(await records(key)).toBe(1);
     });
 
-    // A CHANGE from the behaviour before this work, pinned so it stays visible until it is decided (an open
-    // product decision: accept it with the client rule "send X-Adulis-Seller only on store-side calls", or
-    // have the check resolve which side a request acts as). Before, the stored 201 was replayed. Now a
-    // buyer-side evidence retry that carries X-Adulis-Seller for a store is judged against that store's
-    // grants (claims:read is CONSOLE-only, so on MOBILE no role holds it); the buyer-side re-run then
-    // meets the evidence uniqueness first and answers 409. Nothing is duplicated.
+    // The store header decides the side of a dual-side route, so it is part of what a retry means. A
+    // buyer-side evidence retry that carries X-Adulis-Seller for a store the buyer also owns is judged
+    // against that store's grants (claims:read is CONSOLE-only, so on MOBILE no role holds it); the
+    // buyer-side re-run then meets the evidence uniqueness first and answers 409. Nothing is duplicated and
+    // the answer is the same on every retry. Before this work such a retry was answered with the stored
+    // 201; a header naming a store the buyer has no standing in always gave this 409 (R21 below). Clients
+    // therefore send X-Adulis-Seller only on store-side calls, which the mobile client's tests pin.
     it('R17: buyer-side evidence retried with a header naming another store: 409, attached once', async () => {
       const key = randomUUID();
       const ref = randomUUID();
@@ -615,6 +627,157 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
         [CLAIM, ref],
       );
       expect(items.rows[0].n).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+  });
+
+  describe('the dual-side routes: a retry is the same request only on the side it first named', () => {
+    const say = (session: string, conv: string, key: string, text: string, seller?: string) => {
+      const t = http().post(`/v1/conversations/${conv}/messages`).set(bearer(session)).set('Idempotency-Key', key);
+      return (seller ? t.set('X-Adulis-Seller', seller) : t).send({ text });
+    };
+    const attach = (session: string, key: string, ref: string, seller?: string) => {
+      const t = http().post(`/v1/claims/${CLAIM}/evidence`).set(bearer(session)).set('Idempotency-Key', key);
+      return (seller ? t.set('X-Adulis-Seller', seller) : t).send({ kind: 'BANK_RECORD', reference_id: ref });
+    };
+    const said = async (conv: string, text: string): Promise<number> =>
+      Number((await admin.query(`SELECT count(*) FROM chat.message WHERE conversation_id = $1 AND body = $2`,
+        [conv, text])).rows[0].count);
+    const attached = async (ref: string): Promise<number> =>
+      Number((await admin.query(`SELECT count(*) FROM core.claim_evidence_item WHERE claim_id = $1 AND reference_id = $2`,
+        [CLAIM, ref])).rows[0].count);
+    /** A request whose response the client never reads: the socket is dropped as soon as the body is written. */
+    const lostResponse = (path: string, headers: Record<string, string>, body: object): Promise<void> =>
+      new Promise((resolve) => {
+        const data = JSON.stringify(body);
+        const req = rawRequest({
+          host: '127.0.0.1',
+          port: (app.getHttpServer().address() as AddressInfo).port,
+          path,
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data), ...headers },
+        });
+        req.on('error', () => undefined);
+        req.end(data, () => {
+          req.destroy();
+          resolve();
+        });
+      });
+    /** Resolves once the server has committed a record for `key`: the work the client never saw has finished. */
+    const committed = async (key: string): Promise<void> => {
+      for (const until = Date.now() + 8_000; Date.now() < until; await sleep(20)) if ((await records(key)) > 0) return;
+      throw new Error(`no record was committed for ${key}`);
+    };
+
+    it('R18: a buyer who owns no store: a retry is the stored response; a changed body or an expired record is refused; one message exists', async () => {
+      const key = randomUUID();
+      const text = `r18-${key}`;
+      const first = await say(S_STRANGER, CONV_B, key, text);
+      expect(first.status).toBe(201);
+      expectReplay(await say(S_STRANGER, CONV_B, key, text), 201, first.body);
+      expectProblem(await say(S_STRANGER, CONV_B, key, `${text}-changed`), 409, 'IDEMPOTENCY_KEY_REUSED');
+      await expire(key);
+      const r = await say(S_STRANGER, CONV_B, key, text);
+      expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.message_id);
+      expect([await said(CONV_B, text), await said(CONV_B, `${text}-changed`)]).toEqual([1, 0]);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R19: a buyer who also owns a store and sends no store header: chat and evidence retries are the stored responses', async () => {
+      const keyChat = randomUUID();
+      const text = `r19-${keyChat}`;
+      const chat = await say(S_OTHER, CONV, keyChat, text);
+      expect(chat.status).toBe(201);
+      expectReplay(await say(S_OTHER, CONV, keyChat, text), 201, chat.body);
+      const keyEvidence = randomUUID();
+      const ref = randomUUID();
+      const evidence = await attach(S_OTHER, keyEvidence, ref);
+      expect(evidence.status).toBe(201);
+      expectReplay(await attach(S_OTHER, keyEvidence, ref), 201, evidence.body);
+      expect([await said(CONV, text), await attached(ref)]).toEqual([1, 1]);
+      expect([await records(keyChat), await records(keyEvidence)]).toEqual([1, 1]);
+    });
+
+    it('R20: a buyer-side chat retry that also names a store the account owns is still the stored response, once', async () => {
+      const key = randomUUID();
+      const text = `r20-${key}`;
+      const first = await say(S_OTHER, CONV, key, text, SELLER_H);
+      expect(first.status).toBe(201);
+      // The owner holds the store's messaging grants on MOBILE, so the stored response is served directly.
+      expectReplay(await say(S_OTHER, CONV, key, text, SELLER_H), 201, first.body);
+      expect(await said(CONV, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R21: buyer-side evidence retried with a header naming a store the account has no standing in: 409, attached once', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const first = await attach(S_OTHER, key, ref, SELLER_F);
+      expect(first.status).toBe(201);
+      const again = await attach(S_OTHER, key, ref, SELLER_F);
+      expectProblem(again, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(again.body)).not.toContain(first.body.evidence_item_id);
+      expect(await attached(ref)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R22: a store reply retried without the store header, or under another store the account owns, is never the stored response', async () => {
+      const key = randomUUID();
+      const text = `r22-${key}`;
+      const first = await say(S_OWNER, CONV, key, text, SELLER_A);
+      expect(first.status).toBe(201);
+      expectReplay(await say(S_OWNER, CONV, key, text, SELLER_A), 201, first.body); // control
+      for (const seller of [undefined, SELLER_F]) {
+        const r = await say(S_OWNER, CONV, key, text, seller);
+        expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
+        expect(JSON.stringify(r.body)).not.toContain(first.body.message_id);
+      }
+      expect(await said(CONV, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R23: an Owner talking to their own store: a key never crosses from the buyer side to the store side or back', async () => {
+      const asBuyer = randomUUID();
+      const asStore = randomUUID();
+      const text = `r23-${asBuyer}`;
+      const buyer = await say(S_OWNER, CONV_SELF, asBuyer, text);
+      const store = await say(S_OWNER, CONV_SELF, asStore, text, SELLER_A);
+      expect([buyer.status, store.status]).toEqual([201, 201]);
+      expectReplay(await say(S_OWNER, CONV_SELF, asBuyer, text), 201, buyer.body);
+      expectReplay(await say(S_OWNER, CONV_SELF, asStore, text, SELLER_A), 201, store.body);
+      expectProblem(await say(S_OWNER, CONV_SELF, asBuyer, text, SELLER_A), 409, 'IDEMPOTENCY_KEY_REUSED');
+      expectProblem(await say(S_OWNER, CONV_SELF, asStore, text), 409, 'IDEMPOTENCY_KEY_REUSED');
+      const sent = await admin.query(
+        `SELECT sender_kind::text AS kind FROM chat.message WHERE conversation_id = $1 AND body = $2`,
+        [CONV_SELF, text],
+      );
+      expect(sent.rows.map((m) => m.kind).sort()).toEqual(['BUYER', 'SELLER']);
+      expect([await records(asBuyer), await records(asStore)]).toEqual([1, 1]);
+    });
+
+    it('R24: two identical buyer-side requests at once: one message, and both answers are the same stored response', async () => {
+      const key = randomUUID();
+      const text = `r24-${key}`;
+      const [a, b] = await Promise.all([say(S_STRANGER, CONV_B, key, text), say(S_STRANGER, CONV_B, key, text)]);
+      expect([a.status, b.status]).toEqual([201, 201]);
+      expect(a.body).toEqual(b.body);
+      expect([a, b].filter((r) => r.headers['x-adulis-idempotent-replay'] === 'true')).toHaveLength(1);
+      expect(await said(CONV_B, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R25: a response the client never read: the retry is the stored response and nothing is written twice', async () => {
+      const key = randomUUID();
+      const text = `r25-${key}`;
+      await lostResponse(`/v1/conversations/${CONV_B}/messages`, { ...bearer(S_STRANGER), 'Idempotency-Key': key }, { text });
+      await committed(key);
+      const stored = await admin.query(`SELECT id FROM chat.message WHERE conversation_id = $1 AND body = $2`, [CONV_B, text]);
+      const r = await say(S_STRANGER, CONV_B, key, text);
+      expect(r.status).toBe(201);
+      expect(r.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(r.body.message_id).toBe(stored.rows[0].id);
+      expect(await said(CONV_B, text)).toBe(1);
       expect(await records(key)).toBe(1);
     });
   });
