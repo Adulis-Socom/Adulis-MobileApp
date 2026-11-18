@@ -18,6 +18,9 @@ import { CardSaveButton } from './CardSaveButton';
 import { PublicListView, useLargeText } from './PublicListView';
 import { ProductTile } from './SellerProfile';
 
+/** The result types this screen can draw; one a newer server adds is left out, never guessed at. */
+const DRAWN = new Set<string>(['PRODUCT_POST', 'SELLER', 'SCENE_POST']);
+
 /** One result, as a stable key: a type and its public identity. */
 export const searchKey = (item: SearchItem) =>
   item.type === 'PRODUCT_POST'
@@ -62,7 +65,7 @@ export function SearchResults({
   const list = usePublicList({
     resource: ['search', tab, query, category ?? ''],
     read: placed ? (cursor) => api.search(query, tab, cursor, category) : null,
-    items: (page: SearchPage) => page.items,
+    items: (page: SearchPage) => page.items.filter((item) => DRAWN.has(item.type)),
     keyOf: searchKey,
   });
   const blocked = placed
