@@ -104,8 +104,6 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     } finally {
       if (priv.isCurrent()) {
         await qc.invalidateQueries({ queryKey: [SAVED_STATE] });
-        // One turn, so the read's answer is drawn before the failure is (see saved.ts).
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
         // Checked again: the session may have ended during the re-read (review F1).
         if (priv.isCurrent()) {
           if (failedText !== null) setError({ text: failedText, collection: collectionRef, add });
