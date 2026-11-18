@@ -73,7 +73,11 @@ test('the named target equals what the installed pg would connect to (host, port
         const named = checkTarget(url, process.env);
         assert.equal(named.error, undefined, url);
         const cp = new ConnectionParameters(url);
-        assert.equal(named.target, `${cp.host}:${cp.port}/${cp.database}`, `${url} PGPORT=${pgport}`);
+        assert.equal(
+          named.target,
+          `${cp.host}:${cp.port}/${cp.database}`,
+          `${url} PGPORT=${pgport}`,
+        );
       }
     }
   } finally {
@@ -140,7 +144,14 @@ test('a host that is not a plain name or address is refused, so the target line 
     const r = checkTarget(`postgres://u:p@${h}:5432/app`, {});
     assert.match(r.error, /host is not a plain name or address/, h);
   }
-  for (const ok of ['localhost', '127.0.0.1', '[::1]', 'db.example', 'dpg-abc123-a', 'pg_host.internal'])
+  for (const ok of [
+    'localhost',
+    '127.0.0.1',
+    '[::1]',
+    'db.example',
+    'dpg-abc123-a',
+    'pg_host.internal',
+  ])
     assert.ok(checkTarget(`postgres://u:p@${ok}:5432/app`, {}).target, ok);
 });
 
@@ -152,14 +163,32 @@ const BASE = m(['0001_a.sql', 'a'], ['0002_b.sql', 'b']);
 
 test('append-only: an identical or longer manifest passes; a removed, edited, renamed or reordered entry is named', () => {
   assert.deepEqual(checkAppendOnly(BASE, BASE), []);
-  assert.deepEqual(checkAppendOnly(BASE, m(['0001_a.sql', 'a'], ['0002_b.sql', 'b'], ['0003_c.sql', 'c'])), []);
+  assert.deepEqual(
+    checkAppendOnly(BASE, m(['0001_a.sql', 'a'], ['0002_b.sql', 'b'], ['0003_c.sql', 'c'])),
+    [],
+  );
   const cases = {
-    'the last entry removed': [m(['0001_a.sql', 'a']), /REMOVED pinned entry 0002_b\.sql \(position 2\)/],
+    'the last entry removed': [
+      m(['0001_a.sql', 'a']),
+      /REMOVED pinned entry 0002_b\.sql \(position 2\)/,
+    ],
     'every entry removed': [m(), /REMOVED pinned entry 0001_a\.sql/],
-    'a hash edited': [m(['0001_a.sql', 'a'], ['0002_b.sql', 'x']), /CHANGED pinned entry 0002_b\.sql/],
-    'the first hash edited, others kept': [m(['0001_a.sql', 'z'], ['0002_b.sql', 'b']), /CHANGED pinned entry 0001_a\.sql/],
-    'an entry renamed': [m(['0001_a.sql', 'a'], ['0002_other.sql', 'b']), /RENAMED or reordered pinned entry at position 2: 0002_b\.sql is now 0002_other\.sql/],
-    'two entries swapped': [m(['0002_b.sql', 'b'], ['0001_a.sql', 'a']), /RENAMED or reordered pinned entry at position 1/],
+    'a hash edited': [
+      m(['0001_a.sql', 'a'], ['0002_b.sql', 'x']),
+      /CHANGED pinned entry 0002_b\.sql/,
+    ],
+    'the first hash edited, others kept': [
+      m(['0001_a.sql', 'z'], ['0002_b.sql', 'b']),
+      /CHANGED pinned entry 0001_a\.sql/,
+    ],
+    'an entry renamed': [
+      m(['0001_a.sql', 'a'], ['0002_other.sql', 'b']),
+      /RENAMED or reordered pinned entry at position 2: 0002_b\.sql is now 0002_other\.sql/,
+    ],
+    'two entries swapped': [
+      m(['0002_b.sql', 'b'], ['0001_a.sql', 'a']),
+      /RENAMED or reordered pinned entry at position 1/,
+    ],
   };
   for (const [label, [current, why]] of Object.entries(cases)) {
     const problems = checkAppendOnly(BASE, current);
@@ -168,7 +197,10 @@ test('append-only: an identical or longer manifest passes; a removed, edited, re
   }
   // a base that has no manifest yet has nothing to compare; a malformed base is refused, never skipped
   assert.deepEqual(checkAppendOnly(null, BASE), []);
-  assert.match(checkAppendOnly({ version: 2, files: [] }, BASE).join('\n'), /^BASE MANIFEST is not a version 1 list/);
+  assert.match(
+    checkAppendOnly({ version: 2, files: [] }, BASE).join('\n'),
+    /^BASE MANIFEST is not a version 1 list/,
+  );
   assert.ok(checkAppendOnly(BASE, undefined).length > 0, 'a missing current manifest is refused');
 });
 
@@ -191,7 +223,13 @@ function repoWith(manifestAtBase) {
   writeFileSync(path.join(dir, 'ops', 'migrations.manifest.json'), manifestAtBase);
   git('add', '.');
   git('commit', '-q', '-m', 'manifest');
-  return { dir, git, noManifest, withManifest: git('rev-parse', 'HEAD'), cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    dir,
+    git,
+    noManifest,
+    withManifest: git('rev-parse', 'HEAD'),
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 test('the base manifest is read from git by commit, and a ref that is not a plain commit is refused without running git', () => {
@@ -199,22 +237,36 @@ test('the base manifest is read from git by commit, and a ref that is not a plai
   try {
     assert.deepEqual(readBaseManifest(r.dir, r.withManifest).manifest, BASE);
     assert.deepEqual(readBaseManifest(r.dir, 'HEAD').manifest, BASE);
-    assert.deepEqual(readBaseManifest(r.dir, r.noManifest), { manifest: null }, 'no manifest at that commit yet');
+    assert.deepEqual(
+      readBaseManifest(r.dir, r.noManifest),
+      { manifest: null },
+      'no manifest at that commit yet',
+    );
     for (const bad of ['--help', '-x', 'a b', 'HEAD;ls', '', '$(id)', 'x\ny'])
-      assert.match(readBaseManifest(r.dir, bad).problems.join('\n'), /is not a plain git ref/, JSON.stringify(bad));
+      assert.match(
+        readBaseManifest(r.dir, bad).problems.join('\n'),
+        /is not a plain git ref/,
+        JSON.stringify(bad),
+      );
     assert.match(
       readBaseManifest(r.dir, 'origin/nowhere').problems.join('\n'),
       /BASE origin\/nowhere is not a commit in this clone/,
     );
     // a working-tree edit is invisible: the base is what was committed
-    writeFileSync(path.join(r.dir, 'ops', 'migrations.manifest.json'), JSON.stringify(m(['0001_a.sql', 'q'])));
+    writeFileSync(
+      path.join(r.dir, 'ops', 'migrations.manifest.json'),
+      JSON.stringify(m(['0001_a.sql', 'q'])),
+    );
     assert.deepEqual(readBaseManifest(r.dir, 'HEAD').manifest, BASE);
   } finally {
     r.cleanup();
   }
   const broken = repoWith('{not json');
   try {
-    assert.match(readBaseManifest(broken.dir, 'HEAD').problems.join('\n'), /the committed manifest is not JSON/);
+    assert.match(
+      readBaseManifest(broken.dir, 'HEAD').problems.join('\n'),
+      /the committed manifest is not JSON/,
+    );
   } finally {
     broken.cleanup();
   }
@@ -238,11 +290,16 @@ test('verify --base through the command line: bad ref refused before git, a miss
 
 test('CI checks the append-only rule on pull requests, with the base branch passed through the environment', () => {
   const ci = read('.github/workflows/ci.yml');
-  const step = ci.split('\n      - name: ').find((s) => s.startsWith('The migration manifest only appends'));
+  const step = ci
+    .split('\n      - name: ')
+    .find((s) => s.startsWith('The migration manifest only appends'));
   assert.ok(step, 'the CI step exists');
   assert.match(step, /if: github\.event_name == 'pull_request'/);
   assert.match(step, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
-  assert.match(step, /run: node ops\/scripts\/migration-guard\.mjs verify --base "origin\/\$BASE_REF"/);
+  assert.match(
+    step,
+    /run: node ops\/scripts\/migration-guard\.mjs verify --base "origin\/\$BASE_REF"/,
+  );
   assert.doesNotMatch(step.split('run:')[1], /\$\{\{/, 'no expression inside the script text');
 });
 

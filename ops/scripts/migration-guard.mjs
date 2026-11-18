@@ -184,10 +184,12 @@ const PLAIN_REF = /^[A-Za-z0-9][A-Za-z0-9._/@^~-]*$/;
 
 /** The manifest as committed at `ref`: { manifest } (null when that commit has none yet) or { problems }. */
 export function readBaseManifest(root, ref, manifestRel = 'ops/migrations.manifest.json') {
-  if (!PLAIN_REF.test(ref)) return { problems: [`BASE ${JSON.stringify(ref)} is not a plain git ref`] };
+  if (!PLAIN_REF.test(ref))
+    return { problems: [`BASE ${JSON.stringify(ref)} is not a plain git ref`] };
   if (git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).status !== 0)
     return { problems: [`BASE ${ref} is not a commit in this clone (fetch it first)`] };
-  if (git(root, ['cat-file', '-e', `${ref}:${manifestRel}`]).status !== 0) return { manifest: null };
+  if (git(root, ['cat-file', '-e', `${ref}:${manifestRel}`]).status !== 0)
+    return { manifest: null };
   const shown = git(root, ['show', `${ref}:${manifestRel}`]);
   try {
     return { manifest: JSON.parse(shown.out) };
@@ -207,9 +209,14 @@ export function checkAppendOnly(base, current) {
   if (problems.length) return problems;
   base.files.forEach((f, i) => {
     const now = current?.files?.[i];
-    if (!now) problems.push(`REMOVED pinned entry ${f.name} (position ${i + 1}): the manifest is append-only`);
+    if (!now)
+      problems.push(
+        `REMOVED pinned entry ${f.name} (position ${i + 1}): the manifest is append-only`,
+      );
     else if (now.name !== f.name)
-      problems.push(`RENAMED or reordered pinned entry at position ${i + 1}: ${f.name} is now ${now.name}`);
+      problems.push(
+        `RENAMED or reordered pinned entry at position ${i + 1}: ${f.name} is now ${now.name}`,
+      );
     else if (now.sha256 !== f.sha256)
       problems.push(
         `CHANGED pinned entry ${f.name}: sha256 ${String(now.sha256).slice(0, 16)} differs from the base's ${f.sha256.slice(0, 16)} (a merged migration is never rewritten)`,
@@ -272,7 +279,9 @@ export function checkTarget(connectionString, env = process.env) {
       error: `it sets ${bad.join(', ')} as a query option; the URL itself must name the target`,
     };
   if (u.searchParams.has('options'))
-    return { error: 'it sets options as a query option, which could replace the read-only session' };
+    return {
+      error: 'it sets options as a query option, which could replace the read-only session',
+    };
   const port = u.port || env.PGPORT || '5432';
   if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)
     return { error: 'the port it names (or PGPORT, when the URL has none) is not a port number' };

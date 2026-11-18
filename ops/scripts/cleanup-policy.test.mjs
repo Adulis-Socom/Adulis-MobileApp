@@ -14,13 +14,18 @@ const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const POLICY = read('docs/infrastructure/DISPOSABLE-RESOURCE-CLEANUP-POLICY.md');
 
 test('every label the native harness sets has a row in the policy, with the owner value it really uses', () => {
-  for (const label of Object.values(LABEL)) assert.ok(POLICY.includes(`\`${label}`), `the policy names ${label}`);
-  assert.ok(POLICY.includes(`\`adulis.native-harness.owner=${OWNER}\``), 'the owner value is stated');
+  for (const label of Object.values(LABEL))
+    assert.ok(POLICY.includes(`\`${label}`), `the policy names ${label}`);
+  assert.ok(
+    POLICY.includes(`\`adulis.native-harness.owner=${OWNER}\``),
+    'the owner value is stated',
+  );
   assert.match(POLICY, /### Run-scoped resources: the native test harness/);
 });
 
 test('the policy states who may remove a run-labelled named volume, and on what proof', () => {
-  const section = POLICY.split('### Run-scoped resources: the native test harness')[1]?.split('\n## ')[0] ?? '';
+  const section =
+    POLICY.split('### Run-scoped resources: the native test harness')[1]?.split('\n## ')[0] ?? '';
   assert.match(section, /Named volumes of the run/);
   assert.match(section, /no driver options/);
   assert.match(section, /no container of any kind, running or stopped, holds the volume/);
@@ -32,13 +37,18 @@ test('the policy states who may remove a run-labelled named volume, and on what 
 
 test('the commands the policy names exist in the harness, and the harness refuses to remove without the ownership proof it describes', () => {
   const harness = read('ops/native/harness.mjs');
-  for (const cmd of ['down', 'recover', 'purge']) assert.match(harness, new RegExp(`case '${cmd}'`), cmd);
+  for (const cmd of ['down', 'recover', 'purge'])
+    assert.match(harness, new RegExp(`case '${cmd}'`), cmd);
   const identity = read('ops/native/lib/identity.mjs');
   assert.match(identity, /driver options/, 'the harness refuses a volume with driver options');
   const cleanup = read('ops/native/lib/cleanup.mjs');
   assert.match(cleanup, /\['rm', '-f', s\.id\]/, 'containers are removed by full id');
   assert.doesNotMatch(cleanup, /'rm', '-f', '-v'|'-fv'/, 'never with -v');
-  assert.match(cleanup, /`volume=\$\{s\.name\}`/, 'a volume is re-checked for holders before removal');
+  assert.match(
+    cleanup,
+    /`volume=\$\{s\.name\}`/,
+    'a volume is re-checked for holders before removal',
+  );
 });
 
 test('the post-crash report lists native-harness leftovers and removes nothing', () => {
@@ -48,5 +58,9 @@ test('the post-crash report lists native-harness leftovers and removes nothing',
   assert.ok(line.includes(`label=${LABEL.owner}`), 'it lists the native harness label');
   for (const kind of ['docker ps -a', 'docker volume ls', 'docker network ls'])
     assert.match(line, new RegExp(`${kind}[^;]*label=${LABEL.owner.replaceAll('.', '\\.')}`), kind);
-  assert.doesNotMatch(script, /docker (rm|volume rm|network rm|system prune|volume prune)/, 'the report removes nothing');
+  assert.doesNotMatch(
+    script,
+    /docker (rm|volume rm|network rm|system prune|volume prune)/,
+    'the report removes nothing',
+  );
 });
