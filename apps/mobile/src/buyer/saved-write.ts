@@ -23,3 +23,15 @@ export function judgeWrite(error: unknown): WriteOutcome {
   }
   return 'unknown';
 }
+
+/**
+ * Collections deleted since the app started, counted. A Create whose answer was lost keeps its key, and a
+ * replay of that key answers the Collection it stored, even one deleted since (the API keeps the answer for a
+ * day): so any deletion ends such an attempt (SavedScreen's NewCollection compares the count). Only a count,
+ * never a name or a reference, so nothing of an Account is held here.
+ */
+let deletions = 0;
+export const noteCollectionDeleted = () => {
+  deletions += 1;
+};
+export const collectionDeletions = () => deletions;

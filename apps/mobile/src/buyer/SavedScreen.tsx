@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { newIdempotencyKey, problemCode, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
+import { keyUsable } from '../api/mutation';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -14,7 +15,7 @@ import { usePublicList } from './public-list';
 import { PublicListView, useTabLayout } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { collectionName, keepIfCurrent, usePrivateApi } from './saved';
-import { judgeWrite } from './saved-write';
+import { collectionDeletions, judgeWrite } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.saved.tab.recent' },
@@ -168,7 +169,7 @@ export function NewCollection({
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const intent = useRef<{ name: string; key: string } | null>(null);
+  const intent = useRef<{ name: string; key: string; startedAt: number; deletions: number } | null>(null);
   if (!open) return <Button label={t('buyer.saved.new')} variant="secondary" disabled={disabled} onPress={() => setOpen(true)} />;
   const create = async () => {
     const trimmed = name.replace(/\s+/g, ' ').trim();
@@ -177,12 +178,22 @@ export function NewCollection({
       return;
     }
     if (!priv) return;
-    if (intent.current?.name !== trimmed) intent.current = { name: trimmed, key: newIdempotencyKey() };
+    // A key kept after an unknown outcome is replayed only while that is safe: not past its age, and not after
+    // a Collection was deleted (the replay could answer a deleted Collection, or, once the API's record is
+    // purged, silently make a second one). Otherwise the attempt ends here: the list is read again and the
+    // next press is a new Create.
+    const held = intent.current;
+    if (held?.name === trimmed && (!keyUsable(held, Date.now()) || held.deletions !== collectionDeletions())) {
+      intent.current = null;
+      onUnconfirmed?.();
+      return;
+    }
+    const attempt = held?.name === trimmed ? held : (intent.current = { name: trimmed, key: newIdempotencyKey(), startedAt: Date.now(), deletions: collectionDeletions() });
     setBusy(true);
     onBusyChange?.(true);
     setError(null);
     try {
-      const created = await priv.createCollection(trimmed, intent.current.key);
+      const created = await priv.createCollection(trimmed, attempt.key);
       // Answered after a sign-out or another sign-in: nothing more is done for that session.
       if (!priv.isCurrent()) return;
       intent.current = null;
@@ -208,7 +219,7 @@ export function NewCollection({
           <Button label={t('buyer.saved.create')} disabled={busy || disabled} busy={busy} onPress={() => void create()} />
         </View>
         <View style={{ flexGrow: 1 }}>
-          <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { setOpen(false); setError(null); }} />
+          <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { intent.current = null; setOpen(false); setError(null); }} />
         </View>
       </View>
     </View>

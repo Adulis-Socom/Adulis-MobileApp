@@ -16,6 +16,7 @@ import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { FilterTabs } from './SavedScreen';
 import { SAVED_STATE, collectionName, keepIfCurrent, usePrivateApi } from './saved';
+import { noteCollectionDeleted } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.collection.tab.all' },
@@ -217,11 +218,17 @@ function ManageCollection({
           setError(null);
           try {
             await priv.deleteCollection(collectionRef);
-            if (priv.isCurrent()) onDeleted();
+            if (priv.isCurrent()) {
+              noteCollectionDeleted();
+              onDeleted();
+            }
           } catch (failure) {
             if (!priv.isCurrent()) return;
             // Already gone (here or on another device): the outcome the Buyer asked for.
-            if (problemCode(failure) === 'NOT_FOUND') onDeleted();
+            if (problemCode(failure) === 'NOT_FOUND') {
+              noteCollectionDeleted();
+              onDeleted();
+            }
             else setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
           } finally {
             lock.current = false;

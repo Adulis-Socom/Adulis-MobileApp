@@ -165,6 +165,87 @@ describe('creating a Collection after an uncertain outcome', () => {
     expect(creates()).toHaveLength(1);
     expect(named('Gifts')).toHaveLength(1);
   });
+
+  /** An uncertain first attempt for 'Gifts', its Collection stored; the form is left open on the error. */
+  async function uncertainGifts() {
+    await start();
+    fc.loseAnswer('create', 'offline');
+    await fireEvent.press(createButton());
+    await waitFor(() => expect(creates()).toHaveLength(1));
+    await settled();
+    await waitFor(() => expect(rows('Gifts')).toHaveLength(1));
+  }
+  const HOUR = 60 * 60 * 1000;
+
+  it('Cancel ends the attempt: the same name created again is a new Create with its own key', async () => {
+    await uncertainGifts();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.saved.cancel'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.saved.new'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.saved.create'] }));
+    await waitFor(() => expect(creates()).toHaveLength(2));
+    expect(keys()[1]).not.toBe(keys()[0]);
+  });
+
+  it('a Collection deleted since the uncertain Create ends the attempt: the next press reads the list and sends nothing, and the one after is a new Create', async () => {
+    await uncertainGifts();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      // The stored Collection is opened from the list and deleted.
+      await fireEvent.press(await screen.findByRole('button', { name: /^Gifts, / }));
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
+      await act(async () => {
+        await alert.mock.calls[0]![2]!.find((b) => b.style === 'destructive')!.onPress!();
+      });
+      await waitFor(() => expect(screen).toHavePathname('/saved'));
+      expect(named('Gifts')).toHaveLength(0);
+      const reads = api.callsTo('GET /v1/collections').length;
+      // The old key would answer the deleted Collection's reference and close the form on nothing.
+      await fireEvent.press(createButton());
+      await waitFor(() => expect(api.callsTo('GET /v1/collections').length).toBeGreaterThan(reads));
+      await flush();
+      expect(creates()).toHaveLength(1);
+      expect(screen.queryByTestId('new-collection')).not.toBeNull();
+      await fireEvent.press(createButton());
+      await waitFor(() => expect(screen.queryByTestId('new-collection')).toBeNull());
+      expect(creates()).toHaveLength(2);
+      expect(keys()[1]).not.toBe(keys()[0]);
+      expect(named('Gifts')).toHaveLength(1);
+      expect(await screen.findByRole('button', { name: /^Gifts, / })).toBeOnTheScreen();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('a key older than the safe age is not replayed: the press reads the list and sends nothing, and the next one is a new Create', async () => {
+    await uncertainGifts();
+    jest.setSystemTime(Date.now() + 24 * HOUR);
+    const reads = api.callsTo('GET /v1/collections').length;
+    await fireEvent.press(createButton());
+    await waitFor(() => expect(api.callsTo('GET /v1/collections').length).toBeGreaterThan(reads));
+    await flush();
+    expect(creates()).toHaveLength(1);
+    expect(screen.queryByTestId('new-collection')).not.toBeNull();
+    await fireEvent.press(createButton());
+    await waitFor(() => expect(creates()).toHaveLength(2));
+    expect(keys()[1]).not.toBe(keys()[0]);
+  });
+
+  it('a key inside the safe age is still replayed', async () => {
+    await uncertainGifts();
+    jest.setSystemTime(Date.now() + 22 * HOUR);
+    await fireEvent.press(createButton());
+    await waitFor(() => expect(screen.queryByTestId('new-collection')).toBeNull());
+    expect(keys()[1]).toBe(keys()[0]);
+    expect(named('Gifts')).toHaveLength(1);
+  });
+
+  it('a clock stepped back is not trusted: the key is not replayed', async () => {
+    await uncertainGifts();
+    jest.setSystemTime(Date.now() - HOUR);
+    await fireEvent.press(createButton());
+    await flush();
+    expect(creates()).toHaveLength(1);
+  });
 });
 
 describe('one-tap Save and Remove after an uncertain outcome', () => {
