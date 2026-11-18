@@ -10,7 +10,7 @@ import {
   StorefrontProductDto,
   StorefrontProductListDto,
   StorefrontReviewListDto,
-  StorefrontSearchResultListDto,
+  StorefrontSearchResultListDto, SellerLookupDto,
 } from './storefront.dto';
 import { CURSOR_TS, decodeCursor, encodeCursor, pageLimit } from '../../common/http/cursor';
 import { captionExcerpt } from '../fyp/fyp.logic';
@@ -36,6 +36,7 @@ import {
   variantSellable,
 } from '../catalogue/public-projection';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * C8 — the public, anonymous group (ADU-API-01 v1.6 section 12.1).
@@ -166,6 +167,7 @@ export class StorefrontController {
                        ORDER BY ev.evaluated_at DESC LIMIT 1) AS path) e`.execute(trx);
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle')
   @Public()
   @ApiOperation({
@@ -248,6 +250,7 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle/products')
   @Public()
   @ApiOperation({
@@ -325,6 +328,7 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle/products/:slug')
   @Public()
   @ApiOperation({
@@ -462,6 +466,7 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle/search')
   @Public()
   @ApiOperation({
@@ -504,6 +509,7 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle/scenes')
   @Public()
   @ApiOperation({
@@ -578,6 +584,7 @@ export class StorefrontController {
    * to its Market and category, so it cannot page another category; the unfiltered list keeps its
    * cursor shape (uncategorised Products stay there).
    */
+  @ApiDeviceHeaders()
   @Get('shop/products')
   @Public()
   @ApiOperation({
@@ -651,6 +658,7 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
   @Get('storefronts/:handle/reviews')
   @Public()
   @ApiOperation({
@@ -713,6 +721,8 @@ export class StorefrontController {
     });
   }
 
+  @ApiDeviceHeaders()
+  @ApiOkResponse({ type: SellerLookupDto })
   @Get('sellers/lookup')
   @Public()
   @ApiOperation({ summary: 'Returns sellers only, capped, never suggests (S7.6).' })
@@ -749,6 +759,7 @@ export class StorefrontController {
    * conflicting links are their own analytics events.
    */
   @ApiIdempotencyKey()
+  @ApiDeviceHeaders()
   @Post('post-links/resolve')
   @Public()
   @ApiOperation({
@@ -797,6 +808,7 @@ export class StorefrontController {
    * presentable (a label key), in presentation order. Only what the taxonomy holds: no Product
    * counts, ranking or promotion. A read with no write.
    */
+  @ApiDeviceHeaders()
   @Get('categories')
   @Public()
   @ApiOperation({ summary: "Categories enabled in the requester's Market, in presentation order (empty without a Market)." })

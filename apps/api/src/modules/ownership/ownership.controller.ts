@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -8,6 +8,8 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { PendingOwnershipTransferResponseDto, OwnershipTransferRequestedDto } from './ownership.dto';
 
 /**
  * C6 — ownership transfer (ADU-API-01 v1.7 section 12.12, G1.6), with
@@ -70,6 +72,7 @@ export class OwnershipController {
    * party is asking. Anyone else gets `{ transfer: null }`: the same answer
    * as "there is none", because the two must not be distinguishable.
    */
+  @ApiOkResponse({ type: PendingOwnershipTransferResponseDto })
   @Get('seller/ownership-transfer')
   @ApiOperation({ summary: 'The pending transfer, visible to its two parties only.' })
   async pending(@Req() req: AuthedRequest): Promise<unknown> {
@@ -87,6 +90,8 @@ export class OwnershipController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.ownership:transfer'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: OwnershipTransferRequestedDto })
   @Post('seller/ownership-transfer')
   @ApiOperation({
     summary: 'Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.',

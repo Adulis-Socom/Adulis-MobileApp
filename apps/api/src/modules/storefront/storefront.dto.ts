@@ -272,3 +272,13 @@ export class ShopProductListDto {
   @ApiProperty({ type: [ShopProductDto] }) data!: ShopProductDto[];
   @ApiProperty({ type: String, nullable: true, description: 'Opaque; null at the end.' }) next_cursor!: string | null;
 }
+
+export class SellerLookupItemDto {
+  @ApiProperty() handle!: string;
+  @ApiProperty() store_name!: string;
+}
+
+/** GET /v1/sellers/lookup: stores only, at most ten, ordered by name. */
+export class SellerLookupDto {
+  @ApiProperty({ type: [SellerLookupItemDto] }) data!: SellerLookupItemDto[];
+}

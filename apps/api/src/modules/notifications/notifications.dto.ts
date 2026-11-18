@@ -23,3 +23,24 @@ export class NotificationPageDto {
 export class NotificationReadDto {
   @ApiProperty({ format: 'date-time', description: 'When it was first read; a repeat call keeps the original time.' }) read_at!: string;
 }
+
+/** POST /v1/notifications/read-all. */
+export class NotificationsMarkedReadDto {
+  @ApiProperty({ type: 'integer', description: 'How many unread notifications were marked read.' }) marked!: number;
+}
+
+export class NotificationPreferenceDto {
+  @ApiProperty({ description: 'The message template the preference is about.' }) template_key!: string;
+  @ApiProperty() enabled!: boolean;
+  @ApiProperty({ format: 'date-time' }) updated_at!: string;
+}
+
+/** GET /v1/seller/notification-preferences: the caller's own, for the Seller named by X-Adulis-Seller. */
+export class NotificationPreferencesDto {
+  @ApiProperty({ type: [NotificationPreferenceDto], description: 'Ordered by template_key.' }) preferences!: NotificationPreferenceDto[];
+}
+
+/** PATCH /v1/seller/notification-preferences. */
+export class NotificationPreferencesSavedDto {
+  @ApiProperty({ type: 'integer', description: 'How many preferences were saved.' }) updated!: number;
+}

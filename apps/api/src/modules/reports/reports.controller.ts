@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Req, Res } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
@@ -8,6 +8,7 @@ import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ReportCreatedDto, MyReportsDto } from './reports.dto';
 
 /**
  * C8 — reports (ADU-API-01 v1.6 section 12.15; ADU-PRD-01 S18).
@@ -47,6 +48,7 @@ export class ReportsController {
   constructor(private readonly tx: HandlerTransaction) {}
 
   @ApiIdempotencyKey()
+  @ApiCreatedResponse({ type: ReportCreatedDto })
   @Post('reports')
   @ApiOperation({ summary: 'Any surface, any authenticated actor; the queue trigger routes it.' })
   async create(
@@ -66,6 +68,7 @@ export class ReportsController {
     });
   }
 
+  @ApiOkResponse({ type: MyReportsDto })
   @Get('reports/mine')
   @ApiOperation({ summary: "The reporter's own reports and their outcomes." })
   async mine(@Req() req: AuthedRequest): Promise<unknown> {

@@ -8,7 +8,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -18,6 +18,8 @@ import { AdulisException } from '../../common/errors/adulis-exception';
 import { phone } from '../auth/auth.schemas';
 import { TeamService } from './team.service';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { TeamListDto, TeamMemberInvitedDto } from './team.dto';
 
 /** C6 — team (ADU-API-01 v1.6 section 12.12). Step-up TEAM_CHANGE on writes. */
 
@@ -39,6 +41,8 @@ export class TeamController {
     private readonly svc: TeamService,
   ) {}
 
+  @ApiGate({ permission: ['seller.staff:admin'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: TeamListDto })
   @Get('seller/team')
   @ApiOperation({ summary: 'Business tier; Owner/Admin only (seller.staff:admin).' })
   async list(@Req() req: AuthedRequest): Promise<unknown> {
@@ -46,6 +50,8 @@ export class TeamController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.staff:admin'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: TeamMemberInvitedDto })
   @Post('seller/team')
   @ApiOperation({ summary: 'Invite by phone; the member signs in with their own OTP.' })
   async invite(
@@ -58,6 +64,7 @@ export class TeamController {
     );
   }
 
+  @ApiGate({ permission: ['seller.staff:admin'], surfaces: ['CONSOLE'] })
   @Delete('seller/team/:id')
   @HttpCode(204)
   @ApiOperation({ summary: 'Revokes on the next request (R28); the account is untouched.' })
