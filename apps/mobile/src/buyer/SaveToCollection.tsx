@@ -63,7 +63,8 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   const inFlight = useRef(false);
   // A New collection Create in flight holds the same one-change lock (review F2).
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The failure of the last tick, with the change it asked for: said only while the server does not hold it.
+  const [error, setError] = useState<{ text: string; collection: string; add: boolean } | null>(null);
 
   if (!params) {
     return (
@@ -73,13 +74,14 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     );
   }
   const memberships = state.data?.items[0]?.memberships ?? [];
+  const failure = error && memberships.some((m) => m.collection_ref === error.collection) !== error.add ? error.text : null;
 
   // Bound to the session of the tick (WO-010, ON-112): after a sign-out or another sign-in nothing
   // more is sent, read or drawn for it.
   const toggle = async (collectionRef: string, add: boolean, name: string, fromCreate = false) => {
     if (inFlight.current || !priv) {
       // A Collection just created whose fill was refused is said, not dropped silently (review F2).
-      if (fromCreate && priv?.isCurrent()) setError(t('buyer.save.failed'));
+      if (fromCreate && priv?.isCurrent()) setError({ text: t('buyer.save.failed'), collection: collectionRef, add: true });
       return;
     }
     inFlight.current = true;
@@ -97,7 +99,8 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
       changed = true;
     } catch (failure) {
       if (priv.isCurrent()) {
-        setError(problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`);
+        const text = problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`;
+        setError({ text, collection: collectionRef, add });
       }
     } finally {
       if (priv.isCurrent()) {
@@ -153,10 +156,11 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
           })}
         </View>
       )}
-      {error ? <AlertText>{error}</AlertText> : null}
+      {failure ? <AlertText>{failure}</AlertText> : null}
       <NewCollection
         disabled={busy !== null}
         onBusyChange={setCreating}
+        onUnconfirmed={collections.refresh}
         onCreated={(created, name) => void toggle(created.ref, true, name, true)}
       />
       <Button label={t('buyer.save.done')} variant="secondary" onPress={() => router.back()} />

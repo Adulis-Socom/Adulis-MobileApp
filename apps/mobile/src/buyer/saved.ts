@@ -28,6 +28,8 @@ import { useUiStore } from '../state/ui-store';
  */
 
 export const SAVED_STATE = 'saved-state';
+/** How long a failed Save or Remove waits for the read of the target's state before the failure is said. */
+const RECONCILE_WAIT_MS = 3_000;
 /** The API's ceiling: POST /v1/collections/saved-state:batch accepts 1 to 60 targets. */
 export const SAVED_STATE_MAX = 60;
 
@@ -142,9 +144,19 @@ function useSaveMutation(target: SaveTarget, surface: SaveSurface, sceneRef: str
       void qc.invalidateQueries({ queryKey: [SAVED_STATE], predicate: pending });
       AccessibilityInfo.announceForAccessibility(t(saved ? 'buyer.save.added' : 'buyer.save.removed'));
     },
-    onError: (_failure, { bound }) => {
-      // Refused or unknown: read this target's state again wherever it is shown, nothing else.
-      if (bound.isCurrent()) void qc.invalidateQueries({ queryKey: [SAVED_STATE], predicate: (q) => pending(q) || holds(q, target) });
+    onError: async (_failure, { bound }) => {
+      // Refused or unknown: read this target's state again wherever it is shown, nothing else. The failure
+      // is said only after that answer (at most RECONCILE_WAIT_MS), so it is never said of a change that
+      // the server then shows was made.
+      if (!bound.isCurrent()) return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        qc.invalidateQueries({ queryKey: [SAVED_STATE], predicate: (q) => pending(q) || holds(q, target) }),
+        new Promise<void>((resolve) => (timer = setTimeout(resolve, RECONCILE_WAIT_MS))),
+      ]);
+      clearTimeout(timer);
+      // One more turn: the read's answer is delivered to the screens before this failure is.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     },
     onSettled: () => {
       inFlight.current = false;
@@ -160,9 +172,19 @@ function useSaveMutation(target: SaveTarget, surface: SaveSurface, sceneRef: str
     busy: mutation.isPending,
     /** In flight and taking the target out (else putting it in). */
     removing: mutation.isPending && mutation.variables?.held?.saved === true,
+    /** What the last tap asked for: Saved (true) or not Saved (false). */
+    asked: mutation.variables ? mutation.variables.held?.saved !== true : undefined,
     error: mutation.error,
   };
 }
+
+/**
+ * A failed Save or Remove is said only while the server's state is not the one the tap asked for and
+ * no read of it is on its way: after a lost answer the read that follows may show the change took effect,
+ * and "not changed" would then contradict what is drawn beside it.
+ */
+const unconfirmed = (error: unknown, asked: boolean | undefined, saved: boolean, reading: boolean) =>
+  reading || asked === saved ? null : error;
 
 /** Product Detail and Scene Explorer: the target's own read and its Save. */
 export function useSaveToggle(target: SaveTarget, surface: SaveSurface, sceneRef: string | null) {
@@ -173,7 +195,7 @@ export function useSaveToggle(target: SaveTarget, surface: SaveSurface, sceneRef
     state,
     saved: held?.saved ?? false,
     busy: save.busy,
-    error: save.error,
+    error: unconfirmed(save.error, save.asked, held?.saved ?? false, state.isFetching),
     toggle: () => save.toggle(held, state.data?.default_collection_ref),
   };
 }
@@ -285,7 +307,7 @@ export function useCardSave(target: SaveTarget) {
     saved: entry.item?.saved ?? false,
     busy: save.busy,
     removing: save.removing,
-    error: save.error,
+    error: unconfirmed(save.error, save.asked, entry.item?.saved ?? false, entry.fetching),
     retry: entry.retry,
     toggle: () => save.toggle(entry.item, entry.defaultRef),
   };

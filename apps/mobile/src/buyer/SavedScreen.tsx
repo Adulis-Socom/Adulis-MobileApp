@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
+import { newIdempotencyKey, problemCode, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
@@ -14,6 +14,7 @@ import { usePublicList } from './public-list';
 import { PublicListView, useTabLayout } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { collectionName, keepIfCurrent, usePrivateApi } from './saved';
+import { judgeWrite } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.saved.tab.recent' },
@@ -66,7 +67,7 @@ export function SavedScreen() {
         {t('buyer.saved.collections')}
       </AppText>
       <CollectionsSection list={collections} />
-      <NewCollection onCreated={collections.refresh} />
+      <NewCollection onCreated={collections.refresh} onUnconfirmed={collections.refresh} />
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} label={t('buyer.saved.tabs')} />
     </View>
   );
@@ -143,13 +144,20 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
  * characters once trimmed); the server's answer still decides. Returns the new Collection and its
  * name. `disabled` while another Collection change is in flight, and `onBusyChange` tells the
  * screen while its own Create is (WO-018, A-006), so the two never overlap.
+ *
+ * Names are not unique, so the Idempotency-Key is what keeps a retry from making a second Collection:
+ * it stays with the name until the server's own answer ends the attempt (saved-write.ts). After an
+ * attempt whose outcome is not known `onUnconfirmed` runs, so the list is read again and shows a
+ * Collection that was stored although its answer was lost.
  */
 export function NewCollection({
   onCreated,
+  onUnconfirmed,
   disabled = false,
   onBusyChange,
 }: {
   onCreated: (created: CollectionCreated, name: string) => void;
+  onUnconfirmed?: () => void;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -183,7 +191,9 @@ export function NewCollection({
       onCreated(created, trimmed);
     } catch (failure) {
       if (!priv.isCurrent()) return;
-      if (wasAnswered(failure)) intent.current = null;
+      const outcome = judgeWrite(failure);
+      if (outcome !== 'unknown') intent.current = null;
+      if (outcome !== 'refused') onUnconfirmed?.();
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {
       setBusy(false);
