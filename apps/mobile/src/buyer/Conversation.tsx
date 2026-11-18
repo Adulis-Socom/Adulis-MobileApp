@@ -296,7 +296,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         setKeyLost(false);
       }
       const body = await api.sendMessage(ref, text, sendIntent.current.key, productId);
-      // An acceptance without a readable message id may still have stored it: unknown (WO-022).
+      // An acceptance without a readable message id may still have stored it: unknown.
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
       if (!api.isCurrent()) return;
@@ -311,10 +311,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
     } catch (failure) {
-      // The API's own refusal ends this intent; anything else (offline, a timeout, a gateway answer
-      // without the API's problem, an unreadable acceptance, a key conflict) keeps the key, which
+      // The API's own 4xx rejection ends this intent; anything else (offline, a timeout, a gateway
+      // answer, any 5xx, a rate limit, an unreadable acceptance, a key conflict) keeps the key, which
       // replays if the message was stored and the key is still safe. The outcome is then unknown: say
-      // so, and re-read (WO-022). A wait that was asked for holds the next attempt.
+      // so, and re-read. A wait that was asked for holds the next attempt.
       const verdict = judgeFailure(failure, sendIntent.current, Date.now());
       const answered = verdict.outcome === 'failed';
       if (answered) sendIntent.current = null;
@@ -334,7 +334,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         setError(wait !== null ? null : failureMessage(t, failure));
       }
       setState(answered ? 'failed' : 'unknown');
-      if (rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+      if (verdict.outcome === 'unknown' || rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } finally {
       sending.current = false;
     }
@@ -368,7 +368,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
         if (verdict.holdMs !== null && wait !== null) setHold({ until: Date.now() + verdict.holdMs, text: wait });
         setAskFailed(true);
-        if (rereadAfter(failure)) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+        if (verdict.outcome === 'unknown' || rereadAfter(failure)) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
       }
     } finally {
       askingRef.current = false;

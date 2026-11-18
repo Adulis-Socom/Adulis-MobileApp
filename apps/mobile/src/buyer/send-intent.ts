@@ -1,3 +1,4 @@
+import { ApiError } from '../api/client';
 import { keyConflict, keyUsable, waitBeforeRetryMs } from '../api/mutation';
 import { sendOutcome } from './chat';
 
@@ -8,9 +9,11 @@ import { sendOutcome } from './chat';
  * - unsent: text in the box, nothing sent
  * - sending: a request is in flight
  * - sent: the server accepted it with a message id (the message then comes from the server's history)
- * - failed: the API answered with its own problem; nothing was stored and the intent has ended
+ * - failed: the API rejected the request itself (a 4xx problem other than a key conflict or a rate
+ *   limit); nothing was stored and the intent has ended
  * - unknown: no proof either way (lost connection, timeout, a gateway's page, an unreadable
- *   acceptance, a key conflict). The message may be stored: the text, Product and key are kept
+ *   acceptance, any 5xx, a rate limit, a key conflict). The message may be stored: the text, Product
+ *   and key are kept
  */
 export type SendStatus = 'unsent' | 'sending' | 'sent' | 'failed' | 'unknown';
 
@@ -30,15 +33,26 @@ export type FailureJudgement = {
 /**
  * Judge one failed attempt of a keyed send, at `now`, for the intent that began at `intent.startedAt`.
  *
- * The API's own problem answer proves the message was not stored (a refusal leaves no idempotency
- * record), with one exception: a key conflict, which says the key was already used and so the first
- * attempt may be stored. Everything else leaves the outcome unknown. A wait that was asked for holds
- * the next attempt whatever the outcome: after an API answer it was not processed, after an
- * intermediary's answer the replay stays safe because it carries the same key.
+ * Only the API's own 4xx problem (a validation error, a missing conversation, a permission refusal)
+ * proves the request was rejected before anything was stored. A 5xx proves nothing, even with the
+ * API's problem body: the server stores the message and its idempotency record in one transaction,
+ * and a connection lost at the commit answers 503 although the commit happened. A rate limit (429)
+ * and a key conflict (409) are not rejections of the message either, and a key conflict says the key
+ * was already used, so the first attempt may be stored. All of those, and everything that is not the
+ * API's own answer, leave the outcome unknown: sending the same text again under the SAME key is
+ * always safe inside the key's life (stored: the stored answer comes back; not stored: it is
+ * processed once). A wait that was asked for holds the next attempt whatever the outcome.
  */
 export function judgeFailure(failure: unknown, intent: { startedAt: number } | null, now: number): FailureJudgement {
   const holdMs = waitBeforeRetryMs(failure);
   if (keyConflict(failure)) return { outcome: 'unknown', replay: false, holdMs };
-  if (sendOutcome(failure) === 'refused') return { outcome: 'failed', replay: false, holdMs };
+  if (rejectedByApi(failure)) return { outcome: 'failed', replay: false, holdMs };
   return { outcome: 'unknown', replay: intent !== null && keyUsable(intent, now), holdMs };
+}
+
+/** The API's own problem answer with a 4xx status other than a conflict (409) or a rate limit (429). */
+function rejectedByApi(failure: unknown): boolean {
+  if (!(failure instanceof ApiError) || failure.failure.kind !== 'problem' || sendOutcome(failure) !== 'refused') return false;
+  const { status } = failure.failure;
+  return status >= 400 && status < 500 && status !== 409 && status !== 429;
 }

@@ -36,11 +36,21 @@ describe('judging a failed send', () => {
   it.each([
     ['a validation refusal', envelope(400, 'VALIDATION_FAILED')],
     ['a missing conversation', envelope(404, 'NOT_FOUND')],
-    ['a server error the API reported', envelope(500, 'INTERNAL')],
-    ['a conflict that is not about the key', envelope(409, 'PUBLICATION_BLOCKED')],
     ['a permission refusal', envelope(403, 'PERMISSION_DENIED')],
-  ])('%s is the API\'s own refusal: failed, nothing stored, nothing to replay', (_name, failure) => {
+  ])('%s is the API\'s own 4xx rejection: failed, nothing stored, nothing to replay', (_name, failure) => {
     expect(judgeFailure(failure, fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+  });
+
+  // Changed: these were judged "failed" (not sent, a new key) before. A 5xx with the API's own body
+  // proves nothing, because a connection lost at the commit answers 503 after the message was stored.
+  it.each([
+    ['a 500 with the API problem body', envelope(500, 'INTERNAL')],
+    ['a 502 with the API problem body', envelope(502, 'INTERNAL')],
+    ['a 503 with the API problem body (database unavailable)', envelope(503, 'INTERNAL', { retry_after_seconds: 5 })],
+    ['a 504 with the API problem body', envelope(504, 'INTERNAL')],
+    ['a conflict that is not about the key', envelope(409, 'PUBLICATION_BLOCKED')],
+  ])('%s is unknown, not "not sent": the same key is kept and replayable', (_name, failure) => {
+    expect(judgeFailure(failure, fresh, NOW)).toMatchObject({ outcome: 'unknown', replay: true });
   });
 
   it('a key conflict is never "not sent": unknown, and the same key is not sent again', () => {
@@ -57,7 +67,7 @@ describe('judging a failed send', () => {
     expect(KEY_SAFE_MS).toBeLessThan(24 * 3600_000);
   });
 
-  it('an old key does not turn the API\'s own refusal into an unknown outcome', () => {
+  it('an old key does not turn the API\'s own 4xx rejection into an unknown outcome', () => {
     expect(judgeFailure(envelope(400, 'VALIDATION_FAILED'), { startedAt: NOW - 30 * 3600_000 }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
   });
 
@@ -65,9 +75,9 @@ describe('judging a failed send', () => {
     expect(judgeFailure(new ApiError({ kind: 'offline' }), null, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
   });
 
-  it('the API\'s own 429 or 503 is a refusal that holds the next attempt for the wait it gave', () => {
-    expect(judgeFailure(envelope(429, 'RATE_LIMITED', { retry_after_seconds: 30 }, 30), fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: 30_000 });
-    expect(judgeFailure(envelope(503, 'INTERNAL', undefined, 5), fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: 5_000 });
+  it('the API\'s own 429 or 503 holds the next attempt for the wait it gave and keeps the key (changed: it was "failed" with a new key)', () => {
+    expect(judgeFailure(envelope(429, 'RATE_LIMITED', { retry_after_seconds: 30 }, 30), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: 30_000 });
+    expect(judgeFailure(envelope(503, 'INTERNAL', undefined, 5), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: 5_000 });
   });
 
   it('a 429 or 503 that only an intermediary answered (a header, no API body) is unknown and holds; the replay stays safe', () => {
@@ -78,7 +88,7 @@ describe('judging a failed send', () => {
 
   it('a wait of zero seconds is no wait', () => {
     expect(judgeFailure(gateway(429, 0), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
-    expect(judgeFailure(envelope(503, 'INTERNAL', undefined, 0), fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    expect(judgeFailure(envelope(503, 'INTERNAL', undefined, 0), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
     expect(waitBeforeRetryMs(gateway(429, 0))).toBeNull();
     expect(waitBeforeRetryMs(gateway(429, 1))).toBe(1000);
   });
@@ -87,7 +97,7 @@ describe('judging a failed send', () => {
     expect(judgeFailure(gateway(429), fresh, NOW).holdMs).toBeNull();
     expect(judgeFailure(envelope(429, 'RATE_LIMITED'), fresh, NOW).holdMs).toBeNull();
     expect(judgeFailure(gateway(502, 30), fresh, NOW).holdMs).toBeNull();
-    expect(judgeFailure(envelope(500, 'INTERNAL', undefined, 30), fresh, NOW).holdMs).toBeNull();
+    expect(judgeFailure(envelope(500, 'INTERNAL', undefined, 30), fresh, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
   });
 });
 

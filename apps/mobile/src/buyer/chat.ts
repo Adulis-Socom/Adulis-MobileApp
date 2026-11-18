@@ -133,9 +133,9 @@ export function acceptedEscalation(body: unknown): boolean {
  *
  * - `refused`: the API answered with its own problem: the contract's envelope (ProblemDto's required
  *   `title_key`, `request_id`, `retryable`, and a `status` equal to the HTTP status), any status. A
- *   gateway's `{ code }` alone is not one (review S22-01). The outcome is known: the message was not
- *   stored (a refusal leaves no idempotency record), so the intent ends and the next attempt gets a
- *   new key. The Buyer's screen refines this for a key conflict and for an old key (send-intent.ts).
+ *   gateway's `{ code }` alone is not one. A refusal leaves no idempotency record. The Buyer's
+ *   screen refines this (send-intent.ts): only a 4xx other than a conflict or a rate limit proves the
+ *   message was not stored; a 5xx, a conflict, a rate limit and an old key leave it unknown.
  * - `unknown`: anything else. That covers a lost connection, a timeout, a gateway's answer without
  *   the API's problem body (a 502/503/504 page, an empty body), and a 201 whose body cannot be read
  *   or names no message (thrown as `unexpected 201` by the caller). The message may have been

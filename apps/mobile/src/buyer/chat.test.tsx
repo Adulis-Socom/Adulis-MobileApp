@@ -1443,22 +1443,23 @@ describe('Uncertain-send reliability (WO-022)', () => {
     expect(screen.getAllByText('Is it handmade?')).toHaveLength(1);
   });
 
-  it('10. the API\'s own refusal, even a 5xx problem, is "not sent"; the text stays and the next attempt is a new intent', async () => {
+  // Changed: a 5xx with the API's own problem body used to be "not sent" with a new key. It proves
+  // nothing (a connection lost at the commit answers 503 after the message was stored), so it is unknown.
+  it('10. the API\'s own 5xx problem is unknown, not "not sent": the draft and key are kept and the replay is the same message', async () => {
     const { chat, c } = await open();
     storing(chat, [problem(500, 'INTERNAL', 'request')]);
     await send('Open on Sunday?');
-    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
-    // S22-01: after a 5xx refusal the conversation is read again before anything new is sent.
+    expect(await maybe()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    // The conversation is read again before anything else is sent.
     const post = api.calls.findIndex((x) => x.method === 'POST' && /\/messages$/.test(x.path));
     await waitFor(() => expect(api.calls.slice(post + 1).some((x) => x.method === 'GET' && /\/messages$/.test(x.path))).toBe(true));
-    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
     expect(composer().props.value).toBe('Open on Sunday?');
-    expect(composer().props.editable).toBe(true);
-    await fireEvent.press(sendButton());
+    expect(composer().props.editable).toBe(false);
+    await fireEvent.press(retryButton());
     await waitFor(() => expect(sends()).toHaveLength(2));
     const [a, b] = sends();
-    expect(b!.headers['Idempotency-Key']).not.toBe(a!.headers['Idempotency-Key']);
-    // S22-02: the refusal stored nothing, so the new attempt is the only copy.
+    expect(b!.headers['Idempotency-Key']).toBe(a!.headers['Idempotency-Key']);
     await waitFor(() => expect(c.messages.filter((m) => m.body === 'Open on Sunday?')).toHaveLength(1));
   });
 
@@ -1807,6 +1808,7 @@ describe('Account change while a conversation is open', () => {
     expect(screen.queryByText('Unconfirmed first draft')).toBeNull();
     await quiet();
     expect(sends()).toHaveLength(1);
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
     expect(chat.convs.find((c) => c.id === theirs.id)?.messages.some((m) => m.body === 'Unconfirmed first draft')).toBe(false);
   });
 });
@@ -1922,7 +1924,8 @@ describe('Message send reconciliation', () => {
     expect(composer().props.value).toBe('');
   });
 
-  it('repeated taps on Try sending again while the replay is in flight send one request', async () => {
+  // The presses go to a disabled control, which delivers none: this holds the control, not the handler's own guard.
+  it('repeated taps on the disabled control while the replay is in flight send one request', async () => {
     const { chat } = await open();
     idempotent(chat, [{ lose: 'offline' }, { lose: 'hang' }]);
     await typeAndSend('Tap tap');
@@ -1935,7 +1938,9 @@ describe('Message send reconciliation', () => {
     expect(stored(chat, 'Tap tap')).toHaveLength(1);
   });
 
-  it('a 409 on the replay is not "not sent": the replay is withdrawn, the conversation is read again, and only an explicit new message is offered', async () => {
+  // The server answers 409 to a same-key retry only once the key's 24 hour record has expired, and the
+  // client never replays a key that old: the 409 is scripted here to hold the client's reaction to it.
+  it('a 409 on a replay (scripted: the server gives it only for a key past its record) is not "not sent": the replay is withdrawn, the conversation is read again, and only an explicit new message is offered', async () => {
     const { chat } = await open();
     idempotent(chat, [{ lose: gatewayPage }, { refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }]);
     await typeAndSend('Is it in stock?');
@@ -1961,7 +1966,7 @@ describe('Message send reconciliation', () => {
     expect(keys()[2]).not.toBe(keys()[0]);
   });
 
-  it('a 409 on the first attempt is the same: unknown, no replay button', async () => {
+  it('a 409 on the first attempt (a key collision) is the same: unknown, no replay button', async () => {
     const { chat } = await open();
     idempotent(chat, [{ refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }]);
     await typeAndSend('Collision');
@@ -1972,24 +1977,56 @@ describe('Message send reconciliation', () => {
     expect(sends()).toHaveLength(1);
   });
 
-  it("the API's own 429 with a wait: not sent, and Send stays off until the wait is over; repeated taps send nothing; then it is a new message under a new key", async () => {
+  // Changed: the API's own 429 used to be "not sent" with a new key after the wait. A rate limit is not a
+  // rejection of the message, so it is unknown and the same key is used again after the wait.
+  it("the API's own 429 with a wait: unknown, and the controls stay off until the wait is over; taps on the disabled control send nothing; then the same key is used again", async () => {
     const { chat } = await open();
     idempotent(chat, [{ refuse: { ...problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 30 }), headers: { 'Retry-After': '30' } } }]);
     await typeAndSend('Do you deliver?');
-    expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+    expect(await maybe()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
     expect(screen.getAllByText(wait(30))).toHaveLength(1);
-    expect(sendButton()).toBeDisabled();
-    for (let i = 0; i < 4; i++) await fireEvent.press(sendButton());
+    expect(retryButton()).toBeDisabled();
+    // The conversation is read again, as after any unconfirmed attempt.
+    await waitFor(() => expect(getsAfter(sends()[0]!).length).toBeGreaterThan(0));
+    for (let i = 0; i < 4; i++) await fireEvent.press(retryButton());
     await advance(29_000);
-    expect(sendButton()).toBeDisabled();
+    expect(retryButton()).toBeDisabled();
     expect(sends()).toHaveLength(1);
     await advance(1_000);
-    await waitFor(() => expect(sendButton()).toBeEnabled());
+    await waitFor(() => expect(retryButton()).toBeEnabled());
     expect(screen.queryByText(wait(30))).toBeNull();
-    await fireEvent.press(sendButton());
+    await fireEvent.press(retryButton());
     await waitFor(() => expect(sends()).toHaveLength(2));
-    expect(keys()[1]).not.toBe(keys()[0]);
+    expect(keys()[1]).toBe(keys()[0]);
     expect(stored(chat, 'Do you deliver?')).toHaveLength(1);
+  });
+
+  // Changed: a 5xx with the API's own problem body used to be "not sent" with a new key. The model server
+  // stores the message BEFORE it fails (a connection lost at the commit answers 503 after the commit), so
+  // a new key would have stored it twice.
+  it.each([
+    ['a 500 problem after the server stored the message', { lose: problem(500, 'INTERNAL', 'request') } as Fault, 0, 1],
+    ['a 503 problem with its wait (database unavailable) after the server stored the message', { lose: { ...problem(503, 'INTERNAL', 'request', { retry_after_seconds: 5 }), headers: { 'Retry-After': '5' } } } as Fault, 5, 1],
+    ['a 500 problem before the server stored anything', { refuse: problem(500, 'INTERNAL', 'request') } as Fault, 0, 0],
+  ])('%s: unknown, not "not sent"; the retry carries the same key and exactly one message exists', async (_name, fault, waitSeconds, replays) => {
+    const { chat } = await open();
+    const server = idempotent(chat, [fault]);
+    await typeAndSend('Five hundred');
+    expect(await maybe()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    expect(composer().props.editable).toBe(false);
+    if (waitSeconds > 0) {
+      expect(retryButton()).toBeDisabled();
+      await advance(waitSeconds * 1000);
+      await waitFor(() => expect(retryButton()).toBeEnabled());
+    }
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    expect(sends()).toHaveLength(2);
+    expect(keys()[1]).toBe(keys()[0]);
+    expect(server.replays()).toBe(replays);
+    expect(stored(chat, 'Five hundred')).toHaveLength(1);
   });
 
   it('a 503 that only a gateway answered, with Retry-After: unknown and held; after the wait the replay carries the same key and gets the stored message', async () => {
@@ -2215,6 +2252,25 @@ describe('Message send reconciliation', () => {
       expect(keys(escalateCalls())[1]).toBe(keys(escalateCalls())[0]);
       expect(escalations(chat)).toHaveLength(1);
     });
+  });
+
+  // The retry reaches the server before the first request commits (the client gave up at 10 s, the
+  // server commits at 15 s): the model server commits once per key, as the real one does through its
+  // unique collision, so the later commit finds the record and stores nothing more.
+  it('a retry that reaches the server before its twin commits is the same message: one message exists', async () => {
+    const { chat } = await open();
+    idempotent(chat, [{ commitAfterMs: 15_000 }]);
+    await typeAndSend('Racing twins');
+    await advance(10_000);
+    await maybe();
+    await advance(1_000);
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    await advance(10_000);
+    expect(keys()[1]).toBe(keys()[0]);
+    expect(stored(chat, 'Racing twins')).toHaveLength(1);
+    expect(screen.getAllByText('Racing twins')).toHaveLength(1);
   });
 
   // Keep this test last in the file: a second app in one test leaves the harness unusable for the tests after it.
