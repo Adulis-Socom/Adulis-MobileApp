@@ -356,7 +356,8 @@ export class CatalogueController {
     status: 409,
     description:
       'slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), ' +
-      'OBJECT_NOT_UPLOADED, or POSITION_TAKEN.',
+      'OBJECT_NOT_UPLOADED, or POSITION_TAKEN. The code IDEMPOTENCY_KEY_REUSED (the key was already used ' +
+      'for a different request) is also answered with 409.',
   })
   async images(
     @Req() req: LocalizedRequest,

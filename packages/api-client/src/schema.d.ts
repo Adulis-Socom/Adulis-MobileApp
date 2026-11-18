@@ -2982,20 +2982,20 @@ export interface components {
         ProblemItemDto: {
             code: string;
             message_key: string;
-            /** @description What the caller can do to clear this item; further members depend on the kind. */
-            resolving_action?: {
-                kind?: string;
-            } & {
-                [key: string]: unknown;
-            };
+            /** @description What the caller can do to clear this item. */
+            resolving_action?: components["schemas"]["ProblemResolvingActionDto"];
             slots?: {
                 [key: string]: unknown;
             };
             /** @description The object this item is about. */
-            subject?: {
-                id?: string;
-                kind?: string;
-            };
+            subject?: components["schemas"]["ProblemSubjectDto"];
+        };
+        ProblemResolvingActionDto: {
+            kind: string;
+        };
+        ProblemSubjectDto: {
+            id: string;
+            kind: string;
         };
         ProductCreatedDto: {
             /** Format: uuid */
@@ -3858,7 +3858,7 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
                 "X-Adulis-Client"?: string;
-                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. Needed on this route when nobody is signed in and the caller is an app (see the 400 response). */
                 "X-Adulis-Device"?: string;
             };
             path?: never;
@@ -3878,7 +3878,7 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device. Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3905,7 +3905,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4003,7 +4003,7 @@ export interface operations {
                     "application/json": components["schemas"]["OtpVerifyResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4030,7 +4030,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4057,7 +4057,7 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
                 "X-Adulis-Client"?: string;
-                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. Needed on this route when nobody is signed in and the caller is an app (see the 400 response). */
                 "X-Adulis-Device"?: string;
             };
             path?: never;
@@ -4073,7 +4073,7 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device. Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4100,7 +4100,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4292,7 +4292,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A session of another surface is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4331,7 +4331,7 @@ export interface operations {
                     "application/json": components["schemas"]["StepUpRequestedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4349,7 +4349,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A session of another surface is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4358,7 +4358,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4814,7 +4814,7 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionCreatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4841,7 +4841,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5040,7 +5040,7 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionMembershipDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5067,7 +5067,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5309,7 +5309,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationOpenedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5336,7 +5336,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5379,7 +5379,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationEscalatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5406,7 +5406,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5503,7 +5503,7 @@ export interface operations {
                     "application/json": components["schemas"]["MessageSentDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5530,7 +5530,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5624,7 +5624,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionConfirmedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5642,7 +5642,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5669,7 +5669,7 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
                 "X-Adulis-Client"?: string;
-                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. Needed on this route when nobody is signed in and the caller is an app (see the 400 response). */
                 "X-Adulis-Device"?: string;
             };
             path?: never;
@@ -5685,7 +5685,7 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device. Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5712,7 +5712,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5827,7 +5827,7 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
                 "X-Adulis-Client"?: string;
-                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. Needed on this route when nobody is signed in and the caller is an app (see the 400 response). */
                 "X-Adulis-Device"?: string;
             };
             path?: never;
@@ -5847,7 +5847,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeviceRefDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device. Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5874,7 +5874,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5965,7 +5965,7 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5992,7 +5992,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6161,7 +6161,7 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationReadDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6188,7 +6188,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6227,7 +6227,7 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationsMarkedReadDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6254,7 +6254,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6472,7 +6472,7 @@ export interface operations {
                 "Idempotency-Key": string;
                 /** @description <surface>/<version>, e.g. android/1.0.0 or web/1.0.0. */
                 "X-Adulis-Client"?: string;
-                /** @description App clients: the registered device id. Browsers are identified by cookie instead. */
+                /** @description App clients: the registered device id. Browsers are identified by cookie instead. Needed on this route when nobody is signed in and the caller is an app (see the 400 response). */
                 "X-Adulis-Device"?: string;
             };
             path?: never;
@@ -6488,7 +6488,7 @@ export interface operations {
                     "application/json": components["schemas"]["PostLinkProductListDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device. Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6515,7 +6515,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6554,7 +6554,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReportCreatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6581,7 +6581,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6782,7 +6782,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerCreatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6809,7 +6809,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6852,7 +6852,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6870,7 +6870,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6915,7 +6915,7 @@ export interface operations {
                     "application/json": components["schemas"]["AnalyticsOverviewDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6933,7 +6933,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6973,7 +6973,7 @@ export interface operations {
                     "application/json": components["schemas"]["AvailabilityDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6991,7 +6991,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7031,7 +7031,7 @@ export interface operations {
                     "application/json": components["schemas"]["AvailabilitySavedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7049,7 +7049,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7094,7 +7094,7 @@ export interface operations {
                     "application/json": components["schemas"]["AvailabilityOverridePageDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7112,7 +7112,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7154,7 +7154,7 @@ export interface operations {
                     "application/json": components["schemas"]["AvailabilityOverrideDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7172,7 +7172,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7212,7 +7212,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7230,7 +7230,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7309,7 +7309,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerClosureDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7327,7 +7327,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7336,7 +7336,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7374,7 +7374,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7392,7 +7392,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7432,7 +7432,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpdatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7450,7 +7450,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7544,7 +7544,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionConfirmedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7562,7 +7562,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7571,7 +7571,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7611,7 +7611,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerDeletionBlockersDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7629,7 +7629,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7669,7 +7669,7 @@ export interface operations {
                     "application/json": components["schemas"]["FulfilmentMethodListDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7687,7 +7687,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7727,7 +7727,7 @@ export interface operations {
                     "application/json": components["schemas"]["FulfilmentMethodsSavedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7745,7 +7745,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7784,7 +7784,7 @@ export interface operations {
                     "application/json": components["schemas"]["AttestationRecordedDto"];
                 };
             };
-            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7811,7 +7811,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7897,7 +7897,7 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPreferencesDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7915,7 +7915,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7955,7 +7955,7 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPreferencesSavedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7973,7 +7973,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8261,7 +8261,7 @@ export interface operations {
                     "application/json": components["schemas"]["PendingOwnershipTransferResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8320,7 +8320,7 @@ export interface operations {
                     "application/json": components["schemas"]["OwnershipTransferRequestedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8338,7 +8338,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8347,7 +8347,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8385,7 +8385,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8547,7 +8547,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8565,7 +8565,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8606,7 +8606,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductCreatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8624,7 +8624,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8633,7 +8633,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8673,7 +8673,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8691,7 +8691,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8733,7 +8733,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductDeletedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8751,7 +8751,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8793,7 +8793,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpdatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8811,7 +8811,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8910,7 +8910,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8928,7 +8928,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8937,7 +8937,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN. */
+            /** @description slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN. The code IDEMPOTENCY_KEY_REUSED (the key was already used for a different request) is also answered with 409. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8979,7 +8979,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8997,7 +8997,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9046,7 +9046,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImageOrderDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9064,7 +9064,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9108,7 +9108,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductPublishedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9126,7 +9126,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9135,7 +9135,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9178,7 +9178,7 @@ export interface operations {
                     "application/json": components["schemas"]["SocialPostAttachedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9196,7 +9196,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9205,7 +9205,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9249,7 +9249,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductUnpublishedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9267,7 +9267,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9276,7 +9276,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9319,7 +9319,7 @@ export interface operations {
                     "application/json": components["schemas"]["VariantCreatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9337,7 +9337,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9346,7 +9346,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9395,7 +9395,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9413,7 +9413,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9422,7 +9422,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9462,7 +9462,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9480,7 +9480,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9520,7 +9520,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerProfileDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9538,7 +9538,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9578,7 +9578,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpdatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9596,7 +9596,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9636,7 +9636,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReadinessDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9654,7 +9654,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9716,7 +9716,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostPageDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9734,7 +9734,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9779,7 +9779,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9797,7 +9797,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9806,7 +9806,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9850,7 +9850,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9868,7 +9868,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9917,7 +9917,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9935,7 +9935,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -9979,7 +9979,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScenePostImageUploadResponseDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9997,7 +9997,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10006,7 +10006,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10052,7 +10052,7 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10070,7 +10070,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10079,7 +10079,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10119,7 +10119,7 @@ export interface operations {
                     "application/json": components["schemas"]["SocialAccountListDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10137,7 +10137,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10178,7 +10178,7 @@ export interface operations {
                     "application/json": components["schemas"]["SocialAccountLinkedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10196,7 +10196,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10205,7 +10205,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10247,7 +10247,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10265,7 +10265,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10274,7 +10274,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10314,7 +10314,7 @@ export interface operations {
                     "application/json": components["schemas"]["TeamListDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10332,7 +10332,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10373,7 +10373,7 @@ export interface operations {
                     "application/json": components["schemas"]["TeamMemberInvitedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10391,7 +10391,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10400,7 +10400,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10440,7 +10440,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10458,7 +10458,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10500,7 +10500,7 @@ export interface operations {
                     "application/json": components["schemas"]["VariantWithdrawnDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10518,7 +10518,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10560,7 +10560,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpdatedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10578,7 +10578,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10622,7 +10622,7 @@ export interface operations {
                     "application/json": components["schemas"]["StockConfirmedDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10640,7 +10640,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10649,7 +10649,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10692,7 +10692,7 @@ export interface operations {
                     "application/json": components["schemas"]["StockWrittenDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10710,7 +10710,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10719,7 +10719,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10766,7 +10766,7 @@ export interface operations {
                     "application/json": components["schemas"]["StockEventPageDto"];
                 };
             };
-            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            /** @description The request is refused with this status, for example when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). Other refusals with this status carry their own code. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10784,7 +10784,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
-            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED). */
             403: {
                 headers: {
                     [name: string]: unknown;

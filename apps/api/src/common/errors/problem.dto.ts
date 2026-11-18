@@ -7,25 +7,27 @@ import { ERROR_CATALOGUE } from './error-catalogue';
  * ProblemEnvelope in adulis-exception.ts; `code` is the catalogue's closed
  * set, so a client switches on a typed union rather than on strings.
  */
+/** The object a problem item is about (ErrorItem.subject). */
+export class ProblemSubjectDto {
+  @ApiProperty() kind!: string;
+  @ApiProperty() id!: string;
+}
+
+/** What the caller can do to clear a problem item (ErrorItem.resolving_action); other members may accompany `kind`. */
+export class ProblemResolvingActionDto {
+  @ApiProperty() kind!: string;
+}
+
 export class ProblemItemDto {
   @ApiProperty() code!: string;
   @ApiProperty() message_key!: string;
   @ApiPropertyOptional({ type: 'object', additionalProperties: true }) slots?: Record<string, unknown>;
-  @ApiPropertyOptional({
-    type: 'object',
-    required: ['kind', 'id'],
-    properties: { kind: { type: 'string' }, id: { type: 'string' } },
-    description: 'The object this item is about.',
-  })
-  subject?: { kind: string; id: string };
-  @ApiPropertyOptional({
-    type: 'object',
-    required: ['kind'],
-    properties: { kind: { type: 'string' } },
-    additionalProperties: true,
-    description: 'What the caller can do to clear this item; further members depend on the kind.',
-  })
-  resolving_action?: { kind: string; [member: string]: unknown };
+  // Nested classes, not inline schemas: ApiPropertyOptional replaces a nested `required` array with `false`, so an
+  // inline object would declare its own members optional.
+  @ApiPropertyOptional({ type: ProblemSubjectDto, description: 'The object this item is about.' })
+  subject?: ProblemSubjectDto;
+  @ApiPropertyOptional({ type: ProblemResolvingActionDto, description: 'What the caller can do to clear this item.' })
+  resolving_action?: ProblemResolvingActionDto;
 }
 
 export class ProblemDto {

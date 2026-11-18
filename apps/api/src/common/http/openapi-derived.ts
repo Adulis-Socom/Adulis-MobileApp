@@ -87,9 +87,11 @@ export function applyGateDescriptions(
 
 /**
  * Operations whose response keys a client type test pins exactly (logout is `204 | default` in @adulis/api-client);
- * they keep the responses they declare.
+ * they keep the responses they declare. Keyed by the operation's verb and path, which a rename of the controller
+ * or its method does not change; openapi-contract.spec.ts checks that each entry is still an operation of the
+ * contract and still declares exactly what the type test pins.
  */
-export const PINNED_RESPONSES: ReadonlySet<string> = new Set(['AuthController_logout']);
+export const PINNED_RESPONSES: ReadonlySet<string> = new Set(['post /auth/logout']);
 
 const problemResponse = (description: string) => ({ ...structuredClone(PROBLEM_RESPONSE), description });
 const status = (code: ErrorCode): string => String(ERROR_CATALOGUE[code].status);
@@ -106,8 +108,8 @@ export function applyGuardErrors(
   controllers: readonly Type[],
   skip: ReadonlySet<string> = new Set(),
 ): void {
-  for (const { method, operation, handler, controller } of operationRoutes(document, controllers, skip)) {
-    if (PINNED_RESPONSES.has(operation.operationId ?? '')) continue;
+  for (const { path, method, operation, handler, controller } of operationRoutes(document, controllers, skip)) {
+    if (PINNED_RESPONSES.has(`${method} ${path}`)) continue;
     const parameters = operation.parameters ?? [];
     const requiredHeader = (name: string) =>
       parameters.some((p) => 'name' in p && p.in === 'header' && p.name.toLowerCase() === name && p.required === true);
@@ -115,16 +117,37 @@ export function applyGuardErrors(
     const open = isPublicRoute(handler, controller);
     const write = method !== 'get';
     const extensions = operation as unknown as Record<string, unknown>;
+    const surfaces = extensions['x-adulis-surfaces'] as readonly string[] | undefined;
     const add = (code: ErrorCode, description: string) => {
       operation.responses[status(code)] ??= problemResponse(description);
     };
+
+    const keyed = requiredHeader('idempotency-key');
+    const deviceIndex = parameters.findIndex((p) => 'name' in p && p.in === 'header' && p.name.toLowerCase() === 'x-adulis-device');
+    const keyedByDevice = open && keyed && deviceIndex >= 0;
 
     const refused400: string[] = [];
     if (!open && requiredHeader('x-adulis-seller')) {
       refused400.push('X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED).');
     }
-    if (requiredHeader('idempotency-key')) refused400.push('The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING).');
-    if (refused400.length > 0) add('VALIDATION_FAILED', `The request is refused with this status when: ${refused400.join(' ')}`);
+    if (keyed) refused400.push('The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING).');
+    if (keyedByDevice) {
+      refused400.push(
+        'When nobody is signed in, the caller must be identified by X-Adulis-Device (an app) or by its browser cookie; without either the answer is IDEMPOTENCY_KEY_MISSING naming X-Adulis-Device.',
+      );
+      // Optional for a signed-in caller and a browser, so never `required` in the schema: say when it is not.
+      const device = parameters[deviceIndex] as { description?: string };
+      parameters[deviceIndex] = {
+        ...device,
+        description: `${device.description ?? ''} Needed on this route when nobody is signed in and the caller is an app (see the 400 response).`.trim(),
+      } as (typeof parameters)[number];
+    }
+    if (refused400.length > 0) {
+      add(
+        'VALIDATION_FAILED',
+        `The request is refused with this status, for example when: ${refused400.join(' ')} Other refusals with this status carry their own code.`,
+      );
+    }
 
     if (ticket) {
       add('SESSION_EXPIRED', 'The ticket is missing, malformed, expired or not an account-deletion ticket (SESSION_EXPIRED).');
@@ -139,12 +162,20 @@ export function applyGuardErrors(
         `${open ? 'A credential was presented and is' : 'The credential is'} not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie.`,
       ];
       if (write) reasons.push('A cookie-carried write without the Console Origin header (PERMISSION_DENIED).');
-      if (extensions['x-adulis-permission']) reasons.push('The session lacks the permission, or holds it on another surface (PERMISSION_DENIED).');
+      if (extensions['x-adulis-permission']) {
+        reasons.push('A member of the Seller who lacks the permission, or holds it on another surface, is refused (PERMISSION_DENIED).');
+      } else if (surfaces && !surfaces.includes('MOBILE')) {
+        // Console-only by a check of the session audience in code, not by a permission.
+        reasons.push('A session of another surface is refused (PERMISSION_DENIED).');
+      }
       add('AUDIENCE_NOT_PERMITTED', reasons.join(' '));
     }
 
-    if (requiredHeader('idempotency-key')) {
-      add('IDEMPOTENCY_KEY_REUSED', 'The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED).');
+    if (keyed) {
+      add(
+        'IDEMPOTENCY_KEY_REUSED',
+        'The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). A conflict the operation itself reports is also answered with this status and its own code: the code of the problem tells them apart.',
+      );
     }
   }
 }

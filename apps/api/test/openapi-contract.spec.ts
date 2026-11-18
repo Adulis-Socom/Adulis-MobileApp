@@ -1,5 +1,6 @@
 import { LEGACY_COMMERCE_CONTROLLERS } from '../src/common/http/openapi-security';
 import { guardDemandsSeller, loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
+import { PINNED_RESPONSES } from '../src/common/http/openapi-derived';
 import { SELLER_SIDE_ONLY, deriveGate, scanGates } from './gate-support';
 
 /**
@@ -237,11 +238,42 @@ describe('the headers and credentials the code reads are declared', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('says in the 400 text of an anonymous keyed route that the device (or a browser cookie) is needed when nobody is signed in', () => {
+    const keyedByDevice = inScope.filter((r) => r.isPublic && header(r, 'Idempotency-Key')?.required && header(r, 'X-Adulis-Device'));
+    expect(keyedByDevice.map(label).sort()).toEqual(
+      ['POST /v1/auth/otp/request', 'POST /v1/auth/recovery', 'POST /v1/deletion/otp/request', 'POST /v1/devices', 'POST /v1/post-links/resolve'].sort(),
+    );
+    const wrong = keyedByDevice.filter((r) => !(op(r).responses['400']?.description ?? '').includes('X-Adulis-Device') || header(r, 'X-Adulis-Device')?.required !== false);
+    expect(wrong.map(label)).toEqual([]);
+  });
+
   it('says once, in the document description, the headers and the Origin rule no single operation carries', () => {
     const text = contract.info?.description ?? '';
     for (const word of ['X-Adulis-Request-Id', 'Content-Language', 'Accept-Language', 'X-Adulis-Idempotent-Replay', 'Retry-After', 'Origin']) {
       expect(text).toContain(word);
     }
+  });
+});
+
+describe('what the generator pins or derives from other declarations', () => {
+  it('keeps each pinned response exactly as the client type test pins it', () => {
+    expect([...PINNED_RESPONSES]).toEqual(['post /auth/logout']);
+    for (const key of PINNED_RESPONSES) {
+      const [method, path] = key.split(' ') as [string, string];
+      const operation = contract.paths[`/v1${path}`]?.[method];
+      expect(operation).toBeDefined();
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual(['204', 'default']);
+    }
+  });
+
+  it('declares the members of the nested problem classes as required (ApiPropertyOptional would drop a nested required list)', () => {
+    const schemas = contract.components.schemas;
+    expect(schemas['ProblemSubjectDto']?.required).toEqual(['kind', 'id']);
+    expect(schemas['ProblemResolvingActionDto']?.required).toEqual(['kind']);
+    expect(schemas['ProblemItemDto']?.required).toEqual(['code', 'message_key']);
+    // swagger wraps a described $ref in allOf.
+    expect(schemas['ProblemItemDto']?.properties?.['subject']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemSubjectDto');
+    expect(schemas['ProblemItemDto']?.properties?.['resolving_action']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemResolvingActionDto');
   });
 });
 

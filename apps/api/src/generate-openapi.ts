@@ -35,8 +35,9 @@ import { LEGACY_COMMERCE_CONTROLLERS, applyGuardSecurity } from './common/http/o
 /** The cross-cutting behaviour no single operation carries: said once, here, instead of on every operation. */
 const API_DESCRIPTION = [
   'Every response carries `X-Adulis-Request-Id` and `Content-Language` (`en` or `am`, resolved from the optional',
-  '`Accept-Language` request header; the API sends message keys, never rendered text). A replayed keyed request',
-  'answers with the stored response and `X-Adulis-Idempotent-Replay: true`. `Retry-After` accompanies a 429 and a 503.',
+  '`Accept-Language` request header; the API sends message keys, never rendered text). In general a replayed keyed',
+  'request answers with the stored response and `X-Adulis-Idempotent-Replay: true` (sign-in verification answers',
+  'OTP_EXPIRED to a replay after success, with the same header). `Retry-After` accompanies a 429 and a 503.',
   'A browser write that carries the session cookie must also send the console `Origin` header; without it the',
   'answer is 403 PERMISSION_DENIED. A mobile app authenticates with its bearer token and sends no `Origin`.',
 ].join(' ');
@@ -67,7 +68,7 @@ async function generate(): Promise<void> {
     // Opaque random credentials, not JWTs (AUTH-02 v3.3 S43; register API-2).
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'opaque' }, 'bearer')
     .addCookieAuth('__Host-adulis_session', { type: 'apiKey', in: 'cookie' }, 'cookie')
-    // Not a session: the single-use ticket the web deletion flow holds. A header parameter cannot be
+    // Not a session: the ticket the web deletion flow holds. A header parameter cannot be
     // named Authorization in OpenAPI 3.0, so the scheme is the only legal way to declare it.
     .addApiKey(
       {

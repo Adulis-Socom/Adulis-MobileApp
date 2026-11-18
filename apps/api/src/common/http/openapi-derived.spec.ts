@@ -10,6 +10,7 @@ import { ERROR_CATALOGUE } from '../errors/error-catalogue';
 import { ApiIdempotencyKey } from '../idempotency/api-idempotency-key';
 import { SESSION_COOKIE } from './cookies';
 import { ApiGate } from './api-gate';
+import { ApiDeviceHeaders } from './api-headers';
 import { SELLER_HEADER, applyGateDescriptions, applyGuardErrors, applyProblemResponses, applySellerHeader } from './openapi-derived';
 import { applyGuardSecurity } from './openapi-security';
 
@@ -59,6 +60,15 @@ class PublicController {
   lookup(): string {
     return 'lookup';
   }
+
+  /** An anonymous keyed POST: nobody is signed in, so the device (or a browser cookie) is what keys it. */
+  @Post('device-keyed')
+  @Public()
+  @ApiIdempotencyKey()
+  @ApiDeviceHeaders()
+  deviceKeyed(): string {
+    return 'device-keyed';
+  }
 }
 
 @Controller('buyer')
@@ -88,9 +98,9 @@ class BuyerController {
   }
 }
 
-/** Named like the real one: its response keys are pinned by a type test in @adulis/api-client. */
+/** Not named like the real controller on purpose: the pin is the route (post /auth/logout), not a class or method name. */
 @Controller('auth')
-class AuthController {
+class RenamedSessionController {
   @Post('logout')
   logout(): string {
     return 'logout';
@@ -138,7 +148,7 @@ class LegacyController {
   }
 }
 
-const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, GatedController, AuthController, LegacyController];
+const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, GatedController, RenamedSessionController, LegacyController];
 
 describe('contract metadata derived from the request pipeline', () => {
   let app: INestApplication;
@@ -354,9 +364,30 @@ describe('applyGuardErrors', () => {
     expect(text('/buyer/keyed', '409', 'post')).toContain('IDEMPOTENCY_KEY_REUSED');
   });
 
+  it('does not read as exhaustive: a 400 or a 409 can also be a refusal of the operation itself', () => {
+    expect(text('/buyer/keyed', '400', 'post')).toContain('for example');
+    expect(text('/buyer/keyed', '400', 'post')).toContain('carry their own code');
+    expect(text('/buyer/keyed', '409', 'post')).toContain('its own code');
+  });
+
+  it('says when the device header is needed on an anonymous keyed route, and keeps it optional', () => {
+    expect(text('/sellers/device-keyed', '400', 'post')).toContain('X-Adulis-Device');
+    const header = (built.paths['/sellers/device-keyed']?.post?.parameters ?? []).find((p) => 'name' in p && p.name === 'X-Adulis-Device') as { required?: boolean; description?: string };
+    expect(header.required).toBe(false);
+    expect(header.description).toContain('nobody is signed in');
+    // A keyed route a signed-in caller uses says nothing about the device.
+    expect(text('/buyer/keyed', '400', 'post')).not.toContain('X-Adulis-Device');
+  });
+
   it('declares the permission refusal where a permission is stated, and only there', () => {
     expect(text('/gated/console', '403')).toContain('lacks the permission');
     expect(text('/gated/audience', '403')).not.toContain('lacks the permission');
+  });
+
+  it('names the audience check as the refusal of another surface where no permission is stated', () => {
+    expect(text('/gated/audience', '403')).toContain('A session of another surface is refused (PERMISSION_DENIED)');
+    expect(text('/gated/console', '403')).not.toContain('another surface is refused');
+    expect(text('/buyer/plain', '403')).not.toContain('another surface is refused');
   });
 
   it('says that a public route refuses only a credential that was presented', () => {
