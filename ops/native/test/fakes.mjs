@@ -96,7 +96,7 @@ export function world({ api = false } = {}) {
     Image: `sha256:${role}`,
     Config: { Labels: labels(role) },
     Mounts: [{ Type: 'volume', Name: m.names[volume], Destination: dest }],
-    HostConfig: { Binds: null, VolumesFrom: null, Tmpfs: null },
+    HostConfig: { Binds: [`${m.names[volume]}:${dest}`], VolumesFrom: null, Tmpfs: null },
     NetworkSettings: {
       Networks: { [m.names.network]: {} },
       Ports: { [cport]: [{ HostIp: '127.0.0.1', HostPort: `${port}` }] },

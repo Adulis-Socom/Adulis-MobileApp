@@ -222,7 +222,11 @@ export function containerProblems(m, role, info) {
   }
   if (!mounts.some((mt) => mt.Name === m.names[r.volume]))
     p.push(P('ID-08', `${what} does not mount this run's volume ${m.names[r.volume]}`));
-  if ((info.HostConfig?.Binds ?? []).length) p.push(P('ID-08', `${what} has bind mounts`));
+  // Docker lists a named volume's mount in Binds too ("<volume>:<destination>"); only that exact
+  // entry is this run's own volume, every other entry is a host path.
+  const own = `${m.names[r.volume]}:${r.dest}`;
+  for (const b of info.HostConfig?.Binds ?? [])
+    if (b !== own && !b.startsWith(`${own}:`)) p.push(P('ID-08', `${what} has bind mount ${b}`));
   if ((info.HostConfig?.VolumesFrom ?? []).length)
     p.push(P('ID-08', `${what} takes volumes from another container`));
   if (Object.keys(info.HostConfig?.Tmpfs ?? {}).length)
