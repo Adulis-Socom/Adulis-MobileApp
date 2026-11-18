@@ -31,21 +31,28 @@ const operation = (path: string) => {
 };
 const parameters = (path: string) => operation(path).parameters ?? [];
 const queryNames = (path: string) => parameters(path).filter((p) => p.in === 'query').map((p) => p.name).sort();
+/** The only non-query parameters a public read may declare: the optional headers that identify the app install. Anything else (a sort, a filter, a Market) fails. */
+const IDENTIFYING_HEADERS = ['X-Adulis-Client', 'X-Adulis-Device'];
+const otherNames = (path: string) => parameters(path).filter((p) => p.in !== 'query').map((p) => p.name).sort();
+const onlyIdentifyingHeaders = (names: string[]) => names.every((name) => IDENTIFYING_HEADERS.includes(name));
 
 describe('what the contract supports', () => {
   it('the Shop list takes a cursor, a page size and a category, and nothing to sort, filter or pick a Market by', () => {
     expect(queryNames('/v1/shop/products')).toEqual(['category', 'cursor', 'limit']);
-    expect(parameters('/v1/shop/products').filter((p) => p.in !== 'query')).toEqual([]);
+    expect(onlyIdentifyingHeaders(otherNames('/v1/shop/products'))).toBe(true);
+    expect(parameters('/v1/shop/products').filter((p) => p.in !== 'query' && p.required)).toEqual([]);
   });
 
   it('Search takes the query, a result type, a cursor, a page size and a category, and nothing else', () => {
     expect(queryNames('/v1/search')).toEqual(['category', 'cursor', 'limit', 'q', 'type']);
     expect(parameters('/v1/search').find((p) => p.name === 'type')?.schema?.enum).toEqual(['TOP', 'PRODUCT_POST', 'SELLER', 'SCENE_POST']);
-    expect(parameters('/v1/search').filter((p) => p.in !== 'query')).toEqual([]);
+    expect(onlyIdentifyingHeaders(otherNames('/v1/search'))).toBe(true);
+    expect(parameters('/v1/search').filter((p) => p.in !== 'query' && p.required)).toEqual([]);
   });
 
   it('the category list takes no parameter: the Market is the server\'s', () => {
-    expect(operation('/v1/categories').parameters).toEqual([]);
+    expect(parameters('/v1/categories').filter((p) => p.in === 'query')).toEqual([]);
+    expect(onlyIdentifyingHeaders(otherNames('/v1/categories'))).toBe(true);
   });
 
   it('every result type in the Search union is drawn, or listed as deliberately not drawn', () => {
