@@ -17,22 +17,22 @@ import type { Database } from '../src/common/db/database.types';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
- * SEC-003 -- a stored response is replayed only to the caller's CURRENT
+ * A stored response is replayed only to the caller's CURRENT
  * authorisation, and seller deletion authorises before it answers.
  *
- *  F1  the route's declared permission(s), every one, are re-tested against
+ *  1   the route's declared permission(s), every one, are re-tested against
  *      the caller's current role before a replay is served, and an account
  *      with a due, unactivated ownership transfer away from the store is not
  *      served through any of its roles there;
- *  F2  ...and against the presenting session's surface;
- *  F4  POST /v1/seller/deletion checks seller.account:delete first.
+ *  2   ...and against the presenting session's surface;
+ *  3   POST /v1/seller/deletion checks seller.account:delete first.
  *
  * Also pinned: the 409 outcomes on a declared route with the permission held
  * and lost, the re-run a too-strict declaration costs, and what the two
  * dual-side routes (chat messages, claims evidence) do for a buyer, a store
  * member and an account that is both -- with and without X-Adulis-Seller.
  *
- * The harness is the idempotency security suite's (wo-sec-002-idempotency-security.e2e.spec.ts):
+ * The harness is the idempotency security suite's:
  * probes call the production HandlerTransaction exactly as handlers do, and
  * every authorised execution writes one marker row, so a rolled-back run is
  * visible as a counted execution with no surviving marker. The real-route
@@ -122,7 +122,7 @@ const ACCOUNTS = [
 /** The latched probe's gate, as in the idempotency security suite's harness: pg_advisory_xact_lock(LATCH_GATE, body.latch). */
 const LATCH_GATE = 0x5ec303;
 const SELLERS = [SELLER_A, SELLER_E, SELLER_F, SELLER_G, SELLER_H];
-const MARKER = 'wo-sec-003:';
+const MARKER = 'replay-auth:';
 
 /** Held by OWNER, ADMIN and SALES_SUPPORT; not by ANALYST, INVENTORY or CAMPAIGN_MANAGER. Both surfaces. */
 const GRANT = 'seller.orders:respond';
@@ -135,32 +135,32 @@ const CONSOLE_GRANT = 'seller.products:write';
 const executions = new Map<string, number>();
 
 @Controller()
-class WoSec003Probe {
+class ReplayProbe {
   constructor(private readonly tx: HandlerTransaction) {}
 
   /** A seller-context write that asserts GRANT for the session's own surface, like every real one. */
-  @Post('seller/wo-sec-003-probe')
+  @Post('seller/replay-probe')
   @ReplayGrant(GRANT)
   async probe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, GRANT));
   }
 
   /** The same, for a CONSOLE-only permission. */
-  @Post('seller/wo-sec-003-console-probe')
+  @Post('seller/replay-console-probe')
   @ReplayGrant(CONSOLE_GRANT)
   async consoleProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, CONSOLE_GRANT));
   }
 
   /** Two declared permissions, both asserted, as on the scene and chat routes. */
-  @Post('seller/wo-sec-003-two-code-probe')
+  @Post('seller/replay-two-code-probe')
   @ReplayGrant(READY_GRANT, GRANT)
   async twoCodeProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, READY_GRANT, GRANT));
   }
 
   /** A declaration stricter than what the handler asserts: the lookup withholds, the handler passes. */
-  @Post('seller/wo-sec-003-strict-probe')
+  @Post('seller/replay-strict-probe')
   @ReplayGrant(CONSOLE_GRANT)
   async strictProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, GRANT));
@@ -183,8 +183,8 @@ class WoSec003Probe {
   }
 }
 
-@Module({ imports: [AppModule], controllers: [WoSec003Probe] })
-class WoSec003Module {}
+@Module({ imports: [AppModule], controllers: [ReplayProbe] })
+class ReplayModule {}
 
 /** The one error envelope, refusing with a non-retryable 4xx and no replay header. */
 const expectProblem = (r: request.Response, status: number, code: string): void => {
@@ -201,7 +201,7 @@ const expectReplay = (r: request.Response, status: number, body: unknown): void 
   expect(r.body).toEqual(body);
 };
 
-describe('SEC-003 replay authorisation and seller deletion', () => {
+describe('replay authorisation and seller deletion', () => {
   let app: INestApplication;
   let admin: Pool;
   const http = () => request(app.getHttpServer());
@@ -216,7 +216,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     await admin.query(
       `INSERT INTO core.market (id, code, display_name, phase, display_currency,
                                 display_timezone, default_locale, activation_state, otp_enabled, sms_primary_provider)
-       VALUES ($1,'SC3','SEC-003','PHASE_1','ETB','Africa/Addis_Ababa','en','ACTIVE', true, 'AFROMESSAGE')`,
+       VALUES ($1,'SC3','Replay authorisation','PHASE_1','ETB','Africa/Addis_Ababa','en','ACTIVE', true, 'AFROMESSAGE')`,
       [M],
     );
     await admin.query(
@@ -245,11 +245,11 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     }
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type, store_name, handle, status)
-       VALUES ($1,$4,$5,'INDIVIDUAL','A','sec003-a','ACTIVE'),
-              ($2,$4,$5,'INDIVIDUAL','E','sec003-e','ACTIVE'),
-              ($3,$4,$5,'INDIVIDUAL','F','sec003-f','ACTIVE'),
-              ($6,$4,$5,'INDIVIDUAL','G','sec003-g','ACTIVE'),
-              ($7,$4,$8,'INDIVIDUAL','H','sec003-h','ACTIVE')`,
+       VALUES ($1,$4,$5,'INDIVIDUAL','A','replay-a','ACTIVE'),
+              ($2,$4,$5,'INDIVIDUAL','E','replay-e','ACTIVE'),
+              ($3,$4,$5,'INDIVIDUAL','F','replay-f','ACTIVE'),
+              ($6,$4,$5,'INDIVIDUAL','G','replay-g','ACTIVE'),
+              ($7,$4,$8,'INDIVIDUAL','H','replay-h','ACTIVE')`,
       [SELLER_A, SELLER_E, SELLER_F, M, OWNER, SELLER_G, SELLER_H, OTHER],
     );
     await admin.query(
@@ -338,7 +338,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
       [CLAIM_D, ORDER_D, MEMBER_18],
     );
 
-    const moduleRef = await Test.createTestingModule({ imports: [WoSec003Module] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [ReplayModule] }).compile();
     app = moduleRef.createNestApplication();
     await configureApp(app, CONSOLE_ORIGIN);
     await app.listen(0, '127.0.0.1'); // listen first
@@ -378,7 +378,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
   });
 
   const probe = (session: string, sellerId: string, key: string, body: object) =>
-    http().post('/v1/seller/wo-sec-003-probe').set(bearer(session)).set('X-Adulis-Seller', sellerId)
+    http().post('/v1/seller/replay-probe').set(bearer(session)).set('X-Adulis-Seller', sellerId)
       .set('Idempotency-Key', key).send(body);
   const records = async (key: string): Promise<number> =>
     Number((await admin.query(`SELECT count(*) FROM core.idempotency_record WHERE key = $1`, [key])).rows[0].count);
@@ -461,7 +461,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     throw new Error(`no session waits on advisory lock (${LATCH_GATE}, ${latch})`);
   };
 
-  describe('F1 -- the current role must still hold the route permission', () => {
+  describe('the current role must still hold the route permission', () => {
     it('R1: a member re-invited at a role without the permission is not served the stored response', async () => {
       const key = randomUUID();
       const first = await probe(S_M1, SELLER_A, key, { n: 1 });
@@ -527,7 +527,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     it('R13: every declared permission must still be held: one of two is not enough', async () => {
       const key = randomUUID();
       const post = () =>
-        http().post('/v1/seller/wo-sec-003-two-code-probe').set(bearer(S_M13)).set('X-Adulis-Seller', SELLER_A)
+        http().post('/v1/seller/replay-two-code-probe').set(bearer(S_M13)).set('X-Adulis-Seller', SELLER_A)
           .set('Idempotency-Key', key).send({ n: 13 });
       const first = await post();
       expect(first.status).toBe(201);
@@ -569,7 +569,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     it('R16: a declaration stricter than its handler costs a re-run, still answers the stored response, and commits once', async () => {
       const key = randomUUID();
       const post = () =>
-        http().post('/v1/seller/wo-sec-003-strict-probe').set(bearer(S_OWNER)).set('X-Adulis-Seller', SELLER_A)
+        http().post('/v1/seller/replay-strict-probe').set(bearer(S_OWNER)).set('X-Adulis-Seller', SELLER_A)
           .set('Idempotency-Key', key).send({ n: 16 });
       const first = await post();
       expect(first.status).toBe(201);
@@ -580,11 +580,11 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     });
   });
 
-  describe('F2 -- the presenting surface must be one the permission reaches', () => {
+  describe('the presenting surface must be one the permission reaches', () => {
     it('R4: a CONSOLE-only result is not replayed to a MOBILE session of the same account', async () => {
       const key = randomUUID();
       const post = (headers: Record<string, string>) =>
-        http().post('/v1/seller/wo-sec-003-console-probe').set(headers).set('X-Adulis-Seller', SELLER_A)
+        http().post('/v1/seller/replay-console-probe').set(headers).set('X-Adulis-Seller', SELLER_A)
           .set('Idempotency-Key', key).send({ n: 4 });
       const first = await post(cookie(S_M4_C));
       expect(first.status).toBe(201);
@@ -597,7 +597,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     });
   });
 
-  describe('F1 on the real store-side routes outside /v1/seller', () => {
+  describe('the current role on the real store-side routes outside /v1/seller', () => {
     it('R5: seller-side chat: a member re-invited without the messaging permissions is not served', async () => {
       const key = randomUUID();
       const send = () =>
@@ -933,7 +933,7 @@ describe('SEC-003 replay authorisation and seller deletion', () => {
     });
   });
 
-  describe('F4 -- POST /v1/seller/deletion authorises before it answers', () => {
+  describe('POST /v1/seller/deletion authorises before it answers', () => {
     const del = (headers: Record<string, string>) =>
       http().post('/v1/seller/deletion').set(headers).set('X-Adulis-Seller', SELLER_A)
         .set('Idempotency-Key', randomUUID()).send({ step_up_challenge_id: randomUUID() });

@@ -218,7 +218,7 @@ export class HandlerTransaction {
     // handler runs and decides; where it does not refuse, the existing record
     // collides at commit and the same-hash response is served after all.
     // The route's @ReplayGrant codes are re-tested against the CURRENT role
-    // and the session's surface (SEC-003).
+    // and the session's surface.
     const standingSeller = actor.kind === 'ACCOUNT' ? ctx.sellerId : null;
     const replay = await this.idempotency.check(
       key,

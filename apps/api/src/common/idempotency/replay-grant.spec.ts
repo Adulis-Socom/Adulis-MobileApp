@@ -4,7 +4,7 @@ import * as ts from 'typescript';
 import { requiresSellerContext } from '../auth/auth.guard';
 
 /**
- * SEC-003 -- the replay re-check cannot be skipped by omission.
+ * The replay re-check cannot be skipped by omission.
  *
  * The idempotency lookup serves a stored response only while the caller's
  * CURRENT role still holds the route's @ReplayGrant code(s) on the presenting
@@ -41,7 +41,7 @@ import { requiresSellerContext } from '../auth/auth.guard';
  * decorator arguments, aliased decorator imports, files not named
  * *.controller.ts under src/modules); or a new store-side route outside
  * /v1/seller that is missing from STORE_SIDE_ROUTES. The e2e suite
- * (test/wo-sec-003-replay-authorization.e2e.spec.ts) proves the behaviour.
+ * (test/replay-authorization.e2e.spec.ts) proves the behaviour.
  */
 
 const SRC = join(__dirname, '..', '..');
@@ -265,7 +265,7 @@ export function checkCalls(fileName: string, text: string): CheckCall[] {
   return out;
 }
 
-describe('the replay re-check cannot be skipped by omission (SEC-003)', () => {
+describe('the replay re-check cannot be skipped by omission', () => {
   const controllerFiles = files(join(SRC, 'modules'), (n) => n.endsWith('.controller.ts'));
   const all = controllerFiles.flatMap((f) =>
     routes(f, readFileSync(f, 'utf8')).map((r) => ({ ...r, file: f })),

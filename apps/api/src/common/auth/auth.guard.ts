@@ -42,7 +42,7 @@ export const ActorRole = (role: 'BUYER' | 'SELLER' | 'COURIER') =>
 export const REPLAY_GRANT_KEY = 'adulis:replay-grant';
 /**
  * The permission code(s) the route's handler asserts through
- * fn_has_permission (SEC-003). It AUTHORISES NOTHING: the idempotency lookup
+ * fn_has_permission. It AUTHORISES NOTHING: the idempotency lookup
  * reads it to decide whether a stored response may be replayed to the
  * caller's CURRENT role and surface; when it may not, the handler runs and
  * fn_has_permission answers exactly as for a fresh request. A route without

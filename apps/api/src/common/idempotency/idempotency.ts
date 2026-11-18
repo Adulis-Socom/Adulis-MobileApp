@@ -121,12 +121,12 @@ export class IdempotencyService {
    * that seller that is due but not yet activated does not stand at all,
    * through either arm: activation happens only inside a handler transaction,
    * which a replay never opens, and it can change every role the account
-   * holds there (SEC-003). Otherwise null: the handler runs
+   * holds there. Otherwise null: the handler runs
    * and decides (fn_has_permission's 403 or 404 on a seller-authorised
    * path); were it to pass, the existing record still refuses a second
    * commit (the unique-collision path).
    *
-   * `grants` (the route's @ReplayGrant codes, SEC-003) and `audience` (the
+   * `grants` (the route's @ReplayGrant codes) and `audience` (the
    * presenting session's): standing must also be in a role that still holds
    * every one of those codes on that surface -- fn_has_permission's role and
    * surface step, read-only and without raising. A member demoted since the
