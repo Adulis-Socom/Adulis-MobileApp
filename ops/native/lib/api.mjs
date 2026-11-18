@@ -84,6 +84,8 @@ export async function startApi(m, io, { checkout, sha, dir }) {
   const envProblems = apiEnvProblems(env, m);
   if (envProblems.length)
     throw new Error(`refused: the API environment is not acceptable: ${envProblems.join('; ')}`);
+  // The API is handed this run's credentials only after the stack itself has been proven.
+  await assertTarget(m, 'STACK', io, { dir, states: ['ready'] });
   await io.build(checkout);
   const main = join(checkout, 'apps', 'api', 'dist', 'main.js');
   const mainSha256 = createHash('sha256').update(readFileSync(main)).digest('hex');

@@ -110,6 +110,32 @@ test('a listener already on the API port is refused: no build, no start, nothing
   }
 });
 
+test('an API is not built or started while the stack fails an identity check', async () => {
+  for (const edit of [
+    (w) => (w.pg.tcp = w.pg.tcp.replace(w.m.db.systemId, '1')),
+    (w) => (w.s3.accept = 'adulis-local'),
+    (w) =>
+      w.d.containers[w.m.containers.minio.id].Mounts.push({
+        Type: 'bind',
+        Source: '/x',
+        Destination: '/y',
+      }),
+  ]) {
+    const s = startWorld();
+    try {
+      edit(s.w);
+      await assert.rejects(
+        startApi(s.w.m, s.io, { checkout: s.checkout, sha: SHA, dir: s.dir }),
+        /refused/,
+      );
+      assert.equal(s.effects.builds, 0);
+      assert.equal(s.effects.spawns.length, 0);
+    } finally {
+      s.done();
+    }
+  }
+});
+
 test('a run that is not ready cannot start an API', async () => {
   const s = startWorld();
   try {

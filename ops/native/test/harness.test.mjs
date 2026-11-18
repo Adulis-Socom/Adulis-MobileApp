@@ -395,6 +395,37 @@ test("the API canary reads the API's own write back from this run's database, an
   }
 });
 
+test('reverify records a PostgreSQL restart only when everything else is unchanged, and never runs an operation', async () => {
+  const w = world();
+  const restarted = (v) => v.replace(w.m.db.postmasterStart, '2026-11-18T12:00:00.000000');
+  w.pg.tcp = restarted(w.pg.tcp);
+  w.pg.inside = restarted(w.pg.inside);
+  const c = cli(w);
+  try {
+    assert.equal(await c.run('verify', '--run', w.m.run), 1); // refused until the restart is recorded
+    assert.equal(await c.run('reverify', '--run', w.m.run), 0);
+    const m = readManifest(runDir(c.root, w.m.run));
+    assert.equal(m.db.postmasterStart, '2026-11-18T12:00:00.000000');
+    assert.equal(m.restarts.length, 1);
+    assert.equal(await c.run('verify', '--run', w.m.run), 0);
+    assert.deepEqual(w.d.mutations, []);
+  } finally {
+    c.done();
+  }
+  const other = world();
+  other.pg.inside = other.pg.inside
+    .replace(other.m.db.systemId, '1')
+    .replace(other.m.db.postmasterStart, '2026-11-18T12:00:00.000000');
+  other.pg.tcp = other.pg.inside;
+  const d = cli(other);
+  try {
+    assert.equal(await d.run('reverify', '--run', other.m.run), 1); // another server: nothing is recorded
+    assert.equal(readManifest(runDir(d.root, other.m.run)).restarts, undefined);
+  } finally {
+    d.done();
+  }
+});
+
 test('plan prints the exact docker arguments without any secret value', async () => {
   const c = cli();
   try {
