@@ -183,7 +183,7 @@ describe('the other private screens of the family when the Account changes', () 
     signedIn();
     accountB(api, fc);
     const outfit = fc.named(FIRST);
-    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    const app = await renderRouter(APP_DIR, { initialUrl: PICKER });
     expect(await screen.findByRole('checkbox', { name: FIRST })).toBeOnTheScreen();
     await switchToB();
     await flush();
@@ -191,7 +191,7 @@ describe('the other private screens of the family when the Account changes', () 
     expect(later.filter(naming(outfit))).toEqual([]);
     expect(later.filter((c) => c.headers.Authorization !== undefined).every(asB)).toBe(true);
     // Back on the retained picker: only the second Account's Saved is offered.
-    for (let i = 0; i < 6 && screen.getPathname() !== '/save-to'; i++) await act(() => router.back());
+    for (let i = 0; i < 6 && app.getPathname() !== '/save-to'; i++) await act(() => router.back());
     expect(screen).toHavePathname('/save-to');
     expect(await screen.findByRole('checkbox', { name: en['buyer.saved.default_name'] })).toBeOnTheScreen();
     expect(screen.queryByRole('checkbox', { name: FIRST })).toBeNull();

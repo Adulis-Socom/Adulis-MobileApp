@@ -451,3 +451,81 @@ describe('changes inside a Collection after an uncertain outcome', () => {
     }
   });
 });
+
+describe('read failures and loading states', () => {
+  /** The server is unreachable for this route until the test brings it back. */
+  const outage = () => {
+    const state = { down: true };
+    return { state, answer: () => (state.down ? ('offline' as Reply) : undefined) };
+  };
+  const wait = { timeout: 15_000 };
+
+  it('the Collections on the Saved tab: a failed read says why and Try again brings them back', async () => {
+    signedIn();
+    fc.named('Gifts');
+    const out = outage();
+    fc.intercept('collections', out.answer);
+    await renderRouter(APP_DIR, { initialUrl: '/saved' });
+    expect(await screen.findByText(new RegExp(`^${en['buyer.saved.collections_failed']}`), {}, wait)).toBeOnTheScreen();
+    expect(screen.getByText(new RegExp(en['common.offline']))).toBeOnTheScreen();
+    out.state.down = false;
+    // The Collections section's own Try again (the Recent Saves list below has its own).
+    await fireEvent.press(screen.getAllByRole('button', { name: en['common.retry'] })[0]!);
+    expect(await screen.findByRole('button', { name: /^Gifts, / })).toBeOnTheScreen();
+  });
+
+  it('a Collection: loading is announced, a failed read says why, and Try again shows the items', async () => {
+    signedIn();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    const out = outage();
+    fc.intercept('detail', out.answer);
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    expect(await screen.findByText(en['buyer.collection.loading'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['common.offline'], {}, wait)).toBeOnTheScreen();
+    out.state.down = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText('Woven basket')).toBeOnTheScreen();
+  });
+
+  it('the Saved list: loading is announced before the first answer', async () => {
+    signedIn();
+    const gate = held();
+    fc.intercept('saves', async () => {
+      await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/saved' });
+    expect(await screen.findByText(en['buyer.saved.loading'])).toBeOnTheScreen();
+    await act(async () => gate.release());
+    expect(await screen.findByText(en['buyer.saved.empty'])).toBeOnTheScreen();
+  });
+
+  it('Product Detail: a failed read of the saved state keeps Save off, says why, and Try again enables it', async () => {
+    signedIn();
+    const out = outage();
+    fc.intercept('state', out.answer);
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    expect(await screen.findByText(new RegExp(en['common.offline']), {}, wait)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeDisabled();
+    expect(screen.getByRole('button', { name: en['buyer.save.add'] })).toBeDisabled();
+    out.state.down = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await waitFor(() => expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeEnabled());
+    expect(adds()).toEqual([]);
+  });
+
+  it('the picker: a failed read says why, offers nothing to tick, and Try again brings the Collections back', async () => {
+    signedIn();
+    fc.named('Gifts');
+    const out = outage();
+    fc.intercept('state', out.answer);
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    expect(await screen.findByText(en['common.offline'], {}, wait)).toBeOnTheScreen();
+    expect(screen.queryByRole('checkbox', { name: 'Gifts' })).toBeNull();
+    out.state.down = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByRole('checkbox', { name: 'Gifts' })).toBeOnTheScreen();
+    expect(adds()).toEqual([]);
+  });
+});
