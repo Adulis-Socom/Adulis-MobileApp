@@ -3,11 +3,11 @@
 // before anything destructive runs.
 import { PROTECTED_CONTAINERS as DEV_DB_CONTAINERS } from '../../scripts/lib/disposable-db.mjs';
 
-export const OWNER = 'NATIVE-01';
+export const OWNER = 'native-harness';
 export const LABEL = {
-  owner: 'adulis.native-01.owner',
-  run: 'adulis.native-01.run',
-  role: 'adulis.native-01.role',
+  owner: 'adulis.native-harness.owner',
+  run: 'adulis.native-harness.run',
+  role: 'adulis.native-harness.role',
 };
 
 // Host ports the harness may use. Everything outside the block is refused, and the protected ports
