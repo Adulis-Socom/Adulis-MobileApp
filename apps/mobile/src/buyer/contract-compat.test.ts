@@ -15,6 +15,21 @@ import { parseNotificationPage } from './notifications';
 type S = components['schemas'];
 type Answer<K extends keyof ApiClient> = Awaited<ReturnType<ApiClient[K]>>;
 
+// Compile-time gate (pnpm typecheck): every method below answers its contract type, never `unknown`.
+type Typed<T> = unknown extends T ? { answerIsUnknown: true } : true;
+export const typedAnswers: [
+  Typed<Answer<'openConversation'>>,
+  Typed<Answer<'conversations'>>,
+  Typed<Answer<'conversationMessages'>>,
+  Typed<Answer<'sendMessage'>>,
+  Typed<Answer<'escalateConversation'>>,
+  Typed<Answer<'notifications'>>,
+  Typed<Answer<'markNotificationRead'>>,
+  Typed<Answer<'verifyDeletionOtp'>>,
+  Typed<Answer<'deletionPreview'>>,
+  Typed<Answer<'confirmDeletion'>>,
+] = [true, true, true, true, true, true, true, true, true, true];
+
 const ID = (n: number) => `0b6f1a3e-aaaa-4aaa-8aaa-${n.toString(16).padStart(12, '0')}`;
 const AT = '2026-11-18T08:00:00.000Z';
 const t = (key: keyof typeof en) => en[key];
