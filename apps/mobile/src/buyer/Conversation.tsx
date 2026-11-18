@@ -4,8 +4,9 @@ import { Redirect, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, ScrollView, View } from 'react-native';
 
-import { ApiError, isTransient, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
+import { ApiError, isTransient, newIdempotencyKey, problemCode } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
+import { keyUsable } from '../api/mutation';
 import { useSession } from '../auth/session';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
@@ -17,11 +18,11 @@ import {
   CONVERSATIONS,
   MESSAGES,
   MESSAGE_MAX,
+  acceptedEscalation,
   acceptedMessage,
   escalatableAnswer,
   isConversationRef,
   rereadAfter,
-  sendOutcome,
   useConversationMessages,
   useConversations,
 } from './chat';
@@ -30,6 +31,7 @@ import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
+import { judgeFailure, type SendStatus } from './send-intent';
 
 /**
  * One Buyer-Seller conversation (WO-013; ADU-CHAT-01 v3.3 S7-S10, ADU-CHATBOT-01 v3.3 S18-S19,
@@ -40,7 +42,10 @@ import { keepIfCurrent, usePrivateApi } from './saved';
  * - Plain text up to 4,000 characters. A message is shown as sent only once the server accepted it:
  *   while sending the draft stays in the box with "Sending your message"; a failure keeps it there
  *   and says it was not sent (connected-only: no queue). One idempotency key per draft, kept across a
- *   lost connection, so a retry never sends twice; a ref blocks a double tap.
+ *   lost connection, so a retry never sends twice; a ref blocks a double tap. The key is sent again
+ *   only while it is surely inside the server's 24 hour record (23 hours from the first attempt) and
+ *   after no key conflict; beyond that the screen offers only an explicit new message. A wait the
+ *   server or a gateway asked for (429, 503) holds sending and Ask the Seller until it is over.
  * - "Ask the Seller" after an automated answer, with no promise of a response time.
  * - Re-read on opening, on Refresh, and every 30 seconds while this screen is focused and the app is
  *   in the foreground. No presence, typing or delivery receipts.
@@ -53,7 +58,7 @@ import { keepIfCurrent, usePrivateApi } from './saved';
  *   and clears it after the server accepts. The Buyer can remove it; follow-ups carry no anchor.
  * - Select Product (WO-015; S5): the Buyer can choose a Product of this conversation's Seller from
  *   inside the conversation. The Seller is known only by the handle in the Buyer's own conversation
- *   list (no Seller id is published, ON-20261111-162), found within the first MAX_LIST_PAGES pages;
+ *   list (the list parser keeps the handle, not the Seller id), found within the first MAX_LIST_PAGES pages;
  *   if it cannot be found there, Product selection is off and plain messages still work. A chosen
  *   Product becomes the same context as one from Product Detail: read, checked and sent the same way.
  */
@@ -67,22 +72,48 @@ export const MAX_LIST_PAGES = 4;
 const HISTORY_MIN = 120;
 const COMPOSER_MAX = '60%';
 
+/**
+ * The screen belongs to the session it opened in. This gate holds no data and runs no query: while
+ * that session is the signed-in one it shows the conversation, and once it is not (signed out, ended,
+ * or another Account) it shows a redirect and the conversation below is unmounted, so a thread kept in
+ * the navigation stack asks for nothing under the new credential and its draft, unconfirmed send and
+ * Product context are discarded with it. Nothing depends on the server refusing the old conversation.
+ */
 export function ConversationScreen({ conversationRef, product = null }: { conversationRef: unknown; product?: ProductRef | null }) {
+  const { session } = useSession();
+  const current = session.status === 'signedIn' ? session.token : null;
+  const owner = useRef(current);
+  if (current === null || current !== owner.current) return <Redirect href="/messages" />;
+  return <OwnedConversation conversationRef={conversationRef} product={product} />;
+}
+
+function OwnedConversation({ conversationRef, product }: { conversationRef: unknown; product: ProductRef | null }) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
   const qc = useQueryClient();
   const focused = useIsFocused();
-  const { session } = useSession();
   const api = usePrivateApi();
-  const current = session.status === 'signedIn' ? session.token : null;
-  const owner = useRef(current);
   const ref = isConversationRef(conversationRef) ? conversationRef : null;
   const messages = useConversationMessages(ref, focused);
   const conversations = useConversations();
   const [draft, setDraft] = useState('');
-  // failed: the server refused it; unknown: no answer (it may have been stored).
-  const [state, setState] = useState<'idle' | 'sending' | 'failed' | 'unknown'>('idle');
+  // failed: the server refused it; unknown: no answer (it may have been stored); sent: accepted.
+  const [state, setState] = useState<SendStatus>('unsent');
+  // Unknown, and the same key can no longer be sent again (a key conflict, or older than its safe age).
+  const [keyLost, setKeyLost] = useState(false);
+  // A wait the server or an intermediary asked for: sending and Ask the Seller stay off until it ends.
+  const [hold, setHold] = useState<{ until: number; text: string } | null>(null);
+  // A later wait never shortens an earlier one (Send and Ask the Seller can both be in flight).
+  const holdFor = (ms: number, text: string) =>
+    setHold((current) => {
+      const until = Date.now() + ms;
+      return current !== null && current.until >= until ? current : { until, text };
+    });
+  // The answer whose escalation is confirmed, or may be stored and could not be settled from the
+  // conversation: Ask the Seller is not offered again for it in this view (the server does not
+  // de-duplicate escalations; reopening the conversation reads the server's state afresh).
+  const [passedOn, setPassedOn] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ON-20261111-168 (WO-016): one NOT_FOUND covers the conversation and the Product; name neither.
   const [notFound, setNotFound] = useState<'anchored' | 'plain' | null>(null);
@@ -91,7 +122,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   const sending = useRef(false);
   const askingRef = useRef(false);
   // The idempotency intent is the WHOLE payload: text and Product (or none).
-  const sendIntent = useRef<{ text: string; productId: string | null; key: string } | null>(null);
+  const sendIntent = useRef<{ text: string; productId: string | null; key: string; startedAt: number } | null>(null);
   // The next message's Product (lookup keys of a public read), and a refusal from the last check.
   const [context, setContext] = useState<ProductRef | null>(product);
   const [refusal, setRefusal] = useState<'gone' | 'mismatch' | 'unchecked' | null>(null);
@@ -113,18 +144,29 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     gcTime: 0,
     retry: (failures, e) => isTransient(e) && failures < 2,
   });
-  const askIntent = useRef<{ forMessage: string; key: string } | null>(null);
+  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number } | null>(null);
 
-  // The alert role alone is not spoken on Android: announce what happened to the message.
+  // The alert role alone is not spoken on Android: announce what happened to the message. The effect
+  // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
+  // withdrawn at a press (the state does not change then).
+  const announcement =
+    state === 'sending'
+      ? t('buyer.chat.sending')
+      : state === 'unknown'
+        ? t('buyer.chat.maybe_not_sent')
+        : state === 'failed'
+          ? t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent')
+          : null;
   useEffect(() => {
-    if (state === 'sending') AccessibilityInfo.announceForAccessibility(t('buyer.chat.sending'));
-    if (state === 'unknown') AccessibilityInfo.announceForAccessibility(t('buyer.chat.maybe_not_sent'));
-    if (state === 'failed') {
-      AccessibilityInfo.announceForAccessibility(
-        t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent'),
-      );
-    }
-  }, [state, notFound, t]);
+    if (announcement !== null) AccessibilityInfo.announceForAccessibility(announcement);
+  }, [announcement, keyLost]);
+  useEffect(() => {
+    if (hold === null) return;
+    AccessibilityInfo.announceForAccessibility(hold.text);
+    // One timer, no countdown: the controls come back when the wait that was asked for is over.
+    const timer = setTimeout(() => setHold(null), Math.max(hold.until - Date.now(), 0));
+    return () => clearTimeout(timer);
+  }, [hold]);
   const listed = conversations.items.some((c) => c.id === conversationRef);
   const { hasNextPage, isFetching, isError: listFailed, fetchNextPage } = conversations;
   const pagesRead = conversations.data?.pages.length ?? 0;
@@ -135,8 +177,6 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   useEffect(() => {
     if (canWalk && !isFetching) void fetchNextPage();
   }, [canWalk, isFetching, pagesRead, fetchNextPage]);
-
-  if (current === null || current !== owner.current) return <Redirect href="/messages" />;
 
   const conversation = conversations.items.find((c) => c.id === ref);
   const title = conversation?.storeName ?? t('buyer.chat.title');
@@ -189,11 +229,15 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
                   : 'ok';
   // While the outcome of a send is unknown the payload is frozen: a retry must replay the same text,
   // Product and key. "Edit the message instead" gives up that intent explicitly.
-  const frozen = state === 'unknown' && sendIntent.current !== null;
+  const unconfirmed = sendIntent.current;
+  const frozen = state === 'unknown' && unconfirmed !== null;
+  // The same message again, under the same key, only while the server can still tell it from a new one.
+  const replayable = frozen && !keyLost && keyUsable(unconfirmed, Date.now());
   const abandon = () => {
     if (sending.current) return;
     sendIntent.current = null;
-    setState('idle');
+    setKeyLost(false);
+    setState('unsent');
     setError(null);
     setNotFound(null);
   };
@@ -216,10 +260,16 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
     seller === 'resolved' && conversation !== undefined && isPathName(conversation.handle) && state !== 'sending' && !frozen;
 
   const send = async () => {
-    if (!api || sending.current || text.length === 0 || tooLong) return;
+    if (!api || sending.current || hold !== null || text.length === 0 || tooLong) return;
     if (context !== null && contextStatus !== 'ok') return;
-    // A refused check sends nothing: an unconfirmed earlier send stays unconfirmed, anything else is idle.
-    const previous = state === 'unknown' ? 'unknown' : 'idle';
+    // A refused check sends nothing: an unconfirmed earlier send stays unconfirmed, anything else is unsent.
+    const previous = state === 'unknown' ? 'unknown' : 'unsent';
+    if (previous === 'unknown' && sendIntent.current !== null && (keyLost || !keyUsable(sendIntent.current, Date.now()))) {
+      // Too old to replay without risking a second message: send nothing, look at what the server holds.
+      setKeyLost(true);
+      void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+      return;
+    }
     sending.current = true;
     setState('sending');
     setError(null);
@@ -252,10 +302,11 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       // One key per payload: a retry of the same text and Product replays, never re-sends; a changed
       // text or Product is a new intent.
       if (sendIntent.current?.text !== text || sendIntent.current.productId !== productId) {
-        sendIntent.current = { text, productId, key: newIdempotencyKey() };
+        sendIntent.current = { text, productId, key: newIdempotencyKey(), startedAt: Date.now() };
+        setKeyLost(false);
       }
       const body = await api.sendMessage(ref, text, sendIntent.current.key, productId);
-      // An acceptance without a readable message id may still have stored it: unknown (WO-022).
+      // An acceptance without a readable message id may still have stored it: unknown.
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
       if (!api.isCurrent()) return;
@@ -263,18 +314,24 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       // The Product described this message only: the next one starts without it.
       setContext(null);
       setRefusal(null);
-      setState('idle');
+      setKeyLost(false);
+      setState('sent');
       await Promise.all([
         qc.invalidateQueries({ queryKey: [MESSAGES, ref] }),
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
     } catch (failure) {
-      // The API's own refusal ends this intent; anything else (offline, a timeout, a gateway answer
-      // without the API's problem, an unreadable acceptance) keeps the key for the retry, which
-      // replays if the message was stored. The outcome is then unknown: say so, and re-read (WO-022).
-      const answered = sendOutcome(failure) === 'refused';
+      // The API's own 4xx rejection ends this intent; anything else (offline, a timeout, a gateway
+      // answer, any 5xx, a rate limit, an unreadable acceptance, a key conflict) keeps the key, which
+      // replays if the message was stored and the key is still safe. The outcome is then unknown: say
+      // so, and re-read. A wait that was asked for holds the next attempt.
+      const verdict = judgeFailure(failure, sendIntent.current, Date.now());
+      const answered = verdict.outcome === 'failed';
       if (answered) sendIntent.current = null;
       if (!api.isCurrent()) return;
+      setKeyLost(!answered && !verdict.replay);
+      const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
+      if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
       if (problemCode(failure) === 'NOT_FOUND') {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
         // each decides that (a 404 there shows "no longer available" / "not available").
@@ -283,30 +340,58 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
         if (context !== null) void contextRead.refetch();
         void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
       } else {
-        setError(failureMessage(t, failure));
+        // While held, the wait sentence says it: not the same sentence twice.
+        setError(wait !== null ? null : failureMessage(t, failure));
       }
       setState(answered ? 'failed' : 'unknown');
-      if (rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+      if (verdict.outcome === 'unknown' || rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } finally {
       sending.current = false;
     }
   };
 
   const answer = escalatableAnswer(messages.items);
-  const canAsk = answer !== null;
+  const canAsk = answer !== null && answer.id !== passedOn;
+  // Read the conversation again; true when that read succeeded (the history is then the truth).
+  const readHistory = async () => {
+    await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+    return qc.getQueryState([MESSAGES, ref])?.error === null;
+  };
   const ask = async () => {
-    if (!api || !answer || askingRef.current) return;
+    if (!api || !answer || askingRef.current || hold !== null) return;
     askingRef.current = true;
-    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey() };
+    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now() };
     setAsking(true);
     setAskFailed(false);
     try {
-      await api.escalateConversation(ref, askIntent.current.key);
+      if (!keyUsable(askIntent.current, Date.now())) {
+        // Too old to replay: drop it and let the conversation say whether the question was passed on.
+        // If it cannot be read, a new key could escalate twice: not offered again in this view.
+        askIntent.current = null;
+        if (api.isCurrent() && !(await readHistory())) setPassedOn(answer.id);
+        return;
+      }
+      // Only the server's own confirmation counts; a 200 that does not say it is unconfirmed.
+      if (!acceptedEscalation(await api.escalateConversation(ref, askIntent.current.key))) throw new ApiError({ kind: 'unexpected', status: 200 });
       askIntent.current = null;
+      // Confirmed: remembered here, so a failed re-read cannot bring the control back for a second tap.
+      setPassedOn(answer.id);
       if (api.isCurrent()) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } catch (failure) {
-      if (wasAnswered(failure)) askIntent.current = null;
-      if (api.isCurrent()) setAskFailed(true);
+      // Same rule as a message: the key is kept after an unconfirmed attempt, and ended by the API's
+      // own 4xx rejection or when it can no longer be replayed. The conversation is read again either way.
+      const verdict = judgeFailure(failure, askIntent.current, Date.now());
+      if (verdict.outcome === 'failed' || !verdict.replay) askIntent.current = null;
+      if (api.isCurrent()) {
+        const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
+        if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
+        setAskFailed(true);
+        if (verdict.outcome === 'unknown' || rereadAfter(failure)) {
+          const read = await readHistory();
+          // Unconfirmed, the key cannot be replayed and the history cannot be read: not offered again here.
+          if (!read && verdict.outcome === 'unknown' && !verdict.replay) setPassedOn(answer.id);
+        }
+      }
     } finally {
       askingRef.current = false;
       setAsking(false);
@@ -365,7 +450,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
         {canAsk ? (
           <View style={{ gap: theme.space.xs }}>
             <AppText style={secondary}>{t('buyer.chat.ask_seller_hint')}</AppText>
-            <Button label={t('buyer.chat.ask_seller')} variant="secondary" onPress={() => void ask()} disabled={asking} />
+            <Button label={t('buyer.chat.ask_seller')} variant="secondary" onPress={() => void ask()} disabled={asking || hold !== null} />
             {askFailed ? <AlertText>{t('buyer.chat.ask_failed')}</AlertText> : null}
           </View>
         ) : null}
@@ -405,7 +490,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
           value={draft}
           onChangeText={(value) => {
             setDraft(value);
-            if (state === 'failed') setState('idle');
+            if (state === 'failed' || state === 'sent') setState('unsent');
           }}
           multiline
           editable={state !== 'sending' && !frozen}
@@ -422,15 +507,22 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
             {error ? <AppText style={secondary}>{error}</AppText> : null}
           </View>
         ) : null}
+        {hold !== null ? (
+          <View accessibilityRole="alert">
+            <AppText>{hold.text}</AppText>
+          </View>
+        ) : null}
         <AppText style={secondary}>{t('buyer.chat.connected_only')}</AppText>
       </ScrollView>
       <View style={{ paddingHorizontal: theme.space.lg, paddingBottom: theme.space.lg, paddingTop: theme.space.xs, gap: theme.space.sm }}>
-        {/* Unconfirmed: the same message again (same text, Product and key), never a new one. */}
-        <Button
-          label={t(frozen ? 'buyer.chat.retry_send' : 'buyer.chat.send')}
-          onPress={() => void send()}
-          disabled={state === 'sending' || text.length === 0 || tooLong || (context !== null && contextStatus !== 'ok')}
-        />
+        {/* Unconfirmed: the same message again (same text, Product and key), never a new one; withdrawn when the key can no longer be replayed. */}
+        {frozen && !replayable ? null : (
+          <Button
+            label={t(frozen ? 'buyer.chat.retry_send' : 'buyer.chat.send')}
+            onPress={() => void send()}
+            disabled={state === 'sending' || hold !== null || text.length === 0 || tooLong || (context !== null && contextStatus !== 'ok')}
+          />
+        )}
         {frozen ? <Button label={t('buyer.chat.edit_unconfirmed')} variant="secondary" onPress={abandon} /> : null}
       </View>
       </View>
