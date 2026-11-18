@@ -9,7 +9,7 @@ Windows only: the process lookups use PowerShell (`Get-CimInstance`, `Get-NetTCP
 paths follow Windows rules. The refusal tests (`selftest`) run anywhere and need no Docker.
 
 ```
-export ADULIS_NATIVE_ROOT=<absolute dir>       # manifests, logs; keep it outside any git work tree
+export ADULIS_NATIVE_ROOT=<absolute dir>       # an EXISTING directory for manifests and logs, outside any git work tree
 node ops/native/harness.mjs plan --checkout <path>             # prints the docker arguments, runs nothing
 node ops/native/harness.mjs preflight                          # memory, disk, docker, leftovers
 node ops/native/harness.mjs up --checkout <path> --sha <40-hex>

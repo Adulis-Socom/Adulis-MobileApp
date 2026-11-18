@@ -53,6 +53,11 @@ Hidden system packages:
     parsePackage(dump.replace('HAS_CODE ALLOW', 'DEBUGGABLE HAS_CODE ALLOW')).debuggable,
     true,
   );
+  // the app's own block names no flags at all: the next package's flags are not borrowed
+  assert.equal(
+    parsePackage(dump.replace('    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]\n', '')).debuggable,
+    false,
+  );
   assert.deepEqual(parsePackage('Packages:\n'), { installed: false });
   assert.equal(
     parsePackage(dump.replace('[com.adulis.app]', '[com.adulis.app.other]')).installed,

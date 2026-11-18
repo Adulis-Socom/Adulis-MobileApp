@@ -49,7 +49,7 @@ and the API of its own for each run, on loopback ports it picks, with random cre
 only what it created. See `ops/native/README.md`. In short, from the repository root:
 
 ```
-export ADULIS_NATIVE_ROOT=<absolute dir outside any git work tree>
+export ADULIS_NATIVE_ROOT=<an existing absolute dir outside any git work tree>
 node ops/native/harness.mjs up --checkout . --sha <the commit you verified>
 node ops/native/harness.mjs fixtures --run <run> --set baseline
 node ops/native/harness.mjs api start --run <run> --checkout . --sha <sha>

@@ -421,4 +421,8 @@ test('a device refusal prints its label, not "undefined"', async () => {
     EXIT.REFUSED,
   );
   assert.match(r.last(), /^HARNESS REFUSED - ID-11 device - NO RESOURCE WAS CHANGED$/);
+  assert.ok(
+    r.lines.some((l) => /^refused device: ID-11 device FAIL \(/.test(l)),
+    'the refusal message names its check as well',
+  );
 });

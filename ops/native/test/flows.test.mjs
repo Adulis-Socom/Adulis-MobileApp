@@ -28,6 +28,11 @@ const scan = (body, head) => scanFlow(flow(body, head));
 
 test('comments are not code, and every hazard has its own spelling', () => {
   assert.deepEqual(scan('# clearState: true\n# - runScript: x\n- tapOn: Home').hazards, []);
+  assert.deepEqual(
+    scan('# needs ${PHONE}\n- tapOn: Home').vars,
+    [],
+    'a variable named in a comment is not needed',
+  );
   assert.deepEqual(scan('- launchApp:\n    clearState: true').hazards, ['clearState']);
   assert.deepEqual(scan('- launchApp:\n    clearState: false').hazards, []);
   assert.deepEqual(scan('- clearState').hazards, ['clearState']);
@@ -141,11 +146,7 @@ test('a hazard on the never list is refused even when it is declared', () => {
       'b',
       dir,
     ).problems.join();
-    assert.match(
-      p,
-      new RegExp(`'${hazard}'.*no declaration can approve|declares '${hazard}'`),
-      body,
-    );
+    assert.match(p, new RegExp(`uses '${hazard}', which no declaration can approve`), body);
   }
 });
 

@@ -58,6 +58,12 @@ test("the API address is this run's API on the loopback and nothing else", () =>
     ['no port', 'http://localhost', /not this run's/],
     ['a path', `http://localhost:${m.ports.api}/v1`, /path, query or fragment/],
     ['a query', `http://localhost:${m.ports.api}/?x=1`, /path, query or fragment/],
+    ['https to the loopback', `https://localhost:${m.ports.api}`, /uses https/],
+    [
+      'credentials on the loopback',
+      `http://user:pw@localhost:${m.ports.api}`,
+      /carries credentials/,
+    ],
     ['a non-URL', 'not a url', /not a URL/],
     ['an empty string', '', /not a URL/],
     ['an IPv6 host', `http://[::1]:${m.ports.api}`, /API host is/],

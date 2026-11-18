@@ -571,6 +571,31 @@ test('an interruption during a flow stops Maestro, starts no further flow, resto
   assert.ok(!existsSync(join(x.dir, 'native.lock')));
 });
 
+test('the prepared device is checked again: a foreign reverse entry that appears after preparation stops the session before any flow', async () => {
+  const x = nw();
+  const inner = x.io.adb;
+  x.io.adb = async (a) => {
+    const r = await inner(a);
+    if (a.join(' ').includes('input keyevent 224'))
+      x.dev.st.reverse.push({ remote: 'tcp:57999', local: 'tcp:57999' });
+    return r;
+  };
+  const r = await go(x);
+  assert.equal(r.code, 3);
+  assert.match(
+    r.status,
+    /^HARNESS INCOMPLETE - the prepared device no longer passes: HARNESS REFUSED - NC-05 /,
+  );
+  assert.equal(x.maestro.calls.length, 0);
+  assert.deepEqual(
+    x.dev.st.reverse,
+    [{ remote: 'tcp:57999', local: 'tcp:57999' }],
+    "only the foreign entry is left: this run's own entries were restored",
+  );
+  assert.equal(x.dev.st.settings['global/stay_on_while_plugged_in'], '0');
+  assert.deepEqual(journalProblems(x.dir), []);
+});
+
 test('a cancellation before the first flow still restores what was prepared', async () => {
   const ac = new AbortController();
   const x = nw();
