@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +12,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { formatPriceSpan, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
-import { mediaUrl } from './for-you-feed';
+import { mediaUrl, withdrawScene } from './for-you-feed';
 import { isPublicRef, usePublicRead } from './public-read';
 import { ReadStates } from './ReadStates';
 import { SaveButton } from './SaveButton';
@@ -45,6 +45,13 @@ export function SceneExplorer({ scenePostRef }: { scenePostRef: unknown }) {
     ['scene', valid ? scenePostRef : ''],
     valid ? () => api.scene(scenePostRef) : null,
   );
+
+  // The server's 404 is the authoritative "no longer public": a For You card for this Scene
+  // must not outlive it. Any other failure says nothing about the Scene.
+  const { gone } = read;
+  useEffect(() => {
+    if (gone && isPublicRef(scenePostRef)) withdrawScene(scenePostRef);
+  }, [gone, scenePostRef]);
 
   // By slug, and held here rather than in the content: it survives the content being
   // withheld or failing and coming back, goes if its Product does, and follows a reorder.
