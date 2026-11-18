@@ -171,6 +171,7 @@ function SceneContent({
                 handle={scene.seller.handle}
                 sceneRef={scene.public_ref}
                 mediaOrigin={mediaOrigin}
+                attempt={receivedAt}
                 selected={product.slug === selected}
                 onSelect={() => onSelect(product.slug)}
               />
@@ -252,6 +253,7 @@ function ProductRow({
   handle,
   sceneRef,
   mediaOrigin,
+  attempt,
   selected,
   onSelect,
 }: {
@@ -261,6 +263,8 @@ function ProductRow({
   /** Passed to the Product as `from`: Save provenance the server verifies (WO-009 S11). */
   sceneRef: string;
   mediaOrigin: string | undefined;
+  /** When the shown answer arrived: a new answer lets a failed preview photo try again. */
+  attempt: number;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -268,6 +272,8 @@ function ProductRow({
   const theme = useTheme();
   const locale = useLocale();
   const router = useRouter();
+  // As the Scene photo: a failure holds for this URL and this answer only.
+  const [failed, setFailed] = useState<{ uri: string; attempt: number } | null>(null);
   const price = formatPriceSpan(locale, t, {
     min: product.price_min_minor,
     max: product.price_max_minor,
@@ -360,19 +366,39 @@ function ProductRow({
             borderTopColor: theme.color.border,
           }}
         >
-          {uri ? (
+          {uri === null ? null : failed?.uri === uri && failed.attempt === attempt ? (
+            // The photo's slot, and it grows with the text: never words clipped inside a fixed square.
+            <View
+              testID="scene-product-photo-unavailable"
+              style={{
+                minWidth: PREVIEW_SIZE,
+                minHeight: PREVIEW_SIZE,
+                padding: theme.space.sm,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.color.surfaceMuted,
+                borderRadius: theme.radius.md,
+              }}
+            >
+              <AppText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
+                {t('buyer.scene.photo_unavailable')}
+              </AppText>
+            </View>
+          ) : (
             <Image
               source={{ uri }}
               contentFit="contain"
               cachePolicy="disk"
+              onError={() => setFailed({ uri, attempt })}
               style={{
                 width: PREVIEW_SIZE,
                 height: PREVIEW_SIZE,
                 backgroundColor: theme.color.surfaceMuted,
                 borderRadius: theme.radius.md,
               }}
+              testID="scene-product-photo"
             />
-          ) : null}
+          )}
           <View style={{ flexGrow: 1 }}>
             <Button
               label={t('buyer.product.view')}
