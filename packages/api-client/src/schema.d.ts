@@ -2982,8 +2982,10 @@ export interface components {
         ProblemItemDto: {
             code: string;
             message_key: string;
-            /** @description What the caller can do to clear this item. */
-            resolving_action?: components["schemas"]["ProblemResolvingActionDto"];
+            /** @description What the caller can do to clear this item; further members depend on the kind. */
+            resolving_action?: {
+                [key: string]: unknown;
+            } & components["schemas"]["ProblemResolvingActionDto"];
             slots?: {
                 [key: string]: unknown;
             };

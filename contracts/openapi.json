@@ -12155,7 +12155,8 @@
             ]
           },
           "resolving_action": {
-            "description": "What the caller can do to clear this item.",
+            "additionalProperties": true,
+            "description": "What the caller can do to clear this item; further members depend on the kind.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ProblemResolvingActionDto"

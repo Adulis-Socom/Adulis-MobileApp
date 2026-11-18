@@ -274,6 +274,9 @@ describe('what the generator pins or derives from other declarations', () => {
     // swagger wraps a described $ref in allOf.
     expect(schemas['ProblemItemDto']?.properties?.['subject']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemSubjectDto');
     expect(schemas['ProblemItemDto']?.properties?.['resolving_action']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemResolvingActionDto');
+    // resolving_action is open: some kinds carry further members (REDUCE_QUANTITY carries `to`), with `kind` required.
+    expect(schemas['ProblemItemDto']?.properties?.['resolving_action']?.additionalProperties).toBe(true);
+    expect(schemas['ProblemItemDto']?.properties?.['subject']?.additionalProperties).toBeUndefined();
   });
 });
 

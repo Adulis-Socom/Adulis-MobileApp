@@ -13,7 +13,10 @@ export class ProblemSubjectDto {
   @ApiProperty() id!: string;
 }
 
-/** What the caller can do to clear a problem item (ErrorItem.resolving_action); other members may accompany `kind`. */
+/**
+ * What the caller can do to clear a problem item (ErrorItem.resolving_action). `kind` is always present; other members
+ * accompany some kinds (REDUCE_QUANTITY carries `to`), so the property that holds it is declared open.
+ */
 export class ProblemResolvingActionDto {
   @ApiProperty() kind!: string;
 }
@@ -26,8 +29,12 @@ export class ProblemItemDto {
   // inline object would declare its own members optional.
   @ApiPropertyOptional({ type: ProblemSubjectDto, description: 'The object this item is about.' })
   subject?: ProblemSubjectDto;
-  @ApiPropertyOptional({ type: ProblemResolvingActionDto, description: 'What the caller can do to clear this item.' })
-  resolving_action?: ProblemResolvingActionDto;
+  @ApiPropertyOptional({
+    type: ProblemResolvingActionDto,
+    additionalProperties: true,
+    description: 'What the caller can do to clear this item; further members depend on the kind.',
+  })
+  resolving_action?: ProblemResolvingActionDto & Record<string, unknown>;
 }
 
 export class ProblemDto {
