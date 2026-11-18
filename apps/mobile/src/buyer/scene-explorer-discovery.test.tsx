@@ -7,6 +7,7 @@ import appConfig from '../../app.json';
 import { useUiStore } from '../state/ui-store';
 import { claimsIn, elementsUnder, overlaysIn, renderedText } from '../testing/discovery-rules';
 import {
+  bootstrapBody,
   fypPage,
   fypUnit,
   installFakeApi,
@@ -303,5 +304,84 @@ describe('what the Explorer will not draw or say', () => {
     for (const action of ['Like', 'Hide', 'Share', 'Follow', 'Add to cart', 'Buy now', 'Checkout', 'Order']) {
       expect(screen.queryByRole('button', { name: action })).not.toBeOnTheScreen();
     }
+  });
+});
+
+/**
+ * The selected Product's preview photo, beside View Product: it shows that Product's own photo, or,
+ * when the photo fails, says so in the same place and never suggests it loaded. Like the Scene photo
+ * above it, a failure holds for that photo and that answer only.
+ */
+describe('the selected Product\'s preview photo', () => {
+  const ORIGIN = 'https://media.example.test';
+  const photoOf = (slug: string) => `${ORIGIN}/products/${slug}/card.webp`;
+  const openWithPhotos = async () => {
+    api.on('GET /v1/bootstrap', () => ok(bootstrapBody({ media_public_origin: ORIGIN })));
+    serve(SCENE, ok(threeProducts));
+    await openCold();
+    await screen.findByText(CAPTION);
+  };
+  const preview = () => screen.getByTestId('scene-product-photo');
+  const failPreview = () => fireEvent(preview(), 'error', { nativeEvent: { error: 'network' } });
+  const notes = () => screen.queryAllByTestId('scene-product-photo-unavailable');
+
+  it('shows the selected Product\'s own photo, and nothing about a failure while it loads', async () => {
+    await openWithPhotos();
+    await fireEvent.press(row('Woven basket'));
+    expect(preview().props.source).toMatchObject([{ uri: photoOf('woven-basket') }]);
+    expect(notes()).toHaveLength(0);
+    expect(screen.queryByText(en['buyer.scene.photo_unavailable'])).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['buyer.product.view'] })).toBeEnabled();
+  });
+
+  it('a photo that fails is replaced by a note in its place, the Product stays selected, and View Product is still there', async () => {
+    await openWithPhotos();
+    await fireEvent.press(row('Woven basket'));
+    await failPreview();
+    expect(screen.queryByTestId('scene-product-photo')).not.toBeOnTheScreen();
+    expect(notes()).toHaveLength(1);
+    expect(screen.getAllByText(en['buyer.scene.photo_unavailable'])).toHaveLength(1);
+    expect(row('Woven basket')).toBeChecked();
+    expect(screen.getByRole('button', { name: en['buyer.product.view'] })).toBeEnabled();
+  });
+
+  it('tells a screen reader the photo is unavailable, and leaves no image in the tree that did not load', async () => {
+    await openWithPhotos();
+    await fireEvent.press(row('Woven basket'));
+    await failPreview();
+    const text = screen.getByText(en['buyer.scene.photo_unavailable']);
+    expect(text).toBeVisible();
+    expect(text.props.children).toBe('Photo unavailable');
+    expect(screen.queryByTestId('scene-product-photo')).toBeNull();
+    // Nothing in the Product's row or the preview names a photo that is not there.
+    expect(screen.queryByLabelText(/photo of|photo 1 of/i)).toBeNull();
+  });
+
+  it('choosing another Product after a failure shows that Product\'s own photo; the one that failed still says unavailable', async () => {
+    await openWithPhotos();
+    await fireEvent.press(row('Woven basket'));
+    await failPreview();
+
+    await fireEvent.press(row('Clay jebena'));
+    expect(preview().props.source).toMatchObject([{ uri: photoOf('clay-jebena') }]);
+    expect(notes()).toHaveLength(0);
+
+    await fireEvent.press(row('Woven basket'));
+    expect(screen.queryByTestId('scene-product-photo')).not.toBeOnTheScreen();
+    expect(notes()).toHaveLength(1);
+  });
+
+  it('a new answer tries a photo that failed again', async () => {
+    await openWithPhotos();
+    await fireEvent.press(row('Woven basket'));
+    await failPreview();
+    expect(notes()).toHaveLength(1);
+
+    await settle();
+    await pull();
+    await settle();
+    expect(preview().props.source).toMatchObject([{ uri: photoOf('woven-basket') }]);
+    expect(notes()).toHaveLength(0);
+    expect(calls(SCENE)).toHaveLength(2);
   });
 });
