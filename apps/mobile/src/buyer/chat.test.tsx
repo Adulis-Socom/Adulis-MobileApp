@@ -2040,11 +2040,24 @@ describe('Message send reconciliation', () => {
       expect(escalations(chat)).toHaveLength(1);
     });
 
-    it('a 200 that does not confirm the escalation is not taken as done; the stored escalation then shows from the conversation', async () => {
+    it('a 200 that does not confirm the escalation is not taken as done: it is unconfirmed, and the same key is used again', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: { status: 200, body: {} } }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(escalations(chat)).toHaveLength(0);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(keys(escalateCalls())[1]).toBe(keys(escalateCalls())[0]);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a 200 that does not confirm the escalation, after the server stored it: the conversation shows the escalation and Ask the Seller is gone', async () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ lose: { status: 200, body: {} } }]);
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
       expect(escalateCalls()).toHaveLength(1);
       expect(escalations(chat)).toHaveLength(1);
     });
