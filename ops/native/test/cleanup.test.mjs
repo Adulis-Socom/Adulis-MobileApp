@@ -316,3 +316,45 @@ test('a compose-labelled object is never removed', async () => {
   assert.ok(r.plan.problems.some((p) => /compose labels/.test(p)));
   nothingRemoved(w);
 });
+
+test('ownership is re-proven immediately before a volume or a network is removed', async () => {
+  const w = world();
+  const io = makeIo(w);
+  const plan = await planDown(w.m, io);
+  const later = plan.steps.filter((s) => s.kind !== 'container');
+  // Between the plan and the removal the containers are gone and the volume and network lose the run's label.
+  w.d.containers = {};
+  w.d.networks[w.m.network.id].Containers = {};
+  delete w.d.volumes[w.m.names.pgVolume].Labels[LABEL.run];
+  w.d.networks[w.m.network.id].Labels = {};
+  const r = await executeDown(w.m, later, io);
+  assert.ok(
+    r.left.some((l) => l.startsWith(`volume ${w.m.names.pgVolume}`)),
+    r.left.join(' | '),
+  );
+  assert.ok(
+    r.left.some((l) => l.startsWith('network')),
+    r.left.join(' | '),
+  );
+  assert.ok(!w.d.mutations.includes(`volume rm ${w.m.names.pgVolume}`));
+  assert.ok(!w.d.mutations.some((x) => x.startsWith('network rm')));
+  assert.deepEqual(
+    r.removed.map((s) => s.name),
+    [w.m.names.minioVolume],
+    'only the volume that still proves ownership',
+  );
+});
+
+test('a network that gained an attached container after the plan is not removed', async () => {
+  const w = world();
+  const io = makeIo(w);
+  const plan = await planDown(w.m, io);
+  w.d.containers = {};
+  w.d.networks[w.m.network.id].Containers = { [id64()]: {} };
+  const r = await executeDown(
+    w.m,
+    plan.steps.filter((s) => s.kind === 'network'),
+    io,
+  );
+  assert.ok(r.left.length === 1 && !w.d.mutations.some((x) => x.startsWith('network rm')));
+});
