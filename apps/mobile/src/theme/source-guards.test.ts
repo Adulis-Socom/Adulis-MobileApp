@@ -69,6 +69,7 @@ const FIXED_HEIGHTS = [
   ['buyer/ProductPicker.tsx', 'minHeight: 64', 'a minimum, grows with the name and availability'],
   ['buyer/SceneCard.tsx', 'height: theme.touchTarget', 'seller avatar: a fixed circle holding at most two initials'],
   ['buyer/SceneExplorer.tsx', 'height: PREVIEW_SIZE', 'product preview (image)'],
+  ['buyer/SceneExplorer.tsx', 'minHeight: PREVIEW_SIZE', 'the note for a preview photo that failed: a minimum, grows with the text'],
   ['buyer/SceneExplorer.tsx', 'minHeight: 28', 'a minimum for the number badge, grows'],
   ['buyer/SearchResults.tsx', 'height: theme.touchTarget * 1.25', 'result thumbnail (image)'],
   ['components/Checkbox.tsx', 'height: box', 'the box itself, holding one tick'],
