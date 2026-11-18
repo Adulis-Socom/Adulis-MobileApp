@@ -12,8 +12,9 @@ import { keepIfCurrent } from './saved';
  * Buyer messaging (WO-013): the supported subset of the existing Chat API (ADU-CHAT-01 v3.3 is
  * not built in full; docs/mobile/WO-013-CHAT-CONTRACT-GAPS.md). Server state only, bound to the
  * session on screen (a late answer for an earlier session is refused) and cleared with the whole
- * cache by clearSession. The API publishes no schemas, so every answer is checked here; a row that
- * is not one (or whose sender cannot be attributed) is not shown.
+ * cache by clearSession. Every answer is checked here, whatever the contract's types say (they describe
+ * the server, not what arrived); a row that is not one (or whose sender cannot be attributed) is not
+ * shown.
  */
 
 export const MESSAGE_MAX = 4000; // the server's limit (chat.controller: text max 4000)
@@ -120,15 +121,21 @@ export function acceptedMessage(body: unknown): boolean {
   return isConversationRef((body as { message_id?: unknown } | null)?.message_id);
 }
 
+/** POST .../escalate's answer: `{ escalated: true, bot_message_id }`. Anything else is not a confirmed escalation. */
+export function acceptedEscalation(body: unknown): boolean {
+  const b = body as { escalated?: unknown; bot_message_id?: unknown } | null;
+  return b?.escalated === true && isConversationRef(b.bot_message_id);
+}
+
 /**
  * What a message send that did not return an accepted message proves (WO-022; review S21-03), for
  * the Buyer's messages and a store's replies alike:
  *
  * - `refused`: the API answered with its own problem: the contract's envelope (ProblemDto's required
  *   `title_key`, `request_id`, `retryable`, and a `status` equal to the HTTP status), any status. A
- *   gateway's `{ code }` alone is not one (review S22-01). The outcome is
- *   known: the message was not stored, or the server keeps that refusal against the key, which a
- *   replay would only repeat. The intent ends; the next attempt gets a new key.
+ *   gateway's `{ code }` alone is not one. A refusal leaves no idempotency record. The Buyer's
+ *   screen refines this (send-intent.ts): only a 4xx other than a conflict or a rate limit proves the
+ *   message was not stored; a 5xx, a conflict, a rate limit and an old key leave it unknown.
  * - `unknown`: anything else. That covers a lost connection, a timeout, a gateway's answer without
  *   the API's problem body (a 502/503/504 page, an empty body), and a 201 whose body cannot be read
  *   or names no message (thrown as `unexpected 201` by the caller). The message may have been

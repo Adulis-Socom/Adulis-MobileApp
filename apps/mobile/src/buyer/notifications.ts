@@ -64,7 +64,7 @@ function parseRow(row: unknown): BuyerNotification | null {
   };
 }
 
-/** The page's shape is checked here (no published schema); a malformed row is dropped. */
+/** The page's shape is checked here, whatever the contract's type says; a malformed row is dropped. */
 export function parseNotificationPage(body: unknown): NotificationPage {
   const b = body as { data?: unknown; next_cursor?: unknown } | null;
   if (!b || !Array.isArray(b.data) || !(b.next_cursor === null || typeof b.next_cursor === 'string')) {
@@ -148,10 +148,11 @@ export function useMarkNotificationRead(scope: InboxScope = BUYER_INBOX) {
       const key = keys.current.get(id) ?? newIdempotencyKey();
       keys.current.set(id, key);
       try {
-        const body = (await api.markNotificationRead(id, key)) as { read_at?: unknown } | null;
+        const body = await api.markNotificationRead(id, key);
         keys.current.delete(id);
         if (!api.isCurrent()) return;
-        const readAt = body?.read_at;
+        // Checked, not trusted: an empty or foreign 200 body reads the inbox again below.
+        const readAt: unknown = body?.read_at;
         if (isIso(readAt)) {
           qc.setQueryData<InfiniteData<NotificationPage>>(inbox, (data) =>
             data
