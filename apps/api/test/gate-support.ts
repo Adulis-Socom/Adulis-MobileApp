@@ -113,7 +113,8 @@ export function scanGates(): Map<string, RouteGate> {
     const node = info?.methods.get(method);
     if (!info || !node || seen.has(`${cls}.${method}`)) return;
     seen.add(`${cls}.${method}`);
-    const text = node.getText();
+    // The body only: a method's decorators (ApiGate among them) state the gate, they are not evidence of it.
+    const text = node.body?.getText() ?? '';
     for (const m of text.matchAll(PERMISSION_LITERAL)) acc.permissions.add(m[1] as string);
     for (const m of text.matchAll(/\bcore\.(fn_\w+)/g)) for (const p of sqlFunctionPermissions(m[1] as string)) acc.permissions.add(p);
     if (CONSOLE_CHECK.test(text)) acc.consoleCheck = true;
@@ -130,7 +131,7 @@ export function scanGates(): Map<string, RouteGate> {
       }
       ts.forEachChild(x, visit);
     };
-    visit(node);
+    if (node.body) visit(node.body);
   };
 
   const out = new Map<string, RouteGate>();
