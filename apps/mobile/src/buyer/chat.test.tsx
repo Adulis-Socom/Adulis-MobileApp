@@ -1960,6 +1960,8 @@ describe('Message send reconciliation', () => {
     // The second answer was lost too; now the key reaches its safe age.
     jest.setSystemTime(started + KEY_SAFE_MS);
     await fireEvent.press(retryButton());
+    // Long enough for a request, had one been made, to reach the server.
+    await advance(1000);
     await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull());
     expect(sends()).toHaveLength(2);
     expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
@@ -1978,7 +1980,8 @@ describe('Message send reconciliation', () => {
     await maybe();
     jest.setSystemTime(Date.now() + DAY + 60_000);
     await fireEvent.press(retryButton());
-    await act(async () => undefined);
+    // Long enough for a request, had one been made, to reach the server.
+    await advance(1000);
     expect(sends()).toHaveLength(1);
     expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
     expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
