@@ -396,3 +396,28 @@ test('a not-found message the harness does not recognise is an unknown, never "a
   assert.ok(plan.unknowns.length > 0);
   assert.deepEqual(plan.steps, []);
 });
+
+test('messages that merely contain "no such" or "not found" are not a missing object', async () => {
+  for (const said of [
+    'dial unix /var/run/docker.sock: connect: no such file or directory',
+    'Error response from daemon: page not found',
+    'Error response from daemon: network driver plugin not found',
+    'exec: "docker": executable file not found in $PATH',
+    'permission denied while trying to connect to the Docker daemon socket',
+    'Error response from daemon: No such container: abc, and more words after it',
+  ]) {
+    const w = world();
+    w.d.containers = {};
+    w.d.volumes = {};
+    w.d.networks = {};
+    const io = makeIo(w);
+    const inner = io.docker;
+    io.docker = async (args, opts) => {
+      const r = await inner(args, opts);
+      return r.status === 1 ? { ...r, stderr: said } : r;
+    };
+    const plan = await planDown(w.m, io);
+    assert.ok(plan.unknowns.length > 0, said);
+    assert.deepEqual(plan.steps, [], said);
+  }
+});

@@ -290,6 +290,7 @@ export async function main(
         const r = await up(io, {
           root,
           repo: checkout,
+          sha: a.sha,
           log: (s) => say(`up: ${s}`),
           onRun: (x) => {
             runId = x;

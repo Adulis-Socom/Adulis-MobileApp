@@ -31,6 +31,7 @@ export function engineWorld(opts = {}) {
     },
     events: [],
     nodeRuns: [],
+    runs: [],
   };
   const flagValues = (args, flag) => args.flatMap((a, i) => (args[i - 1] === flag ? [a] : []));
   const labelsOf = (args) =>
@@ -306,9 +307,12 @@ export function engineWorld(opts = {}) {
     Client,
     fetch,
     node: 'node',
-    run: async (file, args) => {
+    run: async (file, args, o = {}) => {
       st.nodeRuns.push(args[0]);
+      st.runs.push({ file, args, env: o.env, cwd: o.cwd });
       st.events.push(`node ${args[0].replaceAll('\\', '/').split('/').pop()}`);
+      if (opts.guardRefuses && /migration-guard/.test(args[0]))
+        return { status: 1, stdout: '', stderr: opts.guardRefuses, error: null };
       return ok();
     },
     proc: {

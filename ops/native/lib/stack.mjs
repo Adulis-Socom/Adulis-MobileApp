@@ -2,7 +2,7 @@
 // before anything is created and written to the manifest; each Docker id is recorded the moment
 // Docker returns it. No database or bucket is ever created inside an existing server.
 import { randomInt } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { join } from 'node:path';
 import { assertTarget, Refused } from './guard.mjs';
@@ -139,7 +139,7 @@ printf '%s' "$NATIVE_RUN_VALUE" | mc pipe "native/${MARKER_BUCKET}/${RUN_MARKER_
  */
 export async function up(
   io,
-  { root, repo, log = () => {}, onRun = () => {}, makeRun = newRun, ports } = {},
+  { root, repo, sha, log = () => {}, onRun = () => {}, makeRun = newRun, ports } = {},
 ) {
   // The engine (id, clock, context) is read FIRST and recorded in the manifest: every later command
   // proves it talks to the same engine, so a `down` in another engine cannot read "absent" as "gone".
@@ -224,19 +224,25 @@ export async function up(
     'extensions',
   );
   const node = (args, what) => run(io, args, { cwd: repo, env, what });
-  await node(
-    [
-      join(repo, 'node_modules', 'node-pg-migrate', 'bin', 'node-pg-migrate.js'),
-      '-d',
-      'DATABASE_URL_MIGRATE',
-      '-m',
-      'db/migrations',
-      '-j',
-      'sql',
-      'up',
-    ],
-    'migrations',
-  );
+  // Every migration goes through the migration-file guard of the verified checkout: the pinned names and
+  // hashes, the database history equal to the pinned prefix, and db/migrations clean in git at the verified
+  // commit. The target is DATABASE_URL_MIGRATE, a plain postgres URL the guard prints as host:port/database.
+  // A refusal or a runner failure is a hard stop; the identity is proven again before anything else writes.
+  const guard = join(repo, 'ops', 'scripts', 'migration-guard.mjs');
+  if (!existsSync(guard))
+    throw new Refused(
+      `the checkout has no migration guard (${guard}): it is older than the rule that requires one`,
+    );
+  const migrated = await io.run(io.node, [guard, 'up', '--expect-commit', sha], {
+    cwd: repo,
+    env,
+    timeout: 600_000,
+  });
+  if (!ok(migrated)) {
+    const why = `the migration guard stopped the migration: ${tail(migrated)}`;
+    throw /REFUSED/.test(`${migrated.stderr}`) ? new Refused(why) : new Error(why);
+  }
+  await assertTarget(m, 'DB-WRITE', io, { dir, states: ['creating'] });
   await node([join(repo, 'ops', 'scripts', 'install-worker-schema.mjs')], 'worker schema');
   const roles = `ALTER ROLE adulis_app LOGIN PASSWORD '${m.secrets.app}';\nALTER ROLE adulis_jobs LOGIN PASSWORD '${m.secrets.jobs}';\n`;
   must(await docker(psqlArgs(m, pgId, ['-q'], true), { input: roles }), 'role passwords');

@@ -21,6 +21,7 @@ import {
   engineProblems,
   manifestProblems,
   networkProblems,
+  NOT_FOUND,
   ownership,
   ROLES,
   volumeProblems,
@@ -31,10 +32,6 @@ const ok = (r) => !r.error && r.status === 0;
 const tail = (r) => `${r.stderr || r.stdout || r.error?.message || ''}`.trim().slice(-300);
 const ids = (r) => r.stdout.split(/\s+/).filter(Boolean);
 const ANONYMOUS = /^[0-9a-f]{64}$/;
-// What `docker inspect` of a missing object says: "No such container: <id>", "get <name>: no such
-// volume", "network <id> not found" (read from a real engine). An unrecognised wording is not
-// "absent": it stays an unknown and refuses.
-const NOT_FOUND = /no such|not found/i;
 export const DOWN_STATES = ['creating', 'ready', 'cleanup', 'cleanup-incomplete'];
 
 async function inspect(io, args) {

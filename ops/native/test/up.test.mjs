@@ -1,7 +1,7 @@
 // `up` against a stateful fake engine: the order of proof and write, the refusals that must stop it
 // before anything is created or written, and a partial failure that `down` then cleans up.
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -10,19 +10,22 @@ import { executeDown, planDown } from '../lib/cleanup.mjs';
 import { Refusal, Refused } from '../lib/guard.mjs';
 import { newRun, readManifest, runDir } from '../lib/manifest.mjs';
 import { up } from '../lib/stack.mjs';
+import { checkTarget } from '../../scripts/migration-guard.mjs';
 import { engineWorld } from './engine-fake.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORTS = { pg: 57311, s3: 57312, api: 57313 };
+const SHA = 'c'.repeat(40);
 
 async function start(opts = {}, mutateWorld = () => {}) {
   const e = engineWorld(opts);
   const root = mkdtempSync(join(tmpdir(), 'native-up-'));
   const fixed = newRun();
-  mutateWorld(e, fixed);
+  mutateWorld(e, fixed, root);
   const result = await up(e.io, {
     root,
     repo,
+    sha: SHA,
     makeRun: () => structuredClone(fixed),
     ports: PORTS,
   }).catch((x) => x);
@@ -65,7 +68,8 @@ test('up creates the stack in order and proves the server before the first write
     assert.ok(s.result.results.every((r) => r.verdict === 'PASS'));
     assert.deepEqual(
       s.e.st.nodeRuns.map((x) => x.replaceAll('\\', '/').split('/').pop()),
-      ['node-pg-migrate.js', 'install-worker-schema.mjs', 'seed.mjs'],
+      ['migration-guard.mjs', 'install-worker-schema.mjs', 'seed.mjs'],
+      'the only migration command is the guard',
     );
   } finally {
     s.done();
@@ -165,7 +169,7 @@ test('an engine that cannot be identified stops up before the manifest or any re
   e.st.dead = true;
   const root = mkdtempSync(join(tmpdir(), 'native-up-'));
   try {
-    const r = await up(e.io, { root, repo, ports: PORTS }).catch((x) => x);
+    const r = await up(e.io, { root, repo, sha: SHA, ports: PORTS }).catch((x) => x);
     assert.match(r.message, /Docker engine could not be identified/);
     assert.deepEqual(e.st.events, []);
     assert.throws(() => readManifest(join(root, 'runs')), /ENOENT/);
@@ -196,6 +200,110 @@ test('up is ready only after the finished stack passes every check, and the proo
       'creating',
       'a stack that failed its proof is not ready',
     );
+  } finally {
+    s.done();
+  }
+});
+
+test('the migration runs through the guard of the checkout, with the verified commit and a target the guard accepts', async () => {
+  const s = await start();
+  try {
+    assert.ok(!(s.result instanceof Error), `${s.result}`);
+    const [guardRun] = s.e.st.runs;
+    const [script, cmd, flag, commit, ...more] = guardRun.args;
+    assert.match(script.replaceAll('\\', '/'), /\/ops\/scripts\/migration-guard\.mjs$/);
+    assert.deepEqual([cmd, flag, commit, more], ['up', '--expect-commit', SHA, []]);
+    assert.ok(!guardRun.args.includes('--no-source-check'));
+    // The guard accepts the URL form (a plain postgres URL) and would print exactly this target.
+    const t = checkTarget(guardRun.env.DATABASE_URL_MIGRATE);
+    assert.deepEqual(t, { target: `127.0.0.1:${PORTS.pg}/${s.fixed.db.name}` });
+    // Nothing but the guard variables and the few a node child needs.
+    assert.deepEqual(
+      Object.keys(guardRun.env)
+        .filter((k) => !['SystemRoot', 'PATH', 'TEMP', 'TMP'].includes(k))
+        .sort(),
+      ['DATABASE_URL_MIGRATE', 'NODE_ENV'],
+    );
+    // The stack proof ran again after the migration and before anything else wrote.
+    const ev = s.e.st.events;
+    assert.ok(
+      ev.indexOf('node migration-guard.mjs') < ev.indexOf('node install-worker-schema.mjs'),
+    );
+  } finally {
+    s.done();
+  }
+});
+
+test('a guard that refuses is a hard stop: nothing else is written, and down cleans up', async () => {
+  const s = await start({
+    guardRefuses: 'REFUSED: the migration set is not the pinned one; nothing was applied.',
+  });
+  try {
+    assert.ok(s.result instanceof Refused && s.result.code === 1, `${s.result}`);
+    assert.match(s.result.message, /the migration guard stopped the migration: .*REFUSED/);
+    assert.deepEqual(
+      s.e.st.nodeRuns.map((x) => x.replaceAll('\\', '/').split('/').pop()),
+      ['migration-guard.mjs'],
+      'no worker schema, seed or role password after a refusal',
+    );
+    assert.ok(!s.e.st.events.includes('minio script'));
+    assert.equal(readManifest(s.dir).state, 'creating');
+    const m = readManifest(s.dir);
+    const plan = await planDown(m, s.e.io);
+    assert.deepEqual([plan.problems, plan.unknowns], [[], []]);
+    assert.equal((await executeDown(m, plan.steps, s.e.io)).left.length, 0);
+  } finally {
+    s.done();
+  }
+});
+
+test('a checkout without the migration guard is refused before any migration', async () => {
+  const e = engineWorld();
+  const root = mkdtempSync(join(tmpdir(), 'native-up-'));
+  const old = mkdtempSync(join(tmpdir(), 'native-oldrepo-'));
+  try {
+    // A checkout older than the guard: everything `up` reads except ops/scripts/migration-guard.mjs.
+    for (const f of [
+      'docker-compose.yml',
+      'db/init/00-extensions.sql',
+      'ops/scripts/minio-init.sh',
+      'ops/scripts/minio-test-marker.sh',
+    ]) {
+      mkdirSync(dirname(join(old, f)), { recursive: true });
+      copyFileSync(join(repo, f), join(old, f));
+    }
+    const r = await up(e.io, { root, repo: old, sha: SHA, ports: PORTS }).catch((x) => x);
+    assert.ok(r instanceof Refused, `${r}`);
+    assert.match(r.message, /no migration guard/);
+    assert.deepEqual(e.st.nodeRuns, [], 'no node child was started');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(old, { recursive: true, force: true });
+  }
+});
+
+test('the stack is proven again after the migration and before anything else writes', async () => {
+  const proofs = [];
+  const s = await start({}, (e, fixed, root) => {
+    const ops = join(runDir(root, fixed.run), 'ops.ndjson');
+    const inner = e.io.run;
+    e.io.run = async (file, args, o) => {
+      const n = existsSync(ops)
+        ? readFileSync(ops, 'utf8')
+            .split('\n')
+            .filter((l) => l.includes('"DB-WRITE"')).length
+        : 0;
+      proofs.push([args[0].replaceAll('\\', '/').split('/').pop(), n]);
+      return inner(file, args, o);
+    };
+  });
+  try {
+    assert.ok(!(s.result instanceof Error), `${s.result}`);
+    assert.deepEqual(proofs, [
+      ['migration-guard.mjs', 1],
+      ['install-worker-schema.mjs', 2],
+      ['seed.mjs', 2],
+    ]);
   } finally {
     s.done();
   }

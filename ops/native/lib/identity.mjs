@@ -535,12 +535,19 @@ const safe = async (fn) => {
 const text = (r) => `${r.stderr || r.stdout || r.error?.message || ''}`.trim().slice(-300);
 const ok = (r) => !r.error && r.status === 0;
 
+// What `docker inspect` of a missing object says, read from a real engine: "No such container: <id>",
+// "get <name>: no such volume", "network <id> not found", each as the daemon's own error. Anything else
+// that merely contains those words ("connect: no such file or directory", "page not found", "executable
+// file not found") is not a missing object: it stays an unknown and refuses.
+export const NOT_FOUND =
+  /Error response from daemon: (?:No such container: \S+|get \S+: no such volume|network \S+ not found)\s*$/i;
+
 async function inspectJson(io, args) {
   const r = await io.docker(args);
   if (!ok(r))
     return {
       error: `docker ${args[0]} failed: ${text(r)}`,
-      absent: /no such|not found/i.test(text(r)),
+      absent: NOT_FOUND.test(text(r)),
     };
   try {
     const o = JSON.parse(r.stdout)[0];
