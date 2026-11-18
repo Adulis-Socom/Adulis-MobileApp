@@ -53,7 +53,7 @@ import { keepIfCurrent, usePrivateApi } from './saved';
  *   and clears it after the server accepts. The Buyer can remove it; follow-ups carry no anchor.
  * - Select Product (WO-015; S5): the Buyer can choose a Product of this conversation's Seller from
  *   inside the conversation. The Seller is known only by the handle in the Buyer's own conversation
- *   list (no Seller id is published, ON-20261111-162), found within the first MAX_LIST_PAGES pages;
+ *   list (the list parser keeps the handle, not the Seller id), found within the first MAX_LIST_PAGES pages;
  *   if it cannot be found there, Product selection is off and plain messages still work. A chosen
  *   Product becomes the same context as one from Product Detail: read, checked and sent the same way.
  */
@@ -67,16 +67,28 @@ export const MAX_LIST_PAGES = 4;
 const HISTORY_MIN = 120;
 const COMPOSER_MAX = '60%';
 
+/**
+ * The screen belongs to the session it opened in. This gate holds no data and runs no query: while
+ * that session is the signed-in one it shows the conversation, and once it is not (signed out, ended,
+ * or another Account) it shows a redirect and the conversation below is unmounted, so a thread kept in
+ * the navigation stack asks for nothing under the new credential and its draft, unconfirmed send and
+ * Product context are discarded with it. Nothing depends on the server refusing the old conversation.
+ */
 export function ConversationScreen({ conversationRef, product = null }: { conversationRef: unknown; product?: ProductRef | null }) {
+  const { session } = useSession();
+  const current = session.status === 'signedIn' ? session.token : null;
+  const owner = useRef(current);
+  if (current === null || current !== owner.current) return <Redirect href="/messages" />;
+  return <OwnedConversation conversationRef={conversationRef} product={product} />;
+}
+
+function OwnedConversation({ conversationRef, product }: { conversationRef: unknown; product: ProductRef | null }) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
   const qc = useQueryClient();
   const focused = useIsFocused();
-  const { session } = useSession();
   const api = usePrivateApi();
-  const current = session.status === 'signedIn' ? session.token : null;
-  const owner = useRef(current);
   const ref = isConversationRef(conversationRef) ? conversationRef : null;
   const messages = useConversationMessages(ref, focused);
   const conversations = useConversations();
@@ -135,8 +147,6 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
   useEffect(() => {
     if (canWalk && !isFetching) void fetchNextPage();
   }, [canWalk, isFetching, pagesRead, fetchNextPage]);
-
-  if (current === null || current !== owner.current) return <Redirect href="/messages" />;
 
   const conversation = conversations.items.find((c) => c.id === ref);
   const title = conversation?.storeName ?? t('buyer.chat.title');

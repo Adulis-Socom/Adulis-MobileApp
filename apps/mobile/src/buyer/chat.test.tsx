@@ -1564,3 +1564,169 @@ describe('Uncertain-send reliability (WO-022)', () => {
     }
   });
 });
+
+/**
+ * A conversation left open (kept in the navigation stack under another screen) when the Account
+ * changes. Account A's thread must neither ask for anything nor keep anything once Account B has
+ * signed in: no request names A's conversation under B's credential, none is made at all by the old
+ * screen, a late answer for A is never drawn, and A's draft and unconfirmed send go with the screen.
+ * The server here answers A's conversation for ANY credential, so a request that is made would visibly
+ * leak: the tests never rely on the server saying 404.
+ */
+describe('Account change while a conversation is open', () => {
+  const open = (path: string) => act(() => router.push(path as never));
+  const quiet = () => act(() => jest.advanceTimersByTimeAsync(1000));
+  const MESSAGES = /^\/v1\/conversations\/[^/]+\/messages$/;
+
+  /** Two Accounts, A signed in; the first has one conversation with a private reply. */
+  function accounts() {
+    signedIn();
+    api.on('GET /v1/bootstrap', (call) =>
+      call.headers.Authorization ? { status: 200, body: bootstrapBody({ account_context: SIGNED_IN_CONTEXT }) } : { status: 200, body: bootstrapBody() },
+    );
+    api.on('POST /v1/auth/otp/verify', (call) =>
+      call.body?.code === SIGN_IN_CODE
+        ? { status: 200, body: { account_id: '0b6f1a3e-3333-4333-8333-333333333333', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: OTHER_TOKEN } }
+        : problem(401, 'OTP_INVALID', 'auth'),
+    );
+    const chat = installChat();
+    const theirs = chat.conv(A, SELLER_ID, 'First Account store');
+    chat.msg(theirs, { sender_kind: 'SELLER', body: 'First Account private reply', sent_at: ago(10) });
+    chat.conv(B, SELLER_ID, 'Second Account store');
+    // A server that answers the first Account's history to whoever asks.
+    api.onPattern('GET', MESSAGES, () => ({ status: 200, body: { data: theirs.messages, next_cursor: null } }));
+    return { chat, theirs };
+  }
+  /** From the open thread: push You over it (the thread stays in the stack), sign out, sign in as the second Account. */
+  async function switchAccount() {
+    await open('/account');
+    await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+    await screen.findByText(en['buyer.you.signed_out']);
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911000002');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    await waitFor(() => expect(memory.get(TOKEN_KEY)).toBe(OTHER_TOKEN));
+  }
+  /** Every request since the first Account's sign-out request. */
+  function afterSignOut() {
+    const at = api.calls.findIndex((c) => c.path === '/v1/auth/logout');
+    expect(at).toBeGreaterThanOrEqual(0);
+    return api.calls.slice(at + 1);
+  }
+  const naming = (id: string) => (c: Recorded) => c.path.includes(id) || JSON.stringify(c.query).includes(id);
+
+  it("a thread kept in the stack asks for nothing under the second Account, and returning to it lands on that Account's Messages", async () => {
+    const { theirs } = accounts();
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    expect(await screen.findByText('First Account private reply')).toBeOnTheScreen();
+    await switchAccount();
+    await quiet();
+    const later = afterSignOut();
+    expect(later.filter(naming(theirs.id))).toEqual([]);
+    // Everything asked for after the switch carries the second Account's credential, nothing the first's.
+    expect(later.filter((c) => c.headers.Authorization !== undefined).every((c) => c.headers.Authorization === B)).toBe(true);
+    expect(screen.queryByText('First Account private reply')).toBeNull();
+    // Back to the retained thread: it leaves for Messages and shows only the second Account's conversations.
+    await open(`/chat/${theirs.id}`);
+    expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+    expect(screen.queryByText('First Account store')).toBeNull();
+    expect(screen.queryByText('First Account private reply')).toBeNull();
+    await quiet();
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+  });
+
+  it('a history answer for the first Account that lands after the second one signed in is never drawn or asked for again', async () => {
+    const { theirs } = accounts();
+    const { gate, release } = held();
+    api.onPattern('GET', MESSAGES, async () => {
+      await gate;
+      return { status: 200, body: { data: theirs.messages, next_cursor: null } };
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    await waitFor(() => expect(api.calls.some(naming(theirs.id))).toBe(true));
+    await switchAccount();
+    await act(async () => release());
+    await quiet();
+    expect(screen.queryByText('First Account private reply')).toBeNull();
+    await open(`/chat/${theirs.id}`);
+    expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+    expect(screen.queryByText('First Account private reply')).toBeNull();
+    await quiet();
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+  });
+
+  it.each([
+    ['accepted', { status: 201, body: { message_id: 'd0000000-0000-4000-8000-0000000000aa', bot: null } } as Reply],
+    ['lost (a gateway page)', { status: 502, unreadable: true } as Reply],
+  ])('a send still in flight for the first Account when the second signs in: one request, nothing shown or sent again (%s)', async (_name, late) => {
+    const { theirs } = accounts();
+    const { gate, release } = held();
+    api.onPattern('POST', MESSAGES, async () => {
+      await gate;
+      return late;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    await screen.findByText('First Account private reply');
+    await fireEvent.changeText(composer(), 'First Account draft');
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    await switchAccount();
+    await act(async () => release());
+    await quiet();
+    expect(sends()).toHaveLength(1);
+    expect(sends()[0]?.headers.Authorization).toBe(A);
+    expect(screen.queryByText('First Account draft')).toBeNull();
+    await open(`/chat/${theirs.id}`);
+    expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+    expect(screen.queryByLabelText(en['buyer.chat.composer'])).toBeNull();
+    expect(screen.queryByText('First Account draft')).toBeNull();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    await act(() => jest.advanceTimersByTimeAsync(120_000));
+    expect(sends()).toHaveLength(1);
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+  });
+
+  it('a send waiting on its Product check when the second Account signs in sends nothing, under either credential', async () => {
+    const { chat, theirs } = accounts();
+    chat.publish(BASKET);
+    const { gate, release } = held();
+    let hold = false;
+    api.on(`GET /v1/storefronts/${HANDLE}/products/basket`, async () => {
+      if (hold) await gate;
+      return { status: 200, body: BASKET };
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/product/${HANDLE}/basket` });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] }));
+    await screen.findByTestId('chat-product-context');
+    await within(screen.getByTestId('chat-product-context')).findByText(BASKET.name);
+    await fireEvent.changeText(composer(), 'About the basket');
+    hold = true;
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(api.callsTo(`GET /v1/storefronts/${HANDLE}/products/basket`).length).toBeGreaterThanOrEqual(2));
+    await switchAccount();
+    await act(async () => release());
+    await quiet();
+    expect(sends()).toEqual([]);
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+  });
+
+  it('an unconfirmed send of the first Account is not offered to the second: the retained screen leaves with its draft and key', async () => {
+    const { chat, theirs } = accounts();
+    api.onPattern('POST', MESSAGES, () => ({ status: 502, unreadable: true }));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    await screen.findByText('First Account private reply');
+    await fireEvent.changeText(composer(), 'Unconfirmed first draft');
+    await fireEvent.press(sendButton());
+    await screen.findByText(en['buyer.chat.maybe_not_sent']);
+    await switchAccount();
+    await open(`/chat/${theirs.id}`);
+    expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.retry_send'])).toBeNull();
+    expect(screen.queryByText('Unconfirmed first draft')).toBeNull();
+    await quiet();
+    expect(sends()).toHaveLength(1);
+    expect(chat.convs.find((c) => c.id === theirs.id)?.messages.some((m) => m.body === 'Unconfirmed first draft')).toBe(false);
+  });
+});
