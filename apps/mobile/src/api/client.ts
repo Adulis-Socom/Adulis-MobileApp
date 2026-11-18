@@ -142,7 +142,8 @@ const clampWait = (seconds: number) => Math.min(Math.max(Math.ceil(seconds), 0),
  */
 export function parseRetryAfter(value: string | null, now = Date.now()): number | null {
   const v = value?.trim() ?? '';
-  if (/^\d{1,9}$/.test(v)) return clampWait(Number(v));
+  // Any run of digits: a huge value is clamped (Number() of a very long string is Infinity, clamped too).
+  if (/^\d+$/.test(v)) return clampWait(Number(v));
   if (!HTTP_DATE.test(v)) return null;
   const at = Date.parse(v);
   return Number.isNaN(at) ? null : clampWait((at - now) / 1000);

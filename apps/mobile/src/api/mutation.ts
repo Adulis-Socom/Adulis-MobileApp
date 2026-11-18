@@ -18,8 +18,15 @@ import { ApiError, problemCode, retryAfterMs } from './client';
  */
 export const KEY_SAFE_MS = 23 * 60 * 60 * 1000;
 
-/** Whether an intent that began at `startedAt` (ms) may still be replayed under its key. */
-export const keyUsable = (intent: { startedAt: number }, now: number): boolean => now - intent.startedAt < KEY_SAFE_MS;
+/**
+ * Whether an intent that began at `startedAt` (ms) may still be replayed under its key. A negative
+ * elapsed time means the device clock was stepped back since the first attempt: the key's real age is
+ * then unknown (it could be far past the safe age), so it is not replayed.
+ */
+export function keyUsable(intent: { startedAt: number }, now: number): boolean {
+  const elapsed = now - intent.startedAt;
+  return elapsed >= 0 && elapsed < KEY_SAFE_MS;
+}
 
 /**
  * The key was already used for something the server cannot match to this attempt: a same-body retry

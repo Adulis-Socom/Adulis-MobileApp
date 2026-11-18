@@ -225,9 +225,14 @@ describe('retry hints on a failed answer', () => {
     // A date already past is no wait; a far one is the ceiling.
     expect(parseRetryAfter('Wed, 18 Nov 2026 09:00:00 GMT', now)).toBe(0);
     expect(parseRetryAfter('Fri, 18 Dec 2026 10:00:00 GMT', now)).toBe(3600);
-    for (const garbage of [null, '', 'soon', '1.5', '-5', '30s', '1e3', '12 34', 'Wed 18 Nov 2026', '99999999999999']) {
+    for (const garbage of [null, '', 'soon', '1.5', '-5', '30s', '1e3', '12 34', 'Wed 18 Nov 2026']) {
       expect(parseRetryAfter(garbage, now)).toBeNull();
     }
+    // A run of digits of any length is a wait, clamped to the hour; it is never ignored.
+    expect(parseRetryAfter('9999999999', now)).toBe(3600);
+    expect(parseRetryAfter('99999999999999', now)).toBe(3600);
+    expect(parseRetryAfter('9'.repeat(400), now)).toBe(3600);
+    expect(parseRetryAfter('0007', now)).toBe(7);
   });
 
   it('never puts the header or the slot in the error message', async () => {

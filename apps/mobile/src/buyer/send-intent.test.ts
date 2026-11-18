@@ -71,6 +71,10 @@ describe('judging a failed send', () => {
     expect(judgeFailure(envelope(400, 'VALIDATION_FAILED'), { startedAt: NOW - 30 * 3600_000 }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
   });
 
+  it('an intent that began in the future (the clock was stepped back) is not replayed', () => {
+    expect(judgeFailure(new ApiError({ kind: 'timeout' }), { startedAt: NOW + 60_000 }, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
+  });
+
   it('with no intent there is nothing to replay', () => {
     expect(judgeFailure(new ApiError({ kind: 'offline' }), null, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
   });
@@ -106,8 +110,10 @@ describe('the shared rules', () => {
     expect(keyUsable({ startedAt: NOW }, NOW)).toBe(true);
     expect(keyUsable({ startedAt: NOW - KEY_SAFE_MS + 1 }, NOW)).toBe(true);
     expect(keyUsable({ startedAt: NOW - KEY_SAFE_MS }, NOW)).toBe(false);
-    // A clock that moved back keeps the key usable rather than withdrawing it.
-    expect(keyUsable({ startedAt: NOW + 5000 }, NOW)).toBe(true);
+    // A clock stepped back since the first attempt leaves the key's real age unknown: not replayed.
+    expect(keyUsable({ startedAt: NOW + 1 }, NOW)).toBe(false);
+    expect(keyUsable({ startedAt: NOW + 5000 }, NOW)).toBe(false);
+    expect(keyUsable({ startedAt: NOW }, NOW)).toBe(true);
   });
 
   it('keyConflict is the key-reuse code and nothing else', () => {
