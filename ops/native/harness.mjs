@@ -74,7 +74,10 @@ export function trackIo(io, mark) {
     docker: async (args, opts) => {
       const r = await io.docker(args, opts);
       // A command that definitively failed (non-zero exit) changed nothing; a success or an
-      // unknown outcome (timeout, killed) may have.
+      // unknown outcome (timeout, killed) may have. Assumption: an `exec` with stdin that exits
+      // non-zero changed nothing. That holds for the fixture load (one transaction); the stamp,
+      // role and MinIO setup scripts of `up` could apply partly, but `up` has already marked the
+      // containers it runs them in.
       if (
         isMutatingDocker(args, opts) &&
         (r.error || r.status === 0 || CHANGED_WHATEVER_THE_EXIT.has(args[0]))
