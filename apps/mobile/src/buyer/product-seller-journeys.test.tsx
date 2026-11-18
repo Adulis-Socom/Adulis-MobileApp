@@ -238,6 +238,11 @@ describe('a link opened cold', () => {
 describe('the Account changes while a Product or a Seller profile is kept in the stack', () => {
   const SAVED_STATE = 'POST /v1/collections/saved-state:batch';
   const A_ITEM = 'a0000000-0000-4000-8000-00000000a001';
+  /** While set, the second Account's saved-state answers wait for it. */
+  let hold: Promise<void> | null = null;
+  beforeEach(() => {
+    hold = null;
+  });
   /** Two Accounts. The first has the Product saved; the second does not. */
   function accounts() {
     signedIn();
@@ -247,9 +252,10 @@ describe('the Account changes while a Product or a Seller profile is kept in the
         ? ok({ account_id: '0b6f1a3e-3333-4333-8333-333333333333', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: OTHER_TOKEN })
         : problem(401, 'OTP_INVALID', 'auth'),
     );
-    api.on(SAVED_STATE, (call) => {
+    api.on(SAVED_STATE, async (call) => {
       const targets = (call.body?.targets ?? []) as Array<{ type: string; ref: string }>;
       const first = call.headers.Authorization === A;
+      if (!first && hold) await hold;
       return ok({
         default_collection_ref: DEFAULT_COLLECTION_REF,
         items: targets.map((t) => ({ ...t, saved: first, default_item_ref: first ? A_ITEM : null, memberships: first ? [{ collection_ref: DEFAULT_COLLECTION_REF, item_ref: A_ITEM }] : [] })),
@@ -280,16 +286,25 @@ describe('the Account changes while a Product or a Seller profile is kept in the
 
   it('a kept Product shows the second Account’s Save state, never the first Account’s, and nothing under the second credential names the first Account’s Save', async () => {
     accounts();
+    let release!: () => void;
     await renderRouter(APP_DIR, { initialUrl: PRODUCT_PATH });
     expect(await screen.findByRole('button', { name: en['buyer.save.saved'] })).toBeOnTheScreen();
+    // The second Account's answer is on its way when the Buyer looks at the kept Product.
+    hold = new Promise<void>((resolve) => (release = resolve));
     await switchAccount();
+    await settle();
+    await open(PRODUCT_PATH);
+    expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
+    // Until it lands nothing says Saved, and nothing can be saved or removed on the strength of the first Account's state.
+    expect(screen.queryByRole('button', { name: en['buyer.save.saved'] })).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeDisabled();
+    await act(async () => release());
     await settle();
     const later = afterSignOut();
     expect(later.filter(mentions(A_ITEM))).toEqual([]);
     expect(later.filter((c) => c.headers.Authorization !== undefined).every((c) => c.headers.Authorization === B)).toBe(true);
-    // Back to the kept Product: it is the second Account's view of it.
-    await open(PRODUCT_PATH);
-    expect(await screen.findByRole('button', { name: en['buyer.save.save'] })).toBeOnTheScreen();
+    // The second Account's view of it.
+    expect(await screen.findByRole('button', { name: en['buyer.save.save'] })).toBeEnabled();
     expect(screen.queryByRole('button', { name: en['buyer.save.saved'] })).not.toBeOnTheScreen();
     expect(afterSignOut().filter(mentions(A_ITEM))).toEqual([]);
   });

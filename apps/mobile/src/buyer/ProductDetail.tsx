@@ -69,8 +69,6 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
   }
   return (
     <ProductContent
-      // A different Product is a different choice: its options are not this one's.
-      key={read.value.id}
       product={read.value}
       route={`/product/${handle as string}/${slug as string}`}
       sceneRef={isPublicRef(from) ? from : null}

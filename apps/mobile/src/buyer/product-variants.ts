@@ -6,7 +6,7 @@ import type { StorefrontProduct } from '../api/client';
  * stock count or a delivery promise: every fact it reads is one the server sent in the
  * answer on screen.
  *
- *   NONE      no option is chosen (the opening, after a drop, after a different Product)
+ *   NONE      no option is chosen (the opening, after a drop)
  *   SELECTED  `id` names an option of the CURRENT answer that is available now
  *
  *   any      --SELECT(id)-->  SELECTED(id)   only if the answer lists `id` and it is available
