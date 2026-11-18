@@ -17,10 +17,14 @@
 // of the manifest, which shows in review.
 //
 //   node ops/scripts/migration-guard.mjs verify [--db] [--expect-commit <sha>]
-//   node ops/scripts/migration-guard.mjs up [--dry-run] [--expect-commit <sha>]     (verify, then node-pg-migrate up)
-//   node ops/scripts/migration-guard.mjs write                                        (pin newly added migrations)
+//   node ops/scripts/migration-guard.mjs up (--expect-commit <sha> | --no-source-check) [--dry-run]
+//                                                                  (verify, then node-pg-migrate up)
+//   node ops/scripts/migration-guard.mjs write                    (pin newly added migrations)
 //
-// The plain `pnpm db:migrate` is unchanged and unguarded. A persistent database is upgraded with `db:migrate:guarded`.
+// Refusals are written to stderr (a caller that discards stdout still sees why nothing was applied); progress to stdout.
+// This is the only code that starts the runner (a test pins that). `pnpm db:migrate` is `up --no-source-check`: every
+// check except the git source check (a deploy or a throwaway database has no clean commit to compare). A persistent or
+// shared database is upgraded with `pnpm db:migrate:guarded --expect-commit <sha>`, which adds the source check.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -94,7 +98,9 @@ export function checkDirectory(dir, manifest) {
     const m = MIGRATION_NAME.exec(n);
     if (m) byNumber.set(m[1], [...(byNumber.get(m[1]) ?? []), n]);
     if (!pinned.has(n) && !IGNORED_ENTRIES.has(n))
-      problems.push(`UNEXPECTED file in the migrations directory: ${n}`);
+      problems.push(
+        `UNEXPECTED file in the migrations directory: ${n} (a new migration is pinned in the same change: pnpm db:migration-pin)`,
+      );
   }
   for (const [num, names] of byNumber)
     if (names.length > 1) problems.push(`DUPLICATE number ${num}: ${names.join(', ')}`);
@@ -103,10 +109,11 @@ export function checkDirectory(dir, manifest) {
       problems.push(`MISSING migration ${name}`);
       continue;
     }
-    const actual = sha256(readFileSync(path.join(dir, name)));
+    const bytes = readFileSync(path.join(dir, name));
+    const actual = sha256(bytes);
     if (actual !== hash)
       problems.push(
-        `CHANGED migration ${name}: sha256 ${actual.slice(0, 16)} differs from the pinned ${hash.slice(0, 16)}`,
+        `CHANGED migration ${name}: sha256 ${actual.slice(0, 16)} differs from the pinned ${hash.slice(0, 16)}${bytes.includes(0x0d) ? ' (the file has CRLF line endings; migrations are LF)' : ''}`,
       );
   }
   return problems;
@@ -190,6 +197,55 @@ export async function readApplied(connectionString) {
   }
 }
 
+/** Query options that would send the connection somewhere other than the URL says (pg reads them over the URL). */
+const RETARGETING = ['host', 'hostaddr', 'port', 'dbname', 'database', 'service'];
+
+/**
+ * The target a connection string names, or why it is refused. Only a plain postgres URL is accepted: a host, and one
+ * plain database name as the whole path. A malformed string (credentials landing in the path, no host, a retargeting
+ * query option) would make the printed line differ from the place pg connects to, or show a password, so it is
+ * refused before anything connects. The reason never repeats the string.
+ */
+export function checkTarget(connectionString) {
+  let u;
+  try {
+    u = new URL(connectionString);
+  } catch {
+    return { error: 'it is not a URL' };
+  }
+  if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:')
+    return { error: 'it is not a postgres:// or postgresql:// URL' };
+  if (u.hostname === '') return { error: 'it names no host' };
+  const database = u.pathname.slice(1);
+  if (!/^[A-Za-z0-9_.-]+$/.test(database))
+    return { error: 'its path is not one plain database name' };
+  const bad = RETARGETING.filter((k) => u.searchParams.has(k));
+  if (bad.length)
+    return {
+      error: `it sets ${bad.join(', ')} as a query option; the URL itself must name the target`,
+    };
+  return { target: `${u.hostname}:${u.port || '5432'}/${database}` };
+}
+
+/**
+ * The one target, DATABASE_URL_MIGRATE: refused (null) when unset or not a plain postgres URL, otherwise named on
+ * `log` as host:port/database (never the credentials) and returned. There is no default host or database.
+ */
+export function resolveTarget(env, { log, err }) {
+  const url = env.DATABASE_URL_MIGRATE;
+  if (!url) {
+    err('REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied');
+    return null;
+  }
+  const t = checkTarget(url);
+  if (t.error) {
+    err(`REFUSED: DATABASE_URL_MIGRATE is not usable (${t.error}); nothing was applied`);
+    return null;
+  }
+  log(`target: ${t.target}`);
+  return url;
+}
+
 /** Everything, fail-closed. `applied` is an array of names, or null when the database history is not being checked. */
 export function verify({
   dir = DEFAULT_DIR,
@@ -212,7 +268,8 @@ export function verify({
 
 /**
  * verify, then run node-pg-migrate. `deps.run` is only ever called after every check passed.
- * `deps.readApplied` is read-only. Returns the process exit code.
+ * `deps.readApplied` is read-only. Returns the process exit code. Refusals go to `err` (stderr on the command line, so
+ * a caller that discards stdout still sees why nothing was applied); everything else goes to `log`.
  */
 export async function up(
   {
@@ -222,40 +279,43 @@ export async function up(
     expectedCommit = null,
     dryRun = false,
     log = console.log,
+    err = log,
   },
   deps = {},
 ) {
-  const readApplied_ = deps.readApplied ?? (() => readApplied(process.env.DATABASE_URL_MIGRATE));
   const run = deps.run ?? defaultRun;
   let manifest;
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   } catch (e) {
-    log(`REFUSED: the manifest cannot be read (${e.code ?? e.message}); nothing was applied`);
+    err(`REFUSED: the manifest cannot be read (${e.code ?? e.message}); nothing was applied`);
     return 1;
   }
-  if (!deps.readApplied && !process.env.DATABASE_URL_MIGRATE) {
-    log('REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied');
-    return 1;
+  let readApplied_ = deps.readApplied;
+  if (!readApplied_) {
+    const url = resolveTarget(process.env, { log, err });
+    if (!url) return 1;
+    readApplied_ = () => readApplied(url);
   }
   let applied;
   try {
     applied = await readApplied_();
   } catch (e) {
-    log(
+    err(
       `REFUSED: the migration history cannot be read (${e.code ?? e.message}); nothing was applied`,
     );
     return 1;
   }
   const result = verify({ dir, manifest, applied, root, expectedCommit });
   if (!result.ok) {
-    log('REFUSED: the migration set is not the pinned one; nothing was applied.');
-    for (const p of result.problems) log(`  - ${p}`);
+    err('REFUSED: the migration set is not the pinned one; nothing was applied.');
+    for (const p of result.problems) err(`  - ${p}`);
     return 1;
   }
   log(
     `OK: ${manifest.files.length} pinned migrations, ${applied.length} applied, ${result.pending.length} pending${result.pending.length ? ': ' + result.pending.join(', ') : ''}`,
   );
+  if (expectedCommit === null) log('source check: skipped (--no-source-check)');
   if (dryRun) {
     log('dry run: the runner was not started');
     return 0;
@@ -278,7 +338,7 @@ export const RUNNER_PATH = path.join(
 
 function defaultRun({ dir }) {
   if (!existsSync(RUNNER_PATH)) {
-    console.log(
+    console.error(
       `REFUSED: the migration runner is not installed (${RUNNER_PATH}); nothing was applied`,
     );
     return 1;
@@ -291,13 +351,19 @@ function defaultRun({ dir }) {
   return r.status ?? 1;
 }
 
-/** `write`: pin newly ADDED migrations. A missing or changed historical entry is refused, never re-pinned. */
+/**
+ * `write`: pin newly ADDED migrations. A missing or changed historical entry is refused, never re-pinned. A new file
+ * with CRLF line endings is refused too: .gitattributes stores migrations as LF, so git would turn it into LF on
+ * commit and the pin of its CRLF bytes would then fail in CI as a changed file, with no way for `write` to repair it.
+ */
 export function write({
   dir = DEFAULT_DIR,
   manifestPath = DEFAULT_MANIFEST,
   log = console.log,
+  err = log,
 } = {}) {
   const fresh = buildManifest(dir);
+  let pinned = 0;
   if (existsSync(manifestPath)) {
     const old = JSON.parse(readFileSync(manifestPath, 'utf8'));
     const problems = checkManifest(old);
@@ -311,13 +377,19 @@ export function write({
         problems.push(`pinned ${f.name} has changed; write does not re-pin history`);
     });
     if (problems.length) {
-      for (const p of problems) log(`REFUSED: ${p}`);
+      for (const p of problems) err(`REFUSED: ${p}`);
       return 1;
     }
+    pinned = old.files.length;
   }
   const problems = checkManifest(fresh);
+  for (const f of fresh.files.slice(pinned))
+    if (readFileSync(path.join(dir, f.name)).includes(0x0d))
+      problems.push(
+        `${f.name} has CRLF line endings; migrations are LF (.gitattributes), so git would store it as LF and the pin would fail as changed: convert it to LF and pin again`,
+      );
   if (problems.length) {
-    for (const p of problems) log(`REFUSED: ${p}`);
+    for (const p of problems) err(`REFUSED: ${p}`);
     return 1;
   }
   writeFileSync(manifestPath, JSON.stringify(fresh, null, 2) + '\n');
@@ -369,8 +441,8 @@ export function parseArgs(argv) {
 async function main(argv) {
   const parsed = parseArgs(argv);
   if (parsed.error) {
-    console.log(`REFUSED: ${parsed.error}; nothing was applied`);
-    console.log(
+    console.error(`REFUSED: ${parsed.error}; nothing was applied`);
+    console.error(
       'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
     );
     return 2;
@@ -378,16 +450,22 @@ async function main(argv) {
   const { cmd, flags } = parsed;
   const flag = (n) => flags[n] === true;
   const val = (n) => flags[n] ?? null;
-  if (cmd === 'write') return write();
+  const sinks = { log: console.log, err: console.error };
+  if (cmd === 'write') return write(sinks);
   if (cmd === 'up')
-    return up({ expectedCommit: val('--expect-commit'), dryRun: flag('--dry-run') });
+    return up({ expectedCommit: val('--expect-commit'), dryRun: flag('--dry-run'), ...sinks });
   if (cmd === 'verify') {
     const manifest = JSON.parse(readFileSync(DEFAULT_MANIFEST, 'utf8'));
-    const applied = flag('--db') ? await readApplied(process.env.DATABASE_URL_MIGRATE) : null;
+    let applied = null;
+    if (flag('--db')) {
+      const url = resolveTarget(process.env, sinks);
+      if (!url) return 1;
+      applied = await readApplied(url);
+    }
     const r = verify({ manifest, applied, expectedCommit: val('--expect-commit') });
     if (!r.ok) {
-      console.log('REFUSED:');
-      for (const p of r.problems) console.log(`  - ${p}`);
+      console.error('REFUSED:');
+      for (const p of r.problems) console.error(`  - ${p}`);
       return 1;
     }
     console.log(
@@ -395,18 +473,19 @@ async function main(argv) {
     );
     return 0;
   }
-  console.log(
-    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up [--dry-run] [--expect-commit <sha>] | write',
+  console.error(
+    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
   );
   return 2;
 }
 
+/** Exit once both streams have drained: a refusal written to a pipe must not be cut short by process.exit. */
+const exitAfterFlush = (code) =>
+  process.stdout.write('', () => process.stderr.write('', () => process.exit(code)));
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv.slice(2)).then(
-    (code) => process.exit(code),
-    (e) => {
-      console.log(`REFUSED: unexpected error (${e.code ?? e.message}); nothing was applied`);
-      process.exit(1);
-    },
-  );
+  main(process.argv.slice(2)).then(exitAfterFlush, (e) => {
+    console.error(`REFUSED: unexpected error (${e.code ?? e.message}); nothing was applied`);
+    exitAfterFlush(1);
+  });
 }

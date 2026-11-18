@@ -44,13 +44,16 @@ for (const sig of ['SIGINT', 'SIGTERM'])
 process.exitCode = await runDeterminism({
   env: process.env,
   docker: (args) => spawnSync('docker', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }),
+  // Through the migration-file guard, the only code that starts the runner: the scratch URL goes in as
+  // DATABASE_URL_MIGRATE. The guard reports a refusal on stderr, which the failure message shows.
   migrate: (url) =>
-    spawnSync(
-      process.execPath,
-      ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', '-d', 'DETERMINISM_URL', '-m', 'db/migrations', '-j', 'sql', 'up'],
-      // node-pg-migrate echoes every migration; the 1 MiB default would kill it (ENOBUFS).
-      { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, DETERMINISM_URL: url } },
-    ),
+    spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', 'up', '--no-source-check'], {
+      // The runner echoes every migration; the 1 MiB default would kill it (ENOBUFS).
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+      env: { ...process.env, DATABASE_URL_MIGRATE: url },
+    }),
   Client: pg.Client,
   interrupted: () => signal,
   suffix: () => randomBytes(4).toString('hex'),
