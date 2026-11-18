@@ -2728,8 +2728,19 @@ export interface components {
         ProblemItemDto: {
             code: string;
             message_key: string;
+            /** @description What the caller can do to clear this item; further members depend on the kind. */
+            resolving_action?: {
+                kind?: string;
+            } & {
+                [key: string]: unknown;
+            };
             slots?: {
                 [key: string]: unknown;
+            };
+            /** @description The object this item is about. */
+            subject?: {
+                id?: string;
+                kind?: string;
             };
         };
         PublicProductSummaryDto: {
@@ -3466,6 +3477,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     AuthController_forgetRememberedDevice: {
@@ -3484,6 +3504,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -3596,6 +3625,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     AuthController_stepUpVerify: {
@@ -3612,6 +3650,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -3681,6 +3728,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapResponseDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
         };
@@ -4196,6 +4252,15 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationPageDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     ChatController_open: {
@@ -4215,6 +4280,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationOpenedDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
         };
@@ -4238,6 +4312,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationEscalatedDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
         };
@@ -4264,6 +4347,15 @@ export interface operations {
                     "application/json": components["schemas"]["MessagePageDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     ChatController_postMessage: {
@@ -4285,6 +4377,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageSentDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
         };
@@ -4363,6 +4464,15 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionConfirmedDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     DeletionController_otpRequest: {
@@ -4384,6 +4494,15 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     DeletionController_otpVerify: {
@@ -4403,6 +4522,15 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionTicketDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     DeletionController_preview: {
@@ -4420,6 +4548,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeletionPreviewDto"];
+                };
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
         };
@@ -4509,6 +4646,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     FypController_feed: {
@@ -4587,6 +4733,15 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPageDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     NotificationsController_markRead: {
@@ -4610,6 +4765,15 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationReadDto"];
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     NotificationsController_readAll: {
@@ -4628,6 +4792,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -4869,6 +5042,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     ReportsController_mine: {
@@ -4885,6 +5067,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -4975,6 +5166,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     AnalyticsController_full: {
@@ -4985,7 +5185,10 @@ export interface operations {
                 /** @description YYYY-MM-DD. Last day of the window. Default: today. */
                 to?: string;
             };
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4996,6 +5199,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5007,7 +5219,10 @@ export interface operations {
                 /** @description YYYY-MM-DD. Last day of the window. Default: today. */
                 to?: string;
             };
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5018,13 +5233,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     OnboardingController_getAvailability: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5036,12 +5263,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_putAvailability: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5052,6 +5291,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5063,7 +5311,10 @@ export interface operations {
                 /** @description Page size, 1-50. Default 20. */
                 limit?: string;
             };
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5075,12 +5326,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_putOverride: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 date: string;
             };
@@ -5094,12 +5357,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_deleteOverride: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 date: string;
             };
@@ -5112,6 +5387,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5158,6 +5442,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -5170,12 +5456,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     DeletionController_leaveClosure: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5187,12 +5485,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_patchCompanyDetails: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5203,6 +5513,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5264,6 +5583,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -5275,13 +5596,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     DeletionController_sellerBlockers: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5292,13 +5625,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     OnboardingController_getFulfilmentMethods: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5310,12 +5655,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_putFulfilmentMethods: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5326,6 +5683,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5346,6 +5712,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_listSellers: {
@@ -5363,12 +5738,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     NotificationsController_getPreferences: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5380,12 +5767,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     NotificationsController_patchPreferences: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5396,6 +5795,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5650,7 +6058,10 @@ export interface operations {
     OwnershipController_pending: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5662,6 +6073,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OwnershipController_request: {
@@ -5669,6 +6089,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -5681,12 +6103,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OwnershipController_cancel: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5697,6 +6131,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5776,7 +6219,10 @@ export interface operations {
                 /** @description Page size, 1-50. Default 20. */
                 limit?: string;
             };
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5821,6 +6267,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_createProduct: {
@@ -5828,6 +6283,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -5840,12 +6297,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_getProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -5858,13 +6327,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     CatalogueController_deleteProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -5877,13 +6358,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     CatalogueController_patchProduct: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -5896,6 +6389,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -5904,6 +6406,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -5969,12 +6473,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_deleteImage: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
                 position: number;
@@ -5990,12 +6506,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_reorderImages: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6016,6 +6544,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_publishProduct: {
@@ -6023,6 +6560,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6038,6 +6577,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_attachSocialPost: {
@@ -6045,6 +6593,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6059,6 +6609,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_unpublishProduct: {
@@ -6066,6 +6625,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6081,6 +6642,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_createVariant: {
@@ -6088,6 +6658,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6102,6 +6674,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_video: {
@@ -6109,6 +6690,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6131,12 +6714,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_deleteVideo: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6150,12 +6745,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_getProfile: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6166,13 +6773,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     OnboardingController_patchProfile: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6184,12 +6803,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_readiness: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6200,6 +6831,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -6442,7 +7082,10 @@ export interface operations {
     OnboardingController_getSocialAccounts: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6454,6 +7097,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_createSocialAccount: {
@@ -6461,6 +7113,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -6473,6 +7127,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     OnboardingController_verifySocialAccount: {
@@ -6480,6 +7143,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6495,12 +7160,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     TeamController_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6512,6 +7189,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     TeamController_invite: {
@@ -6519,6 +7205,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path?: never;
             cookie?: never;
@@ -6531,12 +7219,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     TeamController_revoke: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6550,12 +7250,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_deleteVariant: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6568,13 +7280,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
     CatalogueController_patchVariant: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6587,6 +7311,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -6595,6 +7328,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6610,6 +7345,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_writeStock: {
@@ -6617,6 +7361,8 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
             };
             path: {
                 id: string;
@@ -6631,6 +7377,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
         };
     };
     CatalogueController_listStockEvents: {
@@ -6641,7 +7396,10 @@ export interface operations {
                 /** @description Page size, 1-50. Default 20. */
                 limit?: string;
             };
-            header?: never;
+            header: {
+                /** @description The Seller context (ADU-API-01 S4.2). */
+                "X-Adulis-Seller": string;
+            };
             path: {
                 id: string;
             };
@@ -6654,6 +7412,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };
@@ -6673,6 +7440,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem details (ProblemDetailsFilter). */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
         };
     };

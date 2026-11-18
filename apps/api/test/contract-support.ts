@@ -1,6 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { Reflector } from '@nestjs/core';
+import type { ExecutionContext } from '@nestjs/common';
 import * as ts from 'typescript';
+import { AuthGuard, PUBLIC_KEY } from '../src/common/auth/auth.guard';
+import type { SessionService } from '../src/common/auth/session.service';
+import { AdulisException } from '../src/common/errors/adulis-exception';
+import { SESSION_COOKIE } from '../src/common/http/cookies';
 
 /**
  * Two ways to hold contracts/openapi.json to what the API really does, shared
@@ -40,6 +46,8 @@ interface Parameter {
 }
 interface Operation {
   operationId?: string;
+  summary?: string;
+  description?: string;
   parameters?: Parameter[];
   security?: Record<string, string[]>[];
   responses: Record<string, { content?: Record<string, { schema?: Schema }> }>;
@@ -137,6 +145,32 @@ export function scanRoutes(): Route[] {
     });
   }
   return out;
+}
+
+/**
+ * Whether the real AuthGuard demands `X-Adulis-Seller` on this route: the guard is called with a console session
+ * and no seller header, and either refuses it with SELLER_CONTEXT_REQUIRED or lets it through. A public route is
+ * marked @Public on a stand-in handler, which is all the guard reads of a controller.
+ */
+export async function guardDemandsSeller(r: Pick<Route, 'http' | 'path' | 'isPublic'>): Promise<boolean> {
+  const handler = function standIn(): void {};
+  if (r.isPublic) Reflect.defineMetadata(PUBLIC_KEY, true, handler);
+  const session = { sessionId: 's', accountId: 'a', audience: 'CONSOLE', deviceId: null, marketId: 'm' };
+  const guard = new AuthGuard(new Reflector(), { authenticate: () => Promise.resolve(session) } as unknown as SessionService);
+  const context = {
+    getHandler: () => handler,
+    getClass: () => class StandInController {},
+    switchToHttp: () => ({
+      getRequest: () => ({ headers: { cookie: `${SESSION_COOKIE}=token` }, path: r.path.replace(/\{[^}]+\}/g, 'x'), method: r.http.toUpperCase() }),
+    }),
+  } as unknown as ExecutionContext;
+  return guard.canActivate(context).then(
+    () => false,
+    (e: unknown) => {
+      if (e instanceof AdulisException && e.code === 'SELLER_CONTEXT_REQUIRED') return true;
+      throw e;
+    },
+  );
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

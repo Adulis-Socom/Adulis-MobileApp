@@ -88,7 +88,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * list endpoint additionally does its own filtering by account, so the role
  * decides nothing there.
  */
-function requiresSellerContext(rawPath: string, method: string): boolean {
+export function requiresSellerContext(rawPath: string, method: string): boolean {
   // LOWERCASED ONCE, and this is a fix rather than a nicety (T18 Phase 3 pass).
   // Express routes case-INSENSITIVELY -- neither configure-app.ts nor main.ts
   // sets 'case sensitive routing', so GET /v1/SELLER/payout reaches the payout

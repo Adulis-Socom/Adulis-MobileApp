@@ -102,6 +102,15 @@
         "summary": "Idempotency-keyed; a replay sends no SMS (X11).",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -164,6 +173,15 @@
         "summary": "Not idempotency-keyed; backoff 30s-60s-120s (4.3).",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -216,6 +234,15 @@
         "summary": "Creates buyer identity on first use (S6.1). A replay after success answers OTP_EXPIRED.",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -236,11 +263,30 @@
         "responses": {
           "202": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Operator review, never self-service (S6.6). 202 for any number.",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -260,6 +306,16 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Forget a remembered device (v1.9 S15.0b); the session stays live.",
@@ -435,6 +491,16 @@
         "responses": {
           "202": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The SMS names the action (4.4); binds action and target (9.2).",
@@ -458,6 +524,16 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -532,11 +608,30 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Client floor, market configuration and the clock reference.",
         "tags": [
           "Bootstrap"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -643,6 +738,15 @@
         "summary": "Categories enabled in the requester's Market, in presentation order (empty without a Market).",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1295,6 +1399,16 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Create-or-return the one conversation per buyer-seller pair.",
@@ -1350,6 +1464,16 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default.",
@@ -1395,6 +1519,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConversationEscalatedDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
                 }
               }
             }
@@ -1446,6 +1580,16 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1488,6 +1632,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MessageSentDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
                 }
               }
             }
@@ -1594,11 +1748,30 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Requires explicit acknowledgement; irreversible.",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1626,11 +1799,30 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "purpose ACCOUNT_DELETION; the SMS names the action (4.4).",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1648,10 +1840,29 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1669,11 +1880,30 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Blockers as items[] and what deletion does, before confirm.",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1726,6 +1956,15 @@
         "summary": "Anonymous, app-generated id; binds at identity creation (S11.1).",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1805,6 +2044,16 @@
         "responses": {
           "202": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The closed allow-list of two client-observed events (S11).",
@@ -1882,6 +2131,15 @@
         "summary": "For You: Scene units only, ranked by the active algorithm version. Without ?cursor= a new feed session starts; with it the session continues. A bad cursor is 400 VALIDATION_FAILED with slots.reason CURSOR_INVALID; an ended session (expired, version retired, Market changed) slots.reason CURSOR_EXPIRED: start a new session.",
         "tags": [
           "Fyp"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1941,6 +2199,16 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.",
@@ -1974,6 +2242,16 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2018,6 +2296,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotificationReadDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
                 }
               }
             }
@@ -2327,6 +2615,15 @@
         "summary": "A post link to the LIST of published Products it features (S7.5.1), priced like the list. Idempotency-Key required.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2347,6 +2644,16 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Any surface, any authenticated actor; the queue trigger routes it.",
@@ -2370,6 +2677,16 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The reporter's own reports and their outcomes.",
@@ -2425,6 +2742,15 @@
         "summary": "A public Scene, only while every public gate passes now. PRIVATE, draft and unknown are the same 404.",
         "tags": [
           "Scenes"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2509,6 +2835,15 @@
         "summary": "Marketplace Search: Product Posts, Sellers and Scene Posts of the requester's Market (never a parameter). type=TOP (default) is a bounded mixed set; a single type is cursor-paginated. Lexical (exact, prefix, substring, pg_trgm fuzzy); available Products before relevant unavailable ones. Nothing is stored or logged.",
         "tags": [
           "Search"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2529,6 +2864,16 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Create the seller. The first eligibility evaluation runs inline.",
@@ -2566,11 +2911,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
@@ -2608,11 +2973,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted.",
@@ -2632,10 +3017,31 @@
     "/v1/seller/availability": {
       "get": {
         "operationId": "OnboardingController_getAvailability",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The saved weekly pattern the editor loads (v1.9 S15.0b).",
@@ -2653,10 +3059,31 @@
       },
       "put": {
         "operationId": "OnboardingController_putAvailability",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The whole weekly pattern. Zero windows is valid and means closed.",
@@ -2694,11 +3121,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2725,11 +3172,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Marks the store closed on that date. Idempotent by path; no key.",
@@ -2755,11 +3222,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Removes the closure. 204 whether or not it existed.",
@@ -2836,11 +3323,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Enters CLOSING: new reservations stop, existing orders operable.",
@@ -2858,10 +3365,31 @@
       },
       "delete": {
         "operationId": "DeletionController_leaveClosure",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Returns to ACTIVE. Reversible by design.",
@@ -2881,10 +3409,31 @@
     "/v1/seller/company-details": {
       "patch": {
         "operationId": "OnboardingController_patchCompanyDetails",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2963,11 +3512,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].",
@@ -2987,10 +3556,31 @@
     "/v1/seller/deletion/blockers": {
       "get": {
         "operationId": "DeletionController_sellerBlockers",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "200 with items[] — a state, not a failure (S16.9).",
@@ -3010,10 +3600,31 @@
     "/v1/seller/fulfilment-methods": {
       "get": {
         "operationId": "OnboardingController_getFulfilmentMethods",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3030,10 +3641,31 @@
       },
       "put": {
         "operationId": "OnboardingController_putFulfilmentMethods",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The whole set. At least one active, or 422.",
@@ -3067,6 +3699,16 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Operator-only (G1.1). An operator attests about a named person. No image ever reaches Adulis.",
@@ -3090,6 +3732,16 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The stores this account owns or is a live team member of (D-97).",
@@ -3109,10 +3761,31 @@
     "/v1/seller/notification-preferences": {
       "get": {
         "operationId": "NotificationsController_getPreferences",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3129,10 +3802,31 @@
       },
       "patch": {
         "operationId": "NotificationsController_patchPreferences",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "suppressible=false is not togglable: 422, never a silent accept.",
@@ -3477,10 +4171,31 @@
     "/v1/seller/ownership-transfer": {
       "get": {
         "operationId": "OwnershipController_pending",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The pending transfer, visible to its two parties only.",
@@ -3507,11 +4222,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.",
@@ -3529,10 +4264,31 @@
       },
       "delete": {
         "operationId": "OwnershipController_cancel",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Either party ends it: the owner cancels, the recipient declines.",
@@ -3617,11 +4373,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3655,6 +4431,16 @@
             "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3784,6 +4570,16 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The seller list. Carries the card image key and the resolved publication cap.",
@@ -3811,11 +4607,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The editor's read: variants, attributes, media, posts, state.",
@@ -3841,11 +4657,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -3870,11 +4706,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.",
@@ -3908,6 +4764,16 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -4063,6 +4929,16 @@
           },
           "409": {
             "description": "slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Signed upload then commit — one catalogued path, two actions.",
@@ -4090,6 +4966,16 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -4121,6 +5007,16 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect.",
@@ -4159,11 +5055,31 @@
               "minimum": 1,
               "maximum": 5
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Removed."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Removes one image and schedules the objects for purge.",
@@ -4200,11 +5116,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "The Product is published."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "409 with readiness items[] where blocked.",
@@ -4241,11 +5177,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Canonical id resolved server-side; never the URL string.",
@@ -4282,11 +5238,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "The Product is unpublished; the row is kept."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Removes from the storefront; keeps the row.",
@@ -4323,11 +5299,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4363,6 +5359,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -4371,6 +5377,16 @@
           },
           "201": {
             "description": "COMMIT: the video is registered."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4395,11 +5411,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4418,10 +5454,31 @@
     "/v1/seller/profile": {
       "get": {
         "operationId": "OnboardingController_getProfile",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The saved profile, with status and handle (v1.9 S15.0b).",
@@ -4439,10 +5496,31 @@
       },
       "patch": {
         "operationId": "OnboardingController_patchProfile",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -4461,10 +5539,31 @@
     "/v1/seller/readiness": {
       "get": {
         "operationId": "OnboardingController_readiness",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "The nine readiness items — a state, not a failure.",
@@ -4918,10 +6017,31 @@
     "/v1/seller/social-accounts": {
       "get": {
         "operationId": "OnboardingController_getSocialAccounts",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Linked accounts, with the follower count and when it was captured.",
@@ -4948,11 +6068,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Link a social account; issues the account-control code.",
@@ -4989,11 +6129,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "The verification attempt is recorded."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Fetch and match; captures the follower count at verification.",
@@ -5013,10 +6173,31 @@
     "/v1/seller/team": {
       "get": {
         "operationId": "TeamController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Business tier; Owner/Admin only (seller.staff:admin).",
@@ -5043,11 +6224,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Invite by phone; the member signs in with their own OTP.",
@@ -5075,11 +6276,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Revokes on the next request (R28); the account is untouched.",
@@ -5107,11 +6328,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5136,11 +6377,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.",
@@ -5177,11 +6438,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Stock confirmed; stock_confirmed_at is reset."
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Resets stock_confirmed_at (S13.3).",
@@ -5218,11 +6499,31 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Writes a StockEvent. Never a direct count set.",
@@ -5268,11 +6569,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Adulis-Seller",
+            "in": "header",
+            "required": true,
+            "description": "The Seller context (ADU-API-01 S4.2).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5304,11 +6625,30 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "default": {
+            "description": "Problem details (ProblemDetailsFilter).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDto"
+                }
+              }
+            }
           }
         },
         "summary": "Returns sellers only, capped, never suggests (S7.6).",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5369,6 +6709,15 @@
         "summary": "Market-wide public Products, newest first publication, keyset-paginated; the requester's Market only (empty without one). Not Search, not ranked.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5423,6 +6772,15 @@
         "summary": "Header, stats, trust level, availability, review summary and fulfilment -- one round trip (S3.1; the Buyer Seller Profile header and About).",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5483,6 +6841,15 @@
         "summary": "Available Products first, then unavailable ones, each group in the Seller's display order (MOB-02 R-09; founder ON-026 option A); lean by design (S14). Prices are the ACTIVE Variants' span. Availability is read per page: a Product that changes group mid-browse may repeat (de-duplicate by id) or appear on the next refresh.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5546,6 +6913,15 @@
         "summary": "Structured attributes, variants, stock with confirmed_at. Only a PUBLISHED Product of a visible Seller; anything else is the same 404.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5606,6 +6982,15 @@
         "summary": "Public Seller-service reviews (REV-01: verified evidence only, core.v_review_public), newest first, evidence basis per review; no buyer, order or claim reference. Filtered before paging. Cursor-paginated.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5666,6 +7051,15 @@
         "summary": "The Seller's public Scenes, newest first: only Scenes the canonical public gate (v_scene_post_public) admits now; a PRIVATE, draft or archived Scene is simply absent. Cursor-paginated.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5717,13 +7111,22 @@
         "summary": "Scope is one seller, always (S7.5). Not Marketplace Search. Prices are the ACTIVE Variants' span, as on the list.",
         "tags": [
           "Storefront"
+        ],
+        "security": [
+          {},
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     }
   },
   "info": {
     "title": "Adulis API",
-    "description": "",
+    "description": "Every response carries `X-Adulis-Request-Id` and `Content-Language` (`en` or `am`, resolved from the optional `Accept-Language` request header; the API sends message keys, never rendered text). A replayed keyed request answers with the stored response and `X-Adulis-Idempotent-Replay: true`. `Retry-After` accompanies a 429 and a 503. A browser write that carries the session cookie must also send the console `Origin` header; without it the answer is 403 PERMISSION_DENIED. A mobile app authenticates with its bearer token and sends no `Origin`.",
     "version": "1",
     "contact": {}
   },
@@ -5899,6 +7302,28 @@
           "slots": {
             "type": "object",
             "additionalProperties": true
+          },
+          "subject": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "description": "The object this item is about."
+          },
+          "resolving_action": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "description": "What the caller can do to clear this item; further members depend on the kind."
           }
         },
         "required": [

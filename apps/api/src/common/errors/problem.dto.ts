@@ -11,6 +11,21 @@ export class ProblemItemDto {
   @ApiProperty() code!: string;
   @ApiProperty() message_key!: string;
   @ApiPropertyOptional({ type: 'object', additionalProperties: true }) slots?: Record<string, unknown>;
+  @ApiPropertyOptional({
+    type: 'object',
+    required: ['kind', 'id'],
+    properties: { kind: { type: 'string' }, id: { type: 'string' } },
+    description: 'The object this item is about.',
+  })
+  subject?: { kind: string; id: string };
+  @ApiPropertyOptional({
+    type: 'object',
+    required: ['kind'],
+    properties: { kind: { type: 'string' } },
+    additionalProperties: true,
+    description: 'What the caller can do to clear this item; further members depend on the kind.',
+  })
+  resolving_action?: { kind: string; [member: string]: unknown };
 }
 
 export class ProblemDto {

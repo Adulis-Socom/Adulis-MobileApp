@@ -1,5 +1,5 @@
 import { LEGACY_COMMERCE_CONTROLLERS } from '../src/common/http/openapi-security';
-import { loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
+import { guardDemandsSeller, loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
 
 /**
  * contracts/openapi.json against the controllers it is generated from: the
@@ -25,6 +25,8 @@ const label = (r: Route) => `${r.http.toUpperCase()} ${r.path}`;
 
 /** The guard accepts a session cookie (console) or a bearer token (mobile): either one authenticates. Written out, not imported, so the test cannot agree with a changed constant. */
 const EITHER_CREDENTIAL = [{ cookie: [] }, { bearer: [] }];
+/** A public route honours a credential when one is presented and refuses a dead one, so it accepts either or none. */
+const OPTIONAL_CREDENTIAL = [{}, { cookie: [] }, { bearer: [] }];
 /** Operations that declare their own security, kept as authored: Collections (bearer) and the seller scene posts (cookie). */
 const OWN_SECURITY: ReadonlyArray<readonly [RegExp, object[]]> = [
   [/^\w+ \/v1\/collections(\/|:|$)/, [{ bearer: [] }]],
@@ -59,17 +61,16 @@ describe('contracts/openapi.json against the controllers', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('declares security on every route the AuthGuard protects, and on no public route', () => {
+  it('declares security on every route: the credentials a protected route demands, the optional ones a public route honours', () => {
     const wrong = inScope.flatMap((r) => {
       const security = op(r).security;
-      if (r.isPublic) return security ? [`${label(r)} is public and declares security`] : [];
-      const expected = OWN_SECURITY.find(([re]) => re.test(label(r)))?.[1] ?? EITHER_CREDENTIAL;
+      const expected = OWN_SECURITY.find(([re]) => re.test(label(r)))?.[1] ?? (r.isPublic ? OPTIONAL_CREDENTIAL : EITHER_CREDENTIAL);
       return JSON.stringify(security) === JSON.stringify(expected) ? [] : [`${label(r)} declares ${JSON.stringify(security)}, expected ${JSON.stringify(expected)}`];
     });
     expect(wrong).toEqual([]);
   });
 
-  it('pins the exact security shapes: 69 operations accept either credential, 9 only a bearer token, 6 only the session cookie', () => {
+  it('pins the exact security shapes: 69 operations accept either credential, 9 only a bearer token, 6 only the session cookie, 23 take an optional credential', () => {
     const shapes = new Map<string, number>();
     for (const [, item] of Object.entries(contract.paths)) {
       for (const o of Object.values(item)) {
@@ -80,7 +81,26 @@ describe('contracts/openapi.json against the controllers', () => {
       [JSON.stringify(EITHER_CREDENTIAL)]: 69,
       [JSON.stringify([{ bearer: [] }])]: 9,
       [JSON.stringify([{ cookie: [] }])]: 6,
+      [JSON.stringify(OPTIONAL_CREDENTIAL)]: 23,
     });
+  });
+
+  it('declares X-Adulis-Seller (required) on exactly the routes where the AuthGuard demands it', async () => {
+    const wrong: string[] = [];
+    for (const r of inScope) {
+      const header = (op(r).parameters ?? []).find((p) => p.in === 'header' && p.name.toLowerCase() === 'x-adulis-seller');
+      const demanded = await guardDemandsSeller(r);
+      if (demanded && header?.required !== true) wrong.push(`${label(r)} demands the seller context and does not declare it as required`);
+      if (!demanded && header?.required === true) wrong.push(`${label(r)} declares a required seller header the guard does not demand`);
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('gives every in-scope operation a problem response for the failures the contract does not list', () => {
+    const wrong = inScope
+      .filter((r) => JSON.stringify(op(r).responses['default']?.content?.['application/problem+json']?.schema) !== JSON.stringify({ $ref: '#/components/schemas/ProblemDto' }))
+      .map(label);
+    expect(wrong).toEqual([]);
   });
 
   it('keeps a query parameter required only where the handler refuses its absence', () => {
