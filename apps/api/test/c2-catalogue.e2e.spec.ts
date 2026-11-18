@@ -12,6 +12,7 @@ import {
   FakePostLinkAdapter,
   POST_LINK_ADAPTER,
 } from '../src/modules/catalogue/post-link.adapter';
+import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
@@ -337,7 +338,8 @@ describe('C2 — catalogue, media and stock', () => {
     });
 
     it('publishes within the cap; the THIRD publish refuses at the NEW-level cap of 2', async () => {
-      await write('post', `/v1/seller/products/${productId}/publish`).send({}).expect(200);
+      const published = await write('post', `/v1/seller/products/${productId}/publish`).send({}).expect(200);
+      expectConforms(published, 'post', '/v1/seller/products/{id}/publish');
       const p2 = await write('post', '/v1/seller/products')
         .send({ name: 'Second', base_price_minor: 1000, base_price_currency: 'ETB' })
         .expect(201);
@@ -357,6 +359,7 @@ describe('C2 — catalogue, media and stock', () => {
       const r = await write('post', `/v1/seller/products/${productId}/unpublish`)
         .send({})
         .expect(200);
+      expectConforms(r, 'post', '/v1/seller/products/{id}/unpublish');
       expect(r.body.visibility).toBe('UNPUBLISHED');
       const p = await read(`/v1/seller/products/${productId}`).expect(200);
       expect(p.body.unpublished_reason).toBe('SELLER');
@@ -386,9 +389,10 @@ describe('C2 — catalogue, media and stock', () => {
     });
 
     it('confirm-stock resets the timestamp; events list newest first', async () => {
-      await write('post', `/v1/seller/variants/${variantId}/confirm-stock`)
+      const confirmed = await write('post', `/v1/seller/variants/${variantId}/confirm-stock`)
         .send({})
         .expect(200);
+      expectConforms(confirmed, 'post', '/v1/seller/variants/{id}/confirm-stock');
       const r = await read(`/v1/seller/variants/${variantId}/stock-events`).expect(200);
       expect(r.body.data.length).toBeGreaterThan(0);
       expect(r.body.data[0].reason).toBeDefined();
@@ -608,6 +612,7 @@ describe('C2 — catalogue, media and stock', () => {
       const r = await write('post', `/v1/seller/products/${productId}/video`)
         .send({ action: 'REQUEST_UPLOAD' })
         .expect(200);
+      expectConforms(r, 'post', '/v1/seller/products/{id}/video');
       const vkey = r.body.upload.key as string;
       storage.put(vkey, { bytes: 60 * 1024 * 1024, contentType: 'video/mp4' });
       const c = await write('post', `/v1/seller/products/${productId}/video`)
@@ -615,9 +620,10 @@ describe('C2 — catalogue, media and stock', () => {
         .expect(413);
       expect(c.body.code).toBe('PAYLOAD_TOO_LARGE');
       storage.put(vkey, { bytes: 8 * 1024 * 1024, contentType: 'video/mp4' });
-      await write('post', `/v1/seller/products/${productId}/video`)
+      const committed = await write('post', `/v1/seller/products/${productId}/video`)
         .send({ action: 'COMMIT', key: vkey, duration_seconds: 20, height_px: 480 })
         .expect(201);
+      expectConforms(committed, 'post', '/v1/seller/products/{id}/video');
     });
   });
 

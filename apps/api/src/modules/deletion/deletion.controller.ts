@@ -7,7 +7,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiAcceptedResponse, ApiOkResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
@@ -26,6 +26,9 @@ import {
 } from '../auth/auth.schemas';
 import { z } from 'zod';
 import { DeletionService, type TicketAccount } from './deletion.service';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto } from './deletion.dto';
+import { EmptyResponseDto } from '../auth/auth.dto';
 
 /**
  * C6 — account deletion from the web (12.18) and seller deletion/closure
@@ -67,6 +70,8 @@ export class DeletionController {
     return id;
   }
 
+  @ApiIdempotencyKey()
+  @ApiAcceptedResponse({ type: EmptyResponseDto })
   @Post('deletion/otp/request')
   @Public()
   @HttpCode(202)
@@ -114,6 +119,7 @@ export class DeletionController {
    * Returns a deletion ticket, not a session: no cookie is set, no bearer
    * is issued, and the response says what the ticket is for.
    */
+  @ApiOkResponse({ type: DeletionTicketDto })
   @Post('deletion/otp/verify')
   @Public()
   @HttpCode(200)
@@ -137,6 +143,7 @@ export class DeletionController {
     });
   }
 
+  @ApiOkResponse({ type: DeletionPreviewDto })
   @Get('deletion/preview')
   @Public()
   @ApiOperation({ summary: 'Blockers as items[] and what deletion does, before confirm.' })
@@ -148,6 +155,8 @@ export class DeletionController {
     });
   }
 
+  @ApiIdempotencyKey()
+  @ApiOkResponse({ type: DeletionConfirmedDto })
   @Post('deletion/confirm')
   @Public()
   @HttpCode(200)
@@ -207,6 +216,7 @@ export class DeletionController {
     );
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/deletion')
   @ReplayGrant('seller.account:delete')
   @HttpCode(200)
@@ -231,6 +241,7 @@ export class DeletionController {
     return result;
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/closure')
   @ReplayGrant('seller.store:write')
   @HttpCode(200)

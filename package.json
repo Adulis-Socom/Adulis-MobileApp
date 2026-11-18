@@ -21,6 +21,8 @@
     "gates": "node --env-file-if-exists=.env ops/scripts/gates.mjs",
     "ci:local": "pnpm gates",
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js -d DATABASE_URL_MIGRATE -m db/migrations -j sql up",
+    "db:migrate:guarded": "node --env-file-if-exists=.env ops/scripts/migration-guard.mjs up",
+    "db:migration-guard": "node --env-file-if-exists=.env ops/scripts/migration-guard.mjs verify",
     "db:check": "node --env-file-if-exists=.env ops/scripts/db-check.mjs",
     "verify:permission-doc": "node ops/scripts/verify-permission-doc.mjs",
     "db:determinism": "node --env-file-if-exists=.env ops/scripts/db-determinism.mjs",

@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { FakeSmsAdapter, SMS_ADAPTER } from '../src/modules/auth/sms.adapter';
+import { expectConforms } from './contract-support';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
 /**
@@ -1205,12 +1206,13 @@ const browserCookie = async (): Promise<string> => {
         .expect(201);
 
       // The deletion OTP mints a ticket, and the ticket is NOT a session.
-      await http()
+      const requested = await http()
         .post('/v1/deletion/otp/request')
         .set('Idempotency-Key', key())
         .set('X-Adulis-Device', d)
         .send({ phone: P_WEBDEL })
         .expect(202);
+      expectConforms(requested, 'post', '/v1/deletion/otp/request', true);
       expect(sms.lastTo(P_WEBDEL)?.templateKey).toBe('sms.otp.account_deletion');
       const verified = await http()
         .post('/v1/deletion/otp/verify')
@@ -1220,6 +1222,7 @@ const browserCookie = async (): Promise<string> => {
         .set('X-Adulis-Device', d)
         .send({ phone: P_WEBDEL, code: codeFor(P_WEBDEL) })
         .expect(200);
+      expectConforms(verified, 'post', '/v1/deletion/otp/verify', true);
       const ticket = verified.body.ticket as string;
       await http()
         .get('/v1/orders')
@@ -1237,6 +1240,7 @@ const browserCookie = async (): Promise<string> => {
         .get('/v1/deletion/preview')
         .set('Authorization', `Ticket ${ticket}`)
         .expect(200);
+      expectConforms(blockedPreview, 'get', '/v1/deletion/preview', true);
       expect(
         blockedPreview.body.items.map((i: { code: string }) => i.code),
       ).toContain('BUYER_ORDERS_IN_PAYMENT');
@@ -1257,15 +1261,17 @@ const browserCookie = async (): Promise<string> => {
         .get('/v1/deletion/preview')
         .set('Authorization', `Ticket ${ticket}`)
         .expect(200);
+      expectConforms(preview, 'get', '/v1/deletion/preview', true);
       expect(preview.body.items).toHaveLength(0);
       expect(preview.body.effects.length).toBeGreaterThan(0);
 
-      await http()
+      const confirmed = await http()
         .post('/v1/deletion/confirm')
         .set('Authorization', `Ticket ${ticket}`)
         .set('Idempotency-Key', key())
         .send({ acknowledge: true })
         .expect(200);
+      expectConforms(confirmed, 'post', '/v1/deletion/confirm', true);
 
       // Scrubbed: the session is dead, the reservation released, the row
       // tombstoned — and the number is free for a brand-new account.

@@ -222,7 +222,17 @@
     "/v1/auth/recovery": {
       "post": {
         "operationId": "AuthController_recovery",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "202": {
             "description": ""
@@ -255,6 +265,14 @@
         "summary": "Forget a remembered device (v1.9 S15.0b); the session stays live.",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -403,7 +421,17 @@
     "/v1/auth/step-up/request": {
       "post": {
         "operationId": "AuthController_stepUpRequest",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "202": {
             "description": ""
@@ -412,6 +440,14 @@
         "summary": "The SMS names the action (4.4); binds action and target (9.2).",
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -426,6 +462,14 @@
         },
         "tags": [
           "Auth"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1230,15 +1274,40 @@
     "/v1/conversations": {
       "post": {
         "operationId": "ChatController_open",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOpenedDto"
+                }
+              }
+            }
           }
         },
         "summary": "Create-or-return the one conversation per buyer-seller pair.",
         "tags": [
           "Chat"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "get": {
@@ -1254,16 +1323,18 @@
           },
           {
             "name": "seller_id",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
             }
@@ -1271,12 +1342,27 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPageDto"
+                }
+              }
+            }
           }
         },
         "summary": "?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default.",
         "tags": [
           "Chat"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1291,16 +1377,40 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationEscalatedDto"
+                }
+              }
+            }
           }
         },
         "summary": "Free escalation — S15.1 layer 5 on request.",
         "tags": [
           "Chat"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1318,8 +1428,9 @@
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
             }
@@ -1327,11 +1438,26 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePageDto"
+                }
+              }
+            }
           }
         },
         "tags": [
           "Chat"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "post": {
@@ -1344,16 +1470,40 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSentDto"
+                }
+              }
+            }
           }
         },
         "summary": "text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.",
         "tags": [
           "Chat"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1423,10 +1573,27 @@
     "/v1/deletion/confirm": {
       "post": {
         "operationId": "DeletionController_confirm",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionConfirmedDto"
+                }
+              }
+            }
           }
         },
         "summary": "Requires explicit acknowledgement; irreversible.",
@@ -1438,10 +1605,27 @@
     "/v1/deletion/otp/request": {
       "post": {
         "operationId": "DeletionController_otpRequest",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "202": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "purpose ACCOUNT_DELETION; the SMS names the action (4.4).",
@@ -1456,7 +1640,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionTicketDto"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1470,7 +1661,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionPreviewDto"
+                }
+              }
+            }
           }
         },
         "summary": "Blockers as items[] and what deletion does, before confirm.",
@@ -1593,7 +1791,17 @@
     "/v1/events": {
       "post": {
         "operationId": "AnalyticsController_postEvent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "202": {
             "description": ""
@@ -1602,6 +1810,14 @@
         "summary": "The closed allow-list of two client-observed events (S11).",
         "tags": [
           "Analytics"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -1698,18 +1914,60 @@
           },
           {
             "name": "seller_id",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPageDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_readAll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1718,23 +1976,16 @@
             "description": ""
           }
         },
-        "summary": "?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.",
         "tags": [
           "Notifications"
-        ]
-      }
-    },
-    "/v1/notifications/read-all": {
-      "post": {
-        "operationId": "NotificationsController_readAll",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
           }
-        },
-        "tags": [
-          "Notifications"
         ]
       }
     },
@@ -1749,16 +2000,40 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationReadDto"
+                }
+              }
+            }
           }
         },
         "summary": "Read state syncs across surfaces — one list, two clients.",
         "tags": [
           "Notifications"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2016,7 +2291,17 @@
     "/v1/post-links/resolve": {
       "post": {
         "operationId": "StorefrontController_resolve",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -2048,7 +2333,17 @@
     "/v1/reports": {
       "post": {
         "operationId": "ReportsController_create",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -2057,6 +2352,14 @@
         "summary": "Any surface, any authenticated actor; the queue trigger routes it.",
         "tags": [
           "Reports"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2072,6 +2375,14 @@
         "summary": "The reporter's own reports and their outcomes.",
         "tags": [
           "Reports"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2204,7 +2515,17 @@
     "/v1/seller": {
       "post": {
         "operationId": "OnboardingController_createSeller",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -2213,6 +2534,14 @@
         "summary": "Create the seller. The first eligibility evaluation runs inline.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2222,16 +2551,18 @@
         "parameters": [
           {
             "name": "from",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "to",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD. Last day of the window. Default: today.",
             "schema": {
               "type": "string"
             }
@@ -2245,6 +2576,14 @@
         "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
         "tags": [
           "Analytics"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2254,16 +2593,18 @@
         "parameters": [
           {
             "name": "from",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "to",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD. Last day of the window. Default: today.",
             "schema": {
               "type": "string"
             }
@@ -2277,6 +2618,14 @@
         "summary": "Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted.",
         "tags": [
           "Analytics"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2292,6 +2641,14 @@
         "summary": "The saved weekly pattern the editor loads (v1.9 S15.0b).",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "put": {
@@ -2305,6 +2662,14 @@
         "summary": "The whole weekly pattern. Zero windows is valid and means closed.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2314,16 +2679,18 @@
         "parameters": [
           {
             "name": "from",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "YYYY-MM-DD. Earliest closure date to list. Default: today.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Page size, 1-50. Default 20.",
             "schema": {
               "type": "string"
             }
@@ -2336,6 +2703,14 @@
         },
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2360,6 +2735,14 @@
         "summary": "Marks the store closed on that date. Idempotent by path; no key.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -2382,6 +2765,14 @@
         "summary": "Removes the closure. 204 whether or not it existed.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2436,7 +2827,17 @@
     "/v1/seller/closure": {
       "post": {
         "operationId": "DeletionController_enterClosure",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -2445,6 +2846,14 @@
         "summary": "Enters CLOSING: new reservations stop, existing orders operable.",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -2458,6 +2867,14 @@
         "summary": "Returns to ACTIVE. Reversible by design.",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2472,6 +2889,14 @@
         },
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2529,7 +2954,17 @@
     "/v1/seller/deletion": {
       "post": {
         "operationId": "DeletionController_deleteSeller",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -2538,6 +2973,14 @@
         "summary": "Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2553,6 +2996,14 @@
         "summary": "200 with items[] — a state, not a failure (S16.9).",
         "tags": [
           "Deletion"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2567,6 +3018,14 @@
         },
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "put": {
@@ -2580,13 +3039,31 @@
         "summary": "The whole set. At least one active, or 422.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
     "/v1/seller/identity-verification": {
       "post": {
         "operationId": "OnboardingController_identityVerification",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -2595,6 +3072,14 @@
         "summary": "Operator-only (G1.1). An operator attests about a named person. No image ever reaches Adulis.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2610,6 +3095,14 @@
         "summary": "The stores this account owns or is a live team member of (D-97).",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2624,6 +3117,14 @@
         },
         "tags": [
           "Notifications"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "patch": {
@@ -2637,6 +3138,14 @@
         "summary": "suppressible=false is not togglable: 422, never a silent accept.",
         "tags": [
           "Notifications"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -2977,11 +3486,29 @@
         "summary": "The pending transfer, visible to its two parties only.",
         "tags": [
           "Ownership"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "post": {
         "operationId": "OwnershipController_request",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -2990,6 +3517,14 @@
         "summary": "Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.",
         "tags": [
           "Ownership"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -3003,6 +3538,14 @@
         "summary": "Either party ends it: the owner cancels, the recipient declines.",
         "tags": [
           "Ownership"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3065,7 +3608,17 @@
     "/v1/seller/products": {
       "post": {
         "operationId": "CatalogueController_createProduct",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -3073,6 +3626,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "get": {
@@ -3080,16 +3641,18 @@
         "parameters": [
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Page size, 1-50. Default 20.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
             }
@@ -3226,6 +3789,14 @@
         "summary": "The seller list. Carries the card image key and the resolved publication cap.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3250,6 +3821,14 @@
         "summary": "The editor's read: variants, attributes, media, posts, state.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "patch": {
@@ -3271,6 +3850,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -3293,6 +3880,14 @@
         "summary": "409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3307,6 +3902,15 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3464,6 +4068,14 @@
         "summary": "Signed upload then commit — one catalogued path, two actions.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3514,6 +4126,14 @@
         "summary": "The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3549,6 +4169,14 @@
         "summary": "Removes one image and schedules the objects for purge.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3563,16 +4191,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "The Product is published."
           }
         },
         "summary": "409 with readiness items[] where blocked.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3587,6 +4232,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -3597,6 +4251,14 @@
         "summary": "Canonical id resolved server-side; never the URL string.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3611,16 +4273,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "The Product is unpublished; the row is kept."
           }
         },
         "summary": "Removes from the storefront; keeps the row.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3635,6 +4314,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -3644,6 +4332,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3658,15 +4354,35 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
+          "200": {
+            "description": "REQUEST_UPLOAD: the signed upload."
+          },
           "201": {
-            "description": ""
+            "description": "COMMIT: the video is registered."
           }
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -3688,6 +4404,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3703,6 +4427,14 @@
         "summary": "The saved profile, with status and handle (v1.9 S15.0b).",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "patch": {
@@ -3715,6 +4447,14 @@
         },
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -3730,6 +4470,14 @@
         "summary": "The nine readiness items — a state, not a failure.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4179,11 +4927,29 @@
         "summary": "Linked accounts, with the follower count and when it was captured.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "post": {
         "operationId": "OnboardingController_createSocialAccount",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -4192,6 +4958,14 @@
         "summary": "Link a social account; issues the account-control code.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4206,16 +4980,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "The verification attempt is recorded."
           }
         },
         "summary": "Fetch and match; captures the follower count at verification.",
         "tags": [
           "Onboarding"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4231,11 +5022,29 @@
         "summary": "Business tier; Owner/Admin only (seller.staff:admin).",
         "tags": [
           "Team"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "post": {
         "operationId": "TeamController_invite",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -4244,6 +5053,14 @@
         "summary": "Invite by phone; the member signs in with their own OTP.",
         "tags": [
           "Team"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4268,6 +5085,14 @@
         "summary": "Revokes on the next request (R28); the account is untouched.",
         "tags": [
           "Team"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4291,6 +5116,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       },
       "delete": {
@@ -4313,6 +5146,14 @@
         "summary": "Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4327,16 +5168,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "Stock confirmed; stock_confirmed_at is reset."
           }
         },
         "summary": "Resets stock_confirmed_at (S13.3).",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4351,6 +5209,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -4361,6 +5228,14 @@
         "summary": "Writes a StockEvent. Never a direct count set.",
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -4378,16 +5253,18 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Page size, 1-50. Default 20.",
             "schema": {
               "type": "string"
             }
           },
           {
             "name": "cursor",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "next_cursor of the previous page.",
             "schema": {
               "type": "string"
             }
@@ -4400,6 +5277,14 @@
         },
         "tags": [
           "Catalogue"
+        ],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
         ]
       }
     },
@@ -5403,6 +6288,557 @@
             ]
           }
         }
+      },
+      "DeletionTicketDto": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sent as Authorization: Ticket <ticket> to preview and confirm."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fifteen minutes after it was issued."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "ACCOUNT_DELETION"
+            ]
+          }
+        },
+        "required": [
+          "ticket",
+          "expires_at",
+          "scope"
+        ]
+      },
+      "DeletionBlockerSubjectDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SELLER"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "DeletionBlockerSlotsDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many rows block the deletion."
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "DeletionResolvingActionDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "A stable key the client localises."
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "DeletionBlockerDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The blocker, e.g. NON_TERMINAL_RESERVATIONS."
+          },
+          "message_key": {
+            "type": "string"
+          },
+          "subject": {
+            "description": "The store it concerns; absent for an Account-level blocker.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeletionBlockerSubjectDto"
+              }
+            ]
+          },
+          "slots": {
+            "$ref": "#/components/schemas/DeletionBlockerSlotsDto"
+          },
+          "resolving_action": {
+            "$ref": "#/components/schemas/DeletionResolvingActionDto"
+          }
+        },
+        "required": [
+          "code",
+          "message_key",
+          "slots",
+          "resolving_action"
+        ]
+      },
+      "DeletionEffectDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message_key"
+        ]
+      },
+      "DeletionPreviewDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Empty when nothing blocks the deletion.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeletionBlockerDto"
+            }
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeletionEffectDto"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "effects"
+        ]
+      },
+      "DeletionConfirmedDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
+      "ConversationOpenedDto": {
+        "type": "object",
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The one conversation of this Buyer and Seller, created now or returned."
+          }
+        },
+        "required": [
+          "conversation_id"
+        ]
+      },
+      "BuyerConversationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_message_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "seller_id",
+          "store_name",
+          "handle",
+          "started_at",
+          "last_message_at"
+        ]
+      },
+      "SellerConversationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "buyer_account_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_message_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "buyer_account_id",
+          "started_at",
+          "last_message_at"
+        ]
+      },
+      "ConversationPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/BuyerConversationDto"
+                },
+                {
+                  "$ref": "#/components/schemas/SellerConversationDto"
+                }
+              ]
+            },
+            "description": "as=buyer lists BuyerConversationDto, as=seller lists SellerConversationDto. Most recent message first."
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pass as cursor for the next page; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "BotMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_kind": {
+            "type": "string",
+            "enum": [
+              "BOT"
+            ]
+          },
+          "template_key": {
+            "type": "string",
+            "description": "The answer template, or the catalogue key chat.bot.escalated."
+          },
+          "slots": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Always empty today: a template with slots is escalated, not sent."
+          },
+          "resolution_path": {
+            "type": "string",
+            "enum": [
+              "STRUCTURE",
+              "CHIP",
+              "KEYWORD",
+              "EMBEDDING",
+              "CLASSIFIER",
+              "ESCALATED"
+            ],
+            "nullable": true,
+            "description": "How the bot arrived at it."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "sender_kind",
+          "template_key",
+          "slots",
+          "resolution_path",
+          "sent_at"
+        ]
+      },
+      "HumanMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender_kind": {
+            "type": "string",
+            "enum": [
+              "BUYER",
+              "SELLER",
+              "TEAM_MEMBER"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale it was written in."
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The Product the message is about."
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The Order the message is about."
+          }
+        },
+        "required": [
+          "id",
+          "sender_kind",
+          "body",
+          "locale",
+          "sent_at",
+          "read_at",
+          "product_id",
+          "order_id"
+        ]
+      },
+      "MessagePageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/BotMessageDto"
+                },
+                {
+                  "$ref": "#/components/schemas/HumanMessageDto"
+                }
+              ]
+            },
+            "description": "Newest first."
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pass as cursor for the next page; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "BotTurnDto": {
+        "type": "object",
+        "properties": {
+          "resolution_path": {
+            "type": "string",
+            "enum": [
+              "CHIP",
+              "KEYWORD",
+              "EMBEDDING",
+              "CLASSIFIER",
+              "ESCALATED"
+            ]
+          },
+          "bot_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot message the turn wrote."
+          },
+          "template_key": {
+            "type": "string",
+            "description": "The answer template; absent when the turn escalated."
+          },
+          "slots": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Always empty today; absent when the turn escalated."
+          }
+        },
+        "required": [
+          "resolution_path",
+          "bot_message_id"
+        ]
+      },
+      "MessageSentDto": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bot": {
+            "nullable": true,
+            "description": "null when the bot did not run: a Seller-side message, or a Seller whose plan has no chatbot.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BotTurnDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "message_id",
+          "bot"
+        ]
+      },
+      "ConversationEscalatedDto": {
+        "type": "object",
+        "properties": {
+          "escalated": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "bot_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The escalation message the bot wrote."
+          }
+        },
+        "required": [
+          "escalated",
+          "bot_message_id"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "template_key": {
+            "type": "string",
+            "description": "The message template; the client renders it from its own catalogue."
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale the notification was enqueued in."
+          },
+          "slots": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Typed values for the template; never pre-formatted text."
+          },
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The Order it is about, when it is about one."
+          },
+          "suppressible": {
+            "type": "boolean",
+            "description": "false: it cannot be switched off by a notification preference."
+          },
+          "scheduled_for": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was due to be sent; the list is ordered by it, newest first."
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "null until it is read."
+          }
+        },
+        "required": [
+          "id",
+          "template_key",
+          "locale",
+          "slots",
+          "order_id",
+          "suppressible",
+          "scheduled_for",
+          "read_at"
+        ]
+      },
+      "NotificationPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Pass as cursor for the next page; null at the end."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor"
+        ]
+      },
+      "NotificationReadDto": {
+        "type": "object",
+        "properties": {
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was first read; a repeat call keeps the original time."
+          }
+        },
+        "required": [
+          "read_at"
+        ]
       },
       "StorefrontStatsDto": {
         "type": "object",

@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiCreatedResponse, ApiExtraModels, ApiOkResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -7,6 +7,8 @@ import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ChatService } from './chat.service';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { BotMessageDto, BuyerConversationDto, ConversationEscalatedDto, ConversationOpenedDto, ConversationPageDto, HumanMessageDto, MessagePageDto, MessageSentDto, SellerConversationDto } from './chat.dto';
 
 /** C7 — chat (ADU-API-01 v1.7 section 12.7). */
 
@@ -50,6 +52,8 @@ export class ChatController {
   ) {}
 
   /** 12.7; anchorless again since D-66 (T7). Idempotent by the pair's UNIQUE. */
+  @ApiIdempotencyKey()
+  @ApiCreatedResponse({ type: ConversationOpenedDto })
   @Post('conversations')
   @ApiOperation({
     summary: 'Create-or-return the one conversation per buyer-seller pair.',
@@ -64,6 +68,10 @@ export class ChatController {
     );
   }
 
+  @ApiQuery({ name: 'seller_id', required: false, description: 'Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
+  @ApiExtraModels(BuyerConversationDto, SellerConversationDto)
+  @ApiOkResponse({ type: ConversationPageDto })
   @Get('conversations')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= is REQUIRED — R10, no default.' })
   async list(
@@ -77,6 +85,9 @@ export class ChatController {
     );
   }
 
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
+  @ApiExtraModels(BotMessageDto, HumanMessageDto)
+  @ApiOkResponse({ type: MessagePageDto })
   @Get('conversations/:id/messages')
   async messages(
     @Req() req: AuthedRequest,
@@ -89,6 +100,8 @@ export class ChatController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiCreatedResponse({ type: MessageSentDto })
   @Post('conversations/:id/messages')
   @ReplayGrant('seller.messages:read', 'seller.messages:send')
   @ApiOperation({ summary: 'text or chip_id, optionally anchored on product_id or order_id; the bot replies with template_key and slots, never prose.' })
@@ -105,6 +118,8 @@ export class ChatController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiOkResponse({ type: ConversationEscalatedDto })
   @Post('conversations/:id/escalate')
   @HttpCode(200)
   @ApiOperation({ summary: 'Free escalation — S15.1 layer 5 on request.' })

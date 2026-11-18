@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -29,6 +29,7 @@ import {
   stockBody,
   videoBody,
 } from './catalogue.schemas';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /** C2 — catalogue, media and stock (ADU-API-01 v1.6 section 12.10). */
 
@@ -64,6 +65,7 @@ export class CatalogueController {
     private readonly svc: CatalogueService,
   ) {}
 
+  @ApiIdempotencyKey()
   @Post('seller/products')
   @ReplayGrant('seller.products:write')
   async createProduct(
@@ -87,6 +89,8 @@ export class CatalogueController {
    * there and fails in front of a seller", in the words of the sibling comment
    * below that made the same fix for the image bodies.
    */
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @Get('seller/products')
   @ApiOperation({
     summary: 'The seller list. Carries the card image key and the resolved publication cap.',
@@ -180,6 +184,8 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.patchProduct(trx, req, id, body));
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'The Product is published.' })
   @Post('seller/products/:id/publish')
   @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: '409 with readiness items[] where blocked.' })
@@ -194,6 +200,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.' })
   @Post('seller/products/:id/unpublish')
   @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: 'Removes from the storefront; keeps the row.' })
@@ -215,6 +223,7 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.deleteProduct(trx, req, id));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/variants')
   @ReplayGrant('seller.products:write')
   async createVariant(
@@ -257,6 +266,7 @@ export class CatalogueController {
    * two ever disagree the zod schema governs, because it is the one that
    * actually refuses a request; this is the description of it.
    */
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/images')
   @ReplayGrant('seller.media:write')
   @ApiOperation({ summary: 'Signed upload then commit \u2014 one catalogued path, two actions.' })
@@ -381,6 +391,9 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.reorderImages(trx, req, id, body));
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'REQUEST_UPLOAD: the signed upload.' })
+  @ApiResponse({ status: 201, description: 'COMMIT: the video is registered.' })
   @Post('seller/products/:id/video')
   @ReplayGrant('seller.media:write')
   async video(
@@ -402,6 +415,7 @@ export class CatalogueController {
     await this.tx.run(req, (trx) => this.svc.deleteVideo(trx, req, id));
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/products/:id/social-posts')
   @ReplayGrant('seller.products:write')
   @ApiOperation({ summary: 'Canonical id resolved server-side; never the URL string.' })
@@ -417,6 +431,7 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/variants/:id/stock')
   @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Writes a StockEvent. Never a direct count set.' })
@@ -432,6 +447,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiIdempotencyKey()
+  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.' })
   @Post('seller/variants/:id/confirm-stock')
   @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Resets stock_confirmed_at (S13.3).' })
@@ -446,6 +463,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @Get('seller/variants/:id/stock-events')
   async listStockEvents(
     @Req() req: LocalizedRequest,

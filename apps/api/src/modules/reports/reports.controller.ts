@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /**
  * C8 — reports (ADU-API-01 v1.6 section 12.15; ADU-PRD-01 S18).
@@ -45,6 +46,7 @@ const reportBody = z.object({
 export class ReportsController {
   constructor(private readonly tx: HandlerTransaction) {}
 
+  @ApiIdempotencyKey()
   @Post('reports')
   @ApiOperation({ summary: 'Any surface, any authenticated actor; the queue trigger routes it.' })
   async create(

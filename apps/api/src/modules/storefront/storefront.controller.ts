@@ -35,6 +35,7 @@ import {
   publicPrice,
   variantSellable,
 } from '../catalogue/public-projection';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /**
  * C8 — the public, anonymous group (ADU-API-01 v1.6 section 12.1).
@@ -747,6 +748,7 @@ export class StorefrontController {
    * (S7.5.1). The canonical id comes from the adapter; unresolved and
    * conflicting links are their own analytics events.
    */
+  @ApiIdempotencyKey()
   @Post('post-links/resolve')
   @Public()
   @ApiOperation({

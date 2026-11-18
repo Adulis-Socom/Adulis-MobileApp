@@ -633,6 +633,14 @@ const GATES = [
    * against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
   { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs', 'ops/scripts/db-backup-verify.test.mjs', 'ops/scripts/pg-recovery-verdict.test.mjs', 'ops/scripts/mobile-runtime-deps.test.mjs'] },
+
+  /**
+   * APPENDED (DB-LIVE-02). The migration-file guard: an incomplete, renamed, duplicated or
+   * edited migration set is refused before node-pg-migrate starts (it silently skips a missing file), the
+   * database history must be exactly the pinned prefix, and the pinned manifest must equal db/migrations
+   * (a new migration is pinned in the same change). No database is read: the history is injected.
+   */
+  { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs'] },
 ];
 
 /**

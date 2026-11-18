@@ -131,7 +131,7 @@ function ProductContent({
         accessibilityRole="link"
         accessibilityHint={fillSlots(t('buyer.seller.view'), { store: product.seller.store_name }) ?? undefined}
         onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: product.seller.handle } })}
-        style={{ minHeight: 44, justifyContent: 'center' }}
+        style={{ minHeight: theme.touchTarget, justifyContent: 'center' }}
         testID="product-seller"
       >
         <AppText style={{ color: theme.color.textSecondary }}>

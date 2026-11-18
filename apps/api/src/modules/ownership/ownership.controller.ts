@@ -7,6 +7,7 @@ import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 
 /**
  * C6 — ownership transfer (ADU-API-01 v1.7 section 12.12, G1.6), with
@@ -85,6 +86,7 @@ export class OwnershipController {
     });
   }
 
+  @ApiIdempotencyKey()
   @Post('seller/ownership-transfer')
   @ReplayGrant('seller.ownership:transfer')
   @ApiOperation({

@@ -25,7 +25,7 @@ import { SESSION_COOKIE, clearedHostCookie, readCookie } from '../http/cookies';
  * a cookie minted for the console could be replayed as a bearer token.
  */
 
-const PUBLIC_KEY = 'adulis:public';
+export const PUBLIC_KEY = 'adulis:public';
 /** Anonymous route: no credential demanded, none read. */
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
 
