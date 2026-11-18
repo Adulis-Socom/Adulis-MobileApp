@@ -28,8 +28,6 @@ import { useUiStore } from '../state/ui-store';
  */
 
 export const SAVED_STATE = 'saved-state';
-/** How long a failed Save or Remove waits for the read of the target's state before the failure is said. */
-const RECONCILE_WAIT_MS = 3_000;
 /** The API's ceiling: POST /v1/collections/saved-state:batch accepts 1 to 60 targets. */
 export const SAVED_STATE_MAX = 60;
 
@@ -145,17 +143,11 @@ function useSaveMutation(target: SaveTarget, surface: SaveSurface, sceneRef: str
       AccessibilityInfo.announceForAccessibility(t(saved ? 'buyer.save.added' : 'buyer.save.removed'));
     },
     onError: async (_failure, { bound }) => {
-      // Refused or unknown: read this target's state again wherever it is shown, nothing else. The failure
-      // is said only after that answer (at most RECONCILE_WAIT_MS), so it is never said of a change that
-      // the server then shows was made.
+      // Refused or unknown: read this target's state again wherever it is shown, nothing else.
       if (!bound.isCurrent()) return;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        qc.invalidateQueries({ queryKey: [SAVED_STATE], predicate: (q) => pending(q) || holds(q, target) }),
-        new Promise<void>((resolve) => (timer = setTimeout(resolve, RECONCILE_WAIT_MS))),
-      ]);
-      clearTimeout(timer);
-      // One more turn: the read's answer is delivered to the screens before this failure is.
+      void qc.invalidateQueries({ queryKey: [SAVED_STATE], predicate: (q) => pending(q) || holds(q, target) });
+      // One turn, so the screens know the read is on its way before this failure reaches them: they hold the
+      // failure back while it is (`unconfirmed`), and never say it of a change the server then shows was made.
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     },
     onSettled: () => {

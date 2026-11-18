@@ -281,6 +281,44 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
     expect(await savedButton()).toBeOnTheScreen();
     expect(adds()).toHaveLength(1);
   });
+
+  it('the failure of a Save is not said while the read that follows it is on its way, and never if that read shows it was stored', async () => {
+    signedIn();
+    fc.loseAnswer('add', 'offline');
+    const gate = held();
+    fc.intercept('state', async () => {
+      if (stateCalls().length > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: PRODUCT });
+    await fireEvent.press(await saveButton());
+    await waitFor(() => expect(stateCalls().length).toBeGreaterThanOrEqual(2));
+    await flush();
+    expect(notChanged()).toBeNull();
+    expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeOnTheScreen();
+    await act(async () => gate.release());
+    expect(await savedButton()).toBeOnTheScreen();
+    await flush();
+    expect(notChanged()).toBeNull();
+  });
+
+  it('the failure of a Save that was not stored is said once that read has answered', async () => {
+    signedIn();
+    fc.intercept('add', once(problem(500, 'INTERNAL', 'request')));
+    const gate = held();
+    fc.intercept('state', async () => {
+      if (stateCalls().length > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: PRODUCT });
+    await fireEvent.press(await saveButton());
+    await waitFor(() => expect(stateCalls().length).toBeGreaterThanOrEqual(2));
+    await flush();
+    expect(notChanged()).toBeNull();
+    await act(async () => gate.release());
+    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(await saveButton()).toBeOnTheScreen();
+  });
 });
 
 describe('the Add to collection picker after an uncertain outcome', () => {
@@ -369,6 +407,55 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
       expect(alert).toHaveBeenCalledTimes(1);
       expect(isOn()).toBe(false);
       expect(fc.items).toEqual([]);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('no Alert while the read that follows the failure is on its way, and none if it shows the Save was stored', async () => {
+    signedIn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      fc.loseAnswer('add', 'offline');
+      const gate = held();
+      fc.intercept('state', async () => {
+        if (api.callsTo('POST /v1/collections/saved-state:batch').length > 1) await gate.gate;
+        return undefined;
+      });
+      await openShop();
+      await fireEvent.press(card());
+      await waitFor(() => expect(api.callsTo('POST /v1/collections/saved-state:batch').length).toBeGreaterThanOrEqual(2));
+      await flush();
+      expect(alert).not.toHaveBeenCalled();
+      expect(isOn()).toBe(false);
+      await act(async () => gate.release());
+      await waitFor(() => expect(isOn()).toBe(true));
+      await flush();
+      expect(alert).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('the Alert for a Save that was not stored comes once that read has answered', async () => {
+    signedIn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      fc.intercept('add', once(problem(500, 'INTERNAL', 'request')));
+      const gate = held();
+      fc.intercept('state', async () => {
+        if (api.callsTo('POST /v1/collections/saved-state:batch').length > 1) await gate.gate;
+        return undefined;
+      });
+      await openShop();
+      await fireEvent.press(card());
+      await waitFor(() => expect(api.callsTo('POST /v1/collections/saved-state:batch').length).toBeGreaterThanOrEqual(2));
+      await flush();
+      expect(alert).not.toHaveBeenCalled();
+      await act(async () => gate.release());
+      await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.failed'], expect.stringMatching(/./)));
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(isOn()).toBe(false);
     } finally {
       alert.mockRestore();
     }

@@ -7,12 +7,12 @@ import { Screen } from '../../../components/Screen';
 import { useT } from '../../../i18n/i18n';
 
 /**
- * /collections/:collectionRef -- one of the signed-in Buyer's private Collections (WO-009). Without
- * a session (signed out, or the session ended while this screen was open) it asks for a sign-in
- * instead of reading anything (WO-010 review R1). The Collection belongs to the Account that opened
- * it: kept in the stack while another Account signs in, this screen asks for nothing and leaves for
- * Saved when it is shown again, so no request names the first Account's Collection under the second
- * Account's credential and nothing depends on the server refusing it.
+ * /collections/:collectionRef -- one of the signed-in Buyer's private Collections. Without a session
+ * (signed out, or the session ended while this screen was open) it asks for a sign-in instead of
+ * reading anything. The Collection belongs to the Account that opened it: kept in the stack while
+ * another Account signs in, this screen asks for nothing and leaves for Saved when it is shown again,
+ * so no request names the first Account's Collection under the second Account's credential and
+ * nothing depends on the server refusing it.
  */
 export default function CollectionPage() {
   const t = useT();
