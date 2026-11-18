@@ -25,6 +25,12 @@ export function judgeWrite(error: unknown): WriteOutcome {
 }
 
 /**
+ * A failed change to Saved or a Collection may have been made anyway, unless the API itself refused it.
+ * Only a refusal may say "not changed"; every other outcome says the app could not confirm it.
+ */
+export const outcomeUnknown = (error: unknown): boolean => judgeWrite(error) !== 'refused';
+
+/**
  * Collections deleted since the app started, counted. A Create whose answer was lost keeps its key, and a
  * replay of that key answers the Collection it stored, even one deleted since (the API keeps the answer for a
  * day): so any deletion ends such an attempt (SavedScreen's NewCollection compares the count). Only a count,

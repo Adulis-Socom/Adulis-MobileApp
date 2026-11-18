@@ -15,6 +15,7 @@ import { isPublicRef } from './public-read';
 import { usePublicList } from './public-list';
 import { NewCollection } from './SavedScreen';
 import { SAVED_STATE, collectionName, keepIfCurrent, saveBody, usePrivateApi, useSavedState } from './saved';
+import { outcomeUnknown } from './saved-write';
 
 const SURFACES: readonly SaveSurface[] = ['PRODUCT_DETAIL', 'SCENE_EXPLORER', 'SEARCH', 'SHOP', 'SELLER_PROFILE', 'FOR_YOU', 'SAVED'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -100,7 +101,10 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
       }
       changed = true;
     } catch (failure) {
-      failedText = problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`;
+      failedText =
+        problemCode(failure) === 'NOT_FOUND'
+          ? t('buyer.save.target_gone')
+          : `${t(outcomeUnknown(failure) ? 'buyer.save.unconfirmed' : 'buyer.save.failed')} ${failureMessage(t, failure)}`;
     } finally {
       if (priv.isCurrent()) {
         await qc.invalidateQueries({ queryKey: [SAVED_STATE] });

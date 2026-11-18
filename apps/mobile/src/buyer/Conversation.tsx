@@ -8,7 +8,7 @@ import { ApiError, isTransient, newIdempotencyKey, problemCode } from '../api/cl
 import { failureMessage, fillSlots } from '../api/messages';
 import { keyUsable } from '../api/mutation';
 import { useSession } from '../auth/session';
-import { AlertText } from '../components/AlertText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
@@ -113,12 +113,13 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   // The answer whose escalation is confirmed, or may be stored and could not be settled from the
   // conversation: Ask the Seller is not offered again for it in this view (the server does not
   // de-duplicate escalations; reopening the conversation reads the server's state afresh).
-  const [passedOn, setPassedOn] = useState<string | null>(null);
+  const [passedOn, setPassedOn] = useState<{ id: string; confirmed: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ON-20261111-168 (WO-016): one NOT_FOUND covers the conversation and the Product; name neither.
   const [notFound, setNotFound] = useState<'anchored' | 'plain' | null>(null);
   const [asking, setAsking] = useState(false);
-  const [askFailed, setAskFailed] = useState(false);
+  // refused: the API answered no; unknown: no answer, so the question may have been passed on.
+  const [askFailed, setAskFailed] = useState<'refused' | 'unknown' | false>(false);
   const sending = useRef(false);
   const askingRef = useRef(false);
   // The idempotency intent is the WHOLE payload: text and Product (or none).
@@ -146,6 +147,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   });
   const askIntent = useRef<{ forMessage: string; key: string; startedAt: number } | null>(null);
 
+  // Unknown and the same message can no longer be replayed (a key conflict, or past its safe age): the
+  // app cannot confirm the outcome and offers no Try sending again, so its sentence does not promise one.
+  const withdrawn =
+    state === 'unknown' && sendIntent.current !== null && (keyLost || !keyUsable(sendIntent.current, Date.now()));
   // The alert role alone is not spoken on Android: announce what happened to the message. The effect
   // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
   // withdrawn at a press (the state does not change then).
@@ -153,7 +158,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     state === 'sending'
       ? t('buyer.chat.sending')
       : state === 'unknown'
-        ? t('buyer.chat.maybe_not_sent')
+        ? t(withdrawn ? 'buyer.chat.cannot_confirm' : 'buyer.chat.maybe_not_sent')
         : state === 'failed'
           ? t(notFound === 'anchored' ? 'buyer.chat.not_found_anchored' : notFound === 'plain' ? 'buyer.chat.not_found_plain' : 'buyer.chat.not_sent')
           : null;
@@ -330,7 +335,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       if (answered) sendIntent.current = null;
       if (!api.isCurrent()) return;
       setKeyLost(!answered && !verdict.replay);
-      const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
+      const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
       if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
       if (problemCode(failure) === 'NOT_FOUND') {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
@@ -351,7 +356,9 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   };
 
   const answer = escalatableAnswer(messages.items);
-  const canAsk = answer !== null && answer.id !== passedOn;
+  const canAsk = answer !== null && answer.id !== passedOn?.id;
+  // Ask the Seller is not offered again for this answer, and the history does not show why: say it here.
+  const passed = answer !== null && passedOn !== null && answer.id === passedOn.id ? passedOn : null;
   // Read the conversation again; true when that read succeeded (the history is then the truth).
   const readHistory = async () => {
     await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
@@ -368,14 +375,14 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         // Too old to replay: drop it and let the conversation say whether the question was passed on.
         // If it cannot be read, a new key could escalate twice: not offered again in this view.
         askIntent.current = null;
-        if (api.isCurrent() && !(await readHistory())) setPassedOn(answer.id);
+        if (api.isCurrent() && !(await readHistory())) setPassedOn({ id: answer.id, confirmed: false });
         return;
       }
       // Only the server's own confirmation counts; a 200 that does not say it is unconfirmed.
       if (!acceptedEscalation(await api.escalateConversation(ref, askIntent.current.key))) throw new ApiError({ kind: 'unexpected', status: 200 });
       askIntent.current = null;
       // Confirmed: remembered here, so a failed re-read cannot bring the control back for a second tap.
-      setPassedOn(answer.id);
+      setPassedOn({ id: answer.id, confirmed: true });
       if (api.isCurrent()) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } catch (failure) {
       // Same rule as a message: the key is kept after an unconfirmed attempt, and ended by the API's
@@ -383,13 +390,13 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       const verdict = judgeFailure(failure, askIntent.current, Date.now());
       if (verdict.outcome === 'failed' || !verdict.replay) askIntent.current = null;
       if (api.isCurrent()) {
-        const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
+        const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
         if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
-        setAskFailed(true);
+        setAskFailed(verdict.outcome === 'failed' ? 'refused' : 'unknown');
         if (verdict.outcome === 'unknown' || rereadAfter(failure)) {
           const read = await readHistory();
           // Unconfirmed, the key cannot be replayed and the history cannot be read: not offered again here.
-          if (!read && verdict.outcome === 'unknown' && !verdict.replay) setPassedOn(answer.id);
+          if (!read && verdict.outcome === 'unknown' && !verdict.replay) setPassedOn({ id: answer.id, confirmed: false });
         }
       }
     } finally {
@@ -451,8 +458,14 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           <View style={{ gap: theme.space.xs }}>
             <AppText style={secondary}>{t('buyer.chat.ask_seller_hint')}</AppText>
             <Button label={t('buyer.chat.ask_seller')} variant="secondary" onPress={() => void ask()} disabled={asking || hold !== null} />
-            {askFailed ? <AlertText>{t('buyer.chat.ask_failed')}</AlertText> : null}
+            {askFailed ? <AlertText>{t(askFailed === 'refused' ? 'buyer.chat.ask_failed' : 'buyer.chat.ask_unconfirmed')}</AlertText> : null}
           </View>
+        ) : passed ? (
+          passed.confirmed ? (
+            <StatusText style={secondary}>{t('buyer.chat.ask_passed_on')}</StatusText>
+          ) : (
+            <AlertText>{t('buyer.chat.ask_unconfirmed')}</AlertText>
+          )
         ) : null}
         <View style={{ gap: theme.space.xs }}>
           <Button
@@ -503,7 +516,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           </View>
         ) : state === 'failed' || state === 'unknown' ? (
           <View accessibilityRole="alert">
-            <AppText>{t(state === 'failed' ? 'buyer.chat.not_sent' : 'buyer.chat.maybe_not_sent')}</AppText>
+            <AppText>{t(state === 'failed' ? 'buyer.chat.not_sent' : withdrawn ? 'buyer.chat.cannot_confirm' : 'buyer.chat.maybe_not_sent')}</AppText>
             {error ? <AppText style={secondary}>{error}</AppText> : null}
           </View>
         ) : null}

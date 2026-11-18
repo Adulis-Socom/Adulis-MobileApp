@@ -56,6 +56,7 @@ export function PublicListView<I>({
   emptyState,
   saves,
   bounded = false,
+  failureText,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -79,6 +80,8 @@ export function PublicListView<I>({
   saves?: ListSaves<I>;
   /** A capped answer that has no next page and no end: it never claims to be everything there is (Search Top). */
   bounded?: boolean;
+  /** A sentence for a failure this screen can name; null leaves the generic one (the retry stays either way). */
+  failureText?: (error: unknown) => string | null;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -113,7 +116,7 @@ export function PublicListView<I>({
       return (
         <>
           <AlertText style={{ textAlign: 'center' }}>
-            {failureMessage(t, list.error)}
+            {failureText?.(list.error) ?? failureMessage(t, list.error)}
           </AlertText>
           <Button label={t('common.retry')} onPress={list.retry} />
         </>

@@ -47,7 +47,7 @@ tags:
     visible: Order never arrived 27
     timeout: 30000
 - assertVisible: Verified paid order with an upheld Seller fault
-- assertVisible: Reviews rate the Seller's service\. Product quality is shown on each Product\.
+- assertVisible: Reviews rate the Seller's service\.
 - takeScreenshot: reviews-01-top
 - scrollUntilVisible:
     element: Verified review 24

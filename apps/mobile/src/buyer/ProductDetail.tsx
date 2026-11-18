@@ -8,6 +8,7 @@ import { useBootstrap } from '../api/bootstrap';
 import type { StorefrontProduct } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
+import { StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
@@ -104,8 +105,14 @@ function ProductContent({
   // The option the Buyer chose, re-checked against this answer on every render: one the server no
   // longer offers is dropped here and stays dropped.
   const [selection, setSelection] = useState(NO_VARIANT);
+  // Set when the server stops offering the chosen option; the notice shows until an option is chosen again,
+  // and only while some option can be chosen (it tells the Buyer to choose).
+  const [dropped, setDropped] = useState(false);
   const checked = transition(selection, { type: 'PROJECT' }, product);
-  if (checked !== selection) setSelection(checked);
+  if (checked !== selection) {
+    setSelection(checked);
+    setDropped(true);
+  }
   const chosen = chosenVariant(checked, product);
   // The chosen option's own price; else the server's span of the ACTIVE Variants' prices. Null
   // is "no current price", never the seed.
@@ -195,6 +202,7 @@ function ProductContent({
           <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
             {t('buyer.product.options')}
           </AppText>
+          {dropped && chosen === null && product.variants.some((v) => isSelectable(product, v)) ? <StatusText>{t('buyer.product.option_dropped')}</StatusText> : null}
           {product.variants.map((v) => {
             const price = money(v.price_minor, v.price_currency);
             // The server's per-option answer (OVN-074), never true here while the Product is not.

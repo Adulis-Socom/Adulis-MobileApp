@@ -168,6 +168,15 @@ describe('the Seller Profile', () => {
     expect(calls(PRODUCTS).at(-1)?.query['cursor']).toBeUndefined();
   });
 
+  it('the rating reads "1 review" for one review and "N reviews" for the rest, never "1 reviews"', async () => {
+    const summary = (count: number) => ({ count, average_rating: 5, basis_counts: { FINAL_HANDOFF: count, VERIFIED_ORDER_FAILURE: 0 } });
+    serve(HEADER, ok(storefront(HANDLE, { review_summary: summary(1) })));
+    serve(SCENES, ok({ data: [], next_cursor: null }));
+    await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
+    expect(await screen.findByText('Seller service: 5 out of 5 from 1 review')).toBeOnTheScreen();
+    expect(screen.queryByText(/1 reviews/)).not.toBeOnTheScreen();
+  });
+
   it('Reviews: rating in words, the evidence basis in words, date, the service note', async () => {
     await openProfile();
     serve(REVIEWS, ok({ data: [sellerReview(1), sellerReview(2, { seller_rating: 3, evidence_basis: 'VERIFIED_ORDER_FAILURE', body: null })], next_cursor: null }));
@@ -181,6 +190,9 @@ describe('the Seller Profile', () => {
       expect(screen.queryByText(legacy)).not.toBeOnTheScreen();
     }
     expect(screen.getByText(en['buyer.seller.reviews.note'])).toBeOnTheScreen();
+    // Reviews rate the Seller only: nothing says a Product shows a quality or a review.
+    expect(screen.getByText("Reviews rate the Seller's service.")).toBeOnTheScreen();
+    expect(screen.queryByText(/product quality/i)).not.toBeOnTheScreen();
     expect(screen.getByText('Review 1')).toBeOnTheScreen();
   });
 
