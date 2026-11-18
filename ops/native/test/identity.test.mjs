@@ -358,7 +358,7 @@ test('an unrecognised mount is refused: protected volume, other volume, bind mou
     (c) => c.Mounts.push({ Type: 'bind', Source: '/c/Users/data', Destination: '/data2' }),
     (c) => (c.HostConfig.VolumesFrom = ['adulis-postgres']),
     (c) => c.HostConfig.Binds.push('/c/Users/data:/data'),
-    (c) => c.HostConfig.Binds.push('C:\Users\data:/data'),
+    (c) => c.HostConfig.Binds.push('C:\\Users\\data:/data'),
     (c) => c.HostConfig.Binds.push('adulis-pgdata:/var/lib/postgresql/data'),
     (c) => (c.HostConfig.Binds = ['adulis-pgdata:/var/lib/postgresql/data']),
     (c) => (c.HostConfig.Tmpfs = { '/var/lib/postgresql/data': '' }),
