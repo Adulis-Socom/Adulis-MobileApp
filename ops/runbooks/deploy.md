@@ -170,7 +170,9 @@ itself on Render, which the local `pgvector` image refuses.
    contract once already.
 
 2. **Pre-deploy job: `pnpm db:migrate`.** Render runs it before the new instances take
-   traffic. A migration that fails stops the deploy, which is the intent.
+   traffic. A migration that fails stops the deploy, which is the intent. The command runs
+   the migration-file guard first (`docs/infrastructure/MIGRATION-FILE-GUARD.md`): a missing,
+   unpinned or edited migration file also stops the deploy before anything is applied.
 
 3. **`pnpm worker:install` whenever the worker image changes** — it is idempotent, so
    running it on every deploy is the safe habit rather than remembering which deploys

@@ -17,10 +17,13 @@
 // of the manifest, which shows in review.
 //
 //   node ops/scripts/migration-guard.mjs verify [--db] [--expect-commit <sha>]
-//   node ops/scripts/migration-guard.mjs up [--dry-run] [--expect-commit <sha>]     (verify, then node-pg-migrate up)
-//   node ops/scripts/migration-guard.mjs write                                        (pin newly added migrations)
+//   node ops/scripts/migration-guard.mjs up (--expect-commit <sha> | --no-source-check) [--dry-run]
+//                                                                  (verify, then node-pg-migrate up)
+//   node ops/scripts/migration-guard.mjs write                    (pin newly added migrations)
 //
-// The plain `pnpm db:migrate` is unchanged and unguarded. A persistent database is upgraded with `db:migrate:guarded`.
+// This is the only code that starts the runner (a test pins that). `pnpm db:migrate` is `up --no-source-check`: every
+// check except the git source check (a deploy or a throwaway database has no clean commit to compare). A persistent or
+// shared database is upgraded with `pnpm db:migrate:guarded --expect-commit <sha>`, which adds the source check.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -94,7 +97,9 @@ export function checkDirectory(dir, manifest) {
     const m = MIGRATION_NAME.exec(n);
     if (m) byNumber.set(m[1], [...(byNumber.get(m[1]) ?? []), n]);
     if (!pinned.has(n) && !IGNORED_ENTRIES.has(n))
-      problems.push(`UNEXPECTED file in the migrations directory: ${n}`);
+      problems.push(
+        `UNEXPECTED file in the migrations directory: ${n} (a new migration is pinned in the same change: pnpm db:migration-pin)`,
+      );
   }
   for (const [num, names] of byNumber)
     if (names.length > 1) problems.push(`DUPLICATE number ${num}: ${names.join(', ')}`);
@@ -256,6 +261,7 @@ export async function up(
   log(
     `OK: ${manifest.files.length} pinned migrations, ${applied.length} applied, ${result.pending.length} pending${result.pending.length ? ': ' + result.pending.join(', ') : ''}`,
   );
+  if (expectedCommit === null) log('source check: skipped (--no-source-check)');
   if (dryRun) {
     log('dry run: the runner was not started');
     return 0;
@@ -396,7 +402,7 @@ async function main(argv) {
     return 0;
   }
   console.log(
-    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up [--dry-run] [--expect-commit <sha>] | write',
+    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
   );
   return 2;
 }
