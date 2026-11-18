@@ -1,5 +1,11 @@
 # Morning review guide -- 12 November 2026
 
+> **Superseded procedure.** The launcher scripts named in this document (`morning-start.sh`, the
+> `wo0nn-native.sh` batteries and `talkback.sh`) belong to an earlier review setup and are not to be
+> run. Native review runs use the isolated harness in `ops/native` (see `ops/native/README.md`): a
+> database, an object store and an API of their own for each run, a named test device, and device
+> settings that are restored afterwards. What this document says to check still applies.
+
 How to try the overnight work (WO-011 Account, WO-012 Notifications, WO-013 Messaging) yourself on
 the Android emulator. You need no production credentials. Everything runs against the local,
 disposable test database (`adulis_gates`), which has been loaded with review data.

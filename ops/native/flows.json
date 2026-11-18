@@ -1,0 +1,23 @@
+{
+  "appId": "com.adulis.app",
+  "flows": {
+    "foundation-smoke": {
+      "file": "foundation-smoke.yaml",
+      "hazards": ["clearState", "permission-grant"],
+      "vars": []
+    },
+    "buyer-shell": {
+      "file": "buyer-shell.yaml",
+      "hazards": ["clearState", "permission-grant"],
+      "vars": []
+    }
+  },
+  "batteries": {
+    "smoke": {
+      "flows": ["foundation-smoke", "buyer-shell"],
+      "settings": { "stay_awake": "7" },
+      "canary": "foundation-smoke",
+      "fixtures": ["baseline"]
+    }
+  }
+}

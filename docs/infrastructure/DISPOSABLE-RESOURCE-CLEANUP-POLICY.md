@@ -73,7 +73,7 @@ only thing that lets a cleanup act on a leftover without further proof.
 | `adulis.test-db.owner` (+ `adulis.test-db.role=disposable`) | `ops/scripts/test-db.sh up` | the checkout that ran it (or `ADULIS_TEST_DB_OWNER`) |
 | `adulis.inf04.owner` | the INF-04 rehearsal scripts (`rh04.sh`, `restore-test.sh`, outside the repository); also compose project `inf04r` | `INF-04` |
 | `adulis.inf-close-01.owner` | the INF-CLOSE-01 scripts (`disposable-restore.sh`, `repair-rehearsal.sh`, outside the repository) | `INF-CLOSE-01` |
-| `adulis.native-harness.owner` (+ `adulis.native-harness.run=<run id>`, `adulis.native-harness.role`) | `ops/native/harness.mjs up`: the network, volumes and containers of a native test run | `native-harness` |
+| `adulis.native-harness.owner` (+ `adulis.native-harness.run=<run id>`, `adulis.native-harness.role`) | `ops/native/harness.mjs up`: the network, the named run volumes (`adulis-native-<run8>-pgdata`, `-miniodata`) and the containers of a native test run | `native-harness` |
 
 A cleanup may remove a labelled leftover only when all of these hold:
 
@@ -82,6 +82,12 @@ A cleanup may remove a labelled leftover only when all of these hold:
 3. for a container: it mounts no bind mount and no named volume;
 4. it is not protected (section 3);
 5. the removal is recorded (section 1).
+
+The native test harness is the one creator whose containers mount named volumes: each of its two volumes
+carries the same owner and run labels as its container. Rule 3 therefore stops a label-only cleanup
+from removing them, and that is intended: they are removed only by the harness's `down` (section 2),
+which proves the labels, the planned name, the recorded full id and the Docker engine first. A native
+run's leftover volume is registered (section 8) and left until `down` can be run for that run.
 
 **Future labels.** A new work order that creates Docker resources uses
 `adulis.<work-order-id-in-lowercase>.owner=<WORK-ORDER-ID>` on every container, volume and network it

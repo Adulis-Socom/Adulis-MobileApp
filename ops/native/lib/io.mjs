@@ -5,6 +5,7 @@ import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import net from 'node:net';
 import pg from 'pg';
+import { descendants } from './proc-tree.mjs';
 
 /** Runs an executable with an argument array (no shell). Never rejects: { status, stdout, stderr, error }. */
 export const run = (file, args, { input, timeout = 60_000, cwd, env } = {}) =>
@@ -50,6 +51,22 @@ const proc = {
     return out ? [].concat(JSON.parse(out)) : [];
   },
   kill: (pid) => process.kill(pid),
+  // Metro starts worker processes: the verified pid and the processes it started, each stopped by its
+  // own pid, deepest first. Only called after the pid's creation time and command line matched the record.
+  async killTree(root) {
+    if (!Number.isInteger(root) || root <= 0) throw new Error('pid must be a positive integer');
+    const out = await powershell(
+      "@(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{ n = 'c'; e = { $_.CreationDate.ToUniversalTime().ToString('o') } }) | ConvertTo-Json -Compress",
+    );
+    const order = [...descendants([].concat(JSON.parse(out || '[]')), root).reverse(), root];
+    for (const pid of order) {
+      try {
+        process.kill(pid);
+      } catch {
+        // already gone
+      }
+    }
+  },
 };
 
 /** True when something accepts a TCP connection on the loopback port. */
@@ -75,6 +92,88 @@ const spawnApi = ({ node, main, cwd, env, log }) => {
   child.unref();
   return { pid: child.pid };
 };
+
+/** Spawns Metro detached with stdout and stderr in a log file; returns { pid }. */
+const spawnMetro = ({ node, args, cwd, env, log }) => {
+  mkdirSync(dirname(log), { recursive: true });
+  const fd = openSync(log, 'a');
+  const child = spawn(node, args, {
+    cwd,
+    env,
+    detached: true,
+    stdio: ['ignore', fd, fd],
+    windowsHide: true,
+  });
+  closeSync(fd);
+  child.unref();
+  return { pid: child.pid };
+};
+
+/**
+ * Runs Maestro's JVM, output to a log file. Resolves { status, error, pid, timedOut, aborted }; the signal
+ * and the timeout stop the process this call started (by its handle), nothing else.
+ */
+const maestro = ({ file, args, cwd, env, timeout, signal, log }) =>
+  new Promise((resolve) => {
+    mkdirSync(dirname(log), { recursive: true });
+    const fd = openSync(log, 'a');
+    const child = spawn(file, args, { cwd, env, stdio: ['ignore', fd, fd], windowsHide: true });
+    closeSync(fd);
+    let timedOut = false;
+    let aborted = false;
+    let closed = false;
+    const stop = () => {
+      const { pid } = child; // a pid of a process this call started, and not after it ended
+      if (closed || !pid) return;
+      try {
+        process.kill(pid);
+      } catch {
+        // already gone
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop();
+    }, timeout);
+    const onAbort = () => {
+      aborted = true;
+      stop();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    child.on('error', (error) => {
+      closed = true;
+      clearTimeout(timer);
+      resolve({ status: null, error, pid: child.pid, timedOut, aborted });
+    });
+    child.on('close', (status) => {
+      closed = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ status, error: null, pid: child.pid, timedOut, aborted });
+    });
+  });
+
+/** Like `run`, with stdout as a Buffer (a screenshot). */
+const runBytes = (file, args, { timeout = 30_000 } = {}) =>
+  new Promise((resolve) => {
+    execFile(
+      file,
+      args,
+      { timeout, maxBuffer: 64 * 1024 * 1024, windowsHide: true, encoding: 'buffer' },
+      (error, stdout, stderr) =>
+        resolve({
+          status: error ? (typeof error.code === 'number' ? error.code : null) : 0,
+          stdout,
+          stderr: `${stderr}`,
+          error: error && typeof error.code !== 'number' ? error : null,
+        }),
+    );
+  });
+
+/** Bytes of commit charge still available (the page file counts): FreeVirtualMemory is in kilobytes. */
+const commitFree = async () =>
+  Number(await powershell('(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory')) * 1024;
 
 const build = async (checkout) => {
   const nest = join(checkout, 'apps', 'api', 'node_modules', '@nestjs', 'cli', 'bin', 'nest.js');
@@ -106,8 +205,12 @@ export function realIo() {
     proc,
     git: (args, cwd) => run('git', ['-C', cwd, ...args], { timeout: 30_000 }),
     adb: (args) => run('adb', args, { timeout: 30_000 }),
+    adbBytes: (args) => runBytes('adb', args),
     connects,
     spawnApi,
+    spawnMetro,
+    maestro,
+    commitFree,
     build,
     node: process.execPath,
   };

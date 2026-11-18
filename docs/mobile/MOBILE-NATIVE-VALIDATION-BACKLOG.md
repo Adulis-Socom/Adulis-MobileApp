@@ -1,5 +1,11 @@
 # Mobile native validation backlog
 
+> **Superseded procedure.** The launcher scripts named in this document (`morning-start.sh`, the
+> `wo0nn-native.sh` batteries and `talkback.sh`) belong to an earlier review setup and are not to be
+> run. Native review runs use the isolated harness in `ops/native` (see `ops/native/README.md`): a
+> database, an object store and an API of their own for each run, a named test device, and device
+> settings that are restored afterwards. What this document says to check still applies.
+
 Native checks that are owed and **have not been executed**. Jest results are not native results. Each
 row stays NOT EXECUTED until a run on a device or emulator records its outcome here, with the date,
 the build and the evidence path. WO-019 is reserved for this work.

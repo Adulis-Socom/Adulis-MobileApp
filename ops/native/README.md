@@ -17,7 +17,12 @@ node ops/native/harness.mjs fixtures --run <run> --set baseline
 node ops/native/harness.mjs api start --run <run> --checkout <path> --sha <40-hex>
 node ops/native/harness.mjs api canary --run <run>
 node ops/native/harness.mjs verify --run <run>
-node ops/native/harness.mjs device check|prepare|restore --run <run> --serial <serial>
+node ops/native/harness.mjs metro start --run <run> --checkout <path> --sha <40-hex>
+node ops/native/harness.mjs device check|prepare|restore|journal --run <run> --serial <serial>
+node ops/native/harness.mjs native conditions --run <run> --serial <serial> --checkout <path> \
+    --sha <40-hex> --apk <debug apk> --built-at <40-hex> [--battery smoke]   # checks only
+node ops/native/harness.mjs native run <the same options>      # the session: flows, evidence, restore
+node ops/native/harness.mjs metro stop --run <run>
 node ops/native/harness.mjs api stop --run <run>
 node ops/native/harness.mjs down --run <run>                   # then: purge --run <run>
 node ops/native/harness.mjs selftest                           # the refusal tests, no Docker needed
@@ -77,17 +82,77 @@ One scheme for every command. The last line of every command is its status line.
 | 1    | refused: a rule was evaluated and the operation does not satisfy it        | `HARNESS REFUSED - <check> - NO RESOURCE WAS CHANGED`                                                                                                                                         |
 | 2    | could not check, usage, or an unexpected error before anything was changed | `HARNESS REFUSED - <check> (could not be checked) - NO RESOURCE WAS CHANGED`, `HARNESS USAGE - <reason>`, `HARNESS ERROR - <reason> - NO RESOURCE WAS CHANGED`                                |
 | 3    | something was changed and the command did not finish                       | `HARNESS INCOMPLETE - <reason> after <n> change(s) (<what>); <how to continue>`, `HARNESS CLEANUP INCOMPLETE - <n> RESOURCES LEFT, REGISTERED`                                                |
-| 4    | a precondition of `up` is not met                                          | `HARNESS BLOCKED - <precondition> - NOTHING STARTED`                                                                                                                                          |
+| 4    | a precondition of `up` or of a native run is not met                       | `HARNESS BLOCKED - <precondition> - NOTHING STARTED`                                                                                                                                          |
+| 5    | a native run finished and at least one approved flow failed                | `HARNESS TEST FAILED - native run (<n> PASS, <m> FAIL, <k> NOT EXECUTED); device settings restored`                                                                                           |
 
 Only `up` and a full `verify` print READY, and READY names what was verified. `status`, `env`, `plan`,
 `preflight`, `down` and `purge` verify nothing about the stack and print `HARNESS OK`.
 `NO RESOURCE WAS CHANGED` is printed only when no call that creates, removes, starts or stops anything
 was made by that command. Counted as changes: every Docker call that is not a plain read (`run` and `rm`
-whatever their exit code), `adb reverse`, stopping or starting a process (the API, its build, the
-migration and seed children), deleting a run directory, an HTTP request that makes the API write
+whatever their exit code), `adb reverse` and every device setting (or an adb call the driver's list does
+not know), stopping or starting a process (the API, its build, Metro, a Maestro run, the migration and
+seed children), deleting a run directory, an HTTP request that makes the API write
 (`api canary`, marked before it is sent), and the run directory `up` creates. The manifest, logs and
 evidence files the harness keeps for itself in an existing run directory are not counted.
 `HARNESS SELFTEST FAILED` (exit 2) is what `selftest` prints when a test fails.
+
+## Native runs: the device driver
+
+`native conditions` and `native run` drive one Android device through the approved flows of
+`apps/mobile/.maestro`, in the isolated stack above. Nothing in this section is a device result until
+`native run` has actually run on a device: `native conditions` only decides whether it may.
+
+**Which device.** The serial is named by the operator (`--serial` or `ANDROID_SERIAL`); there is no
+default device and it must be the only one attached. An emulator (`emulator-<port>` that also reports
+emulator hardware) qualifies. A physical phone qualifies only if `<ADULIS_NATIVE_ROOT>/allowed-devices.json`
+lists it (`serial`, `hardwareSerial`, `model` and `"disposable": true`, the operator's statement that it
+holds no personal data) and the device reports the same hardware serial and model. A network (wireless)
+serial is never used. Every adb call goes through a fixed list (`lib/adb.mjs`): the serial is added by the
+driver, and an install, uninstall, clear, push, pull, reboot, free shell or a reverse of any port that is
+not this run's API, this run's MinIO or Metro (8081) is refused before it is sent.
+
+**Which app.** The installed package must be `com.adulis.app`, the id in `apps/mobile/app.json`, and a
+debug build. The operator names the APK (`--apk`) and the commit it was built at (`--built-at`): the
+installed APK must be that file byte for byte, its native libraries must include the device's CPU
+architecture, and `apps/mobile/app.json` and the `dependencies` of `apps/mobile/package.json` must be the
+same at that commit and at the verified one. The build record (APK hash, architectures, native fingerprint,
+verified commit) is kept in the session directory.
+
+**Which API.** The app reaches the host only through `adb reverse`, and only for this run's API, this
+run's MinIO and Metro. Metro is started by `metro start` with this run's API address and recorded by pid,
+creation time and command line; a Metro started by anyone else is refused. The API address must be
+`http://localhost:<this run's API port>`.
+
+**Settings and restoration.** Before a setting is changed (animations, font scale, night mode, density,
+stay awake, airplane mode, accessibility services, rotation, the app's locale, the reverse entries), its
+current value is read, writing that value back is tried and read back, and the intent is written to the
+journal `<run>/device-journal.ndjson` and flushed to disk. Only then is the setting changed. The journal
+is replayed by `device restore` after a success, a failed flow, an interruption (Ctrl+C, SIGTERM), an app
+crash, a cancellation, a killed process or a power loss. A value that is neither the recorded original
+nor the one the run set is reported and not overwritten. A restoration that fails is reported, makes the
+run INCOMPLETE (exit 3) and leaves the journal open: `down` and `status` say so and `purge` refuses
+until the device is restored. The Maestro driver apps that Maestro installs on the device for itself are
+not settings: the session records which are present before and after.
+
+**Flows.** `ops/native/flows.json` names the approved flows and batteries and declares what each flow does
+to the device. The flow files are read again at every run and compared with the declaration: a flow that
+gained a hazard (it clears the app's data, grants a permission, stops the app, loops), a flow that is not
+declared, and a flow that runs a script, loads a file, opens an external link, uses a cloud service or
+touches another app are refused. The `smoke` battery runs `foundation-smoke` first (it must make this
+run's database gain a device, which proves the app talks to this run's API) and then `buyer-shell`.
+Maestro is started from its JVM with a fixed list of options and a small environment; results (JUnit
+report, log, screenshots, the device log and, on a failure, a screenshot) are written under
+`<run>/native/<session>/`. Only an infrastructure error (the device, adb or the Maestro driver failed
+before the flow ran) is retried, once per battery, after the device and API checks passed again; an
+assertion failure, a crash and a timeout never are.
+
+**Conditions.** `native conditions` evaluates thirteen conditions: the device is attached and authorised
+(NC-01) and identified (NC-02), the app (NC-03) and build (NC-04) are the ones named, the endpoint is
+isolated (NC-05), the ten identity checks pass (NC-06), free memory is at least 6 GB (NC-07), commit headroom
+at least 8 GB (NC-08), free disk at least 10 GB under the run root and TEMP (NC-09), adb and Maestro with a
+Java are present (NC-10), restoration is provable (NC-11), no other session holds the run (NC-12) and the adb
+server is the local one (NC-13). A rule that fails is a refusal (exit 1), a condition that cannot be checked is
+exit 2, and a missing resource blocks (exit 4, nothing started).
 
 ## After a Docker reset or reinstall
 
@@ -105,4 +170,4 @@ context is switched), `down` therefore refuses and `preflight` keeps naming the 
    touched by this.
 
 Not included: the worker process (no Buyer flow needs it; `/healthz` then reports `degraded` with
-HTTP 200, and the harness requires only `db: up`), device settings changes, Maestro runs.
+HTTP 200, and the harness requires only `db: up`).

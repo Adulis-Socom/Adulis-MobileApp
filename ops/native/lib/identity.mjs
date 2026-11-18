@@ -38,6 +38,10 @@ export const CHECKS = {
   'ID-10': 'ownership labels',
 };
 
+/** Checks outside the ten of a run's stack (the device). `verify` never produces them, so no gate requires them. */
+export const DEVICE_CHECKS = { 'ID-11': 'device' };
+export const checkLabel = (id) => CHECKS[id] ?? DEVICE_CHECKS[id] ?? '';
+
 export const ROLES = {
   postgres: {
     name: 'pg',
