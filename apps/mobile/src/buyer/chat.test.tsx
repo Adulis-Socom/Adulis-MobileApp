@@ -2123,6 +2123,19 @@ describe('Message send reconciliation', () => {
     }
   });
 
+  it('a clock stepped back while a send is unconfirmed withdraws the replay: the key age can no longer be known', async () => {
+    const { chat } = await open();
+    idempotent(chat, [{ lose: gatewayPage }]);
+    await typeAndSend('Clock back');
+    await maybe();
+    jest.setSystemTime(Date.now() - 60_000);
+    await fireEvent.press(retryButton());
+    await advance(1000);
+    expect(sends()).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
+    expect(edit()).toBeOnTheScreen();
+  });
+
   it('a key older than a day is never sent again, even to a server that would answer 409', async () => {
     const { chat } = await open();
     idempotent(chat, [{ lose: 'offline' }]);
@@ -2251,6 +2264,83 @@ describe('Message send reconciliation', () => {
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
       expect(keys(escalateCalls())[1]).toBe(keys(escalateCalls())[0]);
       expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a confirmed escalation is remembered: when the conversation cannot be read afterwards, Ask the Seller is not offered again and no second escalation is sent', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat);
+      api.onPattern('GET', MESSAGES_PATH, () => 'offline');
+      await fireEvent.press(ask());
+      // The failed re-read settles after its retries.
+      await advance(10_000);
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      await advance(65_000);
+      expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull();
+      expect(escalateCalls()).toHaveLength(1);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a key that can no longer be replayed, with the conversation unreadable: the question may already be passed on, so Ask the Seller is not offered again and nothing is sent', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }]);
+      api.onPattern('GET', MESSAGES_PATH, () => 'offline');
+      await fireEvent.press(ask());
+      await advance(10_000);
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      await advance(65_000);
+      expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull();
+      expect(escalateCalls()).toHaveLength(1);
+      expect(escalations(chat)).toHaveLength(0);
+    });
+
+    // Changed: a 5xx with the API's own problem body used to end the key (a new key on the next press).
+    it('a 500 problem on Ask the Seller is unknown: the same key is used again, and the server stores one escalation', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: problem(500, 'INTERNAL', 'request') }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      await waitFor(() => expect(ask()).toBeEnabled());
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(keys(escalateCalls())[1]).toBe(keys(escalateCalls())[0]);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a 500 problem after the server escalated: the conversation shows the escalation and Ask the Seller is gone, with no second escalation', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ lose: problem(500, 'INTERNAL', 'request') }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      expect(escalateCalls()).toHaveLength(1);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a shorter wait never replaces a longer one: Send is told 60 seconds, then Ask the Seller 5', async () => {
+      await openAnswered();
+      const first = held();
+      const second = held();
+      api.onPattern('POST', MESSAGES_PATH, async () => {
+        await first.gate;
+        return { status: 503, unreadable: true, headers: { 'Retry-After': '60' } };
+      });
+      api.onPattern('POST', ESCALATE_PATH, async () => {
+        await second.gate;
+        return { status: 503, unreadable: true, headers: { 'Retry-After': '5' } };
+      });
+      await fireEvent.changeText(composer(), 'Both at once');
+      await fireEvent.press(sendButton());
+      await waitFor(() => expect(sends()).toHaveLength(1));
+      await fireEvent.press(ask());
+      await waitFor(() => expect(escalateCalls()).toHaveLength(1));
+      await act(async () => first.release());
+      expect(await screen.findByText(wait(60))).toBeOnTheScreen();
+      await act(async () => second.release());
+      await advance(6_000);
+      expect(screen.getByText(wait(60))).toBeOnTheScreen();
+      expect(retryButton()).toBeDisabled();
+      await advance(54_000);
+      await waitFor(() => expect(retryButton()).toBeEnabled());
     });
   });
 

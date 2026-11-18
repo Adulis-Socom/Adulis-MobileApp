@@ -104,6 +104,16 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const [keyLost, setKeyLost] = useState(false);
   // A wait the server or an intermediary asked for: sending and Ask the Seller stay off until it ends.
   const [hold, setHold] = useState<{ until: number; text: string } | null>(null);
+  // A later wait never shortens an earlier one (Send and Ask the Seller can both be in flight).
+  const holdFor = (ms: number, text: string) =>
+    setHold((current) => {
+      const until = Date.now() + ms;
+      return current !== null && current.until >= until ? current : { until, text };
+    });
+  // The answer whose escalation is confirmed, or may be stored and could not be settled from the
+  // conversation: Ask the Seller is not offered again for it in this view (the server does not
+  // de-duplicate escalations; reopening the conversation reads the server's state afresh).
+  const [passedOn, setPassedOn] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ON-20261111-168 (WO-016): one NOT_FOUND covers the conversation and the Product; name neither.
   const [notFound, setNotFound] = useState<'anchored' | 'plain' | null>(null);
@@ -321,7 +331,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       if (!api.isCurrent()) return;
       setKeyLost(!answered && !verdict.replay);
       const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
-      if (verdict.holdMs !== null && wait !== null) setHold({ until: Date.now() + verdict.holdMs, text: wait });
+      if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
       if (problemCode(failure) === 'NOT_FOUND') {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
         // each decides that (a 404 there shows "no longer available" / "not available").
@@ -341,7 +351,12 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   };
 
   const answer = escalatableAnswer(messages.items);
-  const canAsk = answer !== null;
+  const canAsk = answer !== null && answer.id !== passedOn;
+  // Read the conversation again; true when that read succeeded (the history is then the truth).
+  const readHistory = async () => {
+    await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+    return qc.getQueryState([MESSAGES, ref])?.error === null;
+  };
   const ask = async () => {
     if (!api || !answer || askingRef.current || hold !== null) return;
     askingRef.current = true;
@@ -351,24 +366,31 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     try {
       if (!keyUsable(askIntent.current, Date.now())) {
         // Too old to replay: drop it and let the conversation say whether the question was passed on.
+        // If it cannot be read, a new key could escalate twice: not offered again in this view.
         askIntent.current = null;
-        if (api.isCurrent()) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+        if (api.isCurrent() && !(await readHistory())) setPassedOn(answer.id);
         return;
       }
       // Only the server's own confirmation counts; a 200 that does not say it is unconfirmed.
       if (!acceptedEscalation(await api.escalateConversation(ref, askIntent.current.key))) throw new ApiError({ kind: 'unexpected', status: 200 });
       askIntent.current = null;
+      // Confirmed: remembered here, so a failed re-read cannot bring the control back for a second tap.
+      setPassedOn(answer.id);
       if (api.isCurrent()) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
     } catch (failure) {
       // Same rule as a message: the key is kept after an unconfirmed attempt, and ended by the API's
-      // own refusal or when it can no longer be replayed. The conversation is read again either way.
+      // own 4xx rejection or when it can no longer be replayed. The conversation is read again either way.
       const verdict = judgeFailure(failure, askIntent.current, Date.now());
       if (verdict.outcome === 'failed' || !verdict.replay) askIntent.current = null;
       if (api.isCurrent()) {
         const wait = verdict.holdMs === null ? null : fillSlots(t('error.request.rate_limited'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
-        if (verdict.holdMs !== null && wait !== null) setHold({ until: Date.now() + verdict.holdMs, text: wait });
+        if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
         setAskFailed(true);
-        if (verdict.outcome === 'unknown' || rereadAfter(failure)) await qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
+        if (verdict.outcome === 'unknown' || rereadAfter(failure)) {
+          const read = await readHistory();
+          // Unconfirmed, the key cannot be replayed and the history cannot be read: not offered again here.
+          if (!read && verdict.outcome === 'unknown' && !verdict.replay) setPassedOn(answer.id);
+        }
       }
     } finally {
       askingRef.current = false;
