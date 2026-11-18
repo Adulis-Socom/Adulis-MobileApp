@@ -224,15 +224,21 @@ function dockerFake(w, args, opts) {
   if (a === 'inspect') {
     const o = d.containers[args[args.length - 1]];
     if (d.inspectFails?.[args[args.length - 1]]) return fail('Error: inspect failed');
-    return o ? ok(JSON.stringify([o])) : fail('Error: No such container: x');
+    return o
+      ? ok(JSON.stringify([o]))
+      : fail(`Error response from daemon: No such container: ${args.at(-1)}`);
   }
   if (a === 'volume' && b === 'inspect') {
     const o = d.volumes[args[2]];
-    return o ? ok(JSON.stringify([o])) : fail('Error: No such volume: x');
+    return o
+      ? ok(JSON.stringify([o]))
+      : fail(`Error response from daemon: get ${args[2]}: no such volume`);
   }
   if (a === 'network' && b === 'inspect') {
     const o = d.networks[args[2]];
-    return o ? ok(JSON.stringify([o])) : fail('Error: No such network: x');
+    return o
+      ? ok(JSON.stringify([o]))
+      : fail(`Error response from daemon: network ${args[2]} not found`);
   }
   const listing = (kind, store, idOf, labelsOf) => {
     if (d.listFails[kind]) return fail('Error: cannot connect to the Docker daemon');

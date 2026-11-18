@@ -538,7 +538,10 @@ const ok = (r) => !r.error && r.status === 0;
 async function inspectJson(io, args) {
   const r = await io.docker(args);
   if (!ok(r))
-    return { error: `docker ${args[0]} failed: ${text(r)}`, absent: /no such/i.test(text(r)) };
+    return {
+      error: `docker ${args[0]} failed: ${text(r)}`,
+      absent: /no such|not found/i.test(text(r)),
+    };
   try {
     const o = JSON.parse(r.stdout)[0];
     return o ?? { error: 'docker returned nothing' };

@@ -151,15 +151,21 @@ export function engineWorld(opts = {}) {
       );
     if (a === 'inspect') {
       const x = st.containers[args.at(-1)];
-      return x ? ok(JSON.stringify([x])) : fail('Error: No such container: x');
+      return x
+        ? ok(JSON.stringify([x]))
+        : fail(`Error response from daemon: No such container: ${args.at(-1)}`);
     }
     if (a === 'volume' && b === 'inspect') {
       const x = st.volumes[args[2]];
-      return x ? ok(JSON.stringify([x])) : fail('Error: No such volume: x');
+      return x
+        ? ok(JSON.stringify([x]))
+        : fail(`Error response from daemon: get ${args[2]}: no such volume`);
     }
     if (a === 'network' && b === 'inspect') {
       const x = st.networks[args[2]];
-      return x ? ok(JSON.stringify([x])) : fail('Error: No such network: x');
+      return x
+        ? ok(JSON.stringify([x]))
+        : fail(`Error response from daemon: network ${args[2]} not found`);
     }
     if (a === 'network' && b === 'create') {
       const name = args.at(-1);

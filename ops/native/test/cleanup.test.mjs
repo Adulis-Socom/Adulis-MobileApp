@@ -358,3 +358,41 @@ test('a network that gained an attached container after the plan is not removed'
   );
   assert.ok(r.left.length === 1 && !w.d.mutations.some((x) => x.startsWith('network rm')));
 });
+
+test("a run whose resources are all gone is 'nothing found', using the wording of a real engine for each kind", async () => {
+  const w = world();
+  w.d.containers = {};
+  w.d.volumes = {};
+  w.d.networks = {};
+  const io = makeIo(w);
+  // The wording is what a real engine says (read from one): the container, volume and network
+  // messages differ, and the network one does not contain "no such".
+  const said = [];
+  const inner = io.docker;
+  io.docker = async (args, opts) => {
+    const r = await inner(args, opts);
+    if (r.status === 1) said.push(r.stderr);
+    return r;
+  };
+  const plan = await planDown(w.m, io);
+  assert.deepEqual([plan.problems, plan.unknowns, plan.steps], [[], [], []]);
+  assert.ok(said.some((s) => /No such container/.test(s)));
+  assert.ok(said.some((s) => /no such volume/.test(s)));
+  assert.ok(said.some((s) => /network .* not found/.test(s)));
+});
+
+test('a not-found message the harness does not recognise is an unknown, never "absent"', async () => {
+  const w = world();
+  w.d.containers = {};
+  w.d.volumes = {};
+  w.d.networks = {};
+  const io = makeIo(w);
+  const inner = io.docker;
+  io.docker = async (args, opts) => {
+    const r = await inner(args, opts);
+    return r.status === 1 ? { ...r, stderr: 'Error response from daemon: that does not exist' } : r;
+  };
+  const plan = await planDown(w.m, io);
+  assert.ok(plan.unknowns.length > 0);
+  assert.deepEqual(plan.steps, []);
+});
