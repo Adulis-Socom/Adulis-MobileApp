@@ -2342,6 +2342,39 @@ describe('Message send reconciliation', () => {
       await advance(54_000);
       await waitFor(() => expect(retryButton()).toBeEnabled());
     });
+
+    it('a question whose key reached its safe age is not sent again with that key: the conversation is read, and a new question is a new key', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: gatewayPage }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      await waitFor(() => expect(ask()).toBeEnabled());
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await fireEvent.press(ask());
+      await advance(1000);
+      // Nothing was sent by that press; the history was read and shows no escalation.
+      expect(escalateCalls()).toHaveLength(1);
+      await waitFor(() => expect(ask()).toBeEnabled());
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(keys(escalateCalls())[1]).not.toBe(keys(escalateCalls())[0]);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a question whose key reached its safe age, with the conversation unreadable: nothing is sent and it is not offered again', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: gatewayPage }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      await waitFor(() => expect(ask()).toBeEnabled());
+      api.onPattern('GET', MESSAGES_PATH, () => 'offline');
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await fireEvent.press(ask());
+      await advance(10_000);
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      expect(escalateCalls()).toHaveLength(1);
+      expect(escalations(chat)).toHaveLength(0);
+    });
   });
 
   // The retry reaches the server before the first request commits (the client gave up at 10 s, the
