@@ -5,9 +5,10 @@ import { randomInt } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { join } from 'node:path';
-import { assertTarget } from './guard.mjs';
+import { assertTarget, Refused } from './guard.mjs';
 import {
   BUCKETS,
+  engineFacts,
   IDENT_SQL,
   MARKER_BUCKET,
   RUN_MARKER_KEY,
@@ -136,11 +137,18 @@ printf '%s' "$NATIVE_RUN_VALUE" | mc pipe "native/${MARKER_BUCKET}/${RUN_MARKER_
  * Creates the stack and leaves the run `ready`. Any failure leaves the run in `creating` with the
  * manifest listing what exists: `down` removes it, with proof, and nothing is removed here.
  */
-export async function up(io, { root, repo, log = () => {}, onRun = () => {} }) {
-  const m0 = newRun();
+export async function up(
+  io,
+  { root, repo, log = () => {}, onRun = () => {}, makeRun = newRun, ports } = {},
+) {
+  // The engine (id, clock, context) is read FIRST and recorded in the manifest: every later command
+  // proves it talks to the same engine, so a `down` in another engine cannot read "absent" as "gone".
+  const engine = await engineFacts(io);
+  if (engine.error) throw new Error(`the Docker engine could not be identified: ${engine.error}`);
+  const m0 = makeRun();
   const dir = runDir(root, m0.run);
   const images = { pg: PG_IMAGE, minio: minioImage(repo) };
-  let m = { ...m0, ports: await pickPorts() };
+  let m = { ...m0, ports: ports ?? (await pickPorts()), engine };
   writeManifest(dir, m);
   writeRunMarker(dir, m.run);
   onRun(m.run);
@@ -160,7 +168,10 @@ export async function up(io, { root, repo, log = () => {}, onRun = () => {} }) {
   ]) {
     const r = await docker(args);
     if (!ok(r) || r.stdout.trim())
-      throw new Error(`a ${kind} with this run's name exists or could not be listed: ${tail(r)}`);
+      throw new Refused(
+        `a ${kind} with this run's name exists or could not be listed: ${tail(r)}`,
+        ok(r) ? 1 : 2,
+      );
   }
 
   log('network');
@@ -193,7 +204,7 @@ export async function up(io, { root, repo, log = () => {}, onRun = () => {} }) {
   // Before anything is written over the published port: it must reach THIS container's server.
   const tcp = await pgTcp(m, io);
   if (tcp.systemId !== inside[0])
-    throw new Error(
+    throw new Refused(
       `127.0.0.1:${m.ports.pg} is not this run's PostgreSQL (another server answers there); nothing was written`,
     );
   save({ ...m, db: { ...m.db, systemId: inside[0], postmasterStart: inside[1], oid: inside[3] } });
@@ -236,7 +247,9 @@ export async function up(io, { root, repo, log = () => {}, onRun = () => {} }) {
     'MinIO',
     async () =>
       await io
-        .fetch(`http://127.0.0.1:${m.ports.s3}/minio/health/live`)
+        .fetch(`http://127.0.0.1:${m.ports.s3}/minio/health/live`, {
+          signal: AbortSignal.timeout(5000),
+        })
         .then((r) => r.ok)
         .catch(() => false),
   );

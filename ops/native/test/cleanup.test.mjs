@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { executeDown, planDown, purge, purgeProblems } from '../lib/cleanup.mjs';
-import { LABEL } from '../lib/protected.mjs';
+import { LABEL, PROTECTED_PORTS } from '../lib/protected.mjs';
 import { id64, makeIo, world } from './fakes.mjs';
 
 const pgId = (w) => w.m.containers.postgres.id;
@@ -217,4 +217,102 @@ test('purge refuses a run directory that is itself a link out of runs/', () => {
     rmSync(t.root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
   }
+});
+
+/* ---- adoption, the engine, the daemon's clock, and what stays removable ---- */
+
+test('a container created just before a crash (no recorded id) is adopted under its planned name and labels', async () => {
+  const w = world();
+  delete w.m.containers.postgres;
+  const adopted = w.d.containers[Object.keys(w.d.containers)[0]];
+  const r = await down(w);
+  assert.deepEqual([r.plan.problems, r.plan.unknowns], [[], []]);
+  assert.ok(w.d.mutations.includes(`rm -f ${adopted.Id}`), w.d.mutations.join(' | '));
+  assert.equal(r.left.length, 0);
+});
+
+test('an unlabelled container with a planned name is never adopted, and what it holds is not removed', async () => {
+  const w = world();
+  const stray = w.d.containers[pgId(w)];
+  delete stray.Config.Labels[LABEL.run];
+  delete w.m.containers.postgres;
+  const r = await down(w);
+  assert.ok(
+    !w.d.mutations.some((x) => x.includes(stray.Id)),
+    'the unlabelled container was touched',
+  );
+  assert.ok(r.left.some((l) => /volume/.test(l)) || r.plan.problems.length > 0);
+  assert.ok(w.d.containers[stray.Id], 'it still exists');
+});
+
+test('a manifest with a tampered port or id is refused by down before docker is asked', async () => {
+  for (const edit of [
+    (m) => (m.ports.pg = [...PROTECTED_PORTS][0]),
+    (m) => (m.containers.postgres.id = '--force'),
+    (m) => (m.state = 'cleaned'),
+    (m) => (m.db.name = 'adulis'),
+  ]) {
+    const w = world();
+    edit(w.m);
+    const io = makeIo(w);
+    const plan = await planDown(w.m, io);
+    assert.ok(plan.problems.length > 0);
+    assert.deepEqual(io.calls, []);
+  }
+});
+
+test('another Docker engine or context is refused before any resource is looked up', async () => {
+  for (const edit of [
+    (w) => (w.d.engine.id = 'engine-other'),
+    (w) => (w.d.engine.context = 'elsewhere'),
+  ]) {
+    const w = world();
+    edit(w);
+    const io = makeIo(w);
+    const plan = await planDown(w.m, io);
+    assert.ok(plan.problems.length > 0 && plan.steps.length === 0);
+    assert.ok(
+      io.calls.every((c) => /docker (info|context)/.test(c)),
+      io.calls.join(' | '),
+    );
+  }
+  const dead = world();
+  dead.d.engineDead = true;
+  assert.ok((await planDown(dead.m, makeIo(dead))).unknowns.length > 0);
+});
+
+test('a run-owned container stays removable when it fails the isolation rules (stopped, extra anonymous volume)', async () => {
+  const w = world();
+  const c = w.d.containers[pgId(w)];
+  c.NetworkSettings.Ports = {}; // a stopped container publishes nothing
+  c.Mounts.push({ Type: 'volume', Name: 'b'.repeat(64), Destination: '/extra' });
+  const r = await down(w);
+  assert.deepEqual([r.plan.problems, r.plan.unknowns], [[], []]);
+  assert.equal(r.removed.length, 5);
+  assert.equal(r.left.length, 1);
+  assert.match(r.left[0], /anonymous volume b{64} of container .* is not removed/);
+});
+
+test('a container that mounts a protected volume is not removed', async () => {
+  const w = world();
+  w.d.containers[pgId(w)].Mounts.push({ Type: 'volume', Name: 'adulis-pgdata', Destination: '/x' });
+  const r = await down(w);
+  assert.ok(r.plan.problems.some((p) => /protected volume/.test(p)));
+  nothingRemoved(w);
+});
+
+test("created before the run is judged by the daemon's clock", async () => {
+  const w = world();
+  w.m.engine.systemTime = '2026-11-18T11:00:00Z'; // the daemon says the run began an hour after this container
+  const r = await down(w);
+  assert.ok(r.plan.problems.some((p) => /created before this run/.test(p)));
+  nothingRemoved(w);
+});
+
+test('a compose-labelled object is never removed', async () => {
+  const w = world();
+  w.d.containers[pgId(w)].Config.Labels['com.docker.compose.project'] = 'other';
+  const r = await down(w);
+  assert.ok(r.plan.problems.some((p) => /compose labels/.test(p)));
+  nothingRemoved(w);
 });

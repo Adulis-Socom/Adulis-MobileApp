@@ -7,12 +7,14 @@ import { assertTarget, REQUIRED } from '../lib/guard.mjs';
 import {
   apiEnvProblems,
   containerProblems,
+  manifestProblems,
   networkProblems,
+  ownership,
   ROLES,
   volumeProblems,
 } from '../lib/identity.mjs';
 import { buildApiEnv } from '../lib/api.mjs';
-import { LABEL, PORT_BLOCK } from '../lib/protected.mjs';
+import { LABEL, PORT_BLOCK, PROTECTED_PORTS } from '../lib/protected.mjs';
 import { id64, makeIo, refusal, world } from './fakes.mjs';
 
 /** Refused with `id`; no mutating call; optionally zero calls of any kind (refused before connecting). */
@@ -42,18 +44,18 @@ test('every operation class names only known checks', () => {
   for (const [op, ids] of Object.entries(REQUIRED)) assert.ok(ids.includes('ID-00'), op);
 });
 
-/* ---- persistent PostgreSQL ---- */
+/* ---- protected PostgreSQL addresses ---- */
 
-test('persistent PostgreSQL by port only: refused before any connection', async () => {
+const PROTECTED = [...PROTECTED_PORTS];
+
+test('a protected PostgreSQL port in the manifest is refused before any connection', async () => {
   const w = world();
-  w.m.ports.pg = 5434;
+  [w.m.ports.pg] = PROTECTED;
   await refuses(w, 'DB-WRITE', 'ID-09', { beforeConnect: true });
 });
 
 test('every protected port is refused for PostgreSQL, MinIO and the API, before connecting', async () => {
-  for (const port of [
-    5432, 5433, 5434, 9000, 9001, 9100, 6379, 8025, 1025, 5050, 55432, 55444, 59000, 3000,
-  ]) {
+  for (const port of PROTECTED) {
     for (const key of ['pg', 's3', 'api']) {
       const w = world();
       w.m.ports[key] = port;
@@ -67,7 +69,7 @@ test('the protected-port list refuses on its own, even if the reserved block wer
   try {
     PORT_BLOCK.from = 1;
     PORT_BLOCK.to = 65535;
-    for (const port of [5434, 9100, 3000, 55432, 59000]) {
+    for (const port of PROTECTED) {
       const w = world();
       w.m.ports.pg = port;
       await refuses(w, 'DB-WRITE', 'ID-09', { beforeConnect: true });
@@ -148,33 +150,25 @@ test('a container whose full id is not the recorded one is refused on its own, e
   );
 });
 
-test('the persistent PostgreSQL container, named in the manifest, is refused (name, volume, port, labels)', async () => {
+test('a foreign container in the manifest is refused (name, volume, publish address, labels)', async () => {
   const w = world();
-  const persistent = id64();
-  w.d.containers[persistent] = {
-    Id: persistent,
-    Name: '/adulis-postgres',
-    Created: '2026-09-03T10:03:33Z',
-    Config: { Labels: { 'com.docker.compose.project': 'adulis-platform' } },
+  const foreign = id64();
+  w.d.containers[foreign] = {
+    Id: foreign,
+    Name: '/unrelated-db-1',
+    Created: '2026-01-01T00:00:00Z',
+    Config: { Labels: { 'com.docker.compose.project': 'unrelated' } },
     Mounts: [
-      {
-        Type: 'bind',
-        Source: '/run/desktop/mnt/host/c/x/db/init',
-        Destination: '/docker-entrypoint-initdb.d',
-      },
-      {
-        Type: 'volume',
-        Name: 'adulis-platform_adulis-pgdata',
-        Destination: '/var/lib/postgresql/data',
-      },
+      { Type: 'bind', Source: '/srv/unrelated/init', Destination: '/init.d' },
+      { Type: 'volume', Name: 'unrelated-data', Destination: '/var/lib/postgresql/data' },
     ],
     HostConfig: {},
     NetworkSettings: {
-      Networks: { 'adulis-platform_default': {} },
-      Ports: { '5432/tcp': [{ HostIp: '0.0.0.0', HostPort: '5434' }] },
+      Networks: { unrelated_default: {} },
+      Ports: { '5432/tcp': [{ HostIp: '0.0.0.0', HostPort: '15432' }] },
     },
   };
-  w.m.containers.postgres.id = persistent;
+  w.m.containers.postgres.id = foreign;
   const e = await refusal(
     assert,
     assertTarget(w.m, 'STACK', makeIo(w), { states: ['ready'] }),
@@ -185,7 +179,7 @@ test('the persistent PostgreSQL container, named in the manifest, is refused (na
       e.results.some((r) => r.id === id && r.verdict === 'FAIL'),
       id,
     );
-  assert.match(e.message, /protected volume/);
+  assert.match(e.message, /not this run's volume/);
   assert.deepEqual(w.d.mutations, []);
 });
 
@@ -247,36 +241,36 @@ test('the run nonce is part of the marker: the right run id with another nonce i
   await refuses(w, 'DB-WRITE', 'ID-03');
 });
 
-/* ---- persistent MinIO ---- */
+/* ---- protected storage addresses ---- */
 
-test('persistent MinIO by port: refused before any connection', async () => {
+test('a protected MinIO port in the manifest is refused before any connection', async () => {
   const w = world();
-  w.m.ports.s3 = 9100;
+  [, w.m.ports.s3] = PROTECTED;
   await refuses(w, 'OBJECT-WRITE', 'ID-09', { beforeConnect: true });
 });
 
-test('the persistent MinIO container (legacy volume, all interfaces) is refused', async () => {
+test('a foreign MinIO container in the manifest is refused', async () => {
   const w = world();
-  const persistent = id64();
-  w.d.containers[persistent] = {
-    Id: persistent,
-    Name: '/adulis-minio',
-    Created: '2026-09-03T10:03:33Z',
+  const foreign = id64();
+  w.d.containers[foreign] = {
+    Id: foreign,
+    Name: '/unrelated-store-1',
+    Created: '2026-01-01T00:00:00Z',
     Config: { Labels: {} },
-    Mounts: [{ Type: 'volume', Name: 'adulis-pgdata', Destination: '/data' }],
+    Mounts: [{ Type: 'volume', Name: 'unrelated-store-data', Destination: '/data' }],
     HostConfig: {},
     NetworkSettings: {
-      Networks: { 'adulis-platform_default': {} },
-      Ports: { '9000/tcp': [{ HostIp: '0.0.0.0', HostPort: '9100' }] },
+      Networks: { unrelated_default: {} },
+      Ports: { '9000/tcp': [{ HostIp: '0.0.0.0', HostPort: '19000' }] },
     },
   };
-  w.m.containers.minio.id = persistent;
+  w.m.containers.minio.id = foreign;
   await refuses(w, 'OBJECT-WRITE', 'ID-08');
 });
 
-test("a store that rejects the run's random credentials is refused (the persistent MinIO holds other keys)", async () => {
+test("a store that rejects the run's random credentials is refused", async () => {
   const w = world();
-  w.s3.accept = 'adulis-local';
+  w.s3.accept = 'a-key-the-run-never-made';
   await refuses(w, 'OBJECT-WRITE', 'ID-06');
 });
 
@@ -341,7 +335,7 @@ test('an API reporting another environment or media origin is refused', async ()
   a.api.bootstrap.environment = 'staging';
   await refuses(a, 'API-WRITE', 'ID-05');
   const b = world({ api: true });
-  b.api.bootstrap.media_public_origin = 'http://127.0.0.1:9100/adulis-media';
+  b.api.bootstrap.media_public_origin = `http://127.0.0.1:${PROTECTED[0]}/adulis-media`;
   await refuses(b, 'API-WRITE', 'ID-05');
 });
 
@@ -447,24 +441,24 @@ test('a container publishing on all interfaces, or on a port the run does not ow
   a.d.containers[pgId(a)].NetworkSettings.Ports['5432/tcp'][0].HostIp = '0.0.0.0';
   await refuses(a, 'DB-WRITE', 'ID-09');
   const b = world();
-  b.d.containers[s3Id(b)].NetworkSettings.Ports['9000/tcp'][0].HostPort = '9100';
+  b.d.containers[s3Id(b)].NetworkSettings.Ports['9000/tcp'][0].HostPort = `${PROTECTED[0]}`;
   await refuses(b, 'OBJECT-WRITE', 'ID-09');
   const c = world();
-  c.d.containers[pgId(c)].NetworkSettings.Ports['5433/tcp'] = [
-    { HostIp: '127.0.0.1', HostPort: '5433' },
+  c.d.containers[pgId(c)].NetworkSettings.Ports['6543/tcp'] = [
+    { HostIp: '127.0.0.1', HostPort: '16543' },
   ];
   await refuses(c, 'DB-WRITE', 'ID-09');
 });
 
 /* ---- credentials and configuration ---- */
 
-test('production-like or known credentials in the manifest are refused before connecting', async () => {
+test('credentials that are not per-run random values are refused before connecting', async () => {
   for (const [k, v] of [
-    ['pg', 'local-dev-password'],
-    ['app', 'ci-password'],
-    ['s3Key', 'adulis-local'],
-    ['s3Secret', 'adulis-local-secret'],
-    ['jobs', 'ci-fake-evidence-key'],
+    ['pg', 'letmein'],
+    ['app', 'changeme'],
+    ['s3Key', 'admin'],
+    ['s3Secret', 'secret-key-1'],
+    ['jobs', 'not-hex-at-all-but-long-enough'],
     ['pg', 'short'],
   ]) {
     const w = world();
@@ -489,24 +483,27 @@ test('the API environment is an allow-list and every unsafe value is refused', (
     'a PG variable': { PGHOST: '127.0.0.1' },
     'an SMS variable': { SMS_PRIMARY_API_KEY: 'x' },
     NODE_OPTIONS: { NODE_OPTIONS: '--require x' },
-    'the persistent database port': {
-      DATABASE_URL: `postgres://adulis_app:${w.m.secrets.app}@127.0.0.1:5434/${w.m.db.name}`,
+    'a protected database port': {
+      DATABASE_URL: `postgres://adulis_app:${w.m.secrets.app}@127.0.0.1:${PROTECTED[0]}/${w.m.db.name}`,
     },
     'localhost as the database host': {
       DATABASE_URL: `postgres://adulis_app:${w.m.secrets.app}@localhost:${w.m.ports.pg}/${w.m.db.name}`,
     },
-    'the development database name': {
+    'a protected database name': {
       DATABASE_URL_JOBS: `postgres://adulis_jobs:${w.m.secrets.jobs}@127.0.0.1:${w.m.ports.pg}/adulis`,
     },
     'a target override in the URL': {
       DATABASE_URL: `postgres://adulis_app:${w.m.secrets.app}@127.0.0.1:${w.m.ports.pg}/${w.m.db.name}?host=db.example.com`,
     },
-    'a known database credential': {
-      DATABASE_URL: `postgres://adulis_app:local-dev-password@127.0.0.1:${w.m.ports.pg}/${w.m.db.name}`,
+    "a database credential that is not the run's": {
+      DATABASE_URL: `postgres://adulis_app:changeme@127.0.0.1:${w.m.ports.pg}/${w.m.db.name}`,
     },
-    'the persistent MinIO': {
-      R2_ACCOUNT_ID: 'http://127.0.0.1:9100',
-      R2_MEDIA_PUBLIC_ORIGIN: 'http://127.0.0.1:9100/adulis-media',
+    "another role's credential for the same role": {
+      DATABASE_URL: `postgres://adulis_app:${w.m.secrets.jobs}@127.0.0.1:${w.m.ports.pg}/${w.m.db.name}`,
+    },
+    'a protected storage port': {
+      R2_ACCOUNT_ID: `http://127.0.0.1:${PROTECTED[1]}`,
+      R2_MEDIA_PUBLIC_ORIGIN: `http://127.0.0.1:${PROTECTED[1]}/adulis-media`,
     },
     'a Cloudflare account id': { R2_ACCOUNT_ID: '0123456789abcdef0123456789abcdef' },
     'an https endpoint': {
@@ -518,7 +515,10 @@ test('the API environment is an allow-list and every unsafe value is refused', (
       R2_MEDIA_PUBLIC_ORIGIN: 'http://203.0.113.5:57212/adulis-media',
     },
     'a half-set R2 configuration': { R2_SECRET_ACCESS_KEY: undefined },
-    'a known storage credential': { R2_ACCESS_KEY_ID: 'adulis-local' },
+    "a storage access key that is not the run's": { R2_ACCESS_KEY_ID: 'a-key-the-run-never-made' },
+    "a storage secret that is not the run's": {
+      R2_SECRET_ACCESS_KEY: 'a-secret-the-run-never-made',
+    },
     "a port other than the run's API port": { PORT: '3000' },
   };
   for (const [what, patch] of Object.entries(cases)) {
@@ -577,7 +577,7 @@ test('a missing, tampered, foreign or wrongly-staged manifest is refused before 
 
 test('a docker, psql or http error is UNKNOWN: refused with exit 2, nothing written', async () => {
   const cases = [
-    ['STACK', 'ID-08', (w) => (w.d.engineDead = true)],
+    ['STACK', 'ID-00', (w) => (w.d.engineDead = true)],
     ['STACK', 'ID-08', (w) => (w.d.listFails.containers = true)],
     ['STACK', 'ID-10', (w) => (w.d.listFails.volumes = true)],
     ['STACK', 'ID-01', (w) => (w.pg.tcpFails = true)],
@@ -607,6 +607,102 @@ test('every environment variable can name the disposable pair while reality diff
   );
   assert.match(e.message, /boot marker/);
   assert.match(e.message, /listener/);
+});
+
+/* ---- the Docker engine ---- */
+
+test('a different Docker engine or context is refused before any resource is looked up', async () => {
+  for (const edit of [
+    (w) => (w.d.engine.id = 'engine-other'),
+    (w) => (w.d.engine.context = 'another-context'),
+  ]) {
+    const w = world();
+    edit(w);
+    const io = makeIo(w);
+    await refusal(assert, assertTarget(w.m, 'STACK', io, { states: ['ready'] }), 'ID-00');
+    assert.ok(
+      io.calls.every((c) => /docker (info|context)/.test(c)),
+      `looked up resources in the wrong engine: ${io.calls.join(' | ')}`,
+    );
+  }
+});
+
+test('a manifest that records no engine is refused: absence could not be proven', async () => {
+  const w = world();
+  w.m.engine = null;
+  await refuses(w, 'STACK', 'ID-00');
+});
+
+test("the created-time floor is the daemon's clock, not the host's", () => {
+  const w = world();
+  const info = w.d.containers[pgId(w)];
+  w.m.createdAt = '2026-11-18T12:00:00Z'; // the host clock runs two hours ahead of the daemon
+  assert.deepEqual(containerProblems(w.m, 'postgres', info), []);
+  w.m.engine.systemTime = '2026-11-18T11:00:00Z'; // created before the run started, by the daemon's clock
+  const p = containerProblems(w.m, 'postgres', info).map((x) => x.msg);
+  assert.ok(
+    p.some((x) => /created before this run/.test(x)),
+    p.join(),
+  );
+});
+
+/* ---- ownership rules on their own ---- */
+
+test('the name prefix is a leg of its own for containers', () => {
+  const w = world();
+  const info = w.d.containers[pgId(w)];
+  w.m.names.pg = 'some-db';
+  info.Name = '/some-db';
+  const p = containerProblems(w.m, 'postgres', info).map((x) => x.msg);
+  assert.ok(
+    p.some((x) => /does not carry this run's prefix/.test(x)),
+    p.join(),
+  );
+});
+
+test('a compose label on a container, volume or network is refused as ownership', () => {
+  const w = world();
+  const info = w.d.containers[pgId(w)];
+  info.Config.Labels['com.docker.compose.project'] = 'some-project';
+  assert.ok(containerProblems(w.m, 'postgres', info).some((x) => /compose labels/.test(x.msg)));
+  const vol = {
+    ...w.d.volumes[w.m.names.pgVolume],
+    Labels: { ...w.d.volumes[w.m.names.pgVolume].Labels, 'com.docker.compose.volume': 'x' },
+  };
+  assert.ok(volumeProblems(w.m, 'postgres', vol).some((x) => /compose labels/.test(x.msg)));
+  const net = {
+    ...w.d.networks[w.m.network.id],
+    Labels: { ...w.d.networks[w.m.network.id].Labels, 'com.docker.compose.network': 'x' },
+  };
+  assert.ok(networkProblems(w.m, net).some((x) => /compose labels/.test(x.msg)));
+});
+
+test('cleanup applies ownership and the hard rules only; verification applies every rule', () => {
+  const w = world();
+  const info = w.d.containers[pgId(w)];
+  info.NetworkSettings.Ports = {}; // not published: an isolation problem, not an ownership one
+  info.Mounts.push({ Type: 'volume', Name: 'a'.repeat(64), Destination: '/extra' });
+  const all = containerProblems(w.m, 'postgres', info);
+  assert.ok(all.length > 0);
+  assert.deepEqual(ownership(all), [], 'a run-owned container must stay removable');
+  info.Mounts.push({ Type: 'volume', Name: 'adulis-pgdata', Destination: '/data2' });
+  assert.ok(
+    ownership(containerProblems(w.m, 'postgres', info)).length > 0,
+    'a protected volume is hard',
+  );
+});
+
+test('recorded ids must be full ids: nothing else may reach a docker argument list', async () => {
+  for (const edit of [
+    (m) => (m.containers.postgres.id = '--force'),
+    (m) => (m.containers.minio.id = 'a'.repeat(63)),
+    (m) => (m.network.id = '-v /:/host'),
+  ]) {
+    const w = world();
+    edit(w.m);
+    assert.ok(manifestProblems(w.m, {}).length > 0);
+    await refuses(w, 'STACK', 'ID-00', { beforeConnect: true });
+  }
 });
 
 test('both roles are covered by the container rules', () => {

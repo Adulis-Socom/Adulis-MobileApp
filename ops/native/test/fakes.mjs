@@ -3,6 +3,7 @@
 // that no mutating call was made. Nothing here starts a process, opens a socket or runs Docker.
 import { createHash } from 'node:crypto';
 import { IDENT_SQL, apiAppName, runValue } from '../lib/identity.mjs';
+import { evaluateGuard } from './guard-model.mjs';
 import { newRun } from '../lib/manifest.mjs';
 import { LABEL, OWNER } from '../lib/protected.mjs';
 import { DISPOSABLE_MARKER } from '../../scripts/lib/disposable-db.mjs';
@@ -88,6 +89,7 @@ export function world({ api = false } = {}) {
     oid: '16401',
   };
   m.s3 = { deploymentId: 'deployment-1' };
+  m.engine = { id: 'engine-0001', systemTime: NOW.toISOString(), context: 'fake-context' };
   const labels = (role) => ({ [LABEL.owner]: OWNER, [LABEL.run]: m.run, [LABEL.role]: role });
   const container = (role, key, volume, dest, cport, port, id) => ({
     Id: id,
@@ -138,6 +140,7 @@ export function world({ api = false } = {}) {
       },
     },
     listFails: {},
+    engine: { ...m.engine },
     engineDead: false,
     rmFails: false,
     rmKillsEngine: false,
@@ -148,7 +151,17 @@ export function world({ api = false } = {}) {
   const w = {
     m,
     d,
-    pg: { tcp: ident, inside: ident, activity: [], tcpFails: false, guardFails: false },
+    // `live` is what the server really is at the moment a script runs (the identity guard reads it);
+    // tcp and inside are what the earlier checks saw. A test that changes only `live` simulates a
+    // server that was replaced between the check and the use.
+    pg: {
+      tcp: ident,
+      inside: ident,
+      activity: [],
+      tcpFails: false,
+      live: { systemId: m.db.systemId, db: m.db.name, setting: runValue(m) },
+      committed: [],
+    },
     s3: {
       accept: m.secrets.s3Key,
       buckets: ['adulis-media', 'adulis-evidence'],
@@ -205,7 +218,9 @@ function dockerFake(w, args, opts) {
       stderr: '',
       error: new Error('docker engine is not running'),
     };
-  if (a === 'info') return ok('29.0.0');
+  if (a === 'info')
+    return ok(args.includes('--format') ? `${d.engine.id}|${d.engine.systemTime}` : '29.0.0');
+  if (a === 'context' && b === 'show') return ok(d.engine.context);
   if (a === 'inspect') {
     const o = d.containers[args[args.length - 1]];
     if (d.inspectFails?.[args[args.length - 1]]) return fail('Error: inspect failed');
@@ -290,11 +305,13 @@ function dockerFake(w, args, opts) {
       if (sql === IDENT_SQL) return ok(w.pg.inside);
       if (sql.includes('pg_stat_activity')) return ok(w.pg.activity.join('\n'));
       if (opts.input !== undefined) {
-        // The write channel: the identity guard comes first or nothing is written.
+        // The write channel, as psql --single-transaction runs it: a guard that is first and raises
+        // rolls everything back; a script without a guard runs as it is.
         mutate();
-        if (w.pg.guardFails)
-          return fail('ERROR: native run identity mismatch: nothing was written');
+        const g = evaluateGuard(opts.input, w.pg.live);
+        if (g.raises) return fail(`ERROR:  ${g.message}`);
         w.pg.executed = opts.input;
+        w.pg.committed.push(opts.input);
         return ok();
       }
       if (sql.includes('core.device')) return ok(w.pg.canary ?? 't');

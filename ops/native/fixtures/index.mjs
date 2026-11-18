@@ -73,7 +73,7 @@ export async function execGuarded(m, io, sql, { dir, states = ['ready'] } = {}) 
 }
 
 export async function loadSet(m, io, name, { dir }) {
-  const set = SETS[name];
+  const set = Object.hasOwn(SETS, name) ? SETS[name] : undefined;
   if (!set)
     throw new Error(`unknown fixture set '${name}' (known: ${Object.keys(SETS).join(', ')})`);
   if (m.fixtures.includes(name))

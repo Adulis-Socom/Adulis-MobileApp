@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { assertTarget } from './guard.mjs';
+import { assertTarget, Refused } from './guard.mjs';
 import { apiAppName, apiEnvProblems, tokens } from './identity.mjs';
 import { writeManifest } from './manifest.mjs';
 
@@ -72,21 +72,24 @@ export function buildApiEnv(m, { dir, bootMarker, host = process.env }) {
  * fetch, docker and Client; every refusal happens before the build and before the process starts.
  */
 export async function startApi(m, io, { checkout, sha, dir }) {
-  if (m.state !== 'ready') throw new Error(`the run is '${m.state}', not ready`);
-  if (m.api) throw new Error('this run already started an API; stop it first (api stop)');
+  if (m.state !== 'ready') throw new Refused(`the run is '${m.state}', not ready`);
+  if (m.api) throw new Refused('this run already started an API; stop it first (api stop)');
   const prov = await provenanceProblems(checkout, sha, (a) => io.git(a, checkout));
-  if (prov.length) throw new Error(`refused: ${prov.join('; ')}`);
+  if (prov.length) throw new Refused(`refused: ${prov.join('; ')}`);
   // The port guard: anything already answering is a stale run, a developer's server or another program.
   if (await io.connects(m.ports.api))
-    throw new Error(`refused: something already listens on the API port ${m.ports.api}`);
+    throw new Refused(`refused: something already listens on the API port ${m.ports.api}`);
   const bootMarker = newBootMarker(m);
   const env = buildApiEnv(m, { dir, bootMarker });
   const envProblems = apiEnvProblems(env, m);
   if (envProblems.length)
-    throw new Error(`refused: the API environment is not acceptable: ${envProblems.join('; ')}`);
+    throw new Refused(`refused: the API environment is not acceptable: ${envProblems.join('; ')}`);
   // The API is handed this run's credentials only after the stack itself has been proven.
   await assertTarget(m, 'STACK', io, { dir, states: ['ready'] });
   await io.build(checkout);
+  // The build can take minutes: the checkout must still be the verified commit before it is run.
+  const after = await provenanceProblems(checkout, sha, (a) => io.git(a, checkout));
+  if (after.length) throw new Refused(`refused after the build: ${after.join('; ')}`);
   const main = join(checkout, 'apps', 'api', 'dist', 'main.js');
   const mainSha256 = createHash('sha256').update(readFileSync(main)).digest('hex');
   const child = io.spawnApi({
@@ -115,7 +118,7 @@ export async function startApi(m, io, { checkout, sha, dir }) {
     // Identity, not liveness: wait for THIS marker, then prove the whole API chain.
     for (let i = 0; i < 60; i += 1) {
       const h = await io
-        .fetch(`http://127.0.0.1:${m.ports.api}/healthz`)
+        .fetch(`http://127.0.0.1:${m.ports.api}/healthz`, { signal: AbortSignal.timeout(5000) })
         .then((r) => r.json())
         .catch(() => null);
       if (h?.boot_marker === bootMarker) break;
@@ -154,7 +157,7 @@ export async function stopApi(m, io, dir) {
     !same(t[0], rec.node) ||
     !same(t[1], rec.main)
   )
-    throw new Error(
+    throw new Refused(
       `refused: process ${rec.pid} is not the API this run started (creation time or command line differ); it was not stopped`,
     );
   io.proc.kill(rec.pid);

@@ -1,6 +1,6 @@
-// What the native test harness must never touch, defined once. Everything here is a deny-list: the
-// allow-list is the run manifest (names, ports and ids the harness created itself). Both must agree
-// before anything destructive runs.
+// What the native test harness must never touch, defined once. Everything here is a deny-list of
+// resources that exist for other purposes; the allow-list is the run manifest (names, ports and ids
+// the harness created itself). Both must agree before anything destructive runs.
 import { PROTECTED_CONTAINERS as DEV_DB_CONTAINERS } from '../../scripts/lib/disposable-db.mjs';
 
 export const OWNER = 'native-harness';
@@ -22,6 +22,7 @@ const PROTECTED_CONTAINER_NAMES = new Set([
   ...DEV_DB_CONTAINERS,
   'adulis-minio',
   'adulis-minio-init',
+  'adulis-minio-volume-guard',
   'adulis-final-check',
   'adulis-test-pg',
   'adulis-test-minio',
@@ -45,17 +46,9 @@ export const isProtectedContainer = (n) =>
 export const isProtectedVolume = (n) => PROTECTED_VOLUMES.has(n) || hasProtectedPrefix(n);
 export const isProtectedNetwork = (n) => PROTECTED_NETWORKS.has(n) || hasProtectedPrefix(n);
 
-// Credentials that exist in the public repository or in CI: never a per-run secret.
-const KNOWN_LITERALS = new Set([
-  'local-dev-password',
-  'ci-password',
-  'adulis-local',
-  'adulis-local-secret',
-  'postgres',
-  'minioadmin',
-  'password',
-]);
-export const isKnownCredential = (v) => KNOWN_LITERALS.has(v) || /^ci-fake-/.test(`${v}`);
+/** Any resource carrying a compose label belongs to a compose project, never to a harness run. */
+export const hasComposeLabel = (labels) =>
+  Object.keys(labels ?? {}).some((k) => k.startsWith('com.docker.compose.'));
 
 /** Every name of this run's resources starts with this. */
 export const namePrefix = (run8) => `adulis-native-${run8}-`;

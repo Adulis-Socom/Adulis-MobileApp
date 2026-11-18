@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deviceProblems, observeDevice, prepareDevice, restoreDevice } from '../lib/device.mjs';
+import { PROTECTED_PORTS } from '../lib/protected.mjs';
 import { world } from './fakes.mjs';
 
 const SERIAL = 'emulator-5554';
@@ -63,9 +64,7 @@ test('an app that is missing or not a debug build is refused', () => {
 
 test('a foreign or protected reverse entry is refused', () => {
   for (const [remote, local, re] of [
-    ['tcp:9100', 'tcp:9100', /protected port/],
-    ['tcp:3000', 'tcp:3000', /protected port/],
-    ['tcp:5434', 'tcp:5434', /protected port/],
+    ...[...PROTECTED_PORTS].map((p) => [`tcp:${p}`, `tcp:${p}`, /protected port/]),
     ['tcp:57999', 'tcp:57999', /not this run's/],
     ['tcp:8081', 'tcp:9999', /not this run's/],
   ]) {
@@ -117,7 +116,7 @@ test("prepare reverses exactly the run's API, MinIO and Metro ports and nothing 
 
 test('prepare refuses a protected port even if the manifest was tampered with', async () => {
   const mm = m();
-  mm.ports.s3 = 9100;
+  [mm.ports.s3] = [...PROTECTED_PORTS];
   const calls = [];
   const adb = async (args) => (calls.push(args.join(' ')), { status: 0, stdout: '' });
   await assert.rejects(prepareDevice(mm, adb, SERIAL), /protected/);

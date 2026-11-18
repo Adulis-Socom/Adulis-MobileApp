@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { SETS, canaryDeviceId, guardSql, loadSet } from '../fixtures/index.mjs';
-import { main, MIN_FREE, preflightProblems, READY } from '../harness.mjs';
+import { main, MIN_FREE, preflightProblems, STATUS } from '../harness.mjs';
 import { readManifest, runDir, writeManifest } from '../lib/manifest.mjs';
 import { LABEL, OWNER, PORT_BLOCK, PROTECTED_PORTS } from '../lib/protected.mjs';
 import { dockerSteps, pickPorts } from '../lib/stack.mjs';
@@ -117,7 +117,7 @@ test('a fixture load is refused, writing nothing, when any identity check fails'
           Destination: '/y',
         }),
     ],
-    ['ID-09', (w) => (w.m.ports.pg = 5434)],
+    ['ID-09', (w) => ([w.m.ports.pg] = [...PROTECTED_PORTS])],
   ];
   for (const [id, edit] of edits) {
     const w = world();
@@ -125,19 +125,6 @@ test('a fixture load is refused, writing nothing, when any identity check fails'
     await refusal(assert, loadSet(w.m, makeIo(w), 'baseline', { dir: tmpdir() }), id);
     assert.deepEqual(w.d.mutations, []);
     assert.equal(w.pg.executed, undefined);
-  }
-});
-
-test('when the in-transaction identity guard raises, the load fails and the ledger is unchanged', async () => {
-  const w = world();
-  w.pg.guardFails = true;
-  const dir = mkdtempSync(join(tmpdir(), 'native-fx-'));
-  try {
-    writeManifest(dir, w.m);
-    await assert.rejects(loadSet(w.m, makeIo(w), 'baseline', { dir }), /nothing was written/);
-    assert.deepEqual(readManifest(dir).fixtures, []);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -261,12 +248,15 @@ function cli(world_, extra = {}) {
   return { root, w, io, lines, run, done: () => rmSync(root, { recursive: true, force: true }) };
 }
 
-test('verify on a consistent run exits 0 and ends with the READY line', async () => {
+test('verify on a consistent run exits 0 and names what it verified', async () => {
   const c = cli();
   try {
     assert.equal(await c.run('verify', '--run', c.w.m.run), 0);
-    assert.equal(c.lines.at(-1), READY);
-    assert.equal(READY, 'HARNESS READY - NATIVE EXECUTION NOT PERFORMED');
+    assert.equal(c.lines.at(-1), STATUS.READY_STACK);
+    assert.equal(
+      STATUS.READY_STACK,
+      'HARNESS READY - STACK VERIFIED - NATIVE EXECUTION NOT PERFORMED',
+    );
   } finally {
     c.done();
   }
@@ -274,11 +264,11 @@ test('verify on a consistent run exits 0 and ends with the READY line', async ()
 
 test('verify on a run that names a protected port exits 1 before connecting, with a REFUSED line', async () => {
   const w = world();
-  w.m.ports.pg = 5434;
+  [w.m.ports.pg] = [...PROTECTED_PORTS];
   const c = cli(w);
   try {
     assert.equal(await c.run('verify', '--run', w.m.run), 1);
-    assert.match(c.lines.at(-1), /^HARNESS REFUSED - ID-09 .* - NOTHING DESTRUCTIVE WAS DONE$/);
+    assert.match(c.lines.at(-1), /^HARNESS REFUSED - ID-09 .* - NO RESOURCE WAS CHANGED$/);
     assert.deepEqual(c.io.calls, []);
   } finally {
     c.done();

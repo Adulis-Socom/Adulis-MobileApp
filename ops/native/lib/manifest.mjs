@@ -43,6 +43,7 @@ export function newRun(now = new Date(), random = rand) {
     containers: {},
     volumes: {},
     network: null,
+    engine: null,
     fixtures: [],
     api: null,
   };

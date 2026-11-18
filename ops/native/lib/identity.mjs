@@ -11,7 +11,7 @@ import { checkUrlConfig, DISPOSABLE_MARKER } from '../../scripts/lib/disposable-
 import { checkStorageConfig, STORAGE_MARKER } from '../../scripts/lib/disposable-storage.mjs';
 import { signedGet } from './s3.mjs';
 import {
-  isKnownCredential,
+  hasComposeLabel,
   isProtectedContainer,
   isProtectedNetwork,
   isProtectedVolume,
@@ -72,7 +72,9 @@ const why = (f) => (f?.error ? f.error : 'not collected');
 
 /* ---------- ID-00 and the configuration checks (no I/O) ---------- */
 
-export function manifestProblems(m, { run, states }) {
+const ID64 = /^[0-9a-f]{64}$/;
+
+export function manifestProblems(m, { run, states } = {}) {
   const p = [];
   if (!m || typeof m !== 'object') return ['there is no manifest'];
   if (m.schema !== SCHEMA) p.push(`manifest schema ${m.schema} is not ${SCHEMA}`);
@@ -84,6 +86,12 @@ export function manifestProblems(m, { run, states }) {
   if (!/^[0-9a-f]{64}$/.test(`${m.nonce}`)) p.push('the run nonce is missing or malformed');
   if (states && !states.includes(m.state))
     p.push(`the run is in state '${m.state}', not one of ${states.join(', ')}`);
+  // Ids reach docker argument lists: only full ids, never anything that could read as an option.
+  for (const [role, c] of Object.entries(m.containers ?? {}))
+    if (!ID64.test(`${c?.id}`))
+      p.push(`the recorded id of container ${role} is not a full container id`);
+  if (m.network && !ID64.test(`${m.network.id}`))
+    p.push('the recorded network id is not a full id');
   return p;
 }
 
@@ -118,8 +126,7 @@ export function configProblems(m) {
   }
   if (!m.names?.pg || !m.names?.minio || !m.names?.network) p.push('resource names are missing');
   for (const [k, v] of Object.entries(m.secrets ?? {})) {
-    if (isKnownCredential(v) || !/^[0-9a-f]{20,}$/.test(`${v}`))
-      p.push(`credential ${k} is not a per-run random value`);
+    if (!/^[0-9a-f]{20,}$/.test(`${v}`)) p.push(`credential ${k} is not a per-run random value`);
   }
   return { database: dbp, other: p };
 }
@@ -164,24 +171,36 @@ export function apiEnvProblems(env, m) {
       p.push(`${name} port ${url.port} is not this run's PostgreSQL port ${m.ports?.pg}`);
     if (decodeURIComponent(url.pathname.slice(1)) !== m.db?.name)
       p.push(`${name} names database ${url.pathname.slice(1)}, not ${m.db?.name}`);
-    if (isKnownCredential(decodeURIComponent(url.password)))
-      p.push(`${name} carries a known credential`);
+    const [user, secret] = {
+      DATABASE_URL: ['adulis_app', m.secrets?.app],
+      DATABASE_URL_JOBS: ['adulis_jobs', m.secrets?.jobs],
+    }[name];
+    if (decodeURIComponent(url.username) !== user || decodeURIComponent(url.password) !== secret)
+      p.push(`${name} does not carry this run's ${user} credential`);
   }
   const s = checkStorageConfig(env);
   if (!s.configured) p.push('the six R2_* values are not set');
   p.push(...s.problems);
   if (s.endpoint && s.endpoint !== `http://127.0.0.1:${m.ports?.s3}`)
     p.push(`R2_ACCOUNT_ID ${s.endpoint} is not this run's MinIO`);
-  for (const k of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'])
-    if (isKnownCredential(env[k])) p.push(`${k} is a known credential`);
+  if (env.R2_ACCESS_KEY_ID !== m.secrets?.s3Key)
+    p.push("R2_ACCESS_KEY_ID is not this run's access key");
+  if (env.R2_SECRET_ACCESS_KEY !== m.secrets?.s3Secret)
+    p.push("R2_SECRET_ACCESS_KEY is not this run's secret key");
   return p;
 }
 
 /* ---------- Docker resource rules (used by verify and by cleanup) ---------- */
 
 const labelsOf = (o) => o?.Config?.Labels ?? o?.Labels ?? {};
-// A problem is { id, msg }: ID-08 isolation (mounts, volumes, networks), ID-09 addresses, ID-10 ownership.
-const P = (id, msg) => ({ id, msg });
+// A problem is { id, msg, hard }: ID-08 isolation (mounts, volumes, networks), ID-09 addresses,
+// ID-10 ownership. Cleanup applies the ownership problems and the `hard` ones (a protected volume);
+// verification applies every one.
+const P = (id, msg, hard = false) => ({ id, msg, hard });
+/** What cleanup must prove before it removes anything: ownership, plus the hard isolation rules. */
+export const ownership = (problems) => problems.filter((x) => x.id === 'ID-10' || x.hard);
+// Created-time floor on the DAEMON's clock (recorded before anything was created), not the host's.
+const createdFloor = (m) => Date.parse(m.engine?.systemTime ?? m.createdAt) - 1000;
 const labelProblems = (m, labels, role, what) => {
   const p = [];
   if (labels[LABEL.owner] !== OWNER)
@@ -190,6 +209,8 @@ const labelProblems = (m, labels, role, what) => {
     p.push(P('ID-10', `${what} carries run label '${labels[LABEL.run]}', not ${m.run}`));
   if (labels[LABEL.role] !== role)
     p.push(P('ID-10', `${what} carries role label '${labels[LABEL.role]}', not ${role}`));
+  if (hasComposeLabel(labels))
+    p.push(P('ID-10', `${what} carries compose labels: it belongs to a compose project`));
   return p;
 };
 
@@ -204,9 +225,11 @@ export function containerProblems(m, role, info) {
   if (info.Id !== rec?.id)
     p.push(P('ID-10', `${what} has id ${info.Id}, not the recorded ${rec?.id}`));
   if (name !== m.names[r.name]) p.push(P('ID-10', `${what} is not named ${m.names[r.name]}`));
+  if (!name.startsWith(namePrefix(m.run8)))
+    p.push(P('ID-10', `${what} does not carry this run's prefix`));
   if (isProtectedContainer(name)) p.push(P('ID-10', `${what} is a protected container`));
   p.push(...labelProblems(m, labelsOf(info), role, what));
-  if (!(Date.parse(info.Created) >= Date.parse(m.createdAt) - 1000))
+  if (!(Date.parse(info.Created) >= createdFloor(m)))
     p.push(P('ID-10', `${what} was created before this run`));
   const mounts = info.Mounts ?? [];
   for (const mt of mounts) {
@@ -217,6 +240,7 @@ export function containerProblems(m, role, info) {
           'ID-08',
           `${what} mounts ${mt.Type} ${mt.Name ?? mt.Source} at ${mt.Destination}` +
             `${isProtectedVolume(mt.Name) ? ' (a protected volume)' : ''}: not this run's volume`,
+          isProtectedVolume(mt.Name),
         ),
       );
   }
@@ -272,7 +296,8 @@ export function volumeProblems(m, key, info) {
   if (!info?.Name) return [P('ID-10', `volume ${want} was not found`)];
   const p = [];
   if (info.Name !== want) p.push(P('ID-10', `volume ${info.Name} is not ${want}`));
-  if (isProtectedVolume(info.Name)) p.push(P('ID-08', `volume ${info.Name} is a protected volume`));
+  if (isProtectedVolume(info.Name))
+    p.push(P('ID-08', `volume ${info.Name} is a protected volume`, true));
   if (!info.Name.startsWith(namePrefix(m.run8)))
     p.push(P('ID-10', `volume ${info.Name} does not carry this run's prefix`));
   p.push(...labelProblems(m, info.Labels ?? {}, r.vrole, `volume ${info.Name}`));
@@ -298,7 +323,11 @@ export function networkProblems(m, info) {
   for (const id of Object.keys(info.Containers ?? {}))
     if (!mine.has(id))
       p.push(
-        P('ID-08', `network ${info.Name} has an attached container ${id} that is not this run's`),
+        P(
+          'ID-08',
+          `network ${info.Name} has an attached container ${id} that is not this run's`,
+          true,
+        ),
       );
   return p;
 }
@@ -471,9 +500,22 @@ function apiChecks(m, f) {
   ];
 }
 
+/** The engine and context a command talks to must be the ones the run was created in. */
+export function engineProblems(m, e) {
+  if (!m.engine?.id)
+    return ['the manifest records no Docker engine: the run cannot be proven present or absent'];
+  const p = [];
+  if (e.id !== m.engine.id)
+    p.push(`this Docker engine (${e.id}) is not the one the run was created in (${m.engine.id})`);
+  if (e.context !== m.engine.context)
+    p.push(`the Docker context is '${e.context}', not the recorded '${m.engine.context}'`);
+  return p;
+}
+
 /** All results for the facts that were collected. */
 export function checkFacts(m, f, need) {
   const out = [];
+
   if (need.some((id) => ['ID-08', 'ID-09', 'ID-10'].includes(id))) out.push(...dockerChecks(m, f));
   if (need.some((id) => ['ID-01', 'ID-02', 'ID-03'].includes(id))) out.push(...pgChecks(m, f));
   if (need.some((id) => ['ID-06', 'ID-07'].includes(id))) out.push(...s3Checks(m, f));
@@ -503,6 +545,18 @@ async function inspectJson(io, args) {
   } catch {
     return { error: 'docker returned no readable description' };
   }
+}
+
+/** The Docker engine (id and clock) and context behind `io.docker`; `up` records them, every command compares. */
+export async function engineFacts(io) {
+  const r = await io.docker(['info', '--format', '{{.ID}}|{{.SystemTime}}']);
+  if (!ok(r)) return { error: `docker info failed: ${text(r)}` };
+  const [id, systemTime] = r.stdout.trim().split('|');
+  if (!id || Number.isNaN(Date.parse(systemTime)))
+    return { error: 'docker info returned no engine id or clock' };
+  const c = await io.docker(['context', 'show']);
+  if (!ok(c) || !c.stdout.trim()) return { error: `docker context show failed: ${text(c)}` };
+  return { id, systemTime, context: c.stdout.trim() };
 }
 
 async function listIds(io, args) {
@@ -689,5 +743,15 @@ export async function verify(m, io, need, { run, states } = {}) {
     first.push(result('ID-09', c.other), result('ID-02', c.database));
   }
   if (first.some((r) => r.verdict !== 'PASS')) return first;
+  // The first I/O: the engine and context must be the ones the run was created in, before any
+  // resource is looked up (in another engine every lookup would answer "no such object").
+  if (need.some((id) => id !== 'ID-00')) {
+    const e = await safe(() => engineFacts(io));
+    const r = bad(e)
+      ? result('ID-00', [], [`docker engine: ${why(e)}`])
+      : result('ID-00', engineProblems(m, e));
+    first.push(r);
+    if (r.verdict !== 'PASS') return first;
+  }
   return [...first, ...checkFacts(m, await observe(m, io, need), need)];
 }

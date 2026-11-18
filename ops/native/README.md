@@ -2,11 +2,14 @@
 
 An isolated stack for native (device) validation of the mobile app: its own PostgreSQL and MinIO
 containers per run, an API built from a verified checkout, synthetic fixtures, and cleanup that
-proves ownership before it deletes anything. It never touches the development PostgreSQL (5434),
-the development MinIO (9100), the host PostgreSQL, or any other container, volume or network.
+proves ownership before it deletes anything. It creates, changes and removes only the network,
+volumes, containers and processes it created itself, and refuses everything else.
+
+Windows only: the process lookups use PowerShell (`Get-CimInstance`, `Get-NetTCPConnection`) and
+paths follow Windows rules. The refusal tests (`selftest`) run anywhere and need no Docker.
 
 ```
-export ADULIS_NATIVE_ROOT=/absolute/dir        # manifests, logs; keep it off the C: drive
+export ADULIS_NATIVE_ROOT=<absolute dir>       # manifests, logs; keep it outside any git work tree
 node ops/native/harness.mjs plan --checkout <path>             # prints the docker arguments, runs nothing
 node ops/native/harness.mjs preflight                          # memory, disk, docker, leftovers
 node ops/native/harness.mjs up --checkout <path> --sha <40-hex>
@@ -21,7 +24,9 @@ node ops/native/harness.mjs selftest                           # the refusal tes
 ```
 
 `--sha` is the commit the operator verified. The checkout must be exactly that commit, have a clean
-tracked tree, and contain `origin/dev`; the harness builds the API itself on every start.
+tracked tree, and contain `origin/dev` as last fetched; the harness builds the API itself on every
+start and checks the commit again after the build. The API listens on all interfaces for as long as
+it runs (it holds synthetic data and the fake SMS adapter only); stop it when you are done.
 
 ## What is verified, and when
 
@@ -30,7 +35,7 @@ manifest it wrote when it created them (an environment variable only says what s
 
 | Check               | What is read                                                                                                                                                           |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| manifest            | schema, run id, nonce, state                                                                                                                                           |
+| manifest            | schema, run id, nonce, state, full ids; the Docker engine and context the run was created in                                                                           |
 | PostgreSQL server   | system identifier and postmaster start time, over TCP and inside the container by full id                                                                              |
 | database            | name and oid (`adulis_native_<run8>`; never `adulis`, `adulis_gates`, `postgres`)                                                                                      |
 | database marker     | the disposable comment plus a per-run setting holding the run id and nonce                                                                                             |
@@ -39,8 +44,8 @@ manifest it wrote when it created them (an environment variable only says what s
 | MinIO endpoint      | a signed request with the run's random credentials, and the deployment id                                                                                              |
 | bucket marker       | run tags on both buckets, a run marker object, the repository's storage marker                                                                                         |
 | mounts and volumes  | exactly one named run volume per container; no bind, tmpfs or volumes-from                                                                                             |
-| addresses and ports | loopback only, ports from 57100-57999, none protected; no known credential                                                                                             |
-| ownership labels    | owner, run and role labels on every container, volume and network                                                                                                      |
+| addresses and ports | loopback only, ports from 57100-57999, none protected; credentials are this run's random values                                                                        |
+| ownership labels    | owner, run and role labels on every container, volume and network; no compose labels                                                                                   |
 
 Configuration problems are refused before anything is contacted. A check that cannot be made is
 refused too (exit 2). There is no flag that overrides a refusal.
@@ -50,15 +55,34 @@ transaction whose first statement raises unless the server, database and run set
 
 ## Cleanup
 
-`down` identifies every resource of the run first (by full id for containers and networks, by the
-verified name for volumes) and removes nothing unless each one carries this run's labels, this run's
-name prefix, mounts only this run's volumes, and is not in the protected set. A failed listing is not
-"absent"; a removal is confirmed by a successful empty listing. Processes are stopped only by the pid,
-creation time and command line recorded when the harness started them: there is no stop by port.
+`down` first checks the manifest and that the Docker engine and context are the ones the run was
+created in. It then identifies every resource of the run (by full id for containers and networks, by
+the planned name for volumes) and removes nothing unless each one carries this run's owner, run and
+role labels, its planned name with this run's prefix, the recorded full id, and is not in the
+protected set. (A resource that fails the isolation rules of `verify`, such as a stopped container,
+is still the run's own and is removed; an anonymous volume that an image created is reported, not
+removed.) A failed listing is not "absent"; a removal is confirmed by a successful empty listing. A
+`down` that finds nothing says so, and records the engine it looked in. `purge` deletes a cleaned
+run's directory only in that same engine, after a live listing by the run's label comes back empty.
+Processes are stopped only by the pid, creation time and command line recorded when the harness
+started them: there is no stop by port.
 
-Exit codes: 0 ok; 1 refused; 2 could not check or usage; 3 cleanup incomplete; 4 blocked.
-The last line of every command is a status line, for example
-`HARNESS READY - NATIVE EXECUTION NOT PERFORMED`.
+## Exit codes and status lines
+
+One scheme for every command. The last line of every command is its status line.
+
+| Exit | Meaning                                                                    | Status line                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | the command did what it says                                               | `HARNESS READY - STACK VERIFIED - NATIVE EXECUTION NOT PERFORMED` (`up`, `verify`), `HARNESS READY - STACK AND API VERIFIED - ...` (`verify` with an API), otherwise `HARNESS OK - <command>` |
+| 1    | refused: a rule was evaluated and the operation does not satisfy it        | `HARNESS REFUSED - <check> - NO RESOURCE WAS CHANGED`                                                                                                                                         |
+| 2    | could not check, usage, or an unexpected error before anything was changed | `HARNESS REFUSED - <check> (could not be checked) - NO RESOURCE WAS CHANGED`, `HARNESS USAGE - <reason>`, `HARNESS ERROR - <reason> - NO RESOURCE WAS CHANGED`                                |
+| 3    | something was changed and the command did not finish                       | `HARNESS INCOMPLETE - <reason> after <n> change(s) (<what>); <how to continue>`, `HARNESS CLEANUP INCOMPLETE - <n> RESOURCES LEFT, REGISTERED`                                                |
+| 4    | a precondition of `up` is not met                                          | `HARNESS BLOCKED - <precondition> - NOTHING STARTED`                                                                                                                                          |
+
+Only `up` and a full `verify` print READY, and READY names what was verified. `status`, `env`, `plan`,
+`preflight`, `down` and `purge` verify nothing about the stack and print `HARNESS OK`.
+`NO RESOURCE WAS CHANGED` is printed only when no call that creates, removes, starts or stops anything
+was made by that command.
 
 Not included: the worker process (no Buyer flow needs it; `/healthz` then reports `degraded` with
 HTTP 200, and the harness requires only `db: up`), device settings changes, Maestro runs.

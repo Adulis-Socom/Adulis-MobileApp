@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { provenanceProblems, startApi, stopApi } from '../lib/api.mjs';
+import { Refused } from '../lib/guard.mjs';
 import { readManifest, writeManifest } from '../lib/manifest.mjs';
 import { apiAppName } from '../lib/identity.mjs';
 import { makeIo, world } from './fakes.mjs';
@@ -113,7 +114,7 @@ test('a listener already on the API port is refused: no build, no start, nothing
 test('an API is not built or started while the stack fails an identity check', async () => {
   for (const edit of [
     (w) => (w.pg.tcp = w.pg.tcp.replace(w.m.db.systemId, '1')),
-    (w) => (w.s3.accept = 'adulis-local'),
+    (w) => (w.s3.accept = 'a-key-the-run-never-made'),
     (w) =>
       w.d.containers[w.m.containers.minio.id].Mounts.push({
         Type: 'bind',
@@ -204,7 +205,7 @@ test('stop kills the recorded process only when pid, creation time and command l
 test('stop refuses a reused pid or another command line and kills nothing', async () => {
   const cases = [
     (w) => (w.proc.byPid[4242].createdAt = '2026-11-18T13:00:00.0000000Z'),
-    (w) => (w.proc.byPid[4242].commandLine = '"C:\\Windows\\System32\\com.docker.backend.exe"'),
+    (w) => (w.proc.byPid[4242].commandLine = '"C:\\tools\\unrelated.exe"'),
     (w) => (w.proc.byPid[4242].commandLine = `"${w.m.api.node}" --inspect ${w.m.api.main}`),
     (w) => (w.proc.byPid[4242].commandLine = `"${w.m.api.node}" C:\\other\\main.js`),
   ];
@@ -222,12 +223,12 @@ test('stop refuses a reused pid or another command line and kills nothing', asyn
   }
 });
 
-test("a port owned by Docker's own process or an unknown program is never a reason to kill anything", async () => {
+test('a port owned by an unrelated program is never a reason to kill anything', async () => {
   const w = world({ api: true });
-  w.proc.listeners = [19028]; // com.docker.backend
+  w.proc.listeners = [19028];
   w.proc.byPid[19028] = {
     createdAt: '2026-11-17T08:27:00.0000000Z',
-    commandLine: '"C:\\Program Files\\Docker\\Docker\\resources\\com.docker.backend.exe"',
+    commandLine: '"C:\\tools\\unrelated.exe" --serve',
   };
   const io = makeIo(w);
   await assert.rejects(
@@ -249,5 +250,46 @@ test('a recorded process that is gone is reported, not killed', async () => {
     assert.deepEqual(w.proc.kills, []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/* ---- refusals are typed (exit 1), and the checkout is re-checked after the build ---- */
+
+test('provenance, port-busy and stop refusals are typed refusals, not generic errors', async () => {
+  const stale = startWorld({ head: 'd'.repeat(40) });
+  const busy = startWorld({ portBusy: true });
+  try {
+    for (const s of [stale, busy]) {
+      const e = await startApi(s.w.m, s.io, { checkout: s.checkout, sha: SHA, dir: s.dir }).catch(
+        (x) => x,
+      );
+      assert.ok(e instanceof Refused && e.code === 1, `${e}`);
+    }
+  } finally {
+    stale.done();
+    busy.done();
+  }
+  const w = world({ api: true });
+  w.proc.byPid[4242].createdAt = '2026-11-18T13:00:00.0000000Z';
+  const e = await stopApi(w.m, makeIo(w), tmpdir()).catch((x) => x);
+  assert.ok(e instanceof Refused && e.code === 1, `${e}`);
+});
+
+test('a checkout that changes during the build is refused before the API runs', async () => {
+  const s = startWorld();
+  try {
+    let head = SHA;
+    s.io.git = async (args) => gitFake({ head })(args);
+    s.io.build = async () => {
+      s.effects.builds += 1;
+      head = 'e'.repeat(40); // a checkout switched while the build ran
+    };
+    const e = await startApi(s.w.m, s.io, { checkout: s.checkout, sha: SHA, dir: s.dir }).catch(
+      (x) => x,
+    );
+    assert.ok(e instanceof Refused && /after the build/.test(e.message), `${e}`);
+    assert.equal(s.effects.spawns.length, 0);
+  } finally {
+    s.done();
   }
 });

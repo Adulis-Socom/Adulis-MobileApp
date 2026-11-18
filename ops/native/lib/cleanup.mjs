@@ -1,8 +1,10 @@
 // Removing a run's Docker resources. A container, volume or network is removed only with full
-// ownership proof: the run label equals this run's id, the name carries this run's prefix, and the
-// object is not in the protected set. Everything is identified first (by full id for containers
-// and networks); if ANY resource cannot be positively identified, NOTHING is removed. A failed
-// listing is never read as "absent", and a removal is confirmed by a successful empty listing.
+// ownership proof: the run, owner and role labels, this run's planned name and prefix, the full id
+// recorded for it, and not being in the protected set. (The isolation rules of `verify` - mounts,
+// ports, networks - are not applied here: a resource that fails them is still the run's own and
+// must stay removable.) Everything is identified first, in the engine the run was created in; if
+// ANY resource cannot be positively identified, NOTHING is removed. A failed listing is never read
+// as "absent", and a removal is confirmed by a successful empty listing.
 import {
   appendFileSync,
   lstatSync,
@@ -12,12 +14,24 @@ import {
   rmSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { containerProblems, ROLES, networkProblems, volumeProblems } from './identity.mjs';
+import {
+  configProblems,
+  containerProblems,
+  engineFacts,
+  engineProblems,
+  manifestProblems,
+  networkProblems,
+  ownership,
+  ROLES,
+  volumeProblems,
+} from './identity.mjs';
 import { LABEL } from './protected.mjs';
 
 const ok = (r) => !r.error && r.status === 0;
 const tail = (r) => `${r.stderr || r.stdout || r.error?.message || ''}`.trim().slice(-300);
 const ids = (r) => r.stdout.split(/\s+/).filter(Boolean);
+const ANONYMOUS = /^[0-9a-f]{64}$/;
+export const DOWN_STATES = ['creating', 'ready', 'cleanup', 'cleanup-incomplete'];
 
 async function inspect(io, args) {
   const r = await io.docker(args);
@@ -37,14 +51,25 @@ async function confirmedAbsent(io, args) {
 
 /**
  * Phase 1. Returns { steps, problems, unknowns }: `steps` is the ordered removal list and is empty
- * unless every resource of the run was positively identified.
+ * unless every resource of the run was positively identified. `problems` are refusals (exit 1),
+ * `unknowns` are things that could not be read (exit 2).
  */
 export async function planDown(m, io) {
   const problems = [];
   const unknowns = [];
   const steps = [];
-  const info = await io.docker(['info', '--format', '{{.ServerVersion}}']);
-  if (!ok(info)) return { steps, problems, unknowns: [`docker is not reachable: ${tail(info)}`] };
+  // The manifest's own rules first, with no I/O.
+  problems.push(...manifestProblems(m, { states: DOWN_STATES }));
+  if (!problems.length) {
+    const c = configProblems(m);
+    problems.push(...c.other, ...c.database);
+  }
+  if (problems.length) return { steps, problems, unknowns };
+  // Then the engine: in another engine every lookup would answer "no such object".
+  const engine = await engineFacts(io);
+  if (engine.error) return { steps, problems, unknowns: [engine.error] };
+  problems.push(...engineProblems(m, engine));
+  if (problems.length) return { steps, problems, unknowns };
 
   const filter = `label=${LABEL.run}=${m.run}`;
   const lists = {};
@@ -58,6 +83,7 @@ export async function planDown(m, io) {
     else unknowns.push(`could not list ${kind} of this run (${tail(r)}): not treated as absent`);
   }
 
+  const adopted = {};
   // Containers: every id the manifest records plus every id carrying the run label.
   const cids = new Set([
     ...Object.values(m.containers ?? {}).map((c) => c.id),
@@ -88,9 +114,20 @@ export async function planDown(m, io) {
     const mm = m.containers?.[role]?.id
       ? m
       : { ...m, containers: { ...m.containers, [role]: { id } } };
-    const p = containerProblems(mm, role, c);
+    if (!m.containers?.[role]?.id) adopted[role] = { id };
+    const p = ownership(containerProblems(mm, role, c));
     if (p.length) problems.push(...p.map((x) => x.msg));
-    else steps.push({ kind: 'container', id, name });
+    else
+      steps.push({
+        kind: 'container',
+        id,
+        name,
+        // An image that declares another VOLUME gives the container an unlabelled anonymous volume;
+        // it is not removed (nothing proves it is the run's) but it is reported.
+        anonymous: (c.Mounts ?? [])
+          .filter((mt) => mt.Type === 'volume' && ANONYMOUS.test(`${mt.Name}`))
+          .map((mt) => mt.Name),
+      });
   }
 
   // Volumes: the planned names plus every volume carrying the run label.
@@ -111,7 +148,7 @@ export async function planDown(m, io) {
       problems.push(`volume ${name} carries this run's label but is not one of its volumes`);
       continue;
     }
-    const p = volumeProblems(m, key, v);
+    const p = ownership(volumeProblems(m, key, v));
     if (p.length) problems.push(...p.map((x) => x.msg));
     else steps.push({ kind: 'volume', name });
   }
@@ -131,8 +168,10 @@ export async function planDown(m, io) {
       unknowns.push(`network ${id} could not be inspected: ${n.error}`);
       continue;
     }
-    const mm = m.network?.id ? m : { ...m, network: { id } };
-    const p = networkProblems(mm, n);
+    // The adopted containers belong to the run too: they may be attached to its network.
+    const known = { ...m, containers: { ...m.containers, ...adopted } };
+    const mm = m.network?.id ? known : { ...known, network: { id } };
+    const p = ownership(networkProblems(mm, n));
     if (p.length) problems.push(...p.map((x) => x.msg));
     else steps.push({ kind: 'network', id, name: n.Name });
   }
@@ -172,7 +211,7 @@ export async function executeDown(m, steps, io, log = () => {}) {
       if (
         v.error ||
         !key ||
-        volumeProblems(m, key, v).length ||
+        ownership(volumeProblems(m, key, v)).length ||
         !ok(holders) ||
         ids(holders).length
       ) {
@@ -183,7 +222,11 @@ export async function executeDown(m, steps, io, log = () => {}) {
       confirm = ['volume', 'ls', '-q', '--filter', `name=^${s.name}$`];
     } else {
       const n = await inspect(io, ['network', 'inspect', s.id]);
-      if (n.error || networkProblems(m, n).length || Object.keys(n.Containers ?? {}).length) {
+      if (
+        n.error ||
+        ownership(networkProblems(m, n)).length ||
+        Object.keys(n.Containers ?? {}).length
+      ) {
         left.push(`network ${s.name}: ownership or detachment could not be re-proven`);
         continue;
       }
@@ -192,8 +235,13 @@ export async function executeDown(m, steps, io, log = () => {}) {
     }
     const r = await io.docker(args);
     log({ op: 'remove', kind: s.kind, id: s.id ?? s.name, name: s.name, exit: r.status });
-    if (await confirmedAbsent(io, confirm)) removed.push(s);
-    else left.push(`${s.kind} ${s.name ?? s.id}: ${ok(r) ? 'still present' : tail(r)}`);
+    if (await confirmedAbsent(io, confirm)) {
+      removed.push(s);
+      for (const v of s.anonymous ?? [])
+        left.push(
+          `anonymous volume ${v} of container ${s.name} is not removed: check it, then remove it by hand`,
+        );
+    } else left.push(`${s.kind} ${s.name ?? s.id}: ${ok(r) ? 'still present' : tail(r)}`);
   }
   return { removed, left };
 }
@@ -238,9 +286,45 @@ export function purgeProblems(root, run) {
   return p;
 }
 
-export function purge(root, run) {
+/**
+ * Before the only record of a cleaned run is deleted: the engine must be the one the run was
+ * created in (and the one `down` ran in), and a live listing by the run's label must be SUCCESSFUL
+ * and empty. A `down` that found nothing because it looked in another engine can never pass this.
+ * Returns { problems, unknowns }.
+ */
+export async function purgeGateProblems(m, io) {
+  const problems = [];
+  const unknowns = [];
+  if (m.state !== 'cleaned') problems.push(`the run is '${m.state}', not cleaned`);
+  if (!m.cleanup?.engineId || m.cleanup.engineId !== m.engine?.id)
+    problems.push(
+      "the cleanup that ended this run is not recorded as made in the run's own Docker engine",
+    );
+  if (problems.length) return { problems, unknowns };
+  const engine = await engineFacts(io);
+  if (engine.error) return { problems, unknowns: [engine.error] };
+  problems.push(...engineProblems(m, engine));
+  if (problems.length) return { problems, unknowns };
+  const filter = `label=${LABEL.run}=${m.run}`;
+  for (const [kind, args] of [
+    ['containers', ['ps', '-a', '--no-trunc', '-q', '--filter', filter]],
+    ['volumes', ['volume', 'ls', '-q', '--filter', filter]],
+    ['networks', ['network', 'ls', '--no-trunc', '-q', '--filter', filter]],
+  ]) {
+    const r = await io.docker(args);
+    if (!ok(r)) unknowns.push(`could not list ${kind} of this run (${tail(r)})`);
+    else if (ids(r).length)
+      problems.push(`${ids(r).length} ${kind} labelled with this run still exist: run down first`);
+  }
+  return { problems, unknowns };
+}
+
+/** `onRemove` runs immediately before the deletion starts (the point of no return). */
+export function purge(root, run, { onRemove = () => {}, rm = rmSync } = {}) {
   const p = purgeProblems(root, run);
   if (p.length) return p;
-  rmSync(realpathSync(join(resolve(root), 'runs', run)), { recursive: true });
+  const real = realpathSync(join(resolve(root), 'runs', run));
+  onRemove();
+  rm(real, { recursive: true });
   return [];
 }

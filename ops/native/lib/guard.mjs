@@ -14,7 +14,18 @@ export const REQUIRED = {
   STACK: ['ID-00', 'ID-01', 'ID-02', 'ID-03', 'ID-06', 'ID-07', 'ID-08', 'ID-09', 'ID-10'],
 };
 
-export class Refusal extends Error {
+/**
+ * A rule was evaluated and the operation does not satisfy it (exit 1); `code` 2 is used where the
+ * rule could not be evaluated. Everything the CLI reports as REFUSED is one of these.
+ */
+export class Refused extends Error {
+  constructor(message, code = 1) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export class Refusal extends Refused {
   /** code 1: a check FAILED (refused); code 2: a check could not be made (fail closed). */
   constructor(op, results) {
     const notPass = results.filter((r) => r.verdict !== 'PASS');
