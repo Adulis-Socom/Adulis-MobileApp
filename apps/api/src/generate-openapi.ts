@@ -8,7 +8,7 @@ import type { Type } from '@nestjs/common';
 import { ModulesContainer, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ProblemDto } from './common/errors/problem.dto';
-import { applyGateDescriptions, applyProblemResponses, applySellerHeader } from './common/http/openapi-derived';
+import { applyGateDescriptions, applyGuardErrors, applyProblemResponses, applySellerHeader } from './common/http/openapi-derived';
 import { LEGACY_COMMERCE_CONTROLLERS, applyGuardSecurity } from './common/http/openapi-security';
 
 
@@ -91,6 +91,7 @@ async function generate(): Promise<void> {
   );
   applyGuardSecurity(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
   applySellerHeader(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
+  applyGuardErrors(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
   applyProblemResponses(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
   applyGateDescriptions(document, controllers, LEGACY_COMMERCE_CONTROLLERS);
 

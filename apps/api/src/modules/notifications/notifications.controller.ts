@@ -9,7 +9,7 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
-import { NotificationPageDto, NotificationReadDto } from './notifications.dto';
+import { NotificationPageDto, NotificationReadDto, NotificationsMarkedReadDto, NotificationPreferencesDto, NotificationPreferencesSavedDto } from './notifications.dto';
 import { ApiGate } from '../../common/http/api-gate';
 import { ApiOptionalSellerHeader } from '../../common/http/api-headers';
 
@@ -170,6 +170,7 @@ export class NotificationsController {
   }
 
   @ApiIdempotencyKey()
+  @ApiOkResponse({ type: NotificationsMarkedReadDto })
   @Post('notifications/read-all')
   @HttpCode(200)
   async readAll(
@@ -186,6 +187,7 @@ export class NotificationsController {
   }
 
   @ApiGate({ permission: ['seller.notifications:read'], surfaces: ['MOBILE', 'CONSOLE'] })
+  @ApiOkResponse({ type: NotificationPreferencesDto })
   @Get('seller/notification-preferences')
   async getPreferences(@Req() req: AuthedRequest): Promise<unknown> {
     return this.tx.run(req as LocalizedRequest, async (trx) => {
@@ -201,6 +203,7 @@ export class NotificationsController {
 
   /** PATCH is idempotent by shape (an upsert of named keys); no key demanded. */
   @ApiGate({ permission: ['seller.notifications.preferences:write'], surfaces: ['MOBILE', 'CONSOLE'] })
+  @ApiOkResponse({ type: NotificationPreferencesSavedDto })
   @Patch('seller/notification-preferences')
   @ApiOperation({ summary: 'suppressible=false is not togglable: 422, never a silent accept.' })
   async patchPreferences(@Req() req: AuthedRequest): Promise<unknown> {

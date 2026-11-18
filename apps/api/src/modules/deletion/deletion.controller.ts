@@ -27,7 +27,7 @@ import {
 import { z } from 'zod';
 import { DeletionService, type TicketAccount } from './deletion.service';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
-import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto } from './deletion.dto';
+import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto, SellerDeletionBlockersDto, SellerClosureDto } from './deletion.dto';
 import { EmptyResponseDto } from '../auth/auth.dto';
 import { ApiGate } from '../../common/http/api-gate';
 import { ApiDeviceHeaders } from '../../common/http/api-headers';
@@ -215,6 +215,7 @@ export class DeletionController {
   // ---- 12.12: the seller-scoped deletion group -------------------------
 
   @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SellerDeletionBlockersDto })
   @Get('seller/deletion/blockers')
   @ApiOperation({ summary: '200 with items[] — a state, not a failure (S16.9).' })
   async sellerBlockers(@Req() req: AuthedRequest): Promise<unknown> {
@@ -225,6 +226,7 @@ export class DeletionController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: DeletionConfirmedDto })
   @Post('seller/deletion')
   @HttpCode(200)
   @ApiOperation({ summary: 'Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].' })
@@ -250,6 +252,7 @@ export class DeletionController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SellerClosureDto })
   @Post('seller/closure')
   @HttpCode(200)
   @ApiOperation({ summary: 'Enters CLOSING: new reservations stop, existing orders operable.' })

@@ -46,3 +46,13 @@ export class DeletionPreviewDto {
 export class DeletionConfirmedDto {
   @ApiProperty({ enum: [true] }) deleted!: true;
 }
+
+/** GET /v1/seller/deletion/blockers: a state, not a failure. */
+export class SellerDeletionBlockersDto {
+  @ApiProperty({ type: [DeletionBlockerDto], description: 'Empty when nothing blocks the deletion of the store.' }) items!: DeletionBlockerDto[];
+}
+
+/** POST /v1/seller/closure. */
+export class SellerClosureDto {
+  @ApiProperty({ enum: ['CLOSING'] }) status!: 'CLOSING';
+}

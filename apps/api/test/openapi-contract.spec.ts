@@ -109,6 +109,24 @@ describe('contracts/openapi.json against the controllers', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('declares the refusals the pipeline decides: sessions, the seller header, the idempotency key', () => {
+    const PROBLEM = JSON.stringify({ $ref: '#/components/schemas/ProblemDto' });
+    const wrong = inScope
+      .filter((r) => !(r.controller === 'AuthController' && r.handler === 'logout'))
+      .flatMap((r) => {
+        const o = op(r);
+        const header = (name: string) => (o.parameters ?? []).some((p) => p.in === 'header' && p.name.toLowerCase() === name && p.required);
+        const ticket = JSON.stringify(o.security) === JSON.stringify([{ deletionTicket: [] }]);
+        const expected = ['401'];
+        if (!ticket) expected.push('403');
+        if ((!r.isPublic && header('x-adulis-seller')) || header('idempotency-key')) expected.push('400');
+        if (header('idempotency-key')) expected.push('409');
+        const missing = expected.filter((status) => JSON.stringify(o.responses[status]?.content?.['application/problem+json']?.schema) !== PROBLEM);
+        return missing.map((status) => `${label(r)} does not declare ${status} as a problem response`);
+      });
+    expect(wrong).toEqual([]);
+  });
+
   it('keeps a query parameter required only where the handler refuses its absence', () => {
     const required = inScope
       .flatMap((r) => (op(r).parameters ?? []).filter((p) => p.in === 'query' && p.required).map((p) => `${label(r)} ${p.name}`))
@@ -137,9 +155,31 @@ describe('contracts/openapi.json against the controllers', () => {
       ['post', '/v1/deletion/otp/verify', 200],
       ['get', '/v1/deletion/preview', 200],
       ['post', '/v1/deletion/confirm', 200],
+      // The two reads the Seller Companion makes.
+      ['get', '/v1/seller/list', 200],
+      ['get', '/v1/seller/analytics/overview', 200],
     ];
     const missing = calls.filter(([m, p, s]) => !contract.paths[p]?.[m]?.responses[String(s)]?.content?.['application/json']?.schema);
     expect(missing).toEqual([]);
+  });
+
+  it('describes every non-commerce success response except the four whose wire shape is not settled', () => {
+    // Each of these returns a database row spread as it is, numbers PostgreSQL sends as strings next to computed
+    // numbers, or one of several bodies by request action. Describing one needs a field-by-field proof against
+    // real responses first; until then no schema is better than a schema that looks described and is not.
+    const unsettled = [
+      'get /v1/seller/analytics/full 200',
+      'get /v1/seller/products/{id} 200',
+      'post /v1/seller/products/{id}/video 200',
+      'post /v1/seller/products/{id}/video 201',
+      'post /v1/seller/social-accounts/{id}/verify 200',
+    ];
+    const undescribed = inScope.flatMap((r) =>
+      Object.entries(op(r).responses)
+        .filter(([status, response]) => /^2\d\d$/.test(status) && status !== '204' && !response.content?.['application/json']?.schema)
+        .map(([status]) => `${r.http} ${r.path} ${status}`),
+    );
+    expect(undescribed.sort()).toEqual(unsettled);
   });
 });
 
@@ -225,6 +265,6 @@ describe('responseErrors (the check the e2e suites use)', () => {
   });
 
   it('reports an operation that declares no schema', () => {
-    expect(responseErrors({}, 'get', '/v1/seller/list', 200)).not.toEqual([]);
+    expect(responseErrors({}, 'get', '/v1/seller/analytics/full', 200)).not.toEqual([]);
   });
 });

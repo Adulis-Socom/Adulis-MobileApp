@@ -1,14 +1,16 @@
 import 'reflect-metadata';
 import { Controller, Get, Post, type ExecutionContext, type INestApplication, type Type } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ApiDefaultResponse, ApiHeader, ApiOperation, DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { ApiDefaultResponse, ApiHeader, ApiOperation, ApiResponse, ApiSecurity, DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, Public } from '../auth/auth.guard';
 import type { SessionService } from '../auth/session.service';
 import { AdulisException } from '../errors/adulis-exception';
+import { ERROR_CATALOGUE } from '../errors/error-catalogue';
+import { ApiIdempotencyKey } from '../idempotency/api-idempotency-key';
 import { SESSION_COOKIE } from './cookies';
 import { ApiGate } from './api-gate';
-import { SELLER_HEADER, applyGateDescriptions, applyProblemResponses, applySellerHeader } from './openapi-derived';
+import { SELLER_HEADER, applyGateDescriptions, applyGuardErrors, applyProblemResponses, applySellerHeader } from './openapi-derived';
 import { applyGuardSecurity } from './openapi-security';
 
 /**
@@ -65,6 +67,34 @@ class BuyerController {
   plain(): string {
     return 'plain';
   }
+
+  @Post('keyed')
+  @ApiIdempotencyKey()
+  keyed(): string {
+    return 'keyed';
+  }
+
+  @Get('ticket')
+  @Public()
+  @ApiSecurity('deletionTicket')
+  ticket(): string {
+    return 'ticket';
+  }
+
+  @Get('own-409')
+  @ApiResponse({ status: 401, description: 'declared by hand' })
+  ownRefusal(): string {
+    return 'own-refusal';
+  }
+}
+
+/** Named like the real one: its response keys are pinned by a type test in @adulis/api-client. */
+@Controller('auth')
+class AuthController {
+  @Post('logout')
+  logout(): string {
+    return 'logout';
+  }
 }
 
 @Controller('gated')
@@ -108,7 +138,7 @@ class LegacyController {
   }
 }
 
-const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, GatedController, LegacyController];
+const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, GatedController, AuthController, LegacyController];
 
 describe('contract metadata derived from the request pipeline', () => {
   let app: INestApplication;
@@ -282,5 +312,88 @@ describe('ApiGate and applyGateDescriptions', () => {
     );
     expect(op('/gated/audience')['description']).toBe('Console (cookie) sessions only: a mobile (bearer) session cannot perform it.');
     expect(op('/gated/ungated')['description']).toBeUndefined();
+  });
+});
+
+describe('applyGuardErrors', () => {
+  let app: INestApplication;
+  let built: OpenAPIObject;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ controllers: CONTROLLERS }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    built = SwaggerModule.createDocument(app, new DocumentBuilder().addApiKey({ type: 'apiKey', in: 'header', name: 'Authorization' }, 'deletionTicket').build());
+    applyGuardSecurity(built, CONTROLLERS);
+    applySellerHeader(built, CONTROLLERS);
+    applyGateDescriptions(built, CONTROLLERS);
+    applyGuardErrors(built, CONTROLLERS);
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const responses = (path: string, method: 'get' | 'post' = 'get') => built.paths[path]?.[method]?.responses ?? {};
+  const text = (path: string, code: string, method: 'get' | 'post' = 'get') => (responses(path, method)[code] as { description?: string } | undefined)?.description ?? '';
+
+  it('declares the session refusals on a protected route, and the seller header refusal where it is required', () => {
+    expect(text('/seller/things', '401')).toContain('SESSION_EXPIRED');
+    expect(text('/seller/things', '403')).toContain('AUDIENCE_NOT_PERMITTED');
+    expect(text('/seller/things', '400')).toContain('SELLER_CONTEXT_REQUIRED');
+    expect(responses('/buyer/plain')['400']).toBeUndefined();
+    expect(responses('/buyer/plain')['409']).toBeUndefined();
+  });
+
+  it('declares the Origin refusal on a write and not on a read', () => {
+    expect(text('/buyer/keyed', '403', 'post')).toContain('Origin');
+    expect(text('/buyer/plain', '403')).not.toContain('Origin');
+  });
+
+  it('declares the idempotency refusals on a keyed route', () => {
+    expect(text('/buyer/keyed', '400', 'post')).toContain('IDEMPOTENCY_KEY_MISSING');
+    expect(text('/buyer/keyed', '409', 'post')).toContain('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('declares the permission refusal where a permission is stated, and only there', () => {
+    expect(text('/gated/console', '403')).toContain('lacks the permission');
+    expect(text('/gated/audience', '403')).not.toContain('lacks the permission');
+  });
+
+  it('says that a public route refuses only a credential that was presented', () => {
+    expect(text('/sellers/lookup', '401')).toContain('A credential was presented');
+    expect(text('/sellers/lookup', '403')).toContain('A credential was presented');
+    expect(responses('/sellers/lookup')['400']).toBeUndefined();
+  });
+
+  it('declares the ticket refusal alone on a ticket route', () => {
+    expect(text('/buyer/ticket', '401')).toContain('ticket');
+    expect(responses('/buyer/ticket')['403']).toBeUndefined();
+  });
+
+  it('keeps a response an operation declares, and leaves a pinned operation and a skipped controller alone', () => {
+    expect(text('/buyer/own-409', '401')).toBe('declared by hand');
+    expect(Object.keys(responses('/auth/logout', 'post'))).toEqual(['201']);
+    const skipped = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    applyGuardErrors(skipped, CONTROLLERS, new Set(['SellerController']));
+    expect(skipped.paths['/seller/things']?.get?.responses['401']).toBeUndefined();
+  });
+
+  it('names, in every description it writes, only codes whose catalogue status is the status it is filed under', () => {
+    const wrong: string[] = [];
+    for (const item of Object.values(built.paths)) {
+      for (const operation of Object.values(item)) {
+        for (const [code, response] of Object.entries((operation as { responses?: Record<string, { description?: string }> }).responses ?? {})) {
+          if (!['400', '401', '403', '409'].includes(code)) continue;
+          if ((response.description ?? '') === 'declared by hand') continue;
+          for (const name of (response.description ?? '').match(/[A-Z][A-Z_]{5,}/g) ?? []) {
+            const entry = (ERROR_CATALOGUE as Record<string, { status: number }>)[name];
+            // PERMISSION_DENIED and AUDIENCE_NOT_PERMITTED travel together in one 403 description, and the Origin
+            // refusal is a PERMISSION_DENIED; every name must be a real code of that status.
+            if (!entry || String(entry.status) !== code) wrong.push(`${code}: ${name}`);
+          }
+        }
+      }
+    }
+    expect([...new Set(wrong)]).toEqual([]);
   });
 });

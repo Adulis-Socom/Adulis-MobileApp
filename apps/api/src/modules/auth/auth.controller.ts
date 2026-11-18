@@ -19,7 +19,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiResponse,
+  ApiResponse, ApiAcceptedResponse,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -42,7 +42,7 @@ import {
   RevokeOthersBodyDto,
   RevokeOthersResponseDto,
   RevokeSessionBodyDto,
-  SessionListResponseDto,
+  SessionListResponseDto, StepUpRequestedDto, StepUpVerifiedDto,
 } from './auth.dto';
 import { OtpService } from './otp.service';
 import { OtpDeliveryService, type IssuedOtp } from './otp-delivery.service';
@@ -416,6 +416,7 @@ export class AuthController {
 
   @ApiIdempotencyKey()
   @ApiGate({ surfaces: ['CONSOLE'] })
+  @ApiAcceptedResponse({ type: StepUpRequestedDto })
   @Post('auth/step-up/request')
   @HttpCode(202)
   @ApiOperation({ summary: 'The SMS names the action (4.4); binds action and target (9.2).' })
@@ -446,6 +447,7 @@ export class AuthController {
     return result;
   }
 
+  @ApiOkResponse({ type: StepUpVerifiedDto })
   @Post('auth/step-up/verify')
   @HttpCode(200)
   async stepUpVerify(@Req() req: AuthedRequest): Promise<unknown> {
@@ -493,6 +495,7 @@ export class AuthController {
 
   @ApiIdempotencyKey()
   @ApiDeviceHeaders()
+  @ApiResponse({ status: 202, type: EmptyResponseDto })
   @Post('auth/recovery')
   @Public()
   @HttpCode(202)

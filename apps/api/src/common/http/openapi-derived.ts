@@ -1,6 +1,7 @@
 import type { Type } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { requiresSellerContext } from '../auth/auth.guard';
+import { ERROR_CATALOGUE, type ErrorCode } from '../errors/error-catalogue';
 import { PROBLEM_RESPONSE } from '../errors/problem.dto';
 import { isPublicRoute, operationRoutes } from './openapi-security';
 
@@ -81,5 +82,69 @@ export function applyGateDescriptions(
       : 'A mobile (bearer) or a Console (cookie) session can hold it.';
     const sentence = requires + who;
     operation.description = operation.description ? `${operation.description}\n\n${sentence}` : sentence;
+  }
+}
+
+/**
+ * Operations whose response keys a client type test pins exactly (logout is `204 | default` in @adulis/api-client);
+ * they keep the responses they declare.
+ */
+export const PINNED_RESPONSES: ReadonlySet<string> = new Set(['AuthController_logout']);
+
+const problemResponse = (description: string) => ({ ...structuredClone(PROBLEM_RESPONSE), description });
+const status = (code: ErrorCode): string => String(ERROR_CATALOGUE[code].status);
+
+/**
+ * Declares the refusals that the pipeline itself decides, with the code each one carries, so a client can tell them
+ * from the failures the handler adds (those stay under `default`): the AuthGuard (401, 403, and 400 for the seller
+ * header), the Origin check on a cookie write (403), the permission function for a route that states a permission
+ * (403), the deletion ticket (401) and the idempotency key (400 missing, 409 reused). The status of each is the
+ * catalogue's status of the code named, not a number written here. An operation keeps any response it declares.
+ */
+export function applyGuardErrors(
+  document: OpenAPIObject,
+  controllers: readonly Type[],
+  skip: ReadonlySet<string> = new Set(),
+): void {
+  for (const { method, operation, handler, controller } of operationRoutes(document, controllers, skip)) {
+    if (PINNED_RESPONSES.has(operation.operationId ?? '')) continue;
+    const parameters = operation.parameters ?? [];
+    const requiredHeader = (name: string) =>
+      parameters.some((p) => 'name' in p && p.in === 'header' && p.name.toLowerCase() === name && p.required === true);
+    const ticket = JSON.stringify(operation.security) === JSON.stringify([{ deletionTicket: [] }]);
+    const open = isPublicRoute(handler, controller);
+    const write = method !== 'get';
+    const extensions = operation as unknown as Record<string, unknown>;
+    const add = (code: ErrorCode, description: string) => {
+      operation.responses[status(code)] ??= problemResponse(description);
+    };
+
+    const refused400: string[] = [];
+    if (!open && requiredHeader('x-adulis-seller')) {
+      refused400.push('X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED).');
+    }
+    if (requiredHeader('idempotency-key')) refused400.push('The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING).');
+    if (refused400.length > 0) add('VALIDATION_FAILED', `The request is refused with this status when: ${refused400.join(' ')}`);
+
+    if (ticket) {
+      add('SESSION_EXPIRED', 'The ticket is missing, malformed, expired or not an account-deletion ticket (SESSION_EXPIRED).');
+    } else {
+      add(
+        'SESSION_EXPIRED',
+        open
+          ? 'A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused.'
+          : 'No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED).',
+      );
+      const reasons = [
+        `${open ? 'A credential was presented and is' : 'The credential is'} not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie.`,
+      ];
+      if (write) reasons.push('A cookie-carried write without the Console Origin header (PERMISSION_DENIED).');
+      if (extensions['x-adulis-permission']) reasons.push('The session lacks the permission, or holds it on another surface (PERMISSION_DENIED).');
+      add('AUDIENCE_NOT_PERMITTED', reasons.join(' '));
+    }
+
+    if (requiredHeader('idempotency-key')) {
+      add('IDEMPOTENCY_KEY_REUSED', 'The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED).');
+    }
   }
 }

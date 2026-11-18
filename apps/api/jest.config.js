@@ -11,6 +11,8 @@ module.exports = {
   globalSetup: '<rootDir>/test/global-setup.ts',
   // ...and after the last suite, fails the run on any orphan beyond the known test leaks.
   globalTeardown: '<rootDir>/test/global-teardown.ts',
+  // Every real response is checked against the schema the contract declares for it (test/contract-conformance.ts).
+  setupFilesAfterEnv: ['<rootDir>/test/contract-conformance.ts'],
   // Tests and hooks alike. The e2e setups build the Nest app and their fixtures through the API;
   // under parallel workers several exceeded the 5 s default in their beforeAll, failing whole
   // suites intermittently (ON-20261111-011). Assertions are unaffected.

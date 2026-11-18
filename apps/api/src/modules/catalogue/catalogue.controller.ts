@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
@@ -30,6 +30,9 @@ import {
 } from './catalogue.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { ApiGate } from '../../common/http/api-gate';
+import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
+import { ProductCreatedDto, ProductDeletedDto, ProductPublishedDto, ProductUnpublishedDto, StockConfirmedDto, VariantCreatedDto, VariantWithdrawnDto, ImageOrderDto, SocialPostAttachedDto, StockWrittenDto, StockEventPageDto } from './catalogue.dto';
+import { UpdatedDto } from '../../common/http/response-dtos';
 
 /** C2 — catalogue, media and stock (ADU-API-01 v1.6 section 12.10). */
 
@@ -51,10 +54,11 @@ function assertUuid(v: string, path: string): void {
 // readonly, which the decorator's own type rejects. A plain literal is both.
 const SIGNED_UPLOAD = {
   type: 'object',
-  required: ['url', 'key'],
+  required: ['url', 'key', 'expires_at'],
   properties: {
     url: { type: 'string', format: 'uri' },
     key: { type: 'string' },
+    expires_at: { type: 'string', format: 'date-time' },
   },
 };
 
@@ -67,6 +71,7 @@ export class CatalogueController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: ProductCreatedDto })
   @Post('seller/products')
   async createProduct(
     @Req() req: LocalizedRequest,
@@ -180,6 +185,7 @@ export class CatalogueController {
   }
 
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/products/:id')
   async patchProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
     assertUuid(id, 'id');
@@ -188,7 +194,7 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'The Product is published.' })
+  @ApiResponse({ status: 200, description: 'The Product is published.', type: ProductPublishedDto })
   @ApiGate({ permission: ['seller.products:publish'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/publish')
   @ApiOperation({ summary: '409 with readiness items[] where blocked.' })
@@ -204,7 +210,7 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.' })
+  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.', type: ProductUnpublishedDto })
   @ApiGate({ permission: ['seller.products:publish'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/unpublish')
   @ApiOperation({ summary: 'Removes from the storefront; keeps the row.' })
@@ -220,6 +226,7 @@ export class CatalogueController {
   }
 
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: ProductDeletedDto })
   @Delete('seller/products/:id')
   @ApiOperation({ summary: '409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.' })
   async deleteProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
@@ -229,6 +236,7 @@ export class CatalogueController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: VariantCreatedDto })
   @Post('seller/products/:id/variants')
   async createVariant(
     @Req() req: LocalizedRequest,
@@ -243,6 +251,7 @@ export class CatalogueController {
   }
 
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/variants/:id')
   async patchVariant(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
     assertUuid(id, 'id');
@@ -251,6 +260,7 @@ export class CatalogueController {
   }
 
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: VariantWithdrawnDto })
   @Delete('seller/variants/:id')
   @ApiOperation({ summary: 'Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.' })
   async deleteVariant(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
@@ -310,8 +320,9 @@ export class CatalogueController {
     description: 'REQUEST_UPLOAD: three presigned PUTs, each with the key the commit must name.',
     schema: {
       type: 'object',
-      required: ['uploads'],
+      required: ['position', 'uploads'],
       properties: {
+        position: { type: 'integer', minimum: 1, maximum: 5, description: 'The position the upload is for, as requested.' },
         // INLINED, not a $ref. Nothing registers a SignedUpload component, and
         // a $ref to a component that does not exist generates a contract whose
         // types resolve to `unknown` -- worse than no schema, because it looks
@@ -328,8 +339,20 @@ export class CatalogueController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'COMMIT: the image row is registered.' })
   @ApiResponse({
+    status: 201,
+    description: 'COMMIT: the image row is registered.',
+    schema: {
+      type: 'object',
+      required: ['position', 'committed'],
+      properties: {
+        position: { type: 'integer', minimum: 1, maximum: 5 },
+        committed: { type: 'boolean', enum: [true] },
+      },
+    },
+  })
+  @ApiResponse({
+    ...PROBLEM_RESPONSE,
     status: 409,
     description:
       'slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), ' +
@@ -368,6 +391,7 @@ export class CatalogueController {
   }
 
   @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: ImageOrderDto })
   @Put('seller/products/:id/images/order')
   @ApiOperation({
     summary:
@@ -426,6 +450,7 @@ export class CatalogueController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: SocialPostAttachedDto })
   @Post('seller/products/:id/social-posts')
   @ApiOperation({ summary: 'Canonical id resolved server-side; never the URL string.' })
   async attachSocialPost(
@@ -442,6 +467,7 @@ export class CatalogueController {
 
   @ApiIdempotencyKey()
   @ApiGate({ permission: ['seller.stock:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: StockWrittenDto })
   @Post('seller/variants/:id/stock')
   @ApiOperation({ summary: 'Writes a StockEvent. Never a direct count set.' })
   async writeStock(
@@ -457,7 +483,7 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.' })
+  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.', type: StockConfirmedDto })
   @ApiGate({ permission: ['seller.stock:write'], surfaces: ['CONSOLE'] })
   @Post('seller/variants/:id/confirm-stock')
   @ApiOperation({ summary: 'Resets stock_confirmed_at (S13.3).' })
@@ -475,6 +501,7 @@ export class CatalogueController {
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @ApiGate({ permission: ['seller.stock:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: StockEventPageDto })
   @Get('seller/variants/:id/stock-events')
   async listStockEvents(
     @Req() req: LocalizedRequest,

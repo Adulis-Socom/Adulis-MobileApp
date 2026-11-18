@@ -2370,6 +2370,64 @@ export interface components {
             /** @description The Scene the Product was opened from; recorded only if its current PUBLIC revision tags the Product. */
             scene_ref: string;
         };
+        AnalyticsOverviewDto: {
+            /** @description Reservations active now. */
+            active_reservations: number;
+            /** @description Handoffs completed, in total. */
+            completed_handoffs: number;
+            /** @description Buyers following the store now. */
+            followers: number;
+            /** @description Orders created inside the window. */
+            orders: number;
+            /** @description Products published now: point-in-time, independent of the window. */
+            products_published: number;
+            window: components["schemas"]["AnalyticsWindowDto"];
+        };
+        AnalyticsWindowDto: {
+            /**
+             * Format: date
+             * @description YYYY-MM-DD. The first day.
+             */
+            from: string;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD. The last day.
+             */
+            to: string;
+        };
+        AttestationRecordedDto: {
+            /** Format: uuid */
+            attestation_id: string;
+        };
+        AvailabilityDto: {
+            windows: components["schemas"]["AvailabilityWindowDto"][];
+        };
+        AvailabilityOverrideDto: {
+            /**
+             * Format: date
+             * @description YYYY-MM-DD
+             */
+            date: string;
+            note: string | null;
+        };
+        AvailabilityOverridePageDto: {
+            data: components["schemas"]["AvailabilityOverrideDto"][];
+            has_more: boolean;
+            /** @description The date to pass as `from` for the next page; null on the last page. */
+            next_cursor: string | null;
+        };
+        AvailabilitySavedDto: {
+            /** @description How many windows were saved. */
+            windows: number;
+        };
+        AvailabilityWindowDto: {
+            /** @description HH:MM */
+            closes_at: string;
+            /** @description HH:MM */
+            opens_at: string;
+            /** @description Day of the week as the database numbers it. */
+            weekday: number;
+        };
         BootstrapMarketDto: {
             /** @example ET */
             code: string;
@@ -2669,6 +2727,18 @@ export interface components {
             platform: "ANDROID" | "IOS";
         };
         EmptyResponseDto: Record<string, never>;
+        FulfilmentMethodDto: {
+            handoff_note: string | null;
+            is_active: boolean;
+            method: string;
+        };
+        FulfilmentMethodListDto: {
+            methods: components["schemas"]["FulfilmentMethodDto"][];
+        };
+        FulfilmentMethodsSavedDto: {
+            /** @description How many methods were saved. */
+            methods: number;
+        };
         FypImageDto: {
             /** @description The feed-card derivative. No full-resolution key in a feed unit. */
             card_key: string;
@@ -2718,6 +2788,10 @@ export interface components {
             /** Format: date-time */
             sent_at: string;
         };
+        ImageOrderDto: {
+            /** @description The image ids in their new order, as sent. */
+            order: string[];
+        };
         MessagePageDto: {
             /** @description Newest first. */
             data: (components["schemas"]["BotMessageDto"] | components["schemas"]["HumanMessageDto"])[];
@@ -2732,6 +2806,9 @@ export interface components {
         };
         ModeAvailabilityDto: {
             available: boolean;
+        };
+        MyReportsDto: {
+            data: components["schemas"]["ReportDto"][];
         };
         NotificationDto: {
             /** Format: uuid */
@@ -2770,12 +2847,31 @@ export interface components {
              */
             next_cursor: string | null;
         };
+        NotificationPreferenceDto: {
+            enabled: boolean;
+            /** @description The message template the preference is about. */
+            template_key: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NotificationPreferencesDto: {
+            /** @description Ordered by template_key. */
+            preferences: components["schemas"]["NotificationPreferenceDto"][];
+        };
+        NotificationPreferencesSavedDto: {
+            /** @description How many preferences were saved. */
+            updated: number;
+        };
         NotificationReadDto: {
             /**
              * Format: date-time
              * @description When it was first read; a repeat call keeps the original time.
              */
             read_at: string;
+        };
+        NotificationsMarkedReadDto: {
+            /** @description How many unread notifications were marked read. */
+            marked: number;
         };
         OtpRequestBodyDto: {
             /**
@@ -2813,12 +2909,35 @@ export interface components {
             /** @description MOBILE only: the session credential, sent as Authorization: Bearer. Returned once and never stored by the server; keep it in platform secure storage. Absent for CONSOLE, whose credential is the __Host-adulis_session cookie. */
             token?: string;
         };
+        OwnershipTransferRequestedDto: {
+            /** Format: date-time */
+            activates_at: string;
+            residual_role: string | null;
+            /** Format: uuid */
+            transfer_id: string;
+        };
         PatchScenePostDraftBodyDto: {
             caption?: string | null;
             /** @description Keys from POST .../image-uploads, after the bytes were PUT. */
             image?: components["schemas"]["ScenePostImageDto"] | null;
             /** @description Replaces every tag of the working revision, in presentation order. */
             product_ids?: string[];
+        };
+        PendingOwnershipTransferDto: {
+            /** Format: date-time */
+            activates_at: string;
+            /** @description True for the owner who requested the transfer, false for the recipient. */
+            i_am_the_owner: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            requested_at: string;
+            /** @description The role the current owner keeps after the transfer, if any. */
+            residual_role: string | null;
+        };
+        PendingOwnershipTransferResponseDto: {
+            /** @description Null when no transfer is pending. */
+            transfer: components["schemas"]["PendingOwnershipTransferDto"] | null;
         };
         PostLinkProductDto: {
             /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
@@ -2878,6 +2997,24 @@ export interface components {
                 kind?: string;
             };
         };
+        ProductCreatedDto: {
+            /** Format: uuid */
+            product_id: string;
+            /** @enum {string} */
+            visibility: "DRAFT";
+        };
+        ProductDeletedDto: {
+            /** @enum {boolean} */
+            deleted: true;
+        };
+        ProductPublishedDto: {
+            /** @enum {string} */
+            visibility: "PUBLISHED";
+        };
+        ProductUnpublishedDto: {
+            /** @enum {string} */
+            visibility: "UNPUBLISHED";
+        };
         PublicProductSummaryDto: {
             /** @description False: show "Currently unavailable" and no purchase action. PUBLISHED, Seller and Market ACTIVE, and an ACTIVE Variant in stock in the Market currency, read now. */
             available: boolean;
@@ -2932,6 +3069,42 @@ export interface components {
         PublicSceneSellerDto: {
             handle: string;
             store_name: string;
+        };
+        ReadinessDto: {
+            items: components["schemas"]["ReadinessItemDto"][];
+        };
+        ReadinessItemDto: {
+            /** @description The readiness item. */
+            code: string;
+            /** @enum {string} */
+            kind: "READINESS_ITEM";
+            /** @description What the seller can do to satisfy the item; absent when nothing is open. */
+            resolving_action?: components["schemas"]["ReadinessResolvingActionDto"];
+            satisfied: boolean;
+        };
+        ReadinessResolvingActionDto: {
+            /** @description A stable key the client localises. */
+            kind: string;
+        };
+        ReportCreatedDto: {
+            /** Format: uuid */
+            report_id: string;
+        };
+        ReportDto: {
+            /** Format: uuid */
+            id: string;
+            reason_code: string;
+            /** Format: date-time */
+            reported_at: string;
+            /**
+             * Format: date-time
+             * @description Null while the report is open.
+             */
+            resolved_at: string | null;
+            /** Format: uuid */
+            target_id: string;
+            /** @description What was reported: PRODUCT, REVIEW, MESSAGE, SELLER or STOREFRONT. */
+            target_kind: string;
         };
         ReviewBasisCountsDto: {
             /** @description Verified payment and accepted final receipt. */
@@ -3117,6 +3290,10 @@ export interface components {
             /** @enum {string} */
             type: "SELLER";
         };
+        SellerClosureDto: {
+            /** @enum {string} */
+            status: "CLOSING";
+        };
         SellerConversationDto: {
             /** Format: uuid */
             buyer_account_id: string;
@@ -3126,6 +3303,56 @@ export interface components {
             last_message_at: string;
             /** Format: date-time */
             started_at: string;
+        };
+        SellerCreatedDto: {
+            eligibility: components["schemas"]["SellerEligibilityDto"];
+            /** Format: uuid */
+            seller_id: string;
+            /** @enum {string} */
+            status: "DRAFT";
+        };
+        SellerDeletionBlockersDto: {
+            /** @description Empty when nothing blocks the deletion of the store. */
+            items: components["schemas"]["DeletionBlockerDto"][];
+        };
+        SellerEligibilityDto: {
+            /** @description The outcome of the first eligibility evaluation. */
+            outcome: string;
+            reasons: string[];
+        };
+        SellerListDto: {
+            /** @description Ordered by creation time, oldest first. */
+            data: components["schemas"]["SellerListItemDto"][];
+        };
+        SellerListItemDto: {
+            /** Format: date-time */
+            created_at: string;
+            handle: string;
+            /** Format: uuid */
+            id: string;
+            /** @description The caller's role in the store: OWNER, or the team role of the membership. */
+            role: string;
+            /** @description The store status, e.g. DRAFT, ACTIVE, CLOSING, SUSPENDED. A store in any state except DELETED is listed. */
+            status: string;
+            store_name: string;
+        };
+        SellerLookupDto: {
+            data: components["schemas"]["SellerLookupItemDto"][];
+        };
+        SellerLookupItemDto: {
+            handle: string;
+            store_name: string;
+        };
+        SellerProfileDto: {
+            /** Format: uuid */
+            category_id: string | null;
+            description: string | null;
+            /** @description The entity type the store was created with. */
+            entity_type: string;
+            handle: string;
+            /** @description The store status, e.g. DRAFT, ACTIVE, CLOSING. */
+            status: string;
+            store_name: string;
         };
         SellerSceneDto: {
             /** @description Caption excerpt (140 graphemes). */
@@ -3282,6 +3509,90 @@ export interface components {
              * @description Short-lived presigned PUT; never stored.
              */
             url: string;
+        };
+        SocialAccountDto: {
+            /**
+             * Format: date-time
+             * @description When the follower count was captured.
+             */
+            captured_at: string | null;
+            /** @description Captured once, at verification. */
+            follower_count: number | null;
+            follower_count_source: string | null;
+            handle: string;
+            /** Format: uuid */
+            id: string;
+            platform: string;
+            /** @description The verification status. */
+            status: string;
+        };
+        SocialAccountLinkedDto: {
+            code: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            social_account_id: string;
+        };
+        SocialAccountListDto: {
+            accounts: components["schemas"]["SocialAccountDto"][];
+        };
+        SocialPostAttachedDto: {
+            /** @description The platform's own id of the post. */
+            canonical_post_id: string;
+            /** @description The platform the link resolved to. */
+            platform: string;
+        };
+        StepUpRequestedDto: {
+            /**
+             * Format: uuid
+             * @description The challenge to satisfy with POST /v1/auth/step-up/verify.
+             */
+            challenge_id: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        StepUpVerifiedDto: {
+            /** Format: uuid */
+            challenge_id: string;
+            /**
+             * Format: date-time
+             * @description When the challenge was satisfied; a repeat call keeps the original time.
+             */
+            satisfied_at: string;
+        };
+        StockConfirmedDto: {
+            /** Format: date-time */
+            stock_confirmed_at: string;
+        };
+        StockEventDto: {
+            delta: number;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            order_id: string | null;
+            /** @description Why the count changed, e.g. RESTOCK or SELLER_SET. */
+            reason: string;
+            /** @description The count after this event. */
+            resulting_count: number | null;
+        };
+        StockEventPageDto: {
+            data: components["schemas"]["StockEventDto"][];
+            has_more: boolean;
+            /**
+             * Format: date-time
+             * @description Pass as `cursor` for the next page; null on the last page.
+             */
+            next_cursor: string | null;
+        };
+        StockWrittenDto: {
+            /**
+             * Format: uuid
+             * @description The stock event written; null when the count was already the one asked for.
+             */
+            event: string | null;
+            stock_count: number;
         };
         StorefrontAvailabilityDto: {
             /** @description Whether the Seller is open now (the server's derivation; never computed by a client). */
@@ -3451,6 +3762,60 @@ export interface components {
             scan_completion_rate: string | null;
             unresolved_claim_count: number;
         };
+        TeamListDto: {
+            /** @description Which of the team actions the caller may take now, as permission codes, sorted. */
+            allowed_actions: string[];
+            /** @description Live memberships, oldest first. */
+            data: components["schemas"]["TeamMemberDto"][];
+            seats: components["schemas"]["TeamSeatsDto"] | null;
+        };
+        TeamMemberDto: {
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: uuid
+             * @description The membership id (not the account id).
+             */
+            id: string;
+            /** @description The member's phone number, E.164. */
+            phone: string;
+            /** @description The team role. */
+            role: string;
+            /**
+             * Format: date-time
+             * @description Set while the membership is suspended.
+             */
+            suspended_at: string | null;
+        };
+        TeamMemberInvitedDto: {
+            /**
+             * Format: uuid
+             * @description The membership id.
+             */
+            id: string;
+            /** @description The role the member was invited with. */
+            role: string;
+        };
+        TeamSeatsDto: {
+            /** @description False when the tier has no team seats. */
+            allowed: boolean;
+            /** @description The seat cap; null means no cap. Absent when the entitlement could not be resolved. */
+            cap?: number | null;
+            /** @description Why the entitlement could not be resolved, when it could not. */
+            reason?: string;
+        };
+        UpdatedDto: {
+            /** @enum {boolean} */
+            updated: true;
+        };
+        VariantCreatedDto: {
+            /** Format: uuid */
+            variant_id: string;
+        };
+        VariantWithdrawnDto: {
+            /** @enum {boolean} */
+            withdrawn: true;
+        };
     };
     responses: never;
     parameters: never;
@@ -3513,6 +3878,42 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3550,6 +3951,24 @@ export interface operations {
                     "application/json": components["schemas"]["EmptyResponseDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3584,6 +4003,42 @@ export interface operations {
                     "application/json": components["schemas"]["OtpVerifyResponseDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3614,7 +4069,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EmptyResponseDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -3644,6 +4137,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3670,6 +4181,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionListResponseDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -3704,6 +4233,24 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3736,6 +4283,24 @@ export interface operations {
                     "application/json": components["schemas"]["RevokeOthersResponseDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -3762,7 +4327,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StepUpRequestedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -3788,7 +4391,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StepUpVerifiedDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -3872,6 +4495,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapResponseDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -3977,6 +4618,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryListDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4103,6 +4762,24 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionPageDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4135,6 +4812,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionCreatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4172,6 +4885,24 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionDetailDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4200,6 +4931,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -4234,6 +4983,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4273,6 +5040,42 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionMembershipDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4302,6 +5105,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -4335,6 +5156,24 @@ export interface operations {
                     "application/json": components["schemas"]["SavedStateDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4365,6 +5204,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedItemPageDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4404,6 +5261,24 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationPageDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4432,6 +5307,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationOpenedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4466,6 +5377,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationEscalatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4504,6 +5451,24 @@ export interface operations {
                     "application/json": components["schemas"]["MessagePageDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4536,6 +5501,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageSentDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4623,6 +5624,33 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionConfirmedDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The ticket is missing, malformed, expired or not an account-deletion ticket (SESSION_EXPIRED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4655,6 +5683,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmptyResponseDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4690,6 +5754,24 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionTicketDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4716,6 +5798,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeletionPreviewDto"];
+                };
+            };
+            /** @description The ticket is missing, malformed, expired or not an account-deletion ticket (SESSION_EXPIRED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4756,6 +5847,42 @@ export interface operations {
                     "application/json": components["schemas"]["DeviceRefDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4790,6 +5917,24 @@ export interface operations {
                     "application/json": components["schemas"]["DeviceRefDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4816,7 +5961,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EmptyResponseDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -4854,6 +6037,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FypPageDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -4910,6 +6111,24 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPageDto"];
                 };
             };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4942,6 +6161,42 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationReadDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -4968,7 +6223,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationsMarkedReadDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5195,6 +6488,42 @@ export interface operations {
                     "application/json": components["schemas"]["PostLinkProductListDto"];
                 };
             };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -5221,7 +6550,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReportCreatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5247,7 +6614,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MyReportsDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5283,6 +6670,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicScenePostDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -5329,6 +6734,24 @@ export interface operations {
                     "application/json": components["schemas"]["SearchResponseDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -5355,7 +6778,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerCreatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5391,6 +6852,33 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -5423,7 +6911,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOverviewDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5452,7 +6969,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AvailabilityDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5481,7 +7027,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AvailabilitySavedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5515,7 +7090,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AvailabilityOverridePageDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5546,7 +7150,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AvailabilityOverrideDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5578,6 +7211,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5645,7 +7305,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerClosureDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5676,6 +7374,33 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -5703,7 +7428,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5786,7 +7540,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeletionConfirmedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5815,7 +7607,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerDeletionBlockersDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5844,7 +7665,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FulfilmentMethodListDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5873,7 +7723,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FulfilmentMethodsSavedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5901,7 +7780,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttestationRecordedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5927,7 +7844,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerListDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5956,7 +7893,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -5985,7 +7951,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesSavedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6262,7 +8257,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PendingOwnershipTransferResponseDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6292,7 +8316,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OwnershipTransferRequestedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6322,6 +8384,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6458,6 +8547,33 @@ export interface operations {
                     };
                 };
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -6486,7 +8602,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProductCreatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6519,6 +8673,33 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -6548,7 +8729,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProductDeletedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6579,7 +8789,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6630,18 +8869,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description The position the upload is for, as requested. */
+                        position: number;
                         uploads: {
                             card: {
+                                /** Format: date-time */
+                                expires_at: string;
                                 key: string;
                                 /** Format: uri */
                                 url: string;
                             };
                             full: {
+                                /** Format: date-time */
+                                expires_at: string;
                                 key: string;
                                 /** Format: uri */
                                 url: string;
                             };
                             thumb: {
+                                /** Format: date-time */
+                                expires_at: string;
                                 key: string;
                                 /** Format: uri */
                                 url: string;
@@ -6655,14 +8902,49 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        committed: true;
+                        position: number;
+                    };
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), OBJECT_NOT_UPLOADED, or POSITION_TAKEN. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6696,6 +8978,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6733,7 +9042,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ImageOrderDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6766,7 +9104,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProductPublishedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6798,7 +9174,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SocialPostAttachedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6831,7 +9245,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProductUnpublishedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6863,7 +9315,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VariantCreatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6905,6 +9395,42 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -6936,6 +9462,33 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -6963,7 +9516,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerProfileDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -6992,7 +9574,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7021,7 +9632,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReadinessDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7076,6 +9716,33 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostPageDto"];
                 };
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7112,6 +9779,42 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7145,6 +9848,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SellerScenePostDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -7187,6 +9917,33 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7220,6 +9977,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenePostImageUploadResponseDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -7259,6 +10052,42 @@ export interface operations {
                     "application/json": components["schemas"]["SellerScenePostDto"];
                 };
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7286,7 +10115,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SocialAccountListDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7316,7 +10174,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SocialAccountLinkedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7351,6 +10247,42 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7378,7 +10310,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TeamListDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7408,7 +10369,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TeamMemberInvitedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7441,6 +10440,33 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7470,7 +10496,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VariantWithdrawnDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7501,7 +10556,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["UpdatedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7534,7 +10618,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StockConfirmedDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7566,7 +10688,45 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StockWrittenDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). The Idempotency-Key header is missing (IDEMPOTENCY_KEY_MISSING). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. A cookie-carried write without the Console Origin header (PERMISSION_DENIED). The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The Idempotency-Key was already used for a different request (IDEMPOTENCY_KEY_REUSED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7602,7 +10762,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StockEventPageDto"];
+                };
+            };
+            /** @description The request is refused with this status when: X-Adulis-Seller is missing (SELLER_CONTEXT_REQUIRED) or is not a uuid (VALIDATION_FAILED). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description No credential, or its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description The credential is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. The session lacks the permission, or holds it on another surface (PERMISSION_DENIED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7635,7 +10824,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SellerLookupDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
             };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
@@ -7677,6 +10886,24 @@ export interface operations {
                     "application/json": components["schemas"]["ShopProductListDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7714,6 +10941,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorefrontDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -7757,6 +11002,24 @@ export interface operations {
                     "application/json": components["schemas"]["StorefrontProductListDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7796,6 +11059,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorefrontProductDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */
@@ -7839,6 +11120,24 @@ export interface operations {
                     "application/json": components["schemas"]["StorefrontReviewListDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7880,6 +11179,24 @@ export interface operations {
                     "application/json": components["schemas"]["SellerSceneListDto"];
                 };
             };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
             /** @description Problem details (ProblemDetailsFilter). */
             default: {
                 headers: {
@@ -7917,6 +11234,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorefrontSearchResultListDto"];
+                };
+            };
+            /** @description A credential was presented and its session is expired or revoked (SESSION_EXPIRED, SESSION_REVOKED); an anonymous request is not refused. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
+                };
+            };
+            /** @description A credential was presented and is not the kind its session was issued for (AUDIENCE_NOT_PERMITTED): a mobile session uses the bearer token, a Console session the cookie. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDto"];
                 };
             };
             /** @description Problem details (ProblemDetailsFilter). */

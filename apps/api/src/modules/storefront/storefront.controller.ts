@@ -10,7 +10,7 @@ import {
   StorefrontProductDto,
   StorefrontProductListDto,
   StorefrontReviewListDto,
-  StorefrontSearchResultListDto,
+  StorefrontSearchResultListDto, SellerLookupDto,
 } from './storefront.dto';
 import { CURSOR_TS, decodeCursor, encodeCursor, pageLimit } from '../../common/http/cursor';
 import { captionExcerpt } from '../fyp/fyp.logic';
@@ -722,6 +722,7 @@ export class StorefrontController {
   }
 
   @ApiDeviceHeaders()
+  @ApiOkResponse({ type: SellerLookupDto })
   @Get('sellers/lookup')
   @Public()
   @ApiOperation({ summary: 'Returns sellers only, capped, never suggests (S7.6).' })
