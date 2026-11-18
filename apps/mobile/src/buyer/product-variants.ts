@@ -2,7 +2,7 @@ import type { StorefrontProduct } from '../api/client';
 
 /**
  * Which option of a Product the Buyer has chosen, as a two-state machine over the server's
- * current projection of that Product (WO-005, WO-CAT-001). Nothing here knows a price, a
+ * current projection of that Product. Nothing here knows a price, a
  * stock count or a delivery promise: every fact it reads is one the server sent in the
  * answer on screen.
  *
