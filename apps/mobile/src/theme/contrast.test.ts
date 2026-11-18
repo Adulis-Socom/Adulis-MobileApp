@@ -1,3 +1,4 @@
+import { blend, contrast, luminance } from '../testing/contrast';
 import { productionSources } from '../testing/source-scan';
 import { themes } from './theme';
 
@@ -5,19 +6,6 @@ import { themes } from './theme';
  * WCAG 2.x contrast, computed from the colours the two themes actually produce (never copies).
  * The pairs are the foreground/background combinations the Buyer UI really draws: each row names where.
  */
-
-const channel = (value: number) => {
-  const c = value / 255;
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-};
-const luminance = (hex: string) => {
-  const n = parseInt(hex.slice(1), 16);
-  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
-};
-const contrast = (a: string, b: string) => {
-  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (lighter + 0.05) / (darker + 0.05);
-};
 
 type Role = keyof typeof themes.light.color;
 type Pair = readonly [foreground: Role, background: Role, where: string];
@@ -58,8 +46,19 @@ const STATE_PAIRS: readonly Pair[] = [
   ['textSecondary', 'surface', 'the inactive tab icon'],
 ];
 
-/** Separators and resting outlines: these roles are not asserted against a contrast target here; the target is a token decision. */
-const OUTLINE_ROLES: readonly Role[] = ['border', 'borderStrong', 'infoBorder'];
+/**
+ * The boundary of a control that has no other outline: the TextField, the quiet Button, an unchosen
+ * ChoiceGroup option and an unchecked Checkbox are found by their edge, so it needs 3:1 (WCAG 1.4.11)
+ * against what it is drawn on. Each of them fills itself with the page colour (control-outline.test.tsx).
+ */
+const CONTROL_BOUNDARY_PAIRS: readonly Pair[] = [
+  ['borderStrong', 'bg', 'those controls on the page'],
+  ['borderStrong', 'surface', 'those controls on a card'],
+  ['borderStrong', 'surfaceMuted', 'the quiet Button while pressed'],
+];
+
+/** Separators and card hairlines: these roles are not asserted against a contrast target here. */
+const OUTLINE_ROLES: readonly Role[] = ['border', 'infoBorder'];
 
 const MODES = ['light', 'dark'] as const;
 
@@ -71,6 +70,12 @@ describe('contrast function', () => {
     // #767676 on white is the well-known smallest grey that clears 4.5:1.
     expect(contrast('#767676', '#ffffff')).toBeGreaterThan(4.5);
     expect(contrast('#777777', '#ffffff')).toBeLessThan(4.5);
+  });
+
+  it('blends a foreground over a background by its opacity', () => {
+    expect(blend('#000000', '#ffffff', 0.6)).toBe('#666666');
+    expect(blend('#123456', '#abcdef', 1)).toBe('#123456');
+    expect(blend('#123456', '#abcdef', 0)).toBe('#abcdef');
   });
 });
 
@@ -108,12 +113,18 @@ describe.each(MODES)('contrast in the %s theme', (mode) => {
   it.each(STATE_PAIRS)('state and icon: %s against %s (%s) is at least 3:1', (foreground, background) => {
     expect(contrast(color[foreground], color[background])).toBeGreaterThanOrEqual(3);
   });
+
+  it.each(CONTROL_BOUNDARY_PAIRS)('control boundary: %s against %s (%s) is at least 3:1', (foreground, background) => {
+    expect(contrast(color[foreground], color[background])).toBeGreaterThanOrEqual(3);
+  });
 });
 
 describe('the pairs cover what the Buyer UI uses', () => {
   const sources = productionSources('buyer', 'components', 'app');
   const used = new Set(sources.flatMap(({ text }) => [...text.matchAll(/theme\.color\.(\w+)/g)].map((m) => m[1]!)));
-  const covered = new Set<string>([...TEXT_PAIRS, ...STATE_PAIRS].flatMap(([fg, bg]) => [fg, bg]));
+  const covered = new Set<string>(
+    [...TEXT_PAIRS, ...STATE_PAIRS, ...CONTROL_BOUNDARY_PAIRS].flatMap(([fg, bg]) => [fg, bg]),
+  );
 
   it('finds the roles the screens draw with (the scan is not vacuous)', () => {
     expect(sources.length).toBeGreaterThan(40);
