@@ -47,15 +47,18 @@ class SellerController {
   }
 }
 
-@Controller('open')
+/** Under a path that starts like the seller routes but public (as GET /v1/sellers/lookup is): the guard returns before the seller stage. */
+@Controller('sellers')
 class PublicController {
-  /** Under a seller-looking path but public: the guard returns before the seller stage. */
-  @Get('seller-ish')
+  @Get('lookup')
   @Public()
-  open(): string {
-    return 'open';
+  lookup(): string {
+    return 'lookup';
   }
+}
 
+@Controller('buyer')
+class BuyerController {
   @Get('plain')
   plain(): string {
     return 'plain';
@@ -70,7 +73,7 @@ class LegacyController {
   }
 }
 
-const CONTROLLERS: Type[] = [SellerController, PublicController, LegacyController];
+const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, LegacyController];
 
 describe('contract metadata derived from the request pipeline', () => {
   let app: INestApplication;
@@ -96,8 +99,8 @@ describe('contract metadata derived from the request pipeline', () => {
       expect(sellerHeaders(document, '/seller/things')).toEqual([SELLER_HEADER]);
       expect(sellerHeaders(document, '/seller/list')).toEqual([]);
       expect(sellerHeaders(document, '/seller', 'post')).toEqual([]);
-      expect(sellerHeaders(document, '/open/seller-ish')).toEqual([]);
-      expect(sellerHeaders(document, '/open/plain')).toEqual([]);
+      expect(sellerHeaders(document, '/sellers/lookup')).toEqual([]);
+      expect(sellerHeaders(document, '/buyer/plain')).toEqual([]);
     });
 
     it('is written out here, not compared with the constant under test', () => {
@@ -147,8 +150,8 @@ describe('contract metadata derived from the request pipeline', () => {
         [SellerController, 'list', '/v1/seller/list', 'GET', 'get', '/seller/list'],
         [SellerController, 'create', '/v1/seller', 'POST', 'post', '/seller'],
         [SellerController, 'declared', '/v1/seller/declared', 'GET', 'get', '/seller/declared'],
-        [PublicController, 'open', '/v1/open/seller-ish', 'GET', 'get', '/open/seller-ish'],
-        [PublicController, 'plain', '/v1/open/plain', 'GET', 'get', '/open/plain'],
+        [PublicController, 'lookup', '/v1/sellers/lookup', 'GET', 'get', '/sellers/lookup'],
+        [BuyerController, 'plain', '/v1/buyer/plain', 'GET', 'get', '/buyer/plain'],
       ];
       for (const [controller, handler, requestPath, method, verb, documentPath] of cases) {
         const required = sellerHeaders(document, documentPath, verb).some((p) => 'required' in p && p.required === true);
@@ -165,7 +168,7 @@ describe('contract metadata derived from the request pipeline', () => {
     it('gives every operation without one the problem response the filter sends', () => {
       const document = build();
       applyProblemResponses(document, CONTROLLERS);
-      for (const path of ['/seller/things', '/seller/list', '/open/plain', '/legacy/x']) {
+      for (const path of ['/seller/things', '/seller/list', '/buyer/plain', '/legacy/x']) {
         expect(problem(document, path)).toEqual({
           description: 'Problem details (ProblemDetailsFilter).',
           content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/ProblemDto' } } },
@@ -183,7 +186,7 @@ describe('contract metadata derived from the request pipeline', () => {
       const document = build();
       applyProblemResponses(document, CONTROLLERS, new Set(['LegacyController']));
       expect(problem(document, '/legacy/x')).toBeUndefined();
-      expect(problem(document, '/open/plain')).toBeDefined();
+      expect(problem(document, '/buyer/plain')).toBeDefined();
     });
   });
 });
