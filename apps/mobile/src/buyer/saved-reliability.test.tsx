@@ -638,7 +638,13 @@ describe('changes inside a Collection after an uncertain outcome', () => {
     expect(fc.collections.find((c) => c.ref === gifts)?.name).toBe('Gifts for mum');
   });
 
-  it('a Delete whose answer was lost after it was stored: the retry finds it gone, which is the outcome asked for', async () => {
+  const confirmDelete = async (alert: jest.SpyInstance, n: number) => {
+    await act(async () => {
+      await alert.mock.calls[n]![2]!.find((b: { style?: string }) => b.style === 'destructive')!.onPress!();
+    });
+  };
+
+  it('a Delete whose answer was lost after it was stored: the Collection is read again and shown as gone, and "Nothing was changed" is not said', async () => {
     signedIn();
     const gifts = fc.named('Gifts');
     fc.loseAnswer('delete', 'offline');
@@ -647,20 +653,81 @@ describe('changes inside a Collection after an uncertain outcome', () => {
       await renderRouter(APP_DIR, { initialUrl: '/saved' });
       await fireEvent.press(await screen.findByRole('button', { name: /^Gifts, / }));
       await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
-      await act(async () => {
-        await alert.mock.calls[0]![2]!.find((b) => b.style === 'destructive')!.onPress!();
-      });
-      expect(await screen.findByText(new RegExp(en['common.offline']))).toBeOnTheScreen();
-      await fireEvent.press(screen.getByRole('button', { name: en['buyer.collection.delete'] }));
-      await act(async () => {
-        await alert.mock.calls[1]![2]!.find((b) => b.style === 'destructive')!.onPress!();
-      });
-      await waitFor(() => expect(screen).toHavePathname('/saved'));
+      await confirmDelete(alert, 0);
+      expect(await screen.findByText(en['buyer.collection.gone'])).toBeOnTheScreen();
+      await flush();
+      expect(failed()).toBeNull();
+      expect(screen.queryByRole('button', { name: en['buyer.collection.delete'] })).toBeNull();
       expect(fc.collections.some((c) => c.ref === gifts)).toBe(false);
-      await act(() => router.navigate('/saved'));
     } finally {
       alert.mockRestore();
     }
+  });
+
+  it('a Delete that was not stored says so once the Collection is read again, and the next Delete finishes it', async () => {
+    signedIn();
+    const gifts = fc.named('Gifts');
+    fc.intercept('delete', once('offline'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      await renderRouter(APP_DIR, { initialUrl: '/saved' });
+      await fireEvent.press(await screen.findByRole('button', { name: /^Gifts, / }));
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
+      await confirmDelete(alert, 0);
+      expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']} ${en['common.offline']}`))).toBeOnTheScreen();
+      expect(fc.collections.some((c) => c.ref === gifts)).toBe(true);
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.collection.delete'] }));
+      await confirmDelete(alert, 1);
+      await waitFor(() => expect(screen).toHavePathname('/saved'));
+      expect(fc.collections.some((c) => c.ref === gifts)).toBe(false);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('the failure of a Delete is not said while the Collection is being read again', async () => {
+    signedIn();
+    const gifts = fc.named('Gifts');
+    fc.intercept('delete', once(problem(500, 'INTERNAL', 'request')));
+    const gate = held();
+    fc.intercept('detail', async () => {
+      if (api.calls.filter((c) => c.path === `/v1/collections/${gifts}`).length > 1) await gate.gate;
+      return undefined;
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      await renderRouter(APP_DIR, { initialUrl: `/collections/${gifts}` });
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
+      await confirmDelete(alert, 0);
+      await waitFor(() => expect(api.calls.filter((c) => c.path === `/v1/collections/${gifts}`).length).toBeGreaterThanOrEqual(2));
+      await act(() => jest.advanceTimersByTimeAsync(100));
+      expect(failed()).toBeNull();
+      await act(async () => gate.release());
+      expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']}`))).toBeOnTheScreen();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('a Rename whose answer was lost while the read after it also fails keeps the title, the form and the draft', async () => {
+    signedIn();
+    const gifts = fc.named('Gifts');
+    fc.loseAnswer('rename', 'offline');
+    let down = false;
+    fc.intercept('detail', () => (down ? 'offline' : undefined));
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${gifts}` });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.rename'] }));
+    await fireEvent.changeText(screen.getByLabelText(en['buyer.saved.name']), 'Gifts for mum');
+    down = true;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.collection.save_name'] }));
+    // The read that follows fails after its own retries: the page keeps what it had, and says why twice.
+    expect((await screen.findAllByText(new RegExp(en['common.offline']), {}, { timeout: 15_000 })).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByDisplayValue('Gifts for mum')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['buyer.collection.save_name'] })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Gifts' })).toBeOnTheScreen();
+    down = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByRole('header', { name: 'Gifts for mum' })).toBeOnTheScreen();
   });
 
   const detailReads = (outfit: string) => api.calls.filter((c) => c.path === `/v1/collections/${outfit}`).length;
