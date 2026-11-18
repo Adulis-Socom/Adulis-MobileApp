@@ -57,3 +57,29 @@ export function applyProblemResponses(
     operation.responses['default'] ??= structuredClone(PROBLEM_RESPONSE);
   }
 }
+
+/**
+ * States, in words, what an operation's `x-adulis-*` gate extensions say, so a person reading the contract is told
+ * the same thing as a client reading the extensions. Appended to the operation's own description.
+ */
+export function applyGateDescriptions(
+  document: OpenAPIObject,
+  controllers: readonly Type[],
+  skip: ReadonlySet<string> = new Set(),
+): void {
+  for (const { operation } of operationRoutes(document, controllers, skip)) {
+    const extensions = operation as unknown as Record<string, unknown>;
+    const surfaces = extensions['x-adulis-surfaces'] as readonly string[] | undefined;
+    if (!surfaces) continue;
+    const permission = extensions['x-adulis-permission'] as readonly string[] | undefined;
+    const consoleOnly = !surfaces.includes('MOBILE');
+    const requires = permission
+      ? `Requires ${permission.map((p) => `\`${p}\``).join(' and ')} in the Seller named by X-Adulis-Seller. `
+      : '';
+    const who = consoleOnly
+      ? 'Console (cookie) sessions only: a mobile (bearer) session cannot perform it.'
+      : 'A mobile (bearer) or a Console (cookie) session can hold it.';
+    const sentence = requires + who;
+    operation.description = operation.description ? `${operation.description}\n\n${sentence}` : sentence;
+  }
+}

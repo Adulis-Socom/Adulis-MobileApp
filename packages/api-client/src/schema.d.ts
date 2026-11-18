@@ -149,7 +149,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Step-up REVOKE_ALL_SESSIONS; revocation is immediate. */
+        /**
+         * Step-up REVOKE_ALL_SESSIONS; revocation is immediate.
+         * @description Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["AuthController_revokeOthers"];
         delete?: never;
         options?: never;
@@ -166,7 +169,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The SMS names the action (4.4); binds action and target (9.2). */
+        /**
+         * The SMS names the action (4.4); binds action and target (9.2).
+         * @description Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["AuthController_stepUpRequest"];
         delete?: never;
         options?: never;
@@ -1063,7 +1069,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors. */
+        /**
+         * Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.
+         * @description Requires `seller.analytics.full:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["AnalyticsController_full"];
         put?: never;
         post?: never;
@@ -1080,7 +1089,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted. */
+        /**
+         * Essential counts over a date window. Every tier, including Free and Beta. products_published is the number of Products published NOW (point-in-time, window-independent); a Product unpublished since is not counted.
+         * @description Requires `seller.analytics.basic:read` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it.
+         */
         get: operations["AnalyticsController_overview"];
         put?: never;
         post?: never;
@@ -1097,9 +1109,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The saved weekly pattern the editor loads (v1.9 S15.0b). */
+        /**
+         * The saved weekly pattern the editor loads (v1.9 S15.0b).
+         * @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["OnboardingController_getAvailability"];
-        /** The whole weekly pattern. Zero windows is valid and means closed. */
+        /**
+         * The whole weekly pattern. Zero windows is valid and means closed.
+         * @description Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         put: operations["OnboardingController_putAvailability"];
         post?: never;
         delete?: never;
@@ -1115,6 +1133,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         get: operations["OnboardingController_getOverrides"];
         put?: never;
         post?: never;
@@ -1132,10 +1151,16 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Marks the store closed on that date. Idempotent by path; no key. */
+        /**
+         * Marks the store closed on that date. Idempotent by path; no key.
+         * @description Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         put: operations["OnboardingController_putOverride"];
         post?: never;
-        /** Removes the closure. 204 whether or not it existed. */
+        /**
+         * Removes the closure. 204 whether or not it existed.
+         * @description Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["OnboardingController_deleteOverride"];
         options?: never;
         head?: never;
@@ -1185,9 +1210,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Enters CLOSING: new reservations stop, existing orders operable. */
+        /**
+         * Enters CLOSING: new reservations stop, existing orders operable.
+         * @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["DeletionController_enterClosure"];
-        /** Returns to ACTIVE. Reversible by design. */
+        /**
+         * Returns to ACTIVE. Reversible by design.
+         * @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["DeletionController_leaveClosure"];
         options?: never;
         head?: never;
@@ -1207,6 +1238,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         patch: operations["OnboardingController_patchCompanyDetails"];
         trace?: never;
     };
@@ -1253,7 +1285,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Owner only; step-up SELLER_DELETION; blockers give the 409 its items[]. */
+        /**
+         * Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].
+         * @description Requires `seller.account:delete` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["DeletionController_deleteSeller"];
         delete?: never;
         options?: never;
@@ -1268,7 +1303,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 200 with items[] — a state, not a failure (S16.9). */
+        /**
+         * 200 with items[] — a state, not a failure (S16.9).
+         * @description Requires `seller.account:delete` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["DeletionController_sellerBlockers"];
         put?: never;
         post?: never;
@@ -1285,8 +1323,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         get: operations["OnboardingController_getFulfilmentMethods"];
-        /** The whole set. At least one active, or 422. */
+        /**
+         * The whole set. At least one active, or 422.
+         * @description Requires `seller.fulfilment:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         put: operations["OnboardingController_putFulfilmentMethods"];
         post?: never;
         delete?: never;
@@ -1336,13 +1378,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires `seller.notifications:read` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it. */
         get: operations["NotificationsController_getPreferences"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** suppressible=false is not togglable: 422, never a silent accept. */
+        /**
+         * suppressible=false is not togglable: 422, never a silent accept.
+         * @description Requires `seller.notifications.preferences:write` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it.
+         */
         patch: operations["NotificationsController_patchPreferences"];
         trace?: never;
     };
@@ -1575,7 +1621,10 @@ export interface paths {
         /** The pending transfer, visible to its two parties only. */
         get: operations["OwnershipController_pending"];
         put?: never;
-        /** Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours. */
+        /**
+         * Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.
+         * @description Requires `seller.ownership:transfer` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["OwnershipController_request"];
         /** Either party ends it: the owner cancels, the recipient declines. */
         delete: operations["OwnershipController_cancel"];
@@ -1641,9 +1690,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The seller list. Carries the card image key and the resolved publication cap. */
+        /**
+         * The seller list. Carries the card image key and the resolved publication cap.
+         * @description Requires `seller.products:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["CatalogueController_listProducts"];
         put?: never;
+        /** @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         post: operations["CatalogueController_createProduct"];
         delete?: never;
         options?: never;
@@ -1658,14 +1711,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The editor's read: variants, attributes, media, posts, state. */
+        /**
+         * The editor's read: variants, attributes, media, posts, state.
+         * @description Requires `seller.products:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["CatalogueController_getProduct"];
         put?: never;
         post?: never;
-        /** 409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live. */
+        /**
+         * 409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.
+         * @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["CatalogueController_deleteProduct"];
         options?: never;
         head?: never;
+        /** @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         patch: operations["CatalogueController_patchProduct"];
         trace?: never;
     };
@@ -1678,7 +1738,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Signed upload then commit — one catalogued path, two actions. */
+        /**
+         * Signed upload then commit — one catalogued path, two actions.
+         * @description Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_images"];
         delete?: never;
         options?: never;
@@ -1696,7 +1759,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Removes one image and schedules the objects for purge. */
+        /**
+         * Removes one image and schedules the objects for purge.
+         * @description Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["CatalogueController_deleteImage"];
         options?: never;
         head?: never;
@@ -1711,7 +1777,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect. */
+        /**
+         * The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect.
+         * @description Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         put: operations["CatalogueController_reorderImages"];
         post?: never;
         delete?: never;
@@ -1729,7 +1798,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 409 with readiness items[] where blocked. */
+        /**
+         * 409 with readiness items[] where blocked.
+         * @description Requires `seller.products:publish` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_publishProduct"];
         delete?: never;
         options?: never;
@@ -1746,7 +1818,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Canonical id resolved server-side; never the URL string. */
+        /**
+         * Canonical id resolved server-side; never the URL string.
+         * @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_attachSocialPost"];
         delete?: never;
         options?: never;
@@ -1763,7 +1838,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Removes from the storefront; keeps the row. */
+        /**
+         * Removes from the storefront; keeps the row.
+         * @description Requires `seller.products:publish` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_unpublishProduct"];
         delete?: never;
         options?: never;
@@ -1780,6 +1858,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         post: operations["CatalogueController_createVariant"];
         delete?: never;
         options?: never;
@@ -1796,7 +1875,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         post: operations["CatalogueController_video"];
+        /** @description Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         delete: operations["CatalogueController_deleteVideo"];
         options?: never;
         head?: never;
@@ -1810,13 +1891,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The saved profile, with status and handle (v1.9 S15.0b). */
+        /**
+         * The saved profile, with status and handle (v1.9 S15.0b).
+         * @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["OnboardingController_getProfile"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         patch: operations["OnboardingController_patchProfile"];
         trace?: never;
     };
@@ -1827,7 +1912,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The nine readiness items — a state, not a failure. */
+        /**
+         * The nine readiness items — a state, not a failure.
+         * @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["OnboardingController_readiness"];
         put?: never;
         post?: never;
@@ -1861,10 +1949,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The Seller's own Scenes, any state, cursor-paginated. */
+        /**
+         * The Seller's own Scenes, any state, cursor-paginated.
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["ScenesController_list"];
         put?: never;
-        /** Create a private DRAFT Scene. Seller and Market are server-derived. */
+        /**
+         * Create a private DRAFT Scene. Seller and Market are server-derived.
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["ScenesController_create"];
         delete?: never;
         options?: never;
@@ -1879,7 +1973,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Management view: state, Private reason, restoration, revisions, tag availability. */
+        /**
+         * Management view: state, Private reason, restoration, revisions, tag availability.
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["ScenesController_detail"];
         put?: never;
         post?: never;
@@ -1902,7 +1999,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes. */
+        /**
+         * Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes.
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         patch: operations["ScenesController_patchDraft"];
         trace?: never;
     };
@@ -1915,7 +2015,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft. */
+        /**
+         * Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft.
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["ScenesController_imageUploads"];
         delete?: never;
         options?: never;
@@ -1932,7 +2035,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...). */
+        /**
+         * Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...).
+         * @description Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["ScenesController_publish"];
         delete?: never;
         options?: never;
@@ -1947,10 +2053,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Linked accounts, with the follower count and when it was captured. */
+        /**
+         * Linked accounts, with the follower count and when it was captured.
+         * @description Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["OnboardingController_getSocialAccounts"];
         put?: never;
-        /** Link a social account; issues the account-control code. */
+        /**
+         * Link a social account; issues the account-control code.
+         * @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["OnboardingController_createSocialAccount"];
         delete?: never;
         options?: never;
@@ -1967,7 +2079,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fetch and match; captures the follower count at verification. */
+        /**
+         * Fetch and match; captures the follower count at verification.
+         * @description Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["OnboardingController_verifySocialAccount"];
         delete?: never;
         options?: never;
@@ -1982,10 +2097,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Business tier; Owner/Admin only (seller.staff:admin). */
+        /**
+         * Business tier; Owner/Admin only (seller.staff:admin).
+         * @description Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         get: operations["TeamController_list"];
         put?: never;
-        /** Invite by phone; the member signs in with their own OTP. */
+        /**
+         * Invite by phone; the member signs in with their own OTP.
+         * @description Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["TeamController_invite"];
         delete?: never;
         options?: never;
@@ -2003,7 +2124,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revokes on the next request (R28); the account is untouched. */
+        /**
+         * Revokes on the next request (R28); the account is untouched.
+         * @description Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["TeamController_revoke"];
         options?: never;
         head?: never;
@@ -2020,10 +2144,14 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Withdraws — VARIANT_WITHDRAWN exists as a cart code for this. */
+        /**
+         * Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.
+         * @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         delete: operations["CatalogueController_deleteVariant"];
         options?: never;
         head?: never;
+        /** @description Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         patch: operations["CatalogueController_patchVariant"];
         trace?: never;
     };
@@ -2036,7 +2164,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resets stock_confirmed_at (S13.3). */
+        /**
+         * Resets stock_confirmed_at (S13.3).
+         * @description Requires `seller.stock:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_confirmStock"];
         delete?: never;
         options?: never;
@@ -2053,7 +2184,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Writes a StockEvent. Never a direct count set. */
+        /**
+         * Writes a StockEvent. Never a direct count set.
+         * @description Requires `seller.stock:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.
+         */
         post: operations["CatalogueController_writeStock"];
         delete?: never;
         options?: never;
@@ -2068,6 +2202,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires `seller.stock:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it. */
         get: operations["CatalogueController_listStockEvents"];
         put?: never;
         post?: never;

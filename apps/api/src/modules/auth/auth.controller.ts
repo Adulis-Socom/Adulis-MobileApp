@@ -68,6 +68,7 @@ import {
   stepUpVerifyBody,
 } from './auth.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
 
 /** C6 — identity and session (ADU-API-01 v1.6 section 12.2). */
 
@@ -409,11 +410,10 @@ export class AuthController {
     );
   }
 
+  @ApiGate({ surfaces: ['CONSOLE'] })
   @Post('auth/sessions/revoke-others')
   @HttpCode(200)
   @ApiOperation({ summary: 'Step-up REVOKE_ALL_SESSIONS; revocation is immediate.' })
-  @ApiBearerAuth('bearer')
-  @ApiCookieAuth('cookie')
   @ApiBody({ type: RevokeOthersBodyDto })
   @ApiOkResponse({ type: RevokeOthersResponseDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
@@ -425,6 +425,7 @@ export class AuthController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ surfaces: ['CONSOLE'] })
   @Post('auth/step-up/request')
   @HttpCode(202)
   @ApiOperation({ summary: 'The SMS names the action (4.4); binds action and target (9.2).' })

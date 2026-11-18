@@ -29,6 +29,7 @@ import { DeletionService, type TicketAccount } from './deletion.service';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto } from './deletion.dto';
 import { EmptyResponseDto } from '../auth/auth.dto';
+import { ApiGate } from '../../common/http/api-gate';
 
 /**
  * C6 — account deletion from the web (12.18) and seller deletion/closure
@@ -208,6 +209,7 @@ export class DeletionController {
 
   // ---- 12.12: the seller-scoped deletion group -------------------------
 
+  @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
   @Get('seller/deletion/blockers')
   @ApiOperation({ summary: '200 with items[] — a state, not a failure (S16.9).' })
   async sellerBlockers(@Req() req: AuthedRequest): Promise<unknown> {
@@ -217,6 +219,7 @@ export class DeletionController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
   @Post('seller/deletion')
   @HttpCode(200)
   @ApiOperation({ summary: 'Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].' })
@@ -241,6 +244,7 @@ export class DeletionController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @Post('seller/closure')
   @HttpCode(200)
   @ApiOperation({ summary: 'Enters CLOSING: new reservations stop, existing orders operable.' })
@@ -253,6 +257,7 @@ export class DeletionController {
     );
   }
 
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @Delete('seller/closure')
   @HttpCode(204)
   @ApiOperation({ summary: 'Returns to ACTIVE. Reversible by design.' })

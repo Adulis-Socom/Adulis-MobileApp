@@ -9,6 +9,7 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -76,6 +77,7 @@ export class AnalyticsController {
 
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).' })
   @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD. Last day of the window. Default: today.' })
+  @ApiGate({ permission: ['seller.analytics.basic:read'], surfaces: ['MOBILE', 'CONSOLE'] })
   @Get('seller/analytics/overview')
   @ApiOperation({
     summary:
@@ -134,6 +136,7 @@ export class AnalyticsController {
 
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).' })
   @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD. Last day of the window. Default: today.' })
+  @ApiGate({ permission: ['seller.analytics.full:read'], surfaces: ['CONSOLE'] })
   @Get('seller/analytics/full')
   @ApiOperation({
     summary:

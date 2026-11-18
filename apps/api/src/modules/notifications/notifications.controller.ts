@@ -10,6 +10,7 @@ import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
 import { NotificationPageDto, NotificationReadDto } from './notifications.dto';
+import { ApiGate } from '../../common/http/api-gate';
 
 /**
  * C8 — notifications (ADU-API-01 v1.6 section 12.14).
@@ -182,6 +183,7 @@ export class NotificationsController {
     });
   }
 
+  @ApiGate({ permission: ['seller.notifications:read'], surfaces: ['MOBILE', 'CONSOLE'] })
   @Get('seller/notification-preferences')
   async getPreferences(@Req() req: AuthedRequest): Promise<unknown> {
     return this.tx.run(req as LocalizedRequest, async (trx) => {
@@ -196,6 +198,7 @@ export class NotificationsController {
   }
 
   /** PATCH is idempotent by shape (an upsert of named keys); no key demanded. */
+  @ApiGate({ permission: ['seller.notifications.preferences:write'], surfaces: ['MOBILE', 'CONSOLE'] })
   @Patch('seller/notification-preferences')
   @ApiOperation({ summary: 'suppressible=false is not togglable: 422, never a silent accept.' })
   async patchPreferences(@Req() req: AuthedRequest): Promise<unknown> {

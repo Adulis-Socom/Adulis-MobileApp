@@ -1,13 +1,15 @@
 import 'reflect-metadata';
 import { Controller, Get, Post, type ExecutionContext, type INestApplication, type Type } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ApiDefaultResponse, ApiHeader, DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+import { ApiDefaultResponse, ApiHeader, ApiOperation, DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, Public } from '../auth/auth.guard';
 import type { SessionService } from '../auth/session.service';
 import { AdulisException } from '../errors/adulis-exception';
 import { SESSION_COOKIE } from './cookies';
-import { SELLER_HEADER, applyProblemResponses, applySellerHeader } from './openapi-derived';
+import { ApiGate } from './api-gate';
+import { SELLER_HEADER, applyGateDescriptions, applyProblemResponses, applySellerHeader } from './openapi-derived';
+import { applyGuardSecurity } from './openapi-security';
 
 /**
  * The seller header and the problem response of the contract are derived from
@@ -65,6 +67,39 @@ class BuyerController {
   }
 }
 
+@Controller('gated')
+class GatedController {
+  @Get('console')
+  @ApiGate({ permission: ['seller.products:read'], surfaces: ['CONSOLE'] })
+  console(): string {
+    return 'console';
+  }
+
+  @Get('both')
+  @ApiGate({ permission: ['seller.analytics.basic:read'], surfaces: ['MOBILE', 'CONSOLE'] })
+  both(): string {
+    return 'both';
+  }
+
+  @Get('two')
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
+  @ApiOperation({ summary: 'Own summary.', description: 'Own description.' })
+  two(): string {
+    return 'two';
+  }
+
+  @Get('audience')
+  @ApiGate({ surfaces: ['CONSOLE'] })
+  audience(): string {
+    return 'audience';
+  }
+
+  @Get('ungated')
+  ungated(): string {
+    return 'ungated';
+  }
+}
+
 @Controller('legacy')
 class LegacyController {
   @Get('x')
@@ -73,7 +108,7 @@ class LegacyController {
   }
 }
 
-const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, LegacyController];
+const CONTROLLERS: Type[] = [SellerController, PublicController, BuyerController, GatedController, LegacyController];
 
 describe('contract metadata derived from the request pipeline', () => {
   let app: INestApplication;
@@ -188,5 +223,64 @@ describe('contract metadata derived from the request pipeline', () => {
       expect(problem(document, '/legacy/x')).toBeUndefined();
       expect(problem(document, '/buyer/plain')).toBeDefined();
     });
+  });
+});
+
+describe('ApiGate and applyGateDescriptions', () => {
+  let app: INestApplication;
+  let built: OpenAPIObject;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ controllers: [GatedController] }).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    built = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder()
+        .addBearerAuth({ type: 'http', scheme: 'bearer' }, 'bearer')
+        .addCookieAuth('session', { type: 'apiKey', in: 'cookie' }, 'cookie')
+        .build(),
+    );
+    applyGuardSecurity(built, [GatedController]);
+    applyGateDescriptions(built, [GatedController]);
+  });
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const op = (path: string) => built.paths[path]?.get as unknown as Record<string, unknown>;
+
+  it('offers the cookie alone where the gate admits only a Console session', () => {
+    expect(op('/gated/console')['security']).toEqual([{ cookie: [] }]);
+    expect(op('/gated/audience')['security']).toEqual([{ cookie: [] }]);
+    expect(op('/gated/two')['security']).toEqual([{ cookie: [] }]);
+  });
+
+  it('leaves both credentials where a mobile session can pass the gate, and on a route with no gate', () => {
+    expect(op('/gated/both')['security']).toEqual([{ cookie: [] }, { bearer: [] }]);
+    expect(op('/gated/ungated')['security']).toEqual([{ cookie: [] }, { bearer: [] }]);
+  });
+
+  it('states the permission and the surfaces as extensions', () => {
+    expect(op('/gated/console')['x-adulis-permission']).toEqual(['seller.products:read']);
+    expect(op('/gated/console')['x-adulis-surfaces']).toEqual(['CONSOLE']);
+    expect(op('/gated/both')['x-adulis-surfaces']).toEqual(['MOBILE', 'CONSOLE']);
+    expect(op('/gated/two')['x-adulis-permission']).toEqual(['seller.broadcasts:send', 'seller.media:write']);
+    expect(op('/gated/audience')['x-adulis-permission']).toBeUndefined();
+    expect(op('/gated/ungated')['x-adulis-surfaces']).toBeUndefined();
+  });
+
+  it('says it in the description, after the description the operation has', () => {
+    expect(op('/gated/console')['description']).toBe(
+      'Requires `seller.products:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.',
+    );
+    expect(op('/gated/both')['description']).toBe(
+      'Requires `seller.analytics.basic:read` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it.',
+    );
+    expect(op('/gated/two')['description']).toBe(
+      'Own description.\n\nRequires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it.',
+    );
+    expect(op('/gated/audience')['description']).toBe('Console (cookie) sessions only: a mobile (bearer) session cannot perform it.');
+    expect(op('/gated/ungated')['description']).toBeUndefined();
   });
 });

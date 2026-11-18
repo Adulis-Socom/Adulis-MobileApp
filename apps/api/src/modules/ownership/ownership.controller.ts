@@ -8,6 +8,7 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
 
 /**
  * C6 — ownership transfer (ADU-API-01 v1.7 section 12.12, G1.6), with
@@ -87,6 +88,7 @@ export class OwnershipController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.ownership:transfer'], surfaces: ['CONSOLE'] })
   @Post('seller/ownership-transfer')
   @ApiOperation({
     summary: 'Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.',

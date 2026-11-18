@@ -411,15 +411,16 @@
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
         ],
         "summary": "Step-up REVOKE_ALL_SESSIONS; revocation is immediate.",
         "tags": [
           "Auth"
-        ]
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/auth/sessions/{id}": {
@@ -503,18 +504,19 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The SMS names the action (4.4); binds action and target (9.2).",
         "tags": [
           "Auth"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/auth/step-up/verify": {
@@ -2938,18 +2940,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Views, reservations, conversion, funnel over a window — entitlement-gated. product_views counts server-recorded Product openings (a read the client declares a revalidation is not recorded); it is NOT de-duplicated and NOT unique visitors.",
         "tags": [
           "Analytics"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.analytics.full:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.analytics.full:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/analytics/overview": {
@@ -3004,6 +3010,13 @@
         "tags": [
           "Analytics"
         ],
+        "x-adulis-permission": [
+          "seller.analytics.basic:read"
+        ],
+        "x-adulis-surfaces": [
+          "MOBILE",
+          "CONSOLE"
+        ],
         "security": [
           {
             "cookie": []
@@ -3011,7 +3024,8 @@
           {
             "bearer": []
           }
-        ]
+        ],
+        "description": "Requires `seller.analytics.basic:read` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it."
       }
     },
     "/v1/seller/availability": {
@@ -3044,18 +3058,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The saved weekly pattern the editor loads (v1.9 S15.0b).",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "put": {
         "operationId": "OnboardingController_putAvailability",
@@ -3086,18 +3104,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The whole weekly pattern. Zero windows is valid and means closed.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.availability:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/availability-overrides": {
@@ -3148,17 +3170,21 @@
             }
           }
         },
-        "tags": [
-          "Onboarding"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Onboarding"
+        ],
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/availability-overrides/{date}": {
@@ -3199,18 +3225,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Marks the store closed on that date. Idempotent by path; no key.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.availability:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "OnboardingController_deleteOverride",
@@ -3249,18 +3279,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Removes the closure. 204 whether or not it existed.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.availability:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.availability:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/claims": {
@@ -3350,18 +3384,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Enters CLOSING: new reservations stop, existing orders operable.",
         "tags": [
           "Deletion"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "DeletionController_leaveClosure",
@@ -3392,18 +3430,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Returns to ACTIVE. Reversible by design.",
         "tags": [
           "Deletion"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/company-details": {
@@ -3436,17 +3478,21 @@
             }
           }
         },
-        "tags": [
-          "Onboarding"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Onboarding"
+        ],
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/couriers": {
@@ -3539,18 +3585,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Owner only; step-up SELLER_DELETION; blockers give the 409 its items[].",
         "tags": [
           "Deletion"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.account:delete"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.account:delete` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/deletion/blockers": {
@@ -3583,18 +3633,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "200 with items[] — a state, not a failure (S16.9).",
         "tags": [
           "Deletion"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.account:delete"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.account:delete` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/fulfilment-methods": {
@@ -3627,17 +3681,21 @@
             }
           }
         },
-        "tags": [
-          "Onboarding"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Onboarding"
+        ],
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "put": {
         "operationId": "OnboardingController_putFulfilmentMethods",
@@ -3668,18 +3726,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The whole set. At least one active, or 422.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.fulfilment:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.fulfilment:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/identity-verification": {
@@ -3791,6 +3853,13 @@
         "tags": [
           "Notifications"
         ],
+        "x-adulis-permission": [
+          "seller.notifications:read"
+        ],
+        "x-adulis-surfaces": [
+          "MOBILE",
+          "CONSOLE"
+        ],
         "security": [
           {
             "cookie": []
@@ -3798,7 +3867,8 @@
           {
             "bearer": []
           }
-        ]
+        ],
+        "description": "Requires `seller.notifications:read` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it."
       },
       "patch": {
         "operationId": "NotificationsController_patchPreferences",
@@ -3833,6 +3903,13 @@
         "tags": [
           "Notifications"
         ],
+        "x-adulis-permission": [
+          "seller.notifications.preferences:write"
+        ],
+        "x-adulis-surfaces": [
+          "MOBILE",
+          "CONSOLE"
+        ],
         "security": [
           {
             "cookie": []
@@ -3840,7 +3917,8 @@
           {
             "bearer": []
           }
-        ]
+        ],
+        "description": "Requires `seller.notifications.preferences:write` in the Seller named by X-Adulis-Seller. A mobile (bearer) or a Console (cookie) session can hold it."
       }
     },
     "/v1/seller/obligations": {
@@ -4249,18 +4327,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.",
         "tags": [
           "Ownership"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.ownership:transfer"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.ownership:transfer` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "OwnershipController_cancel",
@@ -4400,17 +4482,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "get": {
         "operationId": "CatalogueController_listProducts",
@@ -4582,18 +4668,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The seller list. Carries the card image key and the resolved publication cap.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}": {
@@ -4634,18 +4724,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The editor's read: variants, attributes, media, posts, state.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "patch": {
         "operationId": "CatalogueController_patchProduct",
@@ -4684,17 +4778,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "CatalogueController_deleteProduct",
@@ -4733,18 +4831,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/images": {
@@ -4941,18 +5043,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Signed upload then commit — one catalogued path, two actions.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/images/order": {
@@ -5019,18 +5125,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The WHOLE ordering in one request — UNIQUE (product_id, position) makes a two-step swap a constraint violation, so this is one transaction or a defect.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/images/{position}": {
@@ -5082,18 +5192,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Removes one image and schedules the objects for purge.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/publish": {
@@ -5143,18 +5257,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "409 with readiness items[] where blocked.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:publish"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:publish` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/social-posts": {
@@ -5204,18 +5322,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Canonical id resolved server-side; never the URL string.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/unpublish": {
@@ -5265,18 +5387,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Removes from the storefront; keeps the row.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:publish"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:publish` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/variants": {
@@ -5326,17 +5452,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/products/{id}/video": {
@@ -5389,17 +5519,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "CatalogueController_deleteVideo",
@@ -5438,17 +5572,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/profile": {
@@ -5481,18 +5619,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The saved profile, with status and handle (v1.9 S15.0b).",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "patch": {
         "operationId": "OnboardingController_patchProfile",
@@ -5523,17 +5665,21 @@
             }
           }
         },
-        "tags": [
-          "Onboarding"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Onboarding"
+        ],
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/readiness": {
@@ -5566,18 +5712,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "The nine readiness items — a state, not a failure.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/reviews": {
@@ -5668,7 +5818,15 @@
         "summary": "Create a private DRAFT Scene. Seller and Market are server-derived.",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "get": {
         "operationId": "ScenesController_list",
@@ -5733,7 +5891,15 @@
         "summary": "The Seller's own Scenes, any state, cursor-paginated.",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/scene-posts/{id}": {
@@ -5791,7 +5957,15 @@
         "summary": "Management view: state, Private reason, restoration, revisions, tag availability.",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/scene-posts/{id}/draft": {
@@ -5868,7 +6042,15 @@
         "summary": "Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes.",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/scene-posts/{id}/image-uploads": {
@@ -5935,7 +6117,15 @@
         "summary": "Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft.",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/scene-posts/{id}/publish": {
@@ -6011,7 +6201,15 @@
         "summary": "Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...).",
         "tags": [
           "Scenes"
-        ]
+        ],
+        "x-adulis-permission": [
+          "seller.broadcasts:send",
+          "seller.media:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.broadcasts:send` and `seller.media:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/social-accounts": {
@@ -6044,18 +6242,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Linked accounts, with the follower count and when it was captured.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "post": {
         "operationId": "OnboardingController_createSocialAccount",
@@ -6095,18 +6297,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Link a social account; issues the account-control code.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/social-accounts/{id}/verify": {
@@ -6156,18 +6362,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Fetch and match; captures the follower count at verification.",
         "tags": [
           "Onboarding"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.store:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.store:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/team": {
@@ -6200,18 +6410,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Business tier; Owner/Admin only (seller.staff:admin).",
         "tags": [
           "Team"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.staff:admin"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "post": {
         "operationId": "TeamController_invite",
@@ -6251,18 +6465,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Invite by phone; the member signs in with their own OTP.",
         "tags": [
           "Team"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.staff:admin"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/team/{id}": {
@@ -6303,18 +6521,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Revokes on the next request (R28); the account is untouched.",
         "tags": [
           "Team"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.staff:admin"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.staff:admin` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/variants/{id}": {
@@ -6355,17 +6577,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       },
       "delete": {
         "operationId": "CatalogueController_deleteVariant",
@@ -6404,18 +6630,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.products:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.products:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/variants/{id}/confirm-stock": {
@@ -6465,18 +6695,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Resets stock_confirmed_at (S13.3).",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.stock:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.stock:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/variants/{id}/stock": {
@@ -6526,18 +6760,22 @@
             }
           }
         },
+        "security": [
+          {
+            "cookie": []
+          }
+        ],
         "summary": "Writes a StockEvent. Never a direct count set.",
         "tags": [
           "Catalogue"
         ],
-        "security": [
-          {
-            "cookie": []
-          },
-          {
-            "bearer": []
-          }
-        ]
+        "x-adulis-permission": [
+          "seller.stock:write"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.stock:write` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/seller/variants/{id}/stock-events": {
@@ -6596,17 +6834,21 @@
             }
           }
         },
-        "tags": [
-          "Catalogue"
-        ],
         "security": [
           {
             "cookie": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "tags": [
+          "Catalogue"
+        ],
+        "x-adulis-permission": [
+          "seller.stock:read"
+        ],
+        "x-adulis-surfaces": [
+          "CONSOLE"
+        ],
+        "description": "Requires `seller.stock:read` in the Seller named by X-Adulis-Seller. Console (cookie) sessions only: a mobile (bearer) session cannot perform it."
       }
     },
     "/v1/sellers/lookup": {
