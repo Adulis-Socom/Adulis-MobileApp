@@ -638,6 +638,28 @@ describe('a Scene the server stops serving', () => {
     expect(queries()).toEqual([{}]);
   });
 
+  it('a card that is still shown while a refresh loads is taken out too, and the new session decides what comes next', async () => {
+    const refreshed = held();
+    api.on(FEED, () => (feedCalls().length === 1 ? ok(fypPage([fypUnit(1), fypUnit(2), fypUnit(3)])) : refreshed.reply));
+    api.on(sceneRead(3), notAvailable);
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 3');
+    await pullToRefresh();
+    await waitFor(() => expect(feedCalls()).toHaveLength(2));
+    expect(listed()).toEqual(refsOf(1, 2, 3));
+
+    // The old session's cards are what the Buyer sees while the new session loads.
+    await exploreCard(2);
+    expect(await screen.findByText(en['buyer.scene.gone'])).toBeOnTheScreen();
+    await backToFeed();
+    expect(listed()).toEqual(refsOf(1, 2));
+    expect(screen.queryByText('Store 3')).not.toBeOnTheScreen();
+
+    await refreshed.release(ok(fypPage([fypUnit(1), fypUnit(2), fypUnit(5)])));
+    expect(await screen.findByText('Store 5')).toBeOnTheScreen();
+    expect(listed()).toEqual(refsOf(1, 2, 5));
+  });
+
   it('a refresh does not bring the card back while it loads, and the new session, which is the server\'s to decide, may list the Scene again', async () => {
     const sessions = [ok(fypPage([fypUnit(1), fypUnit(2), fypUnit(3)]))];
     const refreshed = held();
