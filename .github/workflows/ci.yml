@@ -122,6 +122,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # A merged migration is never rewritten: a change may only append to the manifest at its base branch
+      # (docs/infrastructure/MIGRATION-FILE-GUARD.md). The checkout above holds every branch ref.
+      - name: The migration manifest only appends to the base branch's
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node ops/scripts/migration-guard.mjs verify --base "origin/$BASE_REF"
+
       # The service container does not run db/init, so create the extensions the
       # same way docker-compose does locally. This is also section 18 step 1.
       - name: Create the four extensions

@@ -16,7 +16,8 @@
 // `write` pins ADDED migrations only. It never re-pins a missing or changed historical file: that needs a hand edit
 // of the manifest, which shows in review.
 //
-//   node ops/scripts/migration-guard.mjs verify [--db] [--expect-commit <sha>]
+//   node ops/scripts/migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>]
+//                                                                  (--base: the manifest only appends to the one at <ref>)
 //   node ops/scripts/migration-guard.mjs up (--expect-commit <sha> | --no-source-check) [--dry-run]
 //                                                                  (verify, then node-pg-migrate up)
 //   node ops/scripts/migration-guard.mjs write                    (pin newly added migrations)
@@ -178,6 +179,45 @@ export function checkSource({
   return problems;
 }
 
+/** A git ref the check may hand to git: no leading dash (an option), no spaces or other shell-looking characters. */
+const PLAIN_REF = /^[A-Za-z0-9][A-Za-z0-9._/@^~-]*$/;
+
+/** The manifest as committed at `ref`: { manifest } (null when that commit has none yet) or { problems }. */
+export function readBaseManifest(root, ref, manifestRel = 'ops/migrations.manifest.json') {
+  if (!PLAIN_REF.test(ref)) return { problems: [`BASE ${JSON.stringify(ref)} is not a plain git ref`] };
+  if (git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).status !== 0)
+    return { problems: [`BASE ${ref} is not a commit in this clone (fetch it first)`] };
+  if (git(root, ['cat-file', '-e', `${ref}:${manifestRel}`]).status !== 0) return { manifest: null };
+  const shown = git(root, ['show', `${ref}:${manifestRel}`]);
+  try {
+    return { manifest: JSON.parse(shown.out) };
+  } catch {
+    return { problems: [`BASE ${ref}: the committed manifest is not JSON`] };
+  }
+}
+
+/**
+ * The manifest against the one at the base commit: every base entry is still there, unchanged, in the same place;
+ * a change may only append. A hand edit of a merged migration together with its manifest line passes every other
+ * check, so this is what shows it. `base` null: the base has no manifest yet, nothing to compare.
+ */
+export function checkAppendOnly(base, current) {
+  if (base === null) return [];
+  const problems = checkManifest(base).map((p) => `BASE ${p}`);
+  if (problems.length) return problems;
+  base.files.forEach((f, i) => {
+    const now = current?.files?.[i];
+    if (!now) problems.push(`REMOVED pinned entry ${f.name} (position ${i + 1}): the manifest is append-only`);
+    else if (now.name !== f.name)
+      problems.push(`RENAMED or reordered pinned entry at position ${i + 1}: ${f.name} is now ${now.name}`);
+    else if (now.sha256 !== f.sha256)
+      problems.push(
+        `CHANGED pinned entry ${f.name}: sha256 ${String(now.sha256).slice(0, 16)} differs from the base's ${f.sha256.slice(0, 16)} (a merged migration is never rewritten)`,
+      );
+  });
+  return problems;
+}
+
 /** The applied names, read-only, oldest first. A missing pgmigrations table is an empty history; any other error refuses. */
 export async function readApplied(connectionString) {
   const { default: pg } = await import('pg');
@@ -200,13 +240,19 @@ export async function readApplied(connectionString) {
 /** Query options that would send the connection somewhere other than the URL says (pg reads them over the URL). */
 const RETARGETING = ['host', 'hostaddr', 'port', 'dbname', 'database', 'service'];
 
+/** A host is a plain name or address: a percent-encoded or control character would let the printed line differ from where pg connects. */
+const PLAIN_HOST = /^[A-Za-z0-9._[\]:-]+$/;
+
 /**
  * The target a connection string names, or why it is refused. Only a plain postgres URL is accepted: a host, and one
  * plain database name as the whole path. A malformed string (credentials landing in the path, no host, a retargeting
  * query option) would make the printed line differ from the place pg connects to, or show a password, so it is
  * refused before anything connects. The reason never repeats the string.
+ *
+ * The port is the one pg will use: the URL's, else PGPORT, else 5432. `options` is refused as a query parameter: pg
+ * lets the URL's value replace the startup options the guard sets for its read-only history read.
  */
-export function checkTarget(connectionString) {
+export function checkTarget(connectionString, env = process.env) {
   let u;
   try {
     u = new URL(connectionString);
@@ -216,6 +262,7 @@ export function checkTarget(connectionString) {
   if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:')
     return { error: 'it is not a postgres:// or postgresql:// URL' };
   if (u.hostname === '') return { error: 'it names no host' };
+  if (!PLAIN_HOST.test(u.hostname)) return { error: 'its host is not a plain name or address' };
   const database = u.pathname.slice(1);
   if (!/^[A-Za-z0-9_.-]+$/.test(database))
     return { error: 'its path is not one plain database name' };
@@ -224,7 +271,12 @@ export function checkTarget(connectionString) {
     return {
       error: `it sets ${bad.join(', ')} as a query option; the URL itself must name the target`,
     };
-  return { target: `${u.hostname}:${u.port || '5432'}/${database}` };
+  if (u.searchParams.has('options'))
+    return { error: 'it sets options as a query option, which could replace the read-only session' };
+  const port = u.port || env.PGPORT || '5432';
+  if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)
+    return { error: 'the port it names (or PGPORT, when the URL has none) is not a port number' };
+  return { target: `${u.hostname}:${Number(port)}/${database}` };
 }
 
 /**
@@ -237,7 +289,7 @@ export function resolveTarget(env, { log, err }) {
     err('REFUSED: DATABASE_URL_MIGRATE is not set; nothing was applied');
     return null;
   }
-  const t = checkTarget(url);
+  const t = checkTarget(url, env);
   if (t.error) {
     err(`REFUSED: DATABASE_URL_MIGRATE is not usable (${t.error}); nothing was applied`);
     return null;
@@ -398,7 +450,7 @@ export function write({
 }
 
 const COMMANDS = {
-  verify: { bool: ['--db'], value: ['--expect-commit'] },
+  verify: { bool: ['--db'], value: ['--expect-commit', '--base'] },
   up: { bool: ['--dry-run', '--no-source-check'], value: ['--expect-commit'] },
   write: { bool: [], value: [] },
 };
@@ -443,7 +495,7 @@ async function main(argv) {
   if (parsed.error) {
     console.error(`REFUSED: ${parsed.error}; nothing was applied`);
     console.error(
-      'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
+      'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
     );
     return 2;
   }
@@ -463,18 +515,23 @@ async function main(argv) {
       applied = await readApplied(url);
     }
     const r = verify({ manifest, applied, expectedCommit: val('--expect-commit') });
+    if (val('--base') !== null) {
+      const base = readBaseManifest(REPO_ROOT, val('--base'));
+      r.problems.push(...(base.problems ?? checkAppendOnly(base.manifest, manifest)));
+      r.ok = r.problems.length === 0;
+    }
     if (!r.ok) {
       console.error('REFUSED:');
       for (const p of r.problems) console.error(`  - ${p}`);
       return 1;
     }
     console.log(
-      `OK: ${manifest.files.length} pinned migrations match${applied ? `; ${applied.length} applied, ${r.pending.length} pending` : ''}`,
+      `OK: ${manifest.files.length} pinned migrations match${applied ? `; ${applied.length} applied, ${r.pending.length} pending` : ''}${val('--base') !== null ? `; append-only against ${val('--base')}` : ''}`,
     );
     return 0;
   }
   console.error(
-    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
+    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
   );
   return 2;
 }
