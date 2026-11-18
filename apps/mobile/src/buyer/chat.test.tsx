@@ -253,6 +253,29 @@ describe('Message Seller', () => {
     expect(chat.convs.filter((c) => c.owner === A)).toHaveLength(1);
   });
 
+  it('a lost answer when opening a conversation: tapping again uses the same key and ends in the one conversation, never a second thread', async () => {
+    signedIn();
+    const chat = installChat();
+    let lost = true;
+    api.on('POST /v1/conversations', (call) => {
+      const found = chat.convs.find((c) => c.owner === call.headers.Authorization && c.seller_id === call.body?.seller_id) ?? chat.conv(call.headers.Authorization!);
+      if (lost) {
+        lost = false;
+        return 'offline';
+      }
+      return { status: 201, body: { conversation_id: found.id } };
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.message_seller'] }));
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.message_seller'] }));
+    expect(await screen.findByText(en['buyer.chat.empty'])).toBeOnTheScreen();
+    const opens = api.callsTo('POST /v1/conversations');
+    expect(opens).toHaveLength(2);
+    expect(opens[1]?.headers['Idempotency-Key']).toBe(opens[0]?.headers['Idempotency-Key']);
+    expect(chat.convs.filter((c) => c.owner === A)).toHaveLength(1);
+  });
+
   it('a Seller the server does not find says the conversation could not be opened', async () => {
     signedIn();
     installChat();
