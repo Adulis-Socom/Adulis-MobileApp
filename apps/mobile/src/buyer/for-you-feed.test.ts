@@ -58,6 +58,20 @@ describe('feedUnits', () => {
   it('is empty before anything loaded', () => {
     expect(feedUnits(undefined)).toEqual([]);
   });
+
+  it('leaves a withdrawn Scene out wherever it appears and touches nothing else', () => {
+    const pages = [
+      fypPage([fypUnit(1), fypUnit(2), fypUnit(3)], 'c1'),
+      fypPage([fypUnit(2, { position: 4 }), fypUnit(4)], 'c2'),
+    ];
+    const withdrawn = new Set([fypUnit(2).public_ref]);
+    expect(feedUnits(pages, withdrawn).map((u) => u.public_ref)).toEqual(
+      [1, 3, 4].map((n) => fypUnit(n).public_ref),
+    );
+    // The pages themselves still carry it, and their cursors, as served.
+    expect(pages.map((p) => p.next_cursor)).toEqual(['c1', 'c2']);
+    expect(pages[0]!.items).toHaveLength(3);
+  });
 });
 
 describe('feedSessionEnded', () => {

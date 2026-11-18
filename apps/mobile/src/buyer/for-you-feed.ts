@@ -111,20 +111,37 @@ export const forYouKey = (subject: 'guest' | 'account', generation: number) =>
 /**
  * Every loaded page's Scene units, in order, each Scene once. A unit type this build does
  * not know is skipped (the contract may add one), and a Scene repeated by a retried or
- * overlapping page keeps its first position.
+ * overlapping page keeps its first position. A `withdrawn` Scene (see withdrawScene) is
+ * left out wherever it appears; the pages themselves are not edited, so cursors stay as served.
  */
-export function feedUnits(pages: readonly FypPage[] | undefined): FypUnit[] {
+export function feedUnits(pages: readonly FypPage[] | undefined, withdrawn?: ReadonlySet<string>): FypUnit[] {
   const seen = new Set<string>();
   const units: FypUnit[] = [];
   for (const page of pages ?? []) {
     for (const unit of page.items) {
-      if (unit.type !== 'SCENE_POST' || seen.has(unit.public_ref)) continue;
+      if (unit.type !== 'SCENE_POST' || seen.has(unit.public_ref) || withdrawn?.has(unit.public_ref)) continue;
       seen.add(unit.public_ref);
       units.push(unit);
     }
   }
   return units;
 }
+
+const withdrawalListeners = new Set<(publicRef: string) => void>();
+
+/**
+ * A Scene read answered 404 -- the server's one answer for a Scene that is private,
+ * unpublished, removed or unknown -- so the Scene is no longer public. Every mounted For
+ * You feed stops listing it, in every session it has loaded, until a NEW feed session
+ * (pull-to-refresh, foreground revalidation, sign-in or out) lets the server decide again.
+ * Only that 404 calls this: a network failure, a timeout, a 5xx or a 4xx that is not a 404
+ * (sign-in, upgrade, rate limit) says nothing about the Scene.
+ */
+export function withdrawScene(publicRef: string): void {
+  for (const listener of [...withdrawalListeners]) listener(publicRef);
+}
+
+const sessionKey = (subject: 'guest' | 'account', generation: number) => `${subject}/${generation}`;
 
 /** The server ended this feed session (expired, version retired, Market changed): refresh. */
 export function feedSessionEnded(error: unknown): boolean {
@@ -188,20 +205,53 @@ export function useForYouFeed() {
         : undefined,
   });
 
-  const units = useMemo(() => feedUnits(query.data?.pages), [query.data]);
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, fetchNextPage } = query;
+
+  // Scenes found no longer public (withdrawScene), by the feed session whose pages were
+  // loaded before the answer. The pages stay as served -- cursors and the freshness clock are
+  // untouched -- and only the listing hides the Scene, so a page that was still in flight when
+  // the answer came cannot bring it back. A session started afterwards is not in this record:
+  // the server decides again. A refresh's placeholder cards belong to the previous session.
+  const [withdrawn, setWithdrawn] = useState<Readonly<Record<string, ReadonlySet<string>>>>({});
+  const dataSession = sessionKey(subject, isPlaceholderData ? feed.generation - 1 : feed.generation);
+  const units = useMemo(
+    () => feedUnits(query.data?.pages, withdrawn[dataSession]),
+    [query.data, withdrawn, dataSession],
+  );
 
   // Read at the moment of a return or a refresh, not captured when the callbacks were made.
   // `oldest`: the arrival of the oldest card on screen, a pull-to-refresh's placeholders
   // included (they are the old session's); a withheld revalidation shows none, which is also
   // what keeps rapid returns to one new session. `ended`: the server ended this session.
-  const shown = useRef({ oldest: undefined as number | undefined, ended: false });
+  const shown = useRef<{ oldest: number | undefined; ended: boolean; subject: typeof subject; generation: number }>({
+    oldest: undefined,
+    ended: false,
+    subject,
+    generation: 0,
+  });
   useLayoutEffect(() => {
     shown.current = {
       oldest: query.data?.pages[0]?.receivedAt,
       ended: isFetchNextPageError && feedSessionEnded(query.error),
+      subject,
+      generation: feed.generation,
     };
   });
+  useEffect(() => {
+    const listener = (publicRef: string) => {
+      const { subject: current, generation } = shown.current;
+      setWithdrawn((all) => {
+        const next = { ...all };
+        // The loaded session and the one before it (a refresh may still be showing its cards).
+        for (const key of [sessionKey(current, generation), sessionKey(current, generation - 1)]) {
+          next[key] = new Set(all[key]).add(publicRef);
+        }
+        return next;
+      });
+    };
+    withdrawalListeners.add(listener);
+    return () => void withdrawalListeners.delete(listener);
+  }, []);
 
   // Nothing stands in for the new session unless real cards are on screen now: an ended
   // session's cards, or (after a failure) cards that already went, must not come back as
