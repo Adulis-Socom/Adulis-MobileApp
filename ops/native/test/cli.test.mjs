@@ -637,3 +637,17 @@ test('env prints quoted assignments for eval, and no secret', async () => {
     c.done();
   }
 });
+
+test('reverify refuses a tampered or wrongly staged run before PostgreSQL is contacted', async () => {
+  for (const edit of [(m) => ([m.ports.pg] = [5432]), (m) => (m.state = 'creating')]) {
+    const w = world();
+    edit(w.m);
+    const c = cli(w);
+    try {
+      assert.equal(await c.run('reverify', '--run', w.m.run), EXIT.REFUSED);
+      assert.deepEqual(c.io.calls, [], c.io.calls.join(' | '));
+    } finally {
+      c.done();
+    }
+  }
+});

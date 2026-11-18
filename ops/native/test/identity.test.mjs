@@ -14,6 +14,8 @@ import {
   volumeProblems,
 } from '../lib/identity.mjs';
 import { buildApiEnv } from '../lib/api.mjs';
+import { checkFacts } from '../lib/identity.mjs';
+import { namePrefix } from '../lib/protected.mjs';
 import { LABEL, PORT_BLOCK, PROTECTED_PORTS } from '../lib/protected.mjs';
 import { id64, makeIo, refusal, world } from './fakes.mjs';
 
@@ -707,4 +709,33 @@ test('recorded ids must be full ids: nothing else may reach a docker argument li
 
 test('both roles are covered by the container rules', () => {
   assert.deepEqual(Object.keys(ROLES).sort(), ['minio', 'postgres']);
+});
+
+test("a container with the run's prefix but not its planned name is refused", () => {
+  const w = world();
+  const info = w.d.containers[pgId(w)];
+  info.Name = `/${namePrefix(w.m.run8)}another`;
+  const p = containerProblems(w.m, 'postgres', info).map((x) => x.msg);
+  assert.ok(
+    p.some((x) => /is not named/.test(x)),
+    p.join(),
+  );
+  assert.ok(
+    !p.some((x) => /prefix/.test(x)),
+    'the prefix leg is satisfied; only the equality leg refuses',
+  );
+});
+
+test('a store that answers the run credentials with a non-200 is refused even if the body names the buckets', () => {
+  const w = world();
+  const facts = {
+    s3: {
+      list: { status: 403, body: '<Name>adulis-media</Name><Name>adulis-evidence</Name>' },
+      deployment: { id: w.m.s3.deploymentId },
+      tags: {},
+    },
+  };
+  const r = checkFacts(w.m, facts, ['ID-06']).find((x) => x.id === 'ID-06');
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(r.detail, /rejected the run's credentials/);
 });

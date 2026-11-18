@@ -133,6 +133,12 @@ test('a set cannot be loaded twice, a conflicting set is refused, and an unknown
   w.m.fixtures = ['baseline'];
   await assert.rejects(loadSet(w.m, makeIo(w), 'baseline', { dir: tmpdir() }), /already loaded/);
   await assert.rejects(loadSet(w.m, makeIo(w), 'nope', { dir: tmpdir() }), /unknown fixture set/);
+  for (const key of ['constructor', '__proto__', 'toString'])
+    await assert.rejects(
+      loadSet(w.m, makeIo(w), key, { dir: tmpdir() }),
+      /unknown fixture set/,
+      key,
+    );
   SETS.other = { conflicts: ['baseline'], sql: () => '' };
   try {
     await assert.rejects(

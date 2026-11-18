@@ -110,7 +110,8 @@ export function engineWorld(opts = {}) {
       if (input.includes('disposable-test-storage'))
         m.repoMarker = 'adulis:disposable-test-storage';
       if (input.includes('mc tag set')) {
-        for (const b of ['adulis-media', 'adulis-evidence']) m.tags[b] = env.NATIVE_RUN;
+        if (!opts.noTags)
+          for (const b of ['adulis-media', 'adulis-evidence']) m.tags[b] = env.NATIVE_RUN;
         m.marker = env.NATIVE_RUN_VALUE;
       }
       st.events.push('minio script');

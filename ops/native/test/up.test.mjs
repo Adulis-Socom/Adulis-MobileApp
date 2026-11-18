@@ -173,3 +173,30 @@ test('an engine that cannot be identified stops up before the manifest or any re
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('up is ready only after the finished stack passes every check, and the proof is not empty', async () => {
+  const good = await start();
+  try {
+    assert.deepEqual(
+      ['ID-00', 'ID-01', 'ID-02', 'ID-03', 'ID-06', 'ID-07', 'ID-08', 'ID-09', 'ID-10'].filter(
+        (id) => !good.result.results.some((r) => r.id === id),
+      ),
+      [],
+      'every stack check ran',
+    );
+  } finally {
+    good.done();
+  }
+  const s = await start({ noTags: true });
+  try {
+    assert.ok(s.result instanceof Refusal, `${s.result}`);
+    assert.ok(s.result.results.some((r) => r.id === 'ID-07' && r.verdict === 'FAIL'));
+    assert.equal(
+      readManifest(s.dir).state,
+      'creating',
+      'a stack that failed its proof is not ready',
+    );
+  } finally {
+    s.done();
+  }
+});
