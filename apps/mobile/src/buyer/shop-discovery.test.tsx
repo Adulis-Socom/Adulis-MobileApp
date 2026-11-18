@@ -9,7 +9,7 @@ import { GOOD_TOKEN, installFakeApi, problem, shopProduct, type Reply, type Shop
 import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
- * BUY-06: how the Shop and its category tabs behave when the network, the clock, the Account or
+ * How the Shop and its category tabs behave when the network, the clock, the Account or
  * the Buyer's own taps do not arrive in the tidy order -- on the real route tree against the fake
  * API speaking the generated contract. The server filters and orders; the app only asks and draws.
  */
@@ -98,6 +98,22 @@ describe('Shop categories out of order', () => {
     await fireEvent.press(tab('ALL'));
     await screen.findByLabelText(label('Item p0'));
     expect(calls().at(-1)?.query).toEqual({ limit: '30' });
+  });
+});
+
+describe('a category list that is loading', () => {
+  it('says it is loading, never that the category is empty, and never shows the other list in its place', async () => {
+    const fashion = deferred();
+    api.on(SHOP, (call) => (call.query.category === 'FASHION' ? fashion.promise : page([MUG])));
+    await openShop();
+    await screen.findByLabelText(label('Plain mug'));
+    await fireEvent.press(tab('FASHION'));
+    expect(await screen.findByText(en['buyer.shop.loading'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.shop.category_empty'])).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText(label('Plain mug'))).not.toBeOnTheScreen();
+    await act(async () => fashion.resolve(page([SCARF])));
+    expect(await screen.findByLabelText(label('Silk scarf'))).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.shop.loading'])).not.toBeOnTheScreen();
   });
 });
 

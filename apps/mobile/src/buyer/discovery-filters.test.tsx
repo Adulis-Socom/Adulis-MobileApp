@@ -9,7 +9,7 @@ import { resetSecureStore } from '../testing/secure-store-mock';
 import { productionSources, repoFile } from '../testing/source-scan';
 
 /**
- * BUY-06, the supported-filter matrix as tests: the controls Shop and Search show are exactly the
+ * The supported-filter matrix as tests: the controls Shop and Search show are exactly the
  * ones the generated contract supports (a category, the result type, paging), the client sends
  * only parameters the contract declares, and nothing is sorted, filtered, ranked or claimed on the
  * device. If the contract gains a sort or a filter, the first test fails and forces a decision.

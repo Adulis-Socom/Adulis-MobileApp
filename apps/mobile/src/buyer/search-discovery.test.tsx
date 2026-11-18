@@ -11,7 +11,7 @@ import * as secureStore from '../testing/secure-store-mock';
 import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
- * BUY-06: how Marketplace Search behaves when typing, taps, answers, the connection, the clock and
+ * How Marketplace Search behaves when typing, taps, answers, the connection, the clock and
  * the Account do not arrive in the tidy order -- on the real route tree against the fake API
  * speaking the generated contract. Every result type the server returns stays visible; nothing is
  * drawn that the server did not send.
@@ -141,10 +141,25 @@ describe('typing and submitting', () => {
     await typeQuery('basket');
     expect(calls()).toHaveLength(1);
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.search.clear'] }));
+    // At once, before any typing delay could hide a list that is still mounted.
+    expect(screen.getByText(en['buyer.search.hint'])).toBeOnTheScreen();
     await act(async () => held.resolve(page('TOP', [product('basket', 'Woven basket')])));
+    expect(screen.queryByLabelText(label('Woven basket'))).not.toBeOnTheScreen();
     await settle();
     expect(screen.getByText(en['buyer.search.hint'])).toBeOnTheScreen();
     expect(screen.queryByLabelText(label('Woven basket'))).not.toBeOnTheScreen();
+  });
+
+  it('while the first answer is on its way it says Searching, never "No results"; the answer replaces it', async () => {
+    const held = deferred();
+    serve(() => held.promise);
+    await openSearch();
+    await typeQuery('basket');
+    expect(screen.getByText(en['buyer.search.loading'])).toBeOnTheScreen();
+    expect(screen.queryByText(/No results/)).not.toBeOnTheScreen();
+    await act(async () => held.resolve(page('TOP', [product('basket', 'Woven basket')])));
+    expect(await screen.findByLabelText(label('Woven basket'))).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.loading'])).not.toBeOnTheScreen();
   });
 
   it('leaving Search while the answer is on its way: the late answer is not kept, and opening Search again asks again', async () => {
