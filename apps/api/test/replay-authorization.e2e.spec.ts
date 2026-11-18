@@ -901,6 +901,39 @@ describe('replay authorisation and seller deletion', () => {
         expectProblem(await get(path, CAPS, SELLER_F), 400, 'SCOPE_PARAMETER_REQUIRED');
       }
     });
+
+    it('R33: a repeated seller_id query parameter is refused as a bad scope, never a server error', async () => {
+      for (const path of ['/v1/conversations', '/v1/notifications']) {
+        const r = await http()
+          .get(`${path}?as=seller&seller_id=${SELLER_A}&seller_id=${SELLER_A}`)
+          .set(bearer(S_OWNER))
+          .set('X-Adulis-Seller', SELLER_A);
+        expect([path, r.status]).toEqual([path, 400]);
+        expectProblem(r, 400, 'SCOPE_PARAMETER_REQUIRED');
+      }
+    });
+  });
+
+  describe('a stored response belongs to the account that made the request', () => {
+    it('R32: a stored response belongs to the account that made the request: the same key and body from another account is not served it', async () => {
+      const key = randomUUID();
+      const owner = await probe(S_OWNER, SELLER_A, key, { n: 32 });
+      expect(owner.status).toBe(201);
+      // A member who holds the permission, the same store, key and body: a fresh request of their own, never the Owner's response.
+      const member = await probe(S_M4, SELLER_A, key, { n: 32 });
+      expect(member.status).toBe(201);
+      expect(member.headers['x-adulis-idempotent-replay']).toBeUndefined();
+      expect(member.body.run).not.toBe(owner.body.run);
+      // An account with no relationship to the store gets the not-found answer, not the Owner's response.
+      const stranger = await probe(S_STRANGER, SELLER_A, key, { n: 32 });
+      expectProblem(stranger, 404, 'NOT_FOUND');
+      expect(JSON.stringify(stranger.body)).not.toContain(owner.body.run);
+      // Each account's own retry is its own stored response.
+      expectReplay(await probe(S_OWNER, SELLER_A, key, { n: 32 }), 201, owner.body);
+      expectReplay(await probe(S_M4, SELLER_A, key, { n: 32 }), 201, member.body);
+      expect(executions.get(key)).toBe(2);
+      expect(await records(key)).toBe(2);
+    });
   });
 
   describe('a retry that races an in-flight original is judged on the CURRENT role', () => {
