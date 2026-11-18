@@ -1,0 +1,27 @@
+import { ApiError } from '../api/client';
+import { problem } from '../testing/fake-api';
+import { judgeWrite } from './saved-write';
+
+const answered = (status: number, code: Parameters<typeof problem>[1] = 'INTERNAL') => {
+  const { body } = problem(status, code, 'request');
+  return new ApiError({ kind: 'problem', status, problem: body });
+};
+
+describe('judgeWrite: what a failed keyed write says about the first attempt', () => {
+  it.each([
+    ['the API refuses a bad name', 'refused', answered(400, 'VALIDATION_FAILED')],
+    ['the session ended', 'refused', answered(401, 'SESSION_EXPIRED')],
+    ['the API refuses the request', 'refused', answered(403, 'PERMISSION_DENIED')],
+    ['the target is gone', 'refused', answered(404, 'NOT_FOUND')],
+    ['the key cannot be replayed', 'conflict', answered(409, 'IDEMPOTENCY_KEY_REUSED')],
+    ['too many requests (the edge may answer before the API did)', 'unknown', answered(429, 'RATE_LIMITED')],
+    ['a 500 with the API body', 'unknown', answered(500)],
+    ['a 503 with the API body', 'unknown', answered(503)],
+    ['a 502 gateway page that is not the API body', 'unknown', new ApiError({ kind: 'unexpected', status: 502 })],
+    ['no connection', 'unknown', new ApiError({ kind: 'offline' })],
+    ['a timeout', 'unknown', new ApiError({ kind: 'timeout' })],
+    ['something that is not an API failure', 'unknown', new TypeError('boom')],
+  ])('%s is judged %s', (_name, expected, error) => {
+    expect(judgeWrite(error)).toBe(expected);
+  });
+});

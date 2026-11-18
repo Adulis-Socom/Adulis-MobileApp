@@ -16,6 +16,7 @@ import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { FilterTabs } from './SavedScreen';
 import { SAVED_STATE, collectionName, keepIfCurrent, usePrivateApi } from './saved';
+import { noteCollectionDeleted } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.collection.tab.all' },
@@ -49,7 +50,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
   const changing = useRef(false);
   // A Rename or Delete in flight (ManageCollection's), for the disabled states.
   const [managing, setManaging] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ item: string; text: string } | null>(null);
   const list = usePublicList({
     resource: ['collection', valid ? collectionRef : '', tab],
     read: valid && priv ? (cursor) => keepIfCurrent(priv, (a) => a.collection(collectionRef, tab, cursor)) : null,
@@ -63,7 +64,11 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
       focused.current = true;
     }, [list.refresh]),
   );
-  const collection = (list.firstPage as CollectionDetail | undefined)?.collection;
+  const lastCollection = useRef<CollectionDetail['collection'] | undefined>(undefined);
+  const fresh = (list.firstPage as CollectionDetail | undefined)?.collection;
+  if (fresh) lastCollection.current = fresh;
+  // A read that fails keeps the header (title, Rename, Delete, an open rename and its draft); a 404 does not.
+  const collection = fresh ?? (list.gone ? undefined : lastCollection.current);
   const title = collection ? collectionName(collection, t) : '';
 
   const remove = async (item: CollectionItem) => {
@@ -80,12 +85,19 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
       // Cards in other tabs stay mounted: they read their saved state again (WO-009A).
       void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
-      if (priv.isCurrent()) setFailure(`${t('buyer.collection.action_failed')} ${failureMessage(t, error)}`);
+      if (priv.isCurrent()) {
+        setFailure({ item: item.ref, text: `${t('buyer.collection.action_failed')} ${failureMessage(t, error)}` });
+        // The answer may have been lost after the server removed it: read the Collection again.
+        list.refresh();
+      }
     } finally {
       changing.current = false;
       setRemoving(null);
     }
   };
+
+  // Said once the list read again has answered, and only while the item is still there: that read may show the Remove took effect.
+  const failureText = failure && !list.refreshing && list.items.some((i) => i.ref === failure.item) ? failure.text : null;
 
   const header = (
     <View style={{ gap: theme.space.md, paddingHorizontal: theme.space.xs, paddingBottom: theme.space.sm }}>
@@ -104,6 +116,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
               onRenamed={list.refresh}
               onDeleted={() => router.back()}
               busy={managing}
+              reading={list.refreshing}
               setBusy={setManaging}
               blocked={removing !== null}
               lock={changing}
@@ -111,7 +124,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
           ) : null}
         </>
       ) : null}
-      {failure ? <AlertText>{failure}</AlertText> : null}
+      {failureText ? <AlertText>{failureText}</AlertText> : null}
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} label={t('buyer.saved.tabs')} />
     </View>
   );
@@ -143,16 +156,20 @@ function ManageCollection({
   onRenamed,
   onDeleted,
   busy,
+  reading,
   setBusy,
   blocked,
   lock,
 }: {
   collectionRef: string;
   name: string;
+  /** Read the Collection again: after a Rename, and after a change whose answer failed. */
   onRenamed: () => void;
   onDeleted: () => void;
   /** Lifted to the screen, so a Remove waits for a Rename or Delete in flight. */
   busy: boolean;
+  /** The Collection is being read again: a failure is said once that read has answered. */
+  reading: boolean;
   setBusy: (busy: boolean) => void;
   /** A Remove is in flight. */
   blocked: boolean;
@@ -166,6 +183,8 @@ function ManageCollection({
   const [draft, setDraft] = useState(name);
   const [error, setError] = useState<string | null>(null);
   const off = busy || blocked;
+  // After a failed change the Collection is read again; the failure is said when that answer shows it did not happen.
+  const shown = reading ? null : error;
 
   const rename = async () => {
     const trimmed = draft.replace(/\s+/g, ' ').trim();
@@ -184,7 +203,10 @@ function ManageCollection({
       onRenamed();
     } catch (failure) {
       if (!priv.isCurrent()) return;
-      setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
+      const refused = problemCode(failure) === 'VALIDATION_FAILED';
+      setError(refused ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
+      // The answer may have been lost after the rename was stored, or the Collection may be gone: read it again.
+      if (!refused) onRenamed();
     } finally {
       lock.current = false;
       setBusy(false);
@@ -207,12 +229,21 @@ function ManageCollection({
           setError(null);
           try {
             await priv.deleteCollection(collectionRef);
-            if (priv.isCurrent()) onDeleted();
+            if (priv.isCurrent()) {
+              noteCollectionDeleted();
+              onDeleted();
+            }
           } catch (failure) {
             if (!priv.isCurrent()) return;
             // Already gone (here or on another device): the outcome the Buyer asked for.
-            if (problemCode(failure) === 'NOT_FOUND') onDeleted();
-            else setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
+            if (problemCode(failure) === 'NOT_FOUND') {
+              noteCollectionDeleted();
+              onDeleted();
+            } else {
+              setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
+              // The answer may have been lost after the server deleted it: read the Collection again.
+              onRenamed();
+            }
           } finally {
             lock.current = false;
             setBusy(false);
@@ -225,7 +256,7 @@ function ManageCollection({
   if (renaming) {
     return (
       <View style={{ gap: theme.space.sm }} testID="rename-collection">
-        <TextField label={t('buyer.saved.name')} value={draft} onChangeText={setDraft} error={error} maxLength={120} autoFocus testID="rename-collection-name" />
+        <TextField label={t('buyer.saved.name')} value={draft} onChangeText={setDraft} error={shown} maxLength={120} autoFocus testID="rename-collection-name" />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
           <View style={{ flexGrow: 1 }}>
             <Button label={t('buyer.collection.save_name')} disabled={off} busy={busy} onPress={() => void rename()} />
@@ -247,7 +278,7 @@ function ManageCollection({
           <Button label={t('buyer.collection.delete')} variant="secondary" disabled={off} busy={busy} onPress={confirmDelete} />
         </View>
       </View>
-      {error ? <AlertText>{error}</AlertText> : null}
+      {shown ? <AlertText>{shown}</AlertText> : null}
     </View>
   );
 }

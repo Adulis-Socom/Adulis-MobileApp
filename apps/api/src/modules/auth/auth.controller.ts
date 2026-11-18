@@ -19,7 +19,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiResponse,
+  ApiResponse, ApiAcceptedResponse,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -42,7 +42,7 @@ import {
   RevokeOthersBodyDto,
   RevokeOthersResponseDto,
   RevokeSessionBodyDto,
-  SessionListResponseDto,
+  SessionListResponseDto, StepUpRequestedDto, StepUpVerifiedDto,
 } from './auth.dto';
 import { OtpService } from './otp.service';
 import { OtpDeliveryService, type IssuedOtp } from './otp-delivery.service';
@@ -68,6 +68,8 @@ import {
   stepUpVerifyBody,
 } from './auth.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { ApiDeviceHeaders, CLIENT_HEADER, DEVICE_HEADER } from '../../common/http/api-headers';
 
 /** C6 — identity and session (ADU-API-01 v1.6 section 12.2). */
 
@@ -81,17 +83,6 @@ const IDEMPOTENCY_KEY_HEADER = {
   name: 'Idempotency-Key',
   required: true,
   schema: { type: 'string', format: 'uuid' },
-} as const;
-const DEVICE_HEADER = {
-  name: 'X-Adulis-Device',
-  required: false,
-  description: 'App clients: the registered device id. Browsers are identified by cookie instead.',
-  schema: { type: 'string', format: 'uuid' },
-} as const;
-const CLIENT_HEADER = {
-  name: 'X-Adulis-Client',
-  required: false,
-  description: '<surface>/<version>, e.g. android/1.0.0 or web/1.0.0.',
 } as const;
 
 @Controller()
@@ -409,11 +400,10 @@ export class AuthController {
     );
   }
 
+  @ApiGate({ surfaces: ['CONSOLE'] })
   @Post('auth/sessions/revoke-others')
   @HttpCode(200)
   @ApiOperation({ summary: 'Step-up REVOKE_ALL_SESSIONS; revocation is immediate.' })
-  @ApiBearerAuth('bearer')
-  @ApiCookieAuth('cookie')
   @ApiBody({ type: RevokeOthersBodyDto })
   @ApiOkResponse({ type: RevokeOthersResponseDto })
   @ApiDefaultResponse(PROBLEM_RESPONSE)
@@ -425,6 +415,8 @@ export class AuthController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ surfaces: ['CONSOLE'] })
+  @ApiAcceptedResponse({ type: StepUpRequestedDto })
   @Post('auth/step-up/request')
   @HttpCode(202)
   @ApiOperation({ summary: 'The SMS names the action (4.4); binds action and target (9.2).' })
@@ -455,6 +447,7 @@ export class AuthController {
     return result;
   }
 
+  @ApiOkResponse({ type: StepUpVerifiedDto })
   @Post('auth/step-up/verify')
   @HttpCode(200)
   async stepUpVerify(@Req() req: AuthedRequest): Promise<unknown> {
@@ -464,6 +457,7 @@ export class AuthController {
     );
   }
 
+  @ApiDeviceHeaders()
   @Post('devices')
   @Public()
   @HttpCode(201)
@@ -500,6 +494,8 @@ export class AuthController {
   }
 
   @ApiIdempotencyKey()
+  @ApiDeviceHeaders()
+  @ApiResponse({ status: 202, type: EmptyResponseDto })
   @Post('auth/recovery')
   @Public()
   @HttpCode(202)

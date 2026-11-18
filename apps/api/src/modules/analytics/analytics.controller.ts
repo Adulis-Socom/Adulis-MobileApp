@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiOkResponse, ApiAcceptedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { sql, type Transaction } from 'kysely';
 import { z } from 'zod';
@@ -9,6 +9,9 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { AnalyticsOverviewDto } from './analytics.dto';
+import { EmptyResponseDto } from '../auth/auth.dto';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -76,6 +79,8 @@ export class AnalyticsController {
 
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).' })
   @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD. Last day of the window. Default: today.' })
+  @ApiGate({ permission: ['seller.analytics.basic:read'], surfaces: ['MOBILE', 'CONSOLE'] })
+  @ApiOkResponse({ type: AnalyticsOverviewDto })
   @Get('seller/analytics/overview')
   @ApiOperation({
     summary:
@@ -134,6 +139,7 @@ export class AnalyticsController {
 
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. First day of the window. Default: 30 days before to (or before today).' })
   @ApiQuery({ name: 'to', required: false, description: 'YYYY-MM-DD. Last day of the window. Default: today.' })
+  @ApiGate({ permission: ['seller.analytics.full:read'], surfaces: ['CONSOLE'] })
   @Get('seller/analytics/full')
   @ApiOperation({
     summary:
@@ -215,6 +221,7 @@ export class AnalyticsController {
   }
 
   @ApiIdempotencyKey()
+  @ApiAcceptedResponse({ type: EmptyResponseDto })
   @Post('events')
   @HttpCode(202)
   @ApiOperation({ summary: 'The closed allow-list of two client-observed events (S11).' })

@@ -4,14 +4,16 @@ import { Reflector } from '@nestjs/core';
 import { ApiBearerAuth, DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, Public } from '../auth/auth.guard';
-import type { SessionService } from '../auth/session.service';
-import { GUARD_SECURITY, applyGuardSecurity, isPublicRoute } from './openapi-security';
+import type { SessionContext, SessionService } from '../auth/session.service';
+import { AdulisException } from '../errors/adulis-exception';
+import { GUARD_SECURITY, OPTIONAL_SECURITY, applyGuardSecurity, isPublicRoute } from './openapi-security';
 
 /**
  * The security metadata of the contract is derived from the @Public metadata
  * the AuthGuard reads. This holds the derivation to the guard itself: for
  * every shape of route (anonymous by method, anonymous by controller,
- * protected), the guard's verdict and the documented one are the same.
+ * protected), the guard's verdict and the documented one are the same, and a
+ * public route's optional credential is held to what the guard does with one.
  */
 
 @Controller('mixed')
@@ -90,7 +92,10 @@ describe('applyGuardSecurity', () => {
   it('documents security exactly where the guard demands a session', async () => {
     const document = build();
     applyGuardSecurity(document, CONTROLLERS);
-    const documented = (path: string, method: 'get' | 'post') => (document.paths[path]?.[method]?.security ? 'demands a session' : 'allows');
+    const documented = (path: string, method: 'get' | 'post') => {
+      const security = document.paths[path]?.[method]?.security ?? [];
+      return security.length > 0 && security.every((requirement) => Object.keys(requirement).length > 0) ? 'demands a session' : 'allows';
+    };
     expect(documented('/mixed/open', 'get')).toBe(await guardVerdict(MixedController, 'open'));
     expect(documented('/mixed/closed', 'get')).toBe(await guardVerdict(MixedController, 'closed'));
     expect(documented('/anon/a', 'get')).toBe(await guardVerdict(AnonymousController, 'a'));
@@ -102,9 +107,48 @@ describe('applyGuardSecurity', () => {
   it('declares the credentials the guard accepts', () => {
     const document = build();
     applyGuardSecurity(document, CONTROLLERS);
-    // Written out, not compared with the constant under test: either credential authenticates (cookie or bearer).
+    // Written out, not compared with the constants under test: either credential authenticates (cookie or bearer).
     expect(document.paths['/mixed/closed']?.get?.security).toEqual([{ cookie: [] }, { bearer: [] }]);
     expect(GUARD_SECURITY).toEqual([{ cookie: [] }, { bearer: [] }]);
+    // A public route: no credential at all, or either one.
+    expect(document.paths['/mixed/open']?.get?.security).toEqual([{}, { cookie: [] }, { bearer: [] }]);
+    expect(document.paths['/anon/a']?.get?.security).toEqual([{}, { cookie: [] }, { bearer: [] }]);
+    expect(OPTIONAL_SECURITY).toEqual([{}, { cookie: [] }, { bearer: [] }]);
+  });
+
+  describe('the optional credential of a public route is what the guard does with one', () => {
+    const SESSION: SessionContext = { sessionId: 's', accountId: 'a', audience: 'MOBILE', deviceId: null, marketId: 'm' };
+    const run = async (headers: Record<string, string>, authenticate: SessionService['authenticate']) => {
+      const guard = new AuthGuard(new Reflector(), { authenticate } as SessionService);
+      const req: Record<string, unknown> = { headers, path: '/', method: 'GET' };
+      const context = {
+        getHandler: () => MixedController.prototype.open,
+        getClass: () => MixedController,
+        switchToHttp: () => ({ getRequest: () => req, getResponse: () => ({ setHeader: () => undefined }) }),
+      } as unknown as ExecutionContext;
+      const verdict = await guard.canActivate(context).then(
+        () => 'allowed',
+        (e: unknown) => (e instanceof AdulisException ? e.code : 'error'),
+      );
+      return { verdict, req };
+    };
+
+    it('lets an anonymous request through, signed in as nobody', async () => {
+      const { verdict, req } = await run({}, () => Promise.reject(new Error('never asked')));
+      expect(verdict).toBe('allowed');
+      expect(req['auth']).toBeUndefined();
+    });
+
+    it('authenticates a presented bearer token', async () => {
+      const { verdict, req } = await run({ authorization: 'Bearer token' }, () => Promise.resolve(SESSION));
+      expect(verdict).toBe('allowed');
+      expect(req['auth']).toEqual(SESSION);
+    });
+
+    it('refuses a dead credential instead of treating the request as anonymous', async () => {
+      const { verdict } = await run({ authorization: 'Bearer token' }, () => Promise.reject(new AdulisException('SESSION_EXPIRED')));
+      expect(verdict).toBe('SESSION_EXPIRED');
+    });
   });
 
   it('keeps the security a route already declares', () => {

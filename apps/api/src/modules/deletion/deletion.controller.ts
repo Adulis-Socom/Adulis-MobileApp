@@ -7,7 +7,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation, ApiAcceptedResponse, ApiOkResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiAcceptedResponse, ApiOkResponse, ApiSecurity } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
@@ -27,8 +27,10 @@ import {
 import { z } from 'zod';
 import { DeletionService, type TicketAccount } from './deletion.service';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
-import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto } from './deletion.dto';
+import { DeletionConfirmedDto, DeletionPreviewDto, DeletionTicketDto, SellerDeletionBlockersDto, SellerClosureDto } from './deletion.dto';
 import { EmptyResponseDto } from '../auth/auth.dto';
+import { ApiGate } from '../../common/http/api-gate';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * C6 — account deletion from the web (12.18) and seller deletion/closure
@@ -72,6 +74,7 @@ export class DeletionController {
 
   @ApiIdempotencyKey()
   @ApiAcceptedResponse({ type: EmptyResponseDto })
+  @ApiDeviceHeaders()
   @Post('deletion/otp/request')
   @Public()
   @HttpCode(202)
@@ -120,6 +123,7 @@ export class DeletionController {
    * is issued, and the response says what the ticket is for.
    */
   @ApiOkResponse({ type: DeletionTicketDto })
+  @ApiDeviceHeaders()
   @Post('deletion/otp/verify')
   @Public()
   @HttpCode(200)
@@ -144,6 +148,7 @@ export class DeletionController {
   }
 
   @ApiOkResponse({ type: DeletionPreviewDto })
+  @ApiSecurity('deletionTicket')
   @Get('deletion/preview')
   @Public()
   @ApiOperation({ summary: 'Blockers as items[] and what deletion does, before confirm.' })
@@ -157,6 +162,7 @@ export class DeletionController {
 
   @ApiIdempotencyKey()
   @ApiOkResponse({ type: DeletionConfirmedDto })
+  @ApiSecurity('deletionTicket')
   @Post('deletion/confirm')
   @Public()
   @HttpCode(200)
@@ -208,6 +214,8 @@ export class DeletionController {
 
   // ---- 12.12: the seller-scoped deletion group -------------------------
 
+  @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SellerDeletionBlockersDto })
   @Get('seller/deletion/blockers')
   @ApiOperation({ summary: '200 with items[] — a state, not a failure (S16.9).' })
   async sellerBlockers(@Req() req: AuthedRequest): Promise<unknown> {
@@ -217,6 +225,8 @@ export class DeletionController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.account:delete'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: DeletionConfirmedDto })
   @Post('seller/deletion')
   @ReplayGrant('seller.account:delete')
   @HttpCode(200)
@@ -242,6 +252,8 @@ export class DeletionController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SellerClosureDto })
   @Post('seller/closure')
   @ReplayGrant('seller.store:write')
   @HttpCode(200)
@@ -255,6 +267,7 @@ export class DeletionController {
     );
   }
 
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @Delete('seller/closure')
   @HttpCode(204)
   @ApiOperation({ summary: 'Returns to ACTIVE. Reversible by design.' })

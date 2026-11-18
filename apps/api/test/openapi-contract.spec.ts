@@ -1,5 +1,7 @@
 import { LEGACY_COMMERCE_CONTROLLERS } from '../src/common/http/openapi-security';
-import { loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
+import { guardDemandsSeller, loadContract, responseErrors, scanRoutes, type Route } from './contract-support';
+import { PINNED_RESPONSES } from '../src/common/http/openapi-derived';
+import { SELLER_SIDE_ONLY, deriveGate, scanGates } from './gate-support';
 
 /**
  * contracts/openapi.json against the controllers it is generated from: the
@@ -25,10 +27,15 @@ const label = (r: Route) => `${r.http.toUpperCase()} ${r.path}`;
 
 /** The guard accepts a session cookie (console) or a bearer token (mobile): either one authenticates. Written out, not imported, so the test cannot agree with a changed constant. */
 const EITHER_CREDENTIAL = [{ cookie: [] }, { bearer: [] }];
-/** Operations that declare their own security, kept as authored: Collections (bearer) and the seller scene posts (cookie). */
+/** The session cookie alone: where every gate on the route admits only a Console session (openapi-gates.spec.ts holds this to the gates). */
+const COOKIE_ONLY = [{ cookie: [] }];
+/** A public route honours a credential when one is presented and refuses a dead one, so it accepts either or none. */
+const OPTIONAL_CREDENTIAL = [{}, { cookie: [] }, { bearer: [] }];
+/** Operations that declare their own security, kept as authored: Collections (bearer), the seller scene posts (cookie), the deletion ticket routes. */
 const OWN_SECURITY: ReadonlyArray<readonly [RegExp, object[]]> = [
   [/^\w+ \/v1\/collections(\/|:|$)/, [{ bearer: [] }]],
   [/^\w+ \/v1\/seller\/scene-posts(\/|$)/, [{ cookie: [] }]],
+  [/^(GET \/v1\/deletion\/preview|POST \/v1\/deletion\/confirm)$/, [{ deletionTicket: [] }]],
 ];
 
 describe('contracts/openapi.json against the controllers', () => {
@@ -59,17 +66,17 @@ describe('contracts/openapi.json against the controllers', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('declares security on every route the AuthGuard protects, and on no public route', () => {
+  it('declares security on every route: the credentials a protected route can complete with, the optional ones a public route honours', () => {
     const wrong = inScope.flatMap((r) => {
       const security = op(r).security;
-      if (r.isPublic) return security ? [`${label(r)} is public and declares security`] : [];
-      const expected = OWN_SECURITY.find(([re]) => re.test(label(r)))?.[1] ?? EITHER_CREDENTIAL;
+      const protectedShape = deriveGate(r).admits.includes('MOBILE') ? EITHER_CREDENTIAL : COOKIE_ONLY;
+      const expected = OWN_SECURITY.find(([re]) => re.test(label(r)))?.[1] ?? (r.isPublic ? OPTIONAL_CREDENTIAL : protectedShape);
       return JSON.stringify(security) === JSON.stringify(expected) ? [] : [`${label(r)} declares ${JSON.stringify(security)}, expected ${JSON.stringify(expected)}`];
     });
     expect(wrong).toEqual([]);
   });
 
-  it('pins the exact security shapes: 69 operations accept either credential, 9 only a bearer token, 6 only the session cookie', () => {
+  it('pins the exact security shapes: 25 operations accept either credential, 9 only a bearer token, 50 only the session cookie, 21 take an optional credential, 2 the deletion ticket', () => {
     const shapes = new Map<string, number>();
     for (const [, item] of Object.entries(contract.paths)) {
       for (const o of Object.values(item)) {
@@ -77,10 +84,48 @@ describe('contracts/openapi.json against the controllers', () => {
       }
     }
     expect(Object.fromEntries(shapes)).toEqual({
-      [JSON.stringify(EITHER_CREDENTIAL)]: 69,
+      [JSON.stringify(EITHER_CREDENTIAL)]: 25,
       [JSON.stringify([{ bearer: [] }])]: 9,
-      [JSON.stringify([{ cookie: [] }])]: 6,
+      [JSON.stringify(COOKIE_ONLY)]: 50,
+      [JSON.stringify(OPTIONAL_CREDENTIAL)]: 21,
+      [JSON.stringify([{ deletionTicket: [] }])]: 2,
     });
+  });
+
+  it('declares X-Adulis-Seller (required) on exactly the routes where the AuthGuard demands it', async () => {
+    const wrong: string[] = [];
+    for (const r of inScope) {
+      const header = (op(r).parameters ?? []).find((p) => p.in === 'header' && p.name.toLowerCase() === 'x-adulis-seller');
+      const demanded = await guardDemandsSeller(r);
+      if (demanded && header?.required !== true) wrong.push(`${label(r)} demands the seller context and does not declare it as required`);
+      if (!demanded && header?.required === true) wrong.push(`${label(r)} declares a required seller header the guard does not demand`);
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('gives every in-scope operation a problem response for the failures the contract does not list', () => {
+    const wrong = inScope
+      .filter((r) => JSON.stringify(op(r).responses['default']?.content?.['application/problem+json']?.schema) !== JSON.stringify({ $ref: '#/components/schemas/ProblemDto' }))
+      .map(label);
+    expect(wrong).toEqual([]);
+  });
+
+  it('declares the refusals the pipeline decides: sessions, the seller header, the idempotency key', () => {
+    const PROBLEM = JSON.stringify({ $ref: '#/components/schemas/ProblemDto' });
+    const wrong = inScope
+      .filter((r) => !(r.controller === 'AuthController' && r.handler === 'logout'))
+      .flatMap((r) => {
+        const o = op(r);
+        const header = (name: string) => (o.parameters ?? []).some((p) => p.in === 'header' && p.name.toLowerCase() === name && p.required);
+        const ticket = JSON.stringify(o.security) === JSON.stringify([{ deletionTicket: [] }]);
+        const expected = ['401'];
+        if (!ticket) expected.push('403');
+        if ((!r.isPublic && header('x-adulis-seller')) || header('idempotency-key')) expected.push('400');
+        if (header('idempotency-key')) expected.push('409');
+        const missing = expected.filter((status) => JSON.stringify(o.responses[status]?.content?.['application/problem+json']?.schema) !== PROBLEM);
+        return missing.map((status) => `${label(r)} does not declare ${status} as a problem response`);
+      });
+    expect(wrong).toEqual([]);
   });
 
   it('keeps a query parameter required only where the handler refuses its absence', () => {
@@ -111,9 +156,127 @@ describe('contracts/openapi.json against the controllers', () => {
       ['post', '/v1/deletion/otp/verify', 200],
       ['get', '/v1/deletion/preview', 200],
       ['post', '/v1/deletion/confirm', 200],
+      // The two reads the Seller Companion makes.
+      ['get', '/v1/seller/list', 200],
+      ['get', '/v1/seller/analytics/overview', 200],
     ];
     const missing = calls.filter(([m, p, s]) => !contract.paths[p]?.[m]?.responses[String(s)]?.content?.['application/json']?.schema);
     expect(missing).toEqual([]);
+  });
+
+  it('describes every non-commerce success response except the four whose wire shape is not settled', () => {
+    // Each of these returns a database row spread as it is, numbers PostgreSQL sends as strings next to computed
+    // numbers, or one of several bodies by request action. Describing one needs a field-by-field proof against
+    // real responses first; until then no schema is better than a schema that looks described and is not.
+    const unsettled = [
+      'get /v1/seller/analytics/full 200',
+      'get /v1/seller/products/{id} 200',
+      'post /v1/seller/products/{id}/video 200',
+      'post /v1/seller/products/{id}/video 201',
+      'post /v1/seller/social-accounts/{id}/verify 200',
+    ];
+    const undescribed = inScope.flatMap((r) =>
+      Object.entries(op(r).responses)
+        .filter(([status, response]) => /^2\d\d$/.test(status) && status !== '204' && !response.content?.['application/json']?.schema)
+        .map(([status]) => `${r.http} ${r.path} ${status}`),
+    );
+    expect(undescribed.sort()).toEqual(unsettled);
+  });
+});
+
+describe('the headers and credentials the code reads are declared', () => {
+  const gateOf = (r: Route) => {
+    const g = scanGates().get(`${r.controller}.${r.handler}`);
+    if (!g) throw new Error(`${label(r)}: no controller method found in the source`);
+    return g;
+  };
+  const header = (r: Route, name: string) => (op(r).parameters ?? []).find((p) => p.in === 'header' && p.name.toLowerCase() === name.toLowerCase());
+
+  it('declares X-Adulis-Device and X-Adulis-Client, optional, on every public route that reads the device', () => {
+    const wrong = inScope
+      .filter((r) => r.isPublic && (gateOf(r).readsDevice || gateOf(r).keyed))
+      .flatMap((r) => {
+        const problems: string[] = [];
+        for (const name of ['X-Adulis-Device', 'X-Adulis-Client']) {
+          const h = header(r, name);
+          if (!h) problems.push(`${label(r)} reads the device and does not declare ${name}`);
+          else if (h.required) problems.push(`${label(r)} declares ${name} as required`);
+        }
+        return problems;
+      });
+    expect(wrong).toEqual([]);
+  });
+
+  it('declares the device header only where the code reads it, and never on sign-in verification', () => {
+    const wrong = inScope
+      .filter((r) => header(r, 'X-Adulis-Device'))
+      .filter((r) => !(gateOf(r).readsDevice || gateOf(r).keyed))
+      .map(label);
+    expect(wrong).toEqual([]);
+    const verify = inScope.find((r) => label(r) === 'POST /v1/auth/otp/verify') as Route;
+    expect((op(verify).parameters ?? []).filter((p) => p.in === 'header').map((p) => p.name)).toEqual(['Idempotency-Key']);
+  });
+
+  it('declares the deletion ticket, and no session credential, on exactly the routes that read it', () => {
+    const wrong = inScope.flatMap((r) => {
+      const reads = gateOf(r).readsTicket;
+      const security = JSON.stringify(op(r).security);
+      if (reads) return security === JSON.stringify([{ deletionTicket: [] }]) ? [] : [`${label(r)} reads the ticket and declares ${security}`];
+      return security?.includes('deletionTicket') ? [`${label(r)} declares the ticket and does not read it`] : [];
+    });
+    expect(wrong).toEqual([]);
+    expect(contract.components.securitySchemes?.['deletionTicket']).toMatchObject({ type: 'apiKey', in: 'header', name: 'Authorization' });
+  });
+
+  it('declares X-Adulis-Seller, optional, on the routes where it selects the side the caller acts on', () => {
+    const wrong = inScope
+      .filter((r) => SELLER_SIDE_ONLY.has(label(r)))
+      .flatMap((r) => {
+        const h = header(r, 'X-Adulis-Seller');
+        return h && h.required === false ? [] : [`${label(r)} does not declare an optional X-Adulis-Seller`];
+      });
+    expect(wrong).toEqual([]);
+  });
+
+  it('says in the 400 text of an anonymous keyed route that the device (or a browser cookie) is needed when nobody is signed in', () => {
+    const keyedByDevice = inScope.filter((r) => r.isPublic && header(r, 'Idempotency-Key')?.required && header(r, 'X-Adulis-Device'));
+    expect(keyedByDevice.map(label).sort()).toEqual(
+      ['POST /v1/auth/otp/request', 'POST /v1/auth/recovery', 'POST /v1/deletion/otp/request', 'POST /v1/devices', 'POST /v1/post-links/resolve'].sort(),
+    );
+    const wrong = keyedByDevice.filter((r) => !(op(r).responses['400']?.description ?? '').includes('X-Adulis-Device') || header(r, 'X-Adulis-Device')?.required !== false);
+    expect(wrong.map(label)).toEqual([]);
+  });
+
+  it('says once, in the document description, the headers and the Origin rule no single operation carries', () => {
+    const text = contract.info?.description ?? '';
+    for (const word of ['X-Adulis-Request-Id', 'Content-Language', 'Accept-Language', 'X-Adulis-Idempotent-Replay', 'Retry-After', 'Origin']) {
+      expect(text).toContain(word);
+    }
+  });
+});
+
+describe('what the generator pins or derives from other declarations', () => {
+  it('keeps each pinned response exactly as the client type test pins it', () => {
+    expect([...PINNED_RESPONSES]).toEqual(['post /auth/logout']);
+    for (const key of PINNED_RESPONSES) {
+      const [method, path] = key.split(' ') as [string, string];
+      const operation = contract.paths[`/v1${path}`]?.[method];
+      expect(operation).toBeDefined();
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual(['204', 'default']);
+    }
+  });
+
+  it('declares the members of the nested problem classes as required (ApiPropertyOptional would drop a nested required list)', () => {
+    const schemas = contract.components.schemas;
+    expect(schemas['ProblemSubjectDto']?.required).toEqual(['kind', 'id']);
+    expect(schemas['ProblemResolvingActionDto']?.required).toEqual(['kind']);
+    expect(schemas['ProblemItemDto']?.required).toEqual(['code', 'message_key']);
+    // swagger wraps a described $ref in allOf.
+    expect(schemas['ProblemItemDto']?.properties?.['subject']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemSubjectDto');
+    expect(schemas['ProblemItemDto']?.properties?.['resolving_action']?.allOf?.[0]?.$ref).toBe('#/components/schemas/ProblemResolvingActionDto');
+    // resolving_action is open: some kinds carry further members (REDUCE_QUANTITY carries `to`), with `kind` required.
+    expect(schemas['ProblemItemDto']?.properties?.['resolving_action']?.additionalProperties).toBe(true);
+    expect(schemas['ProblemItemDto']?.properties?.['subject']?.additionalProperties).toBeUndefined();
   });
 });
 
@@ -137,6 +300,6 @@ describe('responseErrors (the check the e2e suites use)', () => {
   });
 
   it('reports an operation that declares no schema', () => {
-    expect(responseErrors({}, 'get', '/v1/seller/list', 200)).not.toEqual([]);
+    expect(responseErrors({}, 'get', '/v1/seller/analytics/full', 200)).not.toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiQuery, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
@@ -30,6 +30,10 @@ import {
   videoBody,
 } from './catalogue.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { PROBLEM_RESPONSE } from '../../common/errors/problem.dto';
+import { ProductCreatedDto, ProductDeletedDto, ProductPublishedDto, ProductUnpublishedDto, StockConfirmedDto, VariantCreatedDto, VariantWithdrawnDto, ImageOrderDto, SocialPostAttachedDto, StockWrittenDto, StockEventPageDto } from './catalogue.dto';
+import { UpdatedDto } from '../../common/http/response-dtos';
 
 /** C2 — catalogue, media and stock (ADU-API-01 v1.6 section 12.10). */
 
@@ -51,10 +55,11 @@ function assertUuid(v: string, path: string): void {
 // readonly, which the decorator's own type rejects. A plain literal is both.
 const SIGNED_UPLOAD = {
   type: 'object',
-  required: ['url', 'key'],
+  required: ['url', 'key', 'expires_at'],
   properties: {
     url: { type: 'string', format: 'uri' },
     key: { type: 'string' },
+    expires_at: { type: 'string', format: 'date-time' },
   },
 };
 
@@ -66,6 +71,8 @@ export class CatalogueController {
   ) {}
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: ProductCreatedDto })
   @Post('seller/products')
   @ReplayGrant('seller.products:write')
   async createProduct(
@@ -91,6 +98,7 @@ export class CatalogueController {
    */
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
+  @ApiGate({ permission: ['seller.products:read'], surfaces: ['CONSOLE'] })
   @Get('seller/products')
   @ApiOperation({
     summary: 'The seller list. Carries the card image key and the resolved publication cap.',
@@ -170,6 +178,7 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.listProducts(trx, req, limit, cursor));
   }
 
+  @ApiGate({ permission: ['seller.products:read'], surfaces: ['CONSOLE'] })
   @Get('seller/products/:id')
   @ApiOperation({ summary: "The editor's read: variants, attributes, media, posts, state." })
   async getProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
@@ -177,6 +186,8 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.getProduct(trx, req, id));
   }
 
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/products/:id')
   async patchProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
     assertUuid(id, 'id');
@@ -185,7 +196,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'The Product is published.' })
+  @ApiResponse({ status: 200, description: 'The Product is published.', type: ProductPublishedDto })
+  @ApiGate({ permission: ['seller.products:publish'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/publish')
   @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: '409 with readiness items[] where blocked.' })
@@ -201,7 +213,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.' })
+  @ApiResponse({ status: 200, description: 'The Product is unpublished; the row is kept.', type: ProductUnpublishedDto })
+  @ApiGate({ permission: ['seller.products:publish'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/unpublish')
   @ReplayGrant('seller.products:publish')
   @ApiOperation({ summary: 'Removes from the storefront; keeps the row.' })
@@ -216,6 +229,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: ProductDeletedDto })
   @Delete('seller/products/:id')
   @ApiOperation({ summary: '409 PRODUCT_HAS_ACTIVE_ORDERS where any reservation is live.' })
   async deleteProduct(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
@@ -224,6 +239,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: VariantCreatedDto })
   @Post('seller/products/:id/variants')
   @ReplayGrant('seller.products:write')
   async createVariant(
@@ -238,6 +255,8 @@ export class CatalogueController {
     );
   }
 
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/variants/:id')
   async patchVariant(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
     assertUuid(id, 'id');
@@ -245,6 +264,8 @@ export class CatalogueController {
     return this.tx.run(req, (trx) => this.svc.patchVariant(trx, req, id, body));
   }
 
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: VariantWithdrawnDto })
   @Delete('seller/variants/:id')
   @ApiOperation({ summary: 'Withdraws — VARIANT_WITHDRAWN exists as a cart code for this.' })
   async deleteVariant(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<unknown> {
@@ -267,6 +288,7 @@ export class CatalogueController {
    * actually refuses a request; this is the description of it.
    */
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/images')
   @ReplayGrant('seller.media:write')
   @ApiOperation({ summary: 'Signed upload then commit \u2014 one catalogued path, two actions.' })
@@ -304,8 +326,9 @@ export class CatalogueController {
     description: 'REQUEST_UPLOAD: three presigned PUTs, each with the key the commit must name.',
     schema: {
       type: 'object',
-      required: ['uploads'],
+      required: ['position', 'uploads'],
       properties: {
+        position: { type: 'integer', minimum: 1, maximum: 5, description: 'The position the upload is for, as requested.' },
         // INLINED, not a $ref. Nothing registers a SignedUpload component, and
         // a $ref to a component that does not exist generates a contract whose
         // types resolve to `unknown` -- worse than no schema, because it looks
@@ -322,12 +345,25 @@ export class CatalogueController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'COMMIT: the image row is registered.' })
   @ApiResponse({
+    status: 201,
+    description: 'COMMIT: the image row is registered.',
+    schema: {
+      type: 'object',
+      required: ['position', 'committed'],
+      properties: {
+        position: { type: 'integer', minimum: 1, maximum: 5 },
+        committed: { type: 'boolean', enum: [true] },
+      },
+    },
+  })
+  @ApiResponse({
+    ...PROBLEM_RESPONSE,
     status: 409,
     description:
       'slots.reason is IMAGE_CAP_REACHED (checked BEFORE signing), ' +
-      'OBJECT_NOT_UPLOADED, or POSITION_TAKEN.',
+      'OBJECT_NOT_UPLOADED, or POSITION_TAKEN. The code IDEMPOTENCY_KEY_REUSED (the key was already used ' +
+      'for a different request) is also answered with 409.',
   })
   async images(
     @Req() req: LocalizedRequest,
@@ -341,6 +377,7 @@ export class CatalogueController {
     );
   }
 
+  @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
   @Delete('seller/products/:id/images/:position')
   @HttpCode(204)
   @ApiOperation({ summary: 'Removes one image and schedules the objects for purge.' })
@@ -360,6 +397,8 @@ export class CatalogueController {
     await this.tx.run(req, (trx) => this.svc.deleteImage(trx, req, id, position));
   }
 
+  @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: ImageOrderDto })
   @Put('seller/products/:id/images/order')
   @ApiOperation({
     summary:
@@ -394,6 +433,7 @@ export class CatalogueController {
   @ApiIdempotencyKey()
   @ApiResponse({ status: 200, description: 'REQUEST_UPLOAD: the signed upload.' })
   @ApiResponse({ status: 201, description: 'COMMIT: the video is registered.' })
+  @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/products/:id/video')
   @ReplayGrant('seller.media:write')
   async video(
@@ -408,6 +448,7 @@ export class CatalogueController {
     );
   }
 
+  @ApiGate({ permission: ['seller.media:write'], surfaces: ['CONSOLE'] })
   @Delete('seller/products/:id/video')
   @HttpCode(204)
   async deleteVideo(@Req() req: LocalizedRequest, @Param('id') id: string): Promise<void> {
@@ -416,6 +457,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.products:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: SocialPostAttachedDto })
   @Post('seller/products/:id/social-posts')
   @ReplayGrant('seller.products:write')
   @ApiOperation({ summary: 'Canonical id resolved server-side; never the URL string.' })
@@ -432,6 +475,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.stock:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: StockWrittenDto })
   @Post('seller/variants/:id/stock')
   @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Writes a StockEvent. Never a direct count set.' })
@@ -448,7 +493,8 @@ export class CatalogueController {
   }
 
   @ApiIdempotencyKey()
-  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.' })
+  @ApiResponse({ status: 200, description: 'Stock confirmed; stock_confirmed_at is reset.', type: StockConfirmedDto })
+  @ApiGate({ permission: ['seller.stock:write'], surfaces: ['CONSOLE'] })
   @Post('seller/variants/:id/confirm-stock')
   @ReplayGrant('seller.stock:write')
   @ApiOperation({ summary: 'Resets stock_confirmed_at (S13.3).' })
@@ -465,6 +511,8 @@ export class CatalogueController {
 
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
+  @ApiGate({ permission: ['seller.stock:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: StockEventPageDto })
   @Get('seller/variants/:id/stock-events')
   async listStockEvents(
     @Req() req: LocalizedRequest,

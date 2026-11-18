@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiQuery, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import type { Transaction } from 'kysely';
 import { ReplayGrant } from '../../common/auth/auth.guard';
@@ -31,6 +31,9 @@ import {
   socialAccountBody,
 } from './onboarding.schemas';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
+import { ApiGate } from '../../common/http/api-gate';
+import { SellerCreatedDto, SellerListDto, ReadinessDto, SellerProfileDto, SocialAccountListDto, SocialAccountLinkedDto, AttestationRecordedDto, AvailabilityDto, AvailabilitySavedDto, AvailabilityOverridePageDto, AvailabilityOverrideDto, FulfilmentMethodListDto, FulfilmentMethodsSavedDto } from './onboarding.dto';
+import { UpdatedDto } from '../../common/http/response-dtos';
 
 /**
  * C1 — onboarding and verification (ADU-API-01 v1.6 section 12.9).
@@ -53,6 +56,7 @@ export class OnboardingController {
   ) {}
 
   @ApiIdempotencyKey()
+  @ApiCreatedResponse({ type: SellerCreatedDto })
   @Post('seller')
   @ApiOperation({ summary: 'Create the seller. The first eligibility evaluation runs inline.' })
   async createSeller(
@@ -77,6 +81,7 @@ export class OnboardingController {
    * caller's account id, so the filter IS the authorization and there is no
    * id to probe with.
    */
+  @ApiOkResponse({ type: SellerListDto })
   @Get('seller/list')
   @ApiOperation({
     summary: 'The stores this account owns or is a live team member of (D-97).',
@@ -85,24 +90,32 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.listSellers(trx, req));
   }
 
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: ReadinessDto })
   @Get('seller/readiness')
   @ApiOperation({ summary: 'The nine readiness items — a state, not a failure.' })
   async readiness(@Req() req: LocalizedRequest): Promise<unknown> {
     return this.tx.run(req, (trx) => this.svc.readiness(trx, req));
   }
 
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SellerProfileDto })
   @Get('seller/profile')
   @ApiOperation({ summary: 'The saved profile, with status and handle (v1.9 S15.0b).' })
   async getProfile(@Req() req: LocalizedRequest): Promise<unknown> {
     return this.tx.run(req, (trx) => this.svc.getProfile(trx, req));
   }
 
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/profile')
   async patchProfile(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = patchProfileBody.parse(req.body);
     return this.tx.run(req, (trx) => this.svc.patchProfile(trx, req, body));
   }
 
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: SocialAccountListDto })
   @Get('seller/social-accounts')
   @ApiOperation({ summary: 'Linked accounts, with the follower count and when it was captured.' })
   async getSocialAccounts(@Req() req: LocalizedRequest): Promise<unknown> {
@@ -110,6 +123,8 @@ export class OnboardingController {
   }
 
   @ApiIdempotencyKey()
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
+  @ApiCreatedResponse({ type: SocialAccountLinkedDto })
   @Post('seller/social-accounts')
   @ReplayGrant('seller.store:write')
   @ApiOperation({ summary: 'Link a social account; issues the account-control code.' })
@@ -125,6 +140,7 @@ export class OnboardingController {
 
   @ApiIdempotencyKey()
   @ApiResponse({ status: 200, description: 'The verification attempt is recorded.' })
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
   @Post('seller/social-accounts/:id/verify')
   @ReplayGrant('seller.store:write')
   @ApiOperation({ summary: 'Fetch and match; captures the follower count at verification.' })
@@ -150,6 +166,7 @@ export class OnboardingController {
    * write_attestation's derivation from core.operator_grant.
    */
   @ApiIdempotencyKey()
+  @ApiCreatedResponse({ type: AttestationRecordedDto })
   @Post('seller/identity-verification')
   @ApiOperation({
     summary:
@@ -165,12 +182,16 @@ export class OnboardingController {
     );
   }
 
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: AvailabilityDto })
   @Get('seller/availability')
   @ApiOperation({ summary: 'The saved weekly pattern the editor loads (v1.9 S15.0b).' })
   async getAvailability(@Req() req: LocalizedRequest): Promise<unknown> {
     return this.tx.run(req, (trx) => this.svc.getAvailability(trx, req));
   }
 
+  @ApiGate({ permission: ['seller.availability:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: AvailabilitySavedDto })
   @Put('seller/availability')
   @ApiOperation({ summary: 'The whole weekly pattern. Zero windows is valid and means closed.' })
   async putAvailability(@Req() req: LocalizedRequest): Promise<unknown> {
@@ -180,6 +201,8 @@ export class OnboardingController {
 
   @ApiQuery({ name: 'from', required: false, description: 'YYYY-MM-DD. Earliest closure date to list. Default: today.' })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-50. Default 20.' })
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: AvailabilityOverridePageDto })
   @Get('seller/availability-overrides')
   async getOverrides(
     @Req() req: LocalizedRequest,
@@ -193,6 +216,8 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.getOverrides(trx, req, from, limit));
   }
 
+  @ApiGate({ permission: ['seller.availability:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: AvailabilityOverrideDto })
   @Put('seller/availability-overrides/:date')
   @ApiOperation({ summary: 'Marks the store closed on that date. Idempotent by path; no key.' })
   async putOverride(
@@ -204,6 +229,7 @@ export class OnboardingController {
     return this.tx.run(req, (trx) => this.svc.putOverride(trx, req, date, body.note));
   }
 
+  @ApiGate({ permission: ['seller.availability:write'], surfaces: ['CONSOLE'] })
   @Delete('seller/availability-overrides/:date')
   @HttpCode(204)
   @ApiOperation({ summary: 'Removes the closure. 204 whether or not it existed.' })
@@ -215,17 +241,23 @@ export class OnboardingController {
     await this.tx.run(req, (trx) => this.svc.deleteOverride(trx, req, date));
   }
 
+  @ApiGate({ permission: ['seller.store:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: UpdatedDto })
   @Patch('seller/company-details')
   async patchCompanyDetails(@Req() req: LocalizedRequest): Promise<unknown> {
     const body = companyDetailsBody.parse(req.body);
     return this.tx.run(req, (trx) => this.svc.patchCompanyDetails(trx, req, body));
   }
 
+  @ApiGate({ permission: ['seller.store:read'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: FulfilmentMethodListDto })
   @Get('seller/fulfilment-methods')
   async getFulfilmentMethods(@Req() req: LocalizedRequest): Promise<unknown> {
     return this.tx.run(req, (trx) => this.svc.getFulfilmentMethods(trx, req));
   }
 
+  @ApiGate({ permission: ['seller.fulfilment:write'], surfaces: ['CONSOLE'] })
+  @ApiOkResponse({ type: FulfilmentMethodsSavedDto })
   @Put('seller/fulfilment-methods')
   @ApiOperation({ summary: 'The whole set. At least one active, or 422.' })
   async putFulfilmentMethods(@Req() req: LocalizedRequest): Promise<unknown> {

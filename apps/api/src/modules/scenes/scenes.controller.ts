@@ -1,7 +1,6 @@
 import { Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import {
   ApiBody,
-  ApiCookieAuth,
   ApiCreatedResponse,
   ApiDefaultResponse,
   ApiExtraModels,
@@ -28,6 +27,8 @@ import {
 import { createScenePostBody, patchScenePostDraftBody } from './scenes.schemas';
 import { ScenesService } from './scenes.service';
 import { requesterMarket } from '../storefront/requester-market';
+import { ApiGate } from '../../common/http/api-gate';
+import { ApiDeviceHeaders } from '../../common/http/api-headers';
 
 /**
  * Scene Posts (ADU-SCN-01 v3.2 S45; WO-DISC-001 S20-S22). Seller management
@@ -80,12 +81,12 @@ export class ScenesController {
     private readonly svc: ScenesService,
   ) {}
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts')
   @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary: 'Create a private DRAFT Scene. Seller and Market are server-derived.',
   })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiHeader(IDEMPOTENCY_KEY_HEADER)
   @ApiBody({ type: CreateScenePostBodyDto })
@@ -98,9 +99,9 @@ export class ScenesController {
     return view;
   }
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Get('seller/scene-posts')
   @ApiOperation({ summary: "The Seller's own Scenes, any state, cursor-paginated." })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiQuery({ name: 'cursor', required: false, schema: { type: 'string', format: 'uuid' } })
   @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', minimum: 1, maximum: 50 } })
@@ -118,11 +119,11 @@ export class ScenesController {
     return this.tx.run(req, (trx) => this.svc.list(trx, req, cursor, n));
   }
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Get('seller/scene-posts/:id')
   @ApiOperation({
     summary: 'Management view: state, Private reason, restoration, revisions, tag availability.',
   })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiParam(SCENE_ID)
   @ApiOkResponse({ type: SellerScenePostDto, description: 'ETag carries edit_version.' })
@@ -138,12 +139,12 @@ export class ScenesController {
     return view;
   }
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Patch('seller/scene-posts/:id/draft')
   @ApiOperation({
     summary:
       'Edit the working revision (caption, image, tags). A published Scene is cloned into a new working revision; the published one never changes.',
   })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiHeader(IF_MATCH_HEADER)
   @ApiParam(SCENE_ID)
@@ -164,13 +165,13 @@ export class ScenesController {
     return view;
   }
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts/:id/image-uploads')
   @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary:
       'Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft.',
   })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiHeader(IDEMPOTENCY_KEY_HEADER)
   @ApiParam(SCENE_ID)
@@ -185,13 +186,13 @@ export class ScenesController {
     return this.tx.runIdempotent(req, res, 200, (trx) => this.svc.requestImageUpload(trx, req, id));
   }
 
+  @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts/:id/publish')
   @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary:
       'Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...).',
   })
-  @ApiCookieAuth('cookie')
   @ApiHeader(SELLER_HEADER)
   @ApiHeader(IDEMPOTENCY_KEY_HEADER)
   @ApiHeader(IF_MATCH_HEADER)
@@ -211,6 +212,7 @@ export class ScenesController {
     return view;
   }
 
+  @ApiDeviceHeaders()
   @Get('scene-posts/:publicRef')
   @Public()
   @ApiOperation({

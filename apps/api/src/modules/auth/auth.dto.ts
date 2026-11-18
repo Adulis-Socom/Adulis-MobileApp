@@ -115,3 +115,15 @@ export class DevicePatchBodyDto {
 export class DeviceRefDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
 }
+
+/** POST /v1/auth/step-up/request: the code travels by SMS, never in the response. */
+export class StepUpRequestedDto {
+  @ApiProperty({ format: 'uuid', description: 'The challenge to satisfy with POST /v1/auth/step-up/verify.' }) challenge_id!: string;
+  @ApiProperty({ format: 'date-time' }) expires_at!: string;
+}
+
+/** POST /v1/auth/step-up/verify. */
+export class StepUpVerifiedDto {
+  @ApiProperty({ format: 'uuid' }) challenge_id!: string;
+  @ApiProperty({ format: 'date-time', description: 'When the challenge was satisfied; a repeat call keeps the original time.' }) satisfied_at!: string;
+}

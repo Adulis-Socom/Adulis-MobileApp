@@ -14,6 +14,7 @@ import { PROBLEM_RESPONSE, ProblemDto } from '../../common/errors/problem.dto';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { FypPageDto } from './fyp.dto';
 import { FypService } from './fyp.service';
+import { CLIENT_HEADER } from '../../common/http/api-headers';
 
 /**
  * The Buyer Home For You feed (ADU-REC-01 v3.2 S12; WO-DISC-002). Public:
@@ -27,6 +28,7 @@ export class FypController {
     private readonly svc: FypService,
   ) {}
 
+  @ApiHeader(CLIENT_HEADER)
   @Get('fyp')
   @Public()
   @ApiOperation({

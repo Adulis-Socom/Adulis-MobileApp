@@ -9,7 +9,9 @@ import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
-import { NotificationPageDto, NotificationReadDto } from './notifications.dto';
+import { NotificationPageDto, NotificationReadDto, NotificationsMarkedReadDto, NotificationPreferencesDto, NotificationPreferencesSavedDto } from './notifications.dto';
+import { ApiGate } from '../../common/http/api-gate';
+import { ApiOptionalSellerHeader } from '../../common/http/api-headers';
 
 /**
  * C8 — notifications (ADU-API-01 v1.6 section 12.14).
@@ -79,6 +81,7 @@ export class NotificationsController {
   @ApiQuery({ name: 'seller_id', required: false, description: 'Required with as=seller, and must equal X-Adulis-Seller. Not used with as=buyer.' })
   @ApiQuery({ name: 'cursor', required: false, description: 'next_cursor of the previous page.' })
   @ApiOkResponse({ type: NotificationPageDto })
+  @ApiOptionalSellerHeader('The Seller context (ADU-API-01 S4.2). Optional: send it to act as the Seller (the seller side); without it the request acts as the Buyer. With as=seller it is required and must equal seller_id.')
   @Get('notifications')
   @ApiOperation({ summary: '?as=buyer or ?as=seller&seller_id= required — the 12.7 rule.' })
   async list(
@@ -167,6 +170,7 @@ export class NotificationsController {
   }
 
   @ApiIdempotencyKey()
+  @ApiOkResponse({ type: NotificationsMarkedReadDto })
   @Post('notifications/read-all')
   @HttpCode(200)
   async readAll(
@@ -182,6 +186,8 @@ export class NotificationsController {
     });
   }
 
+  @ApiGate({ permission: ['seller.notifications:read'], surfaces: ['MOBILE', 'CONSOLE'] })
+  @ApiOkResponse({ type: NotificationPreferencesDto })
   @Get('seller/notification-preferences')
   async getPreferences(@Req() req: AuthedRequest): Promise<unknown> {
     return this.tx.run(req as LocalizedRequest, async (trx) => {
@@ -196,6 +202,8 @@ export class NotificationsController {
   }
 
   /** PATCH is idempotent by shape (an upsert of named keys); no key demanded. */
+  @ApiGate({ permission: ['seller.notifications.preferences:write'], surfaces: ['MOBILE', 'CONSOLE'] })
+  @ApiOkResponse({ type: NotificationPreferencesSavedDto })
   @Patch('seller/notification-preferences')
   @ApiOperation({ summary: 'suppressible=false is not togglable: 422, never a silent accept.' })
   async patchPreferences(@Req() req: AuthedRequest): Promise<unknown> {

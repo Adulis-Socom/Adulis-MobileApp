@@ -2,8 +2,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { newIdempotencyKey, problemCode, wasAnswered, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
+import { newIdempotencyKey, problemCode, type Collection, type CollectionCreated, type CollectionItem, type ItemFilter } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
+import { keyUsable } from '../api/mutation';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
@@ -14,6 +15,7 @@ import { usePublicList } from './public-list';
 import { PublicListView, useTabLayout } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { collectionName, keepIfCurrent, usePrivateApi } from './saved';
+import { collectionDeletions, judgeWrite } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.saved.tab.recent' },
@@ -66,7 +68,7 @@ export function SavedScreen() {
         {t('buyer.saved.collections')}
       </AppText>
       <CollectionsSection list={collections} />
-      <NewCollection onCreated={collections.refresh} />
+      <NewCollection onCreated={collections.refresh} onUnconfirmed={collections.refresh} />
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} label={t('buyer.saved.tabs')} />
     </View>
   );
@@ -143,13 +145,20 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
  * characters once trimmed); the server's answer still decides. Returns the new Collection and its
  * name. `disabled` while another Collection change is in flight, and `onBusyChange` tells the
  * screen while its own Create is (WO-018, A-006), so the two never overlap.
+ *
+ * Names are not unique, so the Idempotency-Key is what keeps a retry from making a second Collection:
+ * it stays with the name until the server's own answer ends the attempt (saved-write.ts). After an
+ * attempt whose outcome is not known `onUnconfirmed` runs, so the list is read again and shows a
+ * Collection that was stored although its answer was lost.
  */
 export function NewCollection({
   onCreated,
+  onUnconfirmed,
   disabled = false,
   onBusyChange,
 }: {
   onCreated: (created: CollectionCreated, name: string) => void;
+  onUnconfirmed?: () => void;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -160,7 +169,7 @@ export function NewCollection({
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const intent = useRef<{ name: string; key: string } | null>(null);
+  const intent = useRef<{ name: string; key: string; startedAt: number; deletions: number } | null>(null);
   if (!open) return <Button label={t('buyer.saved.new')} variant="secondary" disabled={disabled} onPress={() => setOpen(true)} />;
   const create = async () => {
     const trimmed = name.replace(/\s+/g, ' ').trim();
@@ -169,12 +178,22 @@ export function NewCollection({
       return;
     }
     if (!priv) return;
-    if (intent.current?.name !== trimmed) intent.current = { name: trimmed, key: newIdempotencyKey() };
+    // A key kept after an unknown outcome is replayed only while that is safe: not past its age, and not after
+    // a Collection was deleted (the replay could answer a deleted Collection, or, once the API's record is
+    // purged, silently make a second one). Otherwise the attempt ends here: the list is read again and the
+    // next press is a new Create.
+    const held = intent.current;
+    if (held?.name === trimmed && (!keyUsable(held, Date.now()) || held.deletions !== collectionDeletions())) {
+      intent.current = null;
+      onUnconfirmed?.();
+      return;
+    }
+    const attempt = held?.name === trimmed ? held : (intent.current = { name: trimmed, key: newIdempotencyKey(), startedAt: Date.now(), deletions: collectionDeletions() });
     setBusy(true);
     onBusyChange?.(true);
     setError(null);
     try {
-      const created = await priv.createCollection(trimmed, intent.current.key);
+      const created = await priv.createCollection(trimmed, attempt.key);
       // Answered after a sign-out or another sign-in: nothing more is done for that session.
       if (!priv.isCurrent()) return;
       intent.current = null;
@@ -183,7 +202,9 @@ export function NewCollection({
       onCreated(created, trimmed);
     } catch (failure) {
       if (!priv.isCurrent()) return;
-      if (wasAnswered(failure)) intent.current = null;
+      const outcome = judgeWrite(failure);
+      if (outcome !== 'unknown') intent.current = null;
+      if (outcome !== 'refused') onUnconfirmed?.();
       setError(problemCode(failure) === 'VALIDATION_FAILED' ? t('buyer.saved.name_invalid') : failureMessage(t, failure));
     } finally {
       setBusy(false);
@@ -198,7 +219,7 @@ export function NewCollection({
           <Button label={t('buyer.saved.create')} disabled={busy || disabled} busy={busy} onPress={() => void create()} />
         </View>
         <View style={{ flexGrow: 1 }}>
-          <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { setOpen(false); setError(null); }} />
+          <Button label={t('buyer.saved.cancel')} variant="secondary" disabled={busy} onPress={() => { intent.current = null; setOpen(false); setError(null); }} />
         </View>
       </View>
     </View>

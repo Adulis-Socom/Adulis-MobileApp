@@ -24,11 +24,22 @@ export function installFakeCollections(
   const items: Item[] = [];
   const hidden = new Set<string>();
   // A test can answer a route itself (fail it, hold it); undefined falls through to the fake.
-  const intercepts: Partial<Record<'add' | 'saves' | 'collections' | 'state' | 'remove', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
+  const intercepts: Partial<Record<'add' | 'saves' | 'collections' | 'state' | 'remove' | 'detail' | 'create' | 'rename' | 'delete', (call: Recorded) => Reply | undefined | Promise<Reply | undefined>>> = {};
+  // The change is made and its answer never arrives (a lost response): the next `times` calls to the route.
+  const lost: Partial<Record<keyof typeof intercepts, { reply: Reply; left: number }>> = {};
   const via =
     (name: keyof typeof intercepts, handler: (call: Recorded) => Reply) =>
-    async (call: Recorded): Promise<Reply> =>
-      (await intercepts[name]?.(call)) ?? handler(call);
+    async (call: Recorded): Promise<Reply> => {
+      const early = await intercepts[name]?.(call);
+      if (early !== undefined) return early;
+      const reply = handler(call);
+      const drop = lost[name];
+      if (drop && drop.left > 0) {
+        drop.left--;
+        return drop.reply;
+      }
+      return reply;
+    };
   const key = (t: Target) => `${t.type}:${t.ref}`;
   const ts = (n: number) => `2026-11-11T08:00:${String(n % 60).padStart(2, '0')}.000000Z`;
 
@@ -69,13 +80,23 @@ export function installFakeCollections(
       body: { default_collection_ref: DEFAULT_COLLECTION_REF, data: collections.map(summary), next_cursor: null },
     })),
   );
-  api.on('POST /v1/collections', (call) => {
-    const name = String(call.body?.name ?? '').trim();
-    if (name.length < 1 || name.length > 60) return problem(400, 'VALIDATION_FAILED', 'request', { path: 'name' });
-    const c = { ref: id(), kind: 'USER_CREATED' as const, name, at: clock++ };
-    collections.push(c);
-    return { status: 201, body: { ref: c.ref } };
-  });
+  // Like the API's idempotency store: a replayed key answers the first attempt's ref, a key reused for
+  // another name is a conflict, and a refusal stores nothing.
+  const created = new Map<string, { name: string; ref: string }>();
+  api.on(
+    'POST /v1/collections',
+    via('create', (call) => {
+      const name = String(call.body?.name ?? '').trim();
+      if (name.length < 1 || name.length > 60) return problem(400, 'VALIDATION_FAILED', 'request', { path: 'name' });
+      const key = `${call.headers.Authorization}|${call.headers['Idempotency-Key']}`;
+      const first = created.get(key);
+      if (first) return first.name === name ? { status: 201, body: { ref: first.ref } } : problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request');
+      const c = { ref: id(), kind: 'USER_CREATED' as const, name, at: clock++ };
+      collections.push(c);
+      created.set(key, { name, ref: c.ref });
+      return { status: 201, body: { ref: c.ref } };
+    }),
+  );
   api.on(
     'GET /v1/collections/saves',
     via('saves', (call) => {
@@ -100,26 +121,38 @@ export function installFakeCollections(
       }),
     },
   })));
-  api.onPattern('GET', /^\/v1\/collections\/[^/]+$/, (call) => {
-    const c = owned(refAt(call.path, 3));
-    if (!c) return problem(404, 'NOT_FOUND', 'request');
-    return { status: 200, body: { collection: summary(c), data: filtered(call, items.filter((i) => i.collection === c.ref)).map(present), next_cursor: null } };
-  });
-  api.onPattern('PATCH', /^\/v1\/collections\/[^/]+$/, (call) => {
-    const c = owned(refAt(call.path, 3));
-    if (!c) return problem(404, 'NOT_FOUND', 'request');
-    if (c.kind === 'DEFAULT') return problem(400, 'VALIDATION_FAILED', 'request', { path: 'collectionRef' });
-    c.name = String(call.body?.name ?? '').trim();
-    return { status: 200, body: summary(c) };
-  });
-  api.onPattern('DELETE', /^\/v1\/collections\/[^/]+$/, (call) => {
-    const c = owned(refAt(call.path, 3));
-    if (!c) return problem(404, 'NOT_FOUND', 'request');
-    if (c.kind === 'DEFAULT') return problem(400, 'VALIDATION_FAILED', 'request', { path: 'collectionRef' });
-    collections.splice(collections.indexOf(c), 1);
-    for (let n = items.length - 1; n >= 0; n--) if (items[n]!.collection === c.ref) items.splice(n, 1);
-    return { status: 204 };
-  });
+  api.onPattern(
+    'GET',
+    /^\/v1\/collections\/[^/]+$/,
+    via('detail', (call) => {
+      const c = owned(refAt(call.path, 3));
+      if (!c) return problem(404, 'NOT_FOUND', 'request');
+      return { status: 200, body: { collection: summary(c), data: filtered(call, items.filter((i) => i.collection === c.ref)).map(present), next_cursor: null } };
+    }),
+  );
+  api.onPattern(
+    'PATCH',
+    /^\/v1\/collections\/[^/]+$/,
+    via('rename', (call) => {
+      const c = owned(refAt(call.path, 3));
+      if (!c) return problem(404, 'NOT_FOUND', 'request');
+      if (c.kind === 'DEFAULT') return problem(400, 'VALIDATION_FAILED', 'request', { path: 'collectionRef' });
+      c.name = String(call.body?.name ?? '').trim();
+      return { status: 200, body: summary(c) };
+    }),
+  );
+  api.onPattern(
+    'DELETE',
+    /^\/v1\/collections\/[^/]+$/,
+    via('delete', (call) => {
+      const c = owned(refAt(call.path, 3));
+      if (!c) return problem(404, 'NOT_FOUND', 'request');
+      if (c.kind === 'DEFAULT') return problem(400, 'VALIDATION_FAILED', 'request', { path: 'collectionRef' });
+      collections.splice(collections.indexOf(c), 1);
+      for (let n = items.length - 1; n >= 0; n--) if (items[n]!.collection === c.ref) items.splice(n, 1);
+      return { status: 204 };
+    }),
+  );
   api.onPattern('POST', /^\/v1\/collections\/[^/]+\/items$/, via('add', (call) => {
     const c = owned(refAt(call.path, 3));
     const target = call.body?.target as Target | undefined;
@@ -142,6 +175,10 @@ export function installFakeCollections(
     items,
     intercept: (name: keyof typeof intercepts, fn: (call: Recorded) => Reply | undefined | Promise<Reply | undefined>) => {
       intercepts[name] = fn;
+    },
+    /** The next `times` calls to this route are carried out, and their answer is lost: `reply` arrives instead. */
+    loseAnswer: (name: keyof typeof intercepts, reply: Reply = 'offline', times = 1) => {
+      lost[name] = { reply, left: times };
     },
     /** A named Collection that already exists on the server. */
     named: (name: string) => {

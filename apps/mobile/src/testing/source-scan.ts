@@ -32,3 +32,8 @@ export function productionSources(...dirs: string[]): SourceFile[] {
 export function allSources(): SourceFile[] {
   return walk('.', true);
 }
+
+/** A file of the repository by its path from the repository root (for a test that checks a package's twin file). */
+export function repoFile(fromRoot: string): string {
+  return fs.readFileSync(path.resolve(SRC, '../../..', fromRoot), 'utf8');
+}

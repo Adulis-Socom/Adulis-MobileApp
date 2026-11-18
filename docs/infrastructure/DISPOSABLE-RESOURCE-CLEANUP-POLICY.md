@@ -34,7 +34,14 @@ work order, not by sections 3 to 6.** That covers:
     volume), its measure container, and its undo of the target volume the same run created;
 - the creating script's documented teardown command, which removes only what carries its own owner
   label for this owner. Example: `test-db.sh down`, which refuses a container with a bind mount or a
-  named volume.
+  named volume;
+- the native test harness's `down` and `recover` (`ops/native/harness.mjs`), which remove only the
+  network, the named volumes and the containers of ONE run, each carrying that run's owner, run and
+  role labels. Its containers mount named volumes of the same run, so rule 3 of section 4 does not
+  apply to them: that rule governs a removal on a label alone, and a native run's leftover (a crash,
+  a killed shell) is removed only by that command, which first proves the run, owner and role labels,
+  the planned name and prefix, the recorded full id, the Docker engine the run was created in, and
+  that nothing is in section 3. It never removes an anonymous volume.
 
 Sections 3 to 6 govern **leftovers**: what such a teardown did not remove (a killed run, a crash), and
 any removal by anyone else.
@@ -66,6 +73,7 @@ only thing that lets a cleanup act on a leftover without further proof.
 | `adulis.test-db.owner` (+ `adulis.test-db.role=disposable`) | `ops/scripts/test-db.sh up` | the checkout that ran it (or `ADULIS_TEST_DB_OWNER`) |
 | `adulis.inf04.owner` | the INF-04 rehearsal scripts (`rh04.sh`, `restore-test.sh`, outside the repository); also compose project `inf04r` | `INF-04` |
 | `adulis.inf-close-01.owner` | the INF-CLOSE-01 scripts (`disposable-restore.sh`, `repair-rehearsal.sh`, outside the repository) | `INF-CLOSE-01` |
+| `adulis.native-harness.owner` (+ `adulis.native-harness.run=<run id>`, `adulis.native-harness.role`) | `ops/native/harness.mjs up`: the network, volumes and containers of a native test run | `native-harness` |
 
 A cleanup may remove a labelled leftover only when all of these hold:
 

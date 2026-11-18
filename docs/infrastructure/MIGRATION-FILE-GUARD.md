@@ -2,7 +2,9 @@
 
 Applies to: any database that must not be upgraded from an unverified set of migration files, above
 all a persistent one. Script: `ops/scripts/migration-guard.mjs`. Pin: `ops/migrations.manifest.json`.
-Tests (gate `migration-guard`): `ops/scripts/migration-guard.test.mjs`.
+Tests (gate `migration-guard`): `ops/scripts/migration-guard.test.mjs` (the checks) and
+`ops/scripts/migration-default-path.test.mjs` (the ordinary command and every other way the repository
+migrates run the guard).
 
 ## Why
 
@@ -23,33 +25,103 @@ noticed either.
    re-ordered or future version. `up` always reads it (read-only session); `verify --db` reads it on request.
    A missing `pgmigrations` table is an empty history; any other read error refuses.
 
-If a check fails, the runner is not started. Nothing is applied.
+If a check fails, the runner is not started. Nothing is applied. Every refusal is written to stderr (progress
+goes to stdout), so a caller that discards stdout, as `test-db.sh` does, still sees why.
 
 ## Use
 
+The ordinary command is the guarded one:
+
 ```
-pnpm db:migration-guard                      # directory against the pin
-pnpm db:migration-guard --db                 # also the database history (DATABASE_URL_MIGRATE)
-pnpm db:migrate:guarded --dry-run --expect-commit <sha>   # every check, no runner
-pnpm db:migrate:guarded --expect-commit <sha>             # every check, then node-pg-migrate up
+pnpm db:migrate                                 # checks 1, 2, 3 and 5, then applies what is pending
+pnpm db:migrate --dry-run                       # the same checks, nothing applied
+pnpm db:migrate:guarded --expect-commit <sha>   # all five checks (the source check too), then applies
+pnpm db:migration-guard                         # directory against the pin, no database
+pnpm db:migration-guard --db                    # also the database history (DATABASE_URL_MIGRATE)
+pnpm db:migration-pin                           # pin newly added migrations (see Adding a migration)
 ```
 
-`pnpm db:migrate` is unchanged and unguarded (CI and local development use it on fresh databases). A
-persistent database is upgraded with `db:migrate:guarded`.
+`pnpm db:migrate` is `migration-guard.mjs up --no-source-check`. It is the command for development
+databases, the disposable pair (`test-db.sh`, `db:reset`, `db:determinism`), CI and the deploy pre-deploy
+step: none of those has a clean commit to compare, and a deploy may have no git directory at all.
+
+**What the ordinary command does not do.** It has no source check, and it does not ask: a migration that is
+pinned in the manifest and pending is applied at once, without a prompt, to whatever `DATABASE_URL_MIGRATE`
+names, whether or not that migration is committed. Nothing in the command or in CI can tell a persistent
+database from a disposable one. Recommended rule for a persistent or shared database (a recommendation, not
+something the tools enforce): read the `target:` line first, run `pnpm db:migrate --dry-run`, and upgrade it
+only with `pnpm db:migrate:guarded --expect-commit <sha>` from a committed, reviewed checkout.
+
+The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
+`--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
+the variable is not set, or is not a plain `postgres://` or `postgresql://` URL (a host, and one plain database
+name as the whole path, no `host`, `port` or `dbname` query option); a malformed string is refused before
+anything connects. A `.env` that points at a persistent database makes `pnpm db:migrate` upgrade that
+database, now only ever from the pinned set. Before it reads anything, `up` and `verify --db` print
+`target: host:port/database` (never the credentials), so a run against an unintended database is visible at
+once. `DATABASE_URL_MIGRATE` must be a direct connection: the history is read over a read-only session opened
+with a startup option, and a pooler that rejects startup options makes the guard refuse (nothing is applied).
 
 The command line is strict. An unknown or repeated flag, a flag without its value, and an `up` without
-`--expect-commit <sha>` (or an explicit `--no-source-check`, for a throwaway database) are refusals with
-exit 2, never defaults: a typo such as `--dryrun` must not turn a dry run into a real apply.
+`--expect-commit <sha>` or an explicit `--no-source-check` are refusals with exit 2, never defaults: a typo
+such as `--dryrun` must not turn a dry run into a real apply, and the two source rules exclude each other.
+
+## Every way a migration runs
+
+| Way | Guarded by |
+|---|---|
+| `pnpm db:migrate` | the guard, `up --no-source-check` |
+| `pnpm db:migrate:guarded --expect-commit <sha>` | the guard, `up` with the source check |
+| CI: the "Migrations apply" step and the `migrate` gate | `pnpm db:migrate` |
+| `bash ops/scripts/test-db.sh up` (the disposable pair) | `pnpm db:migrate` |
+| `pnpm db:reset` | `pnpm db:migrate` |
+| `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE` |
+| the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` |
+| `pnpm worker:install` | not guarded, and not `db/migrations`: it installs the job queue library's own tables (schema `jobs`) |
+| `db/init/*.sql` | not guarded, and not `db/migrations`: extensions and local logins on the first start of an empty local data directory |
+
+`node-pg-migrate` is started by the guard and by nothing else in the repository: no package script,
+workflow, runbook or script starts it, and `migration-default-path.test.mjs` fails if one does (a few
+runbooks and records still mention it in prose). The migrations are hand-written SQL files with no down
+section, so nothing needs the runner's `create` or `down`. Running node-pg-migrate directly (its binary in
+`node_modules`, or through pnpm, npx or yarn) skips every check above and is not a way to migrate this
+repository; a file in the repository cannot stop a person from starting a program that is
+installed on their machine.
 
 ## Adding a migration
 
-A new migration is pinned in the same change: `node ops/scripts/migration-guard.mjs write`, then commit the
-manifest. A test fails if `db/migrations` and the manifest disagree. `write` pins ADDED files only. A missing,
-renamed or changed historical file is refused and is never re-pinned; changing history means editing the
-manifest by hand, which then shows in review. Migrations are never rewritten.
+1. Write `db/migrations/NNNN_name.sql`, the next number, as hand-written SQL with LF line endings (the
+   repository stores migrations as LF, see `.gitattributes`).
+2. Pin it in the same change: `pnpm db:migration-pin`, then commit `ops/migrations.manifest.json` with the
+   migration. A new file with CRLF line endings is refused at this step (git would store it as LF, and the
+   pin of its CRLF bytes would then fail in CI as a changed file): convert it to LF and pin again.
+3. Apply it to your development database with `pnpm db:migrate`.
+
+Until step 2, `pnpm db:migrate` refuses with `UNEXPECTED file in the migrations directory: ... pnpm
+db:migration-pin` and applies nothing; CI fails the same way (its "Migrations apply" step and the `migrate`
+gate), and so does the `migration-guard` gate. `db:migration-pin` pins ADDED files only. A missing, renamed or
+changed historical file is refused and is never re-pinned; changing history means editing the manifest by
+hand, which then shows in review. Migrations are never rewritten once they are merged.
+
+Three situations have an exit that does not touch history:
+
+- **Editing your own migration before it is merged.** After the first pin, an edit shows as `CHANGED` and
+  `db:migration-pin` refuses to re-pin it. Delete your own new entry, the last one, from
+  `ops/migrations.manifest.json` and pin again. If you already applied the earlier version to a development
+  database, reset that database (`pnpm db:reset`; it refuses a database that is neither disposable nor named in
+  its confirmation) rather than editing its history table. Never do this for a migration that has merged.
+- **A development database that is ahead of your checkout** (you applied a branch's migration, then switched
+  back): the command refuses it (`APPLIED but not pinned`). Switch back to the branch that has the migration, or
+  reset the development database with `pnpm db:reset`.
+- **Two branches that each added a migration** conflict in the manifest. Keep the one that merged first,
+  renumber the other file to the next number, and pin again.
 
 ## Limits
 
-- It does not make the plain `pnpm db:migrate` safe; it makes the guarded path safe.
 - It pins contents, not behaviour: a pinned migration is still applied as written.
+- The ordinary command has no source check and no prompt (see Use); persistent databases rely on the
+  recommended rule above.
+- The manifest is checked against the directory, not against the base branch: a hand edit of an old
+  migration together with its manifest line passes the guard and shows only in review.
+- It cannot stop a direct run of the installed node-pg-migrate program (see above).
 - A restore is the only way back from an applied migration (the down migrations raise); the guard does not change that.

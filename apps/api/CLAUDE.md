@@ -31,6 +31,10 @@ a NestJS service is an invariant a second endpoint can bypass.
 - **Single writer — the backend owner.** Two people adding `0016` collides *cleanly* and
   produces two migrations with one number (ADU-REPO-01 §6).
 - **One commit per migration**, e.g. `tier2: migration 09 orders, reservations, guards`.
+- **A new migration is pinned in the same change**: `pnpm db:migration-pin`, then commit
+  `ops/migrations.manifest.json` with the migration. `pnpm db:migrate` runs the migration-file
+  guard first and refuses an unpinned, missing or edited file; never start `node-pg-migrate`
+  directly (`docs/infrastructure/MIGRATION-FILE-GUARD.md`).
 - Every migration header names the **document, version and section** it transcribes.
 - **Transcribe, do not design.** Report what is missing; do not fill it in. Where a
   document contradicts itself, **stop and report** — four reissues and three amendments
