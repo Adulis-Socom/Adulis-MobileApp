@@ -18,6 +18,13 @@ import { CardSaveButton } from './CardSaveButton';
 import { PublicListView, useLargeText } from './PublicListView';
 import { ProductTile } from './SellerProfile';
 
+/**
+ * The result types this screen can draw, one entry per member of the generated union (the compiler
+ * refuses a missing or an extra one); a type a newer server adds is left out, never guessed at.
+ */
+export const DRAWN_TYPES = { PRODUCT_POST: true, SELLER: true, SCENE_POST: true } satisfies Record<SearchItem['type'], true>;
+const DRAWN = new Set<string>(Object.keys(DRAWN_TYPES));
+
 /** One result, as a stable key: a type and its public identity. */
 export const searchKey = (item: SearchItem) =>
   item.type === 'PRODUCT_POST'
@@ -62,7 +69,7 @@ export function SearchResults({
   const list = usePublicList({
     resource: ['search', tab, query, category ?? ''],
     read: placed ? (cursor) => api.search(query, tab, cursor, category) : null,
-    items: (page: SearchPage) => page.items,
+    items: (page: SearchPage) => page.items.filter((item) => DRAWN.has(item.type)),
     keyOf: searchKey,
   });
   const blocked = placed
@@ -93,6 +100,7 @@ export function SearchResults({
         )
       }
       numColumns={grid ? 2 : 1}
+      bounded={tab === 'TOP'}
       saves={{ surface: 'SEARCH', target: searchTarget }}
       empty="buyer.search.loading"
       emptyState={

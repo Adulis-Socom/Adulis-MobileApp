@@ -1,4 +1,4 @@
-import { screen, within } from 'expo-router/testing-library';
+import { isHiddenFromAccessibility, screen, within } from 'expo-router/testing-library';
 import { StyleSheet } from 'react-native';
 
 /**
@@ -57,4 +57,34 @@ export function overlaysIn(elements: readonly Json[]): string[] {
       return style?.position === 'absolute' || names.some((name) => typeof name === 'string' && /hotspot|marker|\bpin\b/i.test(name));
     })
     .map((node) => `${node.type} ${String(node.props.testID ?? '')}`.trim());
+}
+
+export type Control = { role: string; testID: string; name: string };
+type Instance = { type: unknown; props: Record<string, unknown>; children: (Instance | string)[] };
+const textOf = (node: Instance | string): string => (typeof node === 'string' ? node : node.children.map(textOf).join(''));
+
+/**
+ * Every control a Buyer can reach on the screen now: each element that takes a press or typing, or
+ * that says it is a button, tab, link, toggle or switch, and is not hidden from accessibility (a
+ * mounted but inactive tab is not shown). Found by behaviour, not by role alone, so a chip with no
+ * role is listed too. Its name is its accessibility label, else its text.
+ */
+export function controlsShown(): Control[] {
+  const found: Control[] = [];
+  const walk = (node: Instance | string) => {
+    if (typeof node === 'string') return;
+    const host = typeof node.type === 'string';
+    if (host && isHiddenFromAccessibility(node as never)) return;
+    if (host) {
+      const p = node.props;
+      const role = String(p.accessibilityRole);
+      const acts = p.onClick !== undefined || p.onResponderGrant !== undefined || p.onPress !== undefined || p.onChangeText !== undefined;
+      if (acts || ['button', 'tab', 'link', 'togglebutton', 'switch'].includes(role)) {
+        found.push({ role, testID: String(p.testID), name: typeof p.accessibilityLabel === 'string' ? p.accessibilityLabel : textOf(node) });
+      }
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(screen.root as never);
+  return found;
 }
