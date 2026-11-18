@@ -172,7 +172,10 @@ itself on Render, which the local `pgvector` image refuses.
 2. **Pre-deploy job: `pnpm db:migrate`.** Render runs it before the new instances take
    traffic. A migration that fails stops the deploy, which is the intent. The command runs
    the migration-file guard first (`docs/infrastructure/MIGRATION-FILE-GUARD.md`): a missing,
-   unpinned or edited migration file also stops the deploy before anything is applied.
+   unpinned or edited migration file also stops the deploy before anything is applied. The command also applies
+   only to a database that is marked disposable or that the run names with a commit and a confirmation
+   (`--expect-commit`, `--confirm-target`); a hosted database is neither, so until the pre-deploy command is changed
+   deliberately it is refused (`docs/infrastructure/MIGRATION-FILE-GUARD.md`, "Which database is this").
    `DATABASE_URL_MIGRATE` must be a direct connection, not a pooler: the guard reads the
    history over a read-only session opened with a startup option, which a pooler may reject.
 

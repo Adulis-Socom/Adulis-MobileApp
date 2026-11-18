@@ -14,6 +14,10 @@ import { hostname, userInfo } from 'node:os';
 import pg from 'pg';
 
 export const DISPOSABLE_MARKER = 'adulis:disposable-test-database';
+// Set by test-db.sh while it builds the pair, after it proved the server is the one it just started and before it
+// migrates; the final mark replaces it last. Only the migration guard accepts it: every other check compares with the
+// final mark, so nothing treats a half-built database as ready.
+export const DISPOSABLE_SETUP_MARKER = 'adulis:disposable-test-database:setup';
 export const DB_URL_NAMES = ['DATABASE_URL', 'DATABASE_URL_MIGRATE', 'DATABASE_URL_JOBS'];
 const OPTIONAL_URLS = new Set(['DATABASE_URL_JOBS']); // the jobs suites throw without it
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -211,12 +215,12 @@ export function resetDecision({ url, identity, argv }) {
 }
 
 /** One JSON line per authorised persistent reset; a reset that cannot be recorded does not run. */
-export function recordAdminAction(file, action, target, now = new Date()) {
+export function recordAdminAction(file, action, target, now = new Date(), extra = {}) {
   let who = 'unknown';
   try {
     who = userInfo().username;
   } catch {
     /* recorded as unknown */
   }
-  appendFileSync(file, `${JSON.stringify({ at: now.toISOString(), action, target, user: who, host: hostname(), pid: process.pid })}\n`);
+  appendFileSync(file, `${JSON.stringify({ at: now.toISOString(), action, target, user: who, host: hostname(), pid: process.pid, ...extra })}\n`);
 }

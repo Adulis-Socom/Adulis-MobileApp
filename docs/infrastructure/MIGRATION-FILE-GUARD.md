@@ -33,25 +33,53 @@ goes to stdout), so a caller that discards stdout, as `test-db.sh` does, still s
 The ordinary command is the guarded one:
 
 ```
-pnpm db:migrate                                 # checks 1, 2, 3 and 5, then applies what is pending
-pnpm db:migrate --dry-run                       # the same checks, nothing applied
-pnpm db:migrate:guarded --expect-commit <sha>   # all five checks (the source check too), then applies
+pnpm db:migrate                                 # checks 1, 2, 3 and 5, then applies what is pending to a DISPOSABLE database
+pnpm db:migrate --dry-run                       # the same checks and the classification, nothing applied, on any target
+pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<database>@<host>:<port>
+                                                # all five checks and the persistent-target rule, then applies
 pnpm db:migration-guard                         # directory against the pin, no database
 pnpm db:migration-guard --db                    # also the database history (DATABASE_URL_MIGRATE)
 pnpm db:migration-guard --base <ref>            # the manifest only appends to the one committed at <ref>
 pnpm db:migration-pin                           # pin newly added migrations (see Adding a migration)
 ```
 
-`pnpm db:migrate` is `migration-guard.mjs up --no-source-check`. It is the command for development
-databases, the disposable pair (`test-db.sh`, `db:reset`, `db:determinism`), CI and the deploy pre-deploy
-step: none of those has a clean commit to compare, and a deploy may have no git directory at all.
+`pnpm db:migrate` is `migration-guard.mjs up --no-source-check`. It is the command for the disposable pair
+(`test-db.sh`, `db:reset` of a marked database, `db:determinism`), CI, and the native test harness: none of
+those has a clean commit to compare, and every one of them has marked its database disposable first.
 
-**What the ordinary command does not do.** It has no source check, and it does not ask: a migration that is
-pinned in the manifest and pending is applied at once, without a prompt, to whatever `DATABASE_URL_MIGRATE`
-names, whether or not that migration is committed. Nothing in the command or in CI can tell a persistent
-database from a disposable one. Recommended rule for a persistent or shared database (a recommendation, not
-something the tools enforce): read the `target:` line first, run `pnpm db:migrate --dry-run`, and upgrade it
-only with `pnpm db:migrate:guarded --expect-commit <sha>` from a committed, reviewed checkout.
+### Which database is this
+
+Before the runner starts, `up` classifies the target (`classification:` line, after the `target:` line):
+
+| Class | When |
+|---|---|
+| DISPOSABLE | the host is exactly `localhost`, `127.0.0.1`, `::1` or `[::1]`; the URL names its port, and the port is not the protected development port (5434); and a read-only query through the same URL finds the database comment `adulis:disposable-test-database` (or `adulis:disposable-test-database:setup`, which `test-db.sh` sets while it builds the pair) |
+| PERSISTENT-DEV | the protected development port (5434, whatever host name or address is written and whatever the database says about itself: no mark is read or accepted there), or a loopback database that carries no disposable mark |
+| UNKNOWN | everything else: a host that is not exactly a loopback name (an alias, an address, a machine name, a hosted database), a URL without an explicit port, or a mark that could not be read. UNKNOWN is never treated as disposable |
+
+A DISPOSABLE target needs nothing more. **Any other target is applied to only with both of these**, on the command
+line of that run (never from the environment or `.env`):
+
+- `--expect-commit <sha>`: the full 40-character sha, equal to the checkout's HEAD, with no changed tracked file
+  anywhere in the repository and `db/migrations` and the manifest clean (the source check). `pnpm db:migrate` skips it
+  and so is refused: use `pnpm db:migrate:guarded`.
+- `--confirm-target=<database>@<host>:<port>`, exactly the target of this run: the database from the URL, the host as
+  written in the URL, the port the driver will use. It is the form `pnpm db:reset` already requires.
+
+The authorization is appended to `.adulis-db-admin.log` (git-ignored) before anything is applied; a record that cannot
+be written stops the run. A dry run is allowed on every target and only reports the classification and the command an
+apply would need. When nothing is pending nothing is applied and nothing is needed. The refusal names the target, the
+class, what is missing and the full command. `node ops/scripts/migration-guard.mjs authorize --expect-commit <sha>
+--confirm-target=...` runs only this gate (exit 0 when an apply would be allowed); `db:reset` of a persistent database
+uses it before it drops anything, and then migrates with the same two arguments.
+
+Recommended routine for a persistent database: read the `target:` and `classification:` lines, run `pnpm db:migrate
+--dry-run`, then upgrade it with `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=...` from a clean
+checkout of the approved commit. A migration you are still writing is applied to a disposable pair first
+(`bash ops/scripts/test-db.sh up`).
+
+A deployment to a hosted database is UNKNOWN to this rule and has no commit or confirmation to give; until the
+deploy command is changed deliberately, the pre-deploy step is refused.
 
 The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
@@ -87,13 +115,13 @@ tree git lists successfully, without a manifest in it, counts as "no manifest ye
 
 | Way | Guarded by |
 |---|---|
-| `pnpm db:migrate` | the guard, `up --no-source-check` |
-| `pnpm db:migrate:guarded --expect-commit <sha>` | the guard, `up` with the source check |
+| `pnpm db:migrate` | the guard, `up --no-source-check`; applies only to a DISPOSABLE target |
+| `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=...` | the guard, `up` with the source check and the persistent-target rule |
 | CI: the "Migrations apply" step and the `migrate` gate | `pnpm db:migrate` |
 | `bash ops/scripts/test-db.sh up` (the disposable pair) | `pnpm db:migrate` |
-| `pnpm db:reset` | `pnpm db:migrate` |
-| `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE` |
-| the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` |
+| `pnpm db:reset` | `pnpm db:migrate` for a marked database; for a persistent one `pnpm db:migrate:guarded` with the same commit and confirmation, proven before anything is dropped |
+| `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE`; each scratch database is marked disposable first |
+| the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` (a hosted database is UNKNOWN: refused until the command is changed deliberately) |
 | `pnpm worker:install` | not guarded, and not `db/migrations`: it installs the job queue library's own tables (schema `jobs`) |
 | `db/init/*.sql` | not guarded, and not `db/migrations`: extensions and local logins on the first start of an empty local data directory |
 
@@ -136,8 +164,9 @@ Three situations have an exit that does not touch history:
 ## Limits
 
 - It pins contents, not behaviour: a pinned migration is still applied as written.
-- The ordinary command has no source check and no prompt (see Use); persistent databases rely on the
-  recommended rule above.
+- The rule lives in the guard. A database comment is a mark anyone with the right to comment on the database can set, so
+  a deliberate misuse is caught by review, not here (the protected port never accepts a mark). The confirmation proves intent,
+  not authority: the guard cannot know whether the commit was approved.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
   its manifest line passes them; `--base` (run by CI on pushes and pull requests) refuses it, and review is the check for a
   change that is never pushed to the repository.

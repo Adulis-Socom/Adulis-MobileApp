@@ -95,7 +95,7 @@ docker compose up -d                   # Postgres 17 + the four extensions, MinI
 docker compose wait minio-init         # its exit status: non-zero if the buckets or policies failed (up -d says 0 regardless)
                                        # an installation predating WO-INFRA-015A: docs/infrastructure/MINIO-STARTUP.md first
 pnpm db:verify-extensions              # must print 4 PASSes
-pnpm db:migrate                        # runs db/migrations in order, after the migration-file guard (docs/infrastructure/MIGRATION-FILE-GUARD.md)
+pnpm db:migrate                        # a database not marked disposable is refused with the command it needs: pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<database>@<host>:<port> (docs/infrastructure/MIGRATION-FILE-GUARD.md)
 pnpm worker:install                    # graphile-worker's tables, as the DDL role
 pnpm db:check                          # 16 checks, ADU-DB-01 v1.12 Appendix C
 pnpm db:seed                           # one market, one account, one seller

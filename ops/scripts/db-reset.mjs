@@ -38,7 +38,7 @@
  * and saying so here is the point: a comment that oversells a guard is how
  * the next reader decides no further care is needed.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,6 +116,29 @@ if (!decision.allowed) {
   console.error(`FAIL  ${decision.reason}`);
   console.error('      Nothing was dropped.');
   process.exit(1);
+}
+// A persistent reset also needs the approved commit: the migration step below applies to a database that is not
+// marked disposable, so the whole authorization is proven BEFORE anything is recorded or dropped.
+let approvedSha = null;
+if (decision.kind === 'confirmed') {
+  const commits = process.argv.slice(2).filter((a) => a.startsWith('--expect-commit='));
+  approvedSha = commits.length === 1 ? commits[0].slice('--expect-commit='.length) : null;
+  if (!approvedSha) {
+    console.error('FAIL  a persistent reset also needs the approved commit: --expect-commit=<full 40-character sha>.');
+    console.error('      Nothing was dropped.');
+    process.exit(1);
+  }
+  const pre = spawnSync(
+    process.execPath,
+    ['ops/scripts/migration-guard.mjs', 'authorize', '--expect-commit', approvedSha, `--confirm-target=${decision.target}`],
+    { cwd: root, encoding: 'utf8', env: process.env },
+  );
+  if (pre.status !== 0) {
+    console.error(`${pre.stdout}${pre.stderr}`.trimEnd());
+    console.error('FAIL  the migration that follows the reset would be refused for this target.');
+    console.error('      Nothing was dropped.');
+    process.exit(1);
+  }
 }
 if (decision.kind === 'confirmed') {
   try {
@@ -241,7 +264,8 @@ await ext.end();
 console.log('the four extensions are in place');
 
 console.log('\n-- migrate ---------------------------------------------------');
-run('pnpm', ['db:migrate']);
+if (approvedSha) run('pnpm', ['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=${decision.target}`]);
+else run('pnpm', ['db:migrate']);
 
 console.log('\n-- worker queue schema ---------------------------------------');
 run('pnpm', ['worker:install']);

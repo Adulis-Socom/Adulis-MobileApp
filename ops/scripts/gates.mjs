@@ -643,7 +643,7 @@ const GATES = [
    * migration-default-path.test.mjs pins that `pnpm db:migrate` and every other way the repository migrates
    * runs the guard, never the raw runner.
    */
-  { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs', 'ops/scripts/migration-default-path.test.mjs', 'ops/scripts/migration-target.test.mjs'] },
+  { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs', 'ops/scripts/migration-default-path.test.mjs', 'ops/scripts/migration-target.test.mjs', 'ops/scripts/migration-persistent-target.test.mjs'] },
 ];
 
 /**

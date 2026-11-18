@@ -89,6 +89,10 @@ case "${1:-}" in
       echo "test-db: 127.0.0.1:$PG_PORT is not $PG (another server answers there); nothing was written" >&2
       false
     fi
+    # The migration guard applies only to a database marked disposable. The final mark is set last (only a fully set-up
+    # database carries it); this setup mark lets the guarded migration below run on the pair just proven to be ours.
+    docker exec "$PG" psql -U adulis_bootstrap -d adulis -v ON_ERROR_STOP=1 -q \
+      -c "COMMENT ON DATABASE adulis IS 'adulis:disposable-test-database:setup'"
     docker exec -i "$PG" psql -U adulis_bootstrap -d adulis -v ON_ERROR_STOP=1 -q <db/init/00-extensions.sql
     pnpm -s db:migrate >/dev/null
     pnpm -s worker:install >/dev/null # gate `worker-schema`: the queue schema the worker suites run on

@@ -45,7 +45,7 @@ Before acting:
 7. Make the migration deterministic and rerunnable only through the migration framework, not ad-hoc shell SQL.
 8. Update tests and relevant Appendix-C checks.
 9. Highlight migrations affecting stock/state machines for manual line-by-line review.
-10. Pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
+10. Pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it with `pnpm db:migrate` to a disposable database (`bash ops/scripts/test-db.sh up`; it runs the migration-file guard and refuses a persistent one, which needs `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<database>@<host>:<port>` from the committed tree). Never start `node-pg-migrate` directly.
 
 ## Hard blocks
 - A migration depending on DB v1.7-only rulings without explicit interim authorization.
