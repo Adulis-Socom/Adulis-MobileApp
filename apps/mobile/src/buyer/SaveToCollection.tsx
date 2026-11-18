@@ -88,6 +88,8 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
     setBusy(collectionRef);
     setError(null);
     let changed = false;
+    // The failure is said only after the read that follows it has answered: after a lost answer that read may show the change was made.
+    let failedText: string | null = null;
     try {
       if (add) {
         // Each tick its own key: the membership itself is idempotent on the server (review D3).
@@ -98,15 +100,15 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
       }
       changed = true;
     } catch (failure) {
-      if (priv.isCurrent()) {
-        const text = problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`;
-        setError({ text, collection: collectionRef, add });
-      }
+      failedText = problemCode(failure) === 'NOT_FOUND' ? t('buyer.save.target_gone') : `${t('buyer.save.failed')} ${failureMessage(t, failure)}`;
     } finally {
       if (priv.isCurrent()) {
         await qc.invalidateQueries({ queryKey: [SAVED_STATE] });
+        // One turn, so the read's answer is drawn before the failure is (see saved.ts).
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
         // Checked again: the session may have ended during the re-read (review F1).
         if (priv.isCurrent()) {
+          if (failedText !== null) setError({ text: failedText, collection: collectionRef, add });
           collections.refresh();
           // After the re-read, so the tick the Buyer hears about is the one now drawn.
           if (changed) AccessibilityInfo.announceForAccessibility(fillSlots(t(add ? 'buyer.save.added_to' : 'buyer.save.removed_from'), { name }) ?? '');

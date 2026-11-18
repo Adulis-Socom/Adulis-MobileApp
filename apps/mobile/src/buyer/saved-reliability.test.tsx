@@ -448,6 +448,48 @@ describe('the Add to collection picker after an uncertain outcome', () => {
     expect(keys()[1]).toBe(keys()[0]);
     expect(named('Gift ideas')).toHaveLength(1);
   });
+
+  const stateReads = () => api.callsTo('POST /v1/collections/saved-state:batch').length;
+
+  it('the failure of a tick is not said while the read that follows it is on its way, and never if that read shows it was stored', async () => {
+    signedIn();
+    fc.named('Gifts');
+    fc.loseAnswer('add', 'offline');
+    const gate = held();
+    fc.intercept('state', async () => {
+      if (stateReads() > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
+    await waitFor(() => expect(stateReads()).toBeGreaterThanOrEqual(2));
+    await act(() => jest.advanceTimersByTimeAsync(100));
+    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    await act(async () => gate.release());
+    await waitFor(() => expect(box('Gifts')).toBeChecked());
+    await waitFor(() => expect(box('Gifts')).toBeEnabled());
+    await flush();
+    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+  });
+
+  it('the failure of a tick that was not stored is said once that read has answered', async () => {
+    signedIn();
+    fc.named('Gifts');
+    fc.intercept('add', once(problem(500, 'INTERNAL', 'request')));
+    const gate = held();
+    fc.intercept('state', async () => {
+      if (stateReads() > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
+    await waitFor(() => expect(stateReads()).toBeGreaterThanOrEqual(2));
+    await act(() => jest.advanceTimersByTimeAsync(100));
+    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    await act(async () => gate.release());
+    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(box('Gifts')).not.toBeChecked();
+  });
 });
 
 describe('a Save on a discovery card after an uncertain outcome', () => {
@@ -619,6 +661,49 @@ describe('changes inside a Collection after an uncertain outcome', () => {
     } finally {
       alert.mockRestore();
     }
+  });
+
+  const detailReads = (outfit: string) => api.calls.filter((c) => c.path === `/v1/collections/${outfit}`).length;
+
+  it('the failure of a Remove is not said while the read that follows it is on its way, and never if that read shows it was stored', async () => {
+    signedIn();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    fc.loseAnswer('remove', 'offline');
+    const gate = held();
+    fc.intercept('detail', async () => {
+      if (detailReads(outfit) > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
+    await waitFor(() => expect(detailReads(outfit)).toBeGreaterThanOrEqual(2));
+    await act(() => jest.advanceTimersByTimeAsync(100));
+    expect(failed()).toBeNull();
+    await act(async () => gate.release());
+    await waitFor(() => expect(removeBasket()).toBeNull());
+    await flush();
+    expect(failed()).toBeNull();
+  });
+
+  it('the failure of a Remove that was not stored is said once that read has answered', async () => {
+    signedIn();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    fc.intercept('remove', once(problem(500, 'INTERNAL', 'request')));
+    const gate = held();
+    fc.intercept('detail', async () => {
+      if (detailReads(outfit) > 1) await gate.gate;
+      return undefined;
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
+    await waitFor(() => expect(detailReads(outfit)).toBeGreaterThanOrEqual(2));
+    await act(() => jest.advanceTimersByTimeAsync(100));
+    expect(failed()).toBeNull();
+    await act(async () => gate.release());
+    expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']}`))).toBeOnTheScreen();
+    expect(removeBasket()).not.toBeNull();
   });
 });
 

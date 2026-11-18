@@ -92,8 +92,8 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
     }
   };
 
-  // Said only while the item is still there: the list read again may show that the Remove took effect.
-  const failureText = failure && list.items.some((i) => i.ref === failure.item) ? failure.text : null;
+  // Said once the list read again has answered, and only while the item is still there: that read may show the Remove took effect.
+  const failureText = failure && !list.refreshing && list.items.some((i) => i.ref === failure.item) ? failure.text : null;
 
   const header = (
     <View style={{ gap: theme.space.md, paddingHorizontal: theme.space.xs, paddingBottom: theme.space.sm }}>
