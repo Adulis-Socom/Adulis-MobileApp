@@ -18,6 +18,19 @@ import type { Route } from './contract-support';
  *    gate lives in the migration that defines them.
  *
  * Reading the source (the way scanRoutes does) needs no database and no running API.
+ *
+ * KNOWN LIMITS. Everything below is text and AST reading, not execution.
+ *  - A route's permissions are the UNION of every single-quoted permission literal reachable from its handler body
+ *    (comments included; a quoted key of a lookup table is excluded), and the surfaces it admits are the
+ *    INTERSECTION over that union. A handler that checks a Console-only permission in one branch and a
+ *    mobile-capable one in another would be derived Console-only, and the spec would agree with a wrong
+ *    cookie-only declaration. This FAILS OPEN: the two branchy routes that exist (the seller side of chat and
+ *    notifications, and revoking another session) are listed by hand in SELLER_SIDE_ONLY and
+ *    CONSOLE_CHECK_FOR_ANOTHER_SESSION_ONLY, and a new one has to be added there by whoever writes it.
+ *  - Calls are followed only as this.method() and this.held.method() to a depth of four; a SQL function is read
+ *    from the last migration that defines it and nested SQL functions are not followed; the audience check is
+ *    recognised only as audience !== 'CONSOLE'. These FAIL SAFE: a protected route whose gate is not found fails
+ *    the spec unless it is on the reviewed authenticated-only list.
  */
 
 const ROOT = resolve(__dirname, '../../..');

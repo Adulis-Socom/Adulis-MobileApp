@@ -1,4 +1,4 @@
-import { loadContract, responseErrors } from './contract-support';
+import { loadContract, responseErrors } from './contract-check';
 
 /**
  * Jest `setupFilesAfterEnv`: every real response any suite receives through supertest is checked against
@@ -9,10 +9,35 @@ import { loadContract, responseErrors } from './contract-support';
  * It is how a response schema is held to the wire: the schema is proved by every real response in the suite, not
  * by the few assertions someone remembered to write, and a handler that changes its answer without the contract
  * breaks the suite that exercises it. The legacy commerce operations keep the metadata they declare today and are
- * left out. Observation only: the response is untouched, and an operation without a schema is not checked.
+ * left out. Observation only: the response is untouched.
+ *
+ * It imports only contract-check.ts (node and nothing else): it runs in every suite, including the pure unit specs.
+ *
+ * WHAT IT DOES NOT CHECK, on purpose (it is not widened here):
+ *  - a 2xx status the contract does not declare for the operation is skipped; status drift is the business of
+ *    the scanRoutes specs and expectConforms, not of this hook;
+ *  - non-2xx answers: the problem envelope and the error codes are not checked against ProblemDto;
+ *  - 2xx answers without a JSON schema in the contract (204, and the four operations whose wire shape is not
+ *    settled), and non-JSON answers;
+ *  - requests that do not go through supertest;
+ *  - requests a suite makes in its own afterAll: jest-circus runs after-hooks in definition order, so they happen
+ *    after this file's afterAll has flushed and are not reported;
+ *  - the contract path is matched by the most literal template without looking at the method; there is no pair of
+ *    overlapping templates today, and the specs would show one.
+ * An operation is exempt when its tag is a legacy commerce controller's (a tag is the controller class name without
+ * `Controller`; contract-conformance.spec.ts holds this list to LEGACY_COMMERCE_CONTROLLERS).
  */
 
-const LEGACY_COMMERCE_TAGS = new Set(['Billing', 'Claims', 'Couriers', 'Financial', 'Handoff', 'Obligations', 'Orders', 'Reviews']);
+export const LEGACY_COMMERCE_TAGS: ReadonlySet<string> = new Set([
+  'Billing',
+  'Claims',
+  'Couriers',
+  'Financial',
+  'Handoff',
+  'Obligations',
+  'Orders',
+  'Reviews',
+]);
 
 interface SupertestCall {
   method: string;
@@ -44,7 +69,7 @@ Test.prototype.assert = function (this: SupertestCall, resError: unknown, res: u
     const r = res as { status?: number; body?: unknown; headers?: Record<string, string> } | undefined;
     if (r?.status !== undefined && r.status >= 200 && r.status < 300 && (r.headers?.['content-type'] ?? '').includes('json')) {
       const t = templateOf(this.url);
-      const operation = t?.item[this.method.toLowerCase()] as { tags?: string[]; responses: Record<string, { content?: Record<string, { schema?: unknown }> }> } | undefined;
+      const operation = t?.item[this.method.toLowerCase()];
       if (t && operation && !(operation.tags ?? []).some((tag) => LEGACY_COMMERCE_TAGS.has(tag))) {
         if (operation.responses[String(r.status)]?.content?.['application/json']?.schema) {
           const errors = responseErrors(r.body, this.method, t.path, r.status);
@@ -57,6 +82,11 @@ Test.prototype.assert = function (this: SupertestCall, resError: unknown, res: u
   }
   return original.call(this, resError, res, fn);
 };
+
+/** For the spec that proves the hook is armed: the violations recorded so far in this suite, which are then discarded. */
+export function takeViolations(): string[] {
+  return violations.splice(0);
+}
 
 function flush(): void {
   if (violations.length === 0) return;
