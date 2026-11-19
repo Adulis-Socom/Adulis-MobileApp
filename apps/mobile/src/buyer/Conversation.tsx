@@ -29,6 +29,7 @@ import {
 import type { ProductRef } from './MessageSellerButton';
 import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
+import { candidatesFor, captureBaseline, type Baseline } from './pending-match';
 import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
 import { judgeFailure, type SendStatus } from './send-intent';
@@ -46,6 +47,10 @@ import { judgeFailure, type SendStatus } from './send-intent';
  *   only while it is surely inside the server's 24 hour record (23 hours from the first attempt) and
  *   after no key conflict; beyond that the screen offers only an explicit new message. A wait the
  *   server or a gateway asked for (429, 503) holds sending and Ask the Seller until it is over.
+ * - While a send is unconfirmed, a message in the history with the same text that is newer than what the
+ *   history held before the attempt (pending-match.ts: server times only) is reported as a hint. The
+ *   app never settles the send on it: only the server's answer to the same key does, or the person's own
+ *   "Clear the message", which sends nothing and claims nothing.
  * - "Ask the Seller" after an automated answer, with no promise of a response time.
  * - Re-read on opening, on Refresh, and every 30 seconds while this screen is focused and the app is
  *   in the foreground. No presence, typing or delivery receipts.
@@ -80,10 +85,19 @@ const COMPOSER_MAX = '60%';
  * Product context are discarded with it. Nothing depends on the server refusing the old conversation.
  */
 export function ConversationScreen({ conversationRef, product = null }: { conversationRef: unknown; product?: ProductRef | null }) {
+  const t = useT();
   const { session } = useSession();
   const current = session.status === 'signedIn' ? session.token : null;
   const owner = useRef(current);
-  if (current === null || current !== owner.current) return <Redirect href="/messages" />;
+  if (current === null || current !== owner.current) {
+    return (
+      <>
+        {/* The body set the Seller's store name as the title, and unmounting it does not reset it. */}
+        <Stack.Screen options={{ title: t('buyer.chat.title') }} />
+        <Redirect href="/messages" />
+      </>
+    );
+  }
   return <OwnedConversation conversationRef={conversationRef} product={product} />;
 }
 
@@ -122,8 +136,19 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const [askFailed, setAskFailed] = useState<'refused' | 'unknown' | false>(false);
   const sending = useRef(false);
   const askingRef = useRef(false);
-  // The idempotency intent is the WHOLE payload: text and Product (or none).
-  const sendIntent = useRef<{ text: string; productId: string | null; key: string; startedAt: number } | null>(null);
+  // The idempotency intent is the WHOLE payload: text and Product (or none). `attempts` counts the requests
+  // sent under the key; `baseline` is what the history held before the first one (server values only).
+  const sendIntent = useRef<{
+    text: string;
+    productId: string | null;
+    key: string;
+    startedAt: number;
+    attempts: number;
+    baseline: Baseline;
+  } | null>(null);
+  // An unconfirmed message the person chose to edit: kept (this screen only) so that its words can still be
+  // recognised in the history while they are in the box again.
+  const [watch, setWatch] = useState<{ text: string; aboutProduct: boolean; baseline: Baseline } | null>(null);
   // The next message's Product (lookup keys of a public read), and a refusal from the last check.
   const [context, setContext] = useState<ProductRef | null>(product);
   const [refusal, setRefusal] = useState<'gone' | 'mismatch' | 'unchecked' | null>(null);
@@ -145,12 +170,26 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     gcTime: 0,
     retry: (failures, e) => isTransient(e) && failures < 2,
   });
-  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number } | null>(null);
+  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number; attempts: number } | null>(null);
 
   // Unknown and the same message can no longer be replayed (a key conflict, or past its safe age): the
   // app cannot confirm the outcome and offers no Try sending again, so its sentence does not promise one.
   const withdrawn =
     state === 'unknown' && sendIntent.current !== null && (keyLost || !keyUsable(sendIntent.current, Date.now()));
+  // Rows of the history that could be the unconfirmed message (pending-match.ts). A hint for the person
+  // and nothing more: a row carries no key, so the app never settles the send on it. Only the server's
+  // own answer to the same key does.
+  const pendingSend = sendIntent.current;
+  const candidates =
+    state === 'unknown' && pendingSend !== null
+      ? candidatesFor({ text: pendingSend.text, aboutProduct: pendingSend.productId !== null, baseline: pendingSend.baseline }, messages.items)
+      : state === 'unsent' && watch !== null && draft.trim() === watch.text
+        ? candidatesFor(watch, messages.items)
+        : [];
+  const hint = candidates.length > 0 ? t('buyer.chat.appears_received') : null;
+  useEffect(() => {
+    if (hint !== null) AccessibilityInfo.announceForAccessibility(hint);
+  }, [hint]);
   // The alert role alone is not spoken on Android: announce what happened to the message. The effect
   // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
   // withdrawn at a press (the state does not change then).
@@ -240,7 +279,24 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const replayable = frozen && !keyLost && keyUsable(unconfirmed, Date.now());
   const abandon = () => {
     if (sending.current) return;
+    // The words are in the box again: they stay recognisable in the history, beside Send.
+    const given = sendIntent.current;
+    if (given !== null) setWatch({ text: given.text, aboutProduct: given.productId !== null, baseline: given.baseline });
     sendIntent.current = null;
+    setKeyLost(false);
+    setState('unsent');
+    setError(null);
+    setNotFound(null);
+  };
+  // After the person has seen the message in the conversation: empties the box and ends the retry. It
+  // sends nothing and claims nothing; the message in the list is the server's own.
+  const discard = () => {
+    if (sending.current) return;
+    sendIntent.current = null;
+    setWatch(null);
+    setDraft('');
+    setContext(null);
+    setRefusal(null);
     setKeyLost(false);
     setState('unsent');
     setError(null);
@@ -307,9 +363,18 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       // One key per payload: a retry of the same text and Product replays, never re-sends; a changed
       // text or Product is a new intent.
       if (sendIntent.current?.text !== text || sendIntent.current.productId !== productId) {
-        sendIntent.current = { text, productId, key: newIdempotencyKey(), startedAt: Date.now() };
+        sendIntent.current = {
+          text,
+          productId,
+          key: newIdempotencyKey(),
+          startedAt: Date.now(),
+          attempts: 0,
+          baseline: captureBaseline({ read: messages.data !== undefined, items: messages.items }),
+        };
         setKeyLost(false);
+        setWatch(null);
       }
+      sendIntent.current.attempts += 1;
       const body = await api.sendMessage(ref, text, sendIntent.current.key, productId);
       // An acceptance without a readable message id may still have stored it: unknown.
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
@@ -367,7 +432,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const ask = async () => {
     if (!api || !answer || askingRef.current || hold !== null) return;
     askingRef.current = true;
-    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now() };
+    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now(), attempts: 0 };
     setAsking(true);
     setAskFailed(false);
     try {
@@ -378,6 +443,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         if (api.isCurrent() && !(await readHistory())) setPassedOn({ id: answer.id, confirmed: false });
         return;
       }
+      askIntent.current.attempts += 1;
       // Only the server's own confirmation counts; a 200 that does not say it is unconfirmed.
       if (!acceptedEscalation(await api.escalateConversation(ref, askIntent.current.key))) throw new ApiError({ kind: 'unexpected', status: 200 });
       askIntent.current = null;
@@ -517,9 +583,12 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         ) : state === 'failed' || state === 'unknown' ? (
           <View accessibilityRole="alert">
             <AppText>{t(state === 'failed' ? 'buyer.chat.not_sent' : withdrawn ? 'buyer.chat.cannot_confirm' : 'buyer.chat.maybe_not_sent')}</AppText>
+            {hint !== null && state === 'unknown' ? <AppText>{hint}</AppText> : null}
             {error ? <AppText style={secondary}>{error}</AppText> : null}
           </View>
         ) : null}
+        {/* The same words are in the box again (after Edit the message instead): the hint stays above Send, which it never blocks. */}
+        {hint !== null && state === 'unsent' ? <AppText>{hint}</AppText> : null}
         {hold !== null ? (
           <View accessibilityRole="alert">
             <AppText>{hold.text}</AppText>
@@ -536,6 +605,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
             disabled={state === 'sending' || hold !== null || text.length === 0 || tooLong || (context !== null && contextStatus !== 'ok')}
           />
         )}
+        {/* Only once the replay is withdrawn and the message appears: then the person, not the app, decides it is done. */}
+        {withdrawn && hint !== null ? <Button label={t('buyer.chat.discard_unconfirmed')} variant="secondary" onPress={discard} /> : null}
         {frozen ? <Button label={t('buyer.chat.edit_unconfirmed')} variant="secondary" onPress={abandon} /> : null}
       </View>
       </View>

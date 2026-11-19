@@ -1,6 +1,6 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
-import { onlineManager } from '@tanstack/react-query';
+import { focusManager, onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
 
@@ -1811,6 +1811,58 @@ describe('Account change while a conversation is open', () => {
     expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
     expect(chat.convs.find((c) => c.id === theirs.id)?.messages.some((m) => m.body === 'Unconfirmed first draft')).toBe(false);
   });
+
+  // The whole rendered tree, screens hidden under others and header titles included: a text query skips those.
+  type Json = string | { props?: Record<string, unknown>; children?: Json[] | null } | null;
+  const everything = () => {
+    const out: string[] = [];
+    const walk = (node: Json | Json[]) => {
+      if (node === null) return;
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (typeof node === 'string') return void out.push(node);
+      for (const value of Object.values(node.props ?? {})) if (typeof value === 'string') out.push(value);
+      walk(node.children ?? null);
+    };
+    walk(screen.toJSON() as Json | Json[]);
+    return out.join(' | ');
+  };
+
+  it("the first Account's store name, the thread's own title, is nowhere in the rendered tree after the switch", async () => {
+    const { theirs } = accounts();
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    expect(await screen.findByText('First Account private reply')).toBeOnTheScreen();
+    // While the thread is open the title is the store's name; this proves the tree shows header titles.
+    expect(everything()).toContain('First Account store');
+    await switchAccount();
+    await quiet();
+    expect(everything()).not.toContain('First Account store');
+    expect(everything()).not.toContain('First Account private reply');
+  });
+
+  it('the line saying a message now appears, and the draft behind it, leave with the screen', async () => {
+    const { chat, theirs } = accounts();
+    api.onPattern('POST', MESSAGES, () => {
+      chat.msg(theirs, { sender_kind: 'BUYER', body: 'Pending thought', sent_at: new Date().toISOString() });
+      return { status: 502, unreadable: true };
+    });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+    await screen.findByText('First Account private reply');
+    await fireEvent.changeText(composer(), 'Pending thought');
+    await fireEvent.press(sendButton());
+    expect(await screen.findByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+    await switchAccount();
+    await quiet();
+    await open(`/chat/${theirs.id}`);
+    expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+    expect(everything()).not.toContain(en['buyer.chat.appears_received']);
+    expect(everything()).not.toContain('Pending thought');
+    expect(screen.queryByLabelText(en['buyer.chat.composer'])).toBeNull();
+    await quiet();
+    expect(sends()).toHaveLength(1);
+    expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+  });
+
 });
 
 /**
@@ -1830,7 +1882,9 @@ describe('Message send reconciliation', () => {
   // A wait the server asked for, said without naming a cause (a 503 is not "too many requests").
   const wait = (seconds: number) => `Please wait. You can try again in ${seconds} seconds.`;
 
-  function idempotent(chat: Chat, script: Array<Fault | undefined> = []) {
+  // `serverSkewMs`: the server's clock against the device's. A stored message is stamped with the SERVER's
+  // time, as the database does, so a rule that compared it with the device's clock would show.
+  function idempotent(chat: Chat, script: Array<Fault | undefined> = [], clock: { serverSkewMs?: number } = {}) {
     const records = new Map<string, { hash: string; id: string; at: number }>();
     let attempt = 0;
     let replays = 0;
@@ -1846,7 +1900,7 @@ describe('Message send reconciliation', () => {
       const commit = () => {
         const existing = records.get(key);
         if (existing) return existing;
-        const m = chat.msg(c, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date().toISOString(), product_id: (call.body?.product_id as string | undefined) ?? null });
+        const m = chat.msg(c, { sender_kind: 'BUYER', body: String(call.body?.text), sent_at: new Date(Date.now() + (clock.serverSkewMs ?? 0)).toISOString(), product_id: (call.body?.product_id as string | undefined) ?? null });
         const made = { hash, id: m.id, at: Date.now() };
         records.set(key, made);
         return made;
@@ -2183,6 +2237,400 @@ describe('Message send reconciliation', () => {
     expect(server.replays()).toBe(1);
     expect(stored(chat, 'Slow server')).toHaveLength(1);
     expect(screen.getAllByText('Slow server')).toHaveLength(1);
+  });
+
+  /**
+   * An unconfirmed send and the conversation's own history. A row with the same text, newer than what
+   * the history held before the attempt, is only a hint (the server returns no key on a row): nothing is
+   * settled from it, nothing is sent because of it, and the server's clock is never compared with the
+   * device's.
+   */
+  describe('the history beside an unconfirmed send', () => {
+    const appears = () => screen.findByText(en['buyer.chat.appears_received']);
+    const noHint = () => expect(screen.queryByText(en['buyer.chat.appears_received'])).toBeNull();
+    const clearButton = () => screen.getByRole('button', { name: en['buyer.chat.discard_unconfirmed'] });
+    const noClear = () => expect(screen.queryByRole('button', { name: en['buyer.chat.discard_unconfirmed'] })).toBeNull();
+    const histories = () => api.calls.filter((x) => x.method === 'GET' && MESSAGES_PATH.test(x.path)).length;
+
+    /** The conversation is on screen, and its history read, before the first attempt. */
+    async function openWith(setup: (chat: Chat, c: Conv) => void, visible: string) {
+      signedIn();
+      const chat = installChat();
+      const c = chat.conv(A);
+      setup(chat, c);
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+      await screen.findAllByText(visible);
+      return { chat, c };
+    }
+
+    it('a message the server stores after the client gave up: it says so, the replay is still offered, and the replay settles it with one message', async () => {
+      const { chat } = await open();
+      const server = idempotent(chat, [{ commitAfterMs: 15_000 }]);
+      await typeAndSend('Late hint');
+      await advance(10_000);
+      expect(await maybe()).toBeOnTheScreen();
+      noHint();
+      for (let i = 0; i < 9 && screen.queryByText('Late hint') === null; i++) await advance(10_000);
+      expect(await screen.findByText('Late hint')).toBeOnTheScreen();
+      expect(await appears()).toBeOnTheScreen();
+      expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+      expect(composer().props.editable).toBe(false);
+      expect(sends()).toHaveLength(1);
+      // Nothing is settled by the match: only the server's own answer to the same key does that.
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+      noHint();
+      expect(sends()).toHaveLength(2);
+      expect(keys()[1]).toBe(keys()[0]);
+      expect(server.replays()).toBe(1);
+      expect(stored(chat, 'Late hint')).toHaveLength(1);
+      expect(screen.getAllByText('Late hint')).toHaveLength(1);
+    });
+
+    it('the answer was lost and the server stored nothing: another message of the Buyer, in other words, gives no hint', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await typeAndSend('Never arrived');
+      expect(await maybe()).toBeOnTheScreen();
+      chat.msg(c, { sender_kind: 'BUYER', body: 'Something else entirely', sent_at: new Date().toISOString() });
+      await advance(65_000);
+      expect(await screen.findByText('Something else entirely')).toBeOnTheScreen();
+      noHint();
+    });
+
+    it('an identical message that was already in the conversation is not the one: no hint when the new one never arrived', async () => {
+      const { chat } = await openWith((seed, c) => {
+        seed.msg(c, { sender_kind: 'BUYER', body: 'Same words', sent_at: ago(300) });
+        // The newest instant holds a Buyer message and its automated answer, as the server writes them.
+        const instant = ago(120);
+        seed.msg(c, { sender_kind: 'BUYER', body: 'Same words', sent_at: instant });
+        seed.msg(c, { sender_kind: 'BOT', template_key: 'chat.bot.escalated', resolution_path: 'ESCALATED', sent_at: instant });
+      }, 'Same words');
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await typeAndSend('Same words');
+      expect(await maybe()).toBeOnTheScreen();
+      await advance(65_000);
+      noHint();
+      expect(stored(chat, 'Same words')).toHaveLength(2);
+    });
+
+    it.each([[-2], [2]])('with the server clock %i hours from the device clock the hint comes when the message is stored, and never for an identical earlier one', async (hours) => {
+      const skewMs = hours * 3600_000;
+      const { chat } = await openWith((seed, c) => {
+        seed.msg(c, { sender_kind: 'BUYER', body: 'Skew text', sent_at: new Date(Date.now() + skewMs - 60_000).toISOString() });
+      }, 'Skew text');
+      idempotent(chat, [{ commitAfterMs: 15_000 }], { serverSkewMs: skewMs });
+      await typeAndSend('Skew text');
+      await advance(10_000);
+      expect(await maybe()).toBeOnTheScreen();
+      noHint();
+      for (let i = 0; i < 9 && screen.queryAllByText('Skew text').length < 2; i++) await advance(10_000);
+      expect(screen.getAllByText('Skew text')).toHaveLength(2);
+      expect(await appears()).toBeOnTheScreen();
+    });
+
+    it.each([
+      [
+        'the key reaches its safe age',
+        [{ lose: gatewayPage }] as Fault[],
+        async () => {
+          jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+          await fireEvent.press(retryButton());
+        },
+      ],
+      [
+        'the server answers the replay with a key conflict',
+        [{ lose: gatewayPage }, { refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }] as Fault[],
+        async () => {
+          await fireEvent.press(retryButton());
+        },
+      ],
+    ])('when %s and the message now appears: the app says so, and Clear the message empties the box and sends nothing', async (_name, script, withdraw) => {
+      const { chat } = await open();
+      idempotent(chat, script);
+      await typeAndSend('Clear me');
+      await maybe();
+      await withdraw();
+      expect(await cannotConfirm()).toBeOnTheScreen();
+      expect(await appears()).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
+      expect(composer().props.editable).toBe(false);
+      const before = sends().length;
+      await fireEvent.press(clearButton());
+      expect(composer().props.value).toBe('');
+      expect(composer().props.editable).toBe(true);
+      noHint();
+      noClear();
+      expect(screen.queryByText(en['buyer.chat.cannot_confirm'])).toBeNull();
+      await advance(1000);
+      // Nothing was sent, and the message in the conversation is the server's own, once.
+      expect(sends()).toHaveLength(before);
+      expect(stored(chat, 'Clear me')).toHaveLength(1);
+      expect(screen.getAllByText('Clear me')).toHaveLength(1);
+      // The next message is an ordinary new one.
+      await typeAndSend('The next one');
+      await waitFor(() => expect(sends()).toHaveLength(before + 1));
+      expect(keys()[before]).not.toBe(keys()[0]);
+    });
+
+    it('when the message cannot be replayed and does not appear, the app says it cannot confirm and offers no Clear', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await typeAndSend('Not stored');
+      await maybe();
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await fireEvent.press(retryButton());
+      expect(await cannotConfirm()).toBeOnTheScreen();
+      await advance(65_000);
+      noHint();
+      noClear();
+      expect(edit()).toBeOnTheScreen();
+      expect(sends()).toHaveLength(1);
+    });
+
+    it('Edit the message instead keeps the hint above Send while the words are the same, and never blocks Send', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Edit me');
+      await maybe();
+      expect(await appears()).toBeOnTheScreen();
+      await fireEvent.press(edit());
+      expect(composer().props.editable).toBe(true);
+      expect(composer().props.value).toBe('Edit me');
+      expect(screen.getByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+      // Other words, no hint; the same words again, the hint again.
+      await fireEvent.changeText(composer(), 'Edit me, please');
+      noHint();
+      await fireEvent.changeText(composer(), 'Edit me');
+      expect(screen.getByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+      // The person decides: Send goes out under a new key.
+      await fireEvent.press(sendButton());
+      await waitFor(() => expect(sends()).toHaveLength(2));
+      expect(keys()[1]).not.toBe(keys()[0]);
+      await waitFor(() => expect(stored(chat, 'Edit me')).toHaveLength(2));
+      await waitFor(() => noHint());
+      expect(composer().props.value).toBe('');
+    });
+
+    it('two rows that could be the message still make one sentence', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Twice stored');
+      await maybe();
+      expect(await appears()).toBeOnTheScreen();
+      // Another device wrote the same words after the attempt began.
+      chat.msg(c, { sender_kind: 'BUYER', body: 'Twice stored', sent_at: new Date().toISOString() });
+      await advance(35_000);
+      await waitFor(() => expect(screen.getAllByText('Twice stored')).toHaveLength(2));
+      expect(screen.getAllByText(en['buyer.chat.appears_received'])).toHaveLength(1);
+    });
+
+    it.each([
+      ['about the same Product', true, true],
+      ['plain, while the attempt was about a Product', false, false],
+    ])('a message about a Product matches only a row about a Product (a row %s)', async (_name, rowIsAnchored, attemptStored) => {
+      signedIn();
+      const chat = installChat();
+      chat.publish(BASKET);
+      await renderRouter(APP_DIR, { initialUrl: `/product/${HANDLE}/basket` });
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] }));
+      await within(await screen.findByTestId('chat-product-context')).findByText(BASKET.name);
+      idempotent(chat, [attemptStored ? { lose: gatewayPage } : { refuse: 'offline' }]);
+      await typeAndSend('About the basket');
+      expect(await maybe()).toBeOnTheScreen();
+      if (!attemptStored) {
+        // Not stored; a plain message with the same words appeared meanwhile.
+        const c = chat.convs[0]!;
+        chat.msg(c, { sender_kind: 'BUYER', body: 'About the basket', sent_at: new Date().toISOString(), product_id: rowIsAnchored ? BASKET.id : null });
+        await advance(65_000);
+        await screen.findByText('About the basket');
+        noHint();
+      } else {
+        expect(await appears()).toBeOnTheScreen();
+      }
+    });
+
+    it('a history that had not been read when the attempt began never gives a hint', async () => {
+      signedIn();
+      const chat = installChat();
+      const c = chat.conv(A);
+      // The conversation opens while its history cannot be read.
+      api.onPattern('GET', MESSAGES_PATH, () => problem(500, 'INTERNAL', 'request'));
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+      expect(await screen.findByText(en['buyer.chat.failed'])).toBeOnTheScreen();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Blind send');
+      expect(await maybe()).toBeOnTheScreen();
+      // The history can be read again, and holds the message: nothing relates it to the attempt.
+      api.onPattern('GET', MESSAGES_PATH, () => ({ status: 200, body: { data: c.messages, next_cursor: null } }));
+      await advance(35_000);
+      expect(await screen.findByText('Blind send')).toBeOnTheScreen();
+      await advance(65_000);
+      noHint();
+      expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    });
+
+    it('the hint is announced once, not at every refresh of the conversation', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await open();
+        idempotent(chat, [{ lose: gatewayPage }]);
+        await typeAndSend('Say it once');
+        await maybe();
+        expect(await appears()).toBeOnTheScreen();
+        await advance(65_000);
+        expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.appears_received'])).toHaveLength(1);
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('back from the background the history is read once and the hint appears; nothing was read while away and nothing is sent', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ commitAfterMs: 100_000 }]);
+      await typeAndSend('While away');
+      await advance(10_000);
+      await maybe();
+      try {
+        await act(async () => focusManager.setFocused(false));
+        const before = histories();
+        await advance(150_000);
+        expect(histories()).toBe(before);
+        expect(stored(chat, 'While away')).toHaveLength(1);
+        noHint();
+        await act(async () => focusManager.setFocused(true));
+        expect(await appears()).toBeOnTheScreen();
+        expect(histories()).toBeGreaterThan(before);
+        expect(sends()).toHaveLength(1);
+      } finally {
+        focusManager.setFocused(undefined);
+      }
+    });
+
+    it('while offline nothing is read; when the connection returns the history is, and the hint appears without a press or a send', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: 'offline' }]);
+      await act(async () => onlineManager.setOnline(false));
+      try {
+        await typeAndSend('Dropped answer');
+        expect(await maybe()).toBeOnTheScreen();
+        await advance(65_000);
+        noHint();
+        expect(stored(chat, 'Dropped answer')).toHaveLength(1);
+        await act(async () => onlineManager.setOnline(true));
+        expect(await appears()).toBeOnTheScreen();
+        expect(sends()).toHaveLength(1);
+      } finally {
+        await act(async () => onlineManager.setOnline(true));
+      }
+    });
+
+    it('during a wait the server asked for the hint shows and Clear the message still works, while sending again stays off', async () => {
+      const { chat } = await open();
+      const held503 = { ...problem(503, 'INTERNAL', 'request', { retry_after_seconds: 600 }), headers: { 'Retry-After': '600' } };
+      idempotent(chat, [{ lose: held503 }]);
+      await typeAndSend('Held and stored');
+      expect(await maybe()).toBeOnTheScreen();
+      expect(screen.getByText(wait(600))).toBeOnTheScreen();
+      expect(await appears()).toBeOnTheScreen();
+      expect(retryButton()).toBeDisabled();
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await advance(31_000);
+      expect(await cannotConfirm()).toBeOnTheScreen();
+      expect(screen.getByText(wait(600))).toBeOnTheScreen();
+      await fireEvent.press(clearButton());
+      expect(composer().props.editable).toBe(true);
+      expect(composer().props.value).toBe('');
+      expect(sends()).toHaveLength(1);
+    });
+
+    it('a 503 after the server stored the message: the hint comes from the immediate re-read, not at the next 30 second poll', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: problem(503, 'INTERNAL', 'request') }]);
+      const started = Date.now();
+      await typeAndSend('Immediate');
+      expect(await maybe()).toBeOnTheScreen();
+      expect(await appears()).toBeOnTheScreen();
+      expect(Date.now() - started).toBeLessThan(5000);
+    });
+
+    it('the key reaching its safe age with the screen open withdraws Try sending again at once, with no press, and keeps the hint', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Aged key');
+      await maybe();
+      expect(await appears()).toBeOnTheScreen();
+      expect(retryButton()).toBeEnabled();
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS);
+      await advance(31_000);
+      await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull());
+      expect(screen.getByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+      expect(clearButton()).toBeOnTheScreen();
+      expect(sends()).toHaveLength(1);
+    });
+
+    it('a guard refusal on the replay says nothing about the first attempt: the same key stays and settles it; on the first attempt the same refusal is the API\'s own', async () => {
+      const { chat } = await open();
+      const guard = problem(403, 'CLIENT_UPGRADE_REQUIRED', 'request');
+      const server = idempotent(chat, [{ lose: gatewayPage }, { refuse: guard }]);
+      await typeAndSend('Behind a guard');
+      await maybe();
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(sends()).toHaveLength(2));
+      expect(await maybe()).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+      await waitFor(() => expect(retryButton()).toBeEnabled());
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+      expect(sends()).toHaveLength(3);
+      expect(keys()[2]).toBe(keys()[0]);
+      expect(server.replays()).toBe(1);
+      expect(stored(chat, 'Behind a guard')).toHaveLength(1);
+    });
+
+    it('the same guard refusal on the FIRST attempt is the API\'s own: not sent, and the next Send is a new key', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ refuse: problem(403, 'CLIENT_UPGRADE_REQUIRED', 'request') }]);
+      await typeAndSend('Guarded first');
+      expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+      await fireEvent.press(sendButton());
+      await waitFor(() => expect(sends()).toHaveLength(2));
+      expect(keys()[1]).not.toBe(keys()[0]);
+    });
+
+    it('a clock stepped back after a quick send withdraws the replay as before, and the hint still recognises the stored message and can clear it', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Clock back again');
+      await maybe();
+      expect(await appears()).toBeOnTheScreen();
+      jest.setSystemTime(Date.now() - 60_000);
+      await fireEvent.press(retryButton());
+      await advance(1000);
+      expect(sends()).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
+      expect(await cannotConfirm()).toBeOnTheScreen();
+      expect(screen.getByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+      await fireEvent.press(clearButton());
+      expect(composer().props.editable).toBe(true);
+      expect(composer().props.value).toBe('');
+    });
+
+    it('a wait written as a date is measured against the answer\'s own Date, not the device clock', async () => {
+      const { chat } = await open();
+      // The device is an hour behind the server that answered.
+      const serverNow = Date.now() + 3600_000;
+      const stamp = (seconds: number) => new Date(serverNow + seconds * 1000).toUTCString();
+      idempotent(chat, [{ refuse: { status: 503, unreadable: true, headers: { 'Retry-After': stamp(90), Date: stamp(0) } } }]);
+      await typeAndSend('Wait by date');
+      expect(await maybe()).toBeOnTheScreen();
+      expect(screen.getByText(wait(90))).toBeOnTheScreen();
+      await advance(89_000);
+      expect(retryButton()).toBeDisabled();
+      await advance(1_000);
+      await waitFor(() => expect(retryButton()).toBeEnabled());
+    });
   });
 
   describe('Ask the Seller', () => {
