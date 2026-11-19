@@ -64,9 +64,34 @@ afterEach(() => {
   onlineManager.setOnline(true);
 });
 
-describe('several Sellers, Products and options', () => {
-  it('keeps each Seller\'s lines in its own cart, in the order the server lists them', async () => {
+describe('one Seller per cart, as the cart contract says', () => {
+  it('refuses an add for a second Seller as a known refusal that says the carts changed, and draws only the first Seller\'s cart', async () => {
     const world = createFixtureWorld();
+    await renderWithCommerce(
+      <>
+        <CartsDump />
+        <AddFor variant={A_BOWL} />
+        <AddFor variant={B_MUG} />
+      </>,
+      { adapter: world.adapter, token: null },
+    );
+    await tapAdd(A_BOWL);
+    await waitFor(() => expect(addState(A_BOWL)).toHaveTextContent('ADDED'));
+    await waitFor(() => expect(carts()).toHaveTextContent('LISTED:VERIFIED demo-seller-a[Demo bowl default x1 @45000]', contains));
+    const readsBefore = world.server.calls.filter((c) => c.op === 'getCarts').length;
+
+    await tapAdd(B_MUG);
+    await waitFor(() => expect(addState(B_MUG)).toHaveTextContent('REFUSED_RELOAD'));
+    // The refusal is followed by a new read, and the carts still show only the first Seller.
+    await waitFor(() => expect(world.server.calls.filter((c) => c.op === 'getCarts').length).toBeGreaterThan(readsBefore));
+    expect((carts().props.children as string).trim()).toBe('LISTED:VERIFIED demo-seller-a[Demo bowl default x1 @45000]');
+    expect(world.server.carts(world.actor()).carts.map((c) => c.handle)).toEqual(['demo-seller-a']);
+  });
+});
+
+describe('several Sellers, Products and options (several Seller carts at once, asked for: not what the cart contract describes)', () => {
+  it('keeps each Seller\'s lines in its own cart, in the order the server lists them', async () => {
+    const world = createFixtureWorld({ sellerCarts: 'MULTI' });
     await renderWithCommerce(
       <>
         <CartsDump />
@@ -91,8 +116,8 @@ describe('several Sellers, Products and options', () => {
     );
   });
 
-  it('adds a second deliberate add of the same option to its line, or draws two lines when the server makes two', async () => {
-    const merging = createFixtureWorld();
+  it('draws one line when the server merges a repeated option (asked for), with a new key for the second add', async () => {
+    const merging = createFixtureWorld({ mergeDuplicates: true });
     await renderWithCommerce(
       <>
         <CartsDump />
@@ -110,7 +135,7 @@ describe('several Sellers, Products and options', () => {
   });
 
   it('draws the server\'s two lines for one option as two lines, and merges nothing itself', async () => {
-    const separate = createFixtureWorld({ mergeDuplicates: false });
+    const separate = createFixtureWorld();
     await renderWithCommerce(
       <>
         <CartsDump />
@@ -265,7 +290,7 @@ describe('what the server reports', () => {
   });
 
   it('draws a Seller subtotal only when the server sends one, and never a total across Sellers', async () => {
-    const world = createFixtureWorld({ serverSubtotal: true });
+    const world = createFixtureWorld({ serverSubtotal: true, sellerCarts: 'MULTI' });
     await renderWithCommerce(
       <>
         <CartsDump />

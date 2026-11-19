@@ -64,6 +64,26 @@ describe('the pending adds of this run', () => {
     expect(store.read(scope, V1).kind).toBe('OFFLINE_NOT_SENT');
   });
 
+  it('does not begin over an add that could not be resolved, makes no key for it, and starts over only after it is dismissed', () => {
+    const store = createIntentStore();
+    const { scope } = makeScope();
+    store.begin(scope, { variantId: V1, quantity: 1 }, ctx(() => 'key-1'));
+    store.apply(scope, V1, { type: 'FAILED', judgement: { outcome: 'unknown', replay: false, holdMs: null }, now: 1100 });
+    const unresolved = store.read(scope, V1);
+    expect(unresolved.kind).toBe('UNRESOLVED');
+    const mint = jest.fn(() => 'key-2');
+    const again = store.begin(scope, { variantId: V1, quantity: 1 }, ctx(mint));
+    expect(again?.result).toBe('ignored');
+    expect(again?.state).toBe(unresolved);
+    expect(mint).not.toHaveBeenCalled();
+    expect(store.read(scope, V1)).toBe(unresolved);
+
+    store.dismiss(scope, V1);
+    const fresh = store.begin(scope, { variantId: V1, quantity: 1 }, ctx(() => 'key-3'));
+    expect(fresh?.result).toBe('started');
+    expect(store.read(scope, V1)).toMatchObject({ kind: 'SENDING', intent: { key: 'key-3' } });
+  });
+
   it('starts a new add after the last one ended, with a new key', () => {
     const store = createIntentStore();
     const { scope } = makeScope();

@@ -20,8 +20,12 @@ import { demoCatalogue, moneyOf, type DemoSeller, type DemoVariant } from './sce
  * on command. It models no payment, no fee, no quote, no delivery and no Order, and it calls no network.
  * Whether it exists in any build is not decided; it is imported only by tests and by the test-only folder.
  *
- * Its rules are labelled assumptions where the contract is silent: same-option adds merge unless told
- * not to; price changes are reported only when told to, against a baseline the simulator keeps per line.
+ * Its defaults follow what the cart contract says: a cart holds one Seller (an add for a second Seller is
+ * a 409 CART_SELLER_CONFLICT) and adding an option that is already in the cart makes a second line.
+ * Everything else is an opt-in scenario that the contract does not describe: several Seller carts at
+ * once (`sellerCarts: 'MULTI'`), merging a repeated option (`mergeDuplicates`), a refused add for an option
+ * that cannot be bought (`refuseUnavailableAdds`), a Seller subtotal (`serverSubtotal`) and price changes
+ * reported against a baseline the simulator keeps per line (`reportPriceChanges`).
  */
 
 /** What happens to a guest's cart when the same device signs in. Models no product decision. */
@@ -66,7 +70,12 @@ export interface FixtureServer {
   serverSubtotal: boolean;
   /** Whether a read reports PRICE_CHANGED, with the previous price, against the price a line had when it was added. */
   reportPriceChanges: boolean;
-  /** Whether adding an option that is already in the cart adds to that line (true) or makes a second line. */
+  /**
+   * SINGLE (the default, as the cart contract says): a cart holds one Seller and an add for another Seller
+   * is refused with 409 CART_SELLER_CONFLICT. MULTI: one cart per Seller at once, which the contract does not describe.
+   */
+  sellerCarts: 'SINGLE' | 'MULTI';
+  /** Whether adding an option that is already in the cart adds to that line (true) or makes a second line (false, the default). */
   mergeDuplicates: boolean;
   /** Whether adding an option that cannot be bought now is refused (true) or accepted and reported on the next read. */
   refuseUnavailableAdds: boolean;
@@ -101,6 +110,7 @@ export function createFixtureServer(
     adoption: AdoptionPolicy;
     serverSubtotal: boolean;
     reportPriceChanges: boolean;
+    sellerCarts: 'SINGLE' | 'MULTI';
     mergeDuplicates: boolean;
     refuseUnavailableAdds: boolean;
     keyLifeMs: number;
@@ -263,7 +273,8 @@ export function createFixtureServer(
     adoption: options.adoption ?? 'ADOPT_IF_EMPTY',
     serverSubtotal: options.serverSubtotal ?? false,
     reportPriceChanges: options.reportPriceChanges ?? false,
-    mergeDuplicates: options.mergeDuplicates ?? true,
+    sellerCarts: options.sellerCarts ?? 'SINGLE',
+    mergeDuplicates: options.mergeDuplicates ?? false,
     refuseUnavailableAdds: options.refuseUnavailableAdds ?? false,
 
     setPrice(variant, priceMinor, currency) {
@@ -326,6 +337,10 @@ export function createFixtureServer(
 
         // The Seller comes from the option, never from the request.
         const mine = cartsOf(actor);
+        if (server.sellerCarts === 'SINGLE') {
+          const held = mine.find((c) => c.lines.length > 0);
+          if (held && held.seller.key !== variant.seller.key) throw apiProblem(409, 'CART_SELLER_CONFLICT');
+        }
         let cart = mine.find((c) => c.seller.key === variant.seller.key);
         if (!cart) {
           cart = { seller: variant.seller, lines: [] };

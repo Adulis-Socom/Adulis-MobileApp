@@ -19,7 +19,9 @@ export interface CommerceRuntime {
   /**
    * Told the session's identity by the provider, while it renders. Idempotent for an unchanged identity.
    * A change ends the old scope: it stops being current, and every pending add is dropped, before any
-   * screen draws anything for the new one.
+   * screen draws anything for the new one. That happens when the provider renders the new identity, one
+   * render after the session's own credential changed, so a request already on the wire still needs its
+   * own check at send time.
    */
   observe(identity: SessionIdentity | null): void;
   readonly scope: Scope | null;

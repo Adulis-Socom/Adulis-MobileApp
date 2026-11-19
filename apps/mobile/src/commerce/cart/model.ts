@@ -125,7 +125,8 @@ function withIssue(line: CartLine, issue: LineIssue, item: ServerItem): CartLine
 /**
  * The Seller cart with the server's items applied. An item about a Variant reaches EVERY line that
  * names that Variant (an answer may hold two lines for one Variant); an item about no Variant reaches
- * every line of the cart; a code about the whole cart reaches none.
+ * every line of the cart, which may mark a line it is not about but never misses one; a code about the
+ * whole cart reaches none.
  */
 export function applyItems(cart: SellerCart, items: readonly ServerItem[]): SellerCart {
   let lines = cart.lines;

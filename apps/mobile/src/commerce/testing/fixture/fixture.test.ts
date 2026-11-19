@@ -42,8 +42,19 @@ describe('the simulator is plainly a fixture', () => {
 });
 
 describe('Seller carts', () => {
-  it('puts an option in its own Seller\'s cart, taken from the option and never from the request, and never merges two Sellers', async () => {
+  it('follows the cart contract by default: one Seller per cart, and a second Seller is refused with CART_SELLER_CONFLICT and changes nothing', async () => {
     const server = createFixtureServer();
+    await server.addLine(GUEST, add(A_SHIRT_SMALL));
+    await expect(server.addLine(GUEST, add(B_MUG))).rejects.toMatchObject({ failure: { status: 409, problem: { code: 'CART_SELLER_CONFLICT' } } });
+    await expect(server.addLine(GUEST, add(A_BOWL))).resolves.toBeDefined();
+    expect(server.carts(GUEST.actor).carts.map((c) => [c.handle, c.lines.map((l) => l.variantId)])).toEqual([['demo-seller-a', [A_SHIRT_SMALL, A_BOWL]]]);
+    // The refusal stored nothing: another Account is free to start with the other Seller.
+    await expect(server.addLine(ACCOUNT_A, add(B_MUG))).resolves.toBeDefined();
+    expect(server.carts(ACCOUNT_A.actor).carts.map((c) => c.handle)).toEqual(['demo-seller-b']);
+  });
+
+  it('with several Seller carts at once (asked for; a shape the cart contract does not describe), puts an option in its own Seller\'s cart, taken from the option and never from the request, and never merges two Sellers', async () => {
+    const server = createFixtureServer({ sellerCarts: 'MULTI' });
     await server.addLine(GUEST, add(A_SHIRT_SMALL));
     await server.addLine(GUEST, add(B_MUG));
     await server.addLine(GUEST, add(A_BOWL));
@@ -62,19 +73,19 @@ describe('Seller carts', () => {
     expect(lines(server.carts(ACCOUNT_A.actor)).map((l) => l.variantId)).toEqual([B_MUG]);
   });
 
-  it('adds to the line of an option already in the cart, or makes a second line when told not to merge', async () => {
-    const merged = createFixtureServer();
-    await merged.addLine(GUEST, add(A_SHIRT_SMALL, 1, 'k1'));
-    await merged.addLine(GUEST, add(A_SHIRT_SMALL, 2, 'k2'));
-    expect(lines(merged.carts(GUEST.actor)).map((l) => l.quantity)).toEqual([3]);
-
-    const separate = createFixtureServer({ mergeDuplicates: false });
+  it('makes a second line for an option already in the cart by default, and merges only when asked to (not what the cart contract describes)', async () => {
+    const separate = createFixtureServer();
     await separate.addLine(GUEST, add(A_SHIRT_SMALL, 1, 'k1'));
     await separate.addLine(GUEST, add(A_SHIRT_SMALL, 2, 'k2'));
     expect(lines(separate.carts(GUEST.actor)).map((l) => [l.variantId, l.quantity])).toEqual([
       [A_SHIRT_SMALL, 1],
       [A_SHIRT_SMALL, 2],
     ]);
+
+    const merged = createFixtureServer({ mergeDuplicates: true });
+    await merged.addLine(GUEST, add(A_SHIRT_SMALL, 1, 'k1'));
+    await merged.addLine(GUEST, add(A_SHIRT_SMALL, 2, 'k2'));
+    expect(lines(merged.carts(GUEST.actor)).map((l) => l.quantity)).toEqual([3]);
   });
 
   it('refuses an unknown option and a quantity that is not a positive whole number', async () => {
@@ -132,7 +143,7 @@ describe('what a read reports', () => {
   });
 
   it('reports a withdrawn option and an unpublished Product, on every line that names them', async () => {
-    const server = createFixtureServer({ mergeDuplicates: false });
+    const server = createFixtureServer();
     await server.addLine(GUEST, add(A_SHIRT_SMALL, 1, 'k1'));
     await server.addLine(GUEST, add(A_SHIRT_SMALL, 1, 'k2'));
     await server.addLine(GUEST, add(A_SHIRT_LARGE, 1, 'k3'));
@@ -143,7 +154,7 @@ describe('what a read reports', () => {
   });
 
   it('reports an unavailable Seller on every line of that Seller\'s cart only', async () => {
-    const server = createFixtureServer();
+    const server = createFixtureServer({ sellerCarts: 'MULTI' });
     await server.addLine(GUEST, add(A_SHIRT_SMALL));
     await server.addLine(GUEST, add(A_BOWL));
     await server.addLine(GUEST, add(B_MUG));
@@ -172,7 +183,7 @@ describe('what a read reports', () => {
     await without.addLine(GUEST, add(A_SHIRT_SMALL, 2));
     expect(without.carts(GUEST.actor).carts[0]?.subtotal).toBeNull();
 
-    const withSubtotal = createFixtureServer({ serverSubtotal: true });
+    const withSubtotal = createFixtureServer({ serverSubtotal: true, sellerCarts: 'MULTI' });
     await withSubtotal.addLine(GUEST, add(A_SHIRT_SMALL, 2));
     await withSubtotal.addLine(GUEST, add(B_MUG, 1));
     const set = withSubtotal.carts(GUEST.actor);

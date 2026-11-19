@@ -41,6 +41,8 @@ export function CommerceProviderCore({
         ? { kind: 'account', token: session.token }
         : { kind: 'guest', token: null };
   // While rendering, not in an effect: no frame is drawn that pairs an old scope with a new credential.
+  // A render that React throws away leaves the runtime one identity ahead of what is on screen; the older
+  // tree's scope then refuses to send until the new one commits, which is the safe side.
   runtime.observe(identity);
   const served = resolveAdapter({ requested: adapter, build, dev });
   const scope = runtime.scope;

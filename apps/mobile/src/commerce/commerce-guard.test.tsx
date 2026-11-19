@@ -23,9 +23,10 @@ import { useCarts } from './cart/hooks';
  * it is broken, so a change that turns commerce on is made on purpose and never by accident. Every scan is
  * proved on a sample it exists to catch, so a pattern that stops matching cannot pass silently.
  *
- * Limit: the scans read import specifiers written out in the source. A specifier built at run time is
- * invisible to them (as it is to the repository's dependency checker); the other layers (the disabled
- * default, the release refusal, the exact surface and review) stand behind them.
+ * Limit: the scans read import specifiers written out in the source, in quotes or backticks, and a second
+ * scan looks for a string that names the folder. A path that only running code can work out is invisible
+ * to both (as it is to the repository's dependency checker); the other layers (the disabled default, the
+ * release refusal, the exact surface and review) stand behind them.
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -47,19 +48,21 @@ function stripComments(source: string): string {
     .join('\n');
 }
 
-const SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"])([^'"\n]+)\1/g;
+const SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/g;
 const specifiersOf = (text: string): string[] => [...stripComments(text).matchAll(SPECIFIER)].map((m) => m[2]!);
 
 /** A specifier that names the commerce folder (a file in it, or the folder itself). */
 const NAMES_COMMERCE = /(^|\/)commerce(\/|$)/;
 /** A specifier that names a folder called testing. */
 const NAMES_TESTING = /(^|\/)testing(\/|$)/;
+const reachesCommerce = (text: string) => specifiersOf(text).some((s) => NAMES_COMMERCE.test(s));
 
 const all = productionSources('.');
 const inCommerce = (file: string) => file.startsWith('commerce/');
 const commerceFiles = all.filter((s) => inCommerce(s.file));
 /** The commerce code a build may contain: not the test-only folder. */
-const core = all.filter((s) => /^commerce\/(cart|adapters|runtime)\//.test(s.file));
+const isCore = (file: string) => inCommerce(file) && !file.startsWith('commerce/testing/');
+const core = all.filter((s) => isCore(s.file));
 
 const offenders = (files: SourceFile[], test: (text: string, file: string) => boolean) => files.filter((s) => test(s.text, s.file)).map((s) => s.file);
 const matching = (pattern: RegExp) => (text: string) => pattern.test(stripComments(text));
@@ -79,19 +82,47 @@ describe('the scans look at the cart code', () => {
     expect(specifiersOf("import x from '../e-commerce-kit'").some((s) => NAMES_COMMERCE.test(s))).toBe(false);
     expect(specifiersOf("// import x from '../commerce'\nconst a = 1;").length).toBe(0);
   });
+
+  it('the specifier pattern also bites on a specifier written with backticks, which the bundler resolves too', () => {
+    const samples = ['const m = await import(`../commerce/cart/hooks`);', 'const m = require(`../commerce/runtime/provider`);'];
+    for (const sample of samples) expect(reachesCommerce(sample)).toBe(true);
+    expect(reachesCommerce('const m = await import(`../e-commerce-kit`);')).toBe(false);
+  });
+
+  it('a file that loads the folder with a backtick specifier is an offender of the same scans', () => {
+    const probe: SourceFile = { file: 'buyer/Probe.ts', text: 'export const load = () => import(`../commerce/cart/hooks`);' };
+    expect(offenders([probe], reachesCommerce)).toEqual(['buyer/Probe.ts']);
+  });
 });
 
 describe('G1 and G2: nothing outside the cart code reaches it', () => {
   it('no route file imports the commerce folder', () => {
     const routes = all.filter((s) => s.file.startsWith('app/'));
     expect(routes.length).toBeGreaterThan(30);
-    expect(offenders(routes, (text) => specifiersOf(text).some((s) => NAMES_COMMERCE.test(s)))).toEqual([]);
+    expect(offenders(routes, reachesCommerce)).toEqual([]);
   });
 
   it('no other source of the app imports the commerce folder', () => {
     const others = all.filter((s) => !inCommerce(s.file));
     expect(others.length).toBeGreaterThan(100);
-    expect(offenders(others, (text) => specifiersOf(text).some((s) => NAMES_COMMERCE.test(s)))).toEqual([]);
+    expect(offenders(others, reachesCommerce)).toEqual([]);
+  });
+
+  describe('second layer: no string outside the folder names it', () => {
+    // A bundler resolves a path built from constants, which no import grammar sees; a string that names the folder is enough to look at.
+    const NAMES_FOLDER_IN_A_STRING = /['"`](?:[^'"`\n]*\/)?commerce(?:\/[^'"`\n]*)?['"`]/;
+
+    it('no source outside the folder has a string literal that names it', () => {
+      const others = all.filter((s) => !inCommerce(s.file));
+      expect(offenders(others, matching(NAMES_FOLDER_IN_A_STRING))).toEqual([]);
+    });
+
+    it('bites on a path built from parts, and leaves ordinary words alone', () => {
+      for (const sample of ["const dir = '../' + 'commerce';", "load('../commerce/cart/hooks')", 'const p = `commerce/runtime`;']) {
+        expect(NAMES_FOLDER_IN_A_STRING.test(sample)).toBe(true);
+      }
+      for (const sample of ["const t = 'e-commerce';", "const t = 'commerce is a word';"]) expect(NAMES_FOLDER_IN_A_STRING.test(sample)).toBe(false);
+    });
   });
 });
 
@@ -108,12 +139,22 @@ describe('G3: the test-only folder is reached only by tests and by itself', () =
   it('the pattern bites on a testing import from a production folder', () => {
     expect(specifiersOf("import { stubAdapter } from '../testing/stub-adapter'").some((s) => NAMES_TESTING.test(s))).toBe(true);
     expect(specifiersOf("import { x } from '../../commerce/testing/harness'").some((s) => /commerce\/testing/.test(s))).toBe(true);
+    expect(specifiersOf('const m = await import(`../testing/stub-adapter`);').some((s) => NAMES_TESTING.test(s))).toBe(true);
+  });
+
+  it('covers every folder of the cart code except the test-only one, including a folder added later', () => {
+    expect(isCore('commerce/ui/Screen.tsx')).toBe(true);
+    expect(isCore('commerce/screens/Cart.tsx')).toBe(true);
+    expect(isCore('commerce/index.ts')).toBe(true);
+    expect(isCore('commerce/testing/harness.tsx')).toBe(false);
+    expect(isCore('commerce/testing/fixture/server.ts')).toBe(false);
+    expect(isCore('buyer/Home.tsx')).toBe(false);
   });
 });
 
 describe('G4: the cart code has no network binding', () => {
   const CLIENT_NAMES_ALLOWED = ['ApiError', 'isTransient', 'problemCode', 'newIdempotencyKey'];
-  const IMPORT_FROM = /import\s+(type\s+)?([^;]*?)\s+from\s+(['"])([^'"\n]+)\3/g;
+  const IMPORT_FROM = /import\s+(type\s+)?([^;]*?)\s+from\s+(['"`])([^'"`\n]+)\3/g;
 
   /** What a file imports by name from a module whose specifier matches `from`. Type-only imports are skipped. */
   function valueNamesFrom(text: string, from: RegExp): string[] {
@@ -144,9 +185,15 @@ describe('G4: the cart code has no network binding', () => {
     expect(bad).toEqual([]);
   });
 
+  const FORBIDDEN = /\bcreateApiClient\b|\bApiClient\b|\bApiDeps\b|\bboundApi\b|@adulis\/api-client|\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(|\.\s*api\b/;
+
   it('names no client constructor, no bound client and no generated client package', () => {
-    const FORBIDDEN = /\bcreateApiClient\b|\bApiClient\b|\bApiDeps\b|\bboundApi\b|@adulis\/api-client|\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(/;
     expect(offenders(core, matching(FORBIDDEN))).toEqual([]);
+  });
+
+  it('does not reach the client through the session value either', () => {
+    for (const sample of ['const s = useSession(); s.api.get(x);', 'const { session } = useSession();\nsession.api\n  .post(y);']) expect(FORBIDDEN.test(sample)).toBe(true);
+    for (const sample of ["import { ApiError } from '../../api/client';", 'const label = session.apiVersion;']) expect(FORBIDDEN.test(sample)).toBe(false);
   });
 
   it('the checks bite on the forms they exist to catch', () => {
@@ -221,6 +268,22 @@ describe('G10: the surface is exactly reading the carts and adding a line', () =
       createOrder() {}
     }
     expect(surface(new Sneaky())).toEqual(['addLine', 'createOrder', 'getCarts']);
+  });
+});
+
+describe('G10b: the provider that takes the build and the run as props stays inside', () => {
+  const OWN_FILE = 'commerce/runtime/provider.tsx';
+  const mentions = (text: string) => /\bCommerceProviderCore\b/.test(stripComments(text));
+
+  it('only its own file and the test-only folder name it', () => {
+    const named = all.filter((s) => mentions(s.text)).map((s) => s.file);
+    expect(named).toContain(OWN_FILE);
+    expect(named.filter((file) => file !== OWN_FILE && !file.startsWith('commerce/testing/'))).toEqual([]);
+  });
+
+  it('bites on a mention in any other file, and ignores a comment', () => {
+    expect(mentions("import { CommerceProviderCore } from '../runtime/provider';")).toBe(true);
+    expect(mentions('// CommerceProviderCore is described here\nconst a = 1;')).toBe(false);
   });
 });
 
@@ -320,22 +383,63 @@ describe('G13: no route, tab or return path reaches it', () => {
 });
 
 describe('G16: the cart code does no arithmetic on money', () => {
-  const BEFORE = /\bamountMinor\b\s*(?:[-+*/%]|\*\*)/;
-  const AFTER = /[-+*/%]=?\s*[\w$.?!]*\bamountMinor\b/;
-  const REDUCED = /\breduce\s*\([^)]*\bamountMinor\b/;
+  // Any field that holds minor units (amountMinor, priceMinor, wasMinor, ...): beside an operator, in a
+  // reduction, wrapped in a conversion, or reached through a name it was copied into.
+  const MINOR = String.raw`\b\w*Minor\b`;
+  const OP = String.raw`(?:\*\*|[-+*/%])`;
+  const BEFORE = new RegExp(String.raw`${MINOR}\)?\s*${OP}`);
+  const AFTER = new RegExp(String.raw`${OP}=?\s*(?:Number\s*\()?[\w$.?!]*${MINOR}`);
+  const REDUCED = new RegExp(String.raw`\breduce\s*\([^;]*?${MINOR}`);
+  const CONVERTED = new RegExp(String.raw`\b(?:Number|parseFloat|parseInt|BigInt|Math\.\w+)\s*\([^)]*${MINOR}`);
+  const boundFromMinor = (code: string): string[] =>
+    [
+      ...[...code.matchAll(new RegExp(String.raw`\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=[^;\n]*${MINOR}`, 'g'))].map((m) => m[1]!),
+      ...[...code.matchAll(new RegExp(String.raw`\{[^}\n]*\b\w*Minor\s*:\s*([A-Za-z_]\w*)\s*[,}]`, 'g'))].map((m) => m[1]!),
+    ];
+  const usedInArithmetic = (code: string, name: string) => new RegExp(String.raw`\b${name}\b\s*${OP}|${OP}=?\s*[\w$.?!]*\b${name}\b`).test(code);
   const arithmetic = (text: string) => {
     const code = stripComments(text);
-    return BEFORE.test(code) || AFTER.test(code) || REDUCED.test(code);
+    return [BEFORE, AFTER, REDUCED, CONVERTED].some((pattern) => pattern.test(code)) || boundFromMinor(code).some((name) => usedInArithmetic(code, name));
   };
 
-  it('has no sum, difference, product or reduction over an amount', () => {
-    expect(offenders(commerceFiles, arithmetic)).toEqual([]);
+  /** The one file that answers for the server and sums a Seller subtotal there. Every other cart file is scanned. */
+  const EXEMPT = ['commerce/testing/fixture/server.ts'];
+
+  it('has no sum, difference, product or reduction over an amount, except in the server simulator', () => {
+    expect(offenders(commerceFiles.filter((s) => !EXEMPT.includes(s.file)), arithmetic)).toEqual([]);
+  });
+
+  it('names its one exemption, which is a file of the server simulator that still needs it', () => {
+    const exempt = commerceFiles.filter((s) => EXEMPT.includes(s.file));
+    expect(exempt.map((s) => s.file)).toEqual(EXEMPT);
+    for (const file of exempt) {
+      expect(file.file.startsWith('commerce/testing/fixture/')).toBe(true);
+      expect(arithmetic(file.text)).toBe(true);
+    }
   });
 
   it('the patterns bite on the forms they exist to catch', () => {
-    for (const sample of ['a.amountMinor + b.amountMinor', 'x * line.amountMinor', 'lines.reduce((s, l) => s + l.amountMinor, 0)', 'total -= m.amountMinor']) {
+    for (const sample of [
+      'a.amountMinor + b.amountMinor',
+      'x * line.amountMinor',
+      'lines.reduce((s, l) => s + l.amountMinor, 0)',
+      'total -= m.amountMinor',
+      'const a = m.amountMinor; const t = a * q;',
+      'const { amountMinor: a } = m;\nreturn a + b;',
+      'return Number(m.amountMinor) * line.quantity;',
+      'lines.reduce((s, l) => s + l.priceMinor * l.quantity, 0)',
+      'const total = line.priceMinor * line.quantity;',
+      'const n = Number(m.amountMinor);',
+    ]) {
       expect(arithmetic(sample)).toBe(true);
     }
-    for (const sample of ["const m = { amountMinor: 5, currency: 'ETB' };", 'const { amountMinor } = money;']) expect(arithmetic(sample)).toBe(false);
+    for (const sample of [
+      "const m = { amountMinor: 5, currency: 'ETB' };",
+      'const { amountMinor } = money;',
+      'next = { ...next, previousUnitPrice: { amountMinor: item.wasMinor, currency: item.currency } };',
+      'if (item.wasMinor !== null) copy(item.wasMinor);',
+    ]) {
+      expect(arithmetic(sample)).toBe(false);
+    }
   });
 });

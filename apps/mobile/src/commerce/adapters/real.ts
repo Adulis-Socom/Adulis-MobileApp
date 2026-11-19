@@ -16,6 +16,7 @@ export const REAL_ADAPTER_GAPS = {
     'the contract does not yet type the request or the answer',
     'the key requirement is not yet declared in the contract',
     'the rule for adding the same option twice is not yet stated',
+    'a send-time check that the session that asked is still the session on screen',
   ],
 } as const satisfies Record<keyof CartPort, readonly string[]>;
 

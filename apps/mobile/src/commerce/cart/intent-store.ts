@@ -7,8 +7,9 @@ export type BeginResult = Readonly<{
   state: AddState;
   /**
    * started: a new add was made and its request must now be sent; same: an add for this option was already
-   * pending with the same quantity; ignored: one is pending with ANOTHER quantity, which is not sent;
-   * offline: the device is known to be offline, so nothing was sent.
+   * pending with the same quantity; ignored: one is pending with ANOTHER quantity, or one could not be
+   * resolved and waits to be dismissed, and nothing is sent; offline: the device is known to be offline,
+   * so nothing was sent.
    */
   result: 'started' | 'same' | 'ignored' | 'offline';
 }>;
@@ -32,7 +33,7 @@ export interface IntentStore {
   /** Applies one event. Null when the scope is not current: nothing is touched. */
   apply(scope: Scope, variantId: VariantId, event: AddEvent): AddState | null;
   dismiss(scope: Scope, variantId: VariantId): AddState;
-  /** Empties the store. : without telling watchers, for a caller that is rendering (a watcher is told by its own render). */
+  /** Empties the store. With `silent`, watchers are not told: for a caller that is rendering, whose watchers re-render on their own. */
   clear(options?: { silent?: boolean }): void;
   subscribe(listener: () => void): () => void;
 }
@@ -66,6 +67,7 @@ export function createIntentStore(): IntentStore {
     begin(scope, input, { now, online, mintKey }) {
       if (!scope.isCurrent()) return null;
       const before = current(scope, input.variantId)?.state ?? IDLE;
+      if (before.kind === 'UNRESOLVED') return { state: before, result: 'ignored' };
       if (isPending(before) && 'intent' in before) {
         return { state: before, result: before.intent.quantity === input.quantity ? 'same' : 'ignored' };
       }

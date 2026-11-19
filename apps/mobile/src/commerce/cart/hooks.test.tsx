@@ -8,6 +8,7 @@ import { renderWithCommerce } from '../testing/harness';
 import { stubAdapter } from '../testing/stub-adapter';
 import { cartsKey, shouldRetryRead, useAddToCart, useCarts } from './hooks';
 import { asLineId, asSellerKey, asVariantId, type CartSet } from './model';
+import { ScopeChanged } from './port';
 import type { CartViewState } from './view-state';
 
 jest.mock('expo-secure-store', () => jest.requireActual('../../testing/secure-store-mock'));
@@ -305,7 +306,7 @@ describe('adding a line', () => {
     const stub = stubAdapter();
     const handle: AddHandle = { current: null };
     await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
-    for (const quantity of [0, -2, 1.5]) expect(handle.current!.add(quantity)).toBe('invalid');
+    for (const quantity of [0, -2, 1.5, 2 ** 53, 1e21, Number.NaN]) expect(handle.current!.add(quantity)).toBe('invalid');
     expect(sends(stub)).toHaveLength(0);
   });
 
@@ -378,6 +379,50 @@ describe('adding a line', () => {
     expect(addState()).toHaveTextContent('UNRESOLVED');
   });
 
+  it('does not begin another add over one that could not be resolved: only dismissing it starts over, with a new key', async () => {
+    const stub = stubAdapter();
+    const handle: AddHandle = { current: null };
+    await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    stub.failNext('addLine', apiProblem(409, 'IDEMPOTENCY_KEY_REUSED'));
+    await act(async () => {
+      handle.current!.add(2);
+    });
+    await waitFor(() => expect(addState()).toHaveTextContent('UNRESOLVED'));
+
+    let outcome = '';
+    await act(async () => {
+      outcome = handle.current!.add(2);
+    });
+    expect(outcome).toBe('ignored');
+    expect(sends(stub)).toHaveLength(1);
+    expect(addState()).toHaveTextContent('UNRESOLVED');
+
+    await act(async () => handle.current!.dismiss());
+    expect(addState()).toHaveTextContent('IDLE');
+    await act(async () => {
+      outcome = handle.current!.add(2);
+    });
+    expect(outcome).toBe('started');
+    await waitFor(() => expect(addState()).toHaveTextContent('ADDED'));
+    expect(sends(stub)).toHaveLength(2);
+    expect(sends(stub)[1]?.key).not.toBe(sends(stub)[0]?.key);
+  });
+
+  it('a port that refuses to send for a scope that is still current leaves an unknown outcome, never an add stuck sending', async () => {
+    const stub = stubAdapter();
+    const handle: AddHandle = { current: null };
+    await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    stub.failNext('addLine', new ScopeChanged());
+    await act(async () => {
+      handle.current!.add(1);
+    });
+    await waitFor(() => expect(addState()).toHaveTextContent('UNKNOWN'));
+    await act(async () => handle.current!.retry());
+    await waitFor(() => expect(addState()).toHaveTextContent('ADDED'));
+    expect(sends(stub)).toHaveLength(2);
+    expect(sends(stub)[1]?.key).toBe(sends(stub)[0]?.key);
+  });
+
   it('a refusal by the API ends the add as REFUSED', async () => {
     const stub = stubAdapter();
     const handle: AddHandle = { current: null };
@@ -406,6 +451,37 @@ describe('adding a line', () => {
       stale.add(1);
     });
     expect(sends(stub)).toHaveLength(1);
+  });
+
+  it('an answer for an add held across a sign-out never completes the next session\'s own add of the same option', async () => {
+    const stub = stubAdapter();
+    const handle: AddHandle = { current: null };
+    const { session } = await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    const heldBeforeSignOut = stub.hold('addLine');
+    await act(async () => {
+      handle.current!.add(1);
+    });
+    await waitFor(() => expect(sends(stub)).toHaveLength(1));
+
+    await act(() => session.current!.clearSession());
+    await act(() => session.current!.signIn('token-b'));
+    expect(addState()).toHaveTextContent('IDLE');
+
+    const heldAfterSignIn = stub.hold('addLine');
+    await act(async () => {
+      handle.current!.add(1);
+    });
+    await waitFor(() => expect(sends(stub)).toHaveLength(2));
+    expect(addState()).toHaveTextContent('SENDING');
+    expect(sends(stub)[1]).toMatchObject({ scopeKind: 'account', epoch: 3 });
+
+    // The answer the earlier session was waiting for arrives now: it belongs to nobody on screen.
+    await act(async () => heldBeforeSignOut.release());
+    expect(addState()).toHaveTextContent('SENDING');
+    await act(async () => heldAfterSignIn.release());
+    await waitFor(() => expect(addState()).toHaveTextContent('ADDED'));
+    expect(sends(stub)).toHaveLength(2);
+    expect(sends(stub)[1]?.key).not.toBe(sends(stub)[0]?.key);
   });
 
   it('reads the carts again as a NEW request after an add: a read begun before the add is not the answer', async () => {

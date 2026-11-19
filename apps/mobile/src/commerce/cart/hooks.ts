@@ -20,9 +20,11 @@ export const shouldRetryRead = (failures: number, error: unknown): boolean => is
 
 /**
  * The Seller carts of the session on screen. `focused`: whether the screen is the one the Buyer is on,
- * so coming back to it asks again. The answer is drawn only while it is the server's last word (see
- * `deriveViewState`); returning from the background past the freshness interval withholds it until a new
- * one lands.
+ * so coming back to it asks again. A screen that stays mounted behind another still reads when the
+ * connection returns and when the app comes back to the foreground, so its answer is ready when it is
+ * shown again; nothing reads while no screen that shows the carts is mounted. The answer is drawn only
+ * while it is the server's last word (see `deriveViewState`); returning from the background past the
+ * freshness interval withholds it until a new one lands.
  */
 export function useCarts({ focused }: { focused: boolean }): { view: CartViewState; refresh: () => void } {
   const context = useCommerceContext();
@@ -110,7 +112,9 @@ async function send(args: {
     if (!scope.isCurrent()) return;
     store.apply(scope, variantId, { type: 'ACCEPTED', lineId: accepted.lineId });
   } catch (failure) {
-    if (!scope.isCurrent() || failure instanceof ScopeChanged) return;
+    // A refusal to send for a scope that is still current says nothing about whether the request left, so
+    // it is judged like any lost answer: unknown, and the same key may be sent again.
+    if (!scope.isCurrent()) return;
     const judgement =
       failure instanceof AdapterUnavailable
         ? unavailableJudgement
@@ -145,7 +149,7 @@ export function useAddToCart(variantId: VariantId | null): {
 
   const add = (quantity: number): AddOutcome => {
     if (!store || !scope || variantId === null || !adapter.availability.available) return 'unavailable';
-    if (!Number.isInteger(quantity) || quantity < 1) return 'invalid';
+    if (!Number.isSafeInteger(quantity) || quantity < 1) return 'invalid';
     const begun = store.begin(scope, { variantId, quantity }, { now: Date.now(), online: onlineManager.isOnline(), mintKey: newIdempotencyKey });
     if (begun === null) return 'unavailable';
     if (begun.result === 'started' && begun.state.kind === 'SENDING') {

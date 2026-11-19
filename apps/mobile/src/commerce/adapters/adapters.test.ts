@@ -1,5 +1,6 @@
+import { repoFile } from '../../testing/source-scan';
 import { asVariantId } from '../cart/model';
-import { AdapterUnavailable, type CartAdapter, type Scope } from '../cart/port';
+import { AdapterUnavailable, ScopeChanged, type CartAdapter, type Scope } from '../cart/port';
 import { disabledCartAdapter } from './disabled';
 import { REAL_ADAPTER_GAPS, createRealCartAdapter } from './real';
 
@@ -54,5 +55,37 @@ describe('the real adapter slot', () => {
   it('describes the gaps in neutral words: what the contract does not carry, never how a route behaves', () => {
     const text = Object.values(REAL_ADAPTER_GAPS).flat().join(' ');
     expect(text).not.toMatch(/collid|collision|unique|without checking|does not check|writes|bypass|vulnerab|exploit/i);
+  });
+
+  it('lists the send-time session check a real adapter will need', () => {
+    expect(REAL_ADAPTER_GAPS.addLine.some((gap) => /session that asked is still the session on screen/.test(gap))).toBe(true);
+  });
+});
+
+describe('the cart contract', () => {
+  type Operation = { requestBody?: unknown; responses?: Record<string, { content?: unknown }> };
+  const paths = (JSON.parse(repoFile('contracts/openapi.json')) as { paths: Record<string, Record<string, Operation>> }).paths;
+  const CART_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> = [
+    ['get', '/v1/cart'],
+    ['post', '/v1/cart/lines'],
+    ['patch', '/v1/cart/lines/{id}'],
+    ['delete', '/v1/cart/lines/{id}'],
+  ];
+
+  it('still types neither the request nor the answer of a cart operation: when it does, the unbound adapter must be revisited', () => {
+    const operations = CART_OPERATIONS.map(([method, path]) => ({ method, path, operation: paths[path]?.[method] }));
+    expect(operations.filter((o) => o.operation === undefined).map((o) => `${o.method} ${o.path}`)).toEqual([]);
+    const typed = operations
+      .filter((o) => o.operation?.requestBody !== undefined || Object.values(o.operation?.responses ?? {}).some((r) => r.content !== undefined))
+      .map((o) => `${o.method} ${o.path}`);
+    expect(typed).toEqual([]);
+  });
+});
+
+describe('the failures a port raises', () => {
+  it('carry a code and never a sentence that could reach a screen', () => {
+    expect(new AdapterUnavailable('ADAPTER_DISABLED').message).toBe('ADAPTER_DISABLED');
+    expect(new AdapterUnavailable('CONTRACT_MISSING').message).toBe('CONTRACT_MISSING');
+    expect(new ScopeChanged().message).toBe('SCOPE_CHANGED');
   });
 });

@@ -28,7 +28,8 @@ export type AddIntent = Readonly<{
  *   REFUSED           the API itself refused it; nothing was stored
  *   REFUSED_RELOAD    a known refusal that says the carts changed: read them again
  *   UNKNOWN           no proof either way; the same key may be sent again (`holdUntil`: a wait the server asked for)
- *   UNRESOLVED        no proof and the key can no longer be sent: the Buyer reads the carts and decides
+ *   UNRESOLVED        no proof and the key can no longer be sent: the Buyer reads the carts and decides, and no
+ *                     new add of this option begins until it is dismissed
  */
 export type AddState =
   | Readonly<{ kind: 'IDLE'; earlierUnconfirmed: boolean }>
@@ -61,8 +62,9 @@ export const isPending = (state: AddState): boolean =>
 export function reduceAdd(state: AddState, event: AddEvent): AddState {
   switch (event.type) {
     case 'BEGIN': {
-      // A second tap on an add that is pending is the same decision, not a new one.
-      if (isPending(state)) return state;
+      // A second tap on an add that is pending is the same decision, not a new one. One that could not be
+      // resolved may be stored, and its key is the only evidence of it: it stays until the Buyer dismisses it.
+      if (isPending(state) || state.kind === 'UNRESOLVED') return state;
       const intent: AddIntent = {
         variantId: event.variantId,
         quantity: event.quantity,
@@ -113,7 +115,7 @@ export type AddIntentInput = Readonly<{ variantId: VariantId; quantity: number }
  * quantity. There is no ceiling here: the most the server will take is the server's to refuse.
  */
 export function toAddIntent(product: StorefrontProduct, variantId: string, quantity: number): AddIntentInput | null {
-  if (!Number.isInteger(quantity) || quantity < 1) return null;
+  if (!Number.isSafeInteger(quantity) || quantity < 1) return null;
   const variant = product.variants.find((v) => v.id === variantId);
   if (!variant || !isSelectable(product, variant)) return null;
   return { variantId: asVariantId(variant.id), quantity };

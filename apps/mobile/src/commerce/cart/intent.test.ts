@@ -38,6 +38,15 @@ describe('beginning an add', () => {
     expect(begin(offline, { key: 'key-2' })).toBe(offline);
   });
 
+  it('does not begin over an add that could not be resolved: only dismissing it starts over', () => {
+    const unresolved = failed(begin(), { outcome: 'unknown', replay: false, holdMs: null });
+    expect(unresolved.kind).toBe('UNRESOLVED');
+    expect(begin(unresolved, { key: 'key-2' })).toBe(unresolved);
+    const dismissed = reduceAdd(unresolved, { type: 'DISMISS' });
+    expect(dismissed).toBe(IDLE_UNCONFIRMED);
+    expect(intentOf(begin(dismissed, { key: 'key-2' })).key).toBe('key-2');
+  });
+
   it('starts a NEW intent with a new key after an add that ended', () => {
     const added = reduceAdd(begin(), { type: 'ACCEPTED', lineId: asLineId('l1') });
     expect(intentOf(begin(added, { key: 'key-2' })).key).toBe('key-2');
@@ -181,7 +190,7 @@ describe('naming an option to add from the public Product answer', () => {
 
   it('names nothing for a quantity that is not a positive whole number, and sets no ceiling of its own', () => {
     const p = product(true, [variant(ID, true)]);
-    for (const quantity of [0, -1, 1.5, Number.NaN]) expect(toAddIntent(p, ID, quantity)).toBeNull();
+    for (const quantity of [0, -1, 1.5, Number.NaN, 2 ** 53, 1e21, Number.POSITIVE_INFINITY]) expect(toAddIntent(p, ID, quantity)).toBeNull();
     expect(toAddIntent(p, ID, 100_000)?.quantity).toBe(100_000);
   });
 });

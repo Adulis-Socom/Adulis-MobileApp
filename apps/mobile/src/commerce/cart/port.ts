@@ -6,9 +6,10 @@ export type Provenance = 'SERVER' | 'FIXTURE';
 export type Verified<T> = Readonly<{ value: T; receivedAt: number; provenance: Provenance }>;
 
 /**
- * The session scope a port is bound to. Only the commerce runtime makes one. It stops being current
- * the moment the session changes (sign-in, sign-out, another Account), and a port bound to it must
- * then refuse to send and refuse to return an answer.
+ * The session scope a port is bound to. Only the commerce runtime makes one. It stops being current when
+ * the commerce provider next renders the changed session (sign-in, sign-out, another Account), which is
+ * one render after the session's own credential changes. A port bound to it must then refuse to send and
+ * refuse to return an answer; a request already on the wire needs the port's own check at send time.
  */
 export type Scope = Readonly<{ kind: 'guest' | 'account'; epoch: number; isCurrent(): boolean }>;
 
@@ -46,14 +47,14 @@ export interface CartAdapter {
 
 export class AdapterUnavailable extends Error {
   constructor(readonly reason: UnavailableReason) {
-    super('cart adapter unavailable');
+    super(reason);
     this.name = 'AdapterUnavailable';
   }
 }
 
 export class ScopeChanged extends Error {
   constructor() {
-    super('cart scope changed');
+    super('SCOPE_CHANGED');
     this.name = 'ScopeChanged';
   }
 }
