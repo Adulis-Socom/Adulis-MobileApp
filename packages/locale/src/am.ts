@@ -111,7 +111,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   // request
   'error.request.validation_failed': 'ጥያቄው ትክክል አይደለም።',
   // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
-  'error.request.idempotency_key_missing': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መላክ አልተቻለም። እንደገና ይሞክሩ።',
+  'error.request.idempotency_key_missing': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መላክ አልተቻለም።',
   // Changed with its English: still a placeholder awaiting the human pass.
   'error.request.idempotency_key_reused': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መድገም አልተቻለም። እንደገና ከመሞከርዎ በፊት የሚታየውን ያረጋግጡ።',
   'error.request.rate_limited': 'በጣም ብዙ ጥያቄዎች። በ{retry_after_seconds} ሰከንድ ውስጥ እንደገና ይሞክሩ።',
@@ -164,8 +164,7 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'deletion.effect.verification_retained': 'የማረጋገጥ መዝገብ ይቀመጣል።',
   'deletion.effect.reservations_released': 'ነቃ የሆኑ መያዟዎች ይለቀቃሉ።',
 
-  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
-  'chat.bot.escalated': 'ጥያቄዎ ለሻጩ ተላልፏል። ማንኛውም መልስ እዚህ ይታያል።',
+  'chat.bot.escalated': 'ጥያቄዎ ለሻጭ ተላልፏል። እዚህ ይመልሱልዎታል።',
   'notification.chat.escalated': 'የገዢ ጥያቄ ምላሽዎን ይፈልጋል።',
 
   // WO-002 Buyer shell: machine-translation placeholders, listed in MT-KEYS.md
@@ -500,9 +499,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.you.session.location': 'ግምታዊ አካባቢ፦ {location}',
   'buyer.you.privacy': 'ግላዊነት',
   'buyer.you.delete': 'መለያ ሰርዝ',
-  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
   'buyer.delete.intro':
-    'የአዱሊስ መለያዎን መሰረዝ ዘላቂ ነው። ሊቀለበስ አይችልም፣ ይህ መሣሪያ ወደዚያ መለያ ከገባ ደግሞ ይወጣል።',
+    'የአዱሊስ መለያዎን መሰረዝ ዘላቂ ነው። ሊቀለበስ አይችልም፣ እና ይህ መሣሪያ ይወጣል።',
   'buyer.delete.steps':
     'ለመቀጠል ስልክ ቁጥርዎን በኤስኤምኤስ በሚላክ ኮድ ያረጋግጡ፣ መሰረዝ ምን እንደሚያደርግ ይገምግሙ፣ ከዚያም ያረጋግጡ።',
   'buyer.delete.continue': 'ቀጥል',
