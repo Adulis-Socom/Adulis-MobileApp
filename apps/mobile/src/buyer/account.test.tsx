@@ -63,6 +63,21 @@ const sessionsFor = (call: Recorded): Reply => {
   return problem(401, 'SESSION_EXPIRED', 'auth');
 };
 
+/**
+ * The device refuses to delete the stored credential, and nothing else, until the returned function is
+ * called. Call it in `finally`: a once-only rejection that no call consumes would leak into the next test.
+ */
+function failCredentialDelete() {
+  const real = deleteItemAsync.getMockImplementation();
+  deleteItemAsync.mockImplementation(async (key: string) => {
+    if (key === TOKEN_KEY) throw new Error('delete failed');
+    await real?.(key);
+  });
+  return () => {
+    if (real) deleteItemAsync.mockImplementation(real);
+  };
+}
+
 const deletionCalls = () => api.calls.filter((c) => c.path.startsWith('/v1/deletion/'));
 const preview = (overrides: Record<string, unknown> = {}) => ({
   status: 200,
@@ -252,13 +267,70 @@ describe('the You tab', () => {
     signedIn();
     await renderRouter(APP_DIR, { initialUrl: '/account' });
     const signOut = await screen.findByRole('button', { name: en['common.signOut'] });
-    deleteItemAsync.mockRejectedValueOnce(new Error('delete failed'));
-    await fireEvent.press(signOut);
-    expect(await screen.findByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
-    expect(screen.queryByText(en['error.request.internal'])).toBeNull();
-    expect(screen.queryByText(en['buyer.you.signed_out'])).toBeNull();
+    const restore = failCredentialDelete();
+    try {
+      await fireEvent.press(signOut);
+      expect(await screen.findByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['error.request.internal'])).toBeNull();
+      expect(screen.queryByText(en['buyer.you.signed_out'])).toBeNull();
+      expect(screen.getByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+      expect(memory.has(TOKEN_KEY)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('a failed Sign out message does not outlive the Account: the session ends, another credential signs in, the line is gone', async () => {
+    signedIn();
+    let ended = false;
+    api.on('GET /v1/auth/sessions', (call) => (ended && call.headers.Authorization === `Bearer ${GOOD_TOKEN}` ? problem(401, 'SESSION_REVOKED', 'auth') : sessionsFor(call)));
+    api.on('GET /v1/bootstrap', (call) =>
+      call.headers.Authorization === `Bearer ${OTHER_TOKEN}` || (call.headers.Authorization === `Bearer ${GOOD_TOKEN}` && !ended)
+        ? { status: 200, body: bootstrapBody({ account_context: SIGNED_IN_CONTEXT }) }
+        : { status: 200, body: bootstrapBody() },
+    );
+    api.on('POST /v1/auth/otp/verify', (call) =>
+      call.body?.code === SIGN_IN_CODE
+        ? { status: 200, body: { account_id: '0b6f1a3e-3333-4333-8333-333333333333', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: OTHER_TOKEN } }
+        : problem(401, 'OTP_INVALID', 'auth'),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    const restore = failCredentialDelete();
+    try {
+      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+      expect(await screen.findByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+    } finally {
+      restore();
+    }
+    // The server ends the session; the tab returns to the guest state, and the line goes with the Account.
+    ended = true;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.you.sessions.refresh'] }));
+    expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
+    // Another Account signs in on this device: its You tab never says it is "still signed in" after a Sign out it did not press.
+    await fireEvent.press(await screen.findByRole('button', { name: en['auth.sign_in'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), '+251911000002');
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.code.label']), SIGN_IN_CODE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    expect(await screen.findByText(en['buyer.you.session.platform.ios'])).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
-    expect(memory.has(TOKEN_KEY)).toBe(true);
+    expect(screen.queryByText(en['buyer.delete.still_signed_in'])).toBeNull();
+  });
+
+  it('a failed Sign out message goes when a later Sign out succeeds', async () => {
+    signedIn();
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    const restore = failCredentialDelete();
+    try {
+      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+      expect(await screen.findByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+    } finally {
+      restore();
+    }
+    await fireEvent.press(screen.getByRole('button', { name: en['common.signOut'] }));
+    expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.delete.still_signed_in'])).toBeNull();
+    expect(memory.has(TOKEN_KEY)).toBe(false);
   });
 
   it('10. a session the server ended (401 SESSION_EXPIRED) returns the tab to the guest state', async () => {
