@@ -1,4 +1,4 @@
-import { en } from '@adulis/locale/mobile';
+import { am, en, type MobileMessageKey } from '@adulis/locale/mobile';
 import { act, render, screen } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
@@ -8,7 +8,7 @@ import { useUiStore } from '../state/ui-store';
 import { fypUnit } from '../testing/fake-api';
 import { LONG, MIXED, SENTENCE, STORE_NAME, UNBROKEN } from '../testing/ethiopic';
 import { themes } from '../theme/theme';
-import { AlertText } from './AlertText';
+import { AlertText, StatusText } from './AlertText';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { ChoiceGroup } from './ChoiceGroup';
@@ -194,5 +194,29 @@ describe('a For You card with a long Ge\'ez store name and caption', () => {
   ])('shows the avatar initials of %s, at most two characters in the fixed avatar', async (_label, store, initials) => {
     await card(store, 'caption');
     expect(inFixedBoxes()).toEqual([initials]);
+  });
+});
+
+/** The sentences of the Buyer catalogue that run longest, in each language (the Seller-audience families excluded). */
+const longest = (catalogue: Record<MobileMessageKey, string>) =>
+  (Object.keys(catalogue) as MobileMessageKey[])
+    .filter((key) => !/^(seller|obligation|sms|deletion|ownership_transfer)\./.test(key))
+    .sort((a, b) => catalogue[b].length - catalogue[a].length)
+    .slice(0, 10);
+
+describe('the longest catalogue sentences at 360dp and 200% type', () => {
+  it.each([
+    ...longest(en).map((key) => ['English', key, en[key]] as const),
+    ...longest(am).map((key) => ['Amharic', key, am[key]] as const),
+  ])('%s %s is kept whole as an alert and as a status line, with no line limit and no fixed-height box', async (_language, _key, sentence) => {
+    await render(
+      <Screen>
+        <AlertText>{sentence}</AlertText>
+        <StatusText>{sentence}</StatusText>
+      </Screen>,
+    );
+    expect(screen.getAllByText(sentence)).toHaveLength(2);
+    expect(inFixedBoxes()).toEqual([]);
+    expect(clamped()).toEqual([]);
   });
 });
