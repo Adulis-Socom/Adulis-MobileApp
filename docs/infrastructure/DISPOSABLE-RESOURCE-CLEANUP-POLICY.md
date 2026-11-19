@@ -35,7 +35,8 @@ work order, not by sections 3 to 6.** That covers:
 - the creating script's documented teardown command, which removes only what carries its own owner
   label for this owner. Example: `test-db.sh down`, which refuses a container with a bind mount or a
   named volume;
-- the native test harness's `down` and `recover` (`ops/native/harness.mjs`), which remove only the
+- the native test harness's `down` and `recover` (`ops/native/harness.mjs`; its `purge` then deletes the run's
+  own directory), which remove only the
   network, the named volumes and the containers of ONE run, each carrying that run's owner, run and
   role labels. Its containers mount named volumes of the same run, so rule 3 of section 4 does not
   apply to them: that rule governs a removal on a label alone, and a native run's leftover (a crash,
@@ -73,9 +74,11 @@ only thing that lets a cleanup act on a leftover without further proof.
 | `adulis.test-db.owner` (+ `adulis.test-db.role=disposable`) | `ops/scripts/test-db.sh up` | the checkout that ran it (or `ADULIS_TEST_DB_OWNER`) |
 | `adulis.inf04.owner` | the INF-04 rehearsal scripts (`rh04.sh`, `restore-test.sh`, outside the repository); also compose project `inf04r` | `INF-04` |
 | `adulis.inf-close-01.owner` | the INF-CLOSE-01 scripts (`disposable-restore.sh`, `repair-rehearsal.sh`, outside the repository) | `INF-CLOSE-01` |
-| `adulis.native-harness.owner` (+ `adulis.native-harness.run=<run id>`, `adulis.native-harness.role`) | `ops/native/harness.mjs up`: the network, the named run volumes (`adulis-native-<run8>-pgdata`, `-miniodata`) and the containers of a native test run | `native-harness` |
+| `adulis.native-harness.owner` (+ `adulis.native-harness.run=<run id>`, `adulis.native-harness.role`) | `ops/native/harness.mjs up`: the network, volumes and containers of a native test run | `native-harness` |
 
-A cleanup may remove a labelled leftover only when all of these hold:
+A **generic cleanup** (an agent or a script that did not create the resource) may remove a labelled leftover only
+when all of these hold. Run-scoped resources of the native harness are the one exception, and have their own
+section below: no generic cleanup ever removes them.
 
 1. the label's value is the caller's own owner value (a checkout path, or the work order ID);
 2. the run that created it has ended (no process of that run is still using it);
@@ -83,15 +86,35 @@ A cleanup may remove a labelled leftover only when all of these hold:
 4. it is not protected (section 3);
 5. the removal is recorded (section 1).
 
-The native test harness is the one creator whose containers mount named volumes: each of its two volumes
-carries the same owner and run labels as its container. Rule 3 therefore stops a label-only cleanup
-from removing them, and that is intended: they are removed only by the harness's `down` (section 2),
-which proves the labels, the planned name, the recorded full id and the Docker engine first. A native
-run's leftover volume is registered (section 8) and left until `down` can be run for that run.
-
 **Future labels.** A new work order that creates Docker resources uses
 `adulis.<work-order-id-in-lowercase>.owner=<WORK-ORDER-ID>` on every container, volume and network it
 creates. It adds a row to the table above in the same PR as the script that sets it.
+
+### Run-scoped resources: the native test harness
+
+Each run (`ops/native/harness.mjs up`) creates one network, two **named volumes** and two containers, named
+`adulis-native-<run8>-net`, `-pgdata`, `-miniodata`, `-pg` and `-minio`. Every one carries
+`adulis.native-harness.owner=native-harness`, `adulis.native-harness.run=<run id>` and
+`adulis.native-harness.role=<role>`, and its full id (or planned name, for a volume) is recorded in the run's
+manifest, which lives outside the repository (`ADULIS_NATIVE_ROOT`). The owner value is the same for every run;
+the **run label** is what ties a resource to one run.
+
+A label alone is never proof, here or anywhere: the harness reads each resource live and compares it with its
+manifest before it removes anything, and if any resource of the run cannot be positively identified it removes
+none. A leftover of a native run (a crash, a killed shell) is removed only by the harness's `down` or
+`recover` for that run, never by hand and never by a generic cleanup.
+
+| Resource | Removed by | Proof required, all of it |
+|---|---|---|
+| Containers of the run | `down` / `recover`, by full id, without `-v` | owner, run and role labels; the planned name and this run's prefix; the recorded full id; not protected; no `com.docker.compose.*` label; the Docker engine and context the run was created in |
+| Named volumes of the run | the same command, by the verified name, after the containers | the same labels, name and prefix; no driver options (a bind mount in disguise); re-read immediately before the removal; **no container of any kind, running or stopped, holds the volume** |
+| Network of the run | the same command, by id | the same labels; the recorded id; no container attached |
+| The run directory | `purge`, after `down` | the same engine; a successful live listing by the run label is empty; the run's own marker file; no link or junction inside |
+
+What the harness never removes: an anonymous volume that an image created for one of its containers (it is
+reported, and judged under section 5); any resource in section 3; anything whose labels, name or id differ from
+the manifest. Rule 3 above does not apply to these containers: they mount named volumes of their own run by
+design, and rule 3 governs a removal on a label alone.
 
 A volume that a container creates implicitly (an image's `VOLUME`, such as PostgreSQL's data
 directory) carries no label unless the script creates it labelled. For example:
@@ -184,7 +207,9 @@ docker network inspect --format '{{.Name}} {{.Created}} {{range $k, $v := .Conta
 `ops/scripts/postcrash-health.sh` reports these leftovers after a crash, and removes nothing:
 - `adulis.test-db.owner` and `adulis.inf04.owner` containers;
 - `inf04*` and `minio-migrate*` containers and volumes;
-- `inf04*` networks.
+- `inf04*` networks;
+- containers, volumes and networks labelled `adulis.native-harness.owner`. A report is not permission: the
+  harness's `down` for that run is the only way to remove them (section 4).
 
 ## 9. Not covered
 
