@@ -1,9 +1,10 @@
 import { am, en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
+import { render } from '@testing-library/react-native';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { Dimensions, Linking, PermissionsAndroid, Platform, StyleSheet } from 'react-native';
+import { Dimensions, Linking, PermissionsAndroid, Platform, StyleSheet, Text } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import { controlsShown } from '../testing/discovery-rules';
@@ -42,6 +43,8 @@ const CHANNEL_LABELS = [
   en['buyer.home.channel.discounts'],
   en['buyer.home.channel.locally_made'],
 ];
+// The controls Home draws around a channel's panel, in order. If Home's shell gains or loses a
+// control (a header entry, a sixth tab), update these two lists; every channel test then follows.
 const HOME_CONTROLS: string[] = [en['buyer.search'], en['buyer.notifications'], ...CHANNEL_LABELS, ...TAB_LABELS];
 /** For You's empty panel has one control of its own (Refresh): the scan sees a panel's controls, so a channel's absence of one means something. */
 const FOR_YOU_CONTROLS: string[] = [
@@ -57,8 +60,8 @@ const rolesOnScreen = () => controlsShown().map((control) => control.role);
 const tab = (name: string) => screen.getByRole('tab', { name });
 const bottomTab = (name: string) => screen.getByRole(Platform.OS === 'ios' ? 'button' : 'tab', { name });
 const signedIn = () => resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
-/** Let any request a screen would make on its own happen (renderRouter runs fake timers). */
-const settle = () => act(() => jest.advanceTimersByTimeAsync(1000));
+/** Let any request a screen would make on its own happen, including one on a short timer (renderRouter runs fake timers). */
+const settle = () => act(() => jest.advanceTimersByTimeAsync(10_000));
 /**
  * Every control a Buyer can reach on a channel, by name and in order: Home's own header, the five
  * channel tabs and the five tabs. A channel's panel adds none (found by behaviour, so a control with
@@ -68,7 +71,7 @@ const controlsOnScreen = () => controlsShown().map((control) => control.name);
 /**
  * Every sentence and label drawn on a channel, in order: the wordmark, the five channel labels, the
  * channel's own sentence, the five tab labels. Anything else a channel drew (a note, a count, an
- * item) would be listed, so the panel is exactly its one sentence. Icon glyphs are not text.
+ * item) would be listed, so the panel is exactly its one sentence.
  */
 const textsOnChannel = (sentence: string) => [
   en['buyer.wordmark'],
@@ -76,11 +79,20 @@ const textsOnChannel = (sentence: string) => [
   sentence,
   ...TAB_LABELS,
 ];
+/** The text a Text draws, as the screen shows it: strings, numbers and nested Text joined; a missing or boolean child draws nothing. */
+function drawn(children: unknown): string {
+  if (children === null || children === undefined || typeof children === 'boolean') return '';
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(drawn).join('');
+  return drawn((children as { props?: { children?: unknown } }).props?.children);
+}
+/** Icon glyphs sit in the Unicode private-use area: they are drawn by a font, and are not text a Buyer reads. */
+const isGlyph = (text: string) => text.replace(/[\uE000-\uF8FF]/g, '').trim() === '';
 const visibleTexts = () =>
   screen
     .queryAllByText(/[\s\S]+/)
-    .map((node) => node.props.children as unknown)
-    .filter((text): text is string => typeof text === 'string');
+    .map((node) => drawn(node.props.children))
+    .filter((text) => !isGlyph(text));
 
 let api: ReturnType<typeof installFakeApi>;
 
@@ -89,6 +101,21 @@ beforeEach(() => {
   resetSecureStore();
   api = installFakeApi();
   useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false });
+});
+
+describe('the drawn-text helper', () => {
+  it('lists a number, a mixed Text and a sentence, and skips an icon glyph and an empty Text', async () => {
+    await render(
+      <>
+        <Text>A sentence.</Text>
+        <Text>{3}</Text>
+        <Text>{4} items</Text>
+        <Text>{'\uF123'}</Text>
+        <Text>{null}</Text>
+      </>,
+    );
+    expect(visibleTexts()).toEqual(['A sentence.', '3', '4 items']);
+  });
 });
 
 /** For You is on screen and the app is quiet: the point after which a channel must add nothing. */
@@ -119,7 +146,6 @@ describe.each(AUDIENCES)('%s on the four channels', (_audience, isSignedIn) => {
     // For You is still mounted underneath (hidden, not gone), so the absence checks below mean it is not showing.
     expect(screen.queryByTestId('for-you-state', { includeHiddenElements: true })).not.toBeNull();
     expect(screen.queryByTestId('for-you-state')).not.toBeOnTheScreen();
-    expect(screen.queryByTestId('for-you-list')).not.toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.for_you.empty'])).not.toBeOnTheScreen();
     expect(screen.queryByText(en['auth.sign_in'])).not.toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: en['auth.sign_in'] })).not.toBeOnTheScreen();
@@ -127,7 +153,7 @@ describe.each(AUDIENCES)('%s on the four channels', (_audience, isSignedIn) => {
 });
 
 describe('what a channel may and may not read', () => {
-  it('a feed that serves Scenes, Products and categories fills no channel and is read only by For You', async () => {
+  it('a server that serves Scenes, Products, categories and search results fills no channel and is read only by For You', async () => {
     api.on('GET /v1/fyp', () => ({
       status: 200,
       // The schema lists FOLLOWING as a candidate source; a channel never filters on it.
@@ -136,6 +162,26 @@ describe('what a channel may and may not read', () => {
     api.on('GET /v1/shop/products', () => ({
       status: 200,
       body: { market_resolved: true, data: [shopProduct('cup', 'Clay cup')], next_cursor: null },
+    }));
+    api.on('GET /v1/categories', () => ({
+      status: 200,
+      body: {
+        market_resolved: true,
+        data: [{ id: 'ca7e0000-0000-4000-8000-000000000001', code: 'FASHION', parent_id: null, label_key: 'catalogue.category.fashion', display_order: 10 }],
+      },
+    }));
+    api.on('GET /v1/search', () => ({
+      status: 200,
+      body: {
+        market_resolved: true,
+        type: 'TOP',
+        algorithm_version: 'lexical-trgm-v1',
+        items: [
+          { type: 'PRODUCT_POST', payload: shopProduct('cup', 'Clay cup') },
+          { type: 'SELLER', payload: { handle: 'seller-1', store_name: 'Basket House', trust_level: 'ESTABLISHED' } },
+        ],
+        next_cursor: null,
+      },
     }));
     await renderRouter(APP_DIR);
     expect(await screen.findByText('Store 1')).toBeOnTheScreen();
@@ -147,6 +193,12 @@ describe('what a channel may and may not read', () => {
       await fireEvent.press(tab(en[label]));
       expect(await screen.findByText(en[coming])).toBeOnTheScreen();
       await settle();
+      // Whatever is drawn is the sentence and Home's own labels: not a caption, handle, count or name taken from the Scenes
+      // For You still holds (mounted, hidden, with its list), and no control beyond Home's own.
+      expect(visibleTexts()).toEqual(textsOnChannel(en[coming]));
+      expect(controlsOnScreen()).toEqual(HOME_CONTROLS);
+      expect(screen.queryByTestId('for-you-list', { includeHiddenElements: true })).not.toBeNull();
+      expect(screen.queryByTestId('for-you-list')).not.toBeOnTheScreen();
       expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
       expect(screen.queryByText('Store 2')).not.toBeOnTheScreen();
       expect(screen.queryByText('Clay cup')).not.toBeOnTheScreen();
@@ -155,7 +207,7 @@ describe('what a channel may and may not read', () => {
     expect(api.callsTo('GET /v1/fyp')).toHaveLength(1);
   });
 
-  it('every flag the server could send leaves all four channels unavailable and asks for nothing', async () => {
+  it('flags named for each channel leave all four channels unavailable and ask for nothing', async () => {
     const names = ['following', 'nearby', 'discounts', 'locally_made', 'locally-made', 'home.following', 'home.nearby', 'market_collections'];
     api.on('GET /v1/bootstrap', () => ({
       status: 200,
@@ -174,19 +226,30 @@ describe('what a channel may and may not read', () => {
     expect(api.calls.slice(before).map((call) => `${call.method} ${call.path}`)).toEqual([]);
   });
 
-  it('the channels say nothing about the connection', async () => {
+  it('the channels say nothing about the connection and ask for nothing offline or on reconnecting', async () => {
     await startedOnForYou();
+    const mark = api.calls.length;
     try {
       await act(async () => onlineManager.setOnline(false));
       expect(onlineManager.isOnline()).toBe(false);
       for (const [, label, coming] of CHANNELS) {
         await fireEvent.press(tab(en[label]));
         expect(await screen.findByText(en[coming])).toBeOnTheScreen();
+        await settle();
+        // The sentence and Home's labels, in any wording of "offline" or none.
+        expect(visibleTexts()).toEqual(textsOnChannel(en[coming]));
+        expect(controlsOnScreen()).toEqual(HOME_CONTROLS);
         expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
       }
+      expect(api.calls.slice(mark)).toEqual([]);
     } finally {
       await act(async () => onlineManager.setOnline(true));
     }
+    await settle();
+    // Coming back online makes no channel read anything either.
+    expect(onlineManager.isOnline()).toBe(true);
+    expect(api.calls.slice(mark)).toEqual([]);
+    expect(visibleTexts()).toEqual(textsOnChannel(en['buyer.home.locally_made.coming']));
   });
 
   it('signing out leaves Following as it was and sends nothing with the old credential', async () => {
