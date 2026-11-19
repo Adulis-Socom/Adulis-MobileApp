@@ -110,15 +110,16 @@ export default function You() {
                 onPress={() => {
                   setSignOutFailed(false);
                   signOut().then(
-                    // The button disappears with the session; say what happened instead of
-                    // leaving a screen reader's focus on nothing.
-                    () => AccessibilityInfo.announceForAccessibility(t('buyer.you.signed_out')),
+                    // The button disappears with the session; say what happened (not the guest
+                    // prompt that replaces the screen) instead of leaving a screen reader's focus
+                    // on nothing.
+                    () => AccessibilityInfo.announceForAccessibility(t('buyer.delete.signed_out')),
                     // The device could not forget the credential: still signed in, and says so.
                     () => setSignOutFailed(true),
                   );
                 }}
               />
-              {signOutFailed ? <AlertText>{t('error.request.internal')}</AlertText> : null}
+              {signOutFailed ? <AlertText>{t('buyer.delete.still_signed_in')}</AlertText> : null}
             </>,
           )
         : null}

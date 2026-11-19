@@ -13,7 +13,7 @@ import {
   type Recorded,
   type Reply,
 } from '../testing/fake-api';
-import { TOKEN_KEY, memory, resetSecureStore } from '../testing/secure-store-mock';
+import { TOKEN_KEY, deleteItemAsync, memory, resetSecureStore } from '../testing/secure-store-mock';
 
 /**
  * WO-011: the You tab (Account, Preferences, Security, Privacy) and Account deletion on the
@@ -232,6 +232,33 @@ describe('the You tab', () => {
     expect(memory.has(TOKEN_KEY)).toBe(false);
     await waitFor(() => expect(api.callsTo('POST /v1/auth/logout')[0]?.headers.Authorization).toBe(`Bearer ${GOOD_TOKEN}`));
     expect(screen.queryByText(en['buyer.you.session.current'])).toBeNull();
+  });
+
+  it('after Sign out a screen reader hears that this device is signed out, not the guest prompt', async () => {
+    signedIn();
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      await renderRouter(APP_DIR, { initialUrl: '/account' });
+      await fireEvent.press(await screen.findByRole('button', { name: en['common.signOut'] }));
+      expect(await screen.findByText(en['buyer.you.signed_out'])).toBeOnTheScreen();
+      await waitFor(() => expect(announce).toHaveBeenCalledWith(en['buyer.delete.signed_out']));
+      expect(announce).not.toHaveBeenCalledWith(en['buyer.you.signed_out']);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('a Sign out the device could not complete says the Account is still signed in, and offers Sign out again', async () => {
+    signedIn();
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    const signOut = await screen.findByRole('button', { name: en['common.signOut'] });
+    deleteItemAsync.mockRejectedValueOnce(new Error('delete failed'));
+    await fireEvent.press(signOut);
+    expect(await screen.findByText(en['buyer.delete.still_signed_in'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['error.request.internal'])).toBeNull();
+    expect(screen.queryByText(en['buyer.you.signed_out'])).toBeNull();
+    expect(screen.getByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+    expect(memory.has(TOKEN_KEY)).toBe(true);
   });
 
   it('10. a session the server ended (401 SESSION_EXPIRED) returns the tab to the guest state', async () => {
