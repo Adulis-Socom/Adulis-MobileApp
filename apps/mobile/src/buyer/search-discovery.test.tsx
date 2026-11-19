@@ -345,6 +345,61 @@ describe('a query the server would always refuse', () => {
     expect(screen.queryByText(en['buyer.search.no_terms'])).not.toBeOnTheScreen();
     expect(calls().map((c) => c.query['q'])).toEqual(['mug']);
   });
+
+  // What the server counts as a letter or a digit, written as escapes so the test carries the characters it names.
+  it.each([
+    ['an Ethiopic word', '\u1260\u1293'],
+    ['Ethiopic digits', '\u1369\u136A'],
+    ['digits only', '12'],
+    ['full-width digits (they fold to 12)', '\uFF11\uFF12'],
+  ])('%s is sent: it has a letter or a digit as the server counts them', async (_name, text) => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    await typeQuery(text);
+    await screen.findByLabelText(label('Woven basket'));
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]?.query['q']).toBe(text);
+    expect(screen.queryByText(en['buyer.search.no_terms'])).not.toBeOnTheScreen();
+  });
+
+  // The server refuses each of these (search.logic.ts: fold, length first, then the term check); none is sent.
+  it.each([
+    ['two zero-width spaces (not white space, no term)', '\u200B\u200B', 'buyer.search.no_terms'],
+    ['a letter and its combining accent (one character after the fold)', 'e\u0301', 'buyer.search.too_short'],
+    ['no-break spaces only (white space: nothing typed)', '\u00A0\u00A0', 'buyer.search.hint'],
+  ] as const)('%s: the reason is said, nothing is sent', async (_name, text, key) => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    await typeQuery(text);
+    expect(screen.getByText(en[key])).toBeOnTheScreen();
+    expect(calls()).toHaveLength(0);
+  });
+
+  describe('where this runtime cannot normalise the text', () => {
+    const original = String.prototype.normalize;
+    afterEach(() => {
+      Object.defineProperty(String.prototype, 'normalize', { value: original, configurable: true, writable: true });
+    });
+
+    it.each([
+      ['is missing', undefined],
+      [
+        'throws',
+        () => {
+          throw new RangeError('The normalization form should be one of NFC, NFD, NFKC, NFKD.');
+        },
+      ],
+    ])('a normalize that %s: the guard steps aside, so the query is sent and the server decides', async (_name, replacement) => {
+      serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_NO_TERMS' }));
+      await openSearch();
+      Object.defineProperty(String.prototype, 'normalize', { value: replacement, configurable: true, writable: true });
+      await typeQuery('!!');
+      expect(calls()).toHaveLength(1);
+      // The server's own named refusal is still said, with no Try again.
+      expect(await screen.findByText(en['buyer.search.no_terms'])).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+    });
+  });
 });
 
 describe('answers that fail', () => {

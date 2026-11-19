@@ -28,8 +28,17 @@ const tidy = (s: string) => s.replace(/\s+/gu, ' ').trim();
 /**
  * The server's own fold (NFKC, control characters to spaces, whitespace collapsed). It is used only to
  * decide whether a query is worth sending: what is sent is the tidied text, and the server folds it again.
+ * Null when this runtime cannot normalise: the guard then steps aside (the old length rule on the tidied
+ * text, no term check) and the server decides, because a query wrongly held back on the device is worse
+ * than one request too many.
  */
-const fold = (s: string) => s.normalize('NFKC').replace(/\p{Cc}/gu, ' ').replace(/\s+/gu, ' ').trim();
+const fold = (s: string): string | null => {
+  try {
+    return s.normalize('NFKC').replace(/\p{Cc}/gu, ' ').replace(/\s+/gu, ' ').trim();
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Marketplace Search (ADU-MOB-02 v4.3 S33; ADU-SRC-01 v3.2; WO-008): Products, Sellers and Scenes
@@ -74,10 +83,10 @@ export default function Search() {
     input.current?.focus();
   };
   const folded = fold(query);
-  const tooShort = query.length > 0 && [...folded].length < MIN_LENGTH;
+  const tooShort = query.length > 0 && [...(folded ?? query)].length < MIN_LENGTH;
   // The server refuses a query with no letter or digit every time; asking would only spend a search and
   // end in a Try again that cannot help.
-  const noTerms = query.length > 0 && !tooShort && !/[\p{L}\p{N}]/u.test(folded);
+  const noTerms = query.length > 0 && folded !== null && !tooShort && !/[\p{L}\p{N}]/u.test(folded);
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.color.bg }}>
