@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { ApiError, newIdempotencyKey, problemCode, wasAnswered } from '../api/client';
@@ -38,6 +38,10 @@ export function MessageSellerButton(props: { sellerId: string } | { product: Pro
   const api = usePrivateApi();
   const opening = useRef(false);
   const intent = useRef<{ seller: string; key: string } | null>(null);
+  // This screen outlives a sign-out, and a key belongs to the Account that minted it: another credential starts a new intent.
+  useEffect(() => {
+    intent.current = null;
+  }, [api]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const product = 'product' in props ? props.product : null;
