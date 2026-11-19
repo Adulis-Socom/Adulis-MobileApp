@@ -274,8 +274,9 @@ const RETARGETING = ['host', 'hostaddr', 'port', 'dbname', 'database', 'service'
 
 /**
  * The only query keys a migration URL may carry. Everything else is refused, so a key the driver or a later consumer
- * reads as configuration (`connectionString`, `user`, `password`, `statement_timeout`, `search_path`, a certificate
- * path, ...) can never change what the guard checked.
+ * reads as configuration (`options`, which pg lets replace the read-only startup option the guard sets for its history
+ * read; `connectionString`, `user`, `password`, `statement_timeout`, `search_path`, a certificate path, ...) can never
+ * change what the guard checked.
  */
 export const ALLOWED_QUERY_KEYS = [
   'sslmode',
@@ -321,10 +322,6 @@ export function checkTarget(connectionString, env = process.env) {
   if (bad.length)
     return {
       error: `it sets ${bad.join(', ')} as a query option; the URL itself must name the target`,
-    };
-  if (u.searchParams.has('options'))
-    return {
-      error: 'it sets options as a query option, which could replace the read-only session',
     };
   const unknown = [...new Set(u.searchParams.keys())].filter(
     (k) => !ALLOWED_QUERY_KEYS.includes(k),
