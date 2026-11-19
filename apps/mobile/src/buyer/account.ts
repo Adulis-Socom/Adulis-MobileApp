@@ -22,12 +22,34 @@ import { keepIfCurrent } from './saved';
 const SESSIONS = 'account-sessions';
 const retry = (failures: number, error: unknown) => isTransient(error) && failures < 2;
 
+const isIso = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+
+/**
+ * GET /v1/auth/sessions' answer, checked whatever the contract's type says: the rows are drawn with Intl, which
+ * throws on an unreadable time, and one such row must not take Sign out and the rest of You with it. A row
+ * that is not one is left out; an answer that is not a list is a contract failure.
+ */
+export function parseSessions(body: unknown): AccountSession[] {
+  const data = (body as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) throw new ApiError({ kind: 'unexpected', status: 200 });
+  return data.filter((row): row is AccountSession => {
+    const r = row as Record<string, unknown> | null;
+    return (
+      !!r &&
+      typeof r.id === 'string' &&
+      isIso(r.first_seen_at) &&
+      isIso(r.last_activity_at) &&
+      (r.approx_location === null || typeof r.approx_location === 'string')
+    );
+  });
+}
+
 export function useAccountSessions() {
   const { session, boundApi } = useSession();
   const token = session.status === 'signedIn' ? session.token : null;
   return useQuery<AccountSession[]>({
     queryKey: [SESSIONS],
-    queryFn: async () => (await keepIfCurrent(boundApi(token!), (api) => api.sessions())).data,
+    queryFn: async () => parseSessions(await keepIfCurrent(boundApi(token!), (api) => api.sessions())),
     enabled: token !== null,
     staleTime: 0,
     gcTime: 60_000,
