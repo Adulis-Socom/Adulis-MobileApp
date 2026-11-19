@@ -13,6 +13,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -1434,7 +1435,13 @@ test('a checkout without git metadata of its own is refused with a message that 
       );
       const none = check({ root: lone, expectedCommit: outerHead }).join('\n');
       assert.match(none, /SOURCE: cannot read the git HEAD \(.*not a git repository/);
+      assert.match(none, /: it has no \.git of its own\. /);
       assert.match(none, /cannot satisfy that/);
+      assert.doesNotMatch(
+        none,
+        /git is not installed/,
+        'git is installed here: the text must not say otherwise',
+      );
     }
     assert.deepEqual(readCheckoutHead(outer), { head: outerHead });
     assert.match(readCheckoutHead(inner).problem, /no \.git of its own/);
@@ -1474,7 +1481,7 @@ test('a checkout without git metadata of its own is refused with a message that 
   }
 });
 
-test('hosted artifact without git metadata: every way the command line can apply to a non-disposable database is refused, nothing is recorded, the runner never starts', async () => {
+test('hosted artifact without git metadata: the ordinary command, the guarded command and authorize are refused for a non-disposable database, nothing is recorded, the runner never starts', async () => {
   const tree = tempTree({ git: false });
   const marked = await fakePg({ names: ALL.slice(0, 3), marker: DISPOSABLE_MARKER });
   const unmarked = await fakePg({ names: ALL.slice(0, 3), marker: null });
@@ -1532,7 +1539,7 @@ test('hosted artifact without git metadata: every way the command line can apply
   }
 });
 
-test('git missing from the artifact is the same refusal, and it says git is the problem', async () => {
+test('git missing from the artifact is the same refusal, and it says git is not installed (a directory with no repository does not say so)', async () => {
   const tree = tempTree({ git: false });
   const pg = await fakePg({ names: ALL.slice(0, 3), marker: null });
   const emptyBin = mkdtempSync(path.join(tmpdir(), 'nogit-'));
@@ -1547,7 +1554,10 @@ test('git missing from the artifact is the same refusal, and it says git is the 
       { DATABASE_URL_MIGRATE: urlFor(pg), ...noGit },
     );
     assert.equal(r.status, 1, r.stderr);
-    assert.match(r.stderr, /SOURCE: cannot read the git HEAD[^]*git is not installed/);
+    assert.match(
+      r.stderr,
+      /SOURCE: cannot read the git HEAD \(git could not be started[^]*\): git is not installed or is not on PATH/,
+    );
     assert.ok(!existsSync(tree.started) && !existsSync(tree.log));
   } finally {
     await pg.close();
@@ -1556,7 +1566,7 @@ test('git missing from the artifact is the same refusal, and it says git is the 
   }
 });
 
-test('the blueprint pre-deploy command is refused for a hosted-looking target in an artifact without git: the first hosted deploy needs a decision, and this pins that it does not run until then', async () => {
+test('the blueprint pre-deploy command (an ordinary migrate) is refused for a hosted-looking, UNKNOWN target: the first hosted deploy needs a decision, and this pins that it does not run until then', async () => {
   const blueprint = read('ops/render.yaml');
   assert.match(blueprint, /preDeployCommand: pnpm db:migrate && pnpm worker:install/);
   const tree = tempTree({ git: false });
@@ -1588,11 +1598,10 @@ test('db:reset of a persistent database: a pinned migration that git does not tr
   try {
     const want = `fakedb@127.0.0.1:${pg.port}`;
     const env = { DATABASE_URL_MIGRATE: urlFor(pg), NODE_ENV: 'test' };
-    // a migration pinned by a COMMITTED manifest line whose file was never added to git
-    writeFileSync(
-      path.join(tree.dir, 'db', 'migrations', '0063_pinned_not_tracked.sql'),
-      'SELECT 1;\n',
-    );
+    // a migration pinned by a COMMITTED manifest line whose file was never added to git; its number follows the real manifest,
+    // so a real migration with the next number cannot collide with it
+    const name = `${String(ALL.length + 1).padStart(4, '0')}_pinned_not_tracked.sql`;
+    writeFileSync(path.join(tree.dir, 'db', 'migrations', name), 'SELECT 1;\n');
     const pinned = await inTree(tree, 'migration-guard.mjs', ['write'], {});
     assert.equal(pinned.status, 0, pinned.stderr);
     tree.git('add', 'ops/migrations.manifest.json');
@@ -1607,7 +1616,9 @@ test('db:reset of a persistent database: a pinned migration that git does not tr
     assert.equal(r.status, 1, `${r.stdout}${r.stderr}`);
     assert.match(
       r.stderr,
-      /SOURCE: the migrations or the manifest differ from the commit[^]*0063_pinned_not_tracked\.sql/,
+      new RegExp(
+        `SOURCE: the migrations or the manifest differ from the commit[^]*${name.replace('.', '\\.')}`,
+      ),
     );
     assert.match(r.stderr, /Nothing was dropped\./);
     assert.doesNotMatch(r.stdout, /CONFIRMED/);
@@ -1654,5 +1665,192 @@ test('db:reset resets only a loopback host: the compose service names are no lon
   }
   const src = read('ops/scripts/db-reset.mjs');
   assert.doesNotMatch(src, /'db', 'postgres'/);
-  assert.match(src, /\['localhost', '127\.0\.0\.1', '::1'\]\.includes\(host\)/);
+  assert.match(src, /\['localhost', '127\.0\.0\.1'\]\.includes\(host\)/);
+});
+
+test('db:reset refuses an IPv6 loopback URL (the parser reports the host as [::1]), and db:seed refuses the compose service names, both before any connection', async () => {
+  const tree = tempTree({ git: false });
+  try {
+    const v6 = await inTree(tree, 'db-reset.mjs', ['--confirm-target=x@x:5432'], {
+      DATABASE_URL_MIGRATE: 'postgres://u:p@[::1]:5432/fakedb',
+      NODE_ENV: 'test',
+    });
+    assert.equal(v6.status, 2, v6.stderr);
+    assert.match(v6.stderr, /refusing to reset a non-local database \(host: \[::1\]\)/);
+  } finally {
+    tree.cleanup();
+  }
+  for (const host of ['db', 'postgres']) {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'ops', 'scripts', 'seed.mjs')], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NODE_ENV: 'development',
+        DATABASE_URL_MIGRATE: `postgres://u:p@${host}:5432/adulis`,
+      },
+    });
+    assert.equal(r.status, 2, `${host}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, new RegExp(`refusing to seed a non-local database \\(host: ${host}\\)`));
+  }
+  assert.doesNotMatch(read('ops/scripts/seed.mjs'), /'db', 'postgres'/);
+});
+
+// ---- the git environment, the shape of a checkout, and the words of each refusal ----------------------------------------
+
+test('the repository-location variables are dropped by name in any letter case, and the rest of the environment is kept', async () => {
+  const { gitEnvironment } = await import('./migration-guard.mjs');
+  const env = gitEnvironment({
+    PATH: '/bin',
+    git_dir: 'a',
+    Git_Work_Tree: 'b',
+    GIT_INDEX_FILE: 'c',
+    git_common_dir: 'd',
+    GIT_NAMESPACE: 'e',
+    GIT_AUTHOR_NAME: 'n',
+    HOME: '/home/x',
+  });
+  assert.deepEqual(env, { PATH: '/bin', GIT_AUTHOR_NAME: 'n', HOME: '/home/x' });
+});
+
+test('a lowercase git_dir (the same variable where environment names ignore case) cannot make a directory with no repository look like the approved checkout', () => {
+  const base = mkdtempSync(path.join(tmpdir(), 'migenv-'));
+  const saved = process.env.git_dir;
+  try {
+    const other = path.join(base, 'other');
+    const otherHead = repoWithCommit(other, 'elsewhere\n');
+    const lone = mkdtempSync(path.join(base, 'lone-'));
+    process.env.git_dir = path.join(other, '.git');
+    assert.match(
+      checkApprovedSource({ root: lone, expectedCommit: otherHead }).join('\n'),
+      /cannot read the git HEAD/,
+    );
+    assert.match(
+      checkSource({ root: lone, expectedCommit: otherHead }).join('\n'),
+      /cannot read the git HEAD/,
+    );
+  } finally {
+    if (saved === undefined) delete process.env.git_dir;
+    else process.env.git_dir = saved;
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('each way git can fail has its own words: not started, no repository, another owner, no work tree, nested, no HEAD', () => {
+  const ask = (...answers) => {
+    let i = 0;
+    return readCheckoutHead('x', () => answers[Math.min(i++, answers.length - 1)]);
+  };
+  const reply = (status, out = '', err = '', spawnError = null) => ({
+    status,
+    out,
+    err,
+    spawnError,
+  });
+  const started = ask(reply(null, '', '', 'ENOENT')).problem;
+  assert.match(
+    started,
+    /\(git could not be started \(ENOENT\)\): git is not installed or is not on PATH\. this directory is not a git checkout/,
+  );
+  const none = ask(
+    reply(128, '', 'fatal: not a git repository (or any of the parent directories): .git'),
+  ).problem;
+  assert.match(none, /: it has no \.git of its own\. this directory is not a git checkout/);
+  const owner = ask(
+    reply(
+      128,
+      '',
+      "fatal: detected dubious ownership in repository at '/x'\nTo add an exception...",
+    ),
+  ).problem;
+  assert.match(
+    owner,
+    /\(fatal: detected dubious ownership in repository at '\/x'\): git refuses a directory that belongs to another user/,
+  );
+  const other = ask(reply(1, '', 'fatal: something odd')).problem;
+  assert.match(other, /\(fatal: something odd\): git cannot read this checkout/);
+  assert.match(
+    ask(reply(0, 'false')).problem,
+    /it is not a work tree: a bare repository, or the inside of a git directory/,
+  );
+  assert.match(
+    ask(reply(0, 'true\n../')).problem,
+    /it has no \.git of its own and sits inside another repository/,
+  );
+  assert.match(
+    ask(reply(0, 'true'), reply(128, '', 'fatal: ambiguous argument HEAD')).problem,
+    /^SOURCE: cannot read the git HEAD \(fatal: ambiguous argument HEAD\)$/,
+  );
+  assert.deepEqual(ask(reply(0, 'true'), reply(0, 'a'.repeat(40))), { head: 'a'.repeat(40) });
+  // only the not-started case says git is missing
+  for (const text of [none, owner, other]) assert.doesNotMatch(text, /git is not installed/);
+});
+
+test('a bare repository and the inside of a git directory are not checkouts', () => {
+  const base = mkdtempSync(path.join(tmpdir(), 'migbare-'));
+  try {
+    const repo = path.join(base, 'repo');
+    const head = repoWithCommit(repo);
+    const bare = path.join(base, 'bare.git');
+    const cloned = spawnSync('git', ['clone', '-q', '--bare', repo, bare], { encoding: 'utf8' });
+    assert.equal(cloned.status, 0, cloned.stderr);
+    assert.match(readCheckoutHead(bare).problem, /not a work tree/);
+    assert.match(readCheckoutHead(path.join(repo, '.git')).problem, /not a work tree/);
+    assert.match(
+      checkApprovedSource({ root: bare, expectedCommit: head }).join('\n'),
+      /not a work tree/,
+    );
+    assert.deepEqual(readCheckoutHead(repo), { head }, 'the repository itself is still a checkout');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('a linked worktree is a checkout of its own, judged by its own HEAD; a .git file that points into another repository is judged by that repository', () => {
+  const base = mkdtempSync(path.join(tmpdir(), 'migwt-'));
+  try {
+    const main = path.join(base, 'main');
+    const mainHead = repoWithCommit(main);
+    const wt = path.join(base, 'linked');
+    const added = spawnSync(
+      'git',
+      ['-C', main, 'worktree', 'add', '-q', '-b', 'linked-branch', wt],
+      {
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(added.status, 0, added.stderr);
+    writeFileSync(path.join(wt, 'only-here.txt'), 'x\n');
+    const g = (...a) => {
+      const r = spawnSync('git', ['-C', wt, ...a], { encoding: 'utf8' });
+      assert.equal(r.status, 0, `git ${a.join(' ')}: ${r.stderr}`);
+      return r.stdout.trim();
+    };
+    g('add', '-A');
+    g('commit', '-q', '-m', 'in the worktree');
+    const wtHead = g('rev-parse', 'HEAD');
+    assert.notEqual(wtHead, mainHead);
+    assert.equal(
+      statSync(path.join(wt, '.git')).isFile(),
+      true,
+      'a linked worktree has a .git file',
+    );
+    assert.deepEqual(readCheckoutHead(wt), { head: wtHead });
+    assert.deepEqual(checkApprovedSource({ root: wt, expectedCommit: wtHead }), []);
+    assert.match(
+      checkApprovedSource({ root: wt, expectedCommit: mainHead }).join('\n'),
+      /HEAD is [0-9a-f]{12}, not the approved/,
+    );
+    // a .git file naming another repository's git directory cannot be told from a worktree pointer: the check protects against
+    // accidents, it does not resist someone who writes the checkout's own git metadata
+    const pointer = path.join(base, 'pointer');
+    mkdirSync(pointer);
+    writeFileSync(
+      path.join(pointer, '.git'),
+      `gitdir: ${path.join(main, '.git').replaceAll('\\', '/')}\n`,
+    );
+    assert.deepEqual(readCheckoutHead(pointer), { head: mainHead });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });

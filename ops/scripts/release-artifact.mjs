@@ -15,15 +15,24 @@
 //   node ops/scripts/release-artifact.mjs verify --info <file> --expect-commit <40-hex sha>
 //
 // Refusals go to stderr and exit 1; a usage error exits 2.
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import {
   checkDirectory,
   checkManifest,
+  checkSource,
   DEFAULT_DIR,
   DEFAULT_MANIFEST,
+  entryKind,
   readCheckoutHead,
   REPO_ROOT,
   sha256,
@@ -42,7 +51,7 @@ const readManifest = (manifestPath) => {
 
 /** { record } for this tree, or { problems }: a tree whose files are not its pinned set is never described. */
 export function describeArtifact({ commit, dir = DEFAULT_DIR, manifestPath = DEFAULT_MANIFEST }) {
-  if (!FULL_SHA.test(`${commit}`.toLowerCase()))
+  if (typeof commit !== 'string' || !FULL_SHA.test(commit.toLowerCase()))
     return { problems: ['--commit must be the full 40-character commit sha'] };
   let read;
   try {
@@ -62,15 +71,25 @@ export function describeArtifact({ commit, dir = DEFAULT_DIR, manifestPath = DEF
   };
 }
 
-/** { record } read from a file, or { problems }: size-capped, JSON, a plain object with exactly the three keys. */
+/**
+ * { record } read from a file, or { problems }: a regular file, read with a size limit (never unbounded, whatever the path
+ * names), JSON, a plain object with exactly the three keys.
+ */
 export function readRecordFile(file) {
   let text;
+  let fd;
   try {
-    if (statSync(file).size > MAX_RECORD_BYTES)
+    fd = openSync(file, 'r');
+    if (!fstatSync(fd).isFile()) return { problems: ['the record is not a regular file'] };
+    const buffer = Buffer.alloc(MAX_RECORD_BYTES + 1);
+    const n = readSync(fd, buffer, 0, buffer.length, 0);
+    if (n > MAX_RECORD_BYTES)
       return { problems: [`the record is larger than ${MAX_RECORD_BYTES} bytes`] };
-    text = readFileSync(file, 'utf8');
+    text = buffer.subarray(0, n).toString('utf8');
   } catch (e) {
     return { problems: [`the record cannot be read (${e.code ?? e.message})`] };
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
   let record;
   try {
@@ -134,6 +153,13 @@ function ownHead(root) {
   return h.head ? h : { problem: h.problem };
 }
 
+/**
+ * With git metadata, the commit is also a promise about the files: db/migrations and the manifest must be exactly as committed
+ * (no changed or untracked file there), the same source check the guard runs for --expect-commit. Called only once HEAD is
+ * known to be the commit; returns the problems.
+ */
+const asCommitted = (root, commit) => checkSource({ root, expectedCommit: commit });
+
 /** Flags: every one takes a value, none repeats, none is unknown. */
 function parseFlags(argv, allowed) {
   const flags = {};
@@ -182,6 +208,12 @@ export function main(argv, { log = console.log, err = console.error, root = REPO
       );
       return 1;
     }
+    const dirty = head.head ? asCommitted(root, d.record.commit) : [];
+    if (dirty.length) {
+      err('REFUSED: the files are not the commit they would be recorded for; nothing was written');
+      for (const p of dirty) err(`  - ${p}`);
+      return 1;
+    }
     try {
       writeFileSync(flags['--out'], `${JSON.stringify(d.record, null, 2)}\n`, { flag: 'wx' });
     } catch (e) {
@@ -210,6 +242,8 @@ export function main(argv, { log = console.log, err = console.error, root = REPO
     expectedCommit: flags['--expect-commit'],
     headCommit: head.head,
   });
+  if (head.head && head.head.toLowerCase() === r.record.commit)
+    problems.push(...asCommitted(root, r.record.commit));
   if (problems.length) {
     err('REFUSED: this artifact is not the one the record describes:');
     for (const p of problems) err(`  - ${p}`);
@@ -218,7 +252,7 @@ export function main(argv, { log = console.log, err = console.error, root = REPO
   log(`OK: the migration files are the ones recorded for commit ${r.record.commit.slice(0, 12)}`);
   log(
     head.head
-      ? 'git HEAD: equal to the recorded commit'
+      ? 'git HEAD: equal to the recorded commit; db/migrations and the manifest are as committed'
       : 'git metadata: none (judged by its files and the expected commit)',
   );
   log(
@@ -227,6 +261,11 @@ export function main(argv, { log = console.log, err = console.error, root = REPO
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main(process.argv.slice(2));
+const entry = entryKind(import.meta.url);
+if (entry === 'run') process.exitCode = main(process.argv.slice(2));
+else if (entry === 'unresolved') {
+  console.error(
+    'REFUSED: the script could not recognise itself as the script being run; nothing was checked',
+  );
+  process.exitCode = 2;
 }

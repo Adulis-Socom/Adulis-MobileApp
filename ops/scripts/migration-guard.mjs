@@ -38,9 +38,9 @@
 // upgraded with `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<db>@<host>:<port>`.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import {
   DISPOSABLE_MARKER,
@@ -175,28 +175,67 @@ const GIT_LOCATION_ENV = [
   'GIT_NAMESPACE',
 ];
 
+/** The environment git is started with: the repository-location variables are dropped by name in any letter case (Windows ignores case). */
+export function gitEnvironment(base = process.env) {
+  const env = { ...base };
+  for (const k of Object.keys(env)) if (GIT_LOCATION_ENV.includes(k.toUpperCase())) delete env[k];
+  return env;
+}
+
 function git(root, args) {
-  const env = { ...process.env };
-  for (const k of GIT_LOCATION_ENV) delete env[k];
-  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env });
-  return { status: r.status, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
+  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: gitEnvironment() });
+  return {
+    status: r.status,
+    out: (r.stdout ?? '').trim(),
+    err: (r.stderr ?? '').trim(),
+    spawnError: r.error?.code ?? null,
+  };
 }
 
 const NO_OWN_GIT =
-  'this directory is not a git checkout of its own (it has no .git here, or git is not installed), so the commit it was built from cannot be checked. A database that is not disposable is migrated only from a clean git checkout of the approved commit (--expect-commit <full sha>); an artifact without git metadata cannot satisfy that';
+  'this directory is not a git checkout of its own, so the commit it was built from cannot be checked. A database that is not disposable is migrated only from a clean git checkout of the approved commit (--expect-commit <full sha>); an artifact without git metadata cannot satisfy that';
+
+const firstLine = (text) => text.split(/\r?\n/)[0];
+
+/** Why git could not describe the directory, in the words that tell the operator what to do. */
+function whyNoGit(r) {
+  if (r.status === null)
+    return {
+      cause: `git could not be started${r.spawnError ? ` (${r.spawnError})` : ''}`,
+      advice: 'git is not installed or is not on PATH',
+    };
+  const cause = firstLine(r.err) || 'git failed';
+  if (/dubious ownership|safe\.directory/i.test(r.err))
+    return {
+      cause,
+      advice: 'git refuses a directory that belongs to another user (see safe.directory)',
+    };
+  if (/not a git repository/i.test(r.err)) return { cause, advice: 'it has no .git of its own' };
+  return { cause, advice: 'git cannot read this checkout' };
+}
 
 /**
- * HEAD of the checkout's OWN repository. `root` must be that repository's top level: git finds a repository by walking
- * up, so a directory without a .git of its own (an unpacked artifact inside a workspace, say) would otherwise be judged
- * by the repository around it. Returns { head } or { problem }.
+ * HEAD of the checkout's OWN repository. `root` must be that repository's work tree and its top level: git finds a
+ * repository by walking up, so a directory without a .git of its own (an unpacked artifact inside a workspace, say) would
+ * otherwise be judged by the repository around it, and a bare repository or the inside of a git directory is no checkout
+ * at all. A linked worktree or a submodule (whose .git is a file) is a checkout of its own and is judged by its own HEAD.
+ * Returns { head } or { problem }. `run` is injectable for the tests.
  */
-export function readCheckoutHead(root) {
-  const top = git(root, ['rev-parse', '--show-cdup']);
-  if (top.status !== 0 || top.out !== '')
-    return {
-      problem: `SOURCE: cannot read the git HEAD (${top.status !== 0 ? top.err || 'git failed' : 'it has no .git of its own and sits inside another repository'}): ${NO_OWN_GIT}`,
-    };
-  const head = git(root, ['rev-parse', 'HEAD']);
+export function readCheckoutHead(root, run = git) {
+  const refuse = (cause, advice) => ({
+    problem: `SOURCE: cannot read the git HEAD (${cause}):${advice ? ` ${advice}.` : ''} ${NO_OWN_GIT}`,
+  });
+  const top = run(root, ['rev-parse', '--is-inside-work-tree', '--show-cdup']);
+  if (top.status !== 0) {
+    const why = whyNoGit(top);
+    return refuse(why.cause, why.advice);
+  }
+  const [inside, cdup = ''] = top.out.split(/\r?\n/);
+  if (inside !== 'true')
+    return refuse('it is not a work tree: a bare repository, or the inside of a git directory', '');
+  if (cdup !== '')
+    return refuse('it has no .git of its own and sits inside another repository', '');
+  const head = run(root, ['rev-parse', 'HEAD']);
   if (head.status !== 0)
     return { problem: `SOURCE: cannot read the git HEAD (${head.err || 'git failed'})` };
   return { head: head.out };
@@ -847,9 +886,34 @@ async function main(argv) {
 const exitAfterFlush = (code) =>
   process.stdout.write('', () => process.stderr.write('', () => process.exit(code)));
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * Is this module the script being run? Both sides are resolved to real paths: through a symlink, a junction or a
+ * substituted drive, process.argv[1] keeps the path as typed while the module's own URL is resolved, so a plain comparison
+ * runs nothing and exits 0. Returns 'run', 'import', or 'unresolved' (a file named like this one whose path cannot be
+ * resolved: refuse, never a silent exit 0).
+ */
+export function entryKind(
+  metaUrl,
+  argv1 = process.argv[1],
+  name = path.basename(fileURLToPath(metaUrl)),
+) {
+  if (!argv1) return 'import';
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(metaUrl)) ? 'run' : 'import';
+  } catch {
+    return path.basename(argv1) === name ? 'unresolved' : 'import';
+  }
+}
+
+const entry = entryKind(import.meta.url);
+if (entry === 'run') {
   main(process.argv.slice(2)).then(exitAfterFlush, (e) => {
     console.error(`REFUSED: unexpected error (${e.code ?? e.message}); nothing was applied`);
     exitAfterFlush(1);
   });
+} else if (entry === 'unresolved') {
+  console.error(
+    'REFUSED: the guard could not recognise itself as the script being run; nothing was applied',
+  );
+  process.exitCode = 2;
 }

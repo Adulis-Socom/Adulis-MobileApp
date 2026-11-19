@@ -11,7 +11,9 @@
 // Routine client errors (a failed password, a missing role or database, "starting up") never fail it.
 // No startup in the log is UNKNOWN, never a pass. (INF-CLOSE-01 review A, M-1: "in recovery mode" is NOT
 // routine -- clients see it while the server recovers from a crashed process.)
-import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
+import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const CLIENT_FATAL = [
   /password authentication failed/i,
@@ -76,10 +78,24 @@ export function classify(text) {
 
 const exitFor = { RECOVERED: 0, CLEAN: 0, FAILED: 1, UNKNOWN: 2 };
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+// Run as a script only. Both sides are resolved to real paths: through a symlink, a junction or a substituted drive, argv[1] keeps the
+// path as typed while the module's own URL is resolved, so a plain comparison runs nothing and exits 0 (a verdict that is never
+// given). A file named like this one that cannot be resolved is a refusal, never a silent exit 0.
+const real = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
+};
+const argv1 = process.argv[1];
+if (argv1 && real(argv1) !== null && real(argv1) === real(fileURLToPath(import.meta.url))) {
   const chunks = [];
   for await (const c of process.stdin) chunks.push(c);
   const result = classify(Buffer.concat(chunks).toString('utf8'));
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = exitFor[result.verdict];
+} else if (argv1 && real(argv1) === null && basename(argv1) === 'pg-recovery-verdict.mjs') {
+  console.error('FAIL  pg-recovery-verdict.mjs could not recognise itself as the script being run; no verdict was given.');
+  process.exitCode = 2;
 }

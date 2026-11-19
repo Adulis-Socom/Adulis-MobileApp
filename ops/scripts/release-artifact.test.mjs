@@ -7,16 +7,20 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
+  rmdirSync,
   rmSync,
+  statSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { buildManifest, checkDirectory, sha256 } from './migration-guard.mjs';
 import {
@@ -464,5 +468,304 @@ test('a pipeline simulation: the record written in the build checkout travels to
   } finally {
     build.cleanup();
     image.cleanup();
+  }
+});
+
+// ---- a script started through a link, and the other ways a start can silently do nothing ----------------------------------
+
+/** A directory link (a junction on Windows, a symlink elsewhere) to `dir`, removed without touching `dir`. */
+function linkTo(dir) {
+  const base = mkdtempSync(path.join(tmpdir(), 'rellink-'));
+  const link = path.join(base, 'current');
+  symlinkSync(dir, link, 'junction');
+  return {
+    link,
+    cleanup: () => {
+      try {
+        unlinkSync(link);
+      } catch {
+        rmdirSync(link);
+      }
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
+test('started through a directory link, the migration guard and the record script still run: the usage refusal and exit 2, never a silent exit 0', (t) => {
+  const tree = artifactTree();
+  let l;
+  try {
+    l = linkTo(tree.dir);
+  } catch (e) {
+    tree.cleanup();
+    t.skip(`no directory link can be created here (${e.code}); the Linux CI run creates a symlink`);
+    return;
+  }
+  try {
+    const run = (dir, script, args) =>
+      spawnSync(process.execPath, [path.join(dir, 'ops', 'scripts', script), ...args], {
+        cwd: tree.dir,
+        encoding: 'utf8',
+      });
+    for (const dir of [tree.dir, l.link]) {
+      const via = dir === l.link ? 'through the link' : 'directly';
+      const art = run(dir, 'release-artifact.mjs', ['verify']);
+      assert.equal(art.status, 2, `record script ${via}: ${art.stdout}${art.stderr}`);
+      assert.match(art.stderr, /REFUSED: --info, --expect-commit needed/, via);
+      const guard = run(dir, 'migration-guard.mjs', ['up', '--bogus']);
+      assert.equal(guard.status, 2, `guard ${via}: ${guard.stdout}${guard.stderr}`);
+      assert.match(guard.stderr, /REFUSED: unknown argument "--bogus" for up/, via);
+    }
+    // and real work done through the link is done: the record is written
+    const w = run(l.link, 'release-artifact.mjs', [
+      'write',
+      '--commit',
+      COMMIT,
+      '--out',
+      'via-link.json',
+    ]);
+    assert.equal(w.status, 0, w.stderr);
+    assert.ok(existsSync(path.join(tree.dir, 'via-link.json')));
+  } finally {
+    l.cleanup();
+    tree.cleanup();
+  }
+});
+
+test('entryKind recognises the running script through a link and refuses an unresolvable name instead of guessing', async (t) => {
+  const { entryKind } = await import('./migration-guard.mjs');
+  const base = mkdtempSync(path.join(tmpdir(), 'relentry-'));
+  let l = null;
+  try {
+    const real = path.join(base, 'real');
+    mkdirSync(real);
+    const file = path.join(real, 'tool.mjs');
+    writeFileSync(file, '');
+    writeFileSync(path.join(real, 'other.mjs'), '');
+    const meta = pathToFileURL(realpathSync(file)).href;
+    assert.equal(entryKind(meta, file), 'run');
+    assert.equal(entryKind(meta, path.join(real, 'other.mjs')), 'import');
+    assert.equal(entryKind(meta, undefined), 'import');
+    assert.equal(entryKind(meta, ''), 'import');
+    assert.equal(entryKind(meta, path.join(base, 'gone', 'tool.mjs')), 'unresolved');
+    assert.equal(entryKind(meta, path.join(base, 'gone', 'else.mjs')), 'import');
+    try {
+      l = linkTo(real);
+    } catch (e) {
+      t.diagnostic(
+        `no directory link can be created here (${e.code}); the link case ran in the Linux CI run`,
+      );
+    }
+    if (l) assert.equal(entryKind(meta, path.join(l.link, 'tool.mjs')), 'run');
+  } finally {
+    l?.cleanup();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('no script in ops/scripts decides it is the running script by comparing its URL with argv[1] as typed', () => {
+  const dir = path.join(ROOT, 'ops', 'scripts');
+  const offenders = readdirSync(dir)
+    .filter((n) => n.endsWith('.mjs') && !n.endsWith('.test.mjs'))
+    .filter((n) => {
+      const src = readFileSync(path.join(dir, n), 'utf8');
+      return /import\.meta\.url\s*===/.test(src) || /resolve\(process\.argv\[1\]\)\s*===/.test(src);
+    });
+  assert.deepEqual(offenders, []);
+});
+
+// ---- with git metadata the record is also a promise about the files -------------------------------------------------------
+
+/** A build checkout: git-initialised, everything committed; returns its head. */
+function commitTree(t) {
+  t.git('init', '-q');
+  t.git('config', 'user.email', 't@example.invalid');
+  t.git('config', 'user.name', 't');
+  t.git('config', 'commit.gpgsign', 'false');
+  t.git('config', 'core.autocrlf', 'false');
+  writeFileSync(path.join(t.dir, '.gitignore'), 'node_modules/\n');
+  t.git('add', '-A');
+  t.git('commit', '-q', '-m', 'release');
+  return t.git('rev-parse', 'HEAD');
+}
+
+test('with git metadata, a migration that is pinned but not committed is neither recorded nor verified as the commit', () => {
+  const t = artifactTree();
+  try {
+    const head = commitTree(t);
+    const manifestPath = path.join(t.dir, 'ops', 'migrations.manifest.json');
+    const count = JSON.parse(readFileSync(manifestPath, 'utf8')).files.length;
+    const name = `${String(count + 1).padStart(4, '0')}_dirty.sql`;
+    // appended and pinned, never committed: the manifest is modified and the new file is untracked
+    writeFileSync(path.join(t.dir, 'db', 'migrations', name), 'SELECT 1;\n');
+    const guardScript = path.join(t.dir, 'ops', 'scripts', 'migration-guard.mjs');
+    const git = (args) =>
+      spawnSync(process.execPath, [guardScript, ...args], { cwd: t.dir, encoding: 'utf8' });
+    assert.equal(git(['write']).status, 0);
+    // the guard's own source check refuses this tree
+    const guard = git(['verify', '--expect-commit', head]);
+    assert.equal(guard.status, 1);
+    assert.match(guard.stderr, /SOURCE: the migrations or the manifest differ from the commit/);
+    // write refuses it too, and writes nothing
+    const dirty = path.join(t.dir, 'dirty.json');
+    const w = t.cli(['write', '--commit', head, '--out', dirty]);
+    assert.equal(w.status, 1, w.out + w.err);
+    assert.match(
+      w.err,
+      /SOURCE: the migrations or the manifest differ from the commit[^]*dirty\.sql/,
+    );
+    assert.ok(!existsSync(dirty));
+    // a record made on this dirty tree (as the script used to make it) is refused by verify as well
+    const d = describeArtifact({
+      commit: head,
+      dir: path.join(t.dir, 'db', 'migrations'),
+      manifestPath,
+    });
+    assert.ok(
+      d.record,
+      'the in-process description accepts the tree: only the git check can refuse it',
+    );
+    writeFileSync(path.join(t.dir, 'made-dirty.json'), JSON.stringify(d.record));
+    const v = t.cli([
+      'verify',
+      '--info',
+      path.join(t.dir, 'made-dirty.json'),
+      '--expect-commit',
+      head,
+    ]);
+    assert.equal(v.status, 1, v.out + v.err);
+    assert.match(v.err, /SOURCE: the migrations or the manifest differ from the commit/);
+    // committing the migration makes the same input acceptable
+    t.git('add', '-A');
+    t.git('commit', '-q', '-m', 'the migration');
+    const next = t.git('rev-parse', 'HEAD');
+    assert.equal(t.cli(['write', '--commit', next, '--out', dirty]).status, 0);
+    const ok = t.cli(['verify', '--info', dirty, '--expect-commit', next]);
+    assert.equal(ok.status, 0, ok.err);
+    assert.match(
+      ok.out,
+      /git HEAD: equal to the recorded commit; db\/migrations and the manifest are as committed/,
+    );
+  } finally {
+    t.cleanup();
+  }
+});
+
+// ---- what the record script may import, and who may mention it ---------------------------------------------------------------
+
+test('the record script imports only identity helpers from the guard, nothing that applies a migration, and no other file mentions it', () => {
+  const src = readFileSync(path.join(ROOT, 'ops', 'scripts', 'release-artifact.mjs'), 'utf8');
+  const imports = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)].map((m) => ({
+    names: m[1]
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean),
+    from: m[2],
+  }));
+  assert.deepEqual(
+    imports
+      .filter((i) => i.from === './migration-guard.mjs')
+      .flatMap((i) => i.names)
+      .sort(),
+    [
+      'DEFAULT_DIR',
+      'DEFAULT_MANIFEST',
+      'REPO_ROOT',
+      'checkDirectory',
+      'checkManifest',
+      'checkSource',
+      'entryKind',
+      'readCheckoutHead',
+      'sha256',
+    ],
+    'a new import from the guard (up, authorizeApply, the runner path) is a decision, not an accident',
+  );
+  for (const i of imports.filter((x) => x.from !== './migration-guard.mjs'))
+    assert.ok(i.from.startsWith('node:'), `${i.from}: only the standard library otherwise`);
+  assert.doesNotMatch(src, /import\s+\w+\s+from\s+'(?!node:)|import\s*\*\s*as|import\s*\(/);
+  // every file of the repository that names the script
+  const allowed = new Set([
+    'ops/scripts/release-artifact.mjs',
+    'ops/scripts/release-artifact.test.mjs',
+    'ops/scripts/gates.mjs',
+    'docs/infrastructure/MIGRATION-FILE-GUARD.md',
+    'ops/runbooks/deploy.md',
+  ]);
+  const skip = new Set(['node_modules', '.git', 'dist', 'build', 'coverage']);
+  const text = /\.(md|mjs|cjs|js|ts|tsx|json|ya?ml|sh|sql|toml|txt)$|^Dockerfile/;
+  const found = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(e.name) || e.isSymbolicLink()) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (text.test(e.name) && statSync(p).size < 3 * 1024 * 1024) {
+        if (readFileSync(p, 'utf8').includes('release-artifact'))
+          found.push(path.relative(ROOT, p).replaceAll('\\', '/'));
+      }
+    }
+  };
+  walk(ROOT);
+  assert.deepEqual(
+    found.filter((f) => !allowed.has(f)),
+    [],
+    'a Dockerfile, workflow, compose file, blueprint or script that starts using the record script must be reviewed on purpose',
+  );
+});
+
+// ---- a record path is read with a limit, and an odd commit value is a refusal, not a crash ------------------------------
+
+test('a record path that is not a regular file is refused, and a commit value that is not a string does not throw', () => {
+  const f = fake();
+  try {
+    assert.match(readRecordFile(f.base).problems[0], /not a regular file/);
+    for (const commit of [[COMMIT], { toLowerCase: () => COMMIT }, 12])
+      assert.match(
+        describeArtifact({ commit, ...f.opts }).problems.join('\n'),
+        /--commit must be the full 40-character commit sha/,
+      );
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('the backup verifier and the recovery verdict also run through a directory link: a usage refusal and an UNKNOWN verdict, never a silent exit 0', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'relverify-'));
+  mkdirSync(path.join(dir, 'ops', 'scripts'), { recursive: true });
+  for (const f of ['db-backup-verify.mjs', 'pg-recovery-verdict.mjs'])
+    cpSync(path.join(ROOT, 'ops', 'scripts', f), path.join(dir, 'ops', 'scripts', f));
+  let l;
+  try {
+    l = linkTo(dir);
+  } catch (e) {
+    rmSync(dir, { recursive: true, force: true });
+    t.skip(`no directory link can be created here (${e.code}); the Linux CI run creates a symlink`);
+    return;
+  }
+  try {
+    for (const root of [dir, l.link]) {
+      const backup = spawnSync(
+        process.execPath,
+        [path.join(root, 'ops', 'scripts', 'db-backup-verify.mjs')],
+        {
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(backup.status, 2, `${root}: ${backup.stdout}${backup.stderr}`);
+      assert.match(backup.stderr, /usage: node ops\/scripts\/db-backup-verify\.mjs/);
+      const verdict = spawnSync(
+        process.execPath,
+        [path.join(root, 'ops', 'scripts', 'pg-recovery-verdict.mjs')],
+        {
+          encoding: 'utf8',
+          input: '',
+        },
+      );
+      assert.equal(verdict.status, 2, `${root}: ${verdict.stdout}${verdict.stderr}`);
+      assert.match(verdict.stdout, /"verdict": "UNKNOWN"/);
+    }
+  } finally {
+    l.cleanup();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

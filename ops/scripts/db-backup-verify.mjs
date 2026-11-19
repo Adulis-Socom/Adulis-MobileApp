@@ -19,10 +19,10 @@
 // disposable server proves that (a dump holding the historical orphans stops at five foreign keys).
 // Exit 0 = every check passed, 1 = a check failed, 2 = usage.
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const EXPECTED = ['adulis.dump', 'adulis_gates.dump', 'globals.sql'];
 export const SUMS = 'SHA256SUMS.txt';
@@ -165,4 +165,20 @@ async function main(argv) {
   return problems.length ? 1 : 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exitCode = await main(process.argv.slice(2));
+// Run as a script only. Both sides are resolved to real paths: through a symlink, a junction or a substituted drive, argv[1] keeps the
+// path as typed while the module's own URL is resolved, so a plain comparison runs nothing and exits 0 (a verifier that verifies
+// nothing). A file named like this one that cannot be resolved is a refusal, never a silent exit 0.
+const real = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
+};
+const argv1 = process.argv[1];
+if (argv1 && real(argv1) !== null && real(argv1) === real(fileURLToPath(import.meta.url))) {
+  process.exitCode = await main(process.argv.slice(2));
+} else if (argv1 && real(argv1) === null && basename(argv1) === 'db-backup-verify.mjs') {
+  console.error('FAIL  db-backup-verify.mjs could not recognise itself as the script being run; nothing was checked.');
+  process.exitCode = 2;
+}

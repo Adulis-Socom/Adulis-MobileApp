@@ -78,7 +78,9 @@ const host = (() => {
     return '';
   }
 })();
-if (!['localhost', '127.0.0.1', '::1'].includes(host)) {
+// The host as the URL parser reports it. An IPv6 host is reported with its brackets (`[::1]`), so the unbracketed `::1` could
+// never match: an IPv6 loopback URL is refused here, as it was before. Name the host `localhost` or `127.0.0.1`.
+if (!['localhost', '127.0.0.1'].includes(host)) {
   console.error(`FAIL  refusing to reset a non-local database (host: ${host || 'unparseable'}).`);
   console.error('      This script drops every application schema. That is its purpose.');
   process.exit(2);

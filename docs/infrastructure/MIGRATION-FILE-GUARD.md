@@ -82,10 +82,14 @@ checkout of the approved commit. A migration you are still writing is applied to
 A deployment to a hosted database is UNKNOWN to this rule and has no commit or confirmation to give; until the
 deploy command is changed deliberately, the pre-deploy step is refused.
 
-The source check reads the checkout's OWN git metadata: the directory the guard lives in must be the top level of a git
-repository. A directory with no `.git` of its own is refused even when it sits inside another repository (git would otherwise
-walk up and judge it by that repository's HEAD), and `GIT_DIR`, `GIT_WORK_TREE` and the other variables that move git to another
-repository are ignored. A hosted build that carries no git metadata (or no git) is refused with `SOURCE: cannot read the git HEAD ...
+The source check reads the checkout's OWN git metadata: the directory the guard lives in must be the top level of a git work
+tree. A directory with no `.git` of its own is refused even when it sits inside another repository (git would otherwise
+walk up and judge it by that repository's HEAD), so are a bare repository and the inside of a git directory, and `GIT_DIR`,
+`GIT_WORK_TREE` and the other variables that move git to another repository are ignored (in any letter case). A linked worktree
+or a submodule, whose `.git` is a file, is a checkout of its own and is judged by its own HEAD. A `.git` file that names another
+repository's git directory cannot be told from a worktree pointer: the check protects against accidents, it does not resist
+someone who writes the checkout's own git metadata. Each way git can fail has its own words (not installed, no repository,
+another owner, not a work tree, nested, no HEAD). A hosted build that carries no git metadata (or no git) is refused with `SOURCE: cannot read the git HEAD ...
 an artifact without git metadata cannot satisfy that`: it cannot satisfy a persistent-target rule that compares a commit with
 git HEAD, and no flag turns that into an allowance. `ops/scripts/release-artifact.mjs` describes such an artifact (see below) but
 does not authorise anything.
@@ -96,7 +100,9 @@ does not authorise anything.
 it is and the sha256 of the migration manifest (which lists every migration file's hash); it refuses a tree whose files are not
 exactly its pinned set, and never overwrites an existing record. `node ops/scripts/release-artifact.mjs verify --info <file>
 --expect-commit <full sha>` recomputes the manifest hash, checks every migration file against the manifest, and compares the
-record with the commit the pipeline expects (and with git HEAD when the checkout has its own). It catches a migration edited
+record with the commit the pipeline expects (and, when the checkout has its own git metadata, with git HEAD and with the
+guard's source check: `db/migrations` and the manifest must be exactly as committed, so a migration that is pinned but not
+committed is neither recorded nor verified as that commit). It catches a migration edited
 together with its own manifest line after the record was made, which the directory check alone accepts. It does NOT prove that
 anyone approved the commit (an unsigned record can be rewritten by whoever can rewrite the artifact), and nothing reads a record
 when a migration is applied: `pnpm db:migrate`, `pnpm db:migrate:guarded` and the guard's `up` never consult it, a test fails if
@@ -197,8 +203,13 @@ Three situations have an exit that does not touch history:
   assume-unchanged flags, and it ignores ignored files.
 - The classification and the runner use separate connections, and `localhost` is resolved again for each connection. Nothing
   here makes the two resolve differently, and nothing proves they cannot.
-- `pnpm db:reset` accepts loopback hosts only; the compose service names `db` and `postgres` are no longer accepted, because the guard
-  classifies them UNKNOWN. A reset reaches a database through its published loopback port.
+- `pnpm db:reset` accepts the hosts `localhost` and `127.0.0.1` only. The compose service names `db` and `postgres` are not accepted
+  (the guard classifies them UNKNOWN), and an IPv6 URL such as `[::1]` is refused (the URL parser reports that host with its
+  brackets): name the host `localhost` or `127.0.0.1`. A reset reaches a database through its published loopback port. `pnpm db:seed`
+  likewise accepts loopback hosts only.
+- A script that is started through a symlink, a junction or a substituted drive still runs: the guard, `release-artifact.mjs` and
+  the other scripts that decide "am I the running script" compare real paths, and a start that cannot recognise itself is a
+  refusal with exit 2, never a silent exit 0.
 - The runner reads the SQL files after the guard hashed them. On a checkout that is being edited that is a window of a few
   seconds; an immutable checkout (CI, a deployed build) has none.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
