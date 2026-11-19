@@ -190,21 +190,31 @@ describe('a Seller whose store sells nothing', () => {
     NOT_TRADING_CLAIMS();
   });
 
-  it('an active Seller keeps saying open, closed or nothing from the server\u2019s derivation, and its methods', async () => {
+  it('an active Seller that is open says open and lists its fulfilment methods', async () => {
     profile({ status: 'ACTIVE', ...TRADING_FACTS });
     await openAbout();
     expect(screen.getByText(en['buyer.seller.about.open'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.closed'])).not.toBeOnTheScreen();
     expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
     for (const method of ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY'] as const) {
       expect(screen.getByText(en[`buyer.seller.about.fulfilment.${method}`])).toBeOnTheScreen();
     }
   });
 
-  it('a Seller that is active and closed by its hours still says closed; with no availability it says nothing', async () => {
+  it('an active Seller that is closed by its hours says closed, not open, and still lists its methods', async () => {
     profile({ status: 'ACTIVE', ...TRADING_FACTS, availability: { is_open: false, reason: 'OUT_OF_HOURS', note: null } });
     await openAbout();
     expect(screen.getByText(en['buyer.seller.about.closed'])).toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.seller.about.open'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
+  });
+
+  it('an active Seller with no availability says neither open nor closed, and still lists its methods', async () => {
+    profile({ status: 'ACTIVE', ...TRADING_FACTS, availability: null });
+    await openAbout();
+    expect(screen.queryByText(en['buyer.seller.about.open'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.closed'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
   });
 
   it('a Seller that turns CLOSING at the next read stops saying it is open', async () => {
