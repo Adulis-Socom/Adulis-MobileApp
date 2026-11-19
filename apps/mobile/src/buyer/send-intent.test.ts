@@ -160,25 +160,51 @@ describe('judging a failed replay', () => {
     const silent = { startedAt: NOW - 1000, attempts: 2, unanswered: true };
 
     it('a missing conversation on a replay is unknown, and the same key is kept', () => {
-      expect(judgeFailure(envelope(404, 'NOT_FOUND'), silent, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), silent, NOW)).toEqual({
+        outcome: 'unknown',
+        replay: true,
+        holdMs: null,
+      });
     });
 
-    it('a validation refusal and a body over the limit are still the API\'s own rejection (the same body failed the same way before anything was stored)', () => {
-      expect(judgeFailure(envelope(400, 'VALIDATION_FAILED'), silent, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
-      expect(judgeFailure(envelope(413, 'PAYLOAD_TOO_LARGE'), silent, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    it("a validation refusal and a body over the limit are still the API's own rejection (the same body failed the same way before anything was stored)", () => {
+      expect(judgeFailure(envelope(400, 'VALIDATION_FAILED'), silent, NOW)).toEqual({
+        outcome: 'failed',
+        replay: false,
+        holdMs: null,
+      });
+      expect(judgeFailure(envelope(413, 'PAYLOAD_TOO_LARGE'), silent, NOW)).toEqual({
+        outcome: 'failed',
+        replay: false,
+        holdMs: null,
+      });
     });
 
-    it('a missing conversation after attempts that were all answered is still the API\'s own rejection', () => {
-      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, unanswered: false }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
-      expect(judgeFailure(envelope(404, 'NOT_FOUND'), replay, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    it("a missing conversation after attempts that were all answered is still the API's own rejection", () => {
+      expect(
+        judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, unanswered: false }, NOW),
+      ).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), replay, NOW)).toEqual({
+        outcome: 'failed',
+        replay: false,
+        holdMs: null,
+      });
     });
 
     it('the first attempt is never affected: its own 404 stored nothing', () => {
-      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { startedAt: NOW - 1000, attempts: 1, unanswered: true }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+      expect(
+        judgeFailure(
+          envelope(404, 'NOT_FOUND'),
+          { startedAt: NOW - 1000, attempts: 1, unanswered: true },
+          NOW,
+        ),
+      ).toEqual({ outcome: 'failed', replay: false, holdMs: null });
     });
 
     it('a key too old to replay stays withdrawn: unknown without a replay', () => {
-      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, startedAt: NOW - KEY_SAFE_MS }, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
+      expect(
+        judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, startedAt: NOW - KEY_SAFE_MS }, NOW),
+      ).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
     });
   });
 });

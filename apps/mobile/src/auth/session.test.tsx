@@ -92,6 +92,8 @@ describe('root providers', () => {
   }
 
   beforeEach(() => useUiStore.setState({ activeMode: null }));
+  // A failing assertion must not leave a pending Save behind for the tests after it.
+  afterEach(() => useUiStore.setState({ pendingSave: null }));
 
   it('boots, hydrates the session and serves queries', async () => {
     await boot(fakeStorage('opaque-token'), <QueryProbe />);
@@ -128,7 +130,9 @@ describe('root providers', () => {
     expect(useUiStore.getState().activeMode).toBeNull();
   });
 
-  it('signing in again with the same credential keeps what is held', async () => {
+  // The app never makes this call (every verification mints a new credential, so signing in again is "another
+  // credential" and clears); it pins the guard in `signIn` itself, that only a DIFFERENT credential clears.
+  it('a sign-in call with the credential already held changes nothing', async () => {
     const queryClient = await boot(fakeStorage('first-token'));
     queryClient.setQueryData(['server-state'], 'cached');
     useUiStore.setState({ activeMode: 'buyer' });
@@ -140,7 +144,9 @@ describe('root providers', () => {
   });
 
   it('a guest signing in keeps what a guest holds: the public reads and its own pending Save', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
     await render(
       <AppProviders queryClient={queryClient} sessionStorage={fakeStorage(null)}>
         <SessionProbe />
@@ -148,7 +154,12 @@ describe('root providers', () => {
     );
     await screen.findByText('signedOut');
     queryClient.setQueryData(['public-read'], 'cached for a guest');
-    const pendingSave = { nonce: 'n1', target: { type: 'PRODUCT_POST' as const, ref: 'p1' }, surface: 'PRODUCT_DETAIL' as const, sceneRef: null };
+    const pendingSave = {
+      nonce: 'n1',
+      target: { type: 'PRODUCT_POST' as const, ref: 'p1' },
+      surface: 'PRODUCT_DETAIL' as const,
+      sceneRef: null,
+    };
     useUiStore.setState({ pendingSave });
 
     await act(() => api!.signIn('first-token'));
@@ -156,7 +167,6 @@ describe('root providers', () => {
     expect(screen.getByText('signedIn')).toBeOnTheScreen();
     expect(queryClient.getQueryData(['public-read'])).toBe('cached for a guest');
     expect(useUiStore.getState().pendingSave).toEqual(pendingSave);
-    useUiStore.setState({ pendingSave: null });
   });
 
   it('runs one device registration at a time: concurrent callers share the attempt in flight', async () => {

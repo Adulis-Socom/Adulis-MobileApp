@@ -58,7 +58,8 @@ export function judgeFailure(
 ): FailureJudgement {
   const holdMs = waitBeforeRetryMs(failure);
   if (keyConflict(failure)) return { outcome: 'unknown', replay: false, holdMs };
-  if (rejectedByApi(failure, intent?.attempts ?? 1, intent?.unanswered === true)) return { outcome: 'failed', replay: false, holdMs };
+  if (rejectedByApi(failure, intent?.attempts ?? 1, intent?.unanswered === true))
+    return { outcome: 'failed', replay: false, holdMs };
   return { outcome: 'unknown', replay: intent !== null && keyUsable(intent, now), holdMs };
 }
 

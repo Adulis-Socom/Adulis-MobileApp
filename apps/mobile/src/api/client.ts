@@ -131,7 +131,8 @@ export function problemCode(error: unknown): Problem['code'] | null {
 
 const TIMEOUT_MS = 10_000;
 const MAX_RETRY_AFTER_SECONDS = 3600;
-const HTTP_DATE = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+const HTTP_DATE =
+  /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
 
 const clampWait = (seconds: number) => Math.min(Math.max(Math.ceil(seconds), 0), MAX_RETRY_AFTER_SECONDS);
 

@@ -59,7 +59,8 @@ design is not complete.
   the app says it was not sent, with the reason.
 - **No queue.** Nothing is stored or retried in the background.
 - **One idempotency key per draft text,** kept across a lost connection: a retry of the same text
-  replays rather than sends twice. A server answer, or a changed text, starts a new intent.
+  replays rather than sends twice. A server answer, or a changed text, starts a new intent (a 404 on
+  a replay after an attempt that never got an answer is the exception: WO-022, section 7).
 - **Double taps.** A ref blocks a second tap while one send is in flight.
 - **Limits.** An empty or whitespace-only message cannot be sent. Over 4,000 characters the field
   says so and Send is disabled (checked before sending; the server enforces the same limit).
