@@ -16,21 +16,41 @@
 // `write` pins ADDED migrations only. It never re-pins a missing or changed historical file: that needs a hand edit
 // of the manifest, which shows in review.
 //
+// THE TARGET. The checks above are about the files. Before the runner starts, `up` also asks which database this is
+// (classifyTarget): DISPOSABLE (a loopback host named exactly, a port the URL names that is not the protected one, and
+// a database that carries the disposable mark), PERSISTENT-DEV (the protected development port, or a loopback database
+// without the mark) or UNKNOWN (everything else; never treated as disposable). Only a DISPOSABLE target is migrated on
+// the ordinary command. Any other needs the approved commit (--expect-commit, the full sha, equal to HEAD, no changed
+// tracked file) and --confirm-target=<database>@<host>:<port> naming exactly this run's target; the authorization is
+// appended to .adulis-db-admin.log first. A dry run is allowed on every target.
+//
 //   node ops/scripts/migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>]
 //                                                                  (--base: the manifest only appends to the one at <ref>)
-//   node ops/scripts/migration-guard.mjs up (--expect-commit <sha> | --no-source-check) [--dry-run]
-//                                                                  (verify, then node-pg-migrate up)
+//   node ops/scripts/migration-guard.mjs up (--expect-commit <sha> | --no-source-check) [--confirm-target=<db>@<host>:<port>]
+//                                                                  [--dry-run]   (verify, the target gate, then node-pg-migrate up)
+//   node ops/scripts/migration-guard.mjs authorize [--expect-commit <sha>] [--confirm-target=<db>@<host>:<port>]
+//                                                                  (only the target gate: exit 0 when `up` would be allowed)
 //   node ops/scripts/migration-guard.mjs write                    (pin newly added migrations)
 //
 // Refusals are written to stderr (a caller that discards stdout still sees why nothing was applied); progress to stdout.
 // This is the only code that starts the runner (a test pins that). `pnpm db:migrate` is `up --no-source-check`: every
-// check except the git source check (a deploy or a throwaway database has no clean commit to compare). A persistent or
-// shared database is upgraded with `pnpm db:migrate:guarded --expect-commit <sha>`, which adds the source check.
+// check except the git source check, and it applies only to a DISPOSABLE target. A persistent or shared database is
+// upgraded with `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<db>@<host>:<port>`.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+
+import {
+  DISPOSABLE_MARKER,
+  DISPOSABLE_SETUP_MARKER,
+  PERSISTENT_DEV_PORTS,
+  readIdentity,
+  recordAdminAction,
+} from './lib/disposable-db.mjs';
+
+export { PERSISTENT_DEV_PORTS };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -144,9 +164,84 @@ export function checkHistory(applied, manifest) {
   return { problems, pending: problems.length === 0 ? files.slice(applied.length) : [] };
 }
 
+/** Variables that move git to another repository than the checkout's own. */
+const GIT_LOCATION_ENV = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_NAMESPACE',
+];
+
+/** The environment git is started with: the repository-location variables are dropped by name in any letter case (Windows ignores case). */
+export function gitEnvironment(base = process.env) {
+  const env = { ...base };
+  for (const k of Object.keys(env)) if (GIT_LOCATION_ENV.includes(k.toUpperCase())) delete env[k];
+  return env;
+}
+
 function git(root, args) {
-  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
-  return { status: r.status, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
+  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: gitEnvironment() });
+  return {
+    status: r.status,
+    out: (r.stdout ?? '').trim(),
+    err: (r.stderr ?? '').trim(),
+    spawnError: r.error?.code ?? null,
+  };
+}
+
+const NO_OWN_GIT =
+  'this directory is not a git checkout of its own, so the commit it was built from cannot be checked. A database that is not disposable is migrated only from a clean git checkout of the approved commit (--expect-commit <full sha>); an artifact without git metadata cannot satisfy that';
+
+const firstLine = (text) => text.split(/\r?\n/)[0];
+
+/** Why git could not describe the directory, in the words that tell the operator what to do. */
+function whyNoGit(r) {
+  if (r.status === null)
+    return {
+      cause: `git could not be started${r.spawnError ? ` (${r.spawnError})` : ''}`,
+      advice: 'git is not installed or is not on PATH',
+    };
+  const cause = firstLine(r.err) || 'git failed';
+  if (/dubious ownership|safe\.directory/i.test(r.err))
+    return {
+      cause,
+      advice: 'git refuses a directory that belongs to another user (see safe.directory)',
+    };
+  if (/not a git repository/i.test(r.err)) return { cause, advice: 'it has no .git of its own' };
+  return { cause, advice: 'git cannot read this checkout' };
+}
+
+/**
+ * HEAD of the checkout's OWN repository. `root` must be that repository's work tree and its top level: git finds a
+ * repository by walking up, so a directory without a .git of its own (an unpacked artifact inside a workspace, say) would
+ * otherwise be judged by the repository around it, and a bare repository or the inside of a git directory is no checkout
+ * at all. A linked worktree or a submodule (whose .git is a file) is a checkout of its own and is judged by its own HEAD.
+ * Returns { head } or { problem }. `run` is injectable for the tests.
+ */
+export function readCheckoutHead(root, run = git) {
+  const refuse = (cause, advice) => ({
+    problem: `SOURCE: cannot read the git HEAD (${cause}):${advice ? ` ${advice}.` : ''} ${NO_OWN_GIT}`,
+  });
+  const top = run(root, ['rev-parse', '--is-inside-work-tree', '--show-cdup']);
+  if (top.status !== 0) {
+    const why = whyNoGit(top);
+    return refuse(why.cause, why.advice);
+  }
+  const [inside, cdup = ''] = top.out.split(/\r?\n/);
+  if (inside !== 'true')
+    return refuse(
+      'it is not a work tree: a bare repository, the inside of a git directory, or a repository whose work tree is configured elsewhere',
+      '',
+    );
+  if (cdup !== '')
+    return refuse('it has no .git of its own and sits inside another repository', '');
+  const head = run(root, ['rev-parse', 'HEAD']);
+  if (head.status !== 0)
+    return { problem: `SOURCE: cannot read the git HEAD (${head.err || 'git failed'})` };
+  return { head: head.out };
 }
 
 /** Source commit: the checkout is the expected commit, and the migrations and the manifest are exactly as committed. */
@@ -157,14 +252,14 @@ export function checkSource({
   manifestRel = 'ops/migrations.manifest.json',
 }) {
   const problems = [];
-  const head = git(root, ['rev-parse', 'HEAD']);
-  if (head.status !== 0) return [`SOURCE: cannot read the git HEAD (${head.err || 'git failed'})`];
+  const head = readCheckoutHead(root);
+  if (!head.head) return [head.problem];
   if (!/^[0-9a-f]{7,40}$/i.test(expectedCommit))
     return [
       `SOURCE: --expect-commit must be a hex commit (7 to 40 characters), got ${JSON.stringify(expectedCommit)}`,
     ];
-  if (!head.out.toLowerCase().startsWith(expectedCommit.toLowerCase()))
-    problems.push(`SOURCE: HEAD is ${head.out.slice(0, 12)}, expected ${expectedCommit}`);
+  if (!head.head.toLowerCase().startsWith(expectedCommit.toLowerCase()))
+    problems.push(`SOURCE: HEAD is ${head.head.slice(0, 12)}, expected ${expectedCommit}`);
   const status = git(root, [
     'status',
     '--porcelain',
@@ -302,7 +397,7 @@ const PLAIN_HOST = /^[A-Za-z0-9._[\]:-]+$/;
  * The port is the one pg will use: the URL's, else PGPORT, else 5432. `options` is refused as a query parameter: pg
  * lets the URL's value replace the startup options the guard sets for its read-only history read.
  */
-export function checkTarget(connectionString, env = process.env) {
+export function parseTarget(connectionString, env = process.env) {
   let u;
   try {
     u = new URL(connectionString);
@@ -333,7 +428,158 @@ export function checkTarget(connectionString, env = process.env) {
   const port = u.port || env.PGPORT || '5432';
   if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)
     return { error: 'the port it names (or PGPORT, when the URL has none) is not a port number' };
-  return { target: `${u.hostname}:${Number(port)}/${database}` };
+  return { host: u.hostname, port: Number(port), database, explicitPort: u.port !== '' };
+}
+
+/** The target as named on the target line, or why it is refused. */
+export function checkTarget(connectionString, env = process.env) {
+  const t = parseTarget(connectionString, env);
+  return t.error ? t : { target: `${t.host}:${t.port}/${t.database}` };
+}
+
+// ---- which database is this? (a migration is applied only to one that proved it is disposable) ---------------------
+
+// PERSISTENT_DEV_PORTS (imported above, defined once in lib/disposable-db.mjs): never accepted as disposable.
+/** The only host spellings that are loopback. Anything else (an alias, an address, a machine name) is at best UNKNOWN. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const DISPOSABLE_MARKS = new Set([DISPOSABLE_MARKER, DISPOSABLE_SETUP_MARKER]);
+
+/** The database comment, read through the target's own URL in a read-only session. */
+async function readMark(url) {
+  return (await readIdentity(url))?.marker ?? null;
+}
+
+/**
+ * DISPOSABLE: a loopback host named exactly, a port the URL names and that is not the protected one, and a database
+ * that carries a disposable mark. PERSISTENT-DEV: the protected port (no mark is read there, and none is accepted), or a
+ * loopback database without the mark. UNKNOWN: everything else, including a mark that cannot be read. UNKNOWN is
+ * never treated as disposable. `t` is parseTarget's result; `readMark` is only called when a mark can matter.
+ */
+export async function classifyTarget(t, { readMark: read }) {
+  if (PERSISTENT_DEV_PORTS.has(t.port))
+    return {
+      kind: 'PERSISTENT-DEV',
+      why: `port ${t.port} is the persistent development cluster; no mark is accepted there`,
+    };
+  if (!LOOPBACK_HOSTS.has(t.host))
+    return {
+      kind: 'UNKNOWN',
+      why: `${t.host} is not a plain loopback host, so no disposable mark is accepted`,
+    };
+  if (!t.explicitPort)
+    return {
+      kind: 'UNKNOWN',
+      why: 'the URL has no explicit port, so no disposable mark is accepted',
+    };
+  let mark;
+  try {
+    mark = await read();
+  } catch (e) {
+    return {
+      kind: 'UNKNOWN',
+      why: `the database mark could not be read (${e.code ?? 'connection failed'})`,
+    };
+  }
+  if (DISPOSABLE_MARKS.has(mark))
+    return { kind: 'DISPOSABLE', why: 'the database is marked disposable' };
+  return {
+    kind: 'PERSISTENT-DEV',
+    why: mark ? 'its comment is not the disposable mark' : 'it carries no disposable mark',
+  };
+}
+
+/** The whole approved commit: the full sha, equal to HEAD, and no changed tracked file anywhere (the guard itself included). */
+export function checkApprovedSource({ root, expectedCommit }) {
+  if (!/^[0-9a-f]{40}$/i.test(expectedCommit))
+    return ['SOURCE: --expect-commit must be the full 40-character commit sha for this target'];
+  const head = readCheckoutHead(root);
+  if (!head.head) return [head.problem];
+  const problems = [];
+  if (head.head.toLowerCase() !== expectedCommit.toLowerCase())
+    problems.push(
+      `SOURCE: HEAD is ${head.head.slice(0, 12)}, not the approved ${expectedCommit.slice(0, 12)}`,
+    );
+  const status = git(root, ['status', '--porcelain', '--untracked-files=no']);
+  if (status.status !== 0) problems.push(`SOURCE: git status failed (${status.err})`);
+  else if (status.out !== '')
+    problems.push(
+      `SOURCE: the working tree has uncommitted changes to tracked files:\n${status.out.split('\n').slice(0, 10).join('\n')}`,
+    );
+  return problems;
+}
+
+/**
+ * May the pending migrations be applied to this target? A DISPOSABLE target needs nothing. Any other target
+ * (PERSISTENT-DEV or UNKNOWN: the same rule) needs the approved commit (--expect-commit, the full sha equal to HEAD,
+ * clean tree) AND --confirm-target=<database>@<host>:<port> naming exactly this run's target; the authorization is
+ * recorded before anything is applied (`record` null: not recorded, for the `authorize` command). A dry run is allowed
+ * on every target and only reports. Returns { ok, log, refusals }; nothing here writes to the database.
+ */
+export async function authorizeApply({
+  url,
+  env = process.env,
+  expectedCommit = null,
+  confirmTarget = null,
+  dryRun = false,
+  root = REPO_ROOT,
+  readMark: read = () => readMark(url),
+  sourceProblems = checkApprovedSource,
+  record = recordAdminAction,
+  now = new Date(),
+  logFile = path.join(REPO_ROOT, '.adulis-db-admin.log'),
+}) {
+  const t = parseTarget(url, env);
+  if (t.error)
+    return {
+      ok: false,
+      log: [],
+      refusals: [`REFUSED: the target is not usable (${t.error}); nothing was applied`],
+    };
+  const cls = await classifyTarget(t, { readMark: read });
+  const log = [`classification: ${cls.kind} (${cls.why})`];
+  if (cls.kind === 'DISPOSABLE') return { ok: true, log };
+  const want = `${t.database}@${t.host}:${t.port}`;
+  const how = `pnpm db:migrate:guarded --expect-commit <the approved commit's full sha> --confirm-target=${want}`;
+  if (dryRun) {
+    log.push(`dry run: applying here would need ${how}`);
+    return { ok: true, log };
+  }
+  const need = [];
+  if (expectedCommit === null)
+    need.push(
+      'the source check: --expect-commit <full sha> (pnpm db:migrate skips it; use pnpm db:migrate:guarded)',
+    );
+  else need.push(...sourceProblems({ root, expectedCommit }));
+  if (confirmTarget === null) need.push(`--confirm-target=${want}`);
+  else if (confirmTarget !== want)
+    need.push(`--confirm-target names ${confirmTarget}, but this run would apply to ${want}`);
+  if (need.length)
+    return {
+      ok: false,
+      log,
+      refusals: [
+        `REFUSED: the target ${t.host}:${t.port}/${t.database} is ${cls.kind}, not a disposable database; nothing was applied.`,
+        ...need.map((n) => `  - ${n}`),
+        `To upgrade it on purpose, after a dry run, from a clean checkout of the approved commit: ${how}`,
+      ],
+    };
+  if (record) {
+    try {
+      record(logFile, 'db:migrate', want, now, { commit: expectedCommit.toLowerCase() });
+    } catch (e) {
+      return {
+        ok: false,
+        log,
+        refusals: [
+          `REFUSED: could not record the upgrade in .adulis-db-admin.log (${e.code ?? e.message}); nothing was applied`,
+        ],
+      };
+    }
+    log.push(
+      `authorized: ${want} at ${expectedCommit.slice(0, 12).toLowerCase()} (recorded in .adulis-db-admin.log)`,
+    );
+  }
+  return { ok: true, log };
 }
 
 /**
@@ -386,6 +632,7 @@ export async function up(
     manifestPath = DEFAULT_MANIFEST,
     root = REPO_ROOT,
     expectedCommit = null,
+    confirmTarget = null,
     dryRun = false,
     log = console.log,
     err = log,
@@ -400,11 +647,16 @@ export async function up(
     err(`REFUSED: the manifest cannot be read (${e.code ?? e.message}); nothing was applied`);
     return 1;
   }
+  // The gate between the checks and the runner. `deps.readApplied` is the test seam (it supplies its own history and
+  // decides for itself); the command line never injects one, so it always gets the real gate for its target.
   let readApplied_ = deps.readApplied;
+  let authorize = deps.authorize ?? null;
   if (!readApplied_) {
     const url = resolveTarget(process.env, { log, err });
     if (!url) return 1;
     readApplied_ = () => readApplied(url);
+    authorize ??= (o) =>
+      authorizeApply({ url, env: process.env, expectedCommit, confirmTarget, root, ...o });
   }
   let applied;
   try {
@@ -426,12 +678,21 @@ export async function up(
   );
   if (expectedCommit === null) log('source check: skipped (--no-source-check)');
   if (dryRun) {
+    for (const l of (await authorize?.({ dryRun: true }))?.log ?? []) log(l);
     log('dry run: the runner was not started');
     return 0;
   }
   if (result.pending.length === 0) {
     log('nothing to apply');
     return 0;
+  }
+  if (authorize) {
+    const gate = await authorize({ dryRun: false });
+    for (const l of gate.log) log(l);
+    if (!gate.ok) {
+      for (const l of gate.refusals) err(l);
+      return 1;
+    }
   }
   return run({ dir });
 }
@@ -510,7 +771,10 @@ const COMMANDS = {
   verify: { bool: ['--db'], value: ['--expect-commit', '--base'] },
   up: { bool: ['--dry-run', '--no-source-check'], value: ['--expect-commit'] },
   write: { bool: [], value: [] },
+  authorize: { bool: [], value: ['--expect-commit'] },
 };
+/** Commands that take --confirm-target=<database>@<host>:<port> as ONE argument (the form db:reset uses). */
+const CONFIRMS = new Set(['up', 'authorize']);
 
 /**
  * The command line, strictly. An unknown flag, a repeated flag, a flag without its value, and an `up` without
@@ -524,6 +788,15 @@ export function parseArgs(argv) {
   const flags = {};
   for (let i = 0; i < rest.length; i += 1) {
     const a = rest[i];
+    if (CONFIRMS.has(cmd) && a.startsWith('--confirm-target=')) {
+      if ('--confirm-target' in flags) return { error: '--confirm-target is given twice' };
+      if (a === '--confirm-target=')
+        return {
+          error: '--confirm-target needs a value: --confirm-target=<database>@<host>:<port>',
+        };
+      flags['--confirm-target'] = a.slice('--confirm-target='.length);
+      continue;
+    }
     const isBool = spec.bool.includes(a);
     if (!isBool && !spec.value.includes(a))
       return { error: `unknown argument ${JSON.stringify(a)} for ${cmd}` };
@@ -552,7 +825,7 @@ async function main(argv) {
   if (parsed.error) {
     console.error(`REFUSED: ${parsed.error}; nothing was applied`);
     console.error(
-      'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
+      'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--confirm-target=<db>@<host>:<port>] [--dry-run] | authorize [--expect-commit <sha>] [--confirm-target=<db>@<host>:<port>] | write',
     );
     return 2;
   }
@@ -562,7 +835,26 @@ async function main(argv) {
   const sinks = { log: console.log, err: console.error };
   if (cmd === 'write') return write(sinks);
   if (cmd === 'up')
-    return up({ expectedCommit: val('--expect-commit'), dryRun: flag('--dry-run'), ...sinks });
+    return up({
+      expectedCommit: val('--expect-commit'),
+      confirmTarget: val('--confirm-target'),
+      dryRun: flag('--dry-run'),
+      ...sinks,
+    });
+  if (cmd === 'authorize') {
+    const url = resolveTarget(process.env, sinks);
+    if (!url) return 1;
+    const g = await authorizeApply({
+      url,
+      expectedCommit: val('--expect-commit'),
+      confirmTarget: val('--confirm-target'),
+      record: null,
+    });
+    for (const l of g.log) console.log(l);
+    for (const l of g.refusals ?? []) console.error(l);
+    if (g.ok) console.log('OK: this run may apply to the target');
+    return g.ok ? 0 : 1;
+  }
   if (cmd === 'verify') {
     const manifest = JSON.parse(readFileSync(DEFAULT_MANIFEST, 'utf8'));
     let applied = null;
@@ -588,7 +880,7 @@ async function main(argv) {
     return 0;
   }
   console.error(
-    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--dry-run] | write',
+    'usage: migration-guard.mjs verify [--db] [--expect-commit <sha>] [--base <ref>] | up (--expect-commit <sha> | --no-source-check) [--confirm-target=<db>@<host>:<port>] [--dry-run] | authorize [--expect-commit <sha>] [--confirm-target=<db>@<host>:<port>] | write',
   );
   return 2;
 }
@@ -597,9 +889,34 @@ async function main(argv) {
 const exitAfterFlush = (code) =>
   process.stdout.write('', () => process.stderr.write('', () => process.exit(code)));
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * Is this module the script being run? Both sides are resolved to real paths: through a symlink, a junction or a
+ * substituted drive, process.argv[1] keeps the path as typed while the module's own URL is resolved, so a plain comparison
+ * runs nothing and exits 0. Returns 'run', 'import', or 'unresolved' (a file named like this one whose path cannot be
+ * resolved: refuse, never a silent exit 0).
+ */
+export function entryKind(
+  metaUrl,
+  argv1 = process.argv[1],
+  name = path.basename(fileURLToPath(metaUrl)),
+) {
+  if (!argv1) return 'import';
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(metaUrl)) ? 'run' : 'import';
+  } catch {
+    return path.basename(argv1) === name ? 'unresolved' : 'import';
+  }
+}
+
+const entry = entryKind(import.meta.url);
+if (entry === 'run') {
   main(process.argv.slice(2)).then(exitAfterFlush, (e) => {
     console.error(`REFUSED: unexpected error (${e.code ?? e.message}); nothing was applied`);
     exitAfterFlush(1);
   });
+} else if (entry === 'unresolved') {
+  console.error(
+    'REFUSED: the guard could not recognise itself as the script being run; nothing was applied',
+  );
+  process.exitCode = 2;
 }

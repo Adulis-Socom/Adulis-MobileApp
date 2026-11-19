@@ -196,9 +196,10 @@ Set `ADULIS_BIND_ADDRESS=0.0.0.0` for that one command. Example:
 |---|---|
 | `pnpm db:determinism` | only a disposable server. `ADULIS_PG_CONTAINER` must name its container, and the script proves that container is the server `DATABASE_URL_MIGRATE` reaches (port, system identifier, the disposable mark, no named or host data directory). There is no default container |
 | `pnpm verify:console-e2e` | only databases carrying the disposable mark, checked before it builds, resets or seeds anything |
-| `pnpm db:reset` | a database carrying the disposable mark; or a persistent database named exactly for that one run: `pnpm db:reset -- --confirm-target=<database>@<host>:<port>` (explicit port required), recorded in `.adulis-db-admin.log`. No environment variable can stand in for the confirmation |
+| `pnpm db:reset` | a database carrying the disposable mark; or a persistent database named exactly for that one run: `pnpm db:reset -- --confirm-target=<database>@<host>:<port>` (explicit port required), recorded in `.adulis-db-admin.log`. A persistent reset also needs `--expect-commit=<full sha>` (the migration that follows is a persistent upgrade), proven before anything is dropped. No environment variable can stand in for the confirmation |
 | `pnpm db:seed` | NODE_ENV development or test, and a local host only |
-| `pnpm db:migrate`, `pnpm worker:install` | additive. Also used by the deploy blueprint (`ops/render.yaml`), so they do not require a disposable target |
+| `pnpm db:migrate` | a database carrying the disposable mark (host exactly `localhost`, `127.0.0.1` or `::1`, a port the URL names, never the persistent development port); any other target only with `pnpm db:migrate:guarded --expect-commit <full sha> --confirm-target=<database>@<host>:<port>`, recorded in `.adulis-db-admin.log`; a dry run is allowed everywhere. The deploy blueprint (`ops/render.yaml`) runs it against a hosted database, which is neither, so until its command is changed deliberately the deploy step is refused |
+| `pnpm worker:install` | additive: it installs the job queue library's own tables and is not a migration |
 
 The disposable test environment for all of them:
 ```

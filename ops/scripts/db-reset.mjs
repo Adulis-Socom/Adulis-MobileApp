@@ -38,7 +38,7 @@
  * and saying so here is the point: a comment that oversells a guard is how
  * the next reader decides no further care is needed.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,7 +78,9 @@ const host = (() => {
     return '';
   }
 })();
-if (!['localhost', '127.0.0.1', '::1', 'db', 'postgres'].includes(host)) {
+// The host as the URL parser reports it. An IPv6 host is reported with its brackets (`[::1]`), so the unbracketed `::1` could
+// never match: an IPv6 loopback URL is refused here, as it was before. Name the host `localhost` or `127.0.0.1`.
+if (!['localhost', '127.0.0.1'].includes(host)) {
   console.error(`FAIL  refusing to reset a non-local database (host: ${host || 'unparseable'}).`);
   console.error('      This script drops every application schema. That is its purpose.');
   process.exit(2);
@@ -116,6 +118,44 @@ if (!decision.allowed) {
   console.error(`FAIL  ${decision.reason}`);
   console.error('      Nothing was dropped.');
   process.exit(1);
+}
+// The migration that follows the drops is the guarded one, so everything IT checks is proven BEFORE anything is
+// recorded or dropped, for every kind of target: the migration files against their pin (an unpinned or edited file
+// would otherwise be refused after the schemas are gone), and the target gate (a disposable database passes it with no
+// arguments; a persistent one needs the approved commit and the confirmation of this run).
+//
+// ORDER MATTERS: these spawnSync calls (no shell) come before the `shell: true` calls below on Windows. They refuse
+// anything that is not a 40-character hex sha or a plain host name, so only validated text can reach a shell.
+let approvedSha = null;
+const gateArgs = [];
+if (decision.kind === 'confirmed') {
+  // A persistent reset also needs the approved commit: its migration step applies to a database that is not marked disposable.
+  const commits = process.argv.slice(2).filter((a) => a.startsWith('--expect-commit='));
+  approvedSha = commits.length === 1 ? commits[0].slice('--expect-commit='.length) : null;
+  if (!approvedSha) {
+    console.error('FAIL  a persistent reset also needs the approved commit: --expect-commit=<full 40-character sha>.');
+    console.error('      Nothing was dropped.');
+    process.exit(1);
+  }
+  gateArgs.push('--expect-commit', approvedSha, `--confirm-target=${decision.target}`);
+}
+// The target gate first, then the migration files; a persistent reset's file check also proves the source the guarded migration
+// checks (the commit, and that no migration file is untracked).
+for (const [what, args] of [
+  ['the migration that follows the reset would be refused for this target', ['authorize', ...gateArgs]],
+  ['the migration files are not the pinned set, so the migration that follows the reset would be refused', ['verify', ...(approvedSha ? ['--expect-commit', approvedSha] : [])]],
+]) {
+  const pre = spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env,
+  });
+  if (pre.status !== 0) {
+    console.error(`${pre.stdout}${pre.stderr}`.trimEnd());
+    console.error(`FAIL  ${what}.`);
+    console.error('      Nothing was dropped.');
+    process.exit(1);
+  }
 }
 if (decision.kind === 'confirmed') {
   try {
@@ -241,7 +281,8 @@ await ext.end();
 console.log('the four extensions are in place');
 
 console.log('\n-- migrate ---------------------------------------------------');
-run('pnpm', ['db:migrate']);
+if (approvedSha) run('pnpm', ['db:migrate:guarded', '--expect-commit', approvedSha, `--confirm-target=${decision.target}`]);
+else run('pnpm', ['db:migrate']);
 
 console.log('\n-- worker queue schema ---------------------------------------');
 run('pnpm', ['worker:install']);

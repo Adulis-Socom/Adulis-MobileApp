@@ -6,7 +6,7 @@
 // a failed or interrupted run cannot clean up somewhere else. An interrupt stops the run at the next
 // step, the scratch databases are still dropped, and the run never reports a pass. A drop that fails,
 // or a scratch database still present afterwards, fails the run.
-import { checkContainerTarget } from './disposable-db.mjs';
+import { checkContainerTarget, DISPOSABLE_MARKER } from './disposable-db.mjs';
 
 const DESTRUCTIVE_ENVS = ['development', 'test'];
 // Exit status of a Windows console program ended by Ctrl+C (STATUS_CONTROL_C_EXIT), as minio-migrate.
@@ -74,6 +74,8 @@ export async function runDeterminism({ env, docker, migrate, Client, interrupted
       await step();
       must(drop(d), `dropping ${d}`);
       must(psql(`CREATE DATABASE ${d}`), `creating ${d}`);
+      // A new database carries no comment; the migration guard applies only to a database it can see is disposable.
+      must(psql(`COMMENT ON DATABASE ${d} IS '${DISPOSABLE_MARKER}'`), `marking ${d}`);
       await step();
       const url = new URL(env.DATABASE_URL_MIGRATE);
       url.pathname = `/${d}`;

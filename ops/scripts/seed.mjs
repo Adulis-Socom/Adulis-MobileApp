@@ -57,8 +57,9 @@ if (!SEEDABLE.includes(process.env.NODE_ENV ?? '')) {
 /*
  * AND THE TARGET IS LOCAL (WO-INFRA-015A). NODE_ENV says what this process
  * believes; the URL says where the fixture lands. A staging database reached
- * with NODE_ENV=development set by mistake is refused here too: the same hosts
- * db-reset.mjs accepts, and no query-string override of the target.
+ * with NODE_ENV=development set by mistake is refused here too: loopback hosts
+ * only (the compose service names are not accepted), and no query-string
+ * override of the target.
  */
 {
   let u = null;
@@ -67,7 +68,7 @@ if (!SEEDABLE.includes(process.env.NODE_ENV ?? '')) {
   } catch {
     /* refused below */
   }
-  if (!u || !['localhost', '127.0.0.1', '::1', '[::1]', 'db', 'postgres'].includes(u.hostname)) {
+  if (!u || !['localhost', '127.0.0.1', '::1', '[::1]'].includes(u.hostname)) {
     console.error(`FAIL  refusing to seed a non-local database (host: ${u?.hostname || 'unparseable'}).`);
     process.exit(2);
   }

@@ -33,25 +33,80 @@ goes to stdout), so a caller that discards stdout, as `test-db.sh` does, still s
 The ordinary command is the guarded one:
 
 ```
-pnpm db:migrate                                 # checks 1, 2, 3 and 5, then applies what is pending
-pnpm db:migrate --dry-run                       # the same checks, nothing applied
-pnpm db:migrate:guarded --expect-commit <sha>   # all five checks (the source check too), then applies
+pnpm db:migrate                                 # checks 1, 2, 3 and 5, then applies what is pending to a DISPOSABLE database
+pnpm db:migrate --dry-run                       # the same checks and the classification, nothing applied, on any target
+pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=<database>@<host>:<port>
+                                                # all five checks and the persistent-target rule, then applies
 pnpm db:migration-guard                         # directory against the pin, no database
 pnpm db:migration-guard --db                    # also the database history (DATABASE_URL_MIGRATE)
 pnpm db:migration-guard --base <ref>            # the manifest only appends to the one committed at <ref>
 pnpm db:migration-pin                           # pin newly added migrations (see Adding a migration)
 ```
 
-`pnpm db:migrate` is `migration-guard.mjs up --no-source-check`. It is the command for development
-databases, the disposable pair (`test-db.sh`, `db:reset`, `db:determinism`), CI and the deploy pre-deploy
-step: none of those has a clean commit to compare, and a deploy may have no git directory at all.
+`pnpm db:migrate` is `migration-guard.mjs up --no-source-check`. It is the command for the disposable pair
+(`test-db.sh`, `db:reset` of a marked database, `db:determinism`), CI, and the native test harness: none of
+those has a clean commit to compare, and every one of them has marked its database disposable first.
 
-**What the ordinary command does not do.** It has no source check, and it does not ask: a migration that is
-pinned in the manifest and pending is applied at once, without a prompt, to whatever `DATABASE_URL_MIGRATE`
-names, whether or not that migration is committed. Nothing in the command or in CI can tell a persistent
-database from a disposable one. Recommended rule for a persistent or shared database (a recommendation, not
-something the tools enforce): read the `target:` line first, run `pnpm db:migrate --dry-run`, and upgrade it
-only with `pnpm db:migrate:guarded --expect-commit <sha>` from a committed, reviewed checkout.
+### Which database is this
+
+Before the runner starts, `up` classifies the target (`classification:` line, after the `target:` line):
+
+| Class | When |
+|---|---|
+| DISPOSABLE | the host is exactly `localhost`, `127.0.0.1`, `::1` or `[::1]`; the URL names its port, and the port is not the protected development port (5434); and a read-only query through the same URL finds the database comment `adulis:disposable-test-database` (or `adulis:disposable-test-database:setup`, which `test-db.sh` sets while it builds the pair) |
+| PERSISTENT-DEV | the protected development port (5434, whatever host name or address is written and whatever the database says about itself: no mark is read or accepted there), or a loopback database that carries no disposable mark |
+| UNKNOWN | everything else: a host that is not exactly a loopback name (an alias, an address, a machine name, a hosted database), a URL without an explicit port, or a mark that could not be read. UNKNOWN is never treated as disposable |
+
+A DISPOSABLE target needs nothing more. **Any other target is applied to only with both of these**, on the command
+line of that run (never from the environment or `.env`):
+
+- `--expect-commit <sha>`: the full 40-character sha, equal to the checkout's HEAD, with no changed tracked file
+  anywhere in the repository and `db/migrations` and the manifest clean (the source check). `pnpm db:migrate` skips it
+  and so is refused: use `pnpm db:migrate:guarded`.
+- `--confirm-target=<database>@<host>:<port>`, exactly the target of this run: the database from the URL, the host as
+  written in the URL, the port the driver will use. It is the form `pnpm db:reset` already requires.
+
+The authorization is appended to `.adulis-db-admin.log` (git-ignored) before anything is applied; a record that cannot
+be written stops the run. A dry run is allowed on every target and only reports the classification and the command an
+apply would need. When nothing is pending nothing is applied and nothing is needed. The refusal names the target, the
+class, what is missing and the full command. `node ops/scripts/migration-guard.mjs authorize --expect-commit <sha>
+--confirm-target=...` runs only this gate (exit 0 when an apply would be allowed). `db:reset` runs it, and `verify` (the
+migration files against their pin), before it records or drops anything, for every kind of target, so the migration that
+follows the drops cannot be refused after them; a persistent database is then migrated with the same two arguments.
+
+Recommended routine for a persistent database: read the `target:` and `classification:` lines, run `pnpm db:migrate
+--dry-run`, then upgrade it with `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=...` from a clean
+checkout of the approved commit. A migration you are still writing is applied to a disposable pair first
+(`bash ops/scripts/test-db.sh up`).
+
+A deployment to a hosted database is UNKNOWN to this rule and has no commit or confirmation to give; until the
+deploy command is changed deliberately, the pre-deploy step is refused.
+
+The source check reads the checkout's OWN git metadata: the directory the guard lives in must be the top level of a git work
+tree. A directory with no `.git` of its own is refused even when it sits inside another repository (git would otherwise
+walk up and judge it by that repository's HEAD), so are a bare repository and the inside of a git directory, and `GIT_DIR`,
+`GIT_WORK_TREE` and the other variables that move git to another repository are ignored (in any letter case). A linked worktree
+or a submodule, whose `.git` is a file, is a checkout of its own and is judged by its own HEAD. A `.git` file that names another
+repository's git directory cannot be told from a worktree pointer: the check protects against accidents, it does not resist
+someone who writes the checkout's own git metadata. Each way git can fail has its own words (not installed, no repository,
+another owner, not a work tree, nested, no HEAD). A hosted build that carries no git metadata (or no git) is refused with `SOURCE: cannot read the git HEAD ...
+an artifact without git metadata cannot satisfy that`: it cannot satisfy a persistent-target rule that compares a commit with
+git HEAD, and no flag turns that into an allowance. `ops/scripts/release-artifact.mjs` describes such an artifact (see below) but
+does not authorise anything.
+
+### The identity of an artifact's migration set
+
+`node ops/scripts/release-artifact.mjs write --commit <full sha> --out <file>` records, at build time, the commit the build says
+it is and the sha256 of the migration manifest (which lists every migration file's hash); it refuses a tree whose files are not
+exactly its pinned set, and never overwrites an existing record. `node ops/scripts/release-artifact.mjs verify --info <file>
+--expect-commit <full sha>` recomputes the manifest hash, checks every migration file against the manifest, and compares the
+record with the commit the pipeline expects (and, when the checkout has its own git metadata, with git HEAD and with the
+guard's source check: `db/migrations` and the manifest must be exactly as committed, so a migration that is pinned but not
+committed is neither recorded nor verified as that commit). It catches a migration edited
+together with its own manifest line after the record was made, which the directory check alone accepts. It does NOT prove that
+anyone approved the commit (an unsigned record can be rewritten by whoever can rewrite the artifact), and nothing reads a record
+when a migration is applied: `pnpm db:migrate`, `pnpm db:migrate:guarded` and the guard's `up` never consult it, a test fails if
+they do. It is the first building block for an approved deployment path; the approval itself is a separate, not yet decided part.
 
 The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
@@ -87,14 +142,15 @@ tree git lists successfully, without a manifest in it, counts as "no manifest ye
 
 | Way | Guarded by |
 |---|---|
-| `pnpm db:migrate` | the guard, `up --no-source-check` |
-| `pnpm db:migrate:guarded --expect-commit <sha>` | the guard, `up` with the source check |
+| `pnpm db:migrate` | the guard, `up --no-source-check`; applies only to a DISPOSABLE target |
+| `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=...` | the guard, `up` with the source check and the persistent-target rule |
 | CI: the "Migrations apply" step and the `migrate` gate | `pnpm db:migrate` |
 | `bash ops/scripts/test-db.sh up` (the disposable pair) | `pnpm db:migrate` |
-| `pnpm db:reset` | `pnpm db:migrate` |
-| `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE` |
-| the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` |
+| `pnpm db:reset` | `pnpm db:migrate` for a marked database; for a persistent one `pnpm db:migrate:guarded` with the same commit and confirmation, proven before anything is dropped |
+| `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE`; each scratch database is marked disposable first |
+| the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` (a hosted database is UNKNOWN: refused until the command is changed deliberately) |
 | `pnpm worker:install` | not guarded, and not `db/migrations`: it installs the job queue library's own tables (schema `jobs`) |
+| `node ops/scripts/release-artifact.mjs` | not a way to migrate: it writes and checks a record of the migration set's identity, and applies nothing |
 | `db/init/*.sql` | not guarded, and not `db/migrations`: extensions and local logins on the first start of an empty local data directory |
 
 `node-pg-migrate` is started by the guard and by nothing else in the repository: no package script,
@@ -136,8 +192,27 @@ Three situations have an exit that does not touch history:
 ## Limits
 
 - It pins contents, not behaviour: a pinned migration is still applied as written.
-- The ordinary command has no source check and no prompt (see Use); persistent databases rely on the
-  recommended rule above.
+- The rule lives in the guard, not in the database. A database comment is a mark anyone with the right to comment on the
+  database can set, so a deliberate misuse is caught by review. The confirmation proves intent, not authority: the guard
+  cannot know whether the commit was approved.
+- The protected-port rule (no mark is accepted on port 5434, whatever the comment says) is in the migration guard and in the
+  shared URL rules of `ops/scripts/lib/disposable-db.mjs`, which `assert-disposable-db`, the gate runner, `db:reset`,
+  `db:determinism` and `verify:console-e2e` use. `apps/api/test/db-target.ts` keeps its own copy of the rules for the Jest
+  suites and does not have it yet: until it does, those suites accept a hand-set mark on the protected port.
+- "No changed tracked file" is `git status --untracked-files=no`. It does not see files hidden with the skip-worktree or
+  assume-unchanged flags, and it ignores ignored files.
+- The classification and the runner use separate connections, and `localhost` is resolved again for each connection. Nothing
+  here makes the two resolve differently, and nothing proves they cannot.
+- `pnpm db:reset` accepts the hosts `localhost` and `127.0.0.1` only. The compose service names `db` and `postgres` are not accepted
+  (the guard classifies them UNKNOWN), and an IPv6 URL such as `[::1]` is refused (the URL parser reports that host with its
+  brackets): name the host `localhost` or `127.0.0.1`. A reset reaches a database through its published loopback port. `pnpm db:seed`
+  likewise accepts loopback hosts only.
+- A script that is started through a symlink or a junction still runs: the guard, `release-artifact.mjs` and the other scripts
+  under `ops/scripts` that decide "am I the running script" compare real paths, and a start that cannot recognise itself is a
+  refusal with exit 2, never a silent exit 0. A test fails for any script under `ops/` that names `process.argv[1]` without
+  resolving real paths, apart from one named entry that changes with its own owner.
+- The runner reads the SQL files after the guard hashed them. On a checkout that is being edited that is a window of a few
+  seconds; an immutable checkout (CI, a deployed build) has none.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
   its manifest line passes them; `--base` (run by CI on pushes and pull requests) refuses it, and review is the check for a
   change that is never pushed to the repository.
