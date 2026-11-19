@@ -1,10 +1,21 @@
 // A migration is applied to a database that has PROVEN it is disposable; any other target needs the approved commit
 // and an explicit confirmation naming it. These tests classify targets (aliases, ports, marks), run the authorization
 // with injected dependencies, and run the real command line against a tiny local PostgreSQL stand-in. They never connect
-// to the persistent development port, and they never start the migration runner.
+// to the persistent development port, and they never start the real migration runner (a recording stand-in stands in for it).
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,6 +27,8 @@ import { runDeterminism } from './lib/determinism.mjs';
 import { DISPOSABLE_MARKER, DISPOSABLE_SETUP_MARKER } from './lib/disposable-db.mjs';
 import {
   PERSISTENT_DEV_PORTS,
+  REPO_ROOT,
+  RUNNER_PATH,
   authorizeApply,
   checkApprovedSource,
   classifyTarget,
@@ -61,7 +74,7 @@ test('every alias of the protected development port is PERSISTENT-DEV by its por
     '2130706433',
     '0x7f000001',
     '[::ffff:127.0.0.1]',
-    '192.168.1.3',
+    '192.0.2.10',
     'host.docker.internal',
     'kubernetes.docker.internal',
     'my-machine',
@@ -108,7 +121,7 @@ test('a host that is not exactly a loopback name is UNKNOWN even when its port i
     '0.0.0.0',
     'LOCALHOST',
     'localhost.',
-    '192.168.1.3',
+    '192.0.2.10',
     'db.example',
     '[::ffff:127.0.0.1]',
     'host.docker.internal',
@@ -515,14 +528,21 @@ test('the command line takes --confirm-target as one name=value argument, once, 
 
 // ---- the real command line against a local stand-in for PostgreSQL ---------------------------------------------
 
-/** A minimal PostgreSQL server (protocol 3, simple queries): answers the guard's two read-only queries and records every statement. */
+/**
+ * A minimal PostgreSQL server (protocol 3, simple queries): answers the guard's two read-only queries and records every
+ * statement. It parses each connection's startup parameters (`startups`), answers current_database() with the database
+ * the client asked for, and enforces a read-only session the way the real server does: a statement other than a SELECT
+ * on a connection whose startup `options` carry default_transaction_read_only=on is refused with code 25006.
+ */
 function fakePg({ names = [], marker = null, failMark = false }) {
   const seen = [];
+  const startups = [];
   const state = { connections: 0 };
   const server = createServer((sock) => {
     state.connections += 1;
     let buf = Buffer.alloc(0);
     let started = false;
+    let conn = {};
     const cstr = (s) => Buffer.from(`${s}\0`);
     const send = (type, body = Buffer.alloc(0)) => {
       const head = Buffer.alloc(5);
@@ -557,10 +577,10 @@ function fakePg({ names = [], marker = null, failMark = false }) {
       }
       send('D', Buffer.concat(parts));
     };
-    const error = (message) =>
+    const error = (message, code = '0A000') =>
       send(
         'E',
-        Buffer.concat([cstr('SERROR'), cstr('C0A000'), cstr(`M${message}`), Buffer.from([0])]),
+        Buffer.concat([cstr('SERROR'), cstr(`C${code}`), cstr(`M${message}`), Buffer.from([0])]),
       );
     sock.on('error', () => {});
     sock.on('data', (d) => {
@@ -571,12 +591,16 @@ function fakePg({ names = [], marker = null, failMark = false }) {
           const len = buf.readInt32BE(0);
           if (buf.length < len) return;
           const code = buf.readInt32BE(4);
+          const params = buf.subarray(8, len);
           buf = buf.subarray(len);
           if (code === 80877103) {
             sock.write('N'); // no TLS
             continue;
           }
           started = true;
+          const kv = params.toString('utf8').split('\0');
+          for (let i = 0; i + 1 < kv.length; i += 2) if (kv[i]) conn[kv[i]] = kv[i + 1];
+          startups.push(conn);
           send('R', Buffer.from([0, 0, 0, 0]));
           send('S', Buffer.concat([cstr('server_version'), cstr('17.0')]));
           send('K', Buffer.alloc(8));
@@ -590,9 +614,27 @@ function fakePg({ names = [], marker = null, failMark = false }) {
         const body = buf.subarray(5, len + 1);
         buf = buf.subarray(len + 1);
         if (type === 'X') return sock.end();
+        if (type === 'P') {
+          // extended protocol (a parameterised query): record the text, refuse it, answer the Sync that follows
+          seen.push(body.toString('utf8').split('\0')[1] ?? '');
+          error('the stand-in answers only the guard queries');
+          continue;
+        }
+        if (type === 'S') {
+          ready();
+          continue;
+        }
         if (type !== 'Q') continue;
         const sql = body.toString('utf8', 0, body.length - 1);
         seen.push(sql);
+        if (
+          /default_transaction_read_only=on/.test(conn.options ?? '') &&
+          !/^\s*SELECT/i.test(sql)
+        ) {
+          error('cannot execute a write in a read-only transaction', '25006');
+          ready();
+          continue;
+        }
         if (/FROM pgmigrations/.test(sql)) {
           rowDescription(['name']);
           for (const n of names) dataRow([n]);
@@ -603,7 +645,7 @@ function fakePg({ names = [], marker = null, failMark = false }) {
             continue;
           }
           rowDescription(['db', 'marker']);
-          dataRow(['fakedb', marker]);
+          dataRow([conn.database ?? 'fakedb', marker]);
         } else {
           error('the stand-in answers only the guard queries');
           ready();
@@ -619,6 +661,7 @@ function fakePg({ names = [], marker = null, failMark = false }) {
       resolve({
         port: server.address().port,
         seen,
+        startups,
         state,
         close: () => new Promise((r) => server.close(r)),
       }),
@@ -639,7 +682,8 @@ function guardCli(args, env) {
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
-    child.on('close', (status) => resolve({ status, stdout, stderr }));
+    const timer = setTimeout(() => child.kill(), 60_000); // a hang fails the test with its output instead of stalling the suite
+    child.on('close', (status) => (clearTimeout(timer), resolve({ status, stdout, stderr })));
   });
 }
 
@@ -687,7 +731,8 @@ test('real command line: an unmarked loopback database with pending migrations i
       pg.seen.every((q) => GUARD_QUERIES.test(q)),
       `only the guard's two reads reached the database: ${pg.seen.join(' | ')}`,
     );
-    // the full authorization on a wrong confirmation is still refused
+    // a commit that is not HEAD is refused by the ordinary source check first; the comparison of the confirmation itself
+    // is reached with the real HEAD in the allow-path test below (temporary checkout)
     const wrong = await cli(
       ['up', '--expect-commit', SHA, '--confirm-target=fakedb@localhost:1'],
       pg,
@@ -939,4 +984,406 @@ test('the administrative log keeps the optional commit beside the target, one JS
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---- the guard's reads are read-only sessions (checked on what the stand-in received, not on the source) ----------
+
+test('the guard reads the history and the mark in read-only sessions, for the database the URL names', async () => {
+  const pg = await fakePg({ names: ALL.slice(0, 3), marker: DISPOSABLE_MARKER });
+  try {
+    const r = await cli(['up', '--no-source-check', '--dry-run'], pg);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(pg.startups.length, 2, 'one connection for the history, one for the mark');
+    for (const s of pg.startups) {
+      assert.match(s.options ?? '', /-c default_transaction_read_only=on/, JSON.stringify(s));
+      assert.equal(s.database, 'fakedb', 'it connects to the database the URL names');
+    }
+    assert.ok(
+      pg.startups.some((s) => /statement_timeout=30000/.test(s.options)),
+      'the history read also has its timeout',
+    );
+    assert.ok(pg.seen.every((q) => GUARD_QUERIES.test(q)));
+    // the stand-in enforces what it was told: a write on such a session is refused (it is not just accepted)
+    const { default: pg_ } = await import('pg');
+    const c = new pg_.Client({
+      connectionString: `postgres://someuser:x@127.0.0.1:${pg.port}/fakedb`,
+      options: '-c default_transaction_read_only=on',
+    });
+    await c.connect();
+    await assert.rejects(c.query('CREATE TABLE t (id int)'), (e) => e.code === '25006');
+    await c.end();
+  } finally {
+    await pg.close();
+  }
+});
+
+// ---- the allow path, and db:reset, through the real scripts in a temporary checkout ------------------------------
+
+/**
+ * A temporary checkout: copies of the guard, db-reset and the library, the real migrations and manifest, a junction to
+ * the installed `pg`, a recording stand-in for the migration runner (so nothing is ever migrated), and a git repository
+ * with everything committed. The scripts resolve their root from their own location, so they act on this tree only,
+ * and the administrative log they write is this tree's.
+ */
+function tempTree() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'migtree-'));
+  const put = (rel) => {
+    mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    copyFileSync(path.join(ROOT, rel), path.join(dir, rel));
+  };
+  for (const rel of [
+    'ops/scripts/migration-guard.mjs',
+    'ops/scripts/db-reset.mjs',
+    'ops/migrations.manifest.json',
+    'db/init/00-extensions.sql',
+  ])
+    put(rel);
+  cpSync(path.join(ROOT, 'ops', 'scripts', 'lib'), path.join(dir, 'ops', 'scripts', 'lib'), {
+    recursive: true,
+  });
+  cpSync(path.join(ROOT, 'db', 'migrations'), path.join(dir, 'db', 'migrations'), {
+    recursive: true,
+  });
+  // the runner's location in this tree is taken from the guard's own constant, so no path to it is spelled out here
+  const stub = path.join(dir, path.relative(REPO_ROOT, RUNNER_PATH));
+  mkdirSync(path.dirname(stub), { recursive: true });
+  symlinkSync(
+    realpathSync(path.join(ROOT, 'node_modules', 'pg')),
+    path.join(dir, 'node_modules', 'pg'),
+    'junction',
+  );
+  const started = path.join(dir, 'runner-started.json');
+  writeFileSync(
+    stub,
+    `require('node:fs').writeFileSync(${JSON.stringify(started)}, JSON.stringify(process.argv.slice(2)));\n`,
+  );
+  writeFileSync(path.join(dir, 'notes.txt'), 'one\n');
+  writeFileSync(
+    path.join(dir, '.gitignore'),
+    'node_modules/\n.adulis-db-admin.log\nrunner-started.json\n',
+  );
+  const git = (...a) => {
+    const r = spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${a.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  git('config', 'core.autocrlf', 'false');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'tree');
+  return {
+    dir,
+    git,
+    head: git('rev-parse', 'HEAD'),
+    started,
+    log: path.join(dir, '.adulis-db-admin.log'),
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+/** A script of the temporary tree, asynchronously (the stand-in lives in this process). */
+function inTree(tree, script, args, env) {
+  return new Promise((resolve) => {
+    const base = { ...process.env };
+    for (const k of ['DATABASE_URL_MIGRATE', 'PGPORT', 'PGOPTIONS', 'NODE_ENV']) delete base[k];
+    const child = spawn(
+      process.execPath,
+      [path.join(tree.dir, 'ops', 'scripts', script), ...args],
+      {
+        cwd: tree.dir,
+        env: { ...base, ...env },
+      },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => (stdout += d));
+    child.stderr.on('data', (d) => (stderr += d));
+    const timer = setTimeout(() => child.kill(), 60_000);
+    child.on('close', (status) => (clearTimeout(timer), resolve({ status, stdout, stderr })));
+  });
+}
+
+const urlFor = (pg) => `postgres://someuser:s3cretpw@127.0.0.1:${pg.port}/fakedb`;
+
+test('real command line, allow path: the commit and the exact confirmation authorize, record and start the runner; each missing piece stops it first', async () => {
+  const tree = tempTree();
+  const pg = await fakePg({ names: ALL.slice(0, 3), marker: null });
+  try {
+    assert.notEqual(pg.port, 5434);
+    const env = { DATABASE_URL_MIGRATE: urlFor(pg) };
+    const want = `fakedb@127.0.0.1:${pg.port}`;
+    const run = (args) => inTree(tree, 'migration-guard.mjs', ['up', ...args], env);
+    const untouched = () => !existsSync(tree.started) && !existsSync(tree.log);
+    // the REAL head with a confirmation that names another spelling of the host: it gets past the source check
+    // and is stopped by the comparison of the confirmation
+    const wrong = await run([
+      '--expect-commit',
+      tree.head,
+      `--confirm-target=fakedb@localhost:${pg.port}`,
+    ]);
+    assert.equal(wrong.status, 1);
+    assert.match(
+      wrong.stderr,
+      /--confirm-target names fakedb@localhost:\d+, but this run would apply to fakedb@127\.0\.0\.1:\d+/,
+    );
+    assert.doesNotMatch(wrong.stderr, /SOURCE:/, 'the source check had passed');
+    assert.ok(untouched(), 'nothing recorded, no runner');
+    // no confirmation at all
+    const none = await run(['--expect-commit', tree.head]);
+    assert.equal(none.status, 1);
+    assert.match(none.stderr, new RegExp(`- --confirm-target=fakedb@127\\.0\\.0\\.1:${pg.port}`));
+    assert.ok(untouched());
+    // a changed tracked file anywhere (here not even in db/migrations): not the approved commit
+    writeFileSync(path.join(tree.dir, 'notes.txt'), 'two\n');
+    const dirty = await run(['--expect-commit', tree.head, `--confirm-target=${want}`]);
+    assert.equal(dirty.status, 1);
+    assert.match(dirty.stderr, /uncommitted changes to tracked files[^]*notes\.txt/);
+    assert.ok(untouched());
+    tree.git('checkout', '--', 'notes.txt');
+    // another commit than HEAD
+    const other = await run(['--expect-commit', 'b'.repeat(40), `--confirm-target=${want}`]);
+    assert.equal(other.status, 1);
+    assert.ok(untouched());
+    // the full authorization: recorded, then the runner starts with the guard's own arguments
+    const ok = await run(['--expect-commit', tree.head, `--confirm-target=${want}`]);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(
+      ok.stdout,
+      new RegExp(`authorized: fakedb@127\\.0\\.0\\.1:${pg.port} at ${tree.head.slice(0, 12)}`),
+    );
+    const args = JSON.parse(readFileSync(tree.started, 'utf8'));
+    assert.deepEqual(args.slice(0, 2), ['-d', 'DATABASE_URL_MIGRATE']);
+    assert.equal(args.at(-1), 'up');
+    const lines = readFileSync(tree.log, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => JSON.parse(l));
+    assert.equal(lines.length, 1, 'exactly one record, written by the allowed run');
+    assert.deepEqual(
+      [lines[0].action, lines[0].target, lines[0].commit],
+      ['db:migrate', want, tree.head],
+    );
+    assert.ok(
+      pg.seen.every((q) => GUARD_QUERIES.test(q)),
+      'the guard itself wrote nothing',
+    );
+  } finally {
+    await pg.close();
+    tree.cleanup();
+  }
+});
+
+test('db:reset proves everything the migration after it will check before it drops anything, for a disposable target too', async () => {
+  // 1. a disposable (marked) database, but a migration file that is not pinned: refused before any drop
+  const unpinned = tempTree();
+  const marked = await fakePg({ names: ALL, marker: DISPOSABLE_MARKER });
+  try {
+    writeFileSync(path.join(unpinned.dir, 'db', 'migrations', '9999_unpinned.sql'), 'SELECT 1;\n');
+    const r = await inTree(unpinned, 'db-reset.mjs', [], {
+      DATABASE_URL_MIGRATE: urlFor(marked),
+      NODE_ENV: 'test',
+    });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, /UNEXPECTED file in the migrations directory: 9999_unpinned\.sql/);
+    assert.match(r.stderr, /FAIL {2}the migration files are not the pinned set/);
+    assert.match(r.stderr, /Nothing was dropped\./);
+    assert.doesNotMatch(
+      r.stdout,
+      /marked disposable/,
+      'it never got as far as announcing the reset',
+    );
+    assert.ok(!marked.seen.some((q) => /DROP|CREATE/i.test(q)));
+    assert.ok(!existsSync(unpinned.log));
+  } finally {
+    await marked.close();
+    unpinned.cleanup();
+  }
+  // 2. the same marked database with the pinned set passes the pre-flight and reaches the reset
+  const clean = tempTree();
+  const pg2 = await fakePg({ names: ALL, marker: DISPOSABLE_MARKER });
+  try {
+    const r = await inTree(clean, 'db-reset.mjs', [], {
+      DATABASE_URL_MIGRATE: urlFor(pg2),
+      NODE_ENV: 'test',
+    });
+    assert.equal(
+      r.status,
+      1,
+      `it stops at the stand-in's refusal of the first reset statement, not by hanging: ${r.stderr}`,
+    );
+    assert.match(r.stdout, /PASS {2}fakedb is marked disposable/);
+    assert.ok(
+      !pg2.seen.some((q) => /DROP/i.test(q)),
+      'the stand-in refuses the first statement of the reset',
+    );
+    assert.ok(!existsSync(clean.log), 'a disposable reset records nothing');
+  } finally {
+    await pg2.close();
+    clean.cleanup();
+  }
+});
+
+test('db:reset of a persistent database: no commit, a wrong commit or a wrong confirmation refuse before the record and the drops; the right ones reach the reset', async () => {
+  const tree = tempTree();
+  const pg = await fakePg({ names: ALL, marker: null });
+  try {
+    const want = `fakedb@127.0.0.1:${pg.port}`;
+    const env = { DATABASE_URL_MIGRATE: urlFor(pg), NODE_ENV: 'test' };
+    const reset = (args) => inTree(tree, 'db-reset.mjs', args, env);
+    const noSha = await reset([`--confirm-target=${want}`]);
+    assert.equal(noSha.status, 1);
+    assert.match(noSha.stderr, /a persistent reset also needs the approved commit/);
+    const badSha = await reset([`--confirm-target=${want}`, `--expect-commit=${'0'.repeat(40)}`]);
+    assert.equal(badSha.status, 1);
+    assert.match(badSha.stderr, /SOURCE: HEAD is [0-9a-f]{12}, not the approved 000000000000/);
+    assert.match(badSha.stderr, /Nothing was dropped\./);
+    const badTarget = await reset([
+      `--confirm-target=fakedb@localhost:${pg.port}`,
+      `--expect-commit=${tree.head}`,
+    ]);
+    assert.equal(badTarget.status, 1, 'the reset decision itself names the mismatch');
+    assert.ok(!existsSync(tree.log), 'nothing was recorded by any refusal');
+    assert.ok(!pg.seen.some((q) => /DROP|CREATE/i.test(q)));
+    const ok = await reset([`--confirm-target=${want}`, `--expect-commit=${tree.head}`]);
+    assert.equal(
+      ok.status,
+      1,
+      `it stops at the stand-in's refusal of the first reset statement, not by hanging: ${ok.stderr}`,
+    );
+    assert.match(ok.stdout, /CONFIRMED {2}resetting the persistent database/);
+    assert.ok(
+      !pg.seen.some((q) => /DROP/i.test(q)),
+      'the stand-in refuses the first statement of the reset',
+    );
+    const lines = readFileSync(tree.log, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => JSON.parse(l));
+    assert.deepEqual([lines[0].action, lines[0].target], ['db:reset', want]);
+  } finally {
+    await pg.close();
+    tree.cleanup();
+  }
+});
+
+// ---- the protected port is refused by every shared URL rule, not only by the migration guard ----------------------
+
+test('the protected port is refused by the shared URL rules, db:reset and the container check, whatever the database says about itself', async () => {
+  const { checkContainerTarget, checkDisposable, checkUrlConfig, resetDecision } =
+    await import('./lib/disposable-db.mjs');
+  const url = (port, host = 'localhost') => `postgres://u:p@${host}:${port}/adulis`;
+  // the URL rules (assert-disposable-db, the gates, console-e2e, determinism all start here)
+  for (const host of ['localhost', '127.0.0.1', '[::1]'])
+    assert.match(
+      checkUrlConfig({
+        DATABASE_URL: url(5434, host),
+        DATABASE_URL_MIGRATE: url(55432),
+      }).problems.join('\n'),
+      /DATABASE_URL names port 5434, the persistent development cluster, where no disposable mark is accepted/,
+      host,
+    );
+  assert.equal(
+    checkUrlConfig({ DATABASE_URL: url(5433), DATABASE_URL_MIGRATE: url(55432) }).problems.length,
+    0,
+  );
+  // a database that IS marked, on the protected port, is still refused before anything connects
+  let connected = 0;
+  class Marked {
+    async connect() {
+      connected += 1;
+    }
+    async query() {
+      return { rows: [{ db: 'adulis', marker: DISPOSABLE_MARKER }] };
+    }
+    async end() {}
+  }
+  const refused = await checkDisposable(
+    { DATABASE_URL: url(5434), DATABASE_URL_MIGRATE: url(5434) },
+    { Client: Marked },
+  );
+  assert.equal(refused.code, 1);
+  assert.match(refused.err.join('\n'), /persistent development cluster/);
+  assert.equal(connected, 0, 'no connection was made');
+  assert.equal(
+    (
+      await checkDisposable(
+        { DATABASE_URL: url(55432), DATABASE_URL_MIGRATE: url(55432) },
+        { Client: Marked },
+      )
+    ).code,
+    0,
+  );
+  // the determinism container check
+  const never = () => assert.fail('docker must not be asked');
+  const c = await checkContainerTarget({
+    container: 'adulis-test-pg',
+    adminUrl: url(5434),
+    docker: never,
+    Client: Marked,
+  });
+  assert.equal(c.ok, false);
+  assert.match(c.problems.join('\n'), /persistent development cluster/);
+  // db:reset: a hand-set mark on the protected port does not make it disposable; the named confirmation still works
+  const marked = { db: 'adulis', marker: DISPOSABLE_MARKER };
+  const protectedUrl = new URL(url(5434));
+  const noFlag = resetDecision({ url: protectedUrl, identity: marked, argv: [] });
+  assert.equal(noFlag.allowed, false);
+  assert.match(
+    noFlag.reason,
+    /is on the persistent development port, where a mark is not accepted/,
+  );
+  assert.match(noFlag.reason, /--confirm-target=adulis@localhost:5434/);
+  assert.equal(
+    resetDecision({
+      url: protectedUrl,
+      identity: marked,
+      argv: ['--confirm-target=adulis@localhost:5434'],
+    }).kind,
+    'confirmed',
+  );
+  assert.equal(
+    resetDecision({ url: new URL(url(55432)), identity: marked, argv: [] }).kind,
+    'disposable',
+  );
+  // one definition, shared: the guard re-exports the library's
+  assert.equal(
+    PERSISTENT_DEV_PORTS,
+    (await import('./lib/disposable-db.mjs')).PERSISTENT_DEV_PORTS,
+  );
+});
+
+// ---- documents that must not contradict the rule ---------------------------------------------------------------
+
+test('the database-scripts table no longer says the migration command needs no disposable target, and the limits are stated honestly', () => {
+  const startup = read('docs/infrastructure/MINIO-STARTUP.md');
+  assert.doesNotMatch(startup, /so they do not require a disposable target/);
+  const row = startup.split('\n').find((l) => /^\| `pnpm db:migrate`/.test(l)) ?? '';
+  assert.match(row, /disposable/);
+  assert.match(row, /--expect-commit/);
+  assert.match(row, /--confirm-target/);
+  assert.match(row, /deploy/i);
+  assert.match(
+    startup,
+    /`pnpm worker:install`[^\n]*additive/,
+    'the worker installer keeps its own row',
+  );
+  const guardDoc = read('docs/infrastructure/MIGRATION-FILE-GUARD.md');
+  const limits = guardDoc.split('## Limits')[1] ?? '';
+  assert.match(
+    limits,
+    /apps\/api\/test\/db-target\.ts/,
+    'the Jest guard keeps its own copy of the rules',
+  );
+  assert.match(limits, /skip-worktree|assume-unchanged/);
+  assert.match(limits, /ignored files/);
+  assert.match(limits, /`localhost`[^.]*(resolved|each connection)/);
+  assert.match(limits, /SQL files[^.]*after[^.]*(hash|hashed)/);
+  assert.doesNotMatch(
+    limits,
+    /the protected port never accepts a mark\)/,
+    'the old sentence read as if the rule were global',
+  );
 });

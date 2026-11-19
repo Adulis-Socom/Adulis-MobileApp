@@ -117,10 +117,17 @@ if (!decision.allowed) {
   console.error('      Nothing was dropped.');
   process.exit(1);
 }
-// A persistent reset also needs the approved commit: the migration step below applies to a database that is not
-// marked disposable, so the whole authorization is proven BEFORE anything is recorded or dropped.
+// The migration that follows the drops is the guarded one, so everything IT checks is proven BEFORE anything is
+// recorded or dropped, for every kind of target: the migration files against their pin (an unpinned or edited file
+// would otherwise be refused after the schemas are gone), and the target gate (a disposable database passes it with no
+// arguments; a persistent one needs the approved commit and the confirmation of this run).
+//
+// ORDER MATTERS: these spawnSync calls (no shell) come before the `shell: true` calls below on Windows. They refuse
+// anything that is not a 40-character hex sha or a plain host name, so only validated text can reach a shell.
 let approvedSha = null;
+const gateArgs = [];
 if (decision.kind === 'confirmed') {
+  // A persistent reset also needs the approved commit: its migration step applies to a database that is not marked disposable.
   const commits = process.argv.slice(2).filter((a) => a.startsWith('--expect-commit='));
   approvedSha = commits.length === 1 ? commits[0].slice('--expect-commit='.length) : null;
   if (!approvedSha) {
@@ -128,14 +135,20 @@ if (decision.kind === 'confirmed') {
     console.error('      Nothing was dropped.');
     process.exit(1);
   }
-  const pre = spawnSync(
-    process.execPath,
-    ['ops/scripts/migration-guard.mjs', 'authorize', '--expect-commit', approvedSha, `--confirm-target=${decision.target}`],
-    { cwd: root, encoding: 'utf8', env: process.env },
-  );
+  gateArgs.push('--expect-commit', approvedSha, `--confirm-target=${decision.target}`);
+}
+for (const [what, args] of [
+  ['the migration files are not the pinned set, so the migration that follows the reset would be refused', ['verify']],
+  ['the migration that follows the reset would be refused for this target', ['authorize', ...gateArgs]],
+]) {
+  const pre = spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env,
+  });
   if (pre.status !== 0) {
     console.error(`${pre.stdout}${pre.stderr}`.trimEnd());
-    console.error('FAIL  the migration that follows the reset would be refused for this target.');
+    console.error(`FAIL  ${what}.`);
     console.error('      Nothing was dropped.');
     process.exit(1);
   }

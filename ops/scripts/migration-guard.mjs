@@ -45,9 +45,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   DISPOSABLE_MARKER,
   DISPOSABLE_SETUP_MARKER,
+  PERSISTENT_DEV_PORTS,
   readIdentity,
   recordAdminAction,
 } from './lib/disposable-db.mjs';
+
+export { PERSISTENT_DEV_PORTS };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -361,8 +364,7 @@ export function checkTarget(connectionString, env = process.env) {
 
 // ---- which database is this? (a migration is applied only to one that proved it is disposable) ---------------------
 
-/** The persistent development cluster's host port on this workstation (also protected in ops/native). Never accepted as disposable. */
-export const PERSISTENT_DEV_PORTS = new Set([5434]);
+// PERSISTENT_DEV_PORTS (imported above, defined once in lib/disposable-db.mjs): never accepted as disposable.
 /** The only host spellings that are loopback. Anything else (an alias, an address, a machine name) is at best UNKNOWN. */
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const DISPOSABLE_MARKS = new Set([DISPOSABLE_MARKER, DISPOSABLE_SETUP_MARKER]);

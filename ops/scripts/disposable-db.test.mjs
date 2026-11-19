@@ -352,7 +352,7 @@ test('determinism refuses an environment it cannot name, before anything else', 
 
 test('db-reset: a marked database needs nothing more; a persistent one needs its exact name, per run', () => {
   const url = new URL('postgres://u:p@localhost:5434/adulis');
-  assert.deepEqual(resetDecision({ url, identity: { db: 'adulis', marker: DISPOSABLE_MARKER }, argv: [] }), { allowed: true, kind: 'disposable' });
+  assert.deepEqual(resetDecision({ url: new URL('postgres://u:p@localhost:55432/adulis'), identity: { db: 'adulis', marker: DISPOSABLE_MARKER }, argv: [] }), { allowed: true, kind: 'disposable' });
   const none = resetDecision({ url, identity: { db: 'adulis', marker: null }, argv: [] });
   assert.equal(none.allowed, false);
   assert.match(none.reason, /pnpm db:reset -- --confirm-target=adulis@localhost:5434/);

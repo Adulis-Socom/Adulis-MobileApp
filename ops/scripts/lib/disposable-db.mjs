@@ -19,6 +19,10 @@ export const DISPOSABLE_MARKER = 'adulis:disposable-test-database';
 // final mark, so nothing treats a half-built database as ready.
 export const DISPOSABLE_SETUP_MARKER = 'adulis:disposable-test-database:setup';
 export const DB_URL_NAMES = ['DATABASE_URL', 'DATABASE_URL_MIGRATE', 'DATABASE_URL_JOBS'];
+// The persistent development cluster's host port on this workstation. No disposable mark is accepted there, whatever the
+// database's comment says: a person who marks the persistent database to run a suite must not turn it into a test target.
+// Shared by the URL rules below, db:reset and the migration guard (apps/api/test/db-target.ts keeps its own copy of the rules).
+export const PERSISTENT_DEV_PORTS = new Set([5434]);
 const OPTIONAL_URLS = new Set(['DATABASE_URL_JOBS']); // the jobs suites throw without it
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const TARGET_PARAMS = ['host', 'hostaddr', 'port', 'dbname', 'service'];
@@ -47,6 +51,10 @@ export function checkUrlConfig(env, names = DB_URL_NAMES, optional = OPTIONAL_UR
       problems.push(`${name} is not a postgres URL`);
     if (!LOOPBACK.has(u.hostname)) problems.push(`${name} points at ${u.hostname}, not a loopback host`);
     if (!u.port) problems.push(`${name} has no explicit port`);
+    else if (PERSISTENT_DEV_PORTS.has(Number(u.port)))
+      problems.push(
+        `${name} names port ${Number(u.port)}, the persistent development cluster, where no disposable mark is accepted`,
+      );
     if (TARGET_PARAMS.some((k) => u.searchParams.has(k)))
       problems.push(`${name} overrides its target in the query string`);
     urls.push({ name, raw, url: u });
@@ -197,7 +205,8 @@ export async function checkContainerTarget({ container, adminUrl, docker, Client
  * An environment variable can never authorise (b). Pure: `identity` is what the URL reached.
  */
 export function resetDecision({ url, identity, argv }) {
-  if (identity?.marker === DISPOSABLE_MARKER) return { allowed: true, kind: 'disposable' };
+  const protectedPort = PERSISTENT_DEV_PORTS.has(Number(url.port));
+  if (identity?.marker === DISPOSABLE_MARKER && !protectedPort) return { allowed: true, kind: 'disposable' };
   const target = `${identity?.db}@${url.hostname}:${url.port || '5432'}`;
   const flags = argv.filter((a) => a.startsWith('--confirm-target='));
   const how = `pnpm db:reset -- --confirm-target=${target}`;
@@ -205,7 +214,7 @@ export function resetDecision({ url, identity, argv }) {
     return {
       allowed: false,
       target,
-      reason: `${target} is not marked disposable. To reset this persistent database deliberately: ${how}`,
+      reason: `${target} ${protectedPort ? 'is on the persistent development port, where a mark is not accepted' : 'is not marked disposable'}. To reset this persistent database deliberately: ${how}`,
     };
   if (flags.length > 1) return { allowed: false, target, reason: 'more than one --confirm-target given' };
   const named = flags[0].slice('--confirm-target='.length);

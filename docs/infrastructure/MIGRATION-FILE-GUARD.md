@@ -70,8 +70,9 @@ The authorization is appended to `.adulis-db-admin.log` (git-ignored) before any
 be written stops the run. A dry run is allowed on every target and only reports the classification and the command an
 apply would need. When nothing is pending nothing is applied and nothing is needed. The refusal names the target, the
 class, what is missing and the full command. `node ops/scripts/migration-guard.mjs authorize --expect-commit <sha>
---confirm-target=...` runs only this gate (exit 0 when an apply would be allowed); `db:reset` of a persistent database
-uses it before it drops anything, and then migrates with the same two arguments.
+--confirm-target=...` runs only this gate (exit 0 when an apply would be allowed). `db:reset` runs it, and `verify` (the
+migration files against their pin), before it records or drops anything, for every kind of target, so the migration that
+follows the drops cannot be refused after them; a persistent database is then migrated with the same two arguments.
 
 Recommended routine for a persistent database: read the `target:` and `classification:` lines, run `pnpm db:migrate
 --dry-run`, then upgrade it with `pnpm db:migrate:guarded --expect-commit <sha> --confirm-target=...` from a clean
@@ -164,9 +165,19 @@ Three situations have an exit that does not touch history:
 ## Limits
 
 - It pins contents, not behaviour: a pinned migration is still applied as written.
-- The rule lives in the guard. A database comment is a mark anyone with the right to comment on the database can set, so
-  a deliberate misuse is caught by review, not here (the protected port never accepts a mark). The confirmation proves intent,
-  not authority: the guard cannot know whether the commit was approved.
+- The rule lives in the guard, not in the database. A database comment is a mark anyone with the right to comment on the
+  database can set, so a deliberate misuse is caught by review. The confirmation proves intent, not authority: the guard
+  cannot know whether the commit was approved.
+- The protected-port rule (no mark is accepted on port 5434, whatever the comment says) is in the migration guard and in the
+  shared URL rules of `ops/scripts/lib/disposable-db.mjs`, which `assert-disposable-db`, the gate runner, `db:reset`,
+  `db:determinism` and `verify:console-e2e` use. `apps/api/test/db-target.ts` keeps its own copy of the rules for the Jest
+  suites and does not have it yet: until it does, those suites accept a hand-set mark on the protected port.
+- "No changed tracked file" is `git status --untracked-files=no`. It does not see files hidden with the skip-worktree or
+  assume-unchanged flags, and it ignores ignored files.
+- The classification and the runner use separate connections, and `localhost` is resolved again for each connection. Nothing
+  here makes the two resolve differently, and nothing proves they cannot.
+- The runner reads the SQL files after the guard hashed them. On a checkout that is being edited that is a window of a few
+  seconds; an immutable checkout (CI, a deployed build) has none.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
   its manifest line passes them; `--base` (run by CI on pushes and pull requests) refuses it, and review is the check for a
   change that is never pushed to the repository.
