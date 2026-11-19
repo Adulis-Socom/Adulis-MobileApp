@@ -3,13 +3,13 @@
 // finished run with a failed flow is 5, anything that was changed and not finished is 3.
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { EXIT, EXIT_TEST_FAILED, main } from '../harness.mjs';
 import { makeAdb } from '../lib/adb.mjs';
 import { observeDevice } from '../lib/device.mjs';
-import { summarize } from '../lib/journal.mjs';
+import { appendEntry, summarize } from '../lib/journal.mjs';
 import { readManifest } from '../lib/manifest.mjs';
 import { applySetting, beginSession, deviceIdentity } from '../lib/restore.mjs';
 import { fakeDevice, initialState, junit, SERIAL } from './fake-device.mjs';
@@ -582,4 +582,82 @@ test('status says when the device journal is unusable instead of counting it as 
   const line = r.lines.find((l) => l.startsWith('run native-'));
   assert.match(line, /; journal unusable \(.+\); nothing was verified by this command$/);
   assert.doesNotMatch(line, /device changes not restored: 0/);
+});
+
+test('device prepare is refused while another run has open changes on this device, or a journal nobody can read', async () => {
+  const other = (r, name, write) => {
+    const d = join(r.x.root, 'runs', name);
+    mkdirSync(d, { recursive: true });
+    write(d);
+  };
+  const open = rig();
+  other(open, 'native-20261117-aaaaaaaa', (d) => {
+    appendEntry(d, { op: 'begin', run: 'native-20261117-aaaaaaaa', serial: SERIAL, device: {} });
+    appendEntry(d, {
+      op: 'intend',
+      id: 'c1',
+      setting: 'font_scale',
+      original: { present: true, value: '1.0' },
+      target: { present: true, value: '1.3' },
+    });
+  });
+  assert.equal(
+    await open.run('device', 'prepare', '--run', open.x.w.m.run, '--serial', SERIAL),
+    EXIT.REFUSED,
+  );
+  assert.match(
+    open.last(),
+    /run native-20261117-aaaaaaaa still has 1 device change\(s\) not restored: run `device restore --run <run> --serial emulator-5554` first/,
+  );
+  assert.deepEqual(open.x.dev.st.reverse, [], 'nothing was prepared');
+  assert.equal(summarize(open.x.dir).open.length, 0, 'this run opened no journal');
+
+  const broken = rig();
+  other(broken, 'native-20261117-bbbbbbbb', (d) =>
+    writeFileSync(
+      join(d, 'device-journal.ndjson'),
+      `${JSON.stringify({ v: 1, seq: 1, prev: 'wrong', op: 'begin' })}\n`,
+    ),
+  );
+  assert.equal(
+    await broken.run('device', 'prepare', '--run', broken.x.w.m.run, '--serial', SERIAL),
+    EXIT.REFUSED,
+  );
+  assert.match(broken.last(), /run native-20261117-bbbbbbbb has an unusable device journal/);
+
+  // another device's open changes are not in the way
+  const elsewhere = rig();
+  other(elsewhere, 'native-20261117-cccccccc', (d) => {
+    appendEntry(d, { op: 'begin', run: 'x', serial: 'R58M1234ABC', device: {} });
+    appendEntry(d, {
+      op: 'intend',
+      id: 'c1',
+      setting: 'font_scale',
+      original: { present: true, value: '1.0' },
+      target: { present: true, value: '1.3' },
+    });
+  });
+  assert.equal(
+    await elsewhere.run('device', 'prepare', '--run', elsewhere.x.w.m.run, '--serial', SERIAL),
+    EXIT.OK,
+  );
+});
+
+test('an orphan Maestro that is stopped before down or device restore is said in the output', async () => {
+  for (const argv of [
+    (r) => ['down', '--run', r.x.w.m.run],
+    (r) => ['device', 'restore', '--run', r.x.w.m.run, '--serial', SERIAL],
+  ]) {
+    const r = rig();
+    orphanLock(r);
+    assert.equal(await r.run(...argv(r)), EXIT.OK);
+    assert.ok(
+      r.lines.includes('stopped the Maestro process 4321 of an earlier session'),
+      r.lines.join(' | '),
+    );
+  }
+  // nothing to stop, nothing said
+  const none = rig();
+  assert.equal(await none.run('down', '--run', none.x.w.m.run), EXIT.OK);
+  assert.ok(!none.lines.some((l) => l.startsWith('stopped the Maestro')));
 });

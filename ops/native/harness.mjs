@@ -425,7 +425,7 @@ export async function main(
         if (!['check', 'prepare', 'restore', 'journal'].includes(sub))
           throw new Usage('usage: device check|prepare|restore|journal');
         const { m, dir } = load(root, a.run);
-        ({ code, status } = await deviceCommand({ sub, m, dir, io, a, env, say }));
+        ({ code, status } = await deviceCommand({ sub, m, dir, io, a, env, say, root }));
         break;
       }
       case 'metro': {
@@ -463,7 +463,8 @@ export async function main(
       case 'recover': {
         const { m, dir } = load(root, a.run);
         // no session may run under a teardown; a Maestro process an earlier session left is stopped first
-        await guardSession(dir, io, { reap: true });
+        const reaped = await guardSession(dir, io, { reap: true });
+        if (reaped.stopped) say(`stopped the Maestro process ${reaped.pid} of an earlier session`);
         if (m.state === 'cleaned') {
           say('already cleaned');
           const jp = journalProblems(dir);

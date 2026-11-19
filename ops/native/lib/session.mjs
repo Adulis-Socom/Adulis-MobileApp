@@ -9,7 +9,7 @@ import { appIdentity, apkInfo, buildProblems, nativeDepsCheck, observeBuild } fr
 import { decide, evaluateConditions, reverseTableProblems } from './conditions.mjs';
 import { assertTarget, Refused } from './guard.mjs';
 import { psqlArgs } from './identity.mjs';
-import { appendEntry, summarize } from './journal.mjs';
+import { appendEntry, journalPath, summarize } from './journal.mjs';
 import { executeFlow, RETRY } from './maestro.mjs';
 import { metroProblems } from './metro.mjs';
 import {
@@ -47,14 +47,18 @@ export function otherRunsOpen(root, dir, serial) {
   const out = [];
   for (const r of readdirSync(runs)) {
     const d = join(runs, r);
-    if (resolve(d) === resolve(dir)) continue;
+    if (resolve(d) === resolve(dir) || !existsSync(journalPath(d))) continue;
+    // A journal that cannot be read, or that is unusable before it names its device, may be this device's:
+    // it counts as open (nothing is assumed about it).
     let s;
     try {
       s = summarize(d);
-    } catch {
+    } catch (e) {
+      out.push({ run: r, corrupt: `its journal cannot be read (${e.message})` });
       continue;
     }
-    if (s.begin?.serial === serial && (s.open.length || s.corrupt))
+    if (s.corrupt && !s.begin) out.push({ run: r, corrupt: s.corrupt });
+    else if (s.begin?.serial === serial && (s.open.length || s.corrupt))
       out.push({ run: r, open: s.open.length, corrupt: s.corrupt });
   }
   return out;
@@ -245,6 +249,7 @@ export async function runNative(args) {
     if (facts.identity?.error || facts.build?.error)
       throw new Refused(
         `the device facts could not be read: ${facts.identity?.error ?? facts.build?.error}`,
+        2, // a check that could not be made, not a rule that failed
       );
     const identity = facts.identity;
     record.device = {

@@ -22,7 +22,7 @@ import {
 } from './restore.mjs';
 import { reverseTable } from './settings.mjs';
 import { guardSession } from './lock.mjs';
-import { runNative } from './session.mjs';
+import { otherRunsOpen, runNative } from './session.mjs';
 
 export class UsageError extends Error {}
 
@@ -44,7 +44,7 @@ const serialOf = (a, env) => {
 };
 
 /** `device check|prepare|restore|journal`. The first two serve the manual workflow on an emulator. */
-export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
+export async function deviceCommand({ sub, m, dir, io, a, env, say, root }) {
   const serial = serialOf(a, env);
   if (sub === 'journal') {
     const s = summarize(dir);
@@ -62,7 +62,8 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
     if (!serial)
       throw new UsageError('--serial (or ANDROID_SERIAL) is required: there is no default device');
     // a live session restores its own changes; a Maestro process it left behind is stopped by its identity
-    await guardSession(dir, io, { reap: true });
+    const reaped = await guardSession(dir, io, { reap: true });
+    if (reaped.stopped) say(`stopped the Maestro process ${reaped.pid} of an earlier session`);
     const s = summarize(dir);
     if (s.corrupt)
       throw new Refused(
@@ -96,6 +97,12 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
   if (sub === 'check')
     return { code: 0, status: `HARNESS OK - device ${serial} passes the device checks` };
   await guardSession(dir, io);
+  // another run that left changes on this device (or a journal nobody can read) is not built upon
+  const others = root ? otherRunsOpen(root, dir, serial) : [];
+  if (others.length)
+    throw new Refused(
+      `refused: ${others.map((o) => `run ${o.run} ${o.corrupt ? `has an unusable device journal (${o.corrupt})` : `still has ${o.open} device change(s) not restored`}`).join('; ')}: run \`device restore --run <run> --serial ${serial}\` first`,
+    );
   await assertTarget(m, 'API-WRITE', io, { dir, states: ['ready'] });
   const dev = makeAdb(io, serial);
   beginSession(dir, { run: m.run, serial, identity: await deviceIdentity(dev) });

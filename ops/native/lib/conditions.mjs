@@ -255,7 +255,7 @@ export function evaluateConditions(f) {
   for (const o of f.journal?.others ?? [])
     rp.push(
       o.corrupt
-        ? `run ${o.run} has an unusable device journal for this device`
+        ? `run ${o.run} has an unusable device journal that may belong to this device`
         : `run ${o.run} still has ${o.open} device change(s) not restored on this device: run \`device restore --run ${o.run}\` first`,
     );
   if (f.journal && f.journal.writable === false)

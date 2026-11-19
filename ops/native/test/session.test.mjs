@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -838,7 +839,7 @@ test("another run's open device changes on the same device stop a new session, a
   assert.equal(rz.code, 1);
   assert.match(
     rz.status,
-    /run native-20261117-cccccccc has an unusable device journal for this device/,
+    /run native-20261117-cccccccc has an unusable device journal that may belong to this device/,
   );
 });
 
@@ -894,4 +895,72 @@ test('a Maestro process that ended normally leaves no trace in the lock, and the
   assert.equal(during.maestro.pid, 4321, 'while the flow ran the lock named the process');
   assert.deepEqual(before, [undefined, undefined], 'the record is cleared when each process ended');
   assert.ok(!existsSync(join(x.dir, 'native.lock')));
+});
+
+/* ---- device facts that cannot be read, journals nobody can read, a Maestro that cannot be recorded ---- */
+
+test('device facts that cannot be read once the checks passed are a check that could not be made: exit 2, nothing changed', async () => {
+  const x = nw();
+  let reads = 0;
+  const inner = x.io.adb;
+  x.io.adb = async (a) => {
+    if (a.join(' ').includes('getprop ro.hardware') && (reads += 1) > 1)
+      return { status: 1, stdout: '', stderr: 'cannot read', error: null };
+    return inner(a);
+  };
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 2);
+  assert.match(
+    r.status,
+    /^HARNESS REFUSED - the device facts could not be read: .* \(could not be checked\) - NO RESOURCE WAS CHANGED$/,
+  );
+  assert.equal(snap(x.dev), before);
+  assert.deepEqual(changes(x.dev), []);
+  assert.ok(!existsSync(join(x.dir, 'native.lock')));
+});
+
+test("another run's journal that cannot be read, or that is unusable before it names its device, stops a new session", async () => {
+  // a journal path that is a directory cannot be read
+  const a = nw();
+  mkdirSync(join(a.root, 'runs', 'native-20261117-dddddddd', 'device-journal.ndjson'), {
+    recursive: true,
+  });
+  const ra = await go(a);
+  assert.equal(ra.code, 1);
+  assert.match(
+    ra.status,
+    /run native-20261117-dddddddd has an unusable device journal \(?that may belong to this device|run native-20261117-dddddddd has an unusable device journal that may belong/,
+  );
+  // a journal that is wrong from its first line names no device: it may be this one
+  const b = nw();
+  const d = join(b.root, 'runs', 'native-20261117-eeeeeeee');
+  mkdirSync(d, { recursive: true });
+  writeFileSync(
+    join(d, 'device-journal.ndjson'),
+    `${JSON.stringify({ v: 1, seq: 1, prev: 'wrong', op: 'begin' })}\n`,
+  );
+  const rb = await go(b);
+  assert.equal(rb.code, 1);
+  assert.match(rb.status, /run native-20261117-eeeeeeee has an unusable device journal/);
+  assert.deepEqual(changes(b.dev), []);
+  // a run directory with no journal at all is nothing
+  const c = nw();
+  mkdirSync(join(c.root, 'runs', 'native-20261117-ffffffff'), { recursive: true });
+  assert.equal((await go(c)).code, 0);
+});
+
+test('a Maestro process that cannot be recorded in the lock stops the session before any flow result: INCOMPLETE, the device is put back', async () => {
+  const x = nw();
+  delete x.w.proc.byPid[4321]; // the lock cannot name the process
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 3);
+  assert.match(
+    r.status,
+    /^HARNESS INCOMPLETE - the Maestro process 4321 could not be recorded in the session lock \(the Maestro process 4321 could not be identified: it is not recorded\); it was stopped \(0 PASS, 0 FAIL, 0 NOT EXECUTED\); device settings restored$/,
+  );
+  assert.equal(x.maestro.calls.length, 1, 'no second flow was started');
+  assert.equal(snap(x.dev), before);
+  assert.deepEqual(journalProblems(x.dir), []);
 });
