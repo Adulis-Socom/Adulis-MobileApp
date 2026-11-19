@@ -58,9 +58,9 @@ const withoutReason = (list: readonly Acknowledgement[]) => list.filter((entry) 
 /** The acknowledgements whose name is no longer in the contract. */
 const stale = (present: readonly string[], list: readonly Acknowledgement[]) => list.filter((entry) => !present.includes(entry.fact)).map((entry) => entry.fact);
 
-const isParameter = (segment: string) => /^\{.*\}$/.test(segment);
+// A `{parameter}` segment keeps its braces in the token, so it never matches the feed and follow words.
 const pathMatches = (path: string) =>
-  PATH_WORD.test(path) || path.split('/').some((segment) => !isParameter(segment) && segment.split(/[-_]/).some((token) => PATH_TOKEN.test(token)));
+  PATH_WORD.test(path) || path.split('/').some((segment) => segment.split(/[-_]/).some((token) => PATH_TOKEN.test(token)));
 
 /** Every name in the contract that belongs to a Home channel fact, as `kind name`. */
 function channelFactsIn(contract: Contract): string[] {
