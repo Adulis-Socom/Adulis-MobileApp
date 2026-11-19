@@ -154,11 +154,19 @@ export function useMarkNotificationRead(scope: InboxScope = BUYER_INBOX) {
         // Checked, not trusted: an empty or foreign 200 body reads the inbox again below.
         const readAt: unknown = body?.read_at;
         if (isIso(readAt)) {
-          qc.setQueryData<InfiniteData<NotificationPage>>(inbox, (data) =>
-            data
-              ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map((n) => (n.id === id ? { ...n, readAt } : n)) })) }
-              : data,
-          );
+          // Written beside the query's status, not through setQueryData: that also clears a failure (a refresh or an
+          // older page that did not load) which the Buyer has not seen resolved.
+          const query = qc.getQueryCache().find<InfiniteData<NotificationPage>>({ queryKey: inbox, exact: true });
+          const held = query?.state.data;
+          if (query && held) {
+            query.setState({
+              data: { ...held, pages: held.pages.map((p) => ({ ...p, items: p.items.map((n) => (n.id === id ? { ...n, readAt } : n)) })) },
+            });
+          }
+          // A read already on its way may predate this one: it is cancelled and asked again, never drawn over it.
+          // A Load older on its way is cancelled with it (its page was cut from the rows before this read and would
+          // draw them Unread again): the Buyer asks for it again, and nothing says it was cancelled.
+          void qc.invalidateQueries({ queryKey: inbox, predicate: (q) => q.state.fetchStatus === 'fetching' });
         } else {
           // An answer without its read_at: read the inbox again rather than assume.
           void qc.invalidateQueries({ queryKey: inbox });
