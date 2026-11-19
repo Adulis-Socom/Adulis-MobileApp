@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parseAllDocuments } from 'yaml';
 import {
   ALLOWED_HAZARDS,
   ALLOWED_PERMISSIONS,
@@ -621,5 +622,46 @@ test('every flow in the repository directory is read as YAML: none is unparseabl
       [],
       d.file,
     );
+  }
+});
+
+/* ---- an approved flow can only ask the app for what the app offers in the state the flow is in ---- */
+
+// The text a flow taps, waits for or asserts is visible, at any depth. Texts it asserts are ABSENT are not
+// collected: `assertNotVisible` is how a flow checks that a control is missing.
+const WANTS_VISIBLE = ['tapOn', 'assertVisible', 'scrollUntilVisible'];
+const stringsIn = (v) =>
+  typeof v === 'string'
+    ? [v]
+    : Array.isArray(v)
+      ? v.flatMap(stringsIn)
+      : v && typeof v === 'object'
+        ? Object.values(v).flatMap(stringsIn)
+        : [];
+function visibleTexts(node, out = []) {
+  if (Array.isArray(node)) node.forEach((n) => visibleTexts(n, out));
+  else if (node && typeof node === 'object')
+    for (const [key, value] of Object.entries(node)) {
+      if (WANTS_VISIBLE.includes(key)) out.push(...stringsIn(value));
+      else if (key === 'extendedWaitUntil') out.push(...stringsIn(value?.visible));
+      else visibleTexts(value, out);
+    }
+  return out;
+}
+
+test('an approved flow runs as a guest, so it never taps or waits for a Seller Companion control', () => {
+  // The premise, read from the app: Seller Companion is offered only to a signed-in Account whose server
+  // context says so. If that rule changes, the approved flows have to be read again.
+  const modes = readFileSync(join(repo, 'apps', 'mobile', 'src', 'modes', 'modes.ts'), 'utf8');
+  assert.match(modes, /signedIn && sellerCompanion === true/);
+  const real = loadDeclaration(REAL_DECL);
+  for (const [name, d] of Object.entries(real.flows)) {
+    // no variable means no code and no sign-in input: the flow stays a guest (narrow this when one signs in)
+    assert.deepEqual(d.vars, [], `${name} takes a variable: it may sign in, read it again`);
+    const docs = parseAllDocuments(readFileSync(join(REAL_FLOWS, d.file), 'utf8'));
+    const wanted = visibleTexts(docs.map((doc) => doc.toJS())).filter((text) =>
+      /Seller Companion/.test(text),
+    );
+    assert.deepEqual(wanted, [], `${name} asks a guest for a Seller Companion control`);
   }
 });
