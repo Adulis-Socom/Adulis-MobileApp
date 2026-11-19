@@ -65,7 +65,7 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
       opened.current = true;
     }, [revalidate, valid]),
   );
-  const shown = read.value ?? read.stale?.value;
+  const shown = read.unverified?.value ?? read.value;
   if (shown === undefined) {
     return (
       <ReadStates
@@ -76,17 +76,15 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
       />
     );
   }
-  // Waiting for a connection says so and has nothing to try; a failed read says why, and can be tried again.
-  const unverified = read.refreshPaused ? { error: null } : read.stale ? { error: read.stale.error } : null;
   return (
     <ProductContent
       product={shown}
       route={`/product/${handle as string}/${slug as string}`}
       sceneRef={isPublicRef(from) ? from : null}
-      receivedAt={read.receivedAt ?? read.stale?.receivedAt ?? 0}
+      receivedAt={read.receivedAt ?? read.unverified?.receivedAt ?? 0}
       pulling={read.pulling}
       onPull={read.pull}
-      unverified={unverified}
+      unverified={read.unverified ?? null}
       onRetry={read.revalidate}
       retrying={read.revalidating}
     />
@@ -111,8 +109,8 @@ function ProductContent({
   receivedAt: number;
   pulling: boolean;
   onPull: () => void;
-  /** Not null while the answer cannot be verified: the failure to say (null: the Buyer is offline). */
-  unverified: { error: unknown } | null;
+  /** Not null while the answer cannot be verified yet: why (a wait for a connection, a failure, or a read on its way) and the failure to say. */
+  unverified: { why: 'offline' | 'failed' | 'checking'; error: unknown } | null;
   onRetry: () => void;
   retrying: boolean;
 }) {
@@ -175,8 +173,13 @@ function ProductContent({
       </AppText>
       {unverified ? (
         <View style={{ gap: theme.space.sm }}>
-          <AlertText>{unverified.error === null ? t('common.offline') : failureMessage(t, unverified.error)}</AlertText>
-          {unverified.error === null ? null : <Button label={t('common.retry')} onPress={onRetry} disabled={retrying} />}
+          {unverified.why === 'checking' ? (
+            // The connection is back (or a retry is on its way) and the old answer has not been replaced yet.
+            <StatusText>{t('buyer.product.loading')}</StatusText>
+          ) : (
+            <AlertText>{unverified.why === 'offline' ? t('common.offline') : failureMessage(t, unverified.error)}</AlertText>
+          )}
+          {unverified.why === 'failed' ? <Button label={t('common.retry')} onPress={onRetry} disabled={retrying} /> : null}
         </View>
       ) : null}
       {withheld || price === null ? null : (

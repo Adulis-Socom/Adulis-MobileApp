@@ -201,9 +201,75 @@ describe('a Product that is no longer public', () => {
     expect(await screen.findByText(en['buyer.product.gone'])).toBeOnTheScreen();
     expect(heading()).not.toBeOnTheScreen();
   });
+
+  // Something is pushed over the gone screen and popped, so the screen is shown again and reads again.
+  const showAgain = async () => {
+    await act(() => router.push(`/sellers/${HANDLE}` as never));
+    await screen.findByRole('header', { name: 'Store 1' });
+    await act(() => router.back());
+    await settle();
+  };
+
+  it('once gone, a later failure to read does not bring the Product back: only a success does', async () => {
+    serve(ok(BOTH()), problem(404, 'NOT_FOUND', 'request'), problem(500, 'INTERNAL', 'request'));
+    await open();
+    await toSellerAndBack();
+    expect(await screen.findByText(en['buyer.product.gone'])).toBeOnTheScreen();
+    await showAgain();
+    expect(reads()).toBe(3);
+    expect(screen.getByText(en['buyer.product.gone'])).toBeOnTheScreen();
+    expect(heading()).not.toBeOnTheScreen();
+    expect(screen.queryByText('About Woven basket')).not.toBeOnTheScreen();
+    expect(screen.queryByText(FAILED)).not.toBeOnTheScreen();
+    withheldParts();
+  });
+
+  it('a success after a 404 brings the Product back, with its own price and options', async () => {
+    serve(ok(BOTH()), problem(404, 'NOT_FOUND', 'request'), ok(basket([option(SMALL, { price_minor: 70000 }), option(LARGE)])));
+    await open();
+    await toSellerAndBack();
+    expect(await screen.findByText(en['buyer.product.gone'])).toBeOnTheScreen();
+    await showAgain();
+    expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.product.gone'])).not.toBeOnTheScreen();
+    expect(headline()).toBe(`${etb(70000)} \u2013 ${etb(95000)}`);
+    expect(choice('Small', AVAILABLE, 70000)).toBeEnabled();
+  });
 });
 
 describe('a re-read that waits for a connection', () => {
+  it('keeps the old answer withheld after the connection returns, until the NEW answer has arrived', async () => {
+    let n = 0;
+    let release: (reply: Reply) => void = () => undefined;
+    api.on(BASKET, () => {
+      n += 1;
+      return n === 1 ? ok(BOTH()) : new Promise<Reply>((resolve) => (release = resolve));
+    });
+    await open();
+    await fireEvent.press(screen.getByTestId('product-seller'));
+    await screen.findByRole('header', { name: 'Store 1' });
+    await act(async () => onlineManager.setOnline(false));
+    await act(() => router.back());
+    await settle();
+    withheldParts();
+    expect(screen.getByText(en['common.offline'])).toBeOnTheScreen();
+    // The connection returns: the read resumes and is on its way. The earlier answer is not drawn again.
+    await act(async () => onlineManager.setOnline(true));
+    await settle();
+    expect(reads()).toBe(2);
+    keptParts();
+    withheldParts();
+    expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.product.loading'])).toBeOnTheScreen();
+    expect(retry()).not.toBeOnTheScreen();
+    await act(async () => release(ok(basket([option(SMALL, { price_minor: 70000 }), option(LARGE)]))));
+    await settle();
+    expect(headline()).toBe(`${etb(70000)} \u2013 ${etb(95000)}`);
+    expect(choice('Small', AVAILABLE, 70000)).toBeEnabled();
+    expect(screen.queryByText(en['buyer.product.loading'])).not.toBeOnTheScreen();
+  });
+
+
   it('says the Buyer is offline, withholds price and options, offers no Try again, and shows the new answer when the connection returns', async () => {
     serve(ok(BOTH()), ok(basket([option(SMALL, { price_minor: 70000 }), option(LARGE)])));
     await open();
@@ -243,6 +309,10 @@ describe('Try again', () => {
     await settle();
     expect(reads()).toBe(3);
     expect(screen.getByRole('button', { name: en['common.retry'] })).toBeDisabled();
+    // The retry is on its way: the earlier answer is still not drawn, and the failure is still said.
+    keptParts();
+    withheldParts();
+    expect(screen.getByText(FAILED)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(reads()).toBe(3);
     await act(async () => release(problem(500, 'INTERNAL', 'request')));
