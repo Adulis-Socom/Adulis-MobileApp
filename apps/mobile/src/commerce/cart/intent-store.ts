@@ -32,7 +32,8 @@ export interface IntentStore {
   /** Applies one event. Null when the scope is not current: nothing is touched. */
   apply(scope: Scope, variantId: VariantId, event: AddEvent): AddState | null;
   dismiss(scope: Scope, variantId: VariantId): AddState;
-  clear(): void;
+  /** Empties the store. : without telling watchers, for a caller that is rendering (a watcher is told by its own render). */
+  clear(options?: { silent?: boolean }): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -92,10 +93,10 @@ export function createIntentStore(): IntentStore {
       return apply(scope, variantId, { type: 'DISMISS' }) ?? IDLE;
     },
 
-    clear() {
+    clear(options) {
       if (entries.size === 0) return;
       entries.clear();
-      notify();
+      if (options?.silent !== true) notify();
     },
 
     subscribe(listener) {

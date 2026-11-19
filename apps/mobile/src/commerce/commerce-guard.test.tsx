@@ -319,7 +319,7 @@ describe('G13: no route, tab or return path reaches it', () => {
 
 describe('G16: the cart code does no arithmetic on money', () => {
   const BEFORE = /\bamountMinor\b\s*(?:[-+*/%]|\*\*)/;
-  const AFTER = /[-+*/%]\s*[\w$.?!]*\bamountMinor\b/;
+  const AFTER = /[-+*/%]=?\s*[\w$.?!]*\bamountMinor\b/;
   const REDUCED = /\breduce\s*\([^)]*\bamountMinor\b/;
   const arithmetic = (text: string) => {
     const code = stripComments(text);

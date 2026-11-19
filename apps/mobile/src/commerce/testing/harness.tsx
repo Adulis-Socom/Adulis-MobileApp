@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, waitFor } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 
 import { SessionProvider, useSession } from '../../auth/session';
 import type { SessionStorage } from '../../auth/session-storage';
@@ -40,11 +40,18 @@ export type SessionApi = ReturnType<typeof useSession>;
  * provider with the build and the run named explicitly (a fixture adapter is served only when both
  * allow it). Resolves once the session has been restored.
  */
+export type CommerceRender = {
+  session: { current: SessionApi | null };
+  queryClient: QueryClient;
+  /** Replaces what is rendered inside the same providers, so a screen can be unmounted and mounted again. */
+  show: (kids: ReactNode) => Promise<void>;
+};
+
 export async function renderWithCommerce(
   children: ReactNode,
-  options: { adapter: CartAdapter; build?: CommerceMode; dev?: boolean; token?: string | null },
-) {
-  const { adapter, build = 'fixture', dev = true, token = null } = options;
+  options: { adapter: CartAdapter; build?: CommerceMode; dev?: boolean; token?: string | null; strict?: boolean },
+): Promise<CommerceRender> {
+  const { adapter, build = 'fixture', dev = true, token = null, strict = false } = options;
   const session: { current: SessionApi | null } = { current: null };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   const storage = fakeSessionStorage(token);
@@ -53,7 +60,7 @@ export async function renderWithCommerce(
     session.current = useSession();
     return null;
   }
-  const tree = (kids: ReactNode) => (
+  const providers = (kids: ReactNode) => (
     <QueryClientProvider client={queryClient}>
       <SessionProvider storage={storage} deviceStorage={deviceStorage}>
         <CommerceProviderCore adapter={adapter} build={build} dev={dev}>
@@ -63,13 +70,15 @@ export async function renderWithCommerce(
       </SessionProvider>
     </QueryClientProvider>
   );
+  // StrictMode around everything (the providers too) renders each component twice, as a development build does.
+  const tree = (kids: ReactNode) => (strict ? <StrictMode>{providers(kids)}</StrictMode> : providers(kids));
   const view = await render(tree(children));
   await waitFor(() => expect(session.current?.session.status).not.toBe('restoring'));
   return {
     session,
     queryClient,
-    view,
-    /** Replaces what is rendered inside the same providers, so a screen can be unmounted and mounted again. */
-    show: (kids: ReactNode) => view.rerender(tree(kids)),
+    show: async (kids) => {
+      await view.rerender(tree(kids));
+    },
   };
 }

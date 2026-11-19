@@ -137,6 +137,17 @@ describe('dismissing and watching', () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
+  it('can be emptied without telling a watcher, for a caller that is rendering', () => {
+    const store = createIntentStore();
+    const { scope } = makeScope();
+    store.begin(scope, { variantId: V1, quantity: 1 }, ctx(() => 'key-1'));
+    const listener = jest.fn();
+    store.subscribe(listener);
+    store.clear({ silent: true });
+    expect(listener).not.toHaveBeenCalled();
+    expect(store.read(scope, V1).kind).toBe('IDLE');
+  });
+
   it('hands out the same state object until something changes, so a view can compare by identity', () => {
     const store = createIntentStore();
     const { scope } = makeScope();

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
-import { StrictMode } from 'react';
 import { Text } from 'react-native';
 
 import { SessionProvider } from '../../auth/session';
@@ -161,12 +160,7 @@ describe('one scope for every screen', () => {
 
   it('keeps one epoch across a re-render with the same credential, and under StrictMode', async () => {
     const stub = stubAdapter();
-    const { session } = await renderWithCommerce(
-      <StrictMode>
-        <ScopeProbe name="a" />
-      </StrictMode>,
-      { adapter: stub.adapter, token: 'token-a' },
-    );
+    const { session } = await renderWithCommerce(<ScopeProbe name="a" />, { adapter: stub.adapter, token: 'token-a', strict: true });
     await waitFor(() => expect(screen.getByTestId('scope-a')).toHaveTextContent('account:1'));
     await act(() => session.current!.clearSession());
     await waitFor(() => expect(screen.getByTestId('scope-a')).toHaveTextContent('guest:2'));
@@ -229,5 +223,29 @@ describe('an add left unconfirmed by a screen that has gone', () => {
     expect(sent).toHaveLength(2);
     expect(sent[1]!.key).not.toBe(keyOfA);
     expect(sent[1]).toMatchObject({ scopeKind: 'account', epoch: 3 });
+  });
+
+  it('is dropped for a screen that stays mounted, without that screen being updated while the provider renders', async () => {
+    const stub = stubAdapter();
+    const handle: { current: ReturnType<typeof useAddToCart> | null } = { current: null };
+    function Add() {
+      const hook = useAddToCart(V1);
+      handle.current = hook;
+      return <Text testID="add-state">{hook.state.kind}</Text>;
+    }
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { session } = await renderWithCommerce(<Add />, { adapter: stub.adapter, token: 'token-a' });
+      stub.failNext('addLine', offline());
+      await act(async () => {
+        handle.current!.add(1);
+      });
+      await waitFor(() => expect(screen.getByTestId('add-state')).toHaveTextContent('UNKNOWN'));
+      await act(() => session.current!.clearSession());
+      await waitFor(() => expect(screen.getByTestId('add-state')).toHaveTextContent('IDLE'));
+      expect(errors.mock.calls.map((call) => String(call[0])).filter((text) => text.includes('Cannot update a component'))).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });

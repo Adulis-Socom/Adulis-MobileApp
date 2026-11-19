@@ -237,6 +237,7 @@ describe('revalidation', () => {
   describe('returning from the background', () => {
     let listeners: Array<(state: AppStateStatus) => void> = [];
     let appState: jest.SpyInstance;
+    let original: ((...args: never[]) => unknown) | undefined;
     let skew = 0;
     let clock: jest.SpyInstance;
     const goTo = (state: AppStateStatus) =>
@@ -250,13 +251,15 @@ describe('revalidation', () => {
       const real = Date.now.bind(Date);
       clock = jest.spyOn(Date, 'now').mockImplementation(() => real() + skew);
       appState = jest.spyOn(AppState, 'addEventListener');
+      original = appState.getMockImplementation();
       appState.mockImplementation((type, listener) => {
         if (type === 'change') listeners.push(listener as (state: AppStateStatus) => void);
         return { remove: () => (listeners = listeners.filter((l) => l !== listener)) } as ReturnType<typeof AppState.addEventListener>;
       });
     });
     afterEach(() => {
-      appState.mockRestore();
+      // The platform mock has its own implementation: put it back rather than resetting it.
+      if (original) appState.mockImplementation(original);
       clock.mockRestore();
     });
 

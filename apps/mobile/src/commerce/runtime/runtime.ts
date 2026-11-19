@@ -41,7 +41,8 @@ export function createRuntime(): CommerceRuntime {
       if (same(identity, next)) return;
       identity = next;
       epoch += 1;
-      intents.clear();
+      // Silent: this runs while the provider renders, and a screen that watches the store re-renders with the new scope anyway.
+      intents.clear({ silent: true });
       if (next === null) {
         scope = null;
         return;
