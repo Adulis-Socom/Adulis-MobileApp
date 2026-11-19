@@ -85,7 +85,7 @@ tags:
       - takeScreenshot: msg-04-automated
       - tapOn: Ask the Seller
       - extendedWaitUntil:
-          visible: Your question has been passed to the Seller. They will reply here.
+          visible: Your question has been passed to the Seller. Any reply will appear here.
           timeout: 30000
       - assertNotVisible: Ask the Seller
       - takeScreenshot: msg-05-escalated
@@ -116,7 +116,7 @@ tags:
       - tapOn: Fixture Weaves
       # The newest message is at the bottom, above the composer; older ones may be scrolled away.
       - extendedWaitUntil:
-          visible: Your question has been passed to the Seller. They will reply here.
+          visible: Your question has been passed to the Seller. Any reply will appear here.
           timeout: 30000
 
 - runFlow:
