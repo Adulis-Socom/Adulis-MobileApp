@@ -10,6 +10,7 @@ import { parseReturnTo } from '../auth/sign-in-flow';
 import { useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { CardSavesContext, useCardSave } from './saved';
+import { outcomeUnknown } from './saved-write';
 import { startGuestSave } from './SaveButton';
 
 type Props = {
@@ -69,7 +70,7 @@ function SignedInCardSave({ target, name, style }: Props) {
   useEffect(() => {
     if (!save.error || save.error === said.current || save.error instanceof SessionChanged) return;
     said.current = save.error;
-    Alert.alert(t('buyer.save.failed'), failureMessage(t, save.error));
+    Alert.alert(t(outcomeUnknown(save.error) ? 'buyer.save.unconfirmed' : 'buyer.save.failed'), failureMessage(t, save.error));
   }, [save.error, t]);
 
   if (save.status === 'error' && !save.busy) {
