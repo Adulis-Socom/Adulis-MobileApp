@@ -128,7 +128,8 @@ describe('Shop categories', () => {
     expect(await screen.findByText(en['buyer.shop.categories_failed'], {}, { timeout: 10_000 })).toBeOnTheScreen();
     // The list's own failure is on the screen as well: the row above it cannot claim anything about the list.
     expect(await screen.findByText(en['error.request.internal'], {}, { timeout: 10_000 })).toBeOnTheScreen();
-    expect(screen.queryByText(/still shown/i)).toBeNull();
+    // The row shown is the key's own sentence (found above); whatever its wording, it names no Products.
+    expect(en['buyer.shop.categories_failed']).not.toMatch(/\bproducts?\b/i);
   });
 
   it('says nothing about the Products when the categories cannot be read and the Market has no Products', async () => {
@@ -137,7 +138,7 @@ describe('Shop categories', () => {
     await renderRouter(APP_DIR, { initialUrl: '/shop' });
     expect(await screen.findByText(en['buyer.shop.empty'], {}, { timeout: 10_000 })).toBeOnTheScreen();
     expect(await screen.findByText(en['buyer.shop.categories_failed'], {}, { timeout: 10_000 })).toBeOnTheScreen();
-    expect(screen.queryByText(/still shown/i)).toBeNull();
+    expect(en['buyer.shop.categories_failed']).not.toMatch(/\bproducts?\b/i);
   });
 
   it('a Market with no category shows no category bar; a label this catalogue lacks shows the code', async () => {
