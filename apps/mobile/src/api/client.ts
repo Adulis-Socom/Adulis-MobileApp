@@ -163,7 +163,9 @@ export function retryAfterMs(error: unknown): number | null {
 /** The header first (it is what an intermediary can set), else the API's own slot. */
 function waitAsked(res: Response, problem: Problem | null): { retryAfterSeconds?: number } {
   const slot = problem?.slots?.retry_after_seconds;
-  const stamp = Date.parse(res.headers.get('Date') ?? '');
+  // The same shape test as Retry-After's: a loose parser reads "1.5" as a day in 2001.
+  const date = res.headers.get('Date')?.trim() ?? '';
+  const stamp = HTTP_DATE.test(date) ? Date.parse(date) : Number.NaN;
   const seconds =
     parseRetryAfter(res.headers.get('Retry-After'), Date.now(), Number.isNaN(stamp) ? null : stamp) ??
     (typeof slot === 'number' && Number.isFinite(slot) ? clampWait(slot) : null);

@@ -264,6 +264,18 @@ describe('retry hints on a failed answer', () => {
       expect(await waitWith(SERVER_NOW, { 'Retry-After': inSeconds(45), Date: 'not a date' })).toBe(45_000);
     });
 
+    // A loose date parser reads "1.5" or a bare number as a day in 2001, so a Date that is not an HTTP-date is
+    // ignored exactly as such a Retry-After is, and the device clock decides.
+    it.each([
+      ['a decimal', '1.5'],
+      ['a bare number', '12'],
+      ['a bare year', '2026'],
+      ['an ISO date', new Date(SERVER_NOW + 3600_000).toISOString()],
+      ['a date in the long local form', new Date(SERVER_NOW + 3600_000).toString()],
+    ])('ignores a Date that is not an HTTP-date (%s)', async (_name, stamp) => {
+      expect(await waitWith(SERVER_NOW, { 'Retry-After': inSeconds(45), Date: stamp })).toBe(45_000);
+    });
+
     it('leaves a wait in seconds alone, whatever the clocks say', async () => {
       expect(await waitWith(SERVER_NOW + 3600_000, { 'Retry-After': '30', Date: inSeconds(0) })).toBe(30_000);
     });
