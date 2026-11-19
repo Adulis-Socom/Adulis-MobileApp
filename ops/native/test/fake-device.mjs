@@ -260,6 +260,8 @@ export function fakeMaestro(script) {
   const maestro = async (opts) => {
     const idx = calls.length;
     calls.push(opts);
+    // the process started: the session records it (pid 4321 unless the script says otherwise)
+    await opts.onSpawn?.(4321);
     const r = (await script(idx, opts)) ?? {};
     const out = opts.args[opts.args.indexOf('--output') + 1];
     mkdirSync(dirname(out), { recursive: true });
@@ -271,6 +273,7 @@ export function fakeMaestro(script) {
       pid: 4321,
       timedOut: !!r.timedOut,
       aborted: !!r.aborted,
+      stuck: !!r.stuck,
     };
   };
   return { maestro, calls };

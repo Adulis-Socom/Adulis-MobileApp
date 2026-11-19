@@ -36,7 +36,7 @@ const powershell = async (script) => {
   return r.stdout.trim();
 };
 
-const proc = {
+export const proc = {
   async info(pid) {
     if (!Number.isInteger(pid) || pid <= 0) throw new Error('pid must be a positive integer');
     const out = await powershell(
@@ -51,21 +51,34 @@ const proc = {
     return out ? [].concat(JSON.parse(out)) : [];
   },
   kill: (pid) => process.kill(pid),
-  // Metro starts worker processes: the verified pid and the processes it started, each stopped by its
-  // own pid, deepest first. Only called after the pid's creation time and command line matched the record.
-  async killTree(root) {
-    if (!Number.isInteger(root) || root <= 0) throw new Error('pid must be a positive integer');
+  /** One snapshot of the host's processes: [{ ProcessId, ParentProcessId, c }] (c = creation time, ISO). */
+  async table() {
     const out = await powershell(
       "@(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{ n = 'c'; e = { $_.CreationDate.ToUniversalTime().ToString('o') } }) | ConvertTo-Json -Compress",
     );
-    const order = [...descendants([].concat(JSON.parse(out || '[]')), root).reverse(), root];
+    return [].concat(JSON.parse(out || '[]'));
+  },
+  // Metro starts worker processes: the verified pid and the processes it started, each stopped by its
+  // own pid, deepest first. Only called after the pid's creation time and command line matched the record.
+  // A process is stopped only if a second snapshot, taken just before, still shows the creation time the
+  // first one did (a number given to another process in between is left alone). A process that is already
+  // gone is not a failure; any other failure, the root's included, is thrown after the rest was tried.
+  async killTree(root) {
+    if (!Number.isInteger(root) || root <= 0) throw new Error('pid must be a positive integer');
+    const first = await this.table();
+    const order = [...descendants(first, root).reverse(), root];
+    const created = new Map(first.map((x) => [x.ProcessId, x.c]));
+    const now = new Map((await this.table()).map((x) => [x.ProcessId, x.c]));
+    const failures = [];
     for (const pid of order) {
+      if (now.get(pid) !== created.get(pid)) continue; // gone, or the number now belongs to another process
       try {
         process.kill(pid);
-      } catch {
-        // already gone
+      } catch (e) {
+        if (e.code !== 'ESRCH') failures.push(`${pid}: ${e.code ?? e.message}`);
       }
     }
+    if (failures.length) throw new Error(`could not stop process(es) ${failures.join(', ')}`);
   },
 };
 
@@ -94,7 +107,7 @@ const spawnApi = ({ node, main, cwd, env, log }) => {
 };
 
 /** Spawns Metro detached with stdout and stderr in a log file; returns { pid }. */
-const spawnMetro = ({ node, args, cwd, env, log }) => {
+export const spawnMetro = ({ node, args, cwd, env, log }) => {
   mkdirSync(dirname(log), { recursive: true });
   const fd = openSync(log, 'a');
   const child = spawn(node, args, {
@@ -110,10 +123,13 @@ const spawnMetro = ({ node, args, cwd, env, log }) => {
 };
 
 /**
- * Runs Maestro's JVM, output to a log file. Resolves { status, error, pid, timedOut, aborted }; the signal
- * and the timeout stop the process this call started (by its handle), nothing else.
+ * Runs Maestro's JVM, output to a log file. Resolves { status, error, pid, timedOut, aborted, stuck }; the
+ * signal and the timeout stop the process this call started (by its pid, while it is running), nothing
+ * else, and the promise ALWAYS resolves: a process that is still there `hardMs` after it was stopped
+ * resolves it with `stuck: true` and an error (the caller records the orphan). `onSpawn(pid)` runs right
+ * after the process started.
  */
-const maestro = ({ file, args, cwd, env, timeout, signal, log }) =>
+export const maestro = ({ file, args, cwd, env, timeout, signal, log, onSpawn, hardMs = 15_000 }) =>
   new Promise((resolve) => {
     mkdirSync(dirname(log), { recursive: true });
     const fd = openSync(log, 'a');
@@ -122,45 +138,62 @@ const maestro = ({ file, args, cwd, env, timeout, signal, log }) =>
     let timedOut = false;
     let aborted = false;
     let closed = false;
-    const stop = () => {
-      const { pid } = child; // a pid of a process this call started, and not after it ended
-      if (closed || !pid) return;
-      try {
-        process.kill(pid);
-      } catch {
-        // already gone
-      }
-    };
+    let settled = false;
+    let hard = null;
     const timer = setTimeout(() => {
       timedOut = true;
       stop();
     }, timeout);
-    const onAbort = () => {
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(hard);
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ pid: child.pid, timedOut, aborted, ...r });
+    };
+    function stop() {
+      const { pid } = child; // the pid of a process this call started, and only while it has not ended
+      if (closed || !pid || child.exitCode !== null || child.signalCode !== null) return;
+      try {
+        process.kill(pid);
+      } catch {
+        // already gone: the close event follows
+      }
+      hard ??= setTimeout(
+        () =>
+          finish({
+            status: null,
+            error: new Error(`process ${pid} was still running ${hardMs} ms after it was stopped`),
+            stuck: true,
+          }),
+        hardMs,
+      );
+    }
+    function onAbort() {
       aborted = true;
       stop();
-    };
+    }
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) onAbort();
     child.on('error', (error) => {
       closed = true;
-      clearTimeout(timer);
-      resolve({ status: null, error, pid: child.pid, timedOut, aborted });
+      finish({ status: null, error });
     });
     child.on('close', (status) => {
       closed = true;
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      resolve({ status, error: null, pid: child.pid, timedOut, aborted });
+      finish({ status, error: null });
     });
+    if (child.pid) Promise.resolve(onSpawn?.(child.pid)).catch(() => {});
   });
 
 /** Like `run`, with stdout as a Buffer (a screenshot). */
-const runBytes = (file, args, { timeout = 30_000 } = {}) =>
+export const runBytes = (file, args, { timeout = 30_000, env } = {}) =>
   new Promise((resolve) => {
     execFile(
       file,
       args,
-      { timeout, maxBuffer: 64 * 1024 * 1024, windowsHide: true, encoding: 'buffer' },
+      { timeout, env, maxBuffer: 64 * 1024 * 1024, windowsHide: true, encoding: 'buffer' },
       (error, stdout, stderr) =>
         resolve({
           status: error ? (typeof error.code === 'number' ? error.code : null) : 0,
@@ -172,7 +205,7 @@ const runBytes = (file, args, { timeout = 30_000 } = {}) =>
   });
 
 /** Bytes of commit charge still available (the page file counts): FreeVirtualMemory is in kilobytes. */
-const commitFree = async () =>
+export const commitFree = async () =>
   Number(await powershell('(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory')) * 1024;
 
 const build = async (checkout) => {
@@ -186,6 +219,29 @@ const build = async (checkout) => {
     throw new Error(
       `the API build failed: ${`${r.stderr || r.stdout || r.error?.message}`.trim().slice(-400)}`,
     );
+};
+
+/**
+ * The few variables adb needs to find its keys and its tools. No server redirection (ADB_SERVER_SOCKET,
+ * ANDROID_ADB_SERVER_ADDRESS, ANDROID_ADB_SERVER_PORT) and nothing else is passed on.
+ */
+export const adbChildEnv = (host) => {
+  const from = host ?? process.env;
+  const env = {};
+  for (const k of [
+    'SystemRoot',
+    'PATH',
+    'TEMP',
+    'TMP',
+    'USERPROFILE',
+    'HOME',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'ANDROID_HOME',
+    'ANDROID_USER_HOME',
+  ])
+    if (from[k]) env[k] = from[k];
+  return env;
 };
 
 /** The few variables a node child needs; nothing else is inherited. */
@@ -204,8 +260,8 @@ export function realIo() {
     fetch: (url, opts) => fetch(url, opts),
     proc,
     git: (args, cwd) => run('git', ['-C', cwd, ...args], { timeout: 30_000 }),
-    adb: (args) => run('adb', args, { timeout: 30_000 }),
-    adbBytes: (args) => runBytes('adb', args),
+    adb: (args) => run('adb', args, { timeout: 30_000, env: adbChildEnv() }),
+    adbBytes: (args) => runBytes('adb', args, { env: adbChildEnv() }),
     connects,
     spawnApi,
     spawnMetro,

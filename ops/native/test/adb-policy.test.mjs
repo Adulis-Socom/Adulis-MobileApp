@@ -11,7 +11,7 @@ import {
   reversiblePort,
   SERIAL_RE,
 } from '../lib/adb.mjs';
-import { PROTECTED_PORTS } from '../lib/protected.mjs';
+import { DEVICE_PORTS_EXTRA, PORT_BLOCK, PROTECTED_PORTS } from '../lib/protected.mjs';
 import { fakeDevice, SERIAL } from './fake-device.mjs';
 
 const effect = (...a) => classifyAdb(a).effect;
@@ -91,6 +91,11 @@ test('every call outside the list is refused, whatever it is', () => {
     ['exec-out', 'cat', '/sdcard/a'],
     ['bugreport'],
     ['backup', '-all'],
+    // reads the driver does not use are not on the list
+    ['get-state'],
+    ['shell', 'getprop', 'ro.debuggable'],
+    ['shell', 'wm', 'size'],
+    ['shell', 'pidof', 'com.adulis.app'],
   ];
   for (const a of refused) assert.equal(effect(...a), null, a.join(' '));
 });
@@ -157,6 +162,19 @@ test("only this harness's ports are reversed, each to itself, and never a protec
   assert.equal(effect('reverse', 'localabstract:x', 'tcp:57213'), null);
 });
 
+test('no protected port is inside the harness port block or is the Metro port, so a reverse entry can never be one', () => {
+  for (const p of PROTECTED_PORTS) {
+    assert.ok(
+      !(p >= PORT_BLOCK.from && p <= PORT_BLOCK.to),
+      `${p} is inside ${PORT_BLOCK.from}-${PORT_BLOCK.to}`,
+    );
+    assert.notEqual(p, 8081);
+    assert.ok(!DEVICE_PORTS_EXTRA.has(p), `${p}`);
+  }
+  assert.deepEqual([PORT_BLOCK.from, PORT_BLOCK.to], [57100, 57999]);
+  assert.deepEqual([...DEVICE_PORTS_EXTRA], [8081]);
+});
+
 test('an unknown call counts as a change for the tracker, a read does not', () => {
   assert.equal(isMutatingAdb(['-s', 'e', 'shell', 'getprop', 'ro.hardware']), false);
   assert.equal(isMutatingAdb(['devices']), false);
@@ -187,9 +205,24 @@ test('the serial is bound: a call can never name another device or server', asyn
 
 test('a serial must be a plain hardware or emulator serial, never a network address', () => {
   for (const good of ['emulator-5554', 'R58M1234ABC', 'ZY22xxxx_1']) assert.match(good, SERIAL_RE);
-  for (const bad of ['', 'a b', '192.168.1.5:5555', 'x', '../x', 'a;b', '-s'])
+  for (const bad of [
+    '',
+    'a b',
+    '192.168.1.5:5555',
+    'x',
+    '../x',
+    'a;b',
+    '-s',
+    // the mDNS (wireless debugging) form of a serial is a network transport too
+    'adb-R58M1234ABC-xYz1Qw._adb-tls-connect._tcp',
+    'adb-R58M1234ABC-xYz1Qw._adb-tls-pairing._tcp.',
+  ])
     assert.doesNotMatch(bad, SERIAL_RE, JSON.stringify(bad));
   assert.throws(() => makeAdb({}, '192.168.1.5:5555'), /not a device serial/);
+  assert.throws(
+    () => makeAdb({}, 'adb-R58M1234ABC-xYz1Qw._adb-tls-connect._tcp'),
+    /not a device serial/,
+  );
   assert.equal(isEmulatorSerial('emulator-5554'), true);
   assert.equal(isEmulatorSerial('emulator-55'), false);
   assert.equal(isEmulatorSerial('R58M1234ABC'), false);

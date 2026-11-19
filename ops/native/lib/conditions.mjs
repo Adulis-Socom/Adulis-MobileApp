@@ -58,16 +58,14 @@ export function allowListProblems(list) {
   return p;
 }
 
-/** The loopback only: no other adb server's devices may be reached. */
+/**
+ * No adb server selection by the environment, whatever its value: the driver talks to the default local
+ * adb server and so does the Maestro process, which receives none of these variables.
+ */
 export function adbEnvProblems(env) {
-  const p = [];
-  const addr = env.ANDROID_ADB_SERVER_ADDRESS;
-  if (addr && !['127.0.0.1', 'localhost', '::1'].includes(addr))
-    p.push(`ANDROID_ADB_SERVER_ADDRESS is ${addr}`);
-  const sock = env.ADB_SERVER_SOCKET;
-  if (sock && !/^tcp:(127\.0\.0\.1|localhost|\[::1\]):\d+$/.test(sock))
-    p.push(`ADB_SERVER_SOCKET is ${sock}`);
-  return p;
+  return ['ANDROID_ADB_SERVER_ADDRESS', 'ADB_SERVER_SOCKET', 'ANDROID_ADB_SERVER_PORT']
+    .filter((k) => env[k])
+    .map((k) => `${k} is set: the driver and Maestro would not use the same adb server`);
 }
 
 /**
@@ -77,6 +75,8 @@ export function adbEnvProblems(env) {
 export function deviceIdentityProblems({ serial, identity, allowList }) {
   const p = [];
   if (!serial) return ['no device serial was named: there is no default device'];
+  if (identity.bootCompleted !== '1')
+    p.push('the device has not finished booting (sys.boot_completed)');
   if (isEmulatorSerial(serial)) {
     const hw =
       identity.qemu === '1' ||
@@ -92,7 +92,7 @@ export function deviceIdentityProblems({ serial, identity, allowList }) {
   if (!entry)
     return [`${serial} is not an emulator and is not on the allow-list: it is never used`];
   const bad = allowListProblems([entry]);
-  if (bad.length) return bad;
+  if (bad.length) return [...p, ...bad];
   if (identity.serialno !== entry.hardwareSerial)
     p.push(`the device reports hardware serial '${identity.serialno}', not the allow-listed one`);
   if (identity.model !== entry.model)
@@ -214,10 +214,11 @@ export function evaluateConditions(f) {
   else out.push(fromProblems('NC-05', f.endpoint.problems));
 
   // NC-06 the ten identity checks of the stack and the API
-  if (f.harness?.error) unknown('NC-06', f.harness.error);
-  else if (f.harness?.refused)
+  if (!f.harness) unknown('NC-06', 'the stack and API checks were not run');
+  else if (f.harness.error) unknown('NC-06', f.harness.error);
+  else if (f.harness.refused)
     out.push(R('NC-06', f.harness.unknownOnly ? 'UNKNOWN' : 'FAIL', f.harness.refused));
-  else if (f.harness?.blocked) blocked('NC-06', f.harness.blocked);
+  else if (f.harness.blocked) blocked('NC-06', f.harness.blocked);
   else out.push(R('NC-06', 'PASS', 'ID-00 to ID-10'));
 
   need('NC-07', f.free?.memory, NATIVE_LIMITS.memory, 'free memory');
@@ -225,7 +226,7 @@ export function evaluateConditions(f) {
   const disks = f.free?.disks ?? [];
   const low = disks.find((d) => d.free < NATIVE_LIMITS.disk);
   out.push(
-    !disks.length || disks.some((d) => d.free === undefined)
+    !disks.length || disks.some((d) => d.free === undefined || Number.isNaN(d.free))
       ? R('NC-09', 'UNKNOWN', 'free disk space could not be read')
       : low
         ? R(
@@ -251,19 +252,40 @@ export function evaluateConditions(f) {
   if (f.journal?.corrupt) rp.push(`the journal is unusable: ${f.journal.corrupt}`);
   if (f.journal?.open?.length)
     rp.push(`${f.journal.open.length} earlier change(s) are not restored: run \`device restore\``);
+  for (const o of f.journal?.others ?? [])
+    rp.push(
+      o.corrupt
+        ? `run ${o.run} has an unusable device journal for this device`
+        : `run ${o.run} still has ${o.open} device change(s) not restored on this device: run \`device restore --run ${o.run}\` first`,
+    );
   if (f.journal && f.journal.writable === false)
     rp.push(`the journal cannot be written (${f.journal.writeError})`);
   if (!f.journal) rp.push('the journal was not checked');
   if (!dev && !rp.length) blocked('NC-11', `${why}: the original values cannot be read`);
+  else if (!f.plan && !rp.length)
+    unknown('NC-11', 'the settings the battery changes were not checked');
   else if (f.plan?.error) unknown('NC-11', f.plan.error);
   else out.push(fromProblems('NC-11', [...rp, ...(f.plan?.problems ?? [])]));
 
-  // NC-12 one session at a time
-  out.push(
-    f.lock?.held
-      ? R('NC-12', 'FAIL', `another native session holds this run (pid ${f.lock.pid})`)
-      : R('NC-12', 'PASS'),
-  );
+  // NC-12 one session at a time, and no process of an earlier one left behind
+  if (!f.lock) unknown('NC-12', 'the session lock was not checked');
+  else if (f.lock.held)
+    out.push(
+      R(
+        'NC-12',
+        'FAIL',
+        `another native session holds this run (pid ${f.lock.pid ?? 'unknown'}${f.lock.why ? `, ${f.lock.why}` : ''})`,
+      ),
+    );
+  else if (f.lock.orphan)
+    out.push(
+      R(
+        'NC-12',
+        'FAIL',
+        `a Maestro process (pid ${f.lock.orphan.pid}) of an earlier session of this run is still running: run \`device restore\``,
+      ),
+    );
+  else out.push(R('NC-12', 'PASS'));
   // NC-13 adb server
   out.push(fromProblems('NC-13', adbEnvProblems(f.env ?? {})));
 

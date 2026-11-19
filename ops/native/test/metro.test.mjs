@@ -4,8 +4,10 @@
 // URL) is refused.
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   apiUrlProblems,
   buildMetroEnv,
@@ -106,7 +108,14 @@ test("the Metro child gets this run's API address, CI mode and a handful of host
     'USERPROFILE',
   ]);
   assert.ok(!JSON.stringify(env).includes('secret'));
-  assert.deepEqual(metroArgs('/c/cli'), ['/c/cli', 'start', '--port', '8081', '--clear']);
+  assert.deepEqual(metroArgs('/c/cli'), [
+    '/c/cli',
+    'start',
+    '--port',
+    '8081',
+    '--clear',
+    '--localhost',
+  ]);
 });
 
 test('a Metro that is the recorded process, listening alone on 8081 and running, passes', async () => {
@@ -202,7 +211,8 @@ const beforeStart = ({ cli = true } = {}) => {
     createdAt: '2026-11-18T10:02:00.0000000Z',
     commandLine: `"${x.io.node}" ${metroArgs(x.cli).join(' ')}`,
   };
-  x.io.proc.listeners = async (p) => (p === 8081 ? (x.up ? [5151] : []) : x.w.proc.listeners);
+  x.io.proc.listeners = async (p) =>
+    p === 8081 ? (x.up && !x.w.metroDead ? [5151] : []) : x.w.proc.listeners;
   return x;
 };
 const start = (x, o = {}) =>
@@ -319,4 +329,77 @@ test('the tree of a verified pid is its children and theirs, never an unrelated 
   assert.deepEqual(descendants(all, 100).sort(), [101, 102, 103]);
   assert.deepEqual(descendants(all, 999), [], 'a root that is not running has no tree');
   assert.deepEqual(descendants(all, 102), []);
+});
+
+/* ---- the loopback flag, and a stop that is confirmed ---- */
+
+test('Metro is started with the loopback flag, a flag the installed Expo CLI declares; a Metro without it is not the recorded one', async () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const fromMobile = createRequire(join(here, '..', '..', '..', 'apps', 'mobile', 'package.json'));
+  const fromExpo = createRequire(fromMobile.resolve('expo/package.json'));
+  const cliDir = dirname(fromExpo.resolve('@expo/cli/package.json'));
+  const source = readFileSync(join(cliDir, 'build', 'src', 'start', 'index.js'), 'utf8');
+  assert.match(source, /'--localhost':\s*Boolean/, 'the installed CLI has --localhost (a boolean)');
+  assert.ok(metroArgs('/c/cli').includes('--localhost'));
+  assert.ok(!metroArgs('/c/cli').some((a) => /^--(host|lan|tunnel|offline)/.test(a)));
+  // the recorded identity covers the flag: the same Metro without it is another process
+  const x = nw();
+  x.w.proc.byPid[5151] = {
+    ...x.w.proc.byPid[5151],
+    commandLine: x.w.proc.byPid[5151].commandLine.replace(' --localhost', ''),
+  };
+  assert.match((await metroProblems(x.w.m, x.io)).join(), /not the recorded Metro command/);
+});
+
+test('stop clears the record only once the process is gone and the port is free; otherwise it says Metro may still run and keeps the record', async () => {
+  const quick = { tries: 3, delayMs: 0 };
+  // the process cannot be stopped
+  const alive = nw();
+  alive.w.survive = true;
+  await assert.rejects(
+    stopMetro(alive.w.m, alive.io, alive.dir, quick),
+    /Metro \(pid 5151\) is still running or port 8081 is still in use after the stop: its record was kept/,
+  );
+  assert.deepEqual(alive.kills, [5151]);
+  assert.equal(readManifest(alive.dir).metro.pid, 5151, 'the record is kept');
+  // the process is gone but something still holds the port
+  const held = nw();
+  const stop = held.io.proc.killTree;
+  held.io.proc.killTree = async (pid) => {
+    await stop(pid);
+    held.io.proc.listeners = async () => [9999];
+  };
+  await assert.rejects(stopMetro(held.w.m, held.io, held.dir, quick), /port 8081 is still in use/);
+  assert.equal(readManifest(held.dir).metro.pid, 5151);
+  // the process is stopped, but the port is released only on the second look
+  const slow = nw();
+  let looks = 0;
+  const gone = slow.io.proc.listeners;
+  slow.io.proc.listeners = async (p) => ((looks += 1) < 3 ? [5151] : gone(p));
+  const r = await stopMetro(slow.w.m, slow.io, slow.dir, quick);
+  assert.deepEqual(r, { stopped: true });
+  assert.equal(readManifest(slow.dir).metro, null);
+  // a tree kill that fails is not hidden
+  const fails = nw();
+  fails.w.killFails = true;
+  await assert.rejects(
+    stopMetro(fails.w.m, fails.io, fails.dir, quick),
+    /could not stop process\(es\) 5151: EPERM/,
+  );
+  assert.equal(readManifest(fails.dir).metro.pid, 5151);
+});
+
+test('a failed start that could not stop the Metro it spawned leaves its record, so down finds it', async () => {
+  const x = beforeStart();
+  x.w.metroStatus = 'packager-status:starting';
+  x.w.survive = true;
+  await assert.rejects(
+    start(x, { tries: 2, delayMs: 0 }),
+    /did not report packager-status:running/,
+  );
+  assert.equal(
+    readManifest(x.dir).metro.pid,
+    5151,
+    'the record of the process that may still run is kept',
+  );
 });

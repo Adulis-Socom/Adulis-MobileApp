@@ -1,9 +1,9 @@
 // Is the app on the device the build this run claims to test? The production identity is read, never
 // changed: the package id must be the one in apps/mobile/app.json and the one the driver is built for.
 // What is proven: the installed APK is byte for byte the file the operator named, the installed package
-// runs on the device's own CPU architecture, and the native dependencies did not change between the
-// commit that file was built at (declared by the operator, not provable from the file) and the verified
-// commit. A lockfile-only bump of a native module inside a version range is not seen by the last check.
+// runs on the device's own CPU architecture, and the native dependencies (apps/mobile/app.json and the
+// dependencies of apps/mobile/package.json) are the same at the commit the file was built at (named by the
+// operator) and at the verified commit.
 import { createHash } from 'node:crypto';
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import { join } from 'node:path';

@@ -31,6 +31,7 @@ const goodFacts = () => ({
     serialno: 'EMU1',
     avd: 'A',
     bootId: 'b',
+    bootCompleted: '1',
   },
   allowList: [],
   build: {
@@ -159,6 +160,7 @@ test('NC-02: an emulator serial needs emulator hardware; anything else is on the
     serialno: 'HW123',
     avd: '',
     bootId: 'b',
+    bootCompleted: '1',
   };
   const entry = {
     serial: 'R58M1234ABC',
@@ -356,25 +358,79 @@ test('NC-12: another session on the run blocks; NC-13: a remote adb server is re
   const l = run({ lock: { held: true, pid: 4242 } });
   assert.match(l.by('NC-12').detail, /another native session holds this run \(pid 4242\)/);
   assert.equal(l.d.code, 4);
+  // any server selection is refused, a loopback one too: the driver and Maestro must share one adb server
   for (const env of [
     { ANDROID_ADB_SERVER_ADDRESS: '10.0.0.7' },
+    { ANDROID_ADB_SERVER_ADDRESS: '127.0.0.1' },
     { ADB_SERVER_SOCKET: 'tcp:build-host:5037' },
+    { ADB_SERVER_SOCKET: 'tcp:localhost:5037' },
+    { ANDROID_ADB_SERVER_PORT: '5038' },
   ]) {
     const r = run({ env });
-    assert.equal(r.by('NC-13').verdict, 'FAIL');
+    assert.equal(r.by('NC-13').verdict, 'FAIL', JSON.stringify(env));
     assert.equal(r.d.code, 1);
   }
-  assert.deepEqual(
-    adbEnvProblems({
-      ANDROID_ADB_SERVER_ADDRESS: '127.0.0.1',
-      ADB_SERVER_SOCKET: 'tcp:localhost:5037',
-    }),
-    [],
-  );
-  assert.deepEqual(adbEnvProblems({ ADB_SERVER_SOCKET: 'tcp:127.0.0.1:5038' }), []);
+  assert.deepEqual(adbEnvProblems({ PATH: 'x', ANDROID_HOME: 'y' }), []);
   assert.match(
     adbEnvProblems({ ADB_SERVER_SOCKET: 'tcp:127.0.0.1.evil.example:5037' }).join(),
-    /ADB_SERVER_SOCKET/,
+    /ADB_SERVER_SOCKET is set: the driver and Maestro would not use the same adb server/,
+  );
+});
+
+test('NC-02: a device that has not finished booting is not identified, whatever else it reports', () => {
+  const r = run({ identity: { ...goodFacts().identity, bootCompleted: '0' } });
+  assert.equal(r.by('NC-02').verdict, 'FAIL');
+  assert.match(r.by('NC-02').detail, /has not finished booting/);
+  assert.equal(r.d.code, 1);
+  assert.equal(run({ identity: { ...goodFacts().identity, bootCompleted: undefined } }).d.code, 1);
+});
+
+test('a fact that was never collected is UNKNOWN, never a pass: the stack check, the settings plan, the lock and the disks', () => {
+  for (const [id, patch, detail] of [
+    ['NC-06', { harness: undefined }, /stack and API checks were not run/],
+    ['NC-11', { plan: undefined }, /settings the battery changes were not checked/],
+    ['NC-12', { lock: undefined }, /session lock was not checked/],
+    ['NC-09', { free: { ...goodFacts().free, disks: [{ where: 'root', free: NaN }] } }, /disk/],
+    ['NC-07', { free: { ...goodFacts().free, memory: NaN } }, /could not be read/],
+    ['NC-08', { free: { ...goodFacts().free, commit: NaN } }, /could not be read/],
+  ]) {
+    const r = run(patch);
+    assert.equal(r.by(id).verdict, 'UNKNOWN', id);
+    assert.match(r.by(id).detail, detail, id);
+    assert.equal(r.d.code, 2, `${id} stops the run with the unknown-exit code`);
+  }
+  // each of them is a pass only when its fact is present and good
+  assert.equal(run().by('NC-06').verdict, 'PASS');
+  assert.equal(run().by('NC-11').verdict, 'PASS');
+  assert.equal(run().by('NC-12').verdict, 'PASS');
+});
+
+test("NC-11 and NC-12 name another run's open changes and a Maestro process left behind by an earlier session", () => {
+  const others = run({
+    journal: {
+      writable: true,
+      open: [],
+      corrupt: null,
+      others: [
+        { run: 'r-older', open: 2 },
+        { run: 'r-broken', corrupt: 'line 2 does not follow' },
+      ],
+    },
+  });
+  assert.equal(others.by('NC-11').verdict, 'FAIL');
+  assert.match(
+    others.by('NC-11').detail,
+    /run r-older still has 2 device change\(s\) not restored on this device: run `device restore --run r-older` first/,
+  );
+  assert.match(others.by('NC-11').detail, /run r-broken has an unusable device journal/);
+  assert.equal(others.d.code, 1);
+  const orphan = run({ lock: { held: false, orphan: { pid: 777 } } });
+  assert.equal(orphan.by('NC-12').verdict, 'FAIL');
+  assert.match(orphan.by('NC-12').detail, /Maestro process \(pid 777\).*run `device restore`/);
+  assert.equal(orphan.d.code, 4);
+  assert.match(
+    run({ lock: { held: true, pid: 5, why: 'its lock file cannot be read' } }).by('NC-12').detail,
+    /pid 5, its lock file cannot be read/,
   );
 });
 

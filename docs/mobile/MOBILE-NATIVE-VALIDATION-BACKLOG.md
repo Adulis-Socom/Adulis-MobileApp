@@ -11,8 +11,10 @@ row stays NOT EXECUTED until a run on a device or emulator records its outcome h
 the build and the evidence path. WO-019 is reserved for this work.
 
 Before running: close other memory-heavy programs (WO-018 W18-02, W18-08: with a game running the
-emulator took C: below 10 GB and exited twice). Use `G:\AdulisDevelopment\tools\review\morning-start.sh`
-(`prepare`, `long-names`, `start`), the WO-018 harness `wo018-native.sh` and `talkback.sh`.
+emulator took C: below 10 GB and exited twice). Run through the isolated harness (`ops/native/README.md`):
+`native conditions` first, then `native run`. The `smoke` battery covers only `foundation-smoke` and
+`buyer-shell`; every other row below needs its flows declared and pinned in `ops/native/flows.json` and
+its fixtures ported first, and TalkBack needs its own reviewed steps.
 
 ## From WO-018 (Buyer accessibility)
 

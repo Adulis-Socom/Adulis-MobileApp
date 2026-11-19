@@ -2,8 +2,8 @@
 // the restoration that runs whatever happened in between. The session returns a verdict in the exit
 // scheme of the harness; it never throws for a device problem after the first change, because the one
 // thing that must still happen then is putting the device back.
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { adbOk as ok, listDevices, makeAdb, MAESTRO_DRIVER } from './adb.mjs';
 import { appIdentity, apkInfo, buildProblems, nativeDepsCheck, observeBuild } from './build.mjs';
 import { decide, evaluateConditions, reverseTableProblems } from './conditions.mjs';
@@ -23,52 +23,9 @@ import { reverseTable, resolveSetting } from './settings.mjs';
 import { flowDirOf, resolveBattery } from './flows.mjs';
 import { canaryDeviceId, loadSet } from '../fixtures/index.mjs';
 import { reversePorts } from './device.mjs';
+import { acquireLock, clearMaestro, lockHeld, recordMaestro, releaseLock } from './lock.mjs';
 
-const LOCK = 'native.lock';
-
-/** A session lock: the pid and creation time of the process that holds it. A dead holder's lock is replaced. */
-export async function lockHeld(dir, io) {
-  let rec;
-  try {
-    rec = JSON.parse(readFileSync(join(dir, LOCK), 'utf8'));
-  } catch {
-    return { held: false };
-  }
-  let info;
-  try {
-    info = await io.proc.info(rec.pid);
-  } catch {
-    return { held: true, pid: rec.pid, unknown: true };
-  }
-  return info?.createdAt && info.createdAt === rec.createdAt
-    ? { held: true, pid: rec.pid }
-    : { held: false, stale: true };
-}
-
-export async function acquireLock(dir, io, pid = process.pid) {
-  const me = { pid, createdAt: (await io.proc.info(pid)).createdAt };
-  for (let i = 0; i < 2; i += 1) {
-    try {
-      writeFileSync(join(dir, LOCK), JSON.stringify(me), { flag: 'wx' });
-      return me;
-    } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      const h = await lockHeld(dir, io);
-      if (h.held)
-        throw new Refused(`refused: another native session (pid ${h.pid}) holds this run`);
-      unlinkSync(join(dir, LOCK));
-    }
-  }
-  throw new Refused('refused: the session lock could not be taken');
-}
-
-export function releaseLock(dir) {
-  try {
-    unlinkSync(join(dir, LOCK));
-  } catch {
-    // already gone
-  }
-}
+export { acquireLock, lockHeld, releaseLock } from './lock.mjs';
 
 /** The run directory must take a synced write; the probe file is the harness's own and is removed again. */
 function writable(dir) {
@@ -81,6 +38,26 @@ function writable(dir) {
   } catch (e) {
     return { writable: false, writeError: e.message };
   }
+}
+
+/** Other runs under the root whose device journal is open (or unusable) for this serial. */
+export function otherRunsOpen(root, dir, serial) {
+  const runs = join(root, 'runs');
+  if (!existsSync(runs)) return [];
+  const out = [];
+  for (const r of readdirSync(runs)) {
+    const d = join(runs, r);
+    if (resolve(d) === resolve(dir)) continue;
+    let s;
+    try {
+      s = summarize(d);
+    } catch {
+      continue;
+    }
+    if (s.begin?.serial === serial && (s.open.length || s.corrupt))
+      out.push({ run: r, open: s.open.length, corrupt: s.corrupt });
+  }
+  return out;
 }
 
 const safe = async (fn) => {
@@ -197,7 +174,12 @@ export async function gatherFacts({
   };
   if (phase === 'start') {
     const j = summarize(dir);
-    f.journal = { ...writable(dir), corrupt: j.corrupt, open: j.open };
+    f.journal = {
+      ...writable(dir),
+      corrupt: j.corrupt,
+      open: j.open,
+      others: otherRunsOpen(deps.root, dir, serial),
+    };
     f.lock = await lockHeld(dir, io);
   } else {
     f.journal = { writable: true };
@@ -322,6 +304,9 @@ export async function runNative(args) {
       signal: deps.signal,
       vars: {},
       budget,
+      // the Maestro process is recorded in the lock while it runs: a killed harness leaves it identifiable
+      maestroStarted: (pid) => recordMaestro(dir, io, pid),
+      maestroEnded: () => clearMaestro(dir),
       sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       recheck: async () =>
         evaluateConditions(
@@ -340,6 +325,7 @@ export async function runNative(args) {
       const r = await executeFlow(ctx, flow);
       flows.push(r);
       if (r.kind === 'infrastructure') stop = 'an earlier flow could not run (infrastructure)';
+      if (r.attempts.some((a) => a.stuck)) stop = 'a Maestro process could not be stopped';
       if (flow.name === rb.battery.canary && r.verdict === 'PASS') {
         const n = await countAppDevices(m, io);
         r.canary = { before, after: n };
@@ -379,44 +365,70 @@ export async function runNative(args) {
         // the restoration result below is what matters
       }
     }
-    if (lock) releaseLock(dir);
+    // A Maestro process that could not be stopped keeps the lock: its identity is in it.
+    if (lock && !stuckAttempt(flows)) releaseLock(dir);
   }
   record.restoration = restoration;
   record.error = error?.message ?? null;
   const count = (v) => flows.filter((f) => f.verdict === v).length;
   record.counts = { pass: count('PASS'), fail: count('FAIL'), notExecuted: count('NOT EXECUTED') };
   write(join(sdir, 'result.json'), record);
+  // Nothing was changed before the session began (the lock was refused, an earlier session's changes are
+  // open, the device facts could not be read): the refusal's own code and words, and no claim of a restore.
+  if (!began && error) {
+    const refused = error instanceof Refused;
+    const code = refused ? error.code : 2;
+    const head = refused
+      ? `HARNESS REFUSED - ${error.message}${code === 2 ? ' (could not be checked)' : ''}`
+      : `HARNESS ERROR - ${error.message}`;
+    return { code, status: `${head} - NO RESOURCE WAS CHANGED`, record };
+  }
   const tally = `${record.counts.pass} PASS, ${record.counts.fail} FAIL, ${record.counts.notExecuted} NOT EXECUTED`;
   const how = `run \`device restore --run ${m.run} --serial ${serial}\``;
+  // "restored" is said only when a restore ran and put something back (or found it already as it was)
+  const done =
+    restoration.restored.length + restoration.unchanged.length
+      ? 'device settings restored'
+      : 'no device setting was left changed';
+  const stuck = stuckAttempt(flows);
+  if (stuck)
+    return {
+      code: 3,
+      status: `HARNESS INCOMPLETE - the Maestro process ${stuck.maestroPid} could not be stopped (its identity stays in the lock: \`device restore\` stops it; ${restoreLine(restoration)})`,
+      record,
+    };
   if (restoration.failed.length)
     return { code: 3, status: `HARNESS INCOMPLETE - ${restoreLine(restoration)}; ${how}`, record };
   if (deps.signal?.aborted)
     return {
       code: 3,
-      status: `HARNESS INCOMPLETE - interrupted (${tally}); device settings restored`,
+      status: `HARNESS INCOMPLETE - interrupted (${tally}); ${done}`,
       record,
     };
   if (error)
     return {
       code: 3,
-      status: `HARNESS INCOMPLETE - ${error.message} (${tally}); device settings restored`,
+      status: `HARNESS INCOMPLETE - ${error.message} (${tally}); ${done}`,
       record,
     };
   if (record.counts.fail)
     return {
       code: 5,
-      status: `HARNESS TEST FAILED - native run (${tally}); device settings restored`,
+      status: `HARNESS TEST FAILED - native run (${tally}); ${done}`,
       record,
     };
   if (record.counts.notExecuted)
     return {
       code: 3,
-      status: `HARNESS INCOMPLETE - the battery did not finish (${tally}); device settings restored`,
+      status: `HARNESS INCOMPLETE - the battery did not finish (${tally}); ${done}`,
       record,
     };
   return {
     code: 0,
-    status: `HARNESS OK - native run (${tally}); device settings restored`,
+    status: `HARNESS OK - native run (${tally}); ${done}`,
     record,
   };
 }
+
+/** The attempt whose Maestro process was still running after it was stopped, if any. */
+const stuckAttempt = (flows) => flows.flatMap((f) => f.attempts ?? []).find((a) => a.stuck);

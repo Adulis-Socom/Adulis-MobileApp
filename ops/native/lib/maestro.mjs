@@ -4,9 +4,10 @@
 // that would send data to a cloud service are not on the list). Maestro starts from the JVM directly,
 // not through its batch file, so the process this driver started is the process it can stop.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { adbOk as ok } from './adb.mjs';
 import { APP_ID } from './device.mjs';
+import { flowHash, verifyFlowFile } from './flows.mjs';
 
 /** One retry of an infrastructure error in a battery; a flow is never retried for what it asserts. */
 export const RETRY = { maxAttempts: 2, infraRetriesPerBattery: 1 };
@@ -171,12 +172,18 @@ const safeRead = (p) => {
 export async function runAttempt(ctx, flow, n) {
   const out = join(ctx.dir, flow.name, `attempt-${n}`);
   mkdirSync(out, { recursive: true });
+  // The file is read and checked against its pin NOW, and Maestro runs a copy of exactly those bytes.
+  const pinned = verifyFlowFile(flow.file, flow.decl.sha256);
+  if (pinned.problem) throw new FlowRefused(`flow '${flow.name}': ${pinned.problem}`);
+  const copy = join(out, 'flow', basename(flow.file));
+  mkdirSync(join(out, 'flow'), { recursive: true });
+  writeFileSync(copy, pinned.buffer);
   const marker = `start:${flow.name}:${n}`;
   await ctx.adb(['shell', 'log', '-t', 'ADULIS_NATIVE', marker]);
   const argv = maestroArgv({
     home: ctx.maestro.home,
     serial: ctx.serial,
-    flow: flow.file,
+    flow: copy,
     out,
     vars: ctx.vars,
   });
@@ -188,8 +195,10 @@ export async function runAttempt(ctx, flow, n) {
     timeout: flow.decl.timeoutMs ?? FLOW_TIMEOUT_MS,
     signal: ctx.signal,
     log: join(out, 'maestro.log'),
+    onSpawn: (pid) => ctx.maestroStarted?.(pid),
   });
-  const logcat = await ctx.adb(['logcat', '-d', '-v', 'threadtime', '-t', '5000']);
+  if (!res.stuck) await ctx.maestroEnded?.(); // a process that would not stop stays recorded in the lock
+  const logcat = await ctx.adb(['logcat', '-d', '-v', 'threadtime', '-t', '20000']);
   const lc = ok(logcat) ? logcat.stdout : '';
   writeFileSync(
     join(out, 'logcat.txt'),
@@ -212,8 +221,11 @@ export async function runAttempt(ctx, flow, n) {
   const result = {
     n,
     kind,
+    flowSha256: flowHash(pinned.buffer),
     status: res.status,
     timedOut: !!res.timedOut,
+    stuck: !!res.stuck,
+    maestroPid: res.pid ?? null,
     crashes,
     junit: junit && { tests: junit.tests, failures: junit.failures, errors: junit.errors },
     screenshot,
@@ -222,6 +234,9 @@ export async function runAttempt(ctx, flow, n) {
   writeFileSync(join(out, 'attempt.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
+
+/** A flow file that is not the pinned one: the session stops, nothing is run, the device is restored. */
+export class FlowRefused extends Error {}
 
 /** The verdict a flow gets from its last attempt. */
 export const verdictOf = (kind) =>
@@ -245,6 +260,7 @@ export async function executeFlow(ctx, flow) {
     }
     const r = await runAttempt(ctx, flow, n);
     attempts.push(r);
+    if (r.stuck) break; // a process that would not stop: nothing more is started over it
     if (r.kind !== 'infrastructure' || n === RETRY.maxAttempts || ctx.budget.infra <= 0) break;
     const problems = await ctx.recheck();
     if (problems.length) {

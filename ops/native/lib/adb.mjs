@@ -7,8 +7,8 @@ import { APP_ID } from './device.mjs';
 import { Refused } from './guard.mjs';
 import { DEVICE_PORTS_EXTRA, PORT_BLOCK, PROTECTED_PORTS } from './protected.mjs';
 
-/** A named serial. No colon: a network (wireless) transport is never used, so a device cannot drop out of reach. */
-export const SERIAL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{3,63}$/;
+/** A named serial. No colon and no mDNS wireless form (`adb-<serial>-<id>._adb-tls-connect._tcp`): a network transport is never used, so a device cannot drop out of reach. */
+export const SERIAL_RE = /^(?!.*_adb-tls-)[A-Za-z0-9][A-Za-z0-9._-]{3,63}$/;
 export const isEmulatorSerial = (s) => /^emulator-\d{4,5}$/.test(`${s}`);
 
 const float = (lo, hi) => (v) =>
@@ -43,7 +43,6 @@ export const PROPS = new Set([
   'ro.build.fingerprint',
   'ro.serialno',
   'ro.boot.qemu.avd_name',
-  'ro.debuggable',
   'sys.boot_completed',
 ]);
 
@@ -93,7 +92,6 @@ function shell(a) {
     )
       return change;
   }
-  if (c === 'wm' && x === 'size' && a.length === 2) return read;
   if (c === 'cmd' && x === 'uimode' && y === 'night') {
     if (a.length === 3) return read;
     if (a.length === 4 && ['yes', 'no', 'auto'].includes(z)) return change;
@@ -124,7 +122,6 @@ function shell(a) {
     return read;
   if (c === 'sha256sum' && a.length === 2 && APK_PATH.test(x)) return read;
   if (c === 'cat' && x === BOOT_ID && a.length === 2) return read;
-  if (c === 'pidof' && x === APP_ID && a.length === 2) return read;
   if (c === 'input' && x === 'keyevent' && y === '224' && a.length === 3) return ui;
   if (c === 'log' && x === '-t' && y === 'ADULIS_NATIVE' && a.length === 4) return ui;
   return no(`adb shell ${c} is not on the list`);
@@ -139,7 +136,6 @@ export function classifyAdb(argsIn) {
   const a = argsIn[0] === '-s' ? argsIn.slice(2) : argsIn;
   const [c, x, y] = a;
   if (c === 'devices' && (a.length === 1 || (a.length === 2 && x === '-l'))) return read;
-  if (c === 'get-state' && a.length === 1) return read;
   if (c === 'version' && a.length === 1) return read;
   if (c === 'reverse') {
     if (a.length === 2 && x === '--list') return read;

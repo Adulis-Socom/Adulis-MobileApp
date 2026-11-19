@@ -13,7 +13,9 @@
 //                  error happened before anything was changed (fail closed).
 //   3  INCOMPLETE  something WAS changed (a resource, a process, a device, a directory) and the
 //                  command did not finish; the line says what and how to continue.
-//   4  BLOCKED     a precondition of `up` is not met; nothing was started.
+//   4  BLOCKED     a precondition of `up` or of a native run is not met; nothing was started.
+//   5  TEST FAILED a native run finished, the device is back as it was, and an approved flow failed
+//                  (`EXIT_TEST_FAILED`; set only by `native run`, never by a refusal).
 // "NO RESOURCE WAS CHANGED" is printed only when no mutating call of this command went out.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statfsSync } from 'node:fs';
@@ -28,6 +30,7 @@ import { checkLabel, CHECKS, observe, psqlArgs, verify } from './lib/identity.mj
 import { deviceCommand, metroCommand, nativeCommand, UsageError } from './lib/native-cli.mjs';
 import { summarize } from './lib/journal.mjs';
 import { journalProblems } from './lib/restore.mjs';
+import { guardSession } from './lib/lock.mjs';
 import { stopMetro } from './lib/metro.mjs';
 import { assertTarget, Refusal, Refused } from './lib/guard.mjs';
 import { realIo } from './lib/io.mjs';
@@ -367,6 +370,7 @@ export async function main(
       }
       case 'fixtures': {
         const { m, dir } = load(root, a.run);
+        await guardSession(dir, io);
         const name = need(a.set, '--set');
         if (!Object.hasOwn(SETS, name))
           throw new Usage(`unknown fixture set '${name}' (known: ${Object.keys(SETS).join(', ')})`);
@@ -378,6 +382,8 @@ export async function main(
         if (!['start', 'stop', 'canary'].includes(sub))
           throw new Usage('usage: api start|stop|canary');
         const { m, dir } = load(root, a.run);
+        // while a session runs the stack is not touched; a teardown does not care about an orphan Maestro
+        if (sub !== 'canary') await guardSession(dir, io, { allowOrphan: sub === 'stop' });
         if (sub === 'start') {
           const r = await startApi(m, io, {
             checkout: resolve(need(a.checkout, '--checkout')),
@@ -444,14 +450,20 @@ export async function main(
       }
       case 'status': {
         const { m } = load(root, a.run);
+        const j = summarize(runDir(root, m.run));
+        const device = j.corrupt
+          ? `journal unusable (${j.corrupt})`
+          : `device changes not restored: ${j.open.length}`;
         say(
-          `run ${m.run}: ${m.state}; fixtures [${m.fixtures.join(', ')}]; API ${m.api ? `pid ${m.api.pid}` : 'not started'}; Metro ${m.metro ? `pid ${m.metro.pid}` : 'not started'}; device changes not restored: ${summarize(runDir(root, m.run)).open.length}; nothing was verified by this command`,
+          `run ${m.run}: ${m.state}; fixtures [${m.fixtures.join(', ')}]; API ${m.api ? `pid ${m.api.pid}` : 'not started'}; Metro ${m.metro ? `pid ${m.metro.pid}` : 'not started'}; ${device}; nothing was verified by this command`,
         );
         break;
       }
       case 'down':
       case 'recover': {
         const { m, dir } = load(root, a.run);
+        // no session may run under a teardown; a Maestro process an earlier session left is stopped first
+        await guardSession(dir, io, { reap: true });
         if (m.state === 'cleaned') {
           say('already cleaned');
           const jp = journalProblems(dir);

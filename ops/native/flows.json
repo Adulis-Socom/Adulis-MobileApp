@@ -3,12 +3,16 @@
   "flows": {
     "foundation-smoke": {
       "file": "foundation-smoke.yaml",
+      "sha256": "e8285f53341dbe3d057bb7a27f8f21166256dbbf55e0d9177e53f9c7e6fcc143",
       "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
       "vars": []
     },
     "buyer-shell": {
       "file": "buyer-shell.yaml",
+      "sha256": "4ff4118a3cd11a35b911d51a1d1069225e2cb8ccd63dacc00f2c5ab0d8f4a5c1",
       "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
       "vars": []
     }
   },

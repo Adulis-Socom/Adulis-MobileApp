@@ -3,15 +3,24 @@
 // Nothing here is a device result: it proves the driver's logic, never the app.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { makeAdb } from '../lib/adb.mjs';
 import { appendEntry, summarize } from '../lib/journal.mjs';
+import { reapOrphan } from '../lib/lock.mjs';
 import { journalProblems, restoreOpen } from '../lib/restore.mjs';
 import { acquireLock, countAppDevices, lockHeld, releaseLock, runNative } from '../lib/session.mjs';
 import { fakeDevice, initialState, junit, SERIAL } from './fake-device.mjs';
+import { PROTECTED_PORTS } from '../lib/protected.mjs';
 import { nativeWorld } from './native-world.mjs';
 
 const worlds = [];
@@ -161,7 +170,7 @@ const refused = async (x, code, re, what) => {
   return r;
 };
 
-test('no device attached: BLOCKED, nothing started (the state of this machine)', async () => {
+test('no device attached: BLOCKED, nothing started', async () => {
   const x = nw();
   x.dev.st.attached = false;
   await refused(
@@ -276,37 +285,21 @@ test('a CPU architecture that does not match the build, and native dependencies 
   );
 });
 
-test("the protected services are never the run's: a manifest naming the persistent PostgreSQL, MinIO, or a nac-trial port is refused before the device is touched", async () => {
-  for (const [what, patch] of [
-    ['the persistent PostgreSQL port', { pg: 5434 }],
-    ['the persistent MinIO port', { s3: 9100 }],
-    ['the nac-trial front end port as the API', { api: 3000 }],
-    ['the nac-trial PostgreSQL port', { pg: 5433 }],
-    ['the nac-trial MinIO ports', { s3: 9000 }],
-    ['the nac-trial MinIO console port', { s3: 9001 }],
-    ["the test pair's PostgreSQL", { pg: 55432 }],
-    ["the test pair's MinIO", { s3: 59000 }],
-  ]) {
-    const x = nw();
-    Object.assign(x.w.m.ports, patch);
-    const r = await refused(x, 1, /^HARNESS REFUSED - NC-0[56] /, what);
-    const nc6 = r.results.find((c) => c.id === 'NC-06');
-    assert.equal(nc6.verdict, 'FAIL', what);
-    assert.match(nc6.detail, /protected port/, what);
-  }
+test('a manifest naming a protected port as any of its ports is refused before the device is touched', async () => {
+  for (const port of PROTECTED_PORTS)
+    for (const role of ['pg', 's3', 'api']) {
+      const x = nw();
+      x.w.m.ports[role] = port;
+      const what = `protected port ${port} as the ${role} port`;
+      const r = await refused(x, 1, /^HARNESS REFUSED - NC-0[56] /, what);
+      const nc6 = r.results.find((c) => c.id === 'NC-06');
+      assert.equal(nc6.verdict, 'FAIL', what);
+      assert.match(nc6.detail, /protected port/, what);
+    }
 });
 
 test("a device that already reverses a protected port or any port that is not the run's is refused, and no reverse call is made", async () => {
-  for (const remote of [
-    'tcp:9100',
-    'tcp:5434',
-    'tcp:3000',
-    'tcp:9000',
-    'tcp:5433',
-    'tcp:55432',
-    'tcp:57999',
-    'tcp:8080',
-  ]) {
+  for (const remote of [...PROTECTED_PORTS, 57999, 8080].map((p) => `tcp:${p}`)) {
     const x = nw();
     x.dev.st.reverse = [{ remote, local: remote }];
     const before = JSON.stringify(x.dev.st.reverse);
@@ -419,9 +412,11 @@ test('an unknown battery, or a flow file that gained a hazard, is refused before
   );
   const r2 = await go(b);
   assert.equal(r2.code, 1);
+  assert.match(r2.status, /^HARNESS REFUSED - flows: flow 'buyer-shell': the flow file changed/);
   assert.match(
-    r2.status,
-    /flows: flow 'buyer-shell' uses 'script', which no declaration can approve/,
+    r2.problems.join(' | '),
+    /flow 'buyer-shell' uses 'script', which no declaration can approve/,
+    'the hazard is named as well as the change',
   );
   assert.equal(b.maestro.calls.length, 0);
 });
@@ -701,4 +696,202 @@ test("the session lock: a live holder refuses a second session, a dead holder's 
   writeFileSync(join(x.dir, 'native.lock'), JSON.stringify({ pid: 31337, createdAt: 'gone' }));
   const again = await acquireLock(x.dir, x.io);
   assert.equal(again.pid, process.pid);
+});
+
+/* ---- the flow gate, errors before the session began, other runs, and a Maestro that will not stop ---- */
+
+test('a flow file that changes after the checks passed is refused right before it runs: no further flow, the device is put back', async () => {
+  const buyer = (x) => join(x.checkout, 'apps', 'mobile', '.maestro', 'buyer-shell.yaml');
+  const x = nw({
+    maestro: async () => {
+      x.w.pg.canary = String(Number(x.w.pg.canary) + 1);
+      // the second flow's file is edited while the first one runs
+      writeFileSync(buyer(x), `${readFileSync(buyer(x), 'utf8')}\n- runScript: steal.js\n`);
+      return { status: 0, junit: junit() };
+    },
+  });
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 3);
+  assert.match(
+    r.status,
+    /^HARNESS INCOMPLETE - flow 'buyer-shell': the flow file changed: its content hash is [0-9a-f]{64}, the pin is [0-9a-f]{64} \(review it and re-pin it in flows\.json\) \(1 PASS, 0 FAIL, 0 NOT EXECUTED\); device settings restored$/,
+  );
+  assert.equal(x.maestro.calls.length, 1, 'the changed flow was never started');
+  assert.equal(snap(x.dev), before, 'the device is as it was');
+  assert.deepEqual(journalProblems(x.dir), []);
+  assert.ok(!existsSync(join(x.dir, 'native.lock')));
+});
+
+test("an error before the session began says nothing was changed, never that settings were restored, and keeps the refusal's own code", async () => {
+  // a process that cannot be identified takes no lock: a check that could not be made (2)
+  const a = nw();
+  delete a.w.proc.byPid[process.pid];
+  const ra = await go(a);
+  assert.equal(ra.code, 2);
+  assert.equal(
+    ra.status,
+    'HARNESS REFUSED - refused: this process could not be identified for the session lock (could not be checked) - NO RESOURCE WAS CHANGED',
+  );
+  assert.deepEqual(changes(a.dev), []);
+  assert.ok(!existsSync(join(a.dir, 'device-journal.ndjson')), 'no journal was opened');
+  assert.ok(!existsSync(join(a.dir, 'native.lock')));
+  assert.equal(a.maestro.calls.length, 0);
+
+  // another session takes the lock between the checks and the start: a refusal (1)
+  const b = nw();
+  const look = b.io.proc.info;
+  b.io.proc.info = async (p) => {
+    if (p === process.pid) {
+      writeFileSync(join(b.dir, 'native.lock'), JSON.stringify({ pid: 4999, createdAt: 'alive' }));
+      b.w.proc.byPid[4999] = { createdAt: 'alive', commandLine: 'node harness.mjs' };
+    }
+    return look(p);
+  };
+  const rb = await go(b);
+  assert.equal(rb.code, 1);
+  assert.equal(
+    rb.status,
+    'HARNESS REFUSED - refused: another native session (pid 4999) holds this run - NO RESOURCE WAS CHANGED',
+  );
+  assert.ok(existsSync(join(b.dir, 'native.lock')), "the other session's lock is not removed");
+  assert.deepEqual(changes(b.dev), []);
+  assert.ok(!existsSync(join(b.dir, 'device-journal.ndjson')));
+
+  // an unexpected error (the process lookup itself fails): code 2, and still no claim of a restore
+  const c = nw();
+  const look2 = c.io.proc.info;
+  c.io.proc.info = async (p) => {
+    if (p === process.pid) throw new Error('powershell failed');
+    return look2(p);
+  };
+  const rc = await go(c);
+  assert.equal(rc.code, 2);
+  assert.equal(rc.status, 'HARNESS ERROR - powershell failed - NO RESOURCE WAS CHANGED');
+  assert.deepEqual(changes(c.dev), []);
+  for (const r of [ra, rb, rc]) assert.doesNotMatch(r.status, /restored/);
+});
+
+test('"settings restored" is said only when a restore ran and found something to put back', async () => {
+  const x = nw();
+  x.dev.st.failOn = ['settings put global stay_on_while_plugged_in']; // the very first change cannot be made
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 3);
+  assert.equal(snap(x.dev), before);
+  assert.equal(x.maestro.calls.length, 0);
+  const said = /device settings restored$/.test(r.status);
+  const nothing = /no device setting was left changed$/.test(r.status);
+  assert.ok(said !== nothing, r.status);
+  // the words follow what the restoration did, not the fact that it ran
+  assert.equal(
+    said,
+    r.record.restoration.restored.length + r.record.restoration.unchanged.length > 0,
+    r.status,
+  );
+});
+
+test("another run's open device changes on the same device stop a new session, and are left exactly as they are", async () => {
+  const other = (x, name, serial = SERIAL) => {
+    const d = join(x.root, 'runs', name);
+    appendEntry(d, { op: 'begin', run: name, serial, device: {} });
+    appendEntry(d, {
+      op: 'intend',
+      id: 'c1',
+      setting: 'font_scale',
+      original: { present: true, value: '1.0' },
+      target: { present: true, value: '1.3' },
+    });
+    return d;
+  };
+  const x = nw();
+  const d = other(x, 'native-20261117-aaaaaaaa');
+  const text = readFileSync(join(d, 'device-journal.ndjson'), 'utf8');
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 1);
+  assert.match(
+    r.status,
+    /NC-11 restoration provable: run native-20261117-aaaaaaaa still has 1 device change\(s\) not restored on this device: run `device restore --run native-20261117-aaaaaaaa` first/,
+  );
+  assert.equal(
+    readFileSync(join(d, 'device-journal.ndjson'), 'utf8'),
+    text,
+    'their journal is untouched',
+  );
+  assert.equal(snap(x.dev), before);
+  assert.deepEqual(changes(x.dev), []);
+  assert.equal(x.maestro.calls.length, 0);
+  // the same run's own journal is not "another run", and another device's journal does not count
+  const y = nw();
+  other(y, 'native-20261117-bbbbbbbb', 'R58M1234ABC');
+  const ry = await go(y);
+  assert.equal(ry.code, 0, ry.status);
+  // an unusable journal of another run for this device is named, not skipped
+  const z = nw();
+  const dz = other(z, 'native-20261117-cccccccc');
+  appendFileSync(
+    join(dz, 'device-journal.ndjson'),
+    `${JSON.stringify({ v: 1, seq: 9, prev: 'x', op: 'end' })}\n`,
+  );
+  const rz = await go(z);
+  assert.equal(rz.code, 1);
+  assert.match(
+    rz.status,
+    /run native-20261117-cccccccc has an unusable device journal for this device/,
+  );
+});
+
+test('a Maestro process that will not stop keeps its identity in the lock, ends the run INCOMPLETE, starts nothing more, and the next start finds it', async () => {
+  const x = nw({
+    maestro: async () => ({ status: null, stuck: true, error: new Error('did not stop') }),
+  });
+  x.w.proc.byPid[4321] = { createdAt: 'm-created', commandLine: 'java maestro.cli.AppKt' };
+  const before = snap(x.dev);
+  const r = await go(x);
+  assert.equal(r.code, 3);
+  assert.match(
+    r.status,
+    /^HARNESS INCOMPLETE - the Maestro process 4321 could not be stopped \(its identity stays in the lock: `device restore` stops it; /,
+  );
+  assert.equal(x.maestro.calls.length, 1, 'no other flow and no retry was started over it');
+  assert.equal(r.record.flows[1].verdict, 'NOT EXECUTED');
+  assert.equal(r.record.flows[1].why, 'a Maestro process could not be stopped');
+  assert.equal(snap(x.dev), before, 'the device was still put back');
+  const lock = JSON.parse(readFileSync(join(x.dir, 'native.lock'), 'utf8'));
+  assert.deepEqual(lock.maestro, {
+    pid: 4321,
+    createdAt: 'm-created',
+    commandLine: 'java maestro.cli.AppKt',
+  });
+  // the harness process is gone, the Maestro process is not: the next session is refused
+  delete x.w.proc.byPid[process.pid];
+  const again = await go(x);
+  assert.equal(again.code, 4);
+  assert.match(again.status, /NC-12 no other native session: a Maestro process \(pid 4321\)/);
+  assert.equal(x.maestro.calls.length, 1);
+  // and `reapOrphan` stops it by that identity and clears the lock
+  const reaped = await reapOrphan(x.dir, x.io, { tries: 2, delayMs: 0 });
+  assert.deepEqual(reaped, { stopped: true, pid: 4321 });
+  assert.ok(!existsSync(join(x.dir, 'native.lock')));
+});
+
+test('a Maestro process that ended normally leaves no trace in the lock, and the lock is gone with the session', async () => {
+  const x = nw();
+  x.w.proc.byPid[4321] = { createdAt: 'm-created', commandLine: 'java maestro.cli.AppKt' };
+  let during = null;
+  const inner = x.io.maestro;
+  const before = [];
+  x.io.maestro = async (o) => {
+    // what the lock says when a flow is about to start: nothing of an earlier flow's process
+    before.push(JSON.parse(readFileSync(join(x.dir, 'native.lock'), 'utf8')).maestro);
+    const res = await inner(o);
+    during ??= JSON.parse(readFileSync(join(x.dir, 'native.lock'), 'utf8'));
+    return res;
+  };
+  const r = await go(x);
+  assert.equal(r.code, 0, r.status);
+  assert.equal(during.maestro.pid, 4321, 'while the flow ran the lock named the process');
+  assert.deepEqual(before, [undefined, undefined], 'the record is cleared when each process ended');
+  assert.ok(!existsSync(join(x.dir, 'native.lock')));
 });

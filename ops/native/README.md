@@ -30,8 +30,8 @@ node ops/native/harness.mjs selftest                           # the refusal tes
 
 `--sha` is the commit the operator verified. The checkout must be exactly that commit, have a clean
 tracked tree, and contain `origin/dev` as last fetched; the harness builds the API itself on every
-start and checks the commit again after the build. The API listens on all interfaces for as long as
-it runs (it holds synthetic data and the fake SMS adapter only); stop it when you are done.
+start and checks the commit again after the build. The API holds synthetic data and the fake SMS
+adapter only; stop it when you are done.
 
 ## What is verified, and when
 
@@ -120,8 +120,11 @@ verified commit) is kept in the session directory.
 
 **Which API.** The app reaches the host only through `adb reverse`, and only for this run's API, this
 run's MinIO and Metro. Metro is started by `metro start` with this run's API address and recorded by pid,
-creation time and command line; a Metro started by anyone else is refused. The API address must be
-`http://localhost:<this run's API port>`.
+creation time and command line; a Metro started by anyone else is refused. It is started on the loopback
+(`--localhost`) and stopped only by that identity: the record is cleared once the process is gone and the
+port is free, otherwise the command ends INCOMPLETE and says Metro may still run. The API address must be
+`http://localhost:<this run's API port>`. That `adb reverse` reaches a Metro bound to the loopback has not
+been shown yet: it is checked at the first run on a device.
 
 **Settings and restoration.** Before a setting is changed (animations, font scale, night mode, density,
 stay awake, airplane mode, accessibility services, rotation, the app's locale, the reverse entries), its
@@ -134,11 +137,23 @@ run INCOMPLETE (exit 3) and leaves the journal open: `down` and `status` say so 
 until the device is restored. The Maestro driver apps that Maestro installs on the device for itself are
 not settings: the session records which are present before and after.
 
-**Flows.** `ops/native/flows.json` names the approved flows and batteries and declares what each flow does
-to the device. The flow files are read again at every run and compared with the declaration: a flow that
-gained a hazard (it clears the app's data, grants a permission, stops the app, loops), a flow that is not
-declared, and a flow that runs a script, loads a file, opens an external link, uses a cloud service or
-touches another app are refused. The `smoke` battery runs `foundation-smoke` first (it must make this
+**One session at a time.** A native session holds `<run>/native.lock`: the pid and creation time of the
+harness process and, while a flow runs, the pid, creation time and command line of the Maestro process it
+started. While a session holds the run, `down`, `api start|stop`, `metro start|stop`, `device prepare|restore`
+and `fixtures` refuse, and so does a lock that cannot be read (nobody knows who holds the run). If the
+harness was killed while Maestro kept running, `device restore` and `down` stop that Maestro process by its
+recorded identity, never by its number alone, and confirm it is gone before anything else; `device prepare`,
+`native conditions` and `native run` refuse until then. A Maestro process that would not stop ends the run
+INCOMPLETE, and its identity stays in the lock.
+
+**Flows.** `ops/native/flows.json` names the approved flows and batteries, pins the SHA-256 of each flow
+file and declares what it does to the device. The file is read and hashed again right before every Maestro
+start, and Maestro runs a copy of exactly the bytes that were checked: a flow whose content differs from its
+pin is refused, whatever the difference, until the pin is changed in a reviewed change. A flow that is not
+declared is refused too. The scan that a reviewer sees when a pin is set refuses, whatever a declaration
+says, a script or expression, a file load, an external link, a cloud service, another app id (also in the
+string forms of `clearState`, `launchApp` and `stopApp`), a hardware key other than navigation keys, and
+any permission grant other than the one declared. The `smoke` battery runs `foundation-smoke` first (it must make this
 run's database gain a device, which proves the app talks to this run's API) and then `buyer-shell`.
 Maestro is started from its JVM with a fixed list of options and a small environment; results (JUnit
 report, log, screenshots, the device log and, on a failure, a screenshot) are written under
@@ -150,9 +165,14 @@ assertion failure, a crash and a timeout never are.
 (NC-01) and identified (NC-02), the app (NC-03) and build (NC-04) are the ones named, the endpoint is
 isolated (NC-05), the ten identity checks pass (NC-06), free memory is at least 6 GB (NC-07), commit headroom
 at least 8 GB (NC-08), free disk at least 10 GB under the run root and TEMP (NC-09), adb and Maestro with a
-Java are present (NC-10), restoration is provable (NC-11), no other session holds the run (NC-12) and the adb
-server is the local one (NC-13). A rule that fails is a refusal (exit 1), a condition that cannot be checked is
+Java are present (NC-10), restoration is provable (NC-11: a readable and writable journal, nothing open in
+this run or in another run for the same device), no other session holds the run and no Maestro process of an
+earlier one is left (NC-12) and no adb server is selected by the environment (NC-13). A rule that fails is a refusal (exit 1), a condition that cannot be checked is
 exit 2, and a missing resource blocks (exit 4, nothing started).
+
+A device that no longer exists (an emulator that was deleted) leaves an open journal that makes `purge`
+refuse. Nothing in the harness retires it: remove the run directory by hand once the device is known to be
+gone, after copying out any evidence you want to keep.
 
 ## After a Docker reset or reinstall
 

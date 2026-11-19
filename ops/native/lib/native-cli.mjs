@@ -6,7 +6,7 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { provenanceProblems } from './api.mjs';
 import { makeAdb, SERIAL_RE } from './adb.mjs';
-import { allowListProblems, reverseTableProblems } from './conditions.mjs';
+import { adbEnvProblems, allowListProblems, reverseTableProblems } from './conditions.mjs';
 import { deviceProblems, observeDevice, reversePorts } from './device.mjs';
 import { loadDeclaration } from './flows.mjs';
 import { assertTarget, Refusal, Refused } from './guard.mjs';
@@ -21,7 +21,8 @@ import {
   restoreOpen,
 } from './restore.mjs';
 import { reverseTable } from './settings.mjs';
-import { lockHeld, runNative } from './session.mjs';
+import { guardSession } from './lock.mjs';
+import { runNative } from './session.mjs';
 
 export class UsageError extends Error {}
 
@@ -54,14 +55,14 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
     if (s.corrupt) throw new Refused(`refused: the device journal is unusable: ${s.corrupt}`, 1);
     return { code: 0, status: `HARNESS OK - device journal` };
   }
+  // every device command talks to the default local adb server, as Maestro does
+  const envBad = adbEnvProblems(env);
+  if (envBad.length) throw new Refused(`refused: ${envBad.join('; ')}`);
   if (sub === 'restore') {
     if (!serial)
       throw new UsageError('--serial (or ANDROID_SERIAL) is required: there is no default device');
-    const held = await lockHeld(dir, io);
-    if (held.held)
-      throw new Refused(
-        `refused: a native session (pid ${held.pid}) is running on this run: it restores its own changes`,
-      );
+    // a live session restores its own changes; a Maestro process it left behind is stopped by its identity
+    await guardSession(dir, io, { reap: true });
     const s = summarize(dir);
     if (s.corrupt)
       throw new Refused(
@@ -94,6 +95,7 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
     );
   if (sub === 'check')
     return { code: 0, status: `HARNESS OK - device ${serial} passes the device checks` };
+  await guardSession(dir, io);
   await assertTarget(m, 'API-WRITE', io, { dir, states: ['ready'] });
   const dev = makeAdb(io, serial);
   beginSession(dir, { run: m.run, serial, identity: await deviceIdentity(dev) });
@@ -106,6 +108,8 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say }) {
 }
 
 export async function metroCommand({ sub, m, dir, io, a, say }) {
+  // starting needs no live session; stopping is a teardown that does not touch the device
+  await guardSession(dir, io, { allowOrphan: sub === 'stop' });
   if (sub === 'start') {
     const r = await startMetro(m, io, {
       checkout: resolve(a.checkout ?? ''),

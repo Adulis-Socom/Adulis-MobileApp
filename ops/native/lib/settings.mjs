@@ -88,8 +88,7 @@ const night = {
   clear: undefined,
 };
 
-// The format of `get-app-locales` and the form that clears are taken from the platform's shell command
-// and have not been seen on a device: a read that does not match is an error, which refuses the change.
+// A read that does not match the platform's answer is an error, which refuses the change.
 const locale = {
   describe: "the app's own locale list",
   valid: (v) =>

@@ -1,8 +1,10 @@
 // The flows a native run may execute. The Maestro files under apps/mobile/.maestro are the SOURCE of the
-// allow-list, never the list itself: ops/native/flows.json names each approved flow and declares what
-// the file does to the device (clears the app's data, grants a permission, ...). Every run reads the
-// flow file again and compares what it finds with the declaration: a flow that gained a hazard, or a file
-// that is not declared, is refused. A hazard on the NEVER list is refused whatever the declaration says.
+// allow-list, never the list itself: ops/native/flows.json names each approved flow, pins the SHA-256 of
+// its content and declares what the file does to the device (clears the app's data, grants a permission,
+// ...). A flow whose content differs from its pin is refused, every time, right before Maestro starts it;
+// re-pinning is a reviewed change to flows.json. The scan below is the second layer: it is what a reviewer
+// is shown when a flow is pinned, and it refuses the hazards of the NEVER list whatever a declaration says.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { APP_ID } from './device.mjs';
@@ -13,6 +15,7 @@ export const ALLOWED_HAZARDS = ['clearState', 'permission-grant', 'app-stop', 'l
 export const NEVER_HAZARDS = [
   'clearKeychain',
   'script',
+  'expression',
   'runFlow-file',
   'media',
   'location',
@@ -23,7 +26,12 @@ export const NEVER_HAZARDS = [
   'clipboard',
   'external-link',
   'foreign-app',
+  'hardware-key',
 ];
+/** The only permission grants a declaration may name: `<permission>:<allow|deny|unset>`. */
+export const ALLOWED_PERMISSIONS = ['android.permission.ACCESS_LOCAL_NETWORK:allow'];
+/** Keys a flow may press: navigation and text entry, never power, volume, lock or a camera key. */
+const SAFE_KEYS = new Set(['Enter', 'Backspace', 'Back', 'Home', 'Tab', 'Escape']);
 
 const COMMANDS = {
   clearKeychain: 'clearKeychain',
@@ -38,6 +46,19 @@ const COMMANDS = {
   'app-stop': 'stopApp|killApp',
 };
 
+// A command in block form (`- name`, `- {name: x}`) or inside a flow-style map or list (`{a: 1, name: x}`).
+const START = String.raw`(?:^\s*-\s*\{?\s*|[{,\[]\s*)`;
+const unquote = (s) => `${s}`.replace(/^['"]|['"]$/g, '');
+// Expressions of a flow may compare variables; anything that calls, indexes or reaches out is a script.
+const SIMPLE_EXPRESSION = /^[A-Za-z0-9_ ='"!|&<>-]+$/;
+const BUILTINS = new Set(['maestro.platform', 'maestro.copiedText']);
+
+/** The content hash that pins a flow: SHA-256 of its bytes with CRLF read as LF (the repository checks out LF). */
+export function flowHash(buffer) {
+  const lf = Buffer.from(buffer.toString('latin1').replaceAll('\r\n', '\n'), 'latin1');
+  return createHash('sha256').update(lf).digest('hex');
+}
+
 /** What a flow file does, read from its text (comments are not code). */
 export function scanFlow(text) {
   const src = text
@@ -46,24 +67,88 @@ export function scanFlow(text) {
     .filter((l) => !/^\s*#/.test(l))
     .join('\n');
   const hazards = new Set();
-  if (/^\s*(?:-\s*)?clearState:[ \t]*true\b/m.test(src) || /^\s*-\s*clearState\b/m.test(src))
-    hazards.add('clearState');
-  for (const [name, cmds] of Object.entries(COMMANDS))
-    if (new RegExp(`^\\s*-\\s*(?:${cmds})\\b`, 'm').test(src)) hazards.add(name);
-  // The value must sit on the same line: `runFlow:` followed by a block is an inline flow, not a file.
-  if (/^\s*-\s*runFlow:[ \t]*\S/m.test(src) || /^\s*file:[ \t]*\S/m.test(src))
-    hazards.add('runFlow-file');
-  if (/^\s*while:/m.test(src)) hazards.add('loop-while');
-  if (/^\s*permissions:/m.test(src)) hazards.add('permission-grant');
-  const links = [...src.matchAll(/^\s*-\s*openLink:[ \t]*(\S+)/gm)].map((m) => m[1]);
-  if (links.some((l) => !l.startsWith('adulis://'))) hazards.add('external-link');
   const appId = /^appId:[ \t]*(\S+)/m.exec(src)?.[1] ?? null;
-  if ([...src.matchAll(/^\s+appId:[ \t]*(\S+)/gm)].some((m) => m[1] !== appId))
-    hazards.add('foreign-app');
-  const vars = [...new Set([...src.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => m[1]))]
-    .filter((v) => !v.startsWith('maestro'))
-    .sort();
-  return { appId, hazards: [...hazards].sort(), vars };
+  const foreign = (v) => {
+    if (v !== appId) hazards.add('foreign-app');
+  };
+  // clearState: `true` (an option of launchApp or a command), or a package (string form of the command)
+  for (const m of src.matchAll(/(?:^\s*(?:-\s*)?|[{,]\s*)clearState:[ \t]*([^\s,}\]]+)/gm)) {
+    if (m[1] === 'false') continue;
+    hazards.add('clearState');
+    if (m[1] !== 'true') foreign(unquote(m[1]));
+  }
+  if (new RegExp(`${START}clearState\\b(?!:)`, 'm').test(src)) hazards.add('clearState');
+  for (const [name, cmds] of Object.entries(COMMANDS))
+    if (new RegExp(`${START}(?:${cmds})\\b`, 'm').test(src)) hazards.add(name);
+  // launchApp, stopApp and killApp may name a package (string form): it must be this app
+  for (const m of src.matchAll(
+    new RegExp(`${START}(?:launchApp|stopApp|killApp):[ \\t]*([^\\s,}\\]]+)`, 'gm'),
+  ))
+    if (!m[1].startsWith('{') && !m[1].startsWith('[')) foreign(unquote(m[1]));
+  for (const m of src.matchAll(/(?:^\s+|[{,]\s*)appId:[ \t]*([^\s,}\]]+)/gm))
+    foreign(unquote(m[1]));
+  // The value must sit on the same line: `runFlow:` followed by a block is an inline flow, not a file.
+  if (
+    new RegExp(`${START}runFlow:[ \\t]*[^\\s{]`, 'm').test(src) ||
+    /(?:^\s*|[{,]\s*)file:[ \t]*\S/m.test(src)
+  )
+    hazards.add('runFlow-file');
+  if (/(?:^\s*|[{,]\s*)while:/m.test(src)) hazards.add('loop-while');
+  // permissions: the block form (indented `name: value` lines) and the flow-style form
+  const permissions = new Set();
+  const take = (s) => {
+    for (const p of s.matchAll(/([A-Za-z0-9_.]+)\s*:\s*([A-Za-z]+)/g))
+      permissions.add(`${p[1]}:${p[2]}`);
+  };
+  const lines = src.split('\n');
+  lines.forEach((line, i) => {
+    const m = /^(\s*)permissions:[ \t]*(.*)$/.exec(line);
+    if (!m) return;
+    hazards.add('permission-grant');
+    if (m[2].trim()) take(m[2]);
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const next = /^(\s*)(\S.*)$/.exec(lines[j]);
+      if (!next) continue;
+      if (next[1].length <= m[1].length) break;
+      take(next[2]);
+    }
+  });
+  for (const m of src.matchAll(/[{,]\s*permissions:\s*\{([^}]*)\}/g)) {
+    hazards.add('permission-grant');
+    take(m[1]);
+  }
+  // a grant that could not be read is never an empty grant
+  if (/\bpermissions:/.test(src) && !permissions.size) {
+    hazards.add('permission-grant');
+    permissions.add('(none readable)');
+  }
+  // links: the string form and the map form (`link:`), quoted or not
+  const links = [
+    ...[...src.matchAll(new RegExp(`${START}openLink:[ \\t]*([^\\s{,}]+)`, 'gm'))].map((m) => m[1]),
+    ...[...src.matchAll(/(?:^\s+|[{,]\s*)link:[ \t]*([^\s,}]+)/gm)].map((m) => m[1]),
+  ].map(unquote);
+  if (links.some((l) => !l.startsWith('adulis://'))) hazards.add('external-link');
+  for (const m of src.matchAll(new RegExp(`${START}pressKey:[ \\t]*([^\\s,}\\]]+)`, 'gm')))
+    if (!SAFE_KEYS.has(unquote(m[1]))) hazards.add('hardware-key');
+  if (new RegExp(`${START}pressKey:[ \\t]*$`, 'm').test(src)) hazards.add('hardware-key');
+  // ${...}: a variable, a comparison of variables, a Maestro built-in, or a script
+  const names = new Set();
+  for (const m of src.matchAll(/\$\{([^}]*)\}/g)) {
+    const inner = m[1].trim();
+    if (BUILTINS.has(inner)) continue;
+    if (!SIMPLE_EXPRESSION.test(inner)) {
+      hazards.add('expression');
+      continue;
+    }
+    for (const id of inner.replace(/'[^']*'|"[^"]*"/g, '').matchAll(/[A-Za-z_][A-Za-z0-9_]*/g))
+      if (!['true', 'false', 'null'].includes(id[0])) names.add(id[0]);
+  }
+  return {
+    appId,
+    hazards: [...hazards].sort(),
+    vars: [...names].sort(),
+    permissions: [...permissions].sort(),
+  };
 }
 
 export function loadDeclaration(path) {
@@ -74,7 +159,29 @@ export function loadDeclaration(path) {
 }
 
 const FILE_RE = /^[a-z0-9][a-z0-9-]*\.yaml$/;
+const HASH_RE = /^[0-9a-f]{64}$/;
 const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+
+/**
+ * The flow file as it is now: Resolves { buffer } when its content is the pinned one, else { problem }.
+ * Called by resolveBattery and again right before every Maestro start.
+ */
+export function verifyFlowFile(file, pin) {
+  let buffer;
+  try {
+    buffer = readFileSync(file);
+  } catch (e) {
+    return { problem: `the flow file cannot be read (${e.message})` };
+  }
+  const got = flowHash(buffer);
+  if (!HASH_RE.test(`${pin}`))
+    return { problem: 'the flow has no content pin (sha256) in the declaration' };
+  if (got !== pin)
+    return {
+      problem: `the flow file changed: its content hash is ${got}, the pin is ${pin} (review it and re-pin it in flows.json)`,
+    };
+  return { buffer };
+}
 
 /**
  * Every reason the battery may not run: the declaration itself, and each flow file compared with it.
@@ -106,6 +213,8 @@ export function resolveBattery(decl, name, flowDir) {
       problems.push(`flow '${fname}' resolves outside ${flowDir}`);
       continue;
     }
+    const pinned = verifyFlowFile(file, d.sha256);
+    if (pinned.problem) problems.push(`flow '${fname}': ${pinned.problem}`);
     let scan;
     try {
       scan = scanFlow(readFileSync(file, 'utf8'));
@@ -125,6 +234,13 @@ export function resolveBattery(decl, name, flowDir) {
     for (const h of d.hazards ?? [])
       if (!ALLOWED_HAZARDS.includes(h))
         problems.push(`flow '${fname}' declares '${h}', which is not an allowed hazard`);
+    if (!same(scan.permissions, d.permissions ?? []))
+      problems.push(
+        `flow '${fname}' grants permissions [${scan.permissions.join(', ')}] but declares [${(d.permissions ?? []).join(', ')}]`,
+      );
+    for (const p of d.permissions ?? [])
+      if (!ALLOWED_PERMISSIONS.includes(p))
+        problems.push(`flow '${fname}' declares the permission grant '${p}', which is not allowed`);
     if (!same(scan.vars, d.vars ?? []))
       problems.push(
         `flow '${fname}' needs variables [${scan.vars.join(', ')}] but declares [${(d.vars ?? []).join(', ')}]`,

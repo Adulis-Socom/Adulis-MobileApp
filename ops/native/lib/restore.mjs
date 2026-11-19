@@ -25,6 +25,7 @@ export async function deviceIdentity(adb) {
     fingerprint: await prop('ro.build.fingerprint'),
     serialno: await prop('ro.serialno'),
     avd: await prop('ro.boot.qemu.avd_name'),
+    bootCompleted: await prop('sys.boot_completed'),
     bootId: ok(boot) ? boot.stdout.trim() : '',
   };
 }

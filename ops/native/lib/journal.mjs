@@ -58,8 +58,12 @@ export function readJournal(dir) {
   return out;
 }
 
-/** Appends one line and does not return before it is on disk. Returns the line's sequence number. */
-export function appendEntry(dir, entry, now = () => new Date().toISOString()) {
+/**
+ * Appends one line and does not return before ALL of it is on disk: a write that took fewer bytes than the
+ * line is an error (the change that was to follow must not be made). `write` is the writer (tests give a
+ * short one). Returns the line's sequence number.
+ */
+export function appendEntry(dir, entry, now = () => new Date().toISOString(), write = writeSync) {
   mkdirSync(dir, { recursive: true });
   const j = readJournal(dir);
   if (j.corrupt) throw new Error(`the device journal is unusable: ${j.corrupt}`);
@@ -68,7 +72,10 @@ export function appendEntry(dir, entry, now = () => new Date().toISOString()) {
   const fd = openSync(journalPath(dir), 'a');
   try {
     // A cut-short last line is closed off first, so the new line starts on a line of its own.
-    writeSync(fd, `${j.endsClean ? '' : '\n'}${line}\n`);
+    const bytes = Buffer.from(`${j.endsClean ? '' : '\n'}${line}\n`);
+    const n = write(fd, bytes);
+    if (n !== bytes.length)
+      throw new Error(`the journal took ${n} of ${bytes.length} bytes: nothing was changed`);
     fsyncSync(fd);
   } finally {
     closeSync(fd);

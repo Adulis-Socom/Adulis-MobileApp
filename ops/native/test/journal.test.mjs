@@ -2,7 +2,14 @@
 // durable, it must survive a line cut short by a kill, and it must refuse to be guessed at when a line
 // was altered or removed.
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
@@ -46,8 +53,29 @@ test('the append writes through to disk: the source flushes before it returns', 
   );
   assert.match(
     src,
-    /writeSync\(fd,[^\n]*\);\r?\n\s*fsyncSync\(fd\);\r?\n\s*\} finally \{\r?\n\s*closeSync\(fd\);/,
+    /write\(fd, bytes\);[\s\S]*?\n\s*fsyncSync\(fd\);\r?\n\s*\} finally \{\r?\n\s*closeSync\(fd\);/,
   );
+});
+
+test('a write that took fewer bytes than the line stops the change, and the line it cut short is closed off', () => {
+  const d = rig();
+  appendEntry(d, { op: 'begin', run: 'r', serial: 's', device: {} });
+  const short = (fd, bytes) => writeSync(fd, bytes.subarray(0, bytes.length - 9));
+  assert.throws(
+    () => appendEntry(d, intend('c1'), undefined, short),
+    /the journal took \d+ of \d+ bytes: nothing was changed/,
+  );
+  // the intent was never fully written: the journal has no open change and still reads as intact
+  assert.equal(readJournal(d).corrupt, null);
+  assert.deepEqual(summarize(d).open, []);
+  // the next line starts on a line of its own and the chain goes on
+  assert.equal(appendEntry(d, intend('c2')), 2);
+  assert.deepEqual(
+    summarize(d).open.map((c) => c.id),
+    ['c2'],
+  );
+  // a writer that took nothing at all is refused the same way
+  assert.throws(() => appendEntry(d, { op: 'end' }, undefined, () => 0), /took 0 of/);
 });
 
 test('a change is open from its intent until it is restored; a failed write that left nothing is not open', () => {

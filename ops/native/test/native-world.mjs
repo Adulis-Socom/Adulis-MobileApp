@@ -85,9 +85,18 @@ export function nativeWorld(opts = {}) {
     proc: {
       ...base.proc,
       listeners: async (port) =>
-        port === 8081 ? (w.m.metro ? [METRO_PID] : []) : w.proc.listeners,
+        port === 8081 ? (w.m.metro && !w.metroDead ? [METRO_PID] : []) : w.proc.listeners,
+      // a process that is stopped is gone (`w.survive`: it is not, as with a process that cannot be killed)
+      kill: (pid) => {
+        base.proc.kill(pid);
+        if (!w.survive) delete w.proc.byPid[pid];
+      },
       killTree: async (pid) => {
         kills.push(pid);
+        if (w.killFails) throw new Error(`could not stop process(es) ${pid}: EPERM`);
+        if (w.survive) return;
+        delete w.proc.byPid[pid];
+        w.metroDead = true;
       },
     },
     fetch: async (url, o) =>
@@ -99,7 +108,7 @@ export function nativeWorld(opts = {}) {
     env: {
       PATH: 'C:\\bin',
       JAVA_HOME: 'C:\\jdk',
-      ANDROID_HOME: 'G:\\Android\\SDK',
+      ANDROID_HOME: 'C:\\sdk',
       USERPROFILE: 'C:\\Users\\x',
       TEMP: 'C:\\t',
       TMP: 'C:\\t',

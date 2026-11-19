@@ -10,6 +10,7 @@ import { EXIT, EXIT_TEST_FAILED, main } from '../harness.mjs';
 import { makeAdb } from '../lib/adb.mjs';
 import { observeDevice } from '../lib/device.mjs';
 import { summarize } from '../lib/journal.mjs';
+import { readManifest } from '../lib/manifest.mjs';
 import { applySetting, beginSession, deviceIdentity } from '../lib/restore.mjs';
 import { fakeDevice, initialState, junit, SERIAL } from './fake-device.mjs';
 import { BUILT_AT, nativeWorld, SHA } from './native-world.mjs';
@@ -67,7 +68,7 @@ test('the scheme has one code beside the documented five: 5, a finished run with
 
 /* ---- native conditions ---- */
 
-test('native conditions with no device ends BLOCKED, prints every condition, and changes nothing (the state of this machine)', async () => {
+test('native conditions with no device ends BLOCKED, prints every condition, and changes nothing', async () => {
   const r = rig();
   r.x.dev.st.attached = false;
   assert.equal(await r.run(...r.nativeArgs('conditions')), EXIT.BLOCKED);
@@ -425,4 +426,160 @@ test('a device refusal prints its label, not "undefined"', async () => {
     r.lines.some((l) => /^refused device: ID-11 device FAIL \(/.test(l)),
     'the refusal message names its check as well',
   );
+});
+
+/* ---- the adb server, a live session, and a Maestro process left behind ---- */
+
+test('every device command and a native check refuse an adb server selection in the environment, before adb is asked anything', async () => {
+  for (const [name, value] of [
+    ['ADB_SERVER_SOCKET', 'tcp:127.0.0.1:5038'],
+    ['ANDROID_ADB_SERVER_ADDRESS', '10.0.0.7'],
+    ['ANDROID_ADB_SERVER_PORT', '5038'],
+  ])
+    for (const argv of [
+      ['device', 'check', '--run', '$RUN', '--serial', SERIAL],
+      ['device', 'prepare', '--run', '$RUN', '--serial', SERIAL],
+      ['device', 'restore', '--run', '$RUN', '--serial', SERIAL],
+    ]) {
+      const r = rig();
+      r.env[name] = value;
+      const code = await r.run(...argv.map((a) => (a === '$RUN' ? r.x.w.m.run : a)));
+      assert.equal(code, EXIT.REFUSED, `${name} ${argv[1]}`);
+      assert.match(
+        r.last(),
+        new RegExp(`${name} is set: the driver and Maestro would not use the same adb server`),
+      );
+      assert.equal(r.x.dev.st.log.length, 0, `${name} ${argv[1]}: adb was not called`);
+    }
+  const c = rig();
+  c.env.ANDROID_ADB_SERVER_PORT = '5038';
+  assert.equal(await c.run(...c.nativeArgs('conditions')), EXIT.REFUSED);
+  assert.match(c.last(), /NC-13 adb server address: ANDROID_ADB_SERVER_PORT is set/);
+});
+
+const liveLock = (r, pid = 4999) => {
+  writeFileSync(join(r.x.dir, 'native.lock'), JSON.stringify({ pid, createdAt: 'alive' }));
+  r.x.w.proc.byPid[pid] = { createdAt: 'alive', commandLine: 'node harness.mjs native run' };
+};
+const orphanLock = (r) => {
+  // the harness of that session is gone; the Maestro process it started still runs
+  writeFileSync(
+    join(r.x.dir, 'native.lock'),
+    JSON.stringify({
+      pid: 4999,
+      createdAt: 'gone',
+      maestro: { pid: 4321, createdAt: 'm-created', commandLine: 'java maestro.cli.AppKt' },
+    }),
+  );
+  r.x.w.proc.byPid[4321] = { createdAt: 'm-created', commandLine: 'java maestro.cli.AppKt' };
+};
+const mutating = (r) =>
+  r.x.io.calls.filter((c) => /^docker (rm|stop|kill|run|create|start|restart|exec)\b/.test(c));
+
+test('while a native session runs on the run, the commands that change the stack, Metro or the device refuse and change nothing', async () => {
+  const run = (r) => r.x.w.m.run;
+  for (const argv of [
+    (r) => ['down', '--run', run(r)],
+    (r) => ['recover', '--run', run(r)],
+    (r) => ['api', 'start', '--run', run(r), '--checkout', r.x.checkout, '--sha', SHA],
+    (r) => ['api', 'stop', '--run', run(r)],
+    (r) => ['metro', 'start', '--run', run(r), '--checkout', r.x.checkout, '--sha', SHA],
+    (r) => ['metro', 'stop', '--run', run(r)],
+    (r) => ['device', 'prepare', '--run', run(r), '--serial', SERIAL],
+    (r) => ['device', 'restore', '--run', run(r), '--serial', SERIAL],
+    (r) => ['fixtures', '--run', run(r), '--set', 'baseline'],
+  ]) {
+    const r = rig();
+    liveLock(r);
+    const args = argv(r);
+    const before = JSON.stringify([r.x.dev.st.settings, r.x.dev.st.reverse]);
+    assert.equal(await r.run(...args), EXIT.REFUSED, args.slice(0, 2).join(' '));
+    assert.match(
+      r.last(),
+      /^HARNESS REFUSED - refused: a native session \(pid 4999\) is running on this run: it restores its own changes - NO RESOURCE WAS CHANGED$/,
+      args.slice(0, 2).join(' '),
+    );
+    assert.deepEqual(r.x.kills, [], `${args[0]}: no process was stopped`);
+    assert.deepEqual(mutating(r), [], `${args[0]}: Docker was not changed`);
+    assert.equal(JSON.stringify([r.x.dev.st.settings, r.x.dev.st.reverse]), before);
+    assert.equal(readManifest(r.x.dir).state, 'ready', `${args[0]}: the run is as it was`);
+  }
+  // reading is always allowed
+  const r = rig();
+  liveLock(r);
+  assert.equal(await r.run('status', '--run', run(r)), EXIT.OK);
+  assert.equal(await r.run('device', 'journal', '--run', run(r)), EXIT.OK);
+});
+
+test('a lock that cannot be read refuses the same commands: nobody knows who holds the run', async () => {
+  const r = rig();
+  writeFileSync(join(r.x.dir, 'native.lock'), 'not a lock');
+  assert.equal(await r.run('down', '--run', r.x.w.m.run), EXIT.REFUSED);
+  assert.match(r.last(), /a native session lock that cannot be read holds this run/);
+  assert.deepEqual(r.x.kills, []);
+  assert.equal(readManifest(r.x.dir).state, 'ready');
+});
+
+test('a Maestro process an earlier session left behind is stopped by its identity before down and device restore, and refuses prepare and a new run', async () => {
+  const stopped = (r) => r.x.w.proc.kills.includes(4321);
+  const down = rig();
+  orphanLock(down);
+  assert.equal(await down.run('down', '--run', down.x.w.m.run), EXIT.OK);
+  assert.ok(stopped(down), 'the orphan was stopped by its recorded pid');
+  assert.ok(!existsSync(join(down.x.dir, 'native.lock')), 'and its dead lock removed');
+
+  const restore = rig();
+  orphanLock(restore);
+  assert.equal(
+    await restore.run('device', 'restore', '--run', restore.x.w.m.run, '--serial', SERIAL),
+    EXIT.OK,
+  );
+  assert.ok(stopped(restore));
+
+  const prepare = rig();
+  orphanLock(prepare);
+  assert.equal(
+    await prepare.run('device', 'prepare', '--run', prepare.x.w.m.run, '--serial', SERIAL),
+    EXIT.REFUSED,
+  );
+  assert.match(
+    prepare.last(),
+    /Maestro process \(pid 4321\) of an earlier session is still running: run `device restore`/,
+  );
+  assert.ok(!stopped(prepare), 'prepare does not stop it: only restore and down do');
+  assert.equal(prepare.x.dev.st.reverse.length, 0);
+
+  const native = rig();
+  orphanLock(native);
+  assert.equal(await native.run(...native.nativeArgs('run')), EXIT.BLOCKED);
+  assert.match(native.last(), /NC-12 no other native session: a Maestro process \(pid 4321\)/);
+  assert.equal(native.x.maestro.calls.length, 0);
+
+  // a number that now belongs to another process is not stopped
+  const reused = rig();
+  orphanLock(reused);
+  reused.x.w.proc.byPid[4321] = { createdAt: 'a later process', commandLine: 'notepad.exe' };
+  assert.equal(await reused.run('down', '--run', reused.x.w.m.run), EXIT.OK);
+  assert.ok(!stopped(reused));
+});
+
+test('api stop and metro stop are teardowns: an orphan Maestro does not hold them back and they do not stop it', async () => {
+  const r = rig();
+  orphanLock(r);
+  assert.equal(await r.run('metro', 'stop', '--run', r.x.w.m.run), EXIT.OK);
+  assert.deepEqual(r.x.kills, [5151]);
+  assert.ok(!r.x.w.proc.kills.includes(4321));
+  assert.ok(existsSync(join(r.x.dir, 'native.lock')), 'the record of the orphan is kept');
+});
+
+test('status says when the device journal is unusable instead of counting it as nothing open', async () => {
+  const r = rig();
+  writeFileSync(
+    join(r.x.dir, 'device-journal.ndjson'),
+    `${JSON.stringify({ v: 1, seq: 1, prev: 'wrong', op: 'begin' })}\n`,
+  );
+  assert.equal(await r.run('status', '--run', r.x.w.m.run), EXIT.OK);
+  const line = r.lines.find((l) => l.startsWith('run native-'));
+  assert.match(line, /; journal unusable \(.+\); nothing was verified by this command$/);
+  assert.doesNotMatch(line, /device changes not restored: 0/);
 });

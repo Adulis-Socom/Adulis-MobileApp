@@ -59,7 +59,15 @@ export function buildMetroEnv(m, hostEnv) {
 
 export const metroCli = (checkout) =>
   join(checkout, 'apps', 'mobile', 'node_modules', 'expo', 'bin', 'cli');
-export const metroArgs = (cli) => [cli, 'start', '--port', `${METRO_PORT}`, '--clear'];
+// --localhost: the dev server binds the loopback only (the device reaches it through adb reverse).
+export const metroArgs = (cli) => [
+  cli,
+  'start',
+  '--port',
+  `${METRO_PORT}`,
+  '--clear',
+  '--localhost',
+];
 const same = (a, b) =>
   `${a}`.replaceAll('\\', '/').toLowerCase() === `${b}`.replaceAll('\\', '/').toLowerCase();
 
@@ -128,7 +136,7 @@ export async function startMetro(m, io, { checkout, sha, dir, tries = 240, delay
     writeManifest(dir, verified);
     return verified;
   } catch (e) {
-    await stopMetro(next, io, dir).catch(() => {});
+    await stopMetro(next, io, dir, { delayMs }).catch(() => {});
     throw e;
   }
 }
@@ -172,8 +180,12 @@ export async function metroProblems(m, io) {
   return p;
 }
 
-/** Stops Metro and its workers, only if the recorded pid still has the recorded creation time and command line. */
-export async function stopMetro(m, io, dir) {
+/**
+ * Stops Metro and its workers, only if the recorded pid still has the recorded creation time and command
+ * line, and clears its record only once the process is gone and the port is free (else it throws and the
+ * record stays: the run is INCOMPLETE and says Metro may still run).
+ */
+export async function stopMetro(m, io, dir, { tries = 20, delayMs = 500 } = {}) {
   const rec = m.metro;
   if (!rec) return { stopped: false, why: 'no Metro was started by this run' };
   const info = await io.proc.info(rec.pid);
@@ -193,6 +205,17 @@ export async function stopMetro(m, io, dir) {
       `refused: process ${rec.pid} is not the Metro this run started (creation time or command line differ); it was not stopped`,
     );
   await io.proc.killTree(rec.pid);
-  writeManifest(dir, { ...m, metro: null });
-  return { stopped: true };
+  for (let i = 0; i < tries; i += 1) {
+    const now = await io.proc.info(rec.pid);
+    const gone = !now?.createdAt || now.createdAt !== rec.createdAt;
+    const free = (await io.proc.listeners(METRO_PORT)).length === 0;
+    if (gone && free) {
+      writeManifest(dir, { ...m, metro: null });
+      return { stopped: true };
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error(
+    `Metro (pid ${rec.pid}) is still running or port ${METRO_PORT} is still in use after the stop: its record was kept`,
+  );
 }

@@ -15,10 +15,12 @@ or an allow-listed disposable test device, and an app that is not a debug build,
 
 **The approved flows are declared, not discovered.** `ops/native/flows.json` names the flows the
 native driver may run (today `foundation-smoke` and `buyer-shell`, the `smoke` battery) and declares
-what each does to the device (clears the app's data, grants a permission). The driver reads the flow
-file again at every run and refuses a flow that does more than its declaration says, a flow that is
-not declared, and a flow that runs a script, loads another file, opens an external link, uses a cloud
-service or touches another app. Adding a flow to a battery is a change to that declaration.
+what each does to the device (clears the app's data, grants a permission). It also pins the SHA-256
+of each flow file: the driver hashes the file again right before every Maestro start and refuses any
+flow whose content differs from its pin, and a flow that is not declared. Changing an approved flow, or
+adding one to a battery, is a change to that declaration, and the scan a reviewer sees when a pin is set
+refuses scripts and expressions, file loads, external links, cloud services, another app id and hardware
+keys other than navigation keys, whatever the declaration says.
 
 **Only the baseline fixtures are in this repository.** Almost every flow asserts named fixture content
 (Seller "Fixture Weaves", `fixture-weaves`, and its Products and Scenes). The baseline set in
@@ -133,7 +135,9 @@ declaration appears) and avoids per-phone code limits. Never a real person's num
 | `REF`, `PRIVATE_REF` | A Scene `public_ref` from the fixtures (see the flow header for which Scene)        |
 | `EXPECT`, `SHOT`     | `catalogue-product-refresh.yaml`: the expected text (regex) and the screenshot name |
 
-Command form: `maestro test -e KEY=VALUE --test-output-dir <dir> .maestro/<flow>.yaml`.
+Command form of a manual run, on a disposable emulator only and never through the native driver's
+checks: `maestro --device <emulator serial> test -e KEY=VALUE --test-output-dir <dir> .maestro/<flow>.yaml`.
+Name the serial every time, so that the run cannot go to another attached device.
 
 ## Flow index
 

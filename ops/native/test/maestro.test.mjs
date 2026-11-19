@@ -2,15 +2,17 @@
 // the operator's environment, every attempt leaves evidence, and the retry policy is bounded: only an
 // infrastructure error is retried, once, after the device and API proved themselves again.
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { makeAdb } from '../lib/adb.mjs';
+import { flowHash } from '../lib/flows.mjs';
 import {
   classifyAttempt,
   crashLines,
   executeFlow,
+  FlowRefused,
   locateMaestro,
   maestroArgv,
   maestroEnv,
@@ -254,37 +256,53 @@ test('a verdict is PASS, FAIL (it ran and did not hold) or NOT EXECUTED (it did 
 
 /* ---- attempts with evidence, and the bounded retry ---- */
 
+const FLOW_TEXT =
+  'appId: com.adulis.app\nname: foundation-smoke\n---\n- launchApp:\n    clearState: true\n';
+
 function rig(
   script,
   { budget = RETRY.infraRetriesPerBattery, recheck = async () => [], signal } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'native-m-'));
   dirs.push(dir);
+  // the approved flow as a file, with the pin of its content
+  const flowDir = join(dir, 'flows-src');
+  mkdirSync(flowDir, { recursive: true });
+  const file = join(flowDir, 'foundation-smoke.yaml');
+  writeFileSync(file, FLOW_TEXT);
+  const flow = {
+    name: 'foundation-smoke',
+    file,
+    decl: { sha256: flowHash(Buffer.from(FLOW_TEXT)) },
+  };
   const dev = fakeDevice();
   const adb = makeAdb(dev.io, SERIAL);
   const m = fakeMaestro((n, o) => script(n, o, dev));
   const slept = [];
+  const started = [];
+  const ended = [];
   const ctx = {
     io: { maestro: m.maestro },
     adb,
     serial: SERIAL,
     maestro: { home: 'C:\\maestro', java: 'C:\\jdk\\bin\\java.exe' },
     dir,
-    flowDir: 'C:\\flows',
+    flowDir,
     hostEnv: { PATH: 'p', EXPO_TOKEN: 'secret' },
     signal,
     vars: {},
     budget: { infra: budget },
     sleep: async (ms) => slept.push(ms),
     recheck,
+    maestroStarted: (pid) => started.push(pid),
+    maestroEnded: () => ended.push(1),
   };
-  return { ctx, m, dev, dir, slept };
+  return { ctx, m, dev, dir, slept, flow, flowDir, file, started, ended };
 }
-const FLOW = { name: 'foundation-smoke', file: 'C:\\flows\\foundation-smoke.yaml', decl: {} };
 
 test('a passing attempt leaves the report, the log, the device log and a result file, and no failure screenshot', async () => {
   const r = rig(async () => ({ status: 0, junit: junit(), log: 'Flow passed' }));
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual([res.verdict, res.kind, res.attempts.length], ['PASS', 'pass', 1]);
   const out = join(r.dir, 'foundation-smoke', 'attempt-1');
   for (const f of ['report.xml', 'maestro.log', 'logcat.txt', 'attempt.json'])
@@ -296,7 +314,7 @@ test('a passing attempt leaves the report, the log, the device log and a result 
   );
   const call = r.m.calls[0];
   assert.equal(call.file, 'C:\\jdk\\bin\\java.exe');
-  assert.equal(call.cwd, 'C:\\flows');
+  assert.equal(call.cwd, r.flowDir);
   assert.ok(
     !JSON.stringify(call.env).includes('secret'),
     "the operator's token never reaches the child",
@@ -309,7 +327,7 @@ test('an assertion failure is a FAIL with a screenshot and the device log, and i
     junit: junit({ failures: 1 }),
     log: 'Assertion is false',
   }));
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual([res.verdict, res.kind, res.attempts.length], ['FAIL', 'assertion', 1]);
   assert.equal(r.m.calls.length, 1, 'Maestro ran once');
   assert.ok(existsSync(join(r.dir, 'foundation-smoke', 'attempt-1', 'failure.png')));
@@ -324,7 +342,7 @@ test('an app crash is a FAIL even if the flow reported success, and it is never 
     );
     return { status: 0, junit: junit() };
   });
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual([res.verdict, res.kind, r.m.calls.length], ['FAIL', 'crash', 1]);
   assert.equal(res.attempts[0].crashes.length, 1);
   assert.ok(existsSync(join(r.dir, 'foundation-smoke', 'attempt-1', 'failure.png')));
@@ -339,7 +357,7 @@ test('an infrastructure error is retried ONCE, after the checks passed again, an
         : { status: 0, junit: junit() },
     { recheck: async () => ((rechecks += 1), []) },
   );
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual(
     [res.verdict, res.attempts.map((a) => a.kind), r.m.calls.length, rechecks],
     ['PASS', ['infrastructure', 'pass'], 2, 1],
@@ -350,7 +368,7 @@ test('an infrastructure error is retried ONCE, after the checks passed again, an
 
 test('infrastructure errors never loop: two attempts at most, then NOT EXECUTED', async () => {
   const r = rig(async () => ({ status: 1, log: 'adb server is out of date' }));
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual(
     [res.verdict, res.attempts.length, r.m.calls.length],
     ['NOT EXECUTED', RETRY.maxAttempts, RETRY.maxAttempts],
@@ -360,10 +378,10 @@ test('infrastructure errors never loop: two attempts at most, then NOT EXECUTED'
 
 test('the retry budget of the battery is shared: a second flow with an infrastructure error is not retried', async () => {
   const r = rig(async () => ({ status: 1, log: 'device offline' }), { budget: 1 });
-  await executeFlow(r.ctx, FLOW);
+  await executeFlow(r.ctx, r.flow);
   assert.equal(r.ctx.budget.infra, 0);
   const n = r.m.calls.length;
-  const second = await executeFlow(r.ctx, { ...FLOW, name: 'buyer-shell' });
+  const second = await executeFlow(r.ctx, { ...r.flow, name: 'buyer-shell' });
   assert.equal(r.m.calls.length - n, 1, 'one attempt, no retry');
   assert.equal(second.verdict, 'NOT EXECUTED');
 });
@@ -372,7 +390,7 @@ test('no retry when the device or the API no longer pass their checks', async ()
   const r = rig(async () => ({ status: 1, log: 'device offline' }), {
     recheck: async () => ['NC-01 no device is attached'],
   });
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.equal(r.m.calls.length, 1);
   assert.equal(res.verdict, 'NOT EXECUTED');
   assert.match(res.attempts[0].noRetry, /not retried: NC-01/);
@@ -381,7 +399,7 @@ test('no retry when the device or the API no longer pass their checks', async ()
 
 test('a timeout is a FAIL that is never retried (it is not known to be infrastructure)', async () => {
   const r = rig(async () => ({ status: null, timedOut: true, log: 'device offline' }));
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual([res.verdict, res.kind, r.m.calls.length], ['FAIL', 'unknown', 1]);
 });
 
@@ -394,9 +412,9 @@ test('a cancellation stops the flow, starts nothing more, and is NOT EXECUTED', 
     },
     { signal: ac.signal },
   );
-  const res = await executeFlow(r.ctx, FLOW);
+  const res = await executeFlow(r.ctx, r.flow);
   assert.deepEqual([res.verdict, res.kind, r.m.calls.length], ['NOT EXECUTED', 'cancelled', 1]);
-  const again = await executeFlow(r.ctx, { ...FLOW, name: 'buyer-shell' });
+  const again = await executeFlow(r.ctx, { ...r.flow, name: 'buyer-shell' });
   assert.deepEqual(
     [again.verdict, r.m.calls.length],
     ['NOT EXECUTED', 1],
@@ -409,9 +427,82 @@ test('a failed log capture is written down as a failure, not left empty', async 
     dev.st.failOn = ['logcat'];
     return { status: 0, junit: junit() };
   });
-  await runAttempt(r.ctx, FLOW, 1);
+  await runAttempt(r.ctx, r.flow, 1);
   assert.match(
     readFileSync(join(r.dir, 'foundation-smoke', 'attempt-1', 'logcat.txt'), 'utf8'),
     /logcat failed/,
   );
+});
+
+/* ---- the flow gate: only the pinned bytes run, and only a copy of exactly those bytes ---- */
+
+test('a flow whose content is not the pinned one is refused before Maestro starts: nothing is run, nothing is logged', async () => {
+  const r = rig(async () => ({ status: 0, junit: junit() }));
+  writeFileSync(r.file, `${FLOW_TEXT}- tapOn: Home\n`);
+  await assert.rejects(
+    () => executeFlow(r.ctx, r.flow),
+    (e) => e instanceof FlowRefused && /the flow file changed: its content hash is/.test(e.message),
+  );
+  assert.equal(r.m.calls.length, 0, 'Maestro was never started');
+  assert.deepEqual(r.started, []);
+  assert.deepEqual(
+    r.dev.st.log.filter((c) => c.includes('ADULIS_NATIVE')),
+    [],
+    'no marker was logged',
+  );
+  // a flow that has no pin is refused the same way, and so is one that vanished
+  const noPin = rig(async () => ({ status: 0, junit: junit() }));
+  await assert.rejects(
+    () => runAttempt(noPin.ctx, { ...noPin.flow, decl: {} }, 1),
+    /has no content pin/,
+  );
+  rmSync(noPin.file);
+  await assert.rejects(() => runAttempt(noPin.ctx, noPin.flow, 1), /cannot be read/);
+  assert.equal(noPin.m.calls.length, 0);
+});
+
+test('the flow is checked again before every attempt, so a change made between the two attempts is caught', async () => {
+  const r = rig(
+    async (n, _o) => {
+      if (n === 0) writeFileSync(r.file, `${FLOW_TEXT}- tapOn: Home\n`); // changed while the first attempt ran
+      return { status: 1, log: 'device offline' };
+    },
+    { recheck: async () => [] },
+  );
+  await assert.rejects(() => executeFlow(r.ctx, r.flow), FlowRefused);
+  assert.equal(r.m.calls.length, 1, 'the second attempt never started');
+});
+
+test('Maestro runs a copy of the verified bytes: a change to the original after the check does not reach it', async () => {
+  let seen = null;
+  const r = rig(async (_n, o) => {
+    const given = o.args.at(-1);
+    writeFileSync(r.file, 'appId: com.other.app\n---\n- clearKeychain\n'); // the original is replaced during the run
+    seen = [given, readFileSync(given, 'utf8')];
+    return { status: 0, junit: junit() };
+  });
+  const res = await executeFlow(r.ctx, r.flow);
+  assert.equal(res.verdict, 'PASS');
+  assert.equal(seen[1], FLOW_TEXT);
+  assert.notEqual(seen[0], r.file, 'Maestro was not given the original file');
+  assert.ok(seen[0].startsWith(join(r.dir, 'foundation-smoke', 'attempt-1')), seen[0]);
+  assert.equal(res.attempts[0].flowSha256, flowHash(Buffer.from(FLOW_TEXT)));
+});
+
+test('the session is told when Maestro starts and when it has ended, with the pid it ran as', async () => {
+  const r = rig(async () => ({ status: 0, junit: junit() }));
+  await executeFlow(r.ctx, r.flow);
+  assert.deepEqual([r.started, r.ended.length], [[4321], 1]);
+  assert.equal(r.ctx.maestroStarted !== undefined, true);
+});
+
+test('a Maestro process that would not stop stays recorded, is never retried and nothing is started over it', async () => {
+  const r = rig(async () => ({ status: null, stuck: true, error: new Error('did not stop') }), {
+    budget: 3,
+  });
+  const res = await executeFlow(r.ctx, r.flow);
+  assert.equal(r.m.calls.length, 1, 'no retry although the error looks like infrastructure');
+  assert.equal(r.ended.length, 0, 'the record of the process is kept for the next restore');
+  assert.equal(res.attempts[0].stuck, true);
+  assert.equal(r.ctx.budget.infra, 3, 'no budget was spent');
 });
