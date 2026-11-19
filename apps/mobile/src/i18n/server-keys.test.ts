@@ -1,13 +1,24 @@
 import { en } from '@adulis/locale/mobile';
 
-import { repoFile } from '../testing/source-scan';
+import { repoFile, repoFolderFiles } from '../testing/source-scan';
 
 /**
  * Some catalogue keys are named by the server: a Seller's Trust level, a review's evidence basis, a
  * fulfilment method, a category's label. The app draws a sentence only for a key it has, so a value the
  * server adds and the catalogue lacks would vanish from the screen (or show as a bare code) with nothing
  * failing. This holds the served set against the catalogue, read from the generated contract and the
- * category migration, both only read.
+ * category migrations, both only read.
+ *
+ * WHAT IT COVERS: four enums of the contract (a Seller profile Trust level, a Search result Seller Trust
+ * level, a review evidence basis, a Seller fulfilment method) and the category labels written by the
+ * migrations in db/migrations: every migration is read, the catalogue keys any of them names are checked,
+ * and the set of migrations that write the category table is pinned, so a newer migration that adds or
+ * relabels a category fails here until this test has read it.
+ *
+ * WHAT IT DOES NOT COVER: the Seller Companion's served values (`seller.role.*`, `seller.status.*` and
+ * `seller.order.state.*`, which carry a `.other` fallback key for a value the app does not know), the
+ * storefront status (`StorefrontDto.status`), any enum of the contract not listed above, and a category
+ * created outside a migration (the seed folder is empty and no Console write path exists today).
  */
 
 type Schema = { properties?: Record<string, Schema>; items?: Schema; enum?: string[] };
@@ -46,10 +57,26 @@ describe('what the server can name is in the catalogue', () => {
     expect(missingKeys(prefix, served(), en)).toEqual([]);
   });
 
-  it('has a label for every category the migration seeds', () => {
-    const migration = repoFile('db/migrations/0062_catalogue_category_taxonomy.sql');
-    const seeded = [...migration.matchAll(/'(catalogue\.category\.[a-z_]+)'/g)].map((match) => match[1] as string);
+  const migrations = repoFolderFiles('db/migrations', '.sql');
+  /** A statement that creates, changes or removes the category table or its rows (not its availability table). */
+  const WRITES_CATEGORIES = /(?:CREATE\s+TABLE|ALTER\s+TABLE|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+core\.category\b/i;
+  /** The migrations read so far: the one that creates the table and the one that gives it labels. */
+  const READ_SO_FAR = ['0007_catalogue_products_media.sql', '0062_catalogue_category_taxonomy.sql'];
+
+  it('reads every migration, and only the two it has read write the category table', () => {
+    expect(migrations.length).toBeGreaterThan(50);
+    expect(migrations.filter(({ text }) => WRITES_CATEGORIES.test(text)).map(({ file }) => file).sort()).toEqual(READ_SO_FAR);
+  });
+
+  it('has a label for every category any migration names', () => {
+    const seeded = migrations.flatMap(({ text }) => [...text.matchAll(/'(catalogue\.category\.[a-z_]+)'/g)].map((match) => match[1] as string));
     expect(seeded.length).toBeGreaterThanOrEqual(3);
     expect(seeded.filter((key) => !Object.prototype.hasOwnProperty.call(en, key))).toEqual([]);
+  });
+
+  it('flags a category statement in a migration this test has not read', () => {
+    expect(WRITES_CATEGORIES.test("INSERT INTO core.category (id, code) VALUES ('x', 'TOYS');")).toBe(true);
+    expect(WRITES_CATEGORIES.test("update core.category set label_key = 'catalogue.category.toys'")).toBe(true);
+    expect(WRITES_CATEGORIES.test('INSERT INTO core.category_market_availability (category_id) VALUES (1);')).toBe(false);
   });
 });
