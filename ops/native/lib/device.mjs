@@ -1,6 +1,7 @@
 // The Android device a native run may drive. Flows clear the app's data, so a device is used only
 // when the operator named its serial, it is the one device attached, it is an emulator, the app on
 // it is a debug build, and its reverse-port table holds nothing but this run's ports.
+import { parsePackage } from './package-dump.mjs';
 import { DEVICE_PORTS_EXTRA, PROTECTED_PORTS } from './protected.mjs';
 
 export const APP_ID = 'com.adulis.app';
@@ -45,8 +46,10 @@ export async function observeDevice(adb, serial) {
   const sh = (cmd) => adb(['-s', serial, 'shell', ...cmd]);
   const qemu = (await sh(['getprop', 'ro.kernel.qemu'])).stdout.trim();
   const dump = (await sh(['dumpsys', 'package', APP_ID])).stdout;
-  const installed = dump.includes(`Package [${APP_ID}]`);
-  const debuggable = /(pkgFlags|flags)=\[[^\]]*\bDEBUGGABLE\b/.test(dump);
+  // Only the app's own block counts: another package's DEBUGGABLE flag in the same output proves nothing.
+  const pkg = parsePackage(dump, APP_ID);
+  const installed = pkg.installed;
+  const debuggable = !!pkg.debuggable;
   const rev = (await adb(['-s', serial, 'reverse', '--list'])).stdout
     .split(/\r?\n/)
     .map((l) => l.trim().split(/\s+/))
