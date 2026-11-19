@@ -37,8 +37,8 @@ notifications, escalation).
 | Logical state | When | What the app does |
 |---|---|---|
 | CONFIRMED_SENT | 201 with a UUID `message_id` | Shown in the conversation, composer cleared, intent ended |
-| CONFIRMED_FAILED | The API's own problem envelope (ProblemDto's required `title_key`, `request_id`, `retryable`, and a `status` equal to the HTTP status; review S22-01), any status, including 5xx and 401 | "...was not sent", text kept, intent ended. After a 5xx, 409 or 404 the conversation is re-read first (`rereadAfter`). The next Send gets a new key |
-| UNKNOWN_OUTCOME | Anything else: offline, timeout, a gateway 4xx/5xx without the API's problem envelope (including JSON carrying only a `code`), a 201 that cannot be read or has no message id | "Your message may already have been received..." The text, Product, conversation and key are frozen. **Try sending again** replays them; **Edit the message instead** gives the intent up. The conversation is re-read so a stored message appears |
+| CONFIRMED_FAILED | The API's own problem envelope (ProblemDto's required `title_key`, `request_id`, `retryable`, and a `status` equal to the HTTP status; review S22-01). In the Buyer conversation only a 4xx other than a key conflict (409) or a rate limit (429); on a replay only a 400, a 413 and a 404 (see section 7 for the 404). In the Seller reply any status of that envelope (the older rule, see section 7) | "...was not sent", text kept, intent ended. After a 404 the conversation is re-read first (`rereadAfter`). The next Send gets a new key |
+| UNKNOWN_OUTCOME | Anything else: offline, timeout, a gateway 4xx/5xx without the API's problem envelope (including JSON carrying only a `code`), a 201 that cannot be read or has no message id; in the Buyer conversation also the API's own 5xx, 429 and 409, and on a replay a refusal the server raises before it looks at its record (a client too old, a recovery window, the wrong audience, a missing session) | "Your message may already have been received..." The text, Product, conversation and key are frozen. **Try sending again** replays them; **Edit the message instead** gives the intent up. The conversation is re-read so a stored message appears |
 | SENDING | Request in flight | "Sending your message"; Send disabled; a ref blocks a second tap |
 | IDLE | Otherwise | -- |
 
@@ -49,8 +49,11 @@ A 404 on a replay can stay unknown after an earlier attempt that never got an an
   problem. For a Chat send that is too loose, because a gateway can send `{ code }` too (review
   S22-01). The send rule therefore also requires the contract's envelope fields. Only the API sends
   those.
-- A 5xx problem from the API itself stays definite. The server keeps a refusal against its key
-  (ADU-API-01 S8), so a replay would only repeat it forever.
+- In the Buyer conversation a 5xx problem from the API itself is unknown, not definite. The server
+  stores the message and its idempotency record in one transaction, and a connection lost at the
+  commit answers 503 although the commit happened, so the key is kept and the same message is sent
+  again under it (a stored message comes back as stored). The Seller reply keeps the older rule: see
+  section 7.
 - Anything without that body cannot prove the message was not stored.
 
 **Never weaker than WO-021 on the store side:**
@@ -225,3 +228,9 @@ used.
 
 **Signing in over a live session** as a different credential clears the query cache, the active mode
 and a pending Save, as signing out does. A guest signing in keeps what a guest holds.
+
+**The Seller reply keeps the older rule.** Everything in this section is the Buyer conversation. The
+store's reply (`src/seller/seller-chat.ts`) still ends its intent on any answer that carries the API's
+envelope, at any status, so it does not keep the key after a 5xx or after a 404 that follows an
+attempt that never got an answer. Whether the Seller reply and the 5xx rule should follow the Buyer
+conversation is an open product decision.

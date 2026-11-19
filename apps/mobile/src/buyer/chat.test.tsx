@@ -2586,6 +2586,26 @@ describe('Message send reconciliation', () => {
       await waitFor(() => expect(screen.queryByText(en['buyer.chat.failed'])).toBeNull());
     });
 
+    // The line is drawn as an alert, which announces itself: a second announcement would be read out twice.
+    it('the line about a read that failed is announced once', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWithWelcome();
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Announce the failed read once');
+        await maybe();
+        api.onPattern('GET', MESSAGES_PATH, () => problem(500, 'INTERNAL', 'request'));
+        await fireEvent.press(edit());
+        expect(await screen.findByText(en['buyer.chat.failed'])).toBeOnTheScreen();
+        await advance(1000);
+        expect(
+          announce.mock.calls.filter(([text]) => text === en['buyer.chat.failed']),
+        ).toHaveLength(1);
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
     it('Edit the message instead while offline: the box says so, and the line goes when the connection returns', async () => {
       const { chat } = await openWithWelcome();
       idempotent(chat, [{ refuse: 'offline' }]);

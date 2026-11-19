@@ -211,7 +211,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     if (hint !== null) AccessibilityInfo.announceForAccessibility(hint);
   }, [hint]);
   // The edited words are in the box and the hint is only as current as the last read: when that read failed or is
-  // waiting for a connection, say so beside the words, so that no hint is not taken for "not stored".
+  // waiting for a connection, say so beside the words, so that no hint is not taken for "not stored". It is drawn
+  // as an AlertText, which announces it itself.
   const recheckText =
     state === 'unsent' && watch !== null && draft.trim() === watch.text
       ? messages.fetchStatus === 'paused'
@@ -220,9 +221,6 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           ? t('buyer.chat.failed')
           : null
       : null;
-  useEffect(() => {
-    if (recheckText !== null) AccessibilityInfo.announceForAccessibility(recheckText);
-  }, [recheckText]);
   // The alert role alone is not spoken on Android: announce what happened to the message. The effect
   // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
   // withdrawn at a press (the state does not change then).
