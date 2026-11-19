@@ -435,6 +435,8 @@ export const enCommon = {
   'buyer.chat.context_unchecked': 'This Product could not be checked. Check your connection and try again.',
   'buyer.chat.context_remove': 'Remove Product',
   'buyer.chat.edit_unconfirmed': 'Edit the message instead',
+  // Beside an unconfirmed send whose text now appears in the conversation: empties the box and ends the retry. Claims nothing about the message.
+  'buyer.chat.discard_unconfirmed': 'Clear the message',
   // WO-015 in-conversation Product selector (ADU-CHAT-01 v3.3 S5: the composer's Product selector;
   // the chosen Product describes the next message only). Products come from the public Catalogue.
   'buyer.chat.select_product': 'Select Product',

@@ -371,6 +371,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.context_unchecked': 'ይህን ምርት መፈተሽ አልተቻለም። ግንኝነትዎን ያረጋግጡ እና እንደገና ይሞክሩ።',
   'buyer.chat.context_remove': 'ምርቱን አስወግድ',
   'buyer.chat.edit_unconfirmed': 'ይልቁንም መልእክቱን አርትዕ',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.chat.discard_unconfirmed': 'መልእክቱን አጽዳ',
   // WO-015 in-conversation Product selector: machine-translation placeholders awaiting the human pass.
   'buyer.chat.select_product': 'ምርት ይምረጡ',
   'buyer.chat.change_product': 'ሌላ ምርት ይምረጡ',
