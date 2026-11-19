@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { makeAdb } from '../lib/adb.mjs';
 import { appendEntry, summarize } from '../lib/journal.mjs';
 import { reapOrphan } from '../lib/lock.mjs';
+import { flowHash } from '../lib/flows.mjs';
 import { journalProblems, restoreOpen } from '../lib/restore.mjs';
 import { acquireLock, countAppDevices, lockHeld, releaseLock, runNative } from '../lib/session.mjs';
 import { fakeDevice, initialState, junit, SERIAL } from './fake-device.mjs';
@@ -414,11 +415,15 @@ test('an unknown battery, or a flow file that gained a hazard, is refused before
   const r2 = await go(b);
   assert.equal(r2.code, 1);
   assert.match(r2.status, /^HARNESS REFUSED - flows: flow 'buyer-shell': the flow file changed/);
-  assert.match(
-    r2.problems.join(' | '),
-    /flow 'buyer-shell' uses 'script', which no declaration can approve/,
-    'the hazard is named as well as the change',
-  );
+  assert.deepEqual(r2.problems.length, 1, 'a flow that is not the pinned one is not read further');
+  assert.doesNotMatch(r2.problems.join(' | '), /uses 'script'/);
+  assert.equal(b.maestro.calls.length, 0);
+  // re-pinned (a reviewed change to the declaration), the scan refuses the hazard whatever the pin says
+  const edited = join(b.checkout, 'apps', 'mobile', '.maestro', 'buyer-shell.yaml');
+  b.deps.decl.flows['buyer-shell'].sha256 = flowHash(readFileSync(edited));
+  const r3 = await go(b);
+  assert.equal(r3.code, 1);
+  assert.match(r3.status, /flow 'buyer-shell' uses 'script', which no declaration can approve/);
   assert.equal(b.maestro.calls.length, 0);
 });
 

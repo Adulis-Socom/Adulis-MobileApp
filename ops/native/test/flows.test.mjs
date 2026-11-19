@@ -605,3 +605,21 @@ test('a permission grant that is a list or empty cannot be read and is never rea
   assert.deepEqual(scan('- launchApp:\n    permissions: {}').permissions, ['(none readable)']);
   assert.deepEqual(scan('- launchApp:\n    permissions:').permissions, ['(none readable)']);
 });
+
+test('every flow in the repository directory is read as YAML: none is unparseable, and the approved ones carry no refused hazard', () => {
+  const files = readdirSync(REAL_FLOWS).filter((f) => f.endsWith('.yaml'));
+  assert.ok(files.length > 40, `${files.length} flows`);
+  const unparseable = files.filter((f) =>
+    scanFlow(readFileSync(join(REAL_FLOWS, f), 'utf8')).hazards.includes('unparseable'),
+  );
+  assert.deepEqual(unparseable, [], 'a flow that cannot be read is a flow nobody can approve');
+  const real = loadDeclaration(REAL_DECL);
+  for (const d of Object.values(real.flows)) {
+    const scan = scanFlow(readFileSync(join(REAL_FLOWS, d.file), 'utf8'));
+    assert.deepEqual(
+      scan.hazards.filter((h) => NEVER_HAZARDS.includes(h)),
+      [],
+      d.file,
+    );
+  }
+});

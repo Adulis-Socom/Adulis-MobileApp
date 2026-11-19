@@ -9,6 +9,7 @@ import { after, test } from 'node:test';
 import { EXIT, EXIT_TEST_FAILED, main } from '../harness.mjs';
 import { makeAdb } from '../lib/adb.mjs';
 import { observeDevice } from '../lib/device.mjs';
+import { deviceCommand } from '../lib/native-cli.mjs';
 import { appendEntry, summarize } from '../lib/journal.mjs';
 import { readManifest } from '../lib/manifest.mjs';
 import { applySetting, beginSession, deviceIdentity } from '../lib/restore.mjs';
@@ -607,7 +608,7 @@ test('device prepare is refused while another run has open changes on this devic
   );
   assert.match(
     open.last(),
-    /run native-20261117-aaaaaaaa still has 1 device change\(s\) not restored: run `device restore --run <run> --serial emulator-5554` first/,
+    /run native-20261117-aaaaaaaa still has 1 device change\(s\) not restored: run `device restore --run native-20261117-aaaaaaaa --serial emulator-5554` first/,
   );
   assert.deepEqual(open.x.dev.st.reverse, [], 'nothing was prepared');
   assert.equal(summarize(open.x.dir).open.length, 0, 'this run opened no journal');
@@ -623,7 +624,10 @@ test('device prepare is refused while another run has open changes on this devic
     await broken.run('device', 'prepare', '--run', broken.x.w.m.run, '--serial', SERIAL),
     EXIT.REFUSED,
   );
-  assert.match(broken.last(), /run native-20261117-bbbbbbbb has an unusable device journal/);
+  assert.match(
+    broken.last(),
+    /run native-20261117-bbbbbbbb has an unusable device journal .*: inspect it and move that run directory aside by hand/,
+  );
 
   // another device's open changes are not in the way
   const elsewhere = rig();
@@ -660,4 +664,22 @@ test('an orphan Maestro that is stopped before down or device restore is said in
   const none = rig();
   assert.equal(await none.run('down', '--run', none.x.w.m.run), EXIT.OK);
   assert.ok(!none.lines.some((l) => l.startsWith('stopped the Maestro')));
+});
+
+test('device prepare without the run root fails closed: other runs cannot be checked, so nothing is prepared', async () => {
+  const r = rig();
+  await assert.rejects(
+    deviceCommand({
+      sub: 'prepare',
+      m: r.x.w.m,
+      dir: r.x.dir,
+      io: r.x.io,
+      a: { serial: SERIAL },
+      env: r.env,
+      say: () => {},
+    }),
+    /the run root was not passed to device prepare/,
+  );
+  assert.deepEqual(r.x.dev.st.reverse, []);
+  assert.equal(summarize(r.x.dir).open.length, 0);
 });

@@ -290,7 +290,10 @@ export function resolveBattery(decl, name, flowDir) {
       continue;
     }
     const pinned = verifyFlowFile(file, d.sha256);
-    if (pinned.problem) problems.push(`flow '${fname}': ${pinned.problem}`);
+    if (pinned.problem) {
+      problems.push(`flow '${fname}': ${pinned.problem}`); // a flow that is not the pinned one is not read further
+      continue;
+    }
     let scan;
     try {
       scan = scanFlow(readFileSync(file, 'utf8'));

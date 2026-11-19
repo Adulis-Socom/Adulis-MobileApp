@@ -98,10 +98,18 @@ export async function deviceCommand({ sub, m, dir, io, a, env, say, root }) {
     return { code: 0, status: `HARNESS OK - device ${serial} passes the device checks` };
   await guardSession(dir, io);
   // another run that left changes on this device (or a journal nobody can read) is not built upon
-  const others = root ? otherRunsOpen(root, dir, serial) : [];
+  if (!root)
+    throw new Error('the run root was not passed to device prepare: other runs cannot be checked');
+  const others = otherRunsOpen(root, dir, serial);
   if (others.length)
     throw new Refused(
-      `refused: ${others.map((o) => `run ${o.run} ${o.corrupt ? `has an unusable device journal (${o.corrupt})` : `still has ${o.open} device change(s) not restored`}`).join('; ')}: run \`device restore --run <run> --serial ${serial}\` first`,
+      `refused: ${others
+        .map((o) =>
+          o.corrupt
+            ? `run ${o.run} has an unusable device journal (${o.corrupt}): inspect it and move that run directory aside by hand`
+            : `run ${o.run} still has ${o.open} device change(s) not restored: run \`device restore --run ${o.run} --serial ${serial}\` first`,
+        )
+        .join('; ')}`,
     );
   await assertTarget(m, 'API-WRITE', io, { dir, states: ['ready'] });
   const dev = makeAdb(io, serial);

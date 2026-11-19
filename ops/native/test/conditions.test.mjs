@@ -422,7 +422,10 @@ test("NC-11 and NC-12 name another run's open changes and a Maestro process left
     others.by('NC-11').detail,
     /run r-older still has 2 device change\(s\) not restored on this device: run `device restore --run r-older` first/,
   );
-  assert.match(others.by('NC-11').detail, /run r-broken has an unusable device journal/);
+  assert.match(
+    others.by('NC-11').detail,
+    /run r-broken has an unusable device journal that may belong to this device: inspect it and move that run directory aside by hand/,
+  );
   assert.equal(others.d.code, 1);
   const orphan = run({ lock: { held: false, orphan: { pid: 777 } } });
   assert.equal(orphan.by('NC-12').verdict, 'FAIL');
