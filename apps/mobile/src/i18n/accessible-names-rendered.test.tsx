@@ -8,7 +8,8 @@ import { resetSecureStore } from '../testing/secure-store-mock';
 /**
  * The static scan in accessible-names.test.ts reads the sources; this draws the screens a Buyer sees
  * first and asks the way a screen reader does: every control with a button, tab, link, checkbox or
- * radio role has a non-empty accessible name (its label, or the words inside it).
+ * radio role has a non-empty accessible name, which is its label or the words inside it. Text that is
+ * hidden from the screen reader (an icon glyph) is not a name.
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -16,13 +17,29 @@ jest.setTimeout(60_000);
 
 const ROLES = ['button', 'tab', 'link', 'checkbox', 'radio'] as const;
 
+type Node = { props: Record<string, unknown>; children: (Node | string)[] };
+
+const hidden = (node: Node) =>
+  node.props.accessibilityElementsHidden === true ||
+  node.props['aria-hidden'] === true ||
+  String(node.props.importantForAccessibility ?? '').startsWith('no');
+
+/** What a screen reader would say for this node: its own label, else the visible words inside it. */
+function spoken(node: Node | string): string {
+  if (typeof node === 'string') return node;
+  if (hidden(node)) return '';
+  const label = node.props['aria-label'] ?? node.props.accessibilityLabel;
+  if (typeof label === 'string' && label.trim() !== '') return label;
+  return node.children.map(spoken).join(' ');
+}
+
 function expectEveryControlNamed() {
   let controls = 0;
   for (const role of ROLES) {
-    const all = screen.queryAllByRole(role);
-    const named = screen.queryAllByRole(role, { name: /\S/ });
+    const all = screen.queryAllByRole(role) as unknown as Node[];
     controls += all.length;
-    expect({ role, unnamed: all.length - named.length }).toEqual({ role, unnamed: 0 });
+    const unnamed = all.filter((control) => spoken(control).trim() === '').length;
+    expect({ role, unnamed }).toEqual({ role, unnamed: 0 });
   }
   expect(controls).toBeGreaterThan(5);
 }
