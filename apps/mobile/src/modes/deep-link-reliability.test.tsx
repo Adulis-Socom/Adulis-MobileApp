@@ -27,46 +27,73 @@ const signedIn = () => resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
 const quiet = () => act(() => jest.advanceTimersByTimeAsync(1000));
 const open = (path: string) => act(() => router.push(path as never));
 const HOME_CALLS = ['GET /v1/bootstrap', 'GET /v1/fyp', 'POST /v1/devices'];
-const unexpectedCalls = () => api.calls.map((c) => `${c.method} ${c.path}`).filter((c) => !HOME_CALLS.includes(c));
+const unexpectedCalls = () =>
+  api.calls.map((c) => `${c.method} ${c.path}`).filter((c) => !HOME_CALLS.includes(c));
 
 beforeEach(() => {
   jest.clearAllMocks();
   resetSecureStore();
   api = installFakeApi();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
+  useUiStore.setState({
+    activeMode: null,
+    themePreference: 'system',
+    locale: 'en',
+    upgradeNoticeDismissed: false,
+    pendingSave: null,
+  });
 });
 
 afterEach(() => {
-  expect(api.calls.filter((c) => /cart|order|checkout|payment|reservation|claim/i.test(c.path))).toEqual([]);
+  expect(
+    api.calls.filter((c) => /cart|order|checkout|payment|reservation|claim/i.test(c.path)),
+  ).toEqual([]);
 });
 
 // Places the Buyer app does not have: an Order or Claim screen, a checkout, a cart, a Messages or Account path
 // that goes deeper than the screens that exist.
-const UNAVAILABLE = [`/orders/${ORDER}`, `/orders/${ORDER}/claim`, `/claims/${ORDER}`, '/checkout', '/cart', '/chat', `/notifications/${ORDER}`, '/account/sessions', '/account/settings'];
+const UNAVAILABLE = [
+  `/orders/${ORDER}`,
+  `/orders/${ORDER}/claim`,
+  `/claims/${ORDER}`,
+  '/checkout',
+  '/cart',
+  '/chat',
+  `/notifications/${ORDER}`,
+  '/account/sessions',
+  '/account/settings',
+];
 
 describe.each([
   ['a signed-in Buyer', signedIn],
   ['a guest', () => resetSecureStore()],
 ])('%s following a link to a place the app does not have', (_who, start) => {
-  it.each(UNAVAILABLE)('%s opens Buyer Home and sends nothing it should not (cold)', async (path) => {
-    start();
-    await renderRouter(APP_DIR, { initialUrl: path });
-    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
-    expect(screen).toHavePathname('/home/for-you');
-    await quiet();
-    expect(unexpectedCalls()).toEqual([]);
-  });
+  it.each(UNAVAILABLE)(
+    '%s opens Buyer Home and sends nothing it should not (cold)',
+    async (path) => {
+      start();
+      await renderRouter(APP_DIR, { initialUrl: path });
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      await quiet();
+      expect(unexpectedCalls()).toEqual([]);
+    },
+  );
 
-  it.each(UNAVAILABLE)('%s opens Buyer Home and sends nothing it should not (warm)', async (path) => {
-    start();
-    await renderRouter(APP_DIR, { initialUrl: '/home/for-you' });
-    await screen.findByText(en['buyer.for_you.empty']);
-    await open(path);
-    expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
-    expect(screen).toHavePathname('/home/for-you');
-    await quiet();
-    expect(unexpectedCalls().filter((c) => /orders|claims|checkout|cart|chat\b/.test(c))).toEqual([]);
-  });
+  it.each(UNAVAILABLE)(
+    '%s opens Buyer Home and sends nothing it should not (warm)',
+    async (path) => {
+      start();
+      await renderRouter(APP_DIR, { initialUrl: '/home/for-you' });
+      await screen.findByText(en['buyer.for_you.empty']);
+      await open(path);
+      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+      expect(screen).toHavePathname('/home/for-you');
+      await quiet();
+      expect(unexpectedCalls().filter((c) => /orders|claims|checkout|cart|chat\b/.test(c))).toEqual(
+        [],
+      );
+    },
+  );
 });
 
 const PRIVATE_PLACES = [
@@ -79,18 +106,27 @@ const PRIVATE_PLACES = [
 ] as const;
 
 describe('a link to an Account-bound place under a credential the server has already ended', () => {
-  it.each(PRIVATE_PLACES)('%s shows the guest prompt, forgets the credential and asks for nothing private', async (path, message) => {
-    resetSecureStore({ [TOKEN_KEY]: EXPIRED });
-    installInbox(api, {});
-    await renderRouter(APP_DIR, { initialUrl: path });
-    expect(await screen.findByText(en[message])).toBeOnTheScreen();
-    await quiet();
-    expect(memory.has(TOKEN_KEY)).toBe(false);
-    // The only request that carried the dead credential is the one that found it dead.
-    const withCredential = api.calls.filter((c) => c.headers.Authorization === `Bearer ${EXPIRED}`).map((c) => `${c.method} ${c.path}`);
-    expect(withCredential).toEqual(['GET /v1/bootstrap']);
-    expect(api.calls.filter((c) => /^\/v1\/(notifications|conversations|collections|auth\/sessions|deletion)/.test(c.path))).toEqual([]);
-  });
+  it.each(PRIVATE_PLACES)(
+    '%s shows the guest prompt, forgets the credential and asks for nothing private',
+    async (path, message) => {
+      resetSecureStore({ [TOKEN_KEY]: EXPIRED });
+      installInbox(api, {});
+      await renderRouter(APP_DIR, { initialUrl: path });
+      expect(await screen.findByText(en[message])).toBeOnTheScreen();
+      await quiet();
+      expect(memory.has(TOKEN_KEY)).toBe(false);
+      // The only request that carried the dead credential is the one that found it dead.
+      const withCredential = api.calls
+        .filter((c) => c.headers.Authorization === `Bearer ${EXPIRED}`)
+        .map((c) => `${c.method} ${c.path}`);
+      expect(withCredential).toEqual(['GET /v1/bootstrap']);
+      expect(
+        api.calls.filter((c) =>
+          /^\/v1\/(notifications|conversations|collections|auth\/sessions|deletion)/.test(c.path),
+        ),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe('a link to a screen that is already open', () => {
@@ -105,8 +141,12 @@ describe('a link to a screen that is already open', () => {
     await open('/messages');
     await open('/messages');
     await quiet();
-    expect(screen.queryAllByText(en['buyer.notifications.unread'], { includeHiddenElements: true })).toHaveLength(1);
-    expect(screen.queryAllByText(en['buyer.messages.empty'], { includeHiddenElements: true })).toHaveLength(1);
+    expect(
+      screen.queryAllByText(en['buyer.notifications.unread'], { includeHiddenElements: true }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryAllByText(en['buyer.messages.empty'], { includeHiddenElements: true }),
+    ).toHaveLength(1);
     await act(() => router.back());
     await act(() => router.back());
     expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
@@ -122,7 +162,9 @@ describe('a link to a screen that is already open', () => {
     await fireEvent.press(messages[0]!);
     await fireEvent.press(messages[0]!);
     await quiet();
-    expect(screen.queryAllByText(en['buyer.messages.empty'], { includeHiddenElements: true })).toHaveLength(1);
+    expect(
+      screen.queryAllByText(en['buyer.messages.empty'], { includeHiddenElements: true }),
+    ).toHaveLength(1);
     await act(() => router.back());
     expect(await screen.findByText(en['buyer.you.signed_in'])).toBeOnTheScreen();
   });
@@ -133,9 +175,10 @@ describe('a link to a screen that is already open', () => {
     await fireEvent.press(signIn);
     await fireEvent.press(signIn);
     await quiet();
-    expect(screen.queryAllByText(en['auth.sign_in.intro'], { includeHiddenElements: true })).toHaveLength(1);
+    expect(
+      screen.queryAllByText(en['auth.sign_in.intro'], { includeHiddenElements: true }),
+    ).toHaveLength(1);
     await act(() => router.back());
     expect(await screen.findByText(en['buyer.notifications.signed_out'])).toBeOnTheScreen();
   });
 });
-

@@ -2,8 +2,21 @@ import { en } from '@adulis/locale/mobile';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { useUiStore } from '../state/ui-store';
-import { GOOD_TOKEN, SIGNED_IN_CONTEXT, SIGN_IN_CODE, bootstrapBody, installFakeApi, problem } from '../testing/fake-api';
-import { hoursAgo, installInbox, notificationId, notificationPage, notificationRow as row } from '../testing/fake-notifications';
+import {
+  GOOD_TOKEN,
+  SIGNED_IN_CONTEXT,
+  SIGN_IN_CODE,
+  bootstrapBody,
+  installFakeApi,
+  problem,
+} from '../testing/fake-api';
+import {
+  hoursAgo,
+  installInbox,
+  notificationId,
+  notificationPage,
+  notificationRow as row,
+} from '../testing/fake-notifications';
 import { TOKEN_B, afterSignOut, asB, naming, open, switchToB } from '../testing/saved-accounts';
 import { TOKEN_KEY, memory, resetSecureStore } from '../testing/secure-store-mock';
 
@@ -27,7 +40,8 @@ const held = () => {
   const gate = new Promise<void>((r) => (release = r));
   return { gate, release };
 };
-const readCalls = () => api.calls.filter((c) => c.method === 'POST' && /^\/v1\/notifications\/[^/]+\/read$/.test(c.path));
+const readCalls = () =>
+  api.calls.filter((c) => c.method === 'POST' && /^\/v1\/notifications\/[^/]+\/read$/.test(c.path));
 
 // The whole rendered tree, screens hidden under others and header titles included: a text query skips those.
 type Json = string | { props?: Record<string, unknown>; children?: Json[] | null } | null;
@@ -37,7 +51,8 @@ const everything = () => {
     if (node === null) return;
     if (Array.isArray(node)) return node.forEach(walk);
     if (typeof node === 'string') return void out.push(node);
-    for (const value of Object.values(node.props ?? {})) if (typeof value === 'string') out.push(value);
+    for (const value of Object.values(node.props ?? {}))
+      if (typeof value === 'string') out.push(value);
     walk(node.children ?? null);
   };
   walk(screen.toJSON() as Json | Json[]);
@@ -48,13 +63,32 @@ const everything = () => {
 // of the first drawn for the second shows as its time and its "about one of your orders" line.
 const A_TIME = '2025-03-07T10:30:00.000Z';
 const A_DATE = new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(A_TIME));
-const A_ROWS = () => [1, 2, 3].map((n) => row(n, { id: notificationId(100 + n), scheduled_for: new Date(Date.parse(A_TIME) - n * 60_000).toISOString(), order_id: '0f000000-0000-4000-8000-0000000000a1' }));
+const A_ROWS = () =>
+  [1, 2, 3].map((n) =>
+    row(n, {
+      id: notificationId(100 + n),
+      scheduled_for: new Date(Date.parse(A_TIME) - n * 60_000).toISOString(),
+      order_id: '0f000000-0000-4000-8000-0000000000a1',
+    }),
+  );
 
 function installAccounts(rows: Parameters<typeof installInbox>[1]) {
-  api.on('GET /v1/bootstrap', (call) => ({ status: 200, body: bootstrapBody(call.headers.Authorization ? { account_context: SIGNED_IN_CONTEXT } : {}) }));
+  api.on('GET /v1/bootstrap', (call) => ({
+    status: 200,
+    body: bootstrapBody(call.headers.Authorization ? { account_context: SIGNED_IN_CONTEXT } : {}),
+  }));
   api.on('POST /v1/auth/otp/verify', (call) =>
     call.body?.code === SIGN_IN_CODE
-      ? { status: 200, body: { account_id: '0b6f1a3e-1111-4111-8111-11111111111b', audience: 'MOBILE', roles: [], expires_at: '2026-12-09T12:00:00.000Z', token: TOKEN_B } }
+      ? {
+          status: 200,
+          body: {
+            account_id: '0b6f1a3e-1111-4111-8111-11111111111b',
+            audience: 'MOBILE',
+            roles: [],
+            expires_at: '2026-12-09T12:00:00.000Z',
+            token: TOKEN_B,
+          },
+        }
       : problem(401, 'OTP_INVALID', 'auth'),
   );
   installInbox(api, rows);
@@ -64,18 +98,31 @@ beforeEach(() => {
   jest.clearAllMocks();
   resetSecureStore();
   api = installFakeApi();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
+  useUiStore.setState({
+    activeMode: null,
+    themePreference: 'system',
+    locale: 'en',
+    upgradeNoticeDismissed: false,
+    pendingSave: null,
+  });
 });
 
 afterEach(() => {
-  expect(api.calls.filter((c) => /cart|order|checkout|payment|reservation|push|device-token|expo-token/i.test(c.path))).toEqual([]);
+  expect(
+    api.calls.filter((c) =>
+      /cart|order|checkout|payment|reservation|push|device-token|expo-token/i.test(c.path),
+    ),
+  ).toEqual([]);
   expect(api.callsTo('POST /v1/notifications/read-all')).toEqual([]);
 });
 
 describe('Notifications kept in the stack when the Account changes', () => {
   it('draw nothing of the first Account for the second, and nothing is asked under the first credential again', async () => {
     signedIn();
-    installAccounts({ [A]: A_ROWS(), [B]: [row(9, { id: notificationId(900), read_at: hoursAgo(1) })] });
+    installAccounts({
+      [A]: A_ROWS(),
+      [B]: [row(9, { id: notificationId(900), read_at: hoursAgo(1) })],
+    });
     await renderRouter(APP_DIR, { initialUrl: '/notifications' });
     expect(await screen.findAllByText(en['buyer.notifications.unread'])).toHaveLength(3);
     expect(screen.getAllByText(en['buyer.notifications.about_order'])).toHaveLength(3);
@@ -101,24 +148,31 @@ describe('Notifications kept in the stack when the Account changes', () => {
     const shared = notificationId(500);
     installAccounts({ [A]: [row(1, { id: shared })], [B]: [row(1, { id: shared })] });
     const { gate, release } = held();
-    api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, async (call) => {
-      expect(call.headers.Authorization).toBe(A);
+    api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, async () => {
       await gate;
       return { status: 200, body: { read_at: new Date().toISOString() } };
     });
     await renderRouter(APP_DIR, { initialUrl: '/notifications' });
-    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] }),
+    );
     await waitFor(() => expect(readCalls()).toHaveLength(1));
+    // The request still in flight is the first Account's.
+    expect(readCalls()[0]?.headers.Authorization).toBe(A);
     await switchToB();
     await open('/notifications');
-    expect(await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] })).toBeOnTheScreen();
+    expect(
+      await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] }),
+    ).toBeOnTheScreen();
     // The first Account's answer lands now.
     await act(async () => release());
     await act(() => jest.advanceTimersByTimeAsync(2000));
     expect(screen.getByText(en['buyer.notifications.unread'])).toBeOnTheScreen();
     expect(screen.queryByText(en['buyer.notifications.read_state'])).toBeNull();
     expect(readCalls()).toHaveLength(1);
-    expect(api.calls.filter((c) => asB(c) && c.method === 'POST' && c.path.includes('/notifications/'))).toEqual([]);
+    expect(
+      api.calls.filter((c) => asB(c) && c.method === 'POST' && c.path.includes('/notifications/')),
+    ).toEqual([]);
   });
 });
 
@@ -126,9 +180,13 @@ describe('a session the server ends while the inbox is open', () => {
   it('ending it on a Mark as read leaves no row on screen and a guest prompt', async () => {
     signedIn();
     installInbox(api, { [A]: [row(1), row(2)] });
-    api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, () => problem(401, 'SESSION_EXPIRED', 'auth'));
+    api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, () =>
+      problem(401, 'SESSION_EXPIRED', 'auth'),
+    );
     await renderRouter(APP_DIR, { initialUrl: '/notifications' });
-    await fireEvent.press((await screen.findAllByRole('button', { name: en['buyer.notifications.mark_read'] }))[0]!);
+    await fireEvent.press(
+      (await screen.findAllByRole('button', { name: en['buyer.notifications.mark_read'] }))[0]!,
+    );
     expect(await screen.findByText(en['buyer.notifications.signed_out'])).toBeOnTheScreen();
     expect(everything()).not.toContain(en['buyer.notifications.unread']);
     expect(memory.has(TOKEN_KEY)).toBe(false);
@@ -182,7 +240,10 @@ describe('Delete Account left open when the Account changes', () => {
 describe('notifications of a page that lands late', () => {
   it('an inbox page for the first Account that lands after the second Account signed in is never drawn', async () => {
     signedIn();
-    installAccounts({ [A]: A_ROWS(), [B]: [row(9, { id: notificationId(900), read_at: hoursAgo(1) })] });
+    installAccounts({
+      [A]: A_ROWS(),
+      [B]: [row(9, { id: notificationId(900), read_at: hoursAgo(1) })],
+    });
     const { gate, release } = held();
     api.on('GET /v1/notifications', async (call) => {
       if (call.headers.Authorization === A) {
