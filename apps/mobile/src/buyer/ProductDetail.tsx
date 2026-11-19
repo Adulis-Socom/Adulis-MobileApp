@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBootstrap } from '../api/bootstrap';
 import type { StorefrontProduct } from '../api/client';
-import { fillSlots } from '../api/messages';
+import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
-import { StatusText } from '../components/AlertText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
+import { Button } from '../components/Button';
 import { formatMinor, formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
@@ -40,6 +41,11 @@ import { SaveButton } from './SaveButton';
  * - Revalidated on opening, on returning from the background, on returning from another screen
  *   (the Seller, the conversation, sign-in) and on a pull; a 404 clears it. Only the opening
  *   counts as a view (OVN-073).
+ * - A re-read that fails, or waits for a connection, keeps the Product on screen but not what it
+ *   can no longer vouch for: the name, photos, description, Seller, Save and Ask the Seller stay;
+ *   the price, the availability and the options are not drawn, any chosen option is cleared, and
+ *   the Buyer is told why with a way to try again. A 404 and the background interval are not
+ *   covered by this: the first is "no longer available", the second withholds everything.
  */
 export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: unknown; from?: unknown }) {
   const { api } = useSession();
@@ -47,6 +53,7 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
   const read = usePublicRead(
     ['product', valid ? handle : '', valid ? slug : ''],
     valid ? (revalidation) => api.product(handle, slug, revalidation) : null,
+    { keepOnFailure: true },
   );
   // Coming back to this screen asks again, so price and availability follow the server rather
   // than what was on screen when the Buyer left; the first focus is the opening read.
@@ -58,7 +65,8 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
       opened.current = true;
     }, [revalidate, valid]),
   );
-  if (read.value === undefined) {
+  const shown = read.unverified?.value ?? read.value;
+  if (shown === undefined) {
     return (
       <ReadStates
         read={read}
@@ -70,12 +78,15 @@ export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: u
   }
   return (
     <ProductContent
-      product={read.value}
+      product={shown}
       route={`/product/${handle as string}/${slug as string}`}
       sceneRef={isPublicRef(from) ? from : null}
-      receivedAt={read.receivedAt ?? 0}
+      receivedAt={read.receivedAt ?? read.unverified?.receivedAt ?? 0}
       pulling={read.pulling}
       onPull={read.pull}
+      unverified={read.unverified ?? null}
+      onRetry={read.revalidate}
+      retrying={read.revalidating}
     />
   );
 }
@@ -87,6 +98,9 @@ function ProductContent({
   receivedAt,
   pulling,
   onPull,
+  unverified,
+  onRetry,
+  retrying,
 }: {
   product: StorefrontProduct;
   /** This screen's own path: where a guest's sign-in returns (WO-009 S16). */
@@ -95,6 +109,10 @@ function ProductContent({
   receivedAt: number;
   pulling: boolean;
   onPull: () => void;
+  /** Not null while the answer cannot be verified yet: why (a wait for a connection, a failure, or a read on its way) and the failure to say. */
+  unverified: { why: 'offline' | 'failed' | 'checking'; error: unknown } | null;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -108,8 +126,15 @@ function ProductContent({
   // Set when the server stops offering the chosen option; the notice shows until an option is chosen again,
   // and only while some option can be chosen (it tells the Buyer to choose).
   const [dropped, setDropped] = useState(false);
-  const checked = transition(selection, { type: 'PROJECT' }, product);
-  if (checked !== selection) {
+  // Price, availability and options are not drawn while the answer cannot be verified, and no choice is
+  // kept: it is cleared without a word about the option (nothing says it changed), and not restored.
+  const withheld = unverified !== null;
+  if (withheld) {
+    if (selection !== NO_VARIANT) setSelection(NO_VARIANT);
+    if (dropped) setDropped(false);
+  }
+  const checked = withheld ? NO_VARIANT : transition(selection, { type: 'PROJECT' }, product);
+  if (!withheld && checked !== selection) {
     setSelection(checked);
     setDropped(true);
   }
@@ -146,19 +171,32 @@ function ProductContent({
       <AppText variant="heading" accessibilityRole="header">
         {product.name}
       </AppText>
-      {price === null ? null : (
+      {unverified ? (
+        <View style={{ gap: theme.space.sm }}>
+          {unverified.why === 'checking' ? (
+            // The connection is back (or a retry is on its way) and the old answer has not been replaced yet.
+            <StatusText>{t('buyer.product.loading')}</StatusText>
+          ) : (
+            <AlertText>{unverified.why === 'offline' ? t('common.offline') : failureMessage(t, unverified.error)}</AlertText>
+          )}
+          {unverified.why === 'failed' ? <Button label={t('common.retry')} onPress={onRetry} disabled={retrying} /> : null}
+        </View>
+      ) : null}
+      {withheld || price === null ? null : (
         <AppText testID="product-price" style={{ fontWeight: theme.fontWeight.semibold }}>
           {price}
         </AppText>
       )}
-      <AppText
-        style={{
-          color: product.available ? theme.color.text : theme.color.textSecondary,
-          fontWeight: theme.fontWeight.semibold,
-        }}
-      >
-        {availability(product.available)}
-      </AppText>
+      {withheld ? null : (
+        <AppText
+          style={{
+            color: product.available ? theme.color.text : theme.color.textSecondary,
+            fontWeight: theme.fontWeight.semibold,
+          }}
+        >
+          {availability(product.available)}
+        </AppText>
+      )}
       <SaveButton target={{ type: 'PRODUCT_POST', ref: product.id }} surface="PRODUCT_DETAIL" sceneRef={sceneRef} returnTo={route} />
       <Pressable
         accessibilityRole="link"
@@ -197,7 +235,7 @@ function ProductContent({
         </View>
       ) : null}
 
-      {product.variants.length > 0 ? (
+      {!withheld && product.variants.length > 0 ? (
         <View accessibilityRole="radiogroup" testID="product-options" style={{ gap: theme.space.xs }}>
           <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
             {t('buyer.product.options')}

@@ -34,7 +34,15 @@ export function isGone(error: unknown): boolean {
  *   what was shown is WITHHELD until the server answers again, as the For You feed does.
  * - `revalidate` asks again keeping the content on screen (a pull, a return from another
  *   screen). Only a success shows content: a 404 is `gone` whatever was shown before, and
- *   any other failure is an error, never the previous answer standing in for the current one.
+ *   any other failure is an error, never the previous answer standing in for the current one --
+ *   except for a screen that passes `keepOnFailure`, below.
+ * - A screen that cannot afford to lose what the Buyer was reading (the Product) passes
+ *   `keepOnFailure`. Then the last answer is also handed back as `unverified` while its re-read
+ *   failed, waits for a connection, or has resumed and not yet been replaced: the screen keeps
+ *   what is not time-sensitive and says what it can no longer vouch for, until a NEW answer
+ *   arrives. Never after a 404 (once gone, only a success brings the resource back), never for a
+ *   first read or a new generation, and the kept answer still counts as shown for the background
+ *   rule.
  *
  * `read` is null when the route parameters are malformed: nothing is requested. It is told
  * whether the request is a REVALIDATION: true once this screen has had an answer (a pull, a
@@ -44,6 +52,7 @@ export function isGone(error: unknown): boolean {
 export function usePublicRead<T>(
   resource: readonly string[],
   read: ((revalidation: boolean) => Promise<T>) | null,
+  { keepOnFailure = false }: { keepOnFailure?: boolean } = {},
 ) {
   const [generation, setGeneration] = useState(0);
   const answered = useRef(false);
@@ -64,9 +73,38 @@ export function usePublicRead<T>(
   });
 
   useForegroundRevalidation(
-    () => (query.status === 'success' ? query.data.receivedAt : undefined),
+    // An answer kept after a failed re-read is still on screen, so it is withheld like any other.
+    () => (query.status === 'success' || keepOnFailure ? query.data?.receivedAt : undefined),
     () => setGeneration((g) => g + 1),
   );
+
+  // keepOnFailure only. Once a 404 has been answered, only a SUCCESS may bring the resource back: a later
+  // failure (a return to the screen that cannot reach the server) must not show what the server said is gone.
+  const goneSeen = useRef(false);
+  if (isGone(query.error)) goneSeen.current = true;
+  else if (query.status !== 'error') goneSeen.current = false;
+  const gone = keepOnFailure ? goneSeen.current : isGone(query.error);
+  // keepOnFailure only. The answer held while its re-read failed or waited stays unverified until a NEW answer
+  // replaces it: a read that resumes when the connection returns, or a retry on its way, is still the old
+  // answer until the new one lands. `unverifiedAnswer` is the arrival time of the answer so marked.
+  const kept = query.data;
+  const unverifiedAnswer = useRef<number | undefined>(undefined);
+  if (keepOnFailure && kept !== undefined && !gone && (query.fetchStatus === 'paused' || query.status === 'error')) {
+    unverifiedAnswer.current = kept.receivedAt;
+  }
+  const unverified =
+    keepOnFailure && kept !== undefined && !gone && unverifiedAnswer.current === kept.receivedAt
+      ? {
+          value: kept.value,
+          receivedAt: kept.receivedAt,
+          /** offline: its re-read waits for a connection; failed: it failed; checking: it resumed or retries. */
+          why: (query.fetchStatus === 'paused' ? 'offline' : query.status === 'error' ? 'failed' : 'checking') as
+            | 'offline'
+            | 'failed'
+            | 'checking',
+          error: query.error,
+        }
+      : undefined;
 
   const { refetch } = query;
   // Stable (the observer's refetch is), so a focus effect can depend on it. A request already
@@ -86,7 +124,9 @@ export function usePublicRead<T>(
     receivedAt: query.status === 'success' ? query.data.receivedAt : undefined,
     status: query.status,
     error: query.error,
-    gone: isGone(query.error),
+    gone,
+    /** `keepOnFailure` only: the held answer that cannot be vouched for yet (see above). */
+    unverified,
     /** Nothing to show and the request waits for a connection. */
     paused: query.fetchStatus === 'paused' && query.status !== 'success',
     revalidating: query.isRefetching,

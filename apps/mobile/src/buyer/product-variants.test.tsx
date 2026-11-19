@@ -231,8 +231,9 @@ describe('a new answer from the server', () => {
     expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
     expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    // The Product stays while the read fails, so the heading no longer says the retry has answered: the options do.
     expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    for (const radio of await screen.findAllByRole('radio')) expect(radio).not.toBeChecked();
     expect(headline()).toBe(`${etb(85000)} \u2013 ${etb(95000)}`);
   });
 
@@ -312,7 +313,7 @@ describe('the notice when a chosen option is dropped', () => {
     expect(notice()).toBeOnTheScreen();
   });
 
-  it('is gone with the content when the read fails, and is not on the retried answer', async () => {
+  it('is gone when the read fails, and is not on the retried answer', async () => {
     serve(BASKET, ok(BOTH()), ok(basket([option(LARGE)])), problem(500, 'INTERNAL', 'request'), ok(BOTH()));
     await open();
     await fireEvent.press(choice('Small', AVAILABLE));
@@ -322,6 +323,7 @@ describe('the notice when a chosen option is dropped', () => {
     expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
+    await screen.findAllByRole('radio');
     expect(notice()).not.toBeOnTheScreen();
   });
 });

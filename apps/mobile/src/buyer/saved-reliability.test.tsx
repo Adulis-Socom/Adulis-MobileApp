@@ -1,4 +1,5 @@
 import { en } from '@adulis/locale/mobile';
+import { onlineManager } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Alert } from 'react-native';
@@ -862,6 +863,95 @@ describe('read failures and loading states', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByRole('checkbox', { name: 'Gifts' })).toBeOnTheScreen();
     expect(adds()).toEqual([]);
+  });
+});
+
+describe('a one-tap Save or Remove while the device reports no connection', () => {
+  const PRODUCT = '/product/seller-1/basket';
+  const goOffline = () => act(async () => onlineManager.setOnline(false));
+  const goOnline = () => act(async () => onlineManager.setOnline(true));
+  const unconfirmed = () => screen.findByText(UNCONFIRMED);
+  afterEach(() => onlineManager.setOnline(true));
+  async function openProduct(name: string) {
+    await renderRouter(APP_DIR, { initialUrl: PRODUCT });
+    const button = await screen.findByRole('button', { name });
+    await waitFor(() => expect(button).toBeEnabled());
+  }
+
+  it('Save is attempted at the tap: one request, the failure said as unconfirmed with the offline reason, and the control is usable again', async () => {
+    signedIn();
+    fc.intercept('add', () => 'offline');
+    await openProduct(en['buyer.save.save']);
+    await goOffline();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.save.save'] }));
+    await settle();
+    await flush();
+    expect(adds()).toHaveLength(1);
+    expect(await unconfirmed()).toHaveTextContent(en['common.offline'], { exact: false });
+    expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeEnabled();
+  });
+
+  it('nothing is sent later behind the Buyer back: reconnecting sends no second request, and the next tap is its own attempt with its own key', async () => {
+    signedIn();
+    fc.intercept('add', () => 'offline');
+    await openProduct(en['buyer.save.save']);
+    await goOffline();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.save.save'] }));
+    await settle();
+    await flush();
+    expect(adds()).toHaveLength(1);
+    await goOnline();
+    await settle();
+    await flush();
+    expect(adds()).toHaveLength(1);
+    expect(fc.items).toHaveLength(0);
+    fc.intercept('add', () => undefined);
+    await waitFor(() => expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeEnabled());
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.save.save'] }));
+    expect(await screen.findByRole('button', { name: en['buyer.save.saved'] })).toBeOnTheScreen();
+    expect(adds()).toHaveLength(2);
+    expect(adds()[1]!.headers['Idempotency-Key']).not.toBe(adds()[0]!.headers['Idempotency-Key']);
+    expect(fc.items).toHaveLength(1);
+  });
+
+  it('Remove is attempted at the tap the same way, and the item still shows as saved', async () => {
+    signedIn();
+    fc.saveElsewhere(PRODUCT_TARGET);
+    fc.intercept('remove', () => 'offline');
+    await openProduct(en['buyer.save.saved']);
+    await goOffline();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.save.saved'] }));
+    await settle();
+    await flush();
+    expect(removes()).toHaveLength(1);
+    expect(await unconfirmed()).toHaveTextContent(en['common.offline'], { exact: false });
+    expect(screen.getByRole('button', { name: en['buyer.save.saved'] })).toBeEnabled();
+    expect(fc.items).toHaveLength(1);
+  });
+
+  it('a bookmark on a card is attempted at the tap, says it once, and is not left busy', async () => {
+    signedIn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      const BASKET = shopProduct('basket', 'Basket', 'seller-1', { id: PRODUCT_TARGET.ref });
+      api.on('GET /v1/shop/products', () => ({ status: 200, body: { market_resolved: true, data: [BASKET], next_cursor: null } }));
+      fc.intercept('add', () => 'offline');
+      await renderRouter(APP_DIR, { initialUrl: '/shop' });
+      const card = () => screen.getByRole('togglebutton', { name: 'Save Basket' });
+      await screen.findByRole('togglebutton', { name: 'Save Basket' });
+      await waitFor(() => expect(card().props.accessibilityState?.disabled).not.toBe(true));
+      await goOffline();
+      await fireEvent.press(card());
+      await settle();
+      await flush();
+      expect(adds()).toHaveLength(1);
+      expect(card().props.accessibilityState?.disabled).not.toBe(true);
+      expect(card().props.accessibilityState?.checked).not.toBe(true);
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(alert.mock.calls[0]![0]).toBe(en['buyer.save.unconfirmed']);
+    } finally {
+      alert.mockRestore();
+    }
   });
 });
 
