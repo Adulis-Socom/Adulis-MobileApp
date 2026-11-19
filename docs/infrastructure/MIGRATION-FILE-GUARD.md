@@ -38,6 +38,7 @@ pnpm db:migrate --dry-run                       # the same checks, nothing appli
 pnpm db:migrate:guarded --expect-commit <sha>   # all five checks (the source check too), then applies
 pnpm db:migration-guard                         # directory against the pin, no database
 pnpm db:migration-guard --db                    # also the database history (DATABASE_URL_MIGRATE)
+pnpm db:migration-guard --base <ref>            # the manifest only appends to the one committed at <ref>
 pnpm db:migration-pin                           # pin newly added migrations (see Adding a migration)
 ```
 
@@ -54,17 +55,33 @@ only with `pnpm db:migrate:guarded --expect-commit <sha>` from a committed, revi
 
 The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
-the variable is not set, or is not a plain `postgres://` or `postgresql://` URL (a host, and one plain database
-name as the whole path, no `host`, `port` or `dbname` query option); a malformed string is refused before
-anything connects. A `.env` that points at a persistent database makes `pnpm db:migrate` upgrade that
+the variable is not set, or is not a plain `postgres://` or `postgresql://` URL (a plain host name or address, and one
+plain database name as the whole path, and no query key other than `sslmode`, `ssl`, `uselibpqcompat`, `application_name`
+and `connect_timeout`); a malformed string is refused before anything connects. A percent-encoded host is refused, so is
+any control or whitespace character anywhere in the string (the URL parser silently drops some of them, the driver does
+not), and so is every other query key: `host`, `port` and `dbname` would re-target the connection, `options` would
+replace the read-only startup option the guard sets for its history read, and a key such as `connectionString` would be
+read as configuration by anything that parses the raw string. A `.env` that points at a persistent database makes `pnpm db:migrate` upgrade that
 database, now only ever from the pinned set. Before it reads anything, `up` and `verify --db` print
 `target: host:port/database` (never the credentials), so a run against an unintended database is visible at
-once. `DATABASE_URL_MIGRATE` must be a direct connection: the history is read over a read-only session opened
+once. The port printed is the one the driver will use: the URL's own, else `PGPORT`, else 5432 (a `PGPORT` that is
+not a port number is refused). Name the port in the URL when it matters. `DATABASE_URL_MIGRATE` must be a direct connection: the history is read over a read-only session opened
 with a startup option, and a pooler that rejects startup options makes the guard refuse (nothing is applied).
 
 The command line is strict. An unknown or repeated flag, a flag without its value, and an `up` without
 `--expect-commit <sha>` or an explicit `--no-source-check` are refusals with exit 2, never defaults: a typo
 such as `--dryrun` must not turn a dry run into a real apply, and the two source rules exclude each other.
+
+### The manifest only appends
+
+`pnpm db:migration-guard --base <ref>` compares the manifest with the one committed at `<ref>` (for example
+`origin/dev`) and refuses if any entry that was there is now missing, renamed, reordered or has a different hash.
+A new migration appends; nothing else changes. This is what catches a merged migration that was edited together
+with its manifest line, which every other check accepts. CI runs it on every push and every pull request (the step
+"The migration manifest only appends to the base branch's"): a pull request is compared with its base branch, a push
+with the commit where the pushed branch left `dev`. The comparison fails closed: a base that this clone has not fetched,
+a commit whose tree git cannot read, a shallow or damaged clone and git failing to start all refuse. Only a commit whose
+tree git lists successfully, without a manifest in it, counts as "no manifest yet".
 
 ## Every way a migration runs
 
@@ -121,7 +138,8 @@ Three situations have an exit that does not touch history:
 - It pins contents, not behaviour: a pinned migration is still applied as written.
 - The ordinary command has no source check and no prompt (see Use); persistent databases rely on the
   recommended rule above.
-- The manifest is checked against the directory, not against the base branch: a hand edit of an old
-  migration together with its manifest line passes the guard and shows only in review.
+- The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with
+  its manifest line passes them; `--base` (run by CI on pushes and pull requests) refuses it, and review is the check for a
+  change that is never pushed to the repository.
 - It cannot stop a direct run of the installed node-pg-migrate program (see above).
 - A restore is the only way back from an applied migration (the down migrations raise); the guard does not change that.
