@@ -178,6 +178,12 @@ export class DeletionService {
   ): Promise<{ purge: () => Promise<void> }> {
     const accountId = req.ctx?.accountId as string;
     const sellerId = req.ctx?.sellerId as string;
+    // First statement, as in sellerBlockers: the blockers below are this
+    // store's state and are only answered to someone who may delete it.
+    await sql`
+      SELECT core.fn_has_permission(
+        ${accountId}, ${sellerId}, 'seller.account:delete',
+        ${req.ctx?.audience ?? ''}::core.session_audience)`.execute(trx);
 
     const acc = await sql<{ phone_e164: string }>`
       SELECT phone_e164 FROM core.account WHERE id = ${accountId}`.execute(trx);
