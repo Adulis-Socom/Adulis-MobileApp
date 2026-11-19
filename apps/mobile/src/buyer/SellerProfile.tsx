@@ -545,6 +545,9 @@ function AboutTab({
     .map((m) => `buyer.seller.about.fulfilment.${m}`)
     .filter(hasMessage)
     .map((key) => t(key));
+  // A store that is closing or suspended stays public but sells nothing, and the server's open/closed answer
+  // comes from the opening hours alone: only an ACTIVE Seller may be said to be open or to take orders.
+  const trading = seller.status === 'ACTIVE';
   const since = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(`${seller.member_since}T00:00:00Z`),
   );
@@ -574,14 +577,14 @@ function AboutTab({
         {level && hasMessage(level) ? (
           <AppText>{fillSlots(t('buyer.seller.trust'), { level: t(level) })}</AppText>
         ) : null}
-        {seller.availability ? (
+        {trading && seller.availability ? (
           <AppText>
             {t(
               seller.availability.is_open ? 'buyer.seller.about.open' : 'buyer.seller.about.closed',
             )}
           </AppText>
         ) : null}
-        {methods.length > 0 ? (
+        {trading && methods.length > 0 ? (
           <View style={{ gap: theme.space.xs }}>
             <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
               {t('buyer.seller.about.fulfilment')}
