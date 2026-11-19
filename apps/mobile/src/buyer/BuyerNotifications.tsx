@@ -142,8 +142,8 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
             onPress={() => void inbox.refetch()}
             disabled={inbox.isFetching}
           />
-          {/* A refresh that failed leaves the rows as they were, and says so (an older page says it in the footer). */}
-          {inbox.isRefetchError && !inbox.isFetchNextPageError ? (
+          {/* A refresh that failed leaves the rows as they were, and says so; an older page says it in the footer, and an empty inbox in its own block. */}
+          {inbox.isRefetchError && inbox.items.length > 0 ? (
             <AlertText>{`${t('buyer.notifications.failed')} ${failureMessage(t, inbox.error)}`}</AlertText>
           ) : null}
         </View>

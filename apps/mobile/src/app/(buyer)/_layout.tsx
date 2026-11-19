@@ -21,7 +21,7 @@ export default function BuyerLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="search" options={{ headerShown: true, title: t('buyer.search') }} />
-      {/* One inbox, one Messages list and one sign-in: a double tap or a repeated link cannot stack a second. */}
+      {/* One inbox, one Messages list and one sign-in: a double tap or a repeated push or link moves the existing one to the top. A Redirect (replace) onto one of them is not covered. */}
       <Stack.Screen name="notifications" options={{ headerShown: true, title: t('buyer.notifications') }} dangerouslySingular />
       {/* One screen per Scene or Product: a double tap cannot stack the same one twice. */}
       <Stack.Screen

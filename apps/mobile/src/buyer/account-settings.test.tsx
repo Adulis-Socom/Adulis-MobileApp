@@ -32,18 +32,29 @@ const session = (id: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 const CURRENT = session('5e000000-0000-4000-8000-00000000000a', { current: true });
-const OTHER = session('5e000000-0000-4000-8000-00000000000b', { audience: 'CONSOLE', device_platform: 'WEB' });
+const OTHER = session('5e000000-0000-4000-8000-00000000000b', {
+  audience: 'CONSOLE',
+  device_platform: 'WEB',
+});
 const list = (data: unknown): Reply => ({ status: 200, body: { data } });
 
 beforeEach(() => {
   jest.clearAllMocks();
   resetSecureStore();
   api = installFakeApi();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
+  useUiStore.setState({
+    activeMode: null,
+    themePreference: 'system',
+    locale: 'en',
+    upgradeNoticeDismissed: false,
+    pendingSave: null,
+  });
 });
 
 afterEach(() => {
-  expect(api.calls.filter((c) => /cart|order|checkout|payment|reservation/i.test(c.path))).toEqual([]);
+  expect(api.calls.filter((c) => /cart|order|checkout|payment|reservation/i.test(c.path))).toEqual(
+    [],
+  );
 });
 
 describe('Preferences are device settings', () => {
@@ -64,13 +75,12 @@ describe('Preferences are device settings', () => {
 });
 
 describe('Signed-in sessions', () => {
-  it('a session the server sent with an unreadable time or place is left out, and the rest of You and Sign out still work', async () => {
+  it('a session the server sent with an unreadable time is left out, and the rest of You and Sign out still work', async () => {
     signedIn();
     api.on('GET /v1/auth/sessions', () =>
       list([
         CURRENT,
         session('5e000000-0000-4000-8000-00000000000c', { last_activity_at: 'yesterday' }),
-        session('5e000000-0000-4000-8000-00000000000d', { approx_location: 42 }),
         null,
       ]),
     );
@@ -79,6 +89,67 @@ describe('Signed-in sessions', () => {
     expect(screen.getAllByText(/^Last active /)).toHaveLength(1);
     expect(screen.getByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: en['buyer.you.delete'] })).toBeOnTheScreen();
+  });
+
+  it('a session whose optional place is absent or not text is kept, without a place', async () => {
+    signedIn();
+    const { approx_location: _omitted, ...noPlace } = CURRENT;
+    api.on('GET /v1/auth/sessions', () =>
+      list([
+        noPlace,
+        session('5e000000-0000-4000-8000-00000000000d', {
+          approx_location: 42,
+          device_platform: 'IOS',
+        }),
+      ]),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    // This device and the other session both show; neither says "No signed-in sessions were found."
+    expect(await screen.findByText(en['buyer.you.session.current'])).toBeOnTheScreen();
+    expect(screen.getAllByText(/^Last active /)).toHaveLength(2);
+    expect(screen.getByText(en['buyer.you.session.platform.ios'])).toBeOnTheScreen();
+    expect(screen.queryByText(/^Approximate location: /)).toBeNull();
+    expect(screen.queryByText(en['buyer.you.sessions.empty'])).toBeNull();
+  });
+
+  it('only the boolean true marks This device', async () => {
+    signedIn();
+    api.on('GET /v1/auth/sessions', () =>
+      list([
+        CURRENT,
+        session('5e000000-0000-4000-8000-00000000000e', {
+          current: 'false',
+          device_platform: 'IOS',
+        }),
+      ]),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    await screen.findByText(en['buyer.you.session.platform.ios']);
+    expect(screen.getAllByText(en['buyer.you.session.current'])).toHaveLength(1);
+  });
+
+  it('an answer whose every row is unreadable is a failed read, not an empty list', async () => {
+    signedIn();
+    api.on('GET /v1/auth/sessions', () =>
+      list([
+        session('5e000000-0000-4000-8000-00000000000f', {
+          first_seen_at: 'never',
+          last_activity_at: 'never',
+        }),
+      ]),
+    );
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    expect(await screen.findByText(en['buyer.you.sessions.failed'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.you.sessions.empty'])).toBeNull();
+    expect(screen.getByRole('button', { name: en['common.retry'] })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['common.signOut'] })).toBeOnTheScreen();
+  });
+
+  it('a list the server sent empty is the empty list', async () => {
+    signedIn();
+    api.on('GET /v1/auth/sessions', () => list([]));
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    expect(await screen.findByText(en['buyer.you.sessions.empty'])).toBeOnTheScreen();
   });
 
   it('an answer that is not a list of sessions is a failed read, and Sign out is still there', async () => {
@@ -97,7 +168,9 @@ describe('Signed-in sessions', () => {
     await screen.findByText(en['buyer.you.session.surface.console']);
     reply = 'offline';
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.you.sessions.refresh'] }));
-    expect(await screen.findByText(en['buyer.you.sessions.failed'], {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(
+      await screen.findByText(en['buyer.you.sessions.failed'], {}, { timeout: 10_000 }),
+    ).toBeOnTheScreen();
     expect(screen.getByText(en['buyer.you.session.surface.console'])).toBeOnTheScreen();
     expect(sessionCalls().length).toBeGreaterThan(1);
     // Try again reads them once more and the failure goes.
