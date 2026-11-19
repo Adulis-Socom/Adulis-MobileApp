@@ -2,11 +2,14 @@
 // allow-list, never the list itself: ops/native/flows.json names each approved flow, pins the SHA-256 of
 // its content and declares what the file does to the device (clears the app's data, grants a permission,
 // ...). A flow whose content differs from its pin is refused, every time, right before Maestro starts it;
-// re-pinning is a reviewed change to flows.json. The scan below is the second layer: it is what a reviewer
-// is shown when a flow is pinned, and it refuses the hazards of the NEVER list whatever a declaration says.
+// re-pinning is a reviewed change to flows.json. The scan below is the second layer: it parses the file as
+// YAML (so spelling, quoting, anchors and line breaks do not matter), allows only the commands on the lists
+// below, and is what a reviewer is shown when a flow is pinned. A command or an option that is not on a list
+// is refused, whatever a declaration says.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
+import { parseAllDocuments } from 'yaml';
 import { APP_ID } from './device.mjs';
 import { SETTINGS } from './settings.mjs';
 
@@ -27,28 +30,64 @@ export const NEVER_HAZARDS = [
   'external-link',
   'foreign-app',
   'hardware-key',
+  'unknown-command',
+  'unparseable',
 ];
 /** The only permission grants a declaration may name: `<permission>:<allow|deny|unset>`. */
 export const ALLOWED_PERMISSIONS = ['android.permission.ACCESS_LOCAL_NETWORK:allow'];
 /** Keys a flow may press: navigation and text entry, never power, volume, lock or a camera key. */
 const SAFE_KEYS = new Set(['Enter', 'Backspace', 'Back', 'Home', 'Tab', 'Escape']);
 
-const COMMANDS = {
+// Commands that are refused whatever a declaration says, by the hazard they stand for.
+const NEVER_COMMANDS = {
   clearKeychain: 'clearKeychain',
-  script: 'runScript|evalScript',
-  media: 'addMedia',
-  location: 'setLocation|travel',
-  airplane: 'setAirplaneMode|toggleAirplaneMode',
-  orientation: 'setOrientation',
-  recording: 'startRecording|stopRecording',
-  'cloud-ai': 'assertWithAI|extractTextWithAI|assertNoDefectsWithAI',
-  clipboard: 'copyTextFrom|pasteText|setClipboard',
-  'app-stop': 'stopApp|killApp',
+  runScript: 'script',
+  evalScript: 'script',
+  addMedia: 'media',
+  setLocation: 'location',
+  travel: 'location',
+  setAirplaneMode: 'airplane',
+  toggleAirplaneMode: 'airplane',
+  setOrientation: 'orientation',
+  startRecording: 'recording',
+  stopRecording: 'recording',
+  assertWithAI: 'cloud-ai',
+  extractTextWithAI: 'cloud-ai',
+  assertNoDefectsWithAI: 'cloud-ai',
+  copyTextFrom: 'clipboard',
+  pasteText: 'clipboard',
+  setClipboard: 'clipboard',
 };
+// Commands that only look at or touch the screen. Every command that is not handled by name in `command`
+// below and is not in this list is refused as an unknown command (deny by default).
+const UI_COMMANDS = new Set([
+  'tapOn',
+  'doubleTapOn',
+  'longPressOn',
+  'assertVisible',
+  'assertNotVisible',
+  'inputText',
+  'eraseText',
+  'back',
+  'hideKeyboard',
+  'scroll',
+  'scrollUntilVisible',
+  'swipe',
+  'waitForAnimationToEnd',
+  'extendedWaitUntil',
+  'takeScreenshot',
+]);
+// The options of launchApp; any other option is refused.
+const LAUNCH_OPTIONS = new Set([
+  'appId',
+  'clearState',
+  'clearKeychain',
+  'stopApp',
+  'permissions',
+  'arguments',
+  'label',
+]);
 
-// A command in block form (`- name`, `- {name: x}`) or inside a flow-style map or list (`{a: 1, name: x}`).
-const START = String.raw`(?:^\s*-\s*\{?\s*|[{,\[]\s*)`;
-const unquote = (s) => `${s}`.replace(/^['"]|['"]$/g, '');
 // Expressions of a flow may compare variables; anything that calls, indexes or reaches out is a script.
 const SIMPLE_EXPRESSION = /^[A-Za-z0-9_ ='"!|&<>-]+$/;
 const BUILTINS = new Set(['maestro.platform', 'maestro.copiedText']);
@@ -59,96 +98,133 @@ export function flowHash(buffer) {
   return createHash('sha256').update(lf).digest('hex');
 }
 
-/** What a flow file does, read from its text (comments are not code). */
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** What a flow file does, read from its YAML (comments are not code): { appId, hazards, vars, permissions }. */
 export function scanFlow(text) {
-  const src = text
-    .replaceAll('\r', '')
-    .split('\n')
-    .filter((l) => !/^\s*#/.test(l))
-    .join('\n');
   const hazards = new Set();
-  const appId = /^appId:[ \t]*(\S+)/m.exec(src)?.[1] ?? null;
-  const foreign = (v) => {
-    if (v !== appId) hazards.add('foreign-app');
-  };
-  // clearState: `true` (an option of launchApp or a command), or a package (string form of the command)
-  for (const m of src.matchAll(/(?:^\s*(?:-\s*)?|[{,]\s*)clearState:[ \t]*([^\s,}\]]+)/gm)) {
-    if (m[1] === 'false') continue;
-    hazards.add('clearState');
-    if (m[1] !== 'true') foreign(unquote(m[1]));
-  }
-  if (new RegExp(`${START}clearState\\b(?!:)`, 'm').test(src)) hazards.add('clearState');
-  for (const [name, cmds] of Object.entries(COMMANDS))
-    if (new RegExp(`${START}(?:${cmds})\\b`, 'm').test(src)) hazards.add(name);
-  // launchApp, stopApp and killApp may name a package (string form): it must be this app
-  for (const m of src.matchAll(
-    new RegExp(`${START}(?:launchApp|stopApp|killApp):[ \\t]*([^\\s,}\\]]+)`, 'gm'),
-  ))
-    if (!m[1].startsWith('{') && !m[1].startsWith('[')) foreign(unquote(m[1]));
-  for (const m of src.matchAll(/(?:^\s+|[{,]\s*)appId:[ \t]*([^\s,}\]]+)/gm))
-    foreign(unquote(m[1]));
-  // The value must sit on the same line: `runFlow:` followed by a block is an inline flow, not a file.
-  if (
-    new RegExp(`${START}runFlow:[ \\t]*[^\\s{]`, 'm').test(src) ||
-    /(?:^\s*|[{,]\s*)file:[ \t]*\S/m.test(src)
-  )
-    hazards.add('runFlow-file');
-  if (/(?:^\s*|[{,]\s*)while:/m.test(src)) hazards.add('loop-while');
-  // permissions: the block form (indented `name: value` lines) and the flow-style form
-  const permissions = new Set();
-  const take = (s) => {
-    for (const p of s.matchAll(/([A-Za-z0-9_.]+)\s*:\s*([A-Za-z]+)/g))
-      permissions.add(`${p[1]}:${p[2]}`);
-  };
-  const lines = src.split('\n');
-  lines.forEach((line, i) => {
-    const m = /^(\s*)permissions:[ \t]*(.*)$/.exec(line);
-    if (!m) return;
-    hazards.add('permission-grant');
-    if (m[2].trim()) take(m[2]);
-    for (let j = i + 1; j < lines.length; j += 1) {
-      const next = /^(\s*)(\S.*)$/.exec(lines[j]);
-      if (!next) continue;
-      if (next[1].length <= m[1].length) break;
-      take(next[2]);
-    }
-  });
-  for (const m of src.matchAll(/[{,]\s*permissions:\s*\{([^}]*)\}/g)) {
-    hazards.add('permission-grant');
-    take(m[1]);
-  }
-  // a grant that could not be read is never an empty grant
-  if (/\bpermissions:/.test(src) && !permissions.size) {
-    hazards.add('permission-grant');
-    permissions.add('(none readable)');
-  }
-  // links: the string form and the map form (`link:`), quoted or not
-  const links = [
-    ...[...src.matchAll(new RegExp(`${START}openLink:[ \\t]*([^\\s{,}]+)`, 'gm'))].map((m) => m[1]),
-    ...[...src.matchAll(/(?:^\s+|[{,]\s*)link:[ \t]*([^\s,}]+)/gm)].map((m) => m[1]),
-  ].map(unquote);
-  if (links.some((l) => !l.startsWith('adulis://'))) hazards.add('external-link');
-  for (const m of src.matchAll(new RegExp(`${START}pressKey:[ \\t]*([^\\s,}\\]]+)`, 'gm')))
-    if (!SAFE_KEYS.has(unquote(m[1]))) hazards.add('hardware-key');
-  if (new RegExp(`${START}pressKey:[ \\t]*$`, 'm').test(src)) hazards.add('hardware-key');
-  // ${...}: a variable, a comparison of variables, a Maestro built-in, or a script
   const names = new Set();
-  for (const m of src.matchAll(/\$\{([^}]*)\}/g)) {
-    const inner = m[1].trim();
-    if (BUILTINS.has(inner)) continue;
-    if (!SIMPLE_EXPRESSION.test(inner)) {
-      hazards.add('expression');
-      continue;
-    }
-    for (const id of inner.replace(/'[^']*'|"[^"]*"/g, '').matchAll(/[A-Za-z_][A-Za-z0-9_]*/g))
-      if (!['true', 'false', 'null'].includes(id[0])) names.add(id[0]);
-  }
-  return {
+  const permissions = new Set();
+  const unparseable = () => hazards.add('unparseable');
+  const result = (appId) => ({
     appId,
     hazards: [...hazards].sort(),
     vars: [...names].sort(),
     permissions: [...permissions].sort(),
+  });
+
+  let values;
+  try {
+    const docs = parseAllDocuments(text, { maxAliasCount: 50 });
+    if (docs.some((d) => d.errors.length)) {
+      unparseable();
+      return result(null);
+    }
+    values = docs.map((d) => d.toJS());
+  } catch {
+    unparseable();
+    return result(null);
+  }
+
+  let appId = null;
+  const foreign = (v) => {
+    if (v !== appId) hazards.add('foreign-app');
   };
+  const link = (v) => {
+    if (typeof v !== 'string' || !v.startsWith('adulis://')) hazards.add('external-link');
+  };
+  const grant = (v) => {
+    hazards.add('permission-grant');
+    const entries = isMap(v) ? Object.entries(v) : [];
+    if (!entries.length) permissions.add('(none readable)'); // a grant that cannot be read is never an empty grant
+    for (const [p, w] of entries) permissions.add(`${p}:${w}`);
+  };
+  // ${...}: a variable, a comparison of variables, a Maestro built-in, or a script
+  const expressions = (s) => {
+    for (const m of s.matchAll(/\$\{([^}]*)\}/g)) {
+      const inner = m[1].trim();
+      if (BUILTINS.has(inner)) continue;
+      if (!SIMPLE_EXPRESSION.test(inner)) {
+        hazards.add('expression');
+        continue;
+      }
+      for (const id of inner.replace(/'[^']*'|"[^"]*"/g, '').matchAll(/[A-Za-z_][A-Za-z0-9_]*/g))
+        if (!['true', 'false', 'null'].includes(id[0])) names.add(id[0]);
+    }
+    if (s.replace(/\$\{[^}]*\}/g, '').includes('${')) hazards.add('expression'); // never closed: not a variable
+  };
+  // every string, key or value, anywhere below `v`; and the keys that mean something wherever they stand
+  const walk = (v) => {
+    if (typeof v === 'string') expressions(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (isMap(v))
+      for (const [k, w] of Object.entries(v)) {
+        expressions(k);
+        if (k === 'appId') foreign(w);
+        else if (k === 'file') hazards.add('runFlow-file');
+        else if (k === 'while') hazards.add('loop-while');
+        else if (k === 'permissions') grant(w);
+        else if (k === 'link') link(w);
+        else if (k === 'clearKeychain' && w !== false) hazards.add('clearKeychain');
+        else if (k === 'clearState' && w !== false) {
+          hazards.add('clearState');
+          if (typeof w === 'string') foreign(w); // the string form names a package
+        }
+        walk(w);
+      }
+  };
+  const key = (v) => {
+    if (typeof v !== 'string' || !SAFE_KEYS.has(v)) hazards.add('hardware-key');
+  };
+  const command = (name, args) => {
+    if (typeof name !== 'string') return unparseable();
+    if (Object.hasOwn(NEVER_COMMANDS, name)) hazards.add(NEVER_COMMANDS[name]);
+    else if (name === 'clearState') {
+      hazards.add('clearState');
+      if (typeof args === 'string') foreign(args);
+    } else if (name === 'stopApp' || name === 'killApp') {
+      hazards.add('app-stop');
+      if (typeof args === 'string') foreign(args);
+    } else if (name === 'launchApp') {
+      if (typeof args === 'string') foreign(args);
+      else if (isMap(args)) {
+        for (const k of Object.keys(args))
+          if (!LAUNCH_OPTIONS.has(k)) hazards.add('unknown-command');
+      } else if (args !== null) unparseable();
+    } else if (name === 'openLink') link(isMap(args) ? args.link : args);
+    else if (name === 'runFlow') {
+      if (typeof args === 'string') hazards.add('runFlow-file');
+      else if (isMap(args)) commands(args.commands);
+      else unparseable();
+    } else if (name === 'repeat' || name === 'retry') {
+      if (isMap(args)) commands(args.commands);
+      else unparseable();
+    } else if (name === 'pressKey') key(isMap(args) ? args.key : args);
+    else if (!UI_COMMANDS.has(name)) hazards.add('unknown-command');
+    walk(args);
+  };
+  const commands = (list) => {
+    if (list === undefined) return;
+    if (!Array.isArray(list)) return unparseable();
+    for (const c of list) {
+      if (typeof c === 'string') command(c, null);
+      else if (isMap(c) && Object.keys(c).length === 1)
+        command(Object.keys(c)[0], Object.values(c)[0]);
+      else unparseable();
+    }
+  };
+
+  const [config, body, ...extra] = values;
+  if (extra.length) unparseable();
+  if (isMap(config)) {
+    appId = typeof config.appId === 'string' ? config.appId : null;
+    walk(config);
+    commands(config.onFlowStart);
+    commands(config.onFlowComplete);
+  } else unparseable();
+  if (Array.isArray(body)) commands(body);
+  else if (body !== undefined && body !== null) unparseable();
+  return result(appId);
 }
 
 export function loadDeclaration(path) {

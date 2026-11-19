@@ -65,6 +65,8 @@ test('comments are not code, and every hazard has its own spelling', () => {
     'foreign-app': '- launchApp:\n    appId: com.other.app',
     expression: "- inputText: ${http.get('https://example.test')}",
     'hardware-key': '- pressKey: Power',
+    'unknown-command': '- frobnicate: x',
+    unparseable: '- tapOn: [unclosed',
   };
   for (const [name, body] of Object.entries(never))
     assert.ok(scan(body).hazards.includes(name), `${name}: ${body}`);
@@ -451,4 +453,143 @@ test('the real declaration pins the real flow files, and the failure says how to
       `${name} changed: review it, then set "sha256": "${got}" in ops/native/flows.json`,
     );
   }
+});
+
+/* ---- the scan reads the YAML, not the spelling ---- */
+
+const has = (body, hazard, head) => scan(body, head).hazards.includes(hazard);
+
+test('whitespace before the colon changes nothing: every command is read as if it had none', () => {
+  assert.ok(has('- clearState : com.other.app', 'foreign-app'));
+  assert.ok(has('- clearState : com.other.app', 'clearState'));
+  assert.ok(has('- launchApp : com.other.app', 'foreign-app'));
+  assert.ok(has('- stopApp : com.other.app', 'foreign-app'));
+  assert.ok(has('- openLink : https://example.test/x', 'external-link'));
+  assert.ok(has('- openLink:\n    link : https://example.test/x', 'external-link'));
+  assert.ok(has('- runFlow : other.yaml', 'runFlow-file'));
+  assert.ok(has('- runFlow:\n    file : other.yaml', 'runFlow-file'));
+  assert.ok(has('- pressKey : Power', 'hardware-key'));
+  assert.ok(
+    has('- repeat:\n    while :\n      notVisible: X\n    commands:\n      - back', 'loop-while'),
+  );
+  assert.ok(has('- launchApp:\n    appId : com.other.app', 'foreign-app'));
+  assert.deepEqual(scan('- launchApp : {permissions : {all: allow}}').permissions, ['all:allow']);
+  assert.deepEqual(scan('- launchApp:\n    permissions :\n      all : allow').permissions, [
+    'all:allow',
+  ]);
+  assert.deepEqual(scan('- openLink : adulis://saved').hazards, []);
+});
+
+test('a value on the next line is read like a value on the same line', () => {
+  assert.ok(has('- openLink:\n    https://example.test/x', 'external-link'));
+  assert.ok(has('- clearState:\n    com.other.app', 'foreign-app'));
+  assert.ok(has('- launchApp:\n    com.other.app', 'foreign-app'));
+  assert.ok(has('- runFlow:\n    other.yaml', 'runFlow-file'));
+  assert.ok(has('- pressKey:\n    Power', 'hardware-key'));
+  assert.deepEqual(scan('- openLink:\n    adulis://saved').hazards, []);
+});
+
+test('quoted and escaped keys and values are read as what they say', () => {
+  assert.ok(has('- "runScript": x.js', 'script'));
+  assert.ok(has("- 'setAirplaneMode': enabled", 'airplane'));
+  assert.ok(has('- "clearKeychain"', 'clearKeychain'));
+  assert.ok(has('- "\\x72unScript": x.js', 'script'), 'a hex escape in a key');
+  assert.ok(
+    has('- inputText: "\\x24{http.get(\'https://example.test\')}"', 'expression'),
+    'an escaped ${',
+  );
+  assert.ok(has('- "launchApp":\n    "appId": "com.other.app"', 'foreign-app'));
+  assert.ok(has('- openLink: "https://example.test/x"', 'external-link'));
+  assert.ok(has("- 'pressKey': 'Power'", 'hardware-key'));
+  assert.deepEqual(scan('- "tapOn": "Home"').hazards, []);
+});
+
+test('an anchor or a tag before the key, or an alias of a value, does not hide a command', () => {
+  assert.ok(has('- &c\n  runScript: x.js', 'script'));
+  assert.ok(has('- !!map\n  runScript: x.js', 'script'));
+  assert.ok(has('- &c {runScript: x.js}', 'script'));
+  assert.ok(has('- launchApp:\n    appId: &p com.other.app\n- stopApp: *p', 'foreign-app'));
+  assert.ok(has('- launchApp: &l\n    clearState: true\n- launchApp: *l', 'clearState'));
+});
+
+test('CRLF reads like LF; a lone CR cannot be read as a flow and is refused', () => {
+  const body = '- runScript: x.js\n- clearState : com.other.app\n- tapOn: Home';
+  const lf = scanFlow(`${HEAD}${body}\n`);
+  assert.ok(lf.hazards.includes('script') && lf.hazards.includes('foreign-app'));
+  assert.deepEqual(scanFlow(`${HEAD}${body}\n`.replaceAll('\n', '\r\n')), lf);
+  const cr = scanFlow(`${HEAD}${body}\n`.replaceAll('\n', '\r'));
+  assert.ok(
+    cr.hazards.includes('unparseable'),
+    'a flow that is not read is never read as harmless',
+  );
+  assert.notDeepEqual(cr.hazards, []);
+});
+
+test('a command or an option that is not on the list is refused: deny by default', () => {
+  assert.ok(has('- frobnicate: x', 'unknown-command'));
+  assert.ok(has('- assertTrue: ${A == B}', 'unknown-command'));
+  assert.ok(has('- launchApp:\n    environment: x', 'unknown-command'));
+  assert.ok(has('- launchApp: {arguments: {a: b}, flavour: x}', 'unknown-command'));
+  assert.ok(has('- TapOn: Home', 'unknown-command'), 'names are case sensitive');
+  assert.ok(has('- "runscript": x.js', 'unknown-command'));
+  assert.deepEqual(scan('- tapOn: Home\n- back\n- takeScreenshot: a').hazards, []);
+});
+
+test('a file that cannot be read as a Maestro flow is refused: parse errors, shapes that are not commands', () => {
+  for (const body of [
+    '- tapOn: [unclosed',
+    '- tapOn: a\n  back: b',
+    '- {tapOn: a, back: b}',
+    '- [tapOn, Home]',
+    '- 12',
+    '- launchApp:\n    clearState: true\n    clearState: false',
+    'tapOn: Home',
+    '- repeat: 3',
+    '- runFlow: 3',
+  ])
+    assert.ok(has(body, 'unparseable'), body);
+  assert.ok(scanFlow('- tapOn: Home\n').hazards.includes('unparseable'), 'no header document');
+  assert.ok(
+    scanFlow(`${HEAD}- tapOn: a\n---\n- runScript: x\n`).hazards.includes('unparseable'),
+    'a third document',
+  );
+  assert.equal(scanFlow(`${HEAD}- tapOn: a\n`).appId, 'com.adulis.app');
+  assert.equal(scanFlow('name: x\n---\n- back\n').appId, null);
+});
+
+test('a command nested in another command is read: runFlow, repeat, retry and the flow hooks', () => {
+  assert.ok(has('- runFlow:\n    commands:\n      - runScript: x.js', 'script'));
+  assert.ok(has('- repeat:\n    times: 2\n    commands:\n      - clearKeychain', 'clearKeychain'));
+  assert.ok(
+    has(
+      '- retry:\n    maxRetries: 2\n    commands:\n      - setLocation:\n          latitude: 1',
+      'location',
+    ),
+  );
+  assert.ok(has('- retry:\n    file: other.yaml', 'runFlow-file'));
+  assert.ok(has('', 'script', 'appId: com.adulis.app\nonFlowStart:\n  - runScript: x.js\n---\n'));
+  assert.ok(has('', 'clearState', 'appId: com.adulis.app\nonFlowComplete:\n  - clearState\n---\n'));
+  assert.ok(
+    has(
+      '- runFlow:\n    when:\n      visible: X\n    commands:\n      - tapOn: ${a.b}',
+      'expression',
+    ),
+  );
+  assert.deepEqual(
+    scan('- runFlow:\n    when:\n      visible: X\n    commands:\n      - back').hazards,
+    [],
+  );
+});
+
+test('an expression that never closes, or that sits in a key or the header, is not a variable', () => {
+  assert.ok(has("- inputText: ${http.get('x')", 'expression'));
+  assert.ok(has('- tapOn:\n    ${a.b}: x', 'expression'));
+  assert.ok(has('', 'expression', 'appId: com.adulis.app\nenv:\n  A: ${a.b}\n---\n'));
+  assert.deepEqual(scan('- inputText: ${PHONE} and ${OTP}').vars, ['OTP', 'PHONE']);
+});
+
+test('a permission grant that is a list or empty cannot be read and is never read as no grant', () => {
+  assert.deepEqual(scan('- launchApp:\n    permissions: []').permissions, ['(none readable)']);
+  assert.deepEqual(scan('- launchApp:\n    permissions: {}').permissions, ['(none readable)']);
+  assert.deepEqual(scan('- launchApp:\n    permissions:').permissions, ['(none readable)']);
 });

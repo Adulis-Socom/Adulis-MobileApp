@@ -123,8 +123,7 @@ run's MinIO and Metro. Metro is started by `metro start` with this run's API add
 creation time and command line; a Metro started by anyone else is refused. It is started on the loopback
 (`--localhost`) and stopped only by that identity: the record is cleared once the process is gone and the
 port is free, otherwise the command ends INCOMPLETE and says Metro may still run. The API address must be
-`http://localhost:<this run's API port>`. That `adb reverse` reaches a Metro bound to the loopback has not
-been shown yet: it is checked at the first run on a device.
+`http://localhost:<this run's API port>`.
 
 **Settings and restoration.** Before a setting is changed (animations, font scale, night mode, density,
 stay awake, airplane mode, accessibility services, rotation, the app's locale, the reverse entries), its
@@ -150,10 +149,12 @@ INCOMPLETE, and its identity stays in the lock.
 file and declares what it does to the device. The file is read and hashed again right before every Maestro
 start, and Maestro runs a copy of exactly the bytes that were checked: a flow whose content differs from its
 pin is refused, whatever the difference, until the pin is changed in a reviewed change. A flow that is not
-declared is refused too. The scan that a reviewer sees when a pin is set refuses, whatever a declaration
-says, a script or expression, a file load, an external link, a cloud service, another app id (also in the
-string forms of `clearState`, `launchApp` and `stopApp`), a hardware key other than navigation keys, and
-any permission grant other than the one declared. The `smoke` battery runs `foundation-smoke` first (it must make this
+declared is refused too. The scan that a reviewer sees when a pin is set parses the file as YAML and
+allows only the commands and options it lists (any spelling, quoting, anchor or line break reads the same);
+whatever a declaration says, it refuses a script or expression, a file load, an external link, a cloud
+service, another app id (also in the string forms of `clearState`, `launchApp` and `stopApp`), a hardware key
+other than navigation keys, a command or option it does not know, a file that is not valid YAML, and any
+permission grant other than the one declared. The `smoke` battery runs `foundation-smoke` first (it must make this
 run's database gain a device, which proves the app talks to this run's API) and then `buyer-shell`.
 Maestro is started from its JVM with a fixed list of options and a small environment; results (JUnit
 report, log, screenshots, the device log and, on a failure, a screenshot) are written under

@@ -18,9 +18,10 @@ native driver may run (today `foundation-smoke` and `buyer-shell`, the `smoke` b
 what each does to the device (clears the app's data, grants a permission). It also pins the SHA-256
 of each flow file: the driver hashes the file again right before every Maestro start and refuses any
 flow whose content differs from its pin, and a flow that is not declared. Changing an approved flow, or
-adding one to a battery, is a change to that declaration, and the scan a reviewer sees when a pin is set
-refuses scripts and expressions, file loads, external links, cloud services, another app id and hardware
-keys other than navigation keys, whatever the declaration says.
+adding one to a battery, is a change to that declaration. The scan a reviewer sees when a pin is set parses
+the file as YAML and allows only the commands and options it lists; it refuses scripts and expressions, file
+loads, external links, cloud services, another app id, hardware keys other than navigation keys, unknown
+commands and files that are not valid YAML, whatever the declaration says.
 
 **Only the baseline fixtures are in this repository.** Almost every flow asserts named fixture content
 (Seller "Fixture Weaves", `fixture-weaves`, and its Products and Scenes). The baseline set in
