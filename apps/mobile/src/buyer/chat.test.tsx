@@ -1827,7 +1827,8 @@ describe('Message send reconciliation', () => {
   type Fault = { refuse: Reply } | { lose: Reply } | { commitAfterMs: number };
   type Chat = ReturnType<typeof installChat>;
   const gatewayPage: Reply = { status: 502, unreadable: true };
-  const wait = (seconds: number) => `Too many requests. Try again in ${seconds} seconds.`;
+  // A wait the server asked for, said without naming a cause (a 503 is not "too many requests").
+  const wait = (seconds: number) => `Please wait. You can try again in ${seconds} seconds.`;
 
   function idempotent(chat: Chat, script: Array<Fault | undefined> = []) {
     const records = new Map<string, { hash: string; id: string; at: number }>();
@@ -1886,6 +1887,8 @@ describe('Message send reconciliation', () => {
   const escalateCalls = () => api.calls.filter((c) => c.method === 'POST' && ESCALATE_PATH.test(c.path));
   const keys = (calls: Recorded[] = sends()) => calls.map((c) => c.headers['Idempotency-Key']);
   const maybe = () => screen.findByText(en['buyer.chat.maybe_not_sent']);
+  // The same state once the key is withdrawn: no Try sending again is drawn, so none is promised.
+  const cannotConfirm = () => screen.findByText(en['buyer.chat.cannot_confirm']);
   const edit = () => screen.getByRole('button', { name: en['buyer.chat.edit_unconfirmed'] });
   const typeAndSend = async (text: string) => {
     await fireEvent.changeText(composer(), text);
@@ -1949,7 +1952,8 @@ describe('Message send reconciliation', () => {
     await waitFor(() => expect(sends()).toHaveLength(2));
     await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull());
     expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
-    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.chat.cannot_confirm'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
     expect(screen.queryByRole('button', { name: en['buyer.chat.send'] })).toBeNull();
     expect(composer().props.editable).toBe(false);
     // What the server holds is read again; the message the first attempt stored is there to see.
@@ -1970,8 +1974,12 @@ describe('Message send reconciliation', () => {
     const { chat } = await open();
     idempotent(chat, [{ refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }]);
     await typeAndSend('Collision');
-    expect(await maybe()).toBeOnTheScreen();
+    expect(await cannotConfirm()).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
     expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    // The line under it speaks to the Buyer, not about a "retry key".
+    expect(screen.getByText(en['error.request.idempotency_key_reused'])).toBeOnTheScreen();
+    expect(screen.queryByText(/retry key/i)).toBeNull();
     expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
     expect(edit()).toBeOnTheScreen();
     expect(sends()).toHaveLength(1);
@@ -2035,6 +2043,8 @@ describe('Message send reconciliation', () => {
     await typeAndSend('Gateway says wait');
     expect(await maybe()).toBeOnTheScreen();
     expect(screen.getByText(wait(20))).toBeOnTheScreen();
+    // A 503 is not a rate limit: the wait names no cause.
+    expect(screen.queryByText(/Too many requests/)).toBeNull();
     expect(retryButton()).toBeDisabled();
     await fireEvent.press(retryButton());
     await advance(19_000);
@@ -2080,7 +2090,8 @@ describe('Message send reconciliation', () => {
     await advance(1000);
     await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull());
     expect(sends()).toHaveLength(2);
-    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.chat.cannot_confirm'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
     expect(composer().props.editable).toBe(false);
     expect(edit()).toBeOnTheScreen();
     await fireEvent.press(edit());
@@ -2116,7 +2127,7 @@ describe('Message send reconciliation', () => {
       jest.setSystemTime(Date.now() + KEY_SAFE_MS);
       await fireEvent.press(retryButton());
       await advance(1000);
-      expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.maybe_not_sent'])).toHaveLength(1);
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.cannot_confirm'])).toHaveLength(1);
       expect(sends()).toHaveLength(1);
     } finally {
       announce.mockRestore();
@@ -2134,6 +2145,7 @@ describe('Message send reconciliation', () => {
     expect(sends()).toHaveLength(1);
     expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
     expect(edit()).toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.chat.cannot_confirm'])).toBeOnTheScreen();
   });
 
   it('a key older than a day is never sent again, even to a server that would answer 409', async () => {
@@ -2148,6 +2160,7 @@ describe('Message send reconciliation', () => {
     expect(sends()).toHaveLength(1);
     expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
     expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    expect(screen.getByText(en['buyer.chat.cannot_confirm'])).toBeOnTheScreen();
   });
 
   it('a server that stores the message after the client gave up: the poll shows it, the replay returns the same message, and one message exists', async () => {
@@ -2191,6 +2204,9 @@ describe('Message send reconciliation', () => {
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
       await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      // The conversation itself says it: no second sentence about the same thing.
+      expect(screen.queryByText(en['buyer.chat.ask_passed_on'])).toBeNull();
+      expect(screen.queryByText(en['buyer.chat.ask_unconfirmed'])).toBeNull();
       expect(escalateCalls()).toHaveLength(1);
       expect(escalations(chat)).toHaveLength(1);
     });
@@ -2199,7 +2215,7 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: gatewayPage }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
       expect(keys(escalateCalls())[1]).toBe(keys(escalateCalls())[0]);
@@ -2210,7 +2226,7 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: { status: 200, body: {} } }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       expect(escalations(chat)).toHaveLength(0);
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
@@ -2241,7 +2257,7 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request') }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       await waitFor(() => expect(ask()).toBeEnabled());
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
@@ -2274,8 +2290,12 @@ describe('Message send reconciliation', () => {
       // The failed re-read settles after its retries.
       await advance(10_000);
       await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      // The control is gone and the screen says why: the server itself confirmed it.
+      expect(await screen.findByText(en['buyer.chat.ask_passed_on'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.ask_unconfirmed'])).toBeNull();
       await advance(65_000);
       expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull();
+      expect(screen.getByText(en['buyer.chat.ask_passed_on'])).toBeOnTheScreen();
       expect(escalateCalls()).toHaveLength(1);
       expect(escalations(chat)).toHaveLength(1);
     });
@@ -2287,8 +2307,12 @@ describe('Message send reconciliation', () => {
       await fireEvent.press(ask());
       await advance(10_000);
       await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      // Nothing is confirmed either way, and the screen says so instead of going quiet.
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.ask_passed_on'])).toBeNull();
       await advance(65_000);
       expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull();
+      expect(screen.getByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       expect(escalateCalls()).toHaveLength(1);
       expect(escalations(chat)).toHaveLength(0);
     });
@@ -2298,7 +2322,7 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: problem(500, 'INTERNAL', 'request') }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       await waitFor(() => expect(ask()).toBeEnabled());
       await fireEvent.press(ask());
       expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
@@ -2347,7 +2371,7 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: gatewayPage }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       await waitFor(() => expect(ask()).toBeEnabled());
       jest.setSystemTime(Date.now() + KEY_SAFE_MS);
       await fireEvent.press(ask());
@@ -2365,15 +2389,29 @@ describe('Message send reconciliation', () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: gatewayPage }]);
       await fireEvent.press(ask());
-      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       await waitFor(() => expect(ask()).toBeEnabled());
       api.onPattern('GET', MESSAGES_PATH, () => 'offline');
       jest.setSystemTime(Date.now() + KEY_SAFE_MS);
       await fireEvent.press(ask());
       await advance(10_000);
       await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.ask_seller'] })).toBeNull());
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
       expect(escalateCalls()).toHaveLength(1);
       expect(escalations(chat)).toHaveLength(0);
+    });
+
+    it('a refusal by the API is a definite answer: it says the question could not be passed, never "could not confirm", and the next Ask is a new request', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: problem(404, 'NOT_FOUND', 'request') }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.ask_unconfirmed'])).toBeNull();
+      await waitFor(() => expect(ask()).toBeEnabled());
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(keys(escalateCalls())[1]).not.toBe(keys(escalateCalls())[0]);
+      expect(escalations(chat)).toHaveLength(1);
     });
   });
 

@@ -128,7 +128,7 @@ function ProfileHeader({
       ) : null}
       <AppText style={{ color: theme.color.textSecondary }}>
         {summary.count > 0 && summary.average_rating !== null
-          ? fillSlots(t('buyer.seller.rating'), {
+          ? fillSlots(t(summary.count === 1 ? 'buyer.seller.rating_one' : 'buyer.seller.rating'), {
               // Rounded once, by the server (one decimal): shown as is.
               average: new Intl.NumberFormat(locale, {
                 minimumFractionDigits: 0,

@@ -222,7 +222,8 @@ describe('one-tap Save', () => {
     fc.intercept('add', () => answer);
     await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
     await fireEvent.press(await saveButton());
-    expect(await screen.findByText(/^Saved was not changed\./, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    // 'offline' is no answer at all: the Save may or may not have been made, so the screen says it could not confirm.
+    expect(await screen.findByText(new RegExp(`^${en['buyer.save.unconfirmed']}`), {}, { timeout: 10_000 })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeOnTheScreen();
     answer = undefined;
     await fireEvent.press(await saveButton());
@@ -634,9 +635,9 @@ describe('WO-018 (A-006): one Collection change at a time, announced', () => {
     fc.intercept('add', () => (refuse ? ((refuse = false), problem(500, 'INTERNAL', 'request')) : undefined));
     await renderRouter(APP_DIR, { initialUrl: PICKER });
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
-    const alert = await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`));
+    const alert = await screen.findByText(new RegExp(`^${en['buyer.save.unconfirmed']}`));
     expect(alert.props.accessibilityRole).toBe('alert');
-    expect(announce).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${en['buyer.save.failed']}`)));
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${en['buyer.save.unconfirmed']}`)));
     expect(announce).not.toHaveBeenCalledWith('Added to Gifts.');
     await waitFor(() => expect(box('Gifts')).toBeEnabled());
     expect(box('Gifts')).not.toBeChecked();
@@ -656,7 +657,7 @@ describe('WO-018 (A-006): one Collection change at a time, announced', () => {
     await waitFor(() => expect(box('Gifts')).toBeBusy());
     // The client's 10 s timeout (renderRouter runs fake timers).
     await act(() => jest.advanceTimersByTimeAsync(11_000));
-    expect(await screen.findByText(`${en['buyer.save.failed']} ${en['common.timeout']}`)).toBeOnTheScreen();
+    expect(await screen.findByText(`${en['buyer.save.unconfirmed']} ${en['common.timeout']}`)).toBeOnTheScreen();
     await waitFor(() => expect(box('Gifts')).toBeEnabled());
     expect(box('Gifts')).not.toBeChecked();
   });
