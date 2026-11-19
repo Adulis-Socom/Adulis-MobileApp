@@ -20,8 +20,9 @@ import { demoCatalogue, moneyOf, type DemoSeller, type DemoVariant } from './sce
  * on command. It models no payment, no fee, no quote, no delivery and no Order, and it calls no network.
  * Whether it exists in any build is not decided; it is imported only by tests and by the test-only folder.
  *
- * Its defaults follow what the cart contract says: a cart holds one Seller (an add for a second Seller is
- * a 409 CART_SELLER_CONFLICT) and adding an option that is already in the cart makes a second line.
+ * The contract states one thing about this: an add for a second Seller is a 409 CART_SELLER_CONFLICT, so a
+ * cart holds one Seller. The defaults follow that, and then what the current implementation does, which the
+ * contract does not say: adding an option that is already in the cart makes a second line (no merge).
  * Everything else is an opt-in scenario that the contract does not describe: several Seller carts at
  * once (`sellerCarts: 'MULTI'`), merging a repeated option (`mergeDuplicates`), a refused add for an option
  * that cannot be bought (`refuseUnavailableAdds`), a Seller subtotal (`serverSubtotal`) and price changes
