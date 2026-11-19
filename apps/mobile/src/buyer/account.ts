@@ -22,12 +22,34 @@ import { keepIfCurrent } from './saved';
 const SESSIONS = 'account-sessions';
 const retry = (failures: number, error: unknown) => isTransient(error) && failures < 2;
 
+const isIso = (v: unknown): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+
+/**
+ * GET /v1/auth/sessions' answer, checked whatever the contract's type says: the rows are drawn with Intl, which
+ * throws on an unreadable time, and one such row must not take Sign out and the rest of You with it. A row
+ * without a readable id and times is left out. The optional place and the current flag are only used when they
+ * are a string and `true`: anything else is "no place" and "not this device", and the row is kept. An answer
+ * that is not a list, or whose rows were all left out, is a contract failure (the signed-in Account has at
+ * least its own session), never an empty list.
+ */
+export function parseSessions(body: unknown): AccountSession[] {
+  const data = (body as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) throw new ApiError({ kind: 'unexpected', status: 200 });
+  const rows = data.flatMap((row): AccountSession[] => {
+    const r = row as Record<string, unknown> | null;
+    if (!r || typeof r.id !== 'string' || !isIso(r.first_seen_at) || !isIso(r.last_activity_at)) return [];
+    return [{ ...r, approx_location: typeof r.approx_location === 'string' ? r.approx_location : null, current: r.current === true } as AccountSession];
+  });
+  if (data.length > 0 && rows.length === 0) throw new ApiError({ kind: 'unexpected', status: 200 });
+  return rows;
+}
+
 export function useAccountSessions() {
   const { session, boundApi } = useSession();
   const token = session.status === 'signedIn' ? session.token : null;
   return useQuery<AccountSession[]>({
     queryKey: [SESSIONS],
-    queryFn: async () => (await keepIfCurrent(boundApi(token!), (api) => api.sessions())).data,
+    queryFn: async () => parseSessions(await keepIfCurrent(boundApi(token!), (api) => api.sessions())),
     enabled: token !== null,
     staleTime: 0,
     gcTime: 60_000,
