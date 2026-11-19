@@ -11,6 +11,7 @@ import { allSources, productionSources, type SourceFile } from '../testing/sourc
 import { disabledCartAdapter } from './adapters/disabled';
 import { createRealCartAdapter } from './adapters/real';
 import type { CartAdapter, Scope } from './cart/port';
+import { createFixtureWorld } from './testing/fixture/adapter';
 import { renderWithCommerce } from './testing/harness';
 import { stubAdapter } from './testing/stub-adapter';
 import { SHIPPED_COMMERCE_MODE, resolveAdapter } from './runtime/mode';
@@ -205,6 +206,7 @@ describe('G10: the surface is exactly reading the carts and adding a line', () =
     ['the disabled adapter', disabledCartAdapter],
     ['the real adapter slot', createRealCartAdapter()],
     ['a labelled fixture adapter', stubAdapter().adapter],
+    ['the server simulator adapter', createFixtureWorld().adapter],
   ];
 
   it.each(adapters)('%s has exactly the adapter surface and its port exactly the two cart methods', (_name, adapter) => {
