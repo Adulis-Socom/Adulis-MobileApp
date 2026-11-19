@@ -30,17 +30,28 @@ const contract = JSON.parse(repoFile('contracts/openapi.json')) as Contract;
 function enumAt(schema: string, property: string, list = false): string[] {
   const field = contract.components.schemas[schema]?.properties?.[property];
   const values = (list ? field?.items : field)?.enum;
-  if (!values || values.length === 0) throw new Error(`the contract has no enum at ${schema}.${property}: the schema moved, update this test`);
+  if (!values || values.length === 0)
+    throw new Error(
+      `the contract has no enum at ${schema}.${property}: the schema moved, update this test`,
+    );
   return values;
 }
 
 /** The catalogue keys a served set needs that the catalogue lacks. */
-export const missingKeys = (prefix: string, values: readonly string[], catalogue: Record<string, string>) =>
-  values.map((value) => `${prefix}${value}`).filter((key) => !Object.prototype.hasOwnProperty.call(catalogue, key));
+export const missingKeys = (
+  prefix: string,
+  values: readonly string[],
+  catalogue: Record<string, string>,
+) =>
+  values
+    .map((value) => `${prefix}${value}`)
+    .filter((key) => !Object.prototype.hasOwnProperty.call(catalogue, key));
 
 describe('the check itself', () => {
   it('names a served value the catalogue does not have, and passes one it does', () => {
-    expect(missingKeys('buyer.seller.trust.', ['NEW', 'REBUILDING'], en)).toEqual(['buyer.seller.trust.REBUILDING']);
+    expect(missingKeys('buyer.seller.trust.', ['NEW', 'REBUILDING'], en)).toEqual([
+      'buyer.seller.trust.REBUILDING',
+    ]);
     expect(missingKeys('buyer.seller.trust.', ['NEW', 'ESTABLISHED', 'TRUSTED'], en)).toEqual([]);
     expect(() => enumAt('NoSuchSchema', 'level')).toThrow('the schema moved');
   });
@@ -48,10 +59,26 @@ describe('the check itself', () => {
 
 describe('what the server can name is in the catalogue', () => {
   it.each([
-    ['a Seller profile Trust level', 'buyer.seller.trust.', () => enumAt('StorefrontStatsDto', 'level')],
-    ['a Search result Seller Trust level', 'buyer.seller.trust.', () => enumAt('SearchSellerDto', 'trust_level')],
-    ['a review evidence basis', 'buyer.review.basis.', () => enumAt('StorefrontReviewDto', 'evidence_basis')],
-    ['a Seller fulfilment method', 'buyer.seller.about.fulfilment.', () => enumAt('StorefrontDto', 'fulfilment_methods', true)],
+    [
+      'a Seller profile Trust level',
+      'buyer.seller.trust.',
+      () => enumAt('StorefrontStatsDto', 'level'),
+    ],
+    [
+      'a Search result Seller Trust level',
+      'buyer.seller.trust.',
+      () => enumAt('SearchSellerDto', 'trust_level'),
+    ],
+    [
+      'a review evidence basis',
+      'buyer.review.basis.',
+      () => enumAt('StorefrontReviewDto', 'evidence_basis'),
+    ],
+    [
+      'a Seller fulfilment method',
+      'buyer.seller.about.fulfilment.',
+      () => enumAt('StorefrontDto', 'fulfilment_methods', true),
+    ],
   ])('has a sentence for every %s', (_what, prefix, served) => {
     expect(served().length).toBeGreaterThan(0);
     expect(missingKeys(prefix, served(), en)).toEqual([]);
@@ -59,24 +86,40 @@ describe('what the server can name is in the catalogue', () => {
 
   const migrations = repoFolderFiles('db/migrations', '.sql');
   /** A statement that creates, changes or removes the category table or its rows (not its availability table). */
-  const WRITES_CATEGORIES = /(?:CREATE\s+TABLE|ALTER\s+TABLE|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+core\.category\b/i;
+  const WRITES_CATEGORIES =
+    /(?:CREATE\s+TABLE|ALTER\s+TABLE|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+core\.category\b/i;
   /** The migrations read so far: the one that creates the table and the one that gives it labels. */
   const READ_SO_FAR = ['0007_catalogue_products_media.sql', '0062_catalogue_category_taxonomy.sql'];
 
   it('reads every migration, and only the two it has read write the category table', () => {
     expect(migrations.length).toBeGreaterThan(50);
-    expect(migrations.filter(({ text }) => WRITES_CATEGORIES.test(text)).map(({ file }) => file).sort()).toEqual(READ_SO_FAR);
+    expect(
+      migrations
+        .filter(({ text }) => WRITES_CATEGORIES.test(text))
+        .map(({ file }) => file)
+        .sort(),
+    ).toEqual(READ_SO_FAR);
   });
 
   it('has a label for every category any migration names', () => {
-    const seeded = migrations.flatMap(({ text }) => [...text.matchAll(/'(catalogue\.category\.[a-z_]+)'/g)].map((match) => match[1] as string));
+    const seeded = migrations.flatMap(({ text }) =>
+      [...text.matchAll(/'(catalogue\.category\.[a-z_]+)'/g)].map((match) => match[1] as string),
+    );
     expect(seeded.length).toBeGreaterThanOrEqual(3);
     expect(seeded.filter((key) => !Object.prototype.hasOwnProperty.call(en, key))).toEqual([]);
   });
 
   it('flags a category statement in a migration this test has not read', () => {
-    expect(WRITES_CATEGORIES.test("INSERT INTO core.category (id, code) VALUES ('x', 'TOYS');")).toBe(true);
-    expect(WRITES_CATEGORIES.test("update core.category set label_key = 'catalogue.category.toys'")).toBe(true);
-    expect(WRITES_CATEGORIES.test('INSERT INTO core.category_market_availability (category_id) VALUES (1);')).toBe(false);
+    expect(
+      WRITES_CATEGORIES.test("INSERT INTO core.category (id, code) VALUES ('x', 'TOYS');"),
+    ).toBe(true);
+    expect(
+      WRITES_CATEGORIES.test("update core.category set label_key = 'catalogue.category.toys'"),
+    ).toBe(true);
+    expect(
+      WRITES_CATEGORIES.test(
+        'INSERT INTO core.category_market_availability (category_id) VALUES (1);',
+      ),
+    ).toBe(false);
   });
 });

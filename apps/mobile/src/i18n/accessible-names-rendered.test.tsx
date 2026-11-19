@@ -72,7 +72,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   resetSecureStore();
   api = installFakeApi();
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false });
+  useUiStore.setState({
+    activeMode: null,
+    themePreference: 'system',
+    locale: 'en',
+    upgradeNoticeDismissed: false,
+  });
 });
 
 describe('every control on the first screens has an accessible name', () => {
@@ -98,8 +103,14 @@ describe('every control on the first screens has an accessible name', () => {
   });
 
   it('Shop: a Product tile and its Save button', async () => {
-    api.on('GET /v1/categories', () => ({ status: 200, body: { market_resolved: true, data: [] } }));
-    api.on('GET /v1/shop/products', () => ({ status: 200, body: { market_resolved: true, data: [shopProduct('mug', 'Plain mug')], next_cursor: null } }));
+    api.on('GET /v1/categories', () => ({
+      status: 200,
+      body: { market_resolved: true, data: [] },
+    }));
+    api.on('GET /v1/shop/products', () => ({
+      status: 200,
+      body: { market_resolved: true, data: [shopProduct('mug', 'Plain mug')], next_cursor: null },
+    }));
     await renderRouter(APP_DIR, { initialUrl: '/shop' });
     expect(await screen.findByLabelText(/^Plain mug,/)).toBeOnTheScreen();
     expectEveryControlNamed();
