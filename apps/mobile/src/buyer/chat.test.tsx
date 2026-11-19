@@ -6,6 +6,7 @@ import { AccessibilityInfo } from 'react-native';
 
 import { KEY_SAFE_MS } from '../api/mutation';
 import { useUiStore } from '../state/ui-store';
+import { configurePendingRetention } from './pending-policy';
 import {
   GOOD_TOKEN,
   SIGNED_IN_CONTEXT,
@@ -1863,6 +1864,53 @@ describe('Account change while a conversation is open', () => {
     expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
   });
 
+  describe('with an unconfirmed message kept for the session', () => {
+    beforeEach(() => configurePendingRetention('session'));
+    afterEach(() => {
+      configurePendingRetention('none');
+      useUiStore.getState().clearPendingSends();
+    });
+
+    it("the second Account finds nothing of the first Account's kept message, and nothing is sent for it", async () => {
+      const { theirs } = accounts();
+      api.onPattern('POST', MESSAGES, () => ({ status: 502, unreadable: true }));
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+      await screen.findByText('First Account private reply');
+      await fireEvent.changeText(composer(), 'Kept for the first Account only');
+      await fireEvent.press(sendButton());
+      await screen.findByText(en['buyer.chat.maybe_not_sent']);
+      expect(Object.keys(useUiStore.getState().pendingSends)).toEqual([theirs.id]);
+      await switchAccount();
+      expect(useUiStore.getState().pendingSends).toEqual({});
+      await open(`/chat/${theirs.id}`);
+      expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
+      expect(screen.queryByText('Kept for the first Account only')).toBeNull();
+      expect(screen.queryByLabelText(en['buyer.chat.composer'])).toBeNull();
+      await quiet();
+      expect(sends()).toHaveLength(1);
+      expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
+    });
+
+    it('a failure that lands after the Account switched is not kept', async () => {
+      const { theirs } = accounts();
+      const { gate, release } = held();
+      api.onPattern('POST', MESSAGES, async () => {
+        await gate;
+        return { status: 502, unreadable: true };
+      });
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+      await screen.findByText('First Account private reply');
+      await fireEvent.changeText(composer(), 'Landing late');
+      await fireEvent.press(sendButton());
+      await waitFor(() => expect(sends()).toHaveLength(1));
+      await switchAccount();
+      expect(useUiStore.getState().pendingSends).toEqual({});
+      await act(async () => release());
+      await quiet();
+      expect(useUiStore.getState().pendingSends).toEqual({});
+      expect(sends()).toHaveLength(1);
+    });
+  });
 });
 
 /**
@@ -2630,6 +2678,121 @@ describe('Message send reconciliation', () => {
       expect(retryButton()).toBeDisabled();
       await advance(1_000);
       await waitFor(() => expect(retryButton()).toBeEnabled());
+    });
+  });
+
+  /**
+   * An unconfirmed message kept for the session (pending-policy.ts). The retention is switched on only in
+   * this block; the default keeps nothing, and every other test of the file runs with it off.
+   */
+  describe('an unconfirmed message kept while the session lives', () => {
+    beforeEach(() => configurePendingRetention('session'));
+    afterEach(() => {
+      configurePendingRetention('none');
+      useUiStore.getState().clearPendingSends();
+    });
+    const leaveAndReturn = async (id: string) => {
+      await act(() => router.replace('/messages'));
+      await act(() => router.push(`/chat/${id}`));
+    };
+    const kept = () => Object.values(useUiStore.getState().pendingSends);
+
+    it('leaving the conversation and coming back finds the message still unconfirmed; the replay settles it with the same key', async () => {
+      const { chat, c } = await open();
+      const server = idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Come back to me');
+      await maybe();
+      await leaveAndReturn(c.id);
+      expect(await maybe()).toBeOnTheScreen();
+      expect(composer().props.value).toBe('Come back to me');
+      expect(composer().props.editable).toBe(false);
+      expect(sends()).toHaveLength(1);
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+      expect(sends()).toHaveLength(2);
+      expect(keys()[1]).toBe(keys()[0]);
+      expect(server.replays()).toBe(1);
+      expect(stored(chat, 'Come back to me')).toHaveLength(1);
+      expect(composer().props.value).toBe('');
+      expect(kept()).toEqual([]);
+    });
+
+    it('a message about a Product comes back with its Product, and the replay carries the same Product, text and key', async () => {
+      signedIn();
+      const chat = installChat();
+      chat.publish(BASKET);
+      await renderRouter(APP_DIR, { initialUrl: `/product/${HANDLE}/basket` });
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] }));
+      await within(await screen.findByTestId('chat-product-context')).findByText(BASKET.name);
+      const server = idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('About the basket again');
+      await maybe();
+      const id = chat.convs[0]!.id;
+      // Back to it without the Product in the link: the kept message brings its own.
+      await leaveAndReturn(id);
+      expect(await maybe()).toBeOnTheScreen();
+      await within(await screen.findByTestId('chat-product-context')).findByText(BASKET.name);
+      await fireEvent.press(retryButton());
+      await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+      expect(sends()).toHaveLength(2);
+      expect(sends()[1]!.body).toEqual({ text: 'About the basket again', product_id: BASKET.id });
+      expect(keys()[1]).toBe(keys()[0]);
+      expect(server.replays()).toBe(1);
+      expect(stored(chat, 'About the basket again')).toHaveLength(1);
+    });
+
+    it('past the key\'s safe age it comes back withdrawn: the words are there to read and copy, nothing is sent', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Too old to replay');
+      await maybe();
+      await act(() => router.replace('/messages'));
+      jest.setSystemTime(Date.now() + KEY_SAFE_MS + 60_000);
+      await act(() => router.push(`/chat/${c.id}`));
+      expect(await cannotConfirm()).toBeOnTheScreen();
+      expect(composer().props.value).toBe('Too old to replay');
+      expect(composer().props.editable).toBe(false);
+      expect(screen.queryByRole('button', { name: en['buyer.chat.retry_send'] })).toBeNull();
+      await advance(1000);
+      expect(sends()).toHaveLength(1);
+    });
+
+    it('after two days nothing comes back, and nothing is left behind', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Two days ago');
+      await maybe();
+      await act(() => router.replace('/messages'));
+      jest.setSystemTime(Date.now() + 48 * 3600_000 + 60_000);
+      await act(() => router.push(`/chat/${c.id}`));
+      expect(await screen.findByText('Two days ago')).toBeOnTheScreen();
+      expect(composer().props.value).toBe('');
+      expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+      expect(screen.queryByText(en['buyer.chat.cannot_confirm'])).toBeNull();
+      expect(kept()).toEqual([]);
+    });
+
+    it('a message the server accepted, one it refused, and one the person gave up are not kept', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [undefined, { refuse: problem(400, 'VALIDATION_FAILED', 'request', { path: 'text' }) }, { lose: gatewayPage }]);
+      await typeAndSend('Accepted');
+      await waitFor(() => expect(sends()).toHaveLength(1));
+      await waitFor(() => expect(composer().props.value).toBe(''));
+      expect(kept()).toEqual([]);
+      await typeAndSend('Refused');
+      expect(await screen.findByText(en['buyer.chat.not_sent'])).toBeOnTheScreen();
+      expect(kept()).toEqual([]);
+      await fireEvent.changeText(composer(), 'Given up');
+      await fireEvent.press(sendButton());
+      await maybe();
+      expect(kept()).toHaveLength(1);
+      await fireEvent.press(edit());
+      expect(kept()).toEqual([]);
+      await leaveAndReturn(c.id);
+      expect(await screen.findByText('Given up')).toBeOnTheScreen();
+      expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+      expect(composer().props.value).toBe('');
+      expect(stored(chat, 'Given up')).toHaveLength(1);
     });
   });
 

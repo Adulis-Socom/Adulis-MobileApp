@@ -2,6 +2,7 @@ import type { ColorMode } from '@adulis/tokens';
 import { create } from 'zustand';
 
 import type { SaveSurface, SaveTarget } from '../api/client';
+import type { PendingSendRecord } from '../buyer/pending-policy';
 import type { Mode } from '../modes/modes';
 
 export type ThemePreference = 'system' | ColorMode;
@@ -26,6 +27,13 @@ type UiState = {
    */
   pendingSave: { nonce: string; target: SaveTarget; surface: SaveSurface; sceneRef: string | null } | null;
   setPendingSave: (pending: UiState['pendingSave']) => void;
+  /**
+   * Unconfirmed Buyer messages kept while the session lives, by conversation (buyer/pending-policy.ts: empty
+   * unless that switch is on). Memory only, never persisted; cleared by clearSession and a session that ends.
+   */
+  pendingSends: Record<string, PendingSendRecord>;
+  setPendingSend: (conversationRef: string, record: PendingSendRecord | null) => void;
+  clearPendingSends: () => void;
   setActiveMode: (mode: Mode | null) => void;
   setThemePreference: (preference: ThemePreference) => void;
   setLocale: (locale: Locale) => void;
@@ -43,4 +51,13 @@ export const useUiStore = create<UiState>()((set) => ({
   dismissUpgradeNotice: () => set({ upgradeNoticeDismissed: true }),
   pendingSave: null,
   setPendingSave: (pendingSave) => set({ pendingSave }),
+  pendingSends: {},
+  setPendingSend: (conversationRef, record) =>
+    set((state) => {
+      const next = { ...state.pendingSends };
+      if (record === null) delete next[conversationRef];
+      else next[conversationRef] = record;
+      return { pendingSends: next };
+    }),
+  clearPendingSends: () => set({ pendingSends: {} }),
 }));
