@@ -257,6 +257,7 @@ test('a process that is still there after it was stopped resolves as stuck, with
 test('a record that fails stops the process and is reported; the promise still resolves', async () => {
   const m = mrun({
     args: ['-e', HOLD, TOKEN], // would run for ever if it were not stopped
+    timeout: 5000,
     onSpawn: async (pid) => {
       pids.add(pid);
       m.spawned.push(pid);
@@ -264,6 +265,7 @@ test('a record that fails stops the process and is reported; the promise still r
     },
   });
   const r = await m.p;
+  assert.equal(r.timedOut, false, 'it was stopped because of the record, not by the timeout');
   assert.equal(r.recordError.message, 'record failed');
   assert.equal(r.stuck ?? false, false);
   assert.ok(await until(() => !alive(m.spawned[0])), 'the process was stopped by its handle');

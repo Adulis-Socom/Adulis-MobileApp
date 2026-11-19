@@ -581,6 +581,18 @@ test('a command nested in another command is read: runFlow, repeat, retry and th
   );
 });
 
+test('options and keys that mean something are read wherever they stand, and a command list must be a list', () => {
+  assert.ok(has('- launchApp:\n    clearKeychain: true', 'clearKeychain'));
+  assert.ok(!has('- launchApp:\n    clearKeychain: false', 'clearKeychain'));
+  assert.ok(
+    has('- tapOn:\n    link: https://example.test/x', 'external-link'),
+    'a link key in any command',
+  );
+  assert.ok(!has('- tapOn:\n    link: adulis://saved', 'external-link'));
+  assert.ok(has('- runFlow:\n    commands: tapOn', 'unparseable'), 'commands that is not a list');
+  assert.ok(has('- repeat:\n    times: 2\n    commands: back', 'unparseable'));
+});
+
 test('an expression that never closes, or that sits in a key or the header, is not a variable', () => {
   assert.ok(has("- inputText: ${http.get('x')", 'expression'));
   assert.ok(has('- tapOn:\n    ${a.b}: x', 'expression'));
