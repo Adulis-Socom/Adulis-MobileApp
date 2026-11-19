@@ -235,6 +235,40 @@ describe('retry hints on a failed answer', () => {
     expect(parseRetryAfter('0007', now)).toBe(7);
   });
 
+  // A wait written as a date is the server's own time, so it is measured against the Date of the same
+  // answer; the device clock decides only when that header is missing or unreadable.
+  describe('a Retry-After written as a date', () => {
+    const SERVER_NOW = Date.parse('2026-11-18T10:00:00.000Z');
+    const inSeconds = (s: number) => new Date(SERVER_NOW + s * 1000).toUTCString();
+    async function waitWith(deviceNow: number, headers: Record<string, string>) {
+      jest.useFakeTimers({ now: deviceNow });
+      try {
+        return retryAfterMs(await failureFor(() => ({ status: 503, unreadable: true, headers })));
+      } finally {
+        jest.useRealTimers();
+      }
+    }
+
+    it('is 90 seconds with a device clock an hour behind (it used to hold for the whole hour)', async () => {
+      const ms = await waitWith(SERVER_NOW - 3600_000, { 'Retry-After': inSeconds(90), Date: inSeconds(0) });
+      expect(ms).toBe(90_000);
+    });
+
+    it('is 90 seconds with a device clock an hour ahead (it used to be no wait at all)', async () => {
+      const ms = await waitWith(SERVER_NOW + 3600_000, { 'Retry-After': inSeconds(90), Date: inSeconds(0) });
+      expect(ms).toBe(90_000);
+    });
+
+    it('falls back to the device clock when the answer has no usable Date', async () => {
+      expect(await waitWith(SERVER_NOW, { 'Retry-After': inSeconds(45) })).toBe(45_000);
+      expect(await waitWith(SERVER_NOW, { 'Retry-After': inSeconds(45), Date: 'not a date' })).toBe(45_000);
+    });
+
+    it('leaves a wait in seconds alone, whatever the clocks say', async () => {
+      expect(await waitWith(SERVER_NOW + 3600_000, { 'Retry-After': '30', Date: inSeconds(0) })).toBe(30_000);
+    });
+  });
+
   it('never puts the header or the slot in the error message', async () => {
     const limited = problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 777 });
     const error = await failureFor(() => ({ ...limited, headers: { 'Retry-After': '888' } }));
