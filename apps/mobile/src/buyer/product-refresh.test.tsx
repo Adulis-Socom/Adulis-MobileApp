@@ -235,6 +235,27 @@ describe('a Product that is no longer public', () => {
     expect(headline()).toBe(`${etb(70000)} \u2013 ${etb(95000)}`);
     expect(choice('Small', AVAILABLE, 70000)).toBeEnabled();
   });
+
+  it('after a 404 and a success the 404 no longer stands: a later failure keeps the Product like any other', async () => {
+    serve(
+      ok(BOTH()),
+      problem(404, 'NOT_FOUND', 'request'),
+      ok(basket([option(SMALL, { price_minor: 70000 }), option(LARGE)])),
+      problem(500, 'INTERNAL', 'request'),
+    );
+    await open();
+    await toSellerAndBack();
+    expect(await screen.findByText(en['buyer.product.gone'])).toBeOnTheScreen();
+    await showAgain();
+    expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
+    await showAgain();
+    expect(reads()).toBe(4);
+    expect(screen.queryByText(en['buyer.product.gone'])).not.toBeOnTheScreen();
+    keptParts();
+    withheldParts();
+    expect(screen.getByText(FAILED)).toBeOnTheScreen();
+    expect(retry()).toBeOnTheScreen();
+  });
 });
 
 describe('a re-read that waits for a connection', () => {
