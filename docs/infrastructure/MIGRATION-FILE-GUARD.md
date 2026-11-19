@@ -82,6 +82,26 @@ checkout of the approved commit. A migration you are still writing is applied to
 A deployment to a hosted database is UNKNOWN to this rule and has no commit or confirmation to give; until the
 deploy command is changed deliberately, the pre-deploy step is refused.
 
+The source check reads the checkout's OWN git metadata: the directory the guard lives in must be the top level of a git
+repository. A directory with no `.git` of its own is refused even when it sits inside another repository (git would otherwise
+walk up and judge it by that repository's HEAD), and `GIT_DIR`, `GIT_WORK_TREE` and the other variables that move git to another
+repository are ignored. A hosted build that carries no git metadata (or no git) is refused with `SOURCE: cannot read the git HEAD ...
+an artifact without git metadata cannot satisfy that`: it cannot satisfy a persistent-target rule that compares a commit with
+git HEAD, and no flag turns that into an allowance. `ops/scripts/release-artifact.mjs` describes such an artifact (see below) but
+does not authorise anything.
+
+### The identity of an artifact's migration set
+
+`node ops/scripts/release-artifact.mjs write --commit <full sha> --out <file>` records, at build time, the commit the build says
+it is and the sha256 of the migration manifest (which lists every migration file's hash); it refuses a tree whose files are not
+exactly its pinned set, and never overwrites an existing record. `node ops/scripts/release-artifact.mjs verify --info <file>
+--expect-commit <full sha>` recomputes the manifest hash, checks every migration file against the manifest, and compares the
+record with the commit the pipeline expects (and with git HEAD when the checkout has its own). It catches a migration edited
+together with its own manifest line after the record was made, which the directory check alone accepts. It does NOT prove that
+anyone approved the commit (an unsigned record can be rewritten by whoever can rewrite the artifact), and nothing reads a record
+when a migration is applied: `pnpm db:migrate`, `pnpm db:migrate:guarded` and the guard's `up` never consult it, a test fails if
+they do. It is the first building block for an approved deployment path; the approval itself is a separate, not yet decided part.
+
 The target is `DATABASE_URL_MIGRATE`, from the environment or from `.env` (the scripts load it with
 `--env-file-if-exists=.env`), and nothing else: there is no default host or database. The command refuses if
 the variable is not set, or is not a plain `postgres://` or `postgresql://` URL (a plain host name or address, and one
@@ -124,6 +144,7 @@ tree git lists successfully, without a manifest in it, counts as "no manifest ye
 | `pnpm db:determinism` (two scratch databases) | the guard, with the scratch URL as `DATABASE_URL_MIGRATE`; each scratch database is marked disposable first |
 | the deploy blueprint's pre-deploy command (`ops/render.yaml`, `ops/runbooks/deploy.md`) | `pnpm db:migrate` (a hosted database is UNKNOWN: refused until the command is changed deliberately) |
 | `pnpm worker:install` | not guarded, and not `db/migrations`: it installs the job queue library's own tables (schema `jobs`) |
+| `node ops/scripts/release-artifact.mjs` | not a way to migrate: it writes and checks a record of the migration set's identity, and applies nothing |
 | `db/init/*.sql` | not guarded, and not `db/migrations`: extensions and local logins on the first start of an empty local data directory |
 
 `node-pg-migrate` is started by the guard and by nothing else in the repository: no package script,
@@ -176,6 +197,8 @@ Three situations have an exit that does not touch history:
   assume-unchanged flags, and it ignores ignored files.
 - The classification and the runner use separate connections, and `localhost` is resolved again for each connection. Nothing
   here makes the two resolve differently, and nothing proves they cannot.
+- `pnpm db:reset` accepts loopback hosts only; the compose service names `db` and `postgres` are no longer accepted, because the guard
+  classifies them UNKNOWN. A reset reaches a database through its published loopback port.
 - The runner reads the SQL files after the guard hashed them. On a checkout that is being edited that is a window of a few
   seconds; an immutable checkout (CI, a deployed build) has none.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with

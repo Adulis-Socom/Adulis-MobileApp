@@ -78,7 +78,7 @@ const host = (() => {
     return '';
   }
 })();
-if (!['localhost', '127.0.0.1', '::1', 'db', 'postgres'].includes(host)) {
+if (!['localhost', '127.0.0.1', '::1'].includes(host)) {
   console.error(`FAIL  refusing to reset a non-local database (host: ${host || 'unparseable'}).`);
   console.error('      This script drops every application schema. That is its purpose.');
   process.exit(2);
@@ -137,9 +137,11 @@ if (decision.kind === 'confirmed') {
   }
   gateArgs.push('--expect-commit', approvedSha, `--confirm-target=${decision.target}`);
 }
+// The target gate first, then the migration files; a persistent reset's file check also proves the source the guarded migration
+// checks (the commit, and that no migration file is untracked).
 for (const [what, args] of [
-  ['the migration files are not the pinned set, so the migration that follows the reset would be refused', ['verify']],
   ['the migration that follows the reset would be refused for this target', ['authorize', ...gateArgs]],
+  ['the migration files are not the pinned set, so the migration that follows the reset would be refused', ['verify', ...(approvedSha ? ['--expect-commit', approvedSha] : [])]],
 ]) {
   const pre = spawnSync(process.execPath, ['ops/scripts/migration-guard.mjs', ...args], {
     cwd: root,

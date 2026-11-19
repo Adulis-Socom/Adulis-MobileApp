@@ -31,9 +31,11 @@ import {
   RUNNER_PATH,
   authorizeApply,
   checkApprovedSource,
+  checkSource,
   classifyTarget,
   parseArgs,
   parseTarget,
+  readCheckoutHead,
   up,
   write,
 } from './migration-guard.mjs';
@@ -1025,7 +1027,7 @@ test('the guard reads the history and the mark in read-only sessions, for the da
  * with everything committed. The scripts resolve their root from their own location, so they act on this tree only,
  * and the administrative log they write is this tree's.
  */
-function tempTree() {
+function tempTree({ git: withGit = true } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'migtree-'));
   const put = (rel) => {
     mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -1067,17 +1069,19 @@ function tempTree() {
     assert.equal(r.status, 0, `git ${a.join(' ')}: ${r.stderr}`);
     return r.stdout.trim();
   };
-  git('init', '-q');
-  git('config', 'user.email', 't@example.invalid');
-  git('config', 'user.name', 't');
-  git('config', 'commit.gpgsign', 'false');
-  git('config', 'core.autocrlf', 'false');
-  git('add', '-A');
-  git('commit', '-q', '-m', 'tree');
+  if (withGit) {
+    git('init', '-q');
+    git('config', 'user.email', 't@example.invalid');
+    git('config', 'user.name', 't');
+    git('config', 'commit.gpgsign', 'false');
+    git('config', 'core.autocrlf', 'false');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'tree');
+  }
   return {
     dir,
     git,
-    head: git('rev-parse', 'HEAD'),
+    head: withGit ? git('rev-parse', 'HEAD') : null,
     started,
     log: path.join(dir, '.adulis-db-admin.log'),
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
@@ -1386,4 +1390,269 @@ test('the database-scripts table no longer says the migration command needs no d
     /the protected port never accepts a mark\)/,
     'the old sentence read as if the rule were global',
   );
+});
+
+// ---- the source rule judges the checkout's OWN git metadata, and a checkout without any is refused plainly ----------
+
+/** A repository with one commit; returns its head. `content` keeps two repositories made in the same second from sharing a commit id. */
+function repoWithCommit(dir, content = 'one\n') {
+  mkdirSync(dir, { recursive: true });
+  const git = (...a) => {
+    const r = spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${a.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  writeFileSync(path.join(dir, 'a.txt'), content);
+  git('add', '-A');
+  git('commit', '-q', '-m', 'one');
+  return git('rev-parse', 'HEAD');
+}
+
+test('a checkout without git metadata of its own is refused with a message that says what to do, even inside another repository or with GIT_DIR set', () => {
+  const base = mkdtempSync(path.join(tmpdir(), 'migown-'));
+  const saved = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+  try {
+    const outer = path.join(base, 'outer');
+    const outerHead = repoWithCommit(outer);
+    const inner = path.join(outer, 'unpacked'); // an unpacked artifact inside a workspace that is itself a repository
+    mkdirSync(inner);
+    writeFileSync(path.join(inner, 'b.txt'), 'x\n');
+    const lone = mkdtempSync(path.join(base, 'lone-'));
+    for (const check of [checkApprovedSource, checkSource]) {
+      const nested = check({ root: inner, expectedCommit: outerHead }).join('\n');
+      assert.match(
+        nested,
+        /SOURCE: cannot read the git HEAD \(it has no \.git of its own and sits inside another repository\)/,
+      );
+      assert.match(
+        nested,
+        /not a git checkout of its own[^]*clean git checkout of the approved commit[^]*cannot satisfy that/,
+      );
+      const none = check({ root: lone, expectedCommit: outerHead }).join('\n');
+      assert.match(none, /SOURCE: cannot read the git HEAD \(.*not a git repository/);
+      assert.match(none, /cannot satisfy that/);
+    }
+    assert.deepEqual(readCheckoutHead(outer), { head: outerHead });
+    assert.match(readCheckoutHead(inner).problem, /no \.git of its own/);
+    // GIT_DIR and GIT_WORK_TREE name another clean repository: they are not the checkout's metadata
+    const other = path.join(base, 'other');
+    const otherHead = repoWithCommit(other, 'another\n');
+    assert.notEqual(otherHead, outerHead);
+    process.env.GIT_DIR = path.join(other, '.git');
+    process.env.GIT_WORK_TREE = other;
+    assert.match(
+      checkApprovedSource({ root: lone, expectedCommit: otherHead }).join('\n'),
+      /cannot read the git HEAD/,
+    );
+    assert.match(
+      checkSource({ root: lone, expectedCommit: otherHead }).join('\n'),
+      /cannot read the git HEAD/,
+    );
+    assert.deepEqual(
+      checkApprovedSource({ root: outer, expectedCommit: outerHead }),
+      [],
+      'a real checkout is judged by its own repository',
+    );
+    assert.match(
+      checkApprovedSource({ root: outer, expectedCommit: otherHead }).join('\n'),
+      /HEAD is [0-9a-f]{12}, not the approved/,
+      'not by the repository GIT_DIR names',
+    );
+  } finally {
+    for (const [k, v] of [
+      ['GIT_DIR', saved.dir],
+      ['GIT_WORK_TREE', saved.tree],
+    ]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('hosted artifact without git metadata: every way the command line can apply to a non-disposable database is refused, nothing is recorded, the runner never starts', async () => {
+  const tree = tempTree({ git: false });
+  const marked = await fakePg({ names: ALL.slice(0, 3), marker: DISPOSABLE_MARKER });
+  const unmarked = await fakePg({ names: ALL.slice(0, 3), marker: null });
+  try {
+    const targets = [
+      // a loopback database with no mark, and a database whose host is not a plain loopback name even though it says it is marked
+      { url: urlFor(unmarked), pg: unmarked, host: '127.0.0.1', kind: 'PERSISTENT-DEV' },
+      {
+        url: urlFor(marked).replace('127.0.0.1', 'LOCALHOST'),
+        pg: marked,
+        host: 'LOCALHOST',
+        kind: 'UNKNOWN',
+      },
+    ];
+    for (const t of targets) {
+      const env = { DATABASE_URL_MIGRATE: t.url };
+      const want = `fakedb@${t.host}:${t.pg.port}`;
+      const run = (script, args) => inTree(tree, script, args, env);
+      const ordinary = await run('migration-guard.mjs', ['up', '--no-source-check']);
+      assert.equal(ordinary.status, 1, ordinary.stderr);
+      assert.match(ordinary.stdout, new RegExp(`^classification: ${t.kind} `, 'm'));
+      assert.match(
+        ordinary.stderr,
+        new RegExp(
+          `REFUSED: the target .* is ${t.kind}, not a disposable database; nothing was applied`,
+        ),
+      );
+      for (const [script, args] of [
+        ['migration-guard.mjs', ['up', '--expect-commit', SHA, `--confirm-target=${want}`]],
+        ['migration-guard.mjs', ['authorize', '--expect-commit', SHA, `--confirm-target=${want}`]],
+      ]) {
+        const r = await run(script, args);
+        assert.equal(r.status, 1, `${args.join(' ')}: ${r.stderr}`);
+        assert.match(
+          r.stderr,
+          /SOURCE: cannot read the git HEAD[^]*not a git checkout of its own[^]*clean git checkout of the approved commit[^]*cannot satisfy that/,
+        );
+      }
+      // a dry run is read-only and allowed on every target, with or without git metadata
+      const dry = await run('migration-guard.mjs', ['up', '--no-source-check', '--dry-run']);
+      assert.equal(dry.status, 0, dry.stderr);
+      assert.match(dry.stdout, new RegExp(`^classification: ${t.kind} `, 'm'));
+    }
+    assert.ok(!existsSync(tree.started), 'the runner never started');
+    assert.ok(!existsSync(tree.log), 'nothing was recorded');
+    for (const pg of [marked, unmarked])
+      assert.ok(
+        pg.seen.every((q) => GUARD_QUERIES.test(q)),
+        'the guard itself wrote nothing',
+      );
+  } finally {
+    await marked.close();
+    await unmarked.close();
+    tree.cleanup();
+  }
+});
+
+test('git missing from the artifact is the same refusal, and it says git is the problem', async () => {
+  const tree = tempTree({ git: false });
+  const pg = await fakePg({ names: ALL.slice(0, 3), marker: null });
+  const emptyBin = mkdtempSync(path.join(tmpdir(), 'nogit-'));
+  try {
+    const noGit = {};
+    // a PATH with no git in it, under both spellings of the variable
+    for (const k of Object.keys(process.env)) if (k.toLowerCase() === 'path') noGit[k] = emptyBin;
+    const r = await inTree(
+      tree,
+      'migration-guard.mjs',
+      ['up', '--expect-commit', SHA, `--confirm-target=fakedb@127.0.0.1:${pg.port}`],
+      { DATABASE_URL_MIGRATE: urlFor(pg), ...noGit },
+    );
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, /SOURCE: cannot read the git HEAD[^]*git is not installed/);
+    assert.ok(!existsSync(tree.started) && !existsSync(tree.log));
+  } finally {
+    await pg.close();
+    tree.cleanup();
+    rmSync(emptyBin, { recursive: true, force: true });
+  }
+});
+
+test('the blueprint pre-deploy command is refused for a hosted-looking target in an artifact without git: the first hosted deploy needs a decision, and this pins that it does not run until then', async () => {
+  const blueprint = read('ops/render.yaml');
+  assert.match(blueprint, /preDeployCommand: pnpm db:migrate && pnpm worker:install/);
+  const tree = tempTree({ git: false });
+  const pg = await fakePg({ names: ALL.slice(0, 3), marker: DISPOSABLE_MARKER });
+  try {
+    // `pnpm db:migrate` is `up --no-source-check`; the host is spelled so the guard cannot take it for loopback
+    const r = await inTree(tree, 'migration-guard.mjs', ['up', '--no-source-check'], {
+      DATABASE_URL_MIGRATE: urlFor(pg).replace('127.0.0.1', 'LOCALHOST'),
+    });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stdout, /^classification: UNKNOWN /m);
+    assert.match(
+      r.stderr,
+      /REFUSED: the target .* is UNKNOWN, not a disposable database; nothing was applied/,
+    );
+    assert.match(r.stderr, /--expect-commit <full sha>/);
+    assert.ok(!existsSync(tree.started));
+  } finally {
+    await pg.close();
+    tree.cleanup();
+  }
+});
+
+// ---- db:reset ------------------------------------------------------------------------------------------------------
+
+test('db:reset of a persistent database: a pinned migration that git does not track is refused before the reset is announced, recorded or dropped', async () => {
+  const tree = tempTree();
+  const pg = await fakePg({ names: ALL, marker: null });
+  try {
+    const want = `fakedb@127.0.0.1:${pg.port}`;
+    const env = { DATABASE_URL_MIGRATE: urlFor(pg), NODE_ENV: 'test' };
+    // a migration pinned by a COMMITTED manifest line whose file was never added to git
+    writeFileSync(
+      path.join(tree.dir, 'db', 'migrations', '0063_pinned_not_tracked.sql'),
+      'SELECT 1;\n',
+    );
+    const pinned = await inTree(tree, 'migration-guard.mjs', ['write'], {});
+    assert.equal(pinned.status, 0, pinned.stderr);
+    tree.git('add', 'ops/migrations.manifest.json');
+    tree.git('commit', '-q', '-m', 'pin without the file');
+    const head = tree.git('rev-parse', 'HEAD');
+    const r = await inTree(
+      tree,
+      'db-reset.mjs',
+      [`--confirm-target=${want}`, `--expect-commit=${head}`],
+      env,
+    );
+    assert.equal(r.status, 1, `${r.stdout}${r.stderr}`);
+    assert.match(
+      r.stderr,
+      /SOURCE: the migrations or the manifest differ from the commit[^]*0063_pinned_not_tracked\.sql/,
+    );
+    assert.match(r.stderr, /Nothing was dropped\./);
+    assert.doesNotMatch(r.stdout, /CONFIRMED/);
+    assert.ok(!existsSync(tree.log), 'nothing was recorded');
+    assert.ok(!pg.seen.some((q) => /DROP|CREATE/i.test(q)));
+    // a disposable database has no source check (the ordinary command skips it), so it still reaches the reset
+    const marked = await fakePg({ names: ALL, marker: DISPOSABLE_MARKER });
+    try {
+      const d = await inTree(tree, 'db-reset.mjs', [], {
+        DATABASE_URL_MIGRATE: urlFor(marked),
+        NODE_ENV: 'test',
+      });
+      assert.match(d.stdout, /PASS {2}fakedb is marked disposable/);
+    } finally {
+      await marked.close();
+    }
+  } finally {
+    await pg.close();
+    tree.cleanup();
+  }
+});
+
+test('db:reset resets only a loopback host: the compose service names are no longer accepted, and refuse before any connection', async () => {
+  const tree = tempTree({ git: false });
+  try {
+    for (const host of ['db', 'postgres']) {
+      const r = await inTree(tree, 'db-reset.mjs', ['--confirm-target=x@x:5432'], {
+        DATABASE_URL_MIGRATE: `postgres://u:p@${host}:5432/fakedb`,
+        NODE_ENV: 'test',
+      });
+      assert.equal(r.status, 2, `${host}: ${r.stderr}`);
+      assert.match(
+        r.stderr,
+        new RegExp(`refusing to reset a non-local database \\(host: ${host}\\)`),
+      );
+      assert.doesNotMatch(
+        r.stderr,
+        /could not read the target database/,
+        'it never tried to connect',
+      );
+    }
+  } finally {
+    tree.cleanup();
+  }
+  const src = read('ops/scripts/db-reset.mjs');
+  assert.doesNotMatch(src, /'db', 'postgres'/);
+  assert.match(src, /\['localhost', '127\.0\.0\.1', '::1'\]\.includes\(host\)/);
 });

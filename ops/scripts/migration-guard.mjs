@@ -164,9 +164,42 @@ export function checkHistory(applied, manifest) {
   return { problems, pending: problems.length === 0 ? files.slice(applied.length) : [] };
 }
 
+/** Variables that move git to another repository than the checkout's own. */
+const GIT_LOCATION_ENV = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_NAMESPACE',
+];
+
 function git(root, args) {
-  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  const env = { ...process.env };
+  for (const k of GIT_LOCATION_ENV) delete env[k];
+  const r = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env });
   return { status: r.status, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
+}
+
+const NO_OWN_GIT =
+  'this directory is not a git checkout of its own (it has no .git here, or git is not installed), so the commit it was built from cannot be checked. A database that is not disposable is migrated only from a clean git checkout of the approved commit (--expect-commit <full sha>); an artifact without git metadata cannot satisfy that';
+
+/**
+ * HEAD of the checkout's OWN repository. `root` must be that repository's top level: git finds a repository by walking
+ * up, so a directory without a .git of its own (an unpacked artifact inside a workspace, say) would otherwise be judged
+ * by the repository around it. Returns { head } or { problem }.
+ */
+export function readCheckoutHead(root) {
+  const top = git(root, ['rev-parse', '--show-cdup']);
+  if (top.status !== 0 || top.out !== '')
+    return {
+      problem: `SOURCE: cannot read the git HEAD (${top.status !== 0 ? top.err || 'git failed' : 'it has no .git of its own and sits inside another repository'}): ${NO_OWN_GIT}`,
+    };
+  const head = git(root, ['rev-parse', 'HEAD']);
+  if (head.status !== 0)
+    return { problem: `SOURCE: cannot read the git HEAD (${head.err || 'git failed'})` };
+  return { head: head.out };
 }
 
 /** Source commit: the checkout is the expected commit, and the migrations and the manifest are exactly as committed. */
@@ -177,14 +210,14 @@ export function checkSource({
   manifestRel = 'ops/migrations.manifest.json',
 }) {
   const problems = [];
-  const head = git(root, ['rev-parse', 'HEAD']);
-  if (head.status !== 0) return [`SOURCE: cannot read the git HEAD (${head.err || 'git failed'})`];
+  const head = readCheckoutHead(root);
+  if (!head.head) return [head.problem];
   if (!/^[0-9a-f]{7,40}$/i.test(expectedCommit))
     return [
       `SOURCE: --expect-commit must be a hex commit (7 to 40 characters), got ${JSON.stringify(expectedCommit)}`,
     ];
-  if (!head.out.toLowerCase().startsWith(expectedCommit.toLowerCase()))
-    problems.push(`SOURCE: HEAD is ${head.out.slice(0, 12)}, expected ${expectedCommit}`);
+  if (!head.head.toLowerCase().startsWith(expectedCommit.toLowerCase()))
+    problems.push(`SOURCE: HEAD is ${head.head.slice(0, 12)}, expected ${expectedCommit}`);
   const status = git(root, [
     'status',
     '--porcelain',
@@ -417,12 +450,12 @@ export async function classifyTarget(t, { readMark: read }) {
 export function checkApprovedSource({ root, expectedCommit }) {
   if (!/^[0-9a-f]{40}$/i.test(expectedCommit))
     return ['SOURCE: --expect-commit must be the full 40-character commit sha for this target'];
-  const head = git(root, ['rev-parse', 'HEAD']);
-  if (head.status !== 0) return [`SOURCE: cannot read the git HEAD (${head.err || 'git failed'})`];
+  const head = readCheckoutHead(root);
+  if (!head.head) return [head.problem];
   const problems = [];
-  if (head.out.toLowerCase() !== expectedCommit.toLowerCase())
+  if (head.head.toLowerCase() !== expectedCommit.toLowerCase())
     problems.push(
-      `SOURCE: HEAD is ${head.out.slice(0, 12)}, not the approved ${expectedCommit.slice(0, 12)}`,
+      `SOURCE: HEAD is ${head.head.slice(0, 12)}, not the approved ${expectedCommit.slice(0, 12)}`,
     );
   const status = git(root, ['status', '--porcelain', '--untracked-files=no']);
   if (status.status !== 0) problems.push(`SOURCE: git status failed (${status.err})`);
