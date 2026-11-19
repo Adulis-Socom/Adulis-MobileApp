@@ -31,8 +31,12 @@ type Contract = {
   components: { schemas: Record<string, { properties?: Record<string, unknown> } | undefined> };
 };
 
-/** A path segment that is the follow or feed resource itself (`/v1/feed`, not `/v1/feedback`). */
-const PATH_SEGMENT = /^(follows?|following|followers|feed)$/i;
+/**
+ * A word of a path segment that names the follow or feed resource, once the segment is split on `-`
+ * and `_`: `/v1/feed`, `/v1/home-feed`, `/v1/me/followed-sellers`, `/v1/sellers/{handle}/follow-state`
+ * match; `/v1/feedback` (the word is "feedback") and a `{parameter}` segment do not.
+ */
+const PATH_TOKEN = /^(feeds?|follows?|followed|following|followers?)$/i;
 const PATH_WORD = /nearby|discount|locally|offer|promotion/i;
 const PARAMETER_NAME = /follow|nearby|discount|locally|lat(itude)?$|lng|lon(gitude)?$|radius|distance|\barea\b|geo|location|market|country/i;
 // "following", not "follow": the contract's Seller-verification and Seller-analytics counts
@@ -44,9 +48,19 @@ const PROPERTY_NAME = /discount|compare_at|original_price|sale_price|offer|promo
  * `channelFactsIn` reports, and why. Empty today. An entry whose name no longer exists in the
  * contract, or that has no reason, fails below.
  */
-const ACKNOWLEDGED: readonly { fact: string; reason: string }[] = [];
+type Acknowledgement = { fact: string; reason: string };
+const ACKNOWLEDGED: readonly Acknowledgement[] = [];
 
-const pathMatches = (path: string) => PATH_WORD.test(path) || path.split('/').some((segment) => PATH_SEGMENT.test(segment.replace(/[{}]/g, '')));
+/** The facts nobody has acknowledged. */
+const unacknowledged = (facts: readonly string[], list: readonly Acknowledgement[]) => facts.filter((fact) => !list.some((entry) => entry.fact === fact));
+/** The acknowledgements that give no real reason. */
+const withoutReason = (list: readonly Acknowledgement[]) => list.filter((entry) => entry.reason.trim().length < 12).map((entry) => entry.fact);
+/** The acknowledgements whose name is no longer in the contract. */
+const stale = (present: readonly string[], list: readonly Acknowledgement[]) => list.filter((entry) => !present.includes(entry.fact)).map((entry) => entry.fact);
+
+const isParameter = (segment: string) => /^\{.*\}$/.test(segment);
+const pathMatches = (path: string) =>
+  PATH_WORD.test(path) || path.split('/').some((segment) => !isParameter(segment) && segment.split(/[-_]/).some((token) => PATH_TOKEN.test(token)));
 
 /** Every name in the contract that belongs to a Home channel fact, as `kind name`. */
 function channelFactsIn(contract: Contract): string[] {
@@ -77,11 +91,10 @@ const contract = JSON.parse(repoFile('contracts/openapi.json')) as Contract;
 describe('what the contract says about the four channels', () => {
   it('carries no Following, Nearby, Discounts or Locally Made fact in any path, parameter or property', () => {
     expect(Object.keys(contract.paths).length).toBeGreaterThan(100);
-    const acknowledged = new Set(ACKNOWLEDGED.map((entry) => entry.fact));
-    const unacknowledged = channelFactsIn(contract).filter((fact) => !acknowledged.has(fact));
-    if (unacknowledged.length > 0) {
+    const open = unacknowledged(channelFactsIn(contract), ACKNOWLEDGED);
+    if (open.length > 0) {
       throw new Error(
-        `The contract names something that looks like a Home channel fact (Following, Nearby, Discounts, Locally Made):\n  ${unacknowledged.join('\n  ')}\n` +
+        `The contract names something that looks like a Home channel fact (Following, Nearby, Discounts, Locally Made):\n  ${open.join('\n  ')}\n` +
           'If it is a channel fact, update that channel (its states, these tests and the ruling that allows it) in the same change as the code that uses it. ' +
           'If it is unrelated, add the exact entry above to ACKNOWLEDGED in this file with the reason. Do not loosen a pattern.',
       );
@@ -89,15 +102,43 @@ describe('what the contract says about the four channels', () => {
   });
 
   it('keeps no acknowledgement that has lost its name or its reason', () => {
-    const present = new Set(channelFactsIn(contract));
-    expect(ACKNOWLEDGED.filter((entry) => entry.reason.trim().length < 12).map((entry) => entry.fact)).toEqual([]);
-    expect(ACKNOWLEDGED.filter((entry) => !present.has(entry.fact)).map((entry) => entry.fact)).toEqual([]);
+    const present = channelFactsIn(contract);
+    expect(withoutReason(ACKNOWLEDGED)).toEqual([]);
+    expect(stale(present, ACKNOWLEDGED)).toEqual([]);
+  });
+
+  describe('the acknowledgement checks, on lists of their own', () => {
+    const entry = (fact: string, reason: string): Acknowledgement => ({ fact, reason });
+    const FACT = 'property CourierJobDto.offer_expires_at';
+    it('an acknowledged fact is not reported, and an unknown one is', () => {
+      expect(unacknowledged([FACT], [entry(FACT, 'A Courier job offer, not a Buyer discount')])).toEqual([]);
+      expect(unacknowledged([FACT, 'path /v1/feed'], [entry(FACT, 'A Courier job offer, not a Buyer discount')])).toEqual(['path /v1/feed']);
+      expect(unacknowledged([FACT], [])).toEqual([FACT]);
+    });
+
+    it('an entry with a short or blank reason is flagged, and one with a reason is not', () => {
+      expect(withoutReason([entry(FACT, 'ok'), entry('path /v1/x', '   ')])).toEqual([FACT, 'path /v1/x']);
+      expect(withoutReason([entry(FACT, 'A Courier job offer, not a Buyer discount')])).toEqual([]);
+    });
+
+    it('an entry whose name is no longer in the contract is flagged, and a present one is not', () => {
+      const list = [entry(FACT, 'A Courier job offer, not a Buyer discount'), entry('property Gone.discount', 'Was a Seller promotion code')];
+      expect(stale([FACT], list)).toEqual(['property Gone.discount']);
+      expect(stale([FACT, 'property Gone.discount'], list)).toEqual([]);
+    });
   });
 
   const synthetic = (extra: Partial<Contract>): Contract => ({ paths: {}, components: { schemas: {} }, ...extra });
   it.each([
     ['a feed path', synthetic({ paths: { '/v1/feed': { get: {} } } }), 'path /v1/feed'],
     ['a follow path', synthetic({ paths: { '/v1/sellers/{handle}/follow': { post: {} } } }), 'path /v1/sellers/{handle}/follow'],
+    ['a plural feed path', synthetic({ paths: { '/v1/feeds': { get: {} } } }), 'path /v1/feeds'],
+    ['a hyphenated feed path', synthetic({ paths: { '/v1/home-feed': { get: {} } } }), 'path /v1/home-feed'],
+    ['a following-feed path', synthetic({ paths: { '/v1/following-feed': { get: {} } } }), 'path /v1/following-feed'],
+    ['an underscored feed path', synthetic({ paths: { '/v1/scene_feed': { get: {} } } }), 'path /v1/scene_feed'],
+    ['a followed path', synthetic({ paths: { '/v1/me/followed': { get: {} } } }), 'path /v1/me/followed'],
+    ['a followed-sellers path', synthetic({ paths: { '/v1/me/followed-sellers': { get: {} } } }), 'path /v1/me/followed-sellers'],
+    ['a follow-state path', synthetic({ paths: { '/v1/sellers/{handle}/follow-state': { get: {} } } }), 'path /v1/sellers/{handle}/follow-state'],
     ['a nearby parameter', synthetic({ paths: { '/v1/x': { get: { parameters: [{ name: 'nearby' }] } } } }), 'parameter get /v1/x nearby'],
     ['a discount property', synthetic({ components: { schemas: { Dto: { properties: { discounted_price_minor: {} } } } } }), 'property Dto.discounted_price_minor'],
     ['a latitude property', synthetic({ components: { schemas: { Dto: { properties: { latitude: {} } } } } }), 'property Dto.latitude'],
@@ -111,9 +152,9 @@ describe('what the contract says about the four channels', () => {
     expect(channelFactsIn(input)).toEqual([expected]);
   });
 
-  it('does not take a feedback path or a follower count for a channel fact', () => {
+  it('does not take a feedback path, a path parameter named like a feed, or a follower count for a channel fact', () => {
     const near = synthetic({
-      paths: { '/v1/feedback': { post: {} } },
+      paths: { '/v1/feedback': { post: {} }, '/v1/things/{feed}/x': { get: {} }, '/v1/feedback-form': { get: {} } },
       components: { schemas: { Dto: { properties: { follower_count: {}, followers: {} } } } },
     });
     expect(channelFactsIn(near)).toEqual([]);
@@ -165,8 +206,13 @@ describe('the comment stripper used by the scans below', () => {
     expect(stripComments(source)).toContain('getCurrentPositionAsync');
   });
 
-  it('keeps code when a trailing // sits inside a string', () => {
+  it('keeps a URL string and the code after it', () => {
     expect(stripComments("const url = 'https://x.test/a'; const n = 'expo-location';")).toContain('expo-location');
+  });
+
+  it('keeps code after a spaced // that sits inside a string (the quote-count branch)', () => {
+    const source = "const s = 'a // b'; await Location.getCurrentPositionAsync({});";
+    expect(stripComments(source)).toContain('getCurrentPositionAsync');
   });
 });
 
@@ -205,6 +251,7 @@ describe('what the app asks the OS for', () => {
     "import { MapView } from 'expo-maps';",
     "import * as TaskManager from 'expo-task-manager';",
     "import * as BackgroundTask from 'expo-background-task';",
+    "const s = 'a // b'; await Location.getCurrentPositionAsync({});",
     "const accept = 'image/*';\nawait Location.getCurrentPositionAsync({});\n/* done */",
   ])('the scan finds %s', (sample) => {
     expect(locationApiIn(sample)).toBe(true);
