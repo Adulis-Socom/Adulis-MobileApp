@@ -630,10 +630,12 @@ const GATES = [
    * the shared database-target rules, db-determinism's container binding and failure paths, the
    * db-reset confirmation, the direct-invocation refusals, the volume guard script and the compose
    * configuration that wires it, and the native test harness's identity, cleanup, API, device and
-   * command-line refusals (ops/native/test, driven by doubles). No database is written: the scripts are
+   * command-line refusals (ops/native/test, driven by doubles), and its device driver: the adb call
+   * list, the settings journal and restoration, the build, flow and condition checks, Metro and the
+   * session, all against a fake device (a pass here is never a device result). No database is written: the scripts are
    * driven against stubs, or against nothing that answers. Needs `docker compose` for the configuration check (CI has it).
    */
-  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs', 'ops/scripts/db-backup-verify.test.mjs', 'ops/scripts/pg-recovery-verdict.test.mjs', 'ops/scripts/mobile-runtime-deps.test.mjs', 'ops/native/test/identity.test.mjs', 'ops/native/test/cleanup.test.mjs', 'ops/native/test/api.test.mjs', 'ops/native/test/device.test.mjs', 'ops/native/test/harness.test.mjs', 'ops/native/test/cli.test.mjs', 'ops/native/test/up.test.mjs', 'ops/native/test/guard.test.mjs', 'ops/native/test/s3.test.mjs'] },
+  { id: 'storage-guards', title: 'The database and object-storage guards refuse what they must', cmd: ['node', '--test', 'ops/scripts/disposable-db.test.mjs', 'ops/scripts/cleanup-policy.test.mjs', 'ops/scripts/disposable-storage.test.mjs', 'ops/scripts/compose-safety.test.mjs', 'ops/scripts/test-db.test.mjs', 'ops/scripts/db-backup-verify.test.mjs', 'ops/scripts/pg-recovery-verdict.test.mjs', 'ops/scripts/mobile-runtime-deps.test.mjs', 'ops/native/test/identity.test.mjs', 'ops/native/test/cleanup.test.mjs', 'ops/native/test/api.test.mjs', 'ops/native/test/device.test.mjs', 'ops/native/test/harness.test.mjs', 'ops/native/test/cli.test.mjs', 'ops/native/test/up.test.mjs', 'ops/native/test/guard.test.mjs', 'ops/native/test/s3.test.mjs', 'ops/native/test/adb-policy.test.mjs', 'ops/native/test/settings.test.mjs', 'ops/native/test/journal.test.mjs', 'ops/native/test/restore.test.mjs', 'ops/native/test/build.test.mjs', 'ops/native/test/flows.test.mjs', 'ops/native/test/maestro.test.mjs', 'ops/native/test/conditions.test.mjs', 'ops/native/test/metro.test.mjs', 'ops/native/test/session.test.mjs', 'ops/native/test/native-cli.test.mjs', 'ops/native/test/lock.test.mjs', 'ops/native/test/io-real.test.mjs'] },
 
   /**
    * APPENDED (DB-LIVE-02). The migration-file guard: an incomplete, renamed, duplicated or
@@ -643,7 +645,7 @@ const GATES = [
    * migration-default-path.test.mjs pins that `pnpm db:migrate` and every other way the repository migrates
    * runs the guard, never the raw runner.
    */
-  { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs', 'ops/scripts/migration-default-path.test.mjs'] },
+  { id: 'migration-guard', title: 'The migration-file guard refuses an incomplete or altered migration set', cmd: ['node', '--test', 'ops/scripts/migration-guard.test.mjs', 'ops/scripts/migration-default-path.test.mjs', 'ops/scripts/migration-target.test.mjs'] },
 ];
 
 /**

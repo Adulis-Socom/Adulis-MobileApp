@@ -1,5 +1,11 @@
 # WO-021 review guide -- Seller Companion messaging
 
+> **Superseded procedure.** The launcher scripts named in this document (`morning-start.sh`, the
+> `wo0nn-native.sh` batteries and `talkback.sh`) belong to an earlier review setup and are not to be
+> run. Native review runs use the isolated harness in `ops/native` (see `ops/native/README.md`): a
+> database, an object store and an API of their own for each run, a named test device, and device
+> settings that are restored afterwards. What this document says to check still applies.
+
 This guide covers how the store's Messages work and what has not been checked yet.
 
 Everything here was verified **in code and with automated tests only**. No Android or iOS run was

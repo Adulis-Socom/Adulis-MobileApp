@@ -126,6 +126,9 @@ function useSaveMutation(target: SaveTarget, surface: SaveSurface, sceneRef: str
   const { session, boundApi } = useSession();
   const inFlight = useRef(false);
   const mutation = useMutation({
+    // The Buyer's tap is the attempt: with no connection it fails at once like every other Collection write,
+    // rather than waiting silently and being sent when a connection returns, after the Buyer has moved on.
+    networkMode: 'always',
     mutationFn: async ({ bound, held, defaultRef }: ToggleInput) => {
       if (held?.saved && held.default_item_ref) {
         await bound.removeFromCollection(defaultRef, held.default_item_ref);

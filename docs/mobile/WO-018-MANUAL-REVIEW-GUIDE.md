@@ -1,5 +1,11 @@
 # WO-018 manual review guide -- Buyer accessibility
 
+> **Superseded procedure.** The launcher scripts named in this document (`morning-start.sh`, the
+> `wo0nn-native.sh` batteries and `talkback.sh`) belong to an earlier review setup and are not to be
+> run. Native review runs use the isolated harness in `ops/native` (see `ops/native/README.md`): a
+> database, an object store and an API of their own for each run, a named test device, and device
+> settings that are restored afterwards. What this document says to check still applies.
+
 How to check the WO-018 changes yourself on the Android emulator, including the TalkBack pass
 that WO-018 could not run (W18-11). You need no production credentials: everything runs against
 the local, disposable test database (`adulis_gates`). Nothing here touches production, and no step
