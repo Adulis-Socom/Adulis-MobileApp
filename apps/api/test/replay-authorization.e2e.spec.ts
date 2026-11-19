@@ -538,11 +538,18 @@ describe('replay authorisation and seller deletion', () => {
       claim,
       reference,
     ]);
-  /** Resolves once `count` sessions wait on the held transaction: proof that every request got that far. */
+  /**
+   * Resolves once `count` sessions queue behind the held transaction, directly or through another waiter (two
+   * messages in one conversation also wait for each other's row): proof that every request got that far.
+   */
   const waitersOn = async (pid: number, count: number): Promise<void> => {
     for (const until = Date.now() + 8_000; Date.now() < until; await sleep(20)) {
       const r = await admin.query(
-        `SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1::int = ANY(pg_blocking_pids(pid))`,
+        `WITH RECURSIVE queued(pid) AS (
+           SELECT pid FROM pg_stat_activity WHERE $1::int = ANY(pg_blocking_pids(pid))
+           UNION
+           SELECT a.pid FROM pg_stat_activity a JOIN queued q ON q.pid = ANY(pg_blocking_pids(a.pid)))
+         SELECT count(*)::int AS n FROM queued`,
         [pid],
       );
       if (r.rows[0].n >= count) return;
@@ -1133,7 +1140,7 @@ describe('replay authorisation and seller deletion', () => {
     });
 
     // The chat twin of R24 with a latch: R24 passes whichever way the two requests interleave.
-    it('R41: two identical buyer-side messages held at their commit: one message, and both answers are the same stored response', async () => {
+    it('R41: two identical buyer-side messages both in flight before either commits: one message, and both answers are the same stored response', async () => {
       const key = randomUUID();
       const text = `r41-${key}`;
       const blocker = await holdRecord(key, STRANGER, `POST /v1/conversations/${CONV_B}/messages`);
@@ -1147,7 +1154,7 @@ describe('replay authorisation and seller deletion', () => {
     });
 
     // One key, two sides of one account: the sides are different requests, so one commits and the other is refused.
-    it('R42: an Owner sends one key as the Buyer and as the store at once: one message, the other request is refused with 409', async () => {
+    it('R42: an Owner sends one key as the Buyer and as the store, both in flight at once: one message, the other request is refused with 409', async () => {
       const key = randomUUID();
       const text = `r42-${key}`;
       const blocker = await holdRecord(key, OWNER, `POST /v1/conversations/${CONV_SELF}/messages`);
