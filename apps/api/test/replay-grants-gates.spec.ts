@@ -22,6 +22,15 @@ const READ_BY_HAND = new Map([
   ['BillingController.purchaseIntent', 'billing.fn_open_purchase_intent asserts seller.subscription:update'],
 ]);
 
+/**
+ * Routes that run through runIdempotent and can check a seller permission, but on which a store's request never
+ * succeeds (the store side answers not found): only the Buyer's request is served there, so they declare nothing.
+ */
+const BUYER_ONLY = new Map([
+  ['ChatController.escalate', 'the store side of a conversation answers not found'],
+  ['ClaimsController.export', 'the store side of a claim answers not found'],
+]);
+
 const controllers = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? controllers(join(dir, e.name)) : e.name.endsWith('.controller.ts') ? [join(dir, e.name)] : [],
@@ -77,6 +86,25 @@ describe('the replay declarations hold every permission the route code checks', 
       .filter((d) => !READ_BY_HAND.has(d.key) && (gates.get(d.key)?.permissions ?? []).length === 0)
       .map((d) => d.key);
     expect(blind).toEqual([]);
+  });
+
+  // The path-based default-deny covers seller-context paths only. A store-side route anywhere else is found here instead,
+  // from what its own code checks, so a new one cannot be added (or a declaration dropped) without the build noticing.
+  it('every route that runs through runIdempotent and can check a seller permission declares its grants', () => {
+    const declaredKeys = new Set(declared.map((d) => d.key));
+    const missing = [...gates.entries()]
+      .filter(([key, g]) => g.keyed && g.permissions.length > 0 && !declaredKeys.has(key) && !BUYER_ONLY.has(key))
+      .map(([key, g]) => `${key}: checks ${g.permissions.join(', ')} and runs through runIdempotent, but declares no @ReplayGrant`);
+    expect(missing).toEqual([]);
+  });
+
+  it('every route listed as buyer-only still runs through runIdempotent, checks a seller permission and declares nothing', () => {
+    const declaredKeys = new Set(declared.map((d) => d.key));
+    const stale = [...BUYER_ONLY.keys()].filter((key) => {
+      const g = gates.get(key);
+      return g === undefined || !g.keyed || g.permissions.length === 0 || declaredKeys.has(key);
+    });
+    expect(stale).toEqual([]);
   });
 
   it('every route listed as read by hand is still a declared route', () => {

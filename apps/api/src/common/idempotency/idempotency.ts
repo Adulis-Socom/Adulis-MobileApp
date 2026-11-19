@@ -27,9 +27,13 @@ import { AdulisException } from '../errors/adulis-exception';
  *    record not yet purged is 409 IDEMPOTENCY_KEY_REUSED, never a replay.
  *
  * The record is written INSIDE the handler's transaction, at the end: a
- * crash mid-handler leaves no claim, so the retry is a first use; a
- * concurrent duplicate loses the UNIQUE race at commit, rolls its own
- * effects back, and is served the winner's stored response.
+ * crash mid-handler leaves no claim, so the retry is a first use. A
+ * concurrent duplicate that reaches the record loses the UNIQUE race at
+ * commit, rolls its own effects back, and is served the winner's stored
+ * response. A duplicate whose own write meets a uniqueness rule first (the
+ * evidence item a claim holds once per reference) answers that rule's 409
+ * and never reaches the record; its next retry is served the stored
+ * response, and a client reads the resource to see what was stored.
  */
 
 export interface IdempotencyActor {

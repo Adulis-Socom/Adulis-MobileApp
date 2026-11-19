@@ -262,6 +262,8 @@ export class HandlerTransaction {
       // back with the transaction; the winner's stored response is the
       // truthful answer to "did my request succeed?" -- if it was the same
       // request. A different body or seller, or an expired record, is 409.
+      // A twin whose own write meets a uniqueness rule before it reaches the
+      // record (claims evidence) answers that rule's 409 and never gets here.
       if (
         typeof e === 'object' &&
         e !== null &&
