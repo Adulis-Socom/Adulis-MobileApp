@@ -13,10 +13,12 @@ import type { CommonMessageKey } from './en';
  * ADU-CON-02 v3.0 section 9 separates two gates and this file passes only the
  * first:
  *   PRESENCE gate      — satisfied by machine translation. The type check.
- *   HUMAN-TRANSLATION  — NOT satisfied. Until it is, AM_ENABLED hides the
- *   gate                 language switcher, so no seller sees these strings.
+ *   HUMAN-TRANSLATION  - NOT satisfied. Until it is, a release build of the
+ *   gate                 mobile app shows English (amharicAvailable() is
+ *                        __DEV__) and the console imports English only, so
+ *                        no one sees these strings.
  *
- * Do not ship the switcher on the strength of this file compiling.
+ * Do not release Amharic on the strength of this file compiling.
  * ---------------------------------------------------------------------------
  *
  * Rendering note (ADU-PROJ-01 section 12 makes it a release gate): the mixed
@@ -108,7 +110,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'error.deletion.deletion_owner_only': 'ይህን መደብር መሰረዝ የሚችለው ባለቤቱ ብቻ ነው።',
   // request
   'error.request.validation_failed': 'ጥያቄው ትክክል አይደለም።',
-  'error.request.idempotency_key_missing': 'ጥያቄው የድጋሚ ሙከራ ቁልፉ ይጎድለዋል።',
+  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
+  'error.request.idempotency_key_missing': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መላክ አልተቻለም። እንደገና ይሞክሩ።',
   // Changed with its English: still a placeholder awaiting the human pass.
   'error.request.idempotency_key_reused': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መድገም አልተቻለም። እንደገና ከመሞከርዎ በፊት የሚታየውን ያረጋግጡ።',
   'error.request.rate_limited': 'በጣም ብዙ ጥያቄዎች። በ{retry_after_seconds} ሰከንድ ውስጥ እንደገና ይሞክሩ።',
@@ -161,7 +164,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'deletion.effect.verification_retained': 'የማረጋገጥ መዝገብ ይቀመጣል።',
   'deletion.effect.reservations_released': 'ነቃ የሆኑ መያዟዎች ይለቀቃሉ።',
 
-  'chat.bot.escalated': 'ጥያቄዎ ለሻጭ ተላልፏል። እዚህ ይመልሱልዎታል።',
+  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
+  'chat.bot.escalated': 'ጥያቄዎ ለሻጩ ተላልፏል። ማንኛውም መልስ እዚህ ይታያል።',
   'notification.chat.escalated': 'የገዢ ጥያቄ ምላሽዎን ይፈልጋል።',
 
   // WO-002 Buyer shell: machine-translation placeholders, listed in MT-KEYS.md
@@ -448,7 +452,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.shop.categories': 'ምድቦች',
   'buyer.shop.all': 'ሁሉም ምርቶች',
   'buyer.shop.category_empty': 'በዚህ ምድብ ውስጥ እስካሁን ምርቶች የሉም።',
-  'buyer.shop.categories_failed': 'ምድቦችን መጫን አልተቻለም። ሁሉም ምርቶች አሁንም ይታያሉ።',
+  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
+  'buyer.shop.categories_failed': 'ምድቦችን መጫን አልተቻለም።',
   'buyer.save.card.label': '{name}ን አስቀምጥ',
   'buyer.save.card.saving': '{name} በመቀመጥ ላይ',
   'buyer.save.card.removing': '{name} ከተቀመጡት በመወገድ ላይ',
@@ -495,8 +500,9 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.you.session.location': 'ግምታዊ አካባቢ፦ {location}',
   'buyer.you.privacy': 'ግላዊነት',
   'buyer.you.delete': 'መለያ ሰርዝ',
+  // Draft Amharic awaiting the human pass (changed with its English): not approved copy, and a release build shows the English.
   'buyer.delete.intro':
-    'የአዱሊስ መለያዎን መሰረዝ ዘላቂ ነው። ሊቀለበስ አይችልም፣ እና ይህ መሣሪያ ይወጣል።',
+    'የአዱሊስ መለያዎን መሰረዝ ዘላቂ ነው። ሊቀለበስ አይችልም፣ ይህ መሣሪያ ወደዚያ መለያ ከገባ ደግሞ ይወጣል።',
   'buyer.delete.steps':
     'ለመቀጠል ስልክ ቁጥርዎን በኤስኤምኤስ በሚላክ ኮድ ያረጋግጡ፣ መሰረዝ ምን እንደሚያደርግ ይገምግሙ፣ ከዚያም ያረጋግጡ።',
   'buyer.delete.continue': 'ቀጥል',
