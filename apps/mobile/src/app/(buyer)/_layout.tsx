@@ -21,10 +21,8 @@ export default function BuyerLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="search" options={{ headerShown: true, title: t('buyer.search') }} />
-      <Stack.Screen
-        name="notifications"
-        options={{ headerShown: true, title: t('buyer.notifications') }}
-      />
+      {/* One inbox, one Messages list and one sign-in: a double tap or a repeated push or link moves the existing one to the top. A Redirect (replace) onto one of them is not covered. */}
+      <Stack.Screen name="notifications" options={{ headerShown: true, title: t('buyer.notifications') }} dangerouslySingular />
       {/* One screen per Scene or Product: a double tap cannot stack the same one twice. */}
       <Stack.Screen
         name="scenes/[scenePostRef]"
@@ -49,7 +47,7 @@ export default function BuyerLayout() {
       />
       <Stack.Screen name="save-to" options={{ headerShown: true, title: t('buyer.save.picker_title'), presentation: 'modal' }} />
       {/* WO-013: the Conversations list and one conversation per reference. */}
-      <Stack.Screen name="messages" options={{ headerShown: true, title: t('buyer.messages') }} />
+      <Stack.Screen name="messages" options={{ headerShown: true, title: t('buyer.messages') }} dangerouslySingular />
       <Stack.Screen
         name="chat/[conversationRef]"
         options={{ headerShown: true, title: t('buyer.chat.title') }}
@@ -57,7 +55,7 @@ export default function BuyerLayout() {
       />
       {/* WO-011: Account deletion opens over the You tab; one at a time. */}
       <Stack.Screen name="account/delete" options={{ headerShown: true, title: t('buyer.you.delete') }} dangerouslySingular />
-      <Stack.Screen name="auth/sign-in" options={{ headerShown: true, title: t('auth.sign_in') }} />
+      <Stack.Screen name="auth/sign-in" options={{ headerShown: true, title: t('auth.sign_in') }} dangerouslySingular />
       <Stack.Screen name="auth/verify" options={{ headerShown: true, title: t('auth.verify.title') }} />
     </Stack>
   );

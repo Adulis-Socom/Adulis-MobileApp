@@ -7,6 +7,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
+import { LoadMoreFooter, type Paging } from './LoadMoreFooter';
 import { notificationText, useMarkNotificationRead, useNotificationInbox, type BuyerNotification, type InboxScope } from './notifications';
 
 /** Seven days: the Recent group (presentation only; the design defines no grouping). */
@@ -84,17 +85,24 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
     );
   };
 
-  const footer = inbox.hasNextPage ? (
-    <Button
-      label={t('buyer.notifications.load_older')}
-      variant="secondary"
-      onPress={() => void inbox.fetchNextPage()}
-      disabled={inbox.isFetchingNextPage}
-      busy={inbox.isFetchingNextPage}
-    />
-  ) : inbox.items.length > 0 ? (
-    <AppText style={{ ...secondary, textAlign: 'center' }}>{t('buyer.list.end')}</AppText>
-  ) : null;
+  // The same end of a paged list as every other list: Load older, Loading more, a failure with Try again, the end.
+  const paging: Paging = {
+    count: inbox.items.length,
+    pageCount: inbox.data?.pages.length ?? 0,
+    hasNextPage: inbox.hasNextPage,
+    isFetchingNextPage: inbox.isFetchingNextPage,
+    isFetchNextPageError: inbox.isFetchNextPageError,
+    error: inbox.error,
+    loadMore: () => void inbox.fetchNextPage(),
+    retryNextPage: () => void inbox.fetchNextPage(),
+  };
+  const footer =
+    inbox.items.length > 0 || inbox.hasNextPage ? (
+      <LoadMoreFooter
+        paging={paging}
+        keys={{ load: 'buyer.notifications.load_older', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
+      />
+    ) : null;
 
   const empty = inbox.isError ? (
     <View style={{ gap: theme.space.sm }}>
@@ -127,17 +135,21 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
         <RefreshControl refreshing={inbox.isRefetching && !inbox.isFetchingNextPage} onRefresh={() => void inbox.refetch()} colors={[theme.color.accent]} />
       }
       ListHeaderComponent={
-        <View style={{ marginBottom: theme.space.sm }}>
+        <View style={{ gap: theme.space.sm, marginBottom: theme.space.sm }}>
           <Button
             label={t('buyer.notifications.refresh')}
             variant="secondary"
             onPress={() => void inbox.refetch()}
             disabled={inbox.isFetching}
           />
+          {/* A refresh that failed leaves the rows as they were, and says so; an older page says it in the footer, and an empty inbox in its own block. */}
+          {inbox.isRefetchError && inbox.items.length > 0 ? (
+            <AlertText>{`${t('buyer.notifications.failed')} ${failureMessage(t, inbox.error)}`}</AlertText>
+          ) : null}
         </View>
       }
       ListEmptyComponent={empty}
-      ListFooterComponent={<View style={{ paddingVertical: theme.space.md }}>{footer}</View>}
+      ListFooterComponent={footer}
     />
   );
 }
