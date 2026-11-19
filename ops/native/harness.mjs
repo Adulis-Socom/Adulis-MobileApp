@@ -99,8 +99,8 @@ export function trackIo(io, mark) {
       if (isMutatingRequest(opts)) mark('API request');
       return io.fetch(url, opts);
     },
-    adb: async (args) => {
-      const r = await io.adb(args);
+    adb: async (args, ...rest) => {
+      const r = await io.adb(args, ...rest);
       // A reverse entry, a device setting, or a call the driver's list does not know: all are changes.
       if (isMutatingAdb(args) && (r.error || r.status === 0))
         mark(args.includes('reverse') ? 'adb reverse' : 'adb setting');
@@ -108,31 +108,32 @@ export function trackIo(io, mark) {
     },
     proc: {
       ...io.proc,
+      // every argument is passed on: killTree takes the creation time the caller verified
       kill: (pid) => {
         mark('process stop');
         return io.proc.kill(pid);
       },
-      killTree: (pid) => {
+      killTree: (...a) => {
         mark('process stop');
-        return io.proc.killTree(pid);
+        return io.proc.killTree(...a);
       },
     },
-    spawnApi: (o) => {
+    spawnApi: (...a) => {
       mark('API process');
-      return io.spawnApi(o);
+      return io.spawnApi(...a);
     },
-    spawnMetro: (o) => {
+    spawnMetro: (...a) => {
       mark('Metro process');
-      return io.spawnMetro(o);
+      return io.spawnMetro(...a);
     },
     // A flow clears the app's data and registers a device with the API: it changes things whatever it reports.
-    maestro: (o) => {
+    maestro: (...a) => {
       mark('Maestro run');
-      return io.maestro(o);
+      return io.maestro(...a);
     },
-    build: (c) => {
+    build: (...a) => {
       mark('API build');
-      return io.build(c);
+      return io.build(...a);
     },
     run: (...a) => {
       mark('node child process');

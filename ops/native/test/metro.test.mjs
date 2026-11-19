@@ -18,6 +18,7 @@ import {
   startMetro,
   stopMetro,
 } from '../lib/metro.mjs';
+import { trackIo } from '../harness.mjs';
 import { readManifest } from '../lib/manifest.mjs';
 import { descendants } from '../lib/proc-tree.mjs';
 import { PROTECTED_PORTS } from '../lib/protected.mjs';
@@ -402,4 +403,46 @@ test('a failed start that could not stop the Metro it spawned leaves its record,
     5151,
     'the record of the process that may still run is kept',
   );
+});
+
+/* ---- the change tracker hands every argument on ---- */
+
+test('the tracked effects pass every argument on: the creation time reaches the tree kill when metro stop runs through the tracker', async () => {
+  const x = nw();
+  const marks = [];
+  const seen = [];
+  const inner = x.io.proc.killTree;
+  x.io.proc.killTree = async (...a) => {
+    seen.push(a);
+    return inner(...a);
+  };
+  const r = await stopMetro(
+    x.w.m,
+    trackIo(x.io, (what) => marks.push(what)),
+    x.dir,
+  );
+  assert.equal(r.stopped, true);
+  assert.deepEqual(seen, [[5151, x.w.m.metro.createdAt]]);
+  assert.deepEqual(marks, ['process stop']);
+  // and every other tracked effect that takes arguments
+  for (const [name, call] of [
+    ['spawnApi', (io) => io.spawnApi('a', 'b')],
+    ['spawnMetro', (io) => io.spawnMetro('a', 'b')],
+    ['maestro', (io) => io.maestro('a', 'b')],
+    ['build', (io) => io.build('a', 'b')],
+    ['proc.killTree', (io) => io.proc.killTree('a', 'b')],
+    ['run', (io) => io.run('a', 'b')],
+  ]) {
+    const got = [];
+    const probe = {
+      spawnApi: (...a) => got.push(a),
+      spawnMetro: (...a) => got.push(a),
+      maestro: (...a) => got.push(a),
+      build: (...a) => got.push(a),
+      run: (...a) => got.push(a),
+      proc: { killTree: (...a) => got.push(a) },
+    };
+    call(trackIo(probe, () => {}));
+    assert.deepEqual(got, [['a', 'b']], name);
+  }
 });
