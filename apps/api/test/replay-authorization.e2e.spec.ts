@@ -114,10 +114,23 @@ const CLAIM_D = `${P}3f`; // MEMBER_18's open claim on it
 const MEMBER_19 = `${P}40`; // a store-side route, same letter-case variant
 const TM_19 = `${P}41`;
 const S_M19 = `${P}42`; // MOBILE
+// A member removed from the team, a member calling a route that declares nothing, and a Buyer who is also a member.
+const MEMBER_20 = `${P}43`; // ADMIN of SELLER_A, removed during the run
+const TM_20 = `${P}44`;
+const S_M20 = `${P}45`; // MOBILE
+const MEMBER_22 = `${P}49`; // Buyer of CONV_F and ADMIN of SELLER_A, demoted during the run
+const TM_22 = `${P}4a`;
+const S_M22 = `${P}4b`; // MOBILE
+const CONV_F = `${P}4c`; // SELLER_A <-> MEMBER_22 as buyer
+const ORDER_E = `${P}4d`; // SELLER_A's order to OWNER, who is also its Owner
+const CLAIM_E = `${P}4e`; // OWNER's open claim on it
+const MEMBER_23 = `${P}4f`; // ADMIN of SELLER_A, demoted during the run
+const TM_23 = `${P}50`;
+const S_M23 = `${P}51`; // MOBILE
 const CONSOLE_ORIGIN = 'http://localhost:5173';
 const ACCOUNTS = [
   OWNER, OTHER, STRANGER, MEMBER_1, MEMBER_2, MEMBER_4, MEMBER_5, MEMBER_6, MEMBER_7, MEMBER_13, MEMBER_15,
-  MEMBER_16, MEMBER_17, MEMBER_18, MEMBER_19,
+  MEMBER_16, MEMBER_17, MEMBER_18, MEMBER_19, MEMBER_20, MEMBER_22, MEMBER_23,
 ];
 /** The latched probe's gate, as in the idempotency security suite's harness: pg_advisory_xact_lock(LATCH_GATE, body.latch). */
 const LATCH_GATE = 0x5ec303;
@@ -163,6 +176,12 @@ class ReplayProbe {
   @Post('seller/replay-strict-probe')
   @ReplayGrant(CONSOLE_GRANT)
   async strictProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
+    return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, GRANT));
+  }
+
+  /** A seller-context write that declares no grant at all: a stored response is never served for it, the handler decides. */
+  @Post('seller/replay-undeclared-probe')
+  async undeclaredProbe(@Req() req: LocalizedRequest, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     return this.tx.runIdempotent(req, res, 201, (trx) => this.authorised(trx, req, GRANT));
   }
 
@@ -273,6 +292,11 @@ describe('replay authorisation and seller deletion', () => {
        VALUES ($1,$4,$5,'ADMIN'), ($2,$4,$6,'ADMIN'), ($3,$4,$7,'ADMIN')`,
       [TM_17, TM_18, TM_19, SELLER_A, MEMBER_17, MEMBER_18, MEMBER_19],
     );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role)
+       VALUES ($1,$4,$5,'ADMIN'), ($2,$4,$6,'ADMIN'), ($3,$4,$7,'ADMIN')`,
+      [TM_20, TM_22, TM_23, SELLER_A, MEMBER_20, MEMBER_22, MEMBER_23],
+    );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     const sessions: Array<[string, string, 'MOBILE' | 'CONSOLE']> = [
       [S_OWNER, OWNER, 'MOBILE'],
@@ -292,6 +316,9 @@ describe('replay authorisation and seller deletion', () => {
       [S_M17, MEMBER_17, 'MOBILE'],
       [S_M18_C, MEMBER_18, 'CONSOLE'],
       [S_M19, MEMBER_19, 'MOBILE'],
+      [S_M20, MEMBER_20, 'MOBILE'],
+      [S_M22, MEMBER_22, 'MOBILE'],
+      [S_M23, MEMBER_23, 'MOBILE'],
     ];
     for (const [id, account, audience] of sessions) {
       await admin.query(
@@ -337,6 +364,21 @@ describe('replay authorisation and seller deletion', () => {
        VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE')`,
       [CLAIM_D, ORDER_D, MEMBER_18],
     );
+    await admin.query(
+      `INSERT INTO chat.conversation (id, seller_id, buyer_account_id, market_id) VALUES ($1,$2,$3,$4)`,
+      [CONV_F, SELLER_A, MEMBER_22, M],
+    );
+    await admin.query(
+      `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at,
+         clock_stopped_at, total_minor, total_currency, display_currency)
+       VALUES ($1,$2,$3,$4,'PAYMENT_CONFIRMED', now() + interval '2 days', now(), 50000,'ETB','ETB')`,
+      [ORDER_E, M, SELLER_A, OWNER],
+    );
+    await admin.query(
+      `INSERT INTO core.claim (id, order_id, opened_by_kind, opened_by_account_id, trigger, state)
+       VALUES ($1,$2,'BUYER',$3,'GOODS_NOT_RECEIVED','AWAITING_SELLER_EVIDENCE')`,
+      [CLAIM_E, ORDER_E, OWNER],
+    );
 
     const moduleRef = await Test.createTestingModule({ imports: [ReplayModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -350,15 +392,15 @@ describe('replay authorisation and seller deletion', () => {
     const sellers = SELLERS.map((s) => `'${s}'`).join(',');
     // The claim's evidence items are append-only by trigger: replica mode, children before parents.
     await admin.query(`SET session_replication_role = replica`);
-    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id IN ($1,$2)`, [CLAIM, CLAIM_D]);
-    await admin.query(`DELETE FROM core.claim WHERE id IN ($1,$2)`, [CLAIM, CLAIM_D]);
-    await admin.query(`DELETE FROM core."order" WHERE id IN ($1,$2)`, [ORDER, ORDER_D]);
+    await admin.query(`DELETE FROM core.claim_evidence_item WHERE claim_id IN ($1,$2,$3)`, [CLAIM, CLAIM_D, CLAIM_E]);
+    await admin.query(`DELETE FROM core.claim WHERE id IN ($1,$2,$3)`, [CLAIM, CLAIM_D, CLAIM_E]);
+    await admin.query(`DELETE FROM core."order" WHERE id IN ($1,$2,$3)`, [ORDER, ORDER_D, ORDER_E]);
     await admin.query(`SET session_replication_role = DEFAULT`);
     for (const q of [
       `DELETE FROM core.idempotency_record WHERE actor_id IN (${accounts})`,
       `DELETE FROM core.rate_limit_bucket WHERE bucket_key LIKE '${MARKER}%'`,
-      `DELETE FROM chat.message WHERE conversation_id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}')`,
-      `DELETE FROM chat.conversation WHERE id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}')`,
+      `DELETE FROM chat.message WHERE conversation_id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}','${CONV_F}')`,
+      `DELETE FROM chat.conversation WHERE id IN ('${CONV}','${CONV_B}','${CONV_SELF}','${CONV_D}','${CONV_F}')`,
       `DELETE FROM core.seller_ownership_transfer WHERE seller_id IN ('${SELLER_E}','${SELLER_G}')`,
       `DELETE FROM core.step_up_challenge WHERE id IN ('${STEP_UP}','${STEP_UP2}')`,
       `DELETE FROM core.otp_challenge WHERE id IN ('${OTP_CH}','${OTP_CH2}')`,
@@ -459,6 +501,67 @@ describe('replay authorisation and seller deletion', () => {
       await sleep(20);
     }
     throw new Error(`no session waits on advisory lock (${LATCH_GATE}, ${latch})`);
+  };
+  /**
+   * The latch for twins on a REAL route, which has no hook to wait in: a transaction held open on its own connection
+   * with one uncommitted row. Whoever inserts the same unique key waits for it, so identical requests that have both
+   * passed the replay lookup stand in their handlers together. Rolling it back lets them go on; nothing of it survives.
+   */
+  const holdRow = async (insert: string, values: unknown[]): Promise<{ pid: number; release: () => Promise<void> }> => {
+    const c = new Client({ connectionString: ADMIN });
+    await c.connect();
+    await c.query('BEGIN');
+    await c.query(insert, values);
+    const pid = (await c.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as number;
+    let released = false;
+    return {
+      pid,
+      release: async () => {
+        if (released) return;
+        released = true;
+        await c.query('ROLLBACK');
+        await c.end();
+      },
+    };
+  };
+  /** Holds the idempotency record the request would write, so its commit has to wait. */
+  const holdRecord = (key: string, account: string, endpoint: string) =>
+    holdRow(
+      `INSERT INTO core.idempotency_record
+         (id, key, actor_kind, actor_id, endpoint, request_hash, response_status, response_body, expires_at)
+       VALUES (gen_random_uuid(), $1, 'ACCOUNT', $2, $3, decode('00','hex'), 201, '{}'::jsonb, now() + interval '1 hour')`,
+      [key, account, endpoint],
+    );
+  /** Holds the evidence row the request would attach, so its insert has to wait. */
+  const holdEvidence = (claim: string, reference: string) =>
+    holdRow(`INSERT INTO core.claim_evidence_item (claim_id, kind, reference_id) VALUES ($1, 'BANK_RECORD', $2)`, [
+      claim,
+      reference,
+    ]);
+  /** Resolves once `count` sessions wait on the held transaction: proof that every request got that far. */
+  const waitersOn = async (pid: number, count: number): Promise<void> => {
+    for (const until = Date.now() + 8_000; Date.now() < until; await sleep(20)) {
+      const r = await admin.query(
+        `SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1::int = ANY(pg_blocking_pids(pid))`,
+        [pid],
+      );
+      if (r.rows[0].n >= count) return;
+    }
+    throw new Error(`fewer than ${count} sessions wait on backend ${pid}`);
+  };
+  /** Sends the requests together, holds them at the blocker until all wait, then lets them go; answers in the order sent. */
+  const raceBehind = async (
+    blocker: { pid: number; release: () => Promise<void> },
+    ...sends: Array<() => request.Test>
+  ): Promise<request.Response[]> => {
+    try {
+      const running = sends.map((send) => start(send()));
+      await waitersOn(blocker.pid, sends.length);
+      await blocker.release();
+      return await Promise.all(running);
+    } finally {
+      await blocker.release();
+    }
   };
 
   describe('the current role must still hold the route permission', () => {
@@ -577,6 +680,74 @@ describe('replay authorisation and seller deletion', () => {
       expect(executions.get(key)).toBe(2); // the handler ran again...
       expect(await markers(key)).toBe(1); // ...and its run rolled back
       expect(await records(key)).toBe(1);
+    });
+
+    it('R34: a seller-context route that declares no grant is never served from the store: the handler decides every retry', async () => {
+      const key = randomUUID();
+      const post = () =>
+        http().post('/v1/seller/replay-undeclared-probe').set(bearer(S_M23)).set('X-Adulis-Seller', SELLER_A)
+          .set('Idempotency-Key', key).send({ n: 34 });
+      const first = await post();
+      expect(first.status).toBe(201);
+      // Control: an authorised retry costs a re-run, still answers the stored response, and commits once.
+      expectReplay(await post(), 201, first.body);
+      expect(executions.get(key)).toBe(2);
+      expect(await markers(key)).toBe(1);
+      await reinvite(TM_23, MEMBER_23, 'ANALYST'); // no longer holds the permission, still a live member
+      const r = await post();
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(2); // refused before its handler counted an execution
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R35: a member removed from the team is not served the stored response, on a route that declares two grants', async () => {
+      const key = randomUUID();
+      const post = () =>
+        http().post('/v1/seller/replay-two-code-probe').set(bearer(S_M20)).set('X-Adulis-Seller', SELLER_A)
+          .set('Idempotency-Key', key).send({ n: 35 });
+      const first = await post();
+      expect(first.status).toBe(201);
+      expectReplay(await post(), 201, first.body); // control: still a member
+      await admin.query(`UPDATE core.seller_team_member SET revoked_at = now() WHERE id = $1`, [TM_20]);
+      const r = await post();
+      expectProblem(r, 403, 'PERMISSION_DENIED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R36: a key stored for one store is never replayed for another: 409 for a store the account holds, the handler for one it does not', async () => {
+      const key = randomUUID();
+      const first = await probe(S_OWNER, SELLER_A, key, { n: 36 });
+      expect(first.status).toBe(201);
+      expectReplay(await probe(S_OWNER, SELLER_A, key, { n: 36 }), 201, first.body); // control
+      const other = await probe(S_OWNER, SELLER_F, key, { n: 36 }); // OWNER owns SELLER_F as well
+      expectProblem(other, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(other.body)).not.toContain(first.body.run);
+      const stranger = await probe(S_OWNER, SELLER_H, key, { n: 36 }); // SELLER_H belongs to someone else
+      expectProblem(stranger, 404, 'NOT_FOUND');
+      expect(JSON.stringify(stranger.body)).not.toContain(first.body.run);
+      const bare = await http().post('/v1/seller/replay-probe').set(bearer(S_OWNER)).set('Idempotency-Key', key).send({ n: 36 });
+      expectProblem(bare, 400, 'SELLER_CONTEXT_REQUIRED');
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+  });
+
+  describe('the replay lookup and the permission function agree on what each role holds', () => {
+    it('R37: OWNER holds every permission any other role holds, so the lookup cannot serve a role the function would refuse', async () => {
+      const held = await admin.query(`SELECT count(*)::int AS n FROM core.role_permission WHERE role <> 'OWNER'`);
+      expect(held.rows[0].n).toBeGreaterThan(0); // the comparison below has something to compare
+      const only = await admin.query(
+        `SELECT DISTINCT rp.role::text AS role, rp.permission_code AS code
+           FROM core.role_permission rp
+          WHERE rp.role <> 'OWNER'
+            AND NOT EXISTS (SELECT 1 FROM core.role_permission o
+                             WHERE o.role = 'OWNER' AND o.permission_code = rp.permission_code)
+          ORDER BY 1, 2`,
+      );
+      expect(only.rows).toEqual([]);
     });
   });
 
@@ -911,6 +1082,168 @@ describe('replay authorisation and seller deletion', () => {
         expect([path, r.status]).toEqual([path, 400]);
         expectProblem(r, 400, 'SCOPE_PARAMETER_REQUIRED');
       }
+    });
+
+    // Claims evidence is retried like chat: a response the client never read, a changed body, an expired record,
+    // and a twin still in flight. A twin loses on the evidence row itself, so it is told 409 (the item exists:
+    // read the claim to reconcile) instead of being handed the winner's response; nothing is attached twice.
+    it('R38: claims evidence whose response the client never read: the retry is the stored response and nothing is attached twice', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      await lostResponse(`/v1/claims/${CLAIM}/evidence`, { ...bearer(S_OTHER), 'Idempotency-Key': key }, { kind: 'BANK_RECORD', reference_id: ref });
+      await committed(key);
+      const stored = await admin.query(`SELECT id FROM core.claim_evidence_item WHERE claim_id = $1 AND reference_id = $2`, [CLAIM, ref]);
+      const r = await attach(S_OTHER, key, ref);
+      expect(r.status).toBe(201);
+      expect(r.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(r.body.evidence_item_id).toBe(stored.rows[0].id);
+      expect(await attached(ref)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R39: claims evidence: a changed body or an expired record is refused, and nothing more is attached', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const changed = randomUUID();
+      const first = await attach(S_OTHER, key, ref);
+      expect(first.status).toBe(201);
+      expectReplay(await attach(S_OTHER, key, ref), 201, first.body); // control
+      expectProblem(await attach(S_OTHER, key, changed), 409, 'IDEMPOTENCY_KEY_REUSED');
+      await expire(key);
+      const r = await attach(S_OTHER, key, ref);
+      expectProblem(r, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.evidence_item_id);
+      expect([await attached(ref), await attached(changed)]).toEqual([1, 0]);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R40: two identical evidence requests held at the insert: one attaches, the other is told 409, and the next retry is the stored response', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const blocker = await holdEvidence(CLAIM, ref);
+      const answers = await raceBehind(blocker, () => attach(S_OTHER, key, ref), () => attach(S_OTHER, key, ref));
+      const won = answers.filter((r) => r.status === 201);
+      const told = answers.filter((r) => r.status !== 201);
+      expect([won.length, told.length]).toEqual([1, 1]);
+      expectProblem(told[0] as request.Response, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(told[0]?.body)).not.toContain(won[0]?.body.evidence_item_id);
+      expect(await attached(ref)).toBe(1);
+      expect(await records(key)).toBe(1);
+      expectReplay(await attach(S_OTHER, key, ref), 201, won[0]?.body);
+    });
+
+    // The chat twin of R24 with a latch: R24 passes whichever way the two requests interleave.
+    it('R41: two identical buyer-side messages held at their commit: one message, and both answers are the same stored response', async () => {
+      const key = randomUUID();
+      const text = `r41-${key}`;
+      const blocker = await holdRecord(key, STRANGER, `POST /v1/conversations/${CONV_B}/messages`);
+      const [a, b] = await raceBehind(blocker, () => say(S_STRANGER, CONV_B, key, text), () => say(S_STRANGER, CONV_B, key, text));
+      expect([a?.status, b?.status]).toEqual([201, 201]);
+      expect(a?.body).toEqual(b?.body);
+      expect([a, b].filter((r) => r?.headers['x-adulis-idempotent-replay'] === 'true')).toHaveLength(1);
+      expect(await said(CONV_B, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+      expectReplay(await say(S_STRANGER, CONV_B, key, text), 201, a?.body);
+    });
+
+    // One key, two sides of one account: the sides are different requests, so one commits and the other is refused.
+    it('R42: an Owner sends one key as the Buyer and as the store at once: one message, the other request is refused with 409', async () => {
+      const key = randomUUID();
+      const text = `r42-${key}`;
+      const blocker = await holdRecord(key, OWNER, `POST /v1/conversations/${CONV_SELF}/messages`);
+      const [asBuyer, asStore] = (await raceBehind(
+        blocker,
+        () => say(S_OWNER, CONV_SELF, key, text),
+        () => say(S_OWNER, CONV_SELF, key, text, SELLER_A),
+      )) as [request.Response, request.Response];
+      expect([asBuyer.status, asStore.status].sort()).toEqual([201, 409]);
+      const [won, lost, side] = asBuyer.status === 201 ? ([asBuyer, asStore, 'BUYER'] as const) : ([asStore, asBuyer, 'SELLER'] as const);
+      expectProblem(lost, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(lost.body)).not.toContain(won.body.message_id);
+      const sent = await admin.query(`SELECT sender_kind::text AS kind FROM chat.message WHERE conversation_id = $1 AND body = $2`, [CONV_SELF, text]);
+      expect(sent.rows.map((m) => m.kind)).toEqual([side]);
+      expect(await records(key)).toBe(1);
+      // The winner's side keeps its stored response; the other side is never handed it.
+      const again = (buyer: boolean) => (buyer ? say(S_OWNER, CONV_SELF, key, text) : say(S_OWNER, CONV_SELF, key, text, SELLER_A));
+      expectReplay(await again(side === 'BUYER'), 201, won.body);
+      expectProblem(await again(side !== 'BUYER'), 409, 'IDEMPOTENCY_KEY_REUSED');
+    });
+
+    it('R43: an Owner attaches evidence with one key as the Buyer and as the store at once: attached once, the other request is refused with 409', async () => {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const body = { kind: 'BANK_RECORD', reference_id: ref };
+      const buyerSide = () => http().post(`/v1/claims/${CLAIM_E}/evidence`).set(bearer(S_OWNER)).set('Idempotency-Key', key).send(body);
+      const storeSide = () =>
+        http().post(`/v1/claims/${CLAIM_E}/evidence`).set(cookie(S_OWNER_C)).set('X-Adulis-Seller', SELLER_A)
+          .set('Idempotency-Key', key).send(body);
+      const items = async (): Promise<number> =>
+        Number((await admin.query(`SELECT count(*) FROM core.claim_evidence_item WHERE claim_id = $1 AND reference_id = $2`, [CLAIM_E, ref])).rows[0].count);
+      const blocker = await holdEvidence(CLAIM_E, ref);
+      const [asBuyer, asStore] = (await raceBehind(blocker, buyerSide, storeSide)) as [request.Response, request.Response];
+      expect([asBuyer.status, asStore.status].sort()).toEqual([201, 409]);
+      const [won, lost] = asBuyer.status === 201 ? ([asBuyer, asStore] as const) : ([asStore, asBuyer] as const);
+      expectProblem(lost, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(lost.body)).not.toContain(won.body.evidence_item_id);
+      expect(await items()).toBe(1);
+      expect(await records(key)).toBe(1);
+      expectReplay(await (asBuyer.status === 201 ? buyerSide() : storeSide()), 201, won.body);
+      expectProblem(await (asBuyer.status === 201 ? storeSide() : buyerSide()), 409, 'IDEMPOTENCY_KEY_REUSED');
+    });
+
+    // The store header is read from the request as one value. Sent twice it reaches the guard as "a, a", which is
+    // not a store id: on a store route that is a bad request, and on a shared route the request is the Buyer's.
+    const twice = (seller: string): string => [seller, seller] as unknown as string;
+
+    it('R44: a store header sent twice is a bad request on a store route, and no stored response is served for it', async () => {
+      const key = randomUUID();
+      const first = await probe(S_OWNER, SELLER_A, key, { n: 44 });
+      expect(first.status).toBe(201);
+      const r = await probe(S_OWNER, twice(SELLER_A), key, { n: 44 });
+      expectProblem(r, 400, 'VALIDATION_FAILED');
+      expect(JSON.stringify(r.body)).not.toContain(first.body.run);
+      expect(executions.get(key)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R45: a store header sent twice is not the store on a route a Buyer and a store share: the request is the Buyer\'s', async () => {
+      const key = randomUUID();
+      const text = `r45-${key}`;
+      const first = await say(S_OWNER, CONV_SELF, key, text, twice(SELLER_A));
+      expect(first.status).toBe(201);
+      const sent = await admin.query(`SELECT sender_kind::text AS kind FROM chat.message WHERE conversation_id = $1 AND body = $2`, [CONV_SELF, text]);
+      expect(sent.rows.map((m) => m.kind)).toEqual(['BUYER']);
+      expectReplay(await say(S_OWNER, CONV_SELF, key, text, twice(SELLER_A)), 201, first.body);
+      expectReplay(await say(S_OWNER, CONV_SELF, key, text), 201, first.body); // no header at all is the same request
+      expectProblem(await say(S_OWNER, CONV_SELF, key, text, SELLER_A), 409, 'IDEMPOTENCY_KEY_REUSED'); // naming the store is another
+      expect(await said(CONV_SELF, text)).toBe(1);
+      expect(await records(key)).toBe(1);
+    });
+
+    it('R46: a demoted member who is also the Buyer is not served the store reply under any spelling or repeat of the header', async () => {
+      const key = randomUUID();
+      const text = `r46-${key}`;
+      const send = (name: string, value: string) =>
+        http().post(`/v1/conversations/${CONV_F}/messages`).set(bearer(S_M22)).set('Idempotency-Key', key)
+          .set(name, value).send({ text });
+      const spellings = ['X-Adulis-Seller', 'x-adulis-seller', 'X-ADULIS-SELLER'].flatMap((name) =>
+        [SELLER_A, SELLER_A.toUpperCase()].map((value) => [name, value] as const),
+      );
+      const first = await send('X-Adulis-Seller', SELLER_A);
+      expect(first.status).toBe(201);
+      for (const [name, value] of spellings) expectReplay(await send(name, value), 201, first.body); // control: the same request
+      await reinvite(TM_22, MEMBER_22, 'ANALYST'); // no longer holds the messaging permissions
+      for (const [name, value] of spellings) {
+        const r = await send(name, value);
+        expect([name, value, r.status]).toEqual([name, value, 403]);
+        expect(JSON.stringify(r.body)).not.toContain(first.body.message_id);
+      }
+      // The header sent twice makes it the Buyer's request, which is another request for this key.
+      const buyer = await send('X-Adulis-Seller', twice(SELLER_A));
+      expectProblem(buyer, 409, 'IDEMPOTENCY_KEY_REUSED');
+      expect(JSON.stringify(buyer.body)).not.toContain(first.body.message_id);
+      expect(await said(CONV_F, text)).toBe(1);
+      expect(await records(key)).toBe(1);
     });
   });
 

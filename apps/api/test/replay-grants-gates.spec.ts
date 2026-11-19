@@ -15,6 +15,7 @@ import { scanGates } from './gate-support';
  */
 
 const MODULES = join(__dirname, '..', 'src', 'modules');
+const MIGRATIONS = join(__dirname, '..', '..', '..', 'db', 'migrations');
 
 /** Declared routes whose permission is asserted in a database function the scan does not follow. */
 const READ_BY_HAND = new Map([
@@ -70,8 +71,37 @@ describe('the replay declarations hold every permission the route code checks', 
     expect(problems).toEqual([]);
   });
 
+  // A scan that finds nothing agrees with any declaration, so an empty result is a failure of the scan, not a pass.
+  it('the scan finds at least one permission for every route not read by hand', () => {
+    const blind = declared
+      .filter((d) => !READ_BY_HAND.has(d.key) && (gates.get(d.key)?.permissions ?? []).length === 0)
+      .map((d) => d.key);
+    expect(blind).toEqual([]);
+  });
+
   it('every route listed as read by hand is still a declared route', () => {
     const keys = new Set(declared.map((d) => d.key));
     expect([...READ_BY_HAND.keys()].filter((k) => !keys.has(k))).toEqual([]);
+  });
+
+  it('every route listed as read by hand still asserts the permission it declares, in the function it names', () => {
+    const defined = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .flatMap((f) => [
+        ...readFileSync(join(MIGRATIONS, f), 'utf8').matchAll(
+          /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.[a-z0-9_]+)\s*\([\s\S]*?\bAS\s+\$(\w*)\$([\s\S]*?)\$\2\$/gi,
+        ),
+      ]);
+    const problems = declared
+      .filter((d) => READ_BY_HAND.has(d.key))
+      .flatMap((d) => {
+        const named = /^(\w+\.\w+) asserts /.exec(READ_BY_HAND.get(d.key) as string)?.[1];
+        if (named === undefined) return [`${d.key}: the reason does not name a function`];
+        // The last definition wins, as in the database: a later migration may replace the function.
+        const body = defined.filter((m) => (m[1] as string).toLowerCase() === named).pop()?.[3] ?? '';
+        return d.codes.filter((c) => !body.includes(`'${c}'`)).map((c) => `${d.key}: ${named} no longer names ${c}`);
+      });
+    expect(problems).toEqual([]);
   });
 });
