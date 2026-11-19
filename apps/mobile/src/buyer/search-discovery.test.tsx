@@ -261,16 +261,60 @@ describe('tabs and categories out of order', () => {
   });
 });
 
+describe('the order of results', () => {
+  it('says how results are ordered once there are results, on every tab, and never as popularity, Trust, payment or personal', async () => {
+    serve(({ type }) =>
+      page(type, type === 'SELLER' ? [seller('seller-1', 'Store 1')] : type === 'SCENE_POST' ? [scene(1, 'Seller scene 1')] : [product('mug', 'Plain mug')]),
+    );
+    await openSearch();
+    await typeQuery('mug');
+    expect(await screen.findByText(en['buyer.search.order'])).toBeOnTheScreen();
+    for (const type of ['PRODUCT_POST', 'SCENE_POST', 'SELLER'] as const) {
+      await fireEvent.press(tab(type));
+      expect(await screen.findByText(en['buyer.search.order'])).toBeOnTheScreen();
+    }
+    expect(en['buyer.search.order']).not.toMatch(/popular|best|top|trust|sponsor|paid|personal|recommend|for you/i);
+  });
+
+  it('is not drawn where there are no results: an empty answer, a refusal or a query that is too short', async () => {
+    serve(({ q }) => (q === 'zzzz' ? page('TOP', []) : problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_NO_TERMS' })));
+    await openSearch();
+    await typeQuery('zzzz');
+    expect(await screen.findByText(new RegExp('^No results'))).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.order'])).not.toBeOnTheScreen();
+    await typeQuery('!!');
+    expect(await screen.findByText(en['buyer.search.no_terms'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.order'])).not.toBeOnTheScreen();
+    await typeQuery('z');
+    expect(await screen.findByText(en['buyer.search.too_short'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.order'])).not.toBeOnTheScreen();
+  });
+});
+
 describe('answers that fail', () => {
   it('a query the server refuses shows no results and is not retried by itself', async () => {
     serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_NO_TERMS' }));
     await openSearch();
     await typeQuery('!!');
-    expect(await screen.findByText(en['error.request.validation_failed'])).toBeOnTheScreen();
+    // The server names the reason (no letter or digit), so the sentence says what to change.
+    expect(await screen.findByText(en['buyer.search.no_terms'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['error.request.validation_failed'])).not.toBeOnTheScreen();
     await act(() => jest.advanceTimersByTimeAsync(30_000));
     expect(calls()).toHaveLength(1);
     expect(screen.queryByTestId('search-product')).not.toBeOnTheScreen();
     expect(screen.queryByText(/No results/)).not.toBeOnTheScreen();
+    // Wording only: Try again is still offered and asks once more, as before.
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await act(async () => undefined);
+    expect(calls()).toHaveLength(2);
+  });
+
+  it('only the reason the server names changes the sentence: any other refusal keeps the generic one', async () => {
+    serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_LONG' }));
+    await openSearch();
+    await typeQuery('mug');
+    expect(await screen.findByText(en['error.request.validation_failed'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.no_terms'])).not.toBeOnTheScreen();
   });
 
   it('rate limited: says when to try again, and Try again asks once more', async () => {

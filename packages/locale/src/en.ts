@@ -28,6 +28,21 @@
  * S4.1). Marketplace commerce copy - prices, order payment, store levels - is fine
  * here. catalogue.ts composes both parts into the full catalogue the root export
  * serves. Held by test/mobile.test-d.ts and test/mobile-boundary.mjs.
+ *
+ * ADDING A STRING (shared with the mobile app):
+ *   1. Put the key beside the keys it belongs with (not at the end of the file: parallel work then
+ *      meets in different places). One whole sentence per key, slots in {braces}, no formatting and
+ *      no fragments. Write the value as a single-quoted literal (the work-list tooling reads only
+ *      those), with \' for an apostrophe.
+ *   2. Add the same key to am.ts in the same place, under a comment that marks it as draft Amharic
+ *      awaiting the human pass (nothing there is approved copy; a release build shows English).
+ *      Slots must match exactly.
+ *   3. Run `node packages/locale/generate-mt-keys.mjs` so MT-KEYS.md lists the key, then
+ *      `pnpm --filter @adulis/locale test` and `pnpm verify:mt-keys`.
+ *   A sentence for an outcome the app does not know must hedge ("could not confirm"); test/copy-claims.mjs
+ *   holds the keys that carry that job. The same file is a short regression guard for phrases the
+ *   Buyer copy must not use today (Product quality, a cart or checkout, a delivered or received
+ *   claim, popularity); it is not a proof that copy is true, and its header says what it checks.
  */
 export const enCommon = {
   'health.ok': 'All systems operating normally.',
@@ -118,7 +133,7 @@ export const enCommon = {
   // request
   'error.request.validation_failed': 'The request is not valid.',
   'error.request.idempotency_key_missing': 'The request is missing its retry key.',
-  'error.request.idempotency_key_reused': 'This retry key was already used for a different request.',
+  'error.request.idempotency_key_reused': 'This request could not be repeated safely. Check what is shown before trying again.',
   'error.request.rate_limited': 'Too many requests. Try again in {retry_after_seconds} seconds.',
   'error.request.client_upgrade_required': 'Update the app to continue.',
   'error.request.payload_too_large': 'The request is too large.',
@@ -191,10 +206,12 @@ export const enCommon = {
 
   // Chat (C7) - the escalation is the one bot utterance with no intent
   // behind it, so it lives here rather than in nlu.answer_template.
-  'chat.bot.escalated': 'Your question has been passed to the seller. They will reply here.',
+  'chat.bot.escalated': 'Your question has been passed to the Seller. They will reply here.',
   'notification.chat.escalated': 'A buyer question needs your reply.',
 
   'common.loading': 'Loading',
+  // A wait the server asked for, whatever its cause (a rate limit or a busy service): it names no cause.
+  'common.wait': 'Please wait. You can try again in {retry_after_seconds} seconds.',
 
   // Buyer shell (WO-002; ADU-MOB-02 v4.3 S11). Structure only: every "coming
   // update" line stands where a domain arrives later, and never claims the
@@ -263,6 +280,8 @@ export const enCommon = {
   'buyer.product.description': 'Description',
   'buyer.product.options': 'Options',
   'buyer.product.option': '{option}, {price}, {availability}',
+  // Said when the option the Buyer chose is no longer one the server offers (it is deselected, never revived).
+  'buyer.product.option_dropped': 'The option you chose became unavailable, so it is no longer selected. Choose an option again.',
   'buyer.product.details': 'Product details',
   'buyer.product.attribute': '{name}: {value}',
   'buyer.seller.title': 'Seller',
@@ -281,6 +300,8 @@ export const enCommon = {
   'buyer.seller.trust.TRUSTED': 'Trusted',
   'buyer.seller.handoffs': 'Completed handoffs: {count}',
   'buyer.seller.rating': 'Seller service: {average} out of 5 from {count} reviews',
+  // The one-review form of buyer.seller.rating (the catalogue has no plural machinery): chosen when the count is 1.
+  'buyer.seller.rating_one': 'Seller service: {average} out of 5 from 1 review',
   'buyer.seller.no_reviews': 'No reviews yet',
   'buyer.seller.scenes.empty': 'No Scenes to show right now.',
   'buyer.seller.scenes.loading': 'Loading Scenes',
@@ -289,7 +310,8 @@ export const enCommon = {
   'buyer.seller.products.loading': 'Loading Products',
   'buyer.seller.reviews.empty': 'No reviews yet.',
   'buyer.seller.reviews.loading': 'Loading reviews',
-  'buyer.seller.reviews.note': 'Reviews rate the Seller\'s service. Product quality is shown on each Product.',
+  // Reviews rate the Seller only: no Product review exists, so no sentence may say a Product shows one.
+  'buyer.seller.reviews.note': 'Reviews rate the Seller\'s service.',
   'buyer.seller.about.description': 'About this Seller',
   'buyer.seller.about.open': 'Open now',
   'buyer.seller.about.closed': 'Closed now',
@@ -313,12 +335,17 @@ export const enCommon = {
   'buyer.search.clear': 'Clear search',
   'buyer.search.hint': 'Find Products, Sellers and Scenes in your Market.',
   'buyer.search.too_short': 'Type at least 2 characters to search.',
+  // The server refuses a query with no letter or digit; this is the only change it asks for.
+  'buyer.search.no_terms': 'Use letters or numbers to search.',
   'buyer.search.tabs': 'Result types',
   'buyer.search.tab.top': 'Top',
   'buyer.search.tab.products': 'Products',
   'buyer.search.tab.scenes': 'Scenes',
   'buyer.search.tab.sellers': 'Sellers',
   'buyer.search.results': 'Search results',
+  // The server's rule is lexical only (exact, prefix, substring, then close spellings; available Products
+  // first within a band). Never word this as popular, best, trusted, personal or paid.
+  'buyer.search.order': 'Closest matches first',
   'buyer.search.loading': 'Searching',
   'buyer.search.empty': 'No results for "{query}".',
   'buyer.search.no_market': 'Search could not find your Market. Try again.',
@@ -381,11 +408,21 @@ export const enCommon = {
   'buyer.chat.not_sent': 'Your message was not sent. It is still in the box below. Try again.',
   'buyer.chat.maybe_not_sent':
     'Your message may already have been received. Trying again checks the same message, so it is not sent twice. Editing it makes a new message, which could arrive twice.',
+  // The same state once Try sending again is withdrawn (the key can no longer be replayed): no control is promised.
+  'buyer.chat.cannot_confirm':
+    'This message may already have been received, but the app can no longer confirm it. Check the conversation above before writing it again.',
+  // Advisory only, and only ever drawn beside an unconfirmed send whose text now appears in the history.
+  'buyer.chat.appears_received': 'A message with this text now appears in the conversation. It may be the one you wrote.',
   'buyer.chat.too_long': 'A message can be up to {max} characters.',
   'buyer.chat.connected_only': 'Messages are sent only while you are connected. New messages appear when you refresh, and every 30 seconds while this conversation is open.',
   'buyer.chat.ask_seller': 'Ask the Seller',
   'buyer.chat.ask_seller_hint': 'Passes your question from the automated assistant to the Seller. The Seller replies here when they can.',
+  // ask_failed: the API refused the request. ask_unconfirmed: no answer, so it may have been passed on.
   'buyer.chat.ask_failed': 'Your question could not be passed to the Seller. Try again.',
+  'buyer.chat.ask_unconfirmed':
+    'We could not confirm that your question was passed to the Seller. Check the conversation above before asking again.',
+  // Only after the server's own confirmation; the conversation then shows the automated reply to the same effect.
+  'buyer.chat.ask_passed_on': 'Your question has been passed to the Seller.',
 
   // WO-014 Product-context messaging (ADU-CHAT-01 v3.3 S4-S5: composer selection is temporary and
   // describes only the next message; R-07 Ask Seller). The Product shown is a current public read.
@@ -462,7 +499,10 @@ export const enCommon = {
   'buyer.save.added_to': 'Added to {name}.',
   'buyer.save.removed_from': 'Removed from {name}.',
   'buyer.save.sign_in': 'Sign in to save Products and Scenes to your private collections.',
+  // save.failed / collection.action_failed: the API refused the change. unconfirmed: no answer, so it may have been made.
   'buyer.save.failed': 'Saved was not changed.',
+  'buyer.save.unconfirmed': 'We could not confirm whether this change was made.',
+  'buyer.save.check_failed': 'We could not check whether this is saved.',
   'buyer.save.picker_title': 'Save to collection',
   'buyer.save.target_gone': 'This item can no longer be saved.',
   'buyer.save.done': 'Done',

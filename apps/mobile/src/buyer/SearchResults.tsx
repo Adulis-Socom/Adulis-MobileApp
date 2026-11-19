@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { useBootstrap } from '../api/bootstrap';
-import type { SaveTarget, SearchItem, SearchPage, SearchType } from '../api/client';
+import { ApiError, type SaveTarget, type SearchItem, type SearchPage, type SearchType } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
 import { AppText } from '../components/AppText';
@@ -40,6 +40,13 @@ export const searchTarget = (item: SearchItem): SaveTarget | null =>
     : item.type === 'SCENE_POST'
       ? { type: 'SCENE_POST', ref: item.payload.public_ref }
       : null;
+
+/** The server refused a query made only of symbols or punctuation: its own reason, not a guess from the text. */
+const refusedForNoTerms = (error: unknown) =>
+  error instanceof ApiError &&
+  error.failure.kind === 'problem' &&
+  error.failure.problem.code === 'VALIDATION_FAILED' &&
+  error.failure.problem.slots?.['reason'] === 'QUERY_NO_TERMS';
 
 /**
  * The results of one query in one tab (WO-008): Top is one bounded mixed page; Products and
@@ -102,6 +109,15 @@ export function SearchResults({
       numColumns={grid ? 2 : 1}
       bounded={tab === 'TOP'}
       saves={{ surface: 'SEARCH', target: searchTarget }}
+      // The server orders by how closely the words match (lexical only); the line says no more than that.
+      header={
+        list.items.length > 0 ? (
+          <AppText style={{ color: theme.color.textSecondary, paddingHorizontal: theme.space.sm, paddingBottom: theme.space.xs }}>
+            {t('buyer.search.order')}
+          </AppText>
+        ) : null
+      }
+      failureText={(error) => (refusedForNoTerms(error) ? t('buyer.search.no_terms') : null)}
       empty="buyer.search.loading"
       emptyState={
         <View style={{ gap: theme.space.md, alignItems: 'center' }}>

@@ -186,6 +186,8 @@ export function NewCollection({
     if (held?.name === trimmed && (!keyUsable(held, Date.now()) || held.deletions !== collectionDeletions())) {
       intent.current = null;
       onUnconfirmed?.();
+      // Nothing is sent, and the list read again decides: say that the outcome of the earlier attempt is not known.
+      setError(t('buyer.save.unconfirmed'));
       return;
     }
     const attempt = held?.name === trimmed ? held : (intent.current = { name: trimmed, key: newIdempotencyKey(), startedAt: Date.now(), deletions: collectionDeletions() });

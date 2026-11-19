@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AccessibilityInfo, AppState, type AppStateStatus } from 'react-native';
 
 import { formatMinor } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
@@ -244,6 +244,85 @@ describe('a new answer from the server', () => {
     expect(await screen.findByText(en['buyer.product.gone'])).toBeOnTheScreen();
     expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
     expect(screen.queryByText('Woven basket')).not.toBeOnTheScreen();
+  });
+});
+
+describe('the notice when a chosen option is dropped', () => {
+  const notice = () => screen.queryByText(en['buyer.product.option_dropped']);
+
+  it('is not shown at the opening, after a choice, or while the choice is still offered', async () => {
+    serve(BASKET, ok(BOTH()), ok(basket([option(SMALL), option(LARGE, { available: false })])));
+    await open();
+    expect(notice()).not.toBeOnTheScreen();
+    await fireEvent.press(choice('Small', AVAILABLE));
+    expect(notice()).not.toBeOnTheScreen();
+    await pull();
+    expect(choice('Small', AVAILABLE)).toBeChecked();
+    expect(notice()).not.toBeOnTheScreen();
+  });
+
+  it('says so when the option the Buyer chose sold out, is announced once, stays while an answer offers it again, and goes when the Buyer chooses', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      serve(BASKET, ok(BOTH()), ok(basket([option(SMALL, { available: false, stock_count: 0 }), option(LARGE)])), ok(BOTH()));
+      await open();
+      await fireEvent.press(choice('Small', AVAILABLE));
+      await pull();
+      expect(notice()).toBeOnTheScreen();
+      expect(choice('Small', UNAVAILABLE)).not.toBeChecked();
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.product.option_dropped'])).toHaveLength(1);
+      // An answer that offers it again does not revive the choice, and the notice still tells the Buyer why.
+      await pull();
+      expect(choice('Small', AVAILABLE)).not.toBeChecked();
+      expect(notice()).toBeOnTheScreen();
+      expect(announce.mock.calls.filter(([text]) => text === en['buyer.product.option_dropped'])).toHaveLength(1);
+      await fireEvent.press(choice('Large', AVAILABLE));
+      expect(choice('Large', AVAILABLE)).toBeChecked();
+      expect(notice()).not.toBeOnTheScreen();
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('says so when the option is no longer listed', async () => {
+    serve(BASKET, ok(BOTH()), ok(basket([option(LARGE)])));
+    await open();
+    await fireEvent.press(choice('Small', AVAILABLE));
+    await pull();
+    expect(notice()).toBeOnTheScreen();
+  });
+
+  it('says nothing while no option can be chosen (the whole Product became unavailable), and says it once an option can be', async () => {
+    serve(
+      BASKET,
+      ok(BOTH()),
+      ok(basket([option(SMALL, { available: false }), option(LARGE, { available: false })], { available: false })),
+      ok(BOTH()),
+    );
+    await open();
+    await fireEvent.press(choice('Large', AVAILABLE));
+    await pull();
+    // Every option is disabled and the Product says it is unavailable: "choose an option again" could not be followed.
+    expect(choice('Large', UNAVAILABLE)).toBeDisabled();
+    expect(choice('Large', UNAVAILABLE)).not.toBeChecked();
+    expect(notice()).not.toBeOnTheScreen();
+    // The choice was still dropped: once an answer offers an option again, the Buyer is told why none is selected.
+    await pull();
+    expect(choice('Large', AVAILABLE)).not.toBeChecked();
+    expect(notice()).toBeOnTheScreen();
+  });
+
+  it('is gone with the content when the read fails, and is not on the retried answer', async () => {
+    serve(BASKET, ok(BOTH()), ok(basket([option(LARGE)])), problem(500, 'INTERNAL', 'request'), ok(BOTH()));
+    await open();
+    await fireEvent.press(choice('Small', AVAILABLE));
+    await pull();
+    expect(notice()).toBeOnTheScreen();
+    await pull();
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
+    expect(notice()).not.toBeOnTheScreen();
   });
 });
 
