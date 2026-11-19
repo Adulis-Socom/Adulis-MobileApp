@@ -159,6 +159,8 @@ export function useMarkNotificationRead(scope: InboxScope = BUYER_INBOX) {
               ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map((n) => (n.id === id ? { ...n, readAt } : n)) })) }
               : data,
           );
+          // A read already on its way may predate this one: it is cancelled and asked again, never drawn over it.
+          void qc.invalidateQueries({ queryKey: inbox, predicate: (q) => q.state.fetchStatus === 'fetching' });
         } else {
           // An answer without its read_at: read the inbox again rather than assume.
           void qc.invalidateQueries({ queryKey: inbox });
