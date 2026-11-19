@@ -21,6 +21,13 @@ jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store
 jest.setTimeout(60_000);
 
 const GATEWAY: Reply = { status: 502, unreadable: true };
+/**
+ * The first sentence of a failed change: "not changed" only for an answer the API refused, and "could not
+ * confirm" for every other outcome (no answer, a gateway page, a 5xx, a 429, a 409). After a change the
+ * server holds, or while its state is being read, neither may be said.
+ */
+const UNCONFIRMED = new RegExp(`^${en['buyer.save.unconfirmed']}`);
+const ANY_FAILURE = new RegExp(`^(${en['buyer.save.failed']}|${en['buyer.save.unconfirmed']}|${en['buyer.collection.action_failed']})`);
 let api: ReturnType<typeof installFakeApi>;
 let fc: ReturnType<typeof installFakeCollections>;
 const signedIn = () => resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
@@ -225,9 +232,12 @@ describe('creating a Collection after an uncertain outcome', () => {
     await flush();
     expect(creates()).toHaveLength(1);
     expect(screen.queryByTestId('new-collection')).not.toBeNull();
+    // Nothing was sent, and the earlier attempt's outcome is not known: the screen says so instead of only reloading.
+    expect(screen.getByText(en['buyer.save.unconfirmed'])).toBeOnTheScreen();
     await fireEvent.press(createButton());
     await waitFor(() => expect(creates()).toHaveLength(2));
     expect(keys()[1]).not.toBe(keys()[0]);
+    expect(screen.queryByText(en['buyer.save.unconfirmed'])).toBeNull();
   });
 
   it('a key inside the safe age is still replayed', async () => {
@@ -252,7 +262,7 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
   const PRODUCT = '/product/seller-1/basket';
   const saveButton = () => screen.findByRole('button', { name: en['buyer.save.save'] });
   const savedButton = () => screen.findByRole('button', { name: en['buyer.save.saved'] });
-  const notChanged = () => screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`));
+  const notChanged = () => screen.queryByText(ANY_FAILURE);
   const stateCalls = () => api.callsTo('POST /v1/collections/saved-state:batch');
 
   it.each([
@@ -297,7 +307,7 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
     fc.intercept('add', once(reply));
     await renderRouter(APP_DIR, { initialUrl: PRODUCT });
     await fireEvent.press(await saveButton());
-    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     expect(await saveButton()).toBeOnTheScreen();
     // The state read on opening and the one after the failure.
     await waitFor(() => expect(stateCalls().length).toBeGreaterThanOrEqual(2));
@@ -399,7 +409,7 @@ describe('one-tap Save and Remove after an uncertain outcome', () => {
     await settle();
     expect(notChanged()).toBeNull();
     await act(async () => gate.release());
-    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     expect(await saveButton()).toBeOnTheScreen();
   });
 });
@@ -416,7 +426,7 @@ describe('the Add to collection picker after an uncertain outcome', () => {
     await waitFor(() => expect(box('Gifts')).toBeChecked());
     await waitFor(() => expect(box('Gifts')).toBeEnabled());
     await flush();
-    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    expect(screen.queryByText(ANY_FAILURE)).toBeNull();
     expect(fc.items).toHaveLength(1);
   });
 
@@ -426,7 +436,7 @@ describe('the Add to collection picker after an uncertain outcome', () => {
     fc.intercept('add', once(problem(500, 'INTERNAL', 'request')));
     await renderRouter(APP_DIR, { initialUrl: PICKER });
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
-    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     await waitFor(() => expect(box('Gifts')).toBeEnabled());
     expect(box('Gifts')).not.toBeChecked();
     expect(fc.items).toEqual([]);
@@ -464,12 +474,12 @@ describe('the Add to collection picker after an uncertain outcome', () => {
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
     await waitFor(() => expect(stateReads()).toBeGreaterThanOrEqual(2));
     await act(() => jest.advanceTimersByTimeAsync(100));
-    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    expect(screen.queryByText(ANY_FAILURE)).toBeNull();
     await act(async () => gate.release());
     await waitFor(() => expect(box('Gifts')).toBeChecked());
     await waitFor(() => expect(box('Gifts')).toBeEnabled());
     await flush();
-    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    expect(screen.queryByText(ANY_FAILURE)).toBeNull();
   });
 
   it('the failure of a tick that was not stored is said once that read has answered', async () => {
@@ -485,9 +495,9 @@ describe('the Add to collection picker after an uncertain outcome', () => {
     await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
     await waitFor(() => expect(stateReads()).toBeGreaterThanOrEqual(2));
     await act(() => jest.advanceTimersByTimeAsync(100));
-    expect(screen.queryByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeNull();
+    expect(screen.queryByText(ANY_FAILURE)).toBeNull();
     await act(async () => gate.release());
-    expect(await screen.findByText(new RegExp(`^${en['buyer.save.failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     expect(box('Gifts')).not.toBeChecked();
   });
 });
@@ -527,7 +537,7 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
       fc.intercept('add', once(problem(500, 'INTERNAL', 'request')));
       await openShop();
       await fireEvent.press(card());
-      await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.failed'], expect.stringMatching(/./)));
+      await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.unconfirmed'], expect.stringMatching(/./)));
       await flush();
       expect(alert).toHaveBeenCalledTimes(1);
       expect(isOn()).toBe(false);
@@ -578,7 +588,7 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
       await settle();
       expect(alert).not.toHaveBeenCalled();
       await act(async () => gate.release());
-      await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.failed'], expect.stringMatching(/./)));
+      await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.unconfirmed'], expect.stringMatching(/./)));
       expect(alert).toHaveBeenCalledTimes(1);
       expect(isOn()).toBe(false);
     } finally {
@@ -588,7 +598,7 @@ describe('a Save on a discovery card after an uncertain outcome', () => {
 });
 
 describe('changes inside a Collection after an uncertain outcome', () => {
-  const failed = () => screen.queryByText(new RegExp(`^${en['buyer.collection.action_failed']}`));
+  const failed = () => screen.queryByText(ANY_FAILURE);
   const removeBasket = () => screen.queryByRole('button', { name: 'Remove Woven basket from this collection' });
 
   it('a Remove whose answer was lost after it was stored: the item is gone from the list and "Nothing was changed" is not said', async () => {
@@ -612,7 +622,7 @@ describe('changes inside a Collection after an uncertain outcome', () => {
     fc.intercept('remove', once(problem(500, 'INTERNAL', 'request')));
     await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
     await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
-    expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     await flush();
     expect(removeBasket()).not.toBeNull();
     expect(failed()).not.toBeNull();
@@ -674,7 +684,7 @@ describe('changes inside a Collection after an uncertain outcome', () => {
       await fireEvent.press(await screen.findByRole('button', { name: /^Gifts, / }));
       await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
       await confirmDelete(alert, 0);
-      expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']} ${en['common.offline']}`))).toBeOnTheScreen();
+      expect(await screen.findByText(new RegExp(`^${en['buyer.save.unconfirmed']} ${en['common.offline']}`))).toBeOnTheScreen();
       expect(fc.collections.some((c) => c.ref === gifts)).toBe(true);
       await fireEvent.press(screen.getByRole('button', { name: en['buyer.collection.delete'] }));
       await confirmDelete(alert, 1);
@@ -703,7 +713,7 @@ describe('changes inside a Collection after an uncertain outcome', () => {
       await act(() => jest.advanceTimersByTimeAsync(100));
       expect(failed()).toBeNull();
       await act(async () => gate.release());
-      expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']}`))).toBeOnTheScreen();
+      expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     } finally {
       alert.mockRestore();
     }
@@ -769,7 +779,7 @@ describe('changes inside a Collection after an uncertain outcome', () => {
     await act(() => jest.advanceTimersByTimeAsync(100));
     expect(failed()).toBeNull();
     await act(async () => gate.release());
-    expect(await screen.findByText(new RegExp(`^${en['buyer.collection.action_failed']}`))).toBeOnTheScreen();
+    expect(await screen.findByText(UNCONFIRMED)).toBeOnTheScreen();
     expect(removeBasket()).not.toBeNull();
   });
 });
@@ -829,6 +839,9 @@ describe('read failures and loading states', () => {
     fc.intercept('state', out.answer);
     await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
     expect(await screen.findByText(new RegExp(en['common.offline']), {}, wait)).toBeOnTheScreen();
+    // No change was asked for: the sentence says the state could not be checked, never that Saved was not changed.
+    expect(screen.getByText(new RegExp(`^${en['buyer.save.check_failed']} ${en['common.offline']}`))).toBeOnTheScreen();
+    expect(screen.queryByText(ANY_FAILURE)).toBeNull();
     expect(screen.getByRole('button', { name: en['buyer.save.save'] })).toBeDisabled();
     expect(screen.getByRole('button', { name: en['buyer.save.add'] })).toBeDisabled();
     out.state.down = false;
@@ -849,5 +862,59 @@ describe('read failures and loading states', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByRole('checkbox', { name: 'Gifts' })).toBeOnTheScreen();
     expect(adds()).toEqual([]);
+  });
+});
+
+describe('the sentence follows what the API said', () => {
+  const REFUSAL = problem(400, 'VALIDATION_FAILED', 'request');
+  const NOT_CHANGED = new RegExp(`^${en['buyer.save.failed']}`);
+  const NOTHING_CHANGED = new RegExp(`^${en['buyer.collection.action_failed']}`);
+
+  it('a Save the API refuses says Saved was not changed, never that it could not confirm', async () => {
+    signedIn();
+    fc.intercept('add', once(REFUSAL));
+    await renderRouter(APP_DIR, { initialUrl: '/product/seller-1/basket' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.save.save'] }));
+    expect(await screen.findByText(NOT_CHANGED)).toBeOnTheScreen();
+    expect(screen.queryByText(UNCONFIRMED)).toBeNull();
+  });
+
+  it('a tick the API refuses says Saved was not changed, never that it could not confirm', async () => {
+    signedIn();
+    fc.named('Gifts');
+    fc.intercept('add', once(REFUSAL));
+    await renderRouter(APP_DIR, { initialUrl: PICKER });
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'Gifts' }));
+    expect(await screen.findByText(NOT_CHANGED)).toBeOnTheScreen();
+    expect(screen.queryByText(UNCONFIRMED)).toBeNull();
+  });
+
+  it('a Remove the API refuses says nothing was changed, never that it could not confirm', async () => {
+    signedIn();
+    const outfit = fc.named('Outfit ideas');
+    fc.saveElsewhere(PRODUCT_TARGET, outfit);
+    fc.intercept('remove', once(REFUSAL));
+    await renderRouter(APP_DIR, { initialUrl: `/collections/${outfit}` });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Remove Woven basket from this collection' }));
+    expect(await screen.findByText(NOTHING_CHANGED)).toBeOnTheScreen();
+    expect(screen.queryByText(UNCONFIRMED)).toBeNull();
+  });
+
+  it('a Delete the API refuses says nothing was changed, never that it could not confirm', async () => {
+    signedIn();
+    const gifts = fc.named('Gifts');
+    fc.intercept('delete', once(REFUSAL));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      await renderRouter(APP_DIR, { initialUrl: `/collections/${gifts}` });
+      await fireEvent.press(await screen.findByRole('button', { name: en['buyer.collection.delete'] }));
+      await act(async () => {
+        await alert.mock.calls[0]![2]!.find((b) => b.style === 'destructive')!.onPress!();
+      });
+      expect(await screen.findByText(NOTHING_CHANGED)).toBeOnTheScreen();
+      expect(screen.queryByText(UNCONFIRMED)).toBeNull();
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

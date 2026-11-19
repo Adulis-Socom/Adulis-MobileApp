@@ -256,7 +256,7 @@ describe('Save on Shop cards', () => {
     await openShop();
     await waitFor(() => expect(isIdle(card('Basket'))).toBe(true));
     await fireEvent.press(card('Basket'));
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.failed'], expect.stringMatching(/./)));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(en['buyer.save.unconfirmed'], expect.stringMatching(/./)));
     await waitFor(() => expect(isIdle(card('Basket'))).toBe(true));
     expect(isOn(card('Basket'))).toBe(false);
     answer = undefined;

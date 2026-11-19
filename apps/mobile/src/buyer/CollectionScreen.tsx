@@ -16,7 +16,7 @@ import { PublicListView } from './PublicListView';
 import { SavedItemCard } from './SavedItemCard';
 import { FilterTabs } from './SavedScreen';
 import { SAVED_STATE, collectionName, keepIfCurrent, usePrivateApi } from './saved';
-import { noteCollectionDeleted } from './saved-write';
+import { noteCollectionDeleted, outcomeUnknown } from './saved-write';
 
 const TABS = [
   { value: 'ALL', key: 'buyer.collection.tab.all' },
@@ -86,7 +86,7 @@ export function CollectionScreen({ collectionRef }: { collectionRef: unknown }) 
       void qc.invalidateQueries({ queryKey: [SAVED_STATE] });
     } catch (error) {
       if (priv.isCurrent()) {
-        setFailure({ item: item.ref, text: `${t('buyer.collection.action_failed')} ${failureMessage(t, error)}` });
+        setFailure({ item: item.ref, text: `${t(outcomeUnknown(error) ? 'buyer.save.unconfirmed' : 'buyer.collection.action_failed')} ${failureMessage(t, error)}` });
         // The answer may have been lost after the server removed it: read the Collection again.
         list.refresh();
       }
@@ -240,7 +240,7 @@ function ManageCollection({
               noteCollectionDeleted();
               onDeleted();
             } else {
-              setError(`${t('buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
+              setError(`${t(outcomeUnknown(failure) ? 'buyer.save.unconfirmed' : 'buyer.collection.action_failed')} ${failureMessage(t, failure)}`);
               // The answer may have been lost after the server deleted it: read the Collection again.
               onRenamed();
             }
