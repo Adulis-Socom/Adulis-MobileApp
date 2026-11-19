@@ -13,7 +13,9 @@
 //                  error happened before anything was changed (fail closed).
 //   3  INCOMPLETE  something WAS changed (a resource, a process, a device, a directory) and the
 //                  command did not finish; the line says what and how to continue.
-//   4  BLOCKED     a precondition of `up` is not met; nothing was started.
+//   4  BLOCKED     a precondition of `up` or of a native run is not met; nothing was started.
+//   5  TEST FAILED a native run finished, the device is back as it was, and an approved flow failed
+//                  (`EXIT_TEST_FAILED`; set only by `native run`, never by a refusal).
 // "NO RESOURCE WAS CHANGED" is printed only when no mutating call of this command went out.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statfsSync } from 'node:fs';
@@ -23,8 +25,13 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { startApi, stopApi, provenanceProblems } from './lib/api.mjs';
 import { appendOp, executeDown, planDown, purge, purgeGateProblems } from './lib/cleanup.mjs';
-import { deviceProblems, observeDevice, prepareDevice, restoreDevice } from './lib/device.mjs';
-import { CHECKS, observe, psqlArgs, verify } from './lib/identity.mjs';
+import { isMutatingAdb } from './lib/adb.mjs';
+import { checkLabel, CHECKS, observe, psqlArgs, verify } from './lib/identity.mjs';
+import { deviceCommand, metroCommand, nativeCommand, UsageError } from './lib/native-cli.mjs';
+import { summarize } from './lib/journal.mjs';
+import { journalProblems } from './lib/restore.mjs';
+import { guardSession } from './lib/lock.mjs';
+import { stopMetro } from './lib/metro.mjs';
 import { assertTarget, Refusal, Refused } from './lib/guard.mjs';
 import { realIo } from './lib/io.mjs';
 import { newRun, RUN_RE, readManifest, runDir, writeManifest } from './lib/manifest.mjs';
@@ -32,6 +39,8 @@ import { dockerSteps, minioImage, PG_IMAGE, up } from './lib/stack.mjs';
 import { canaryDeviceId, loadSet, SETS } from './fixtures/index.mjs';
 
 export const EXIT = { OK: 0, REFUSED: 1, COULD_NOT_CHECK: 2, INCOMPLETE: 3, BLOCKED: 4 };
+// A native run that finished with an approved flow failing (set by `native run`, never by a refusal).
+export const EXIT_TEST_FAILED = 5;
 export const STATUS = {
   READY_STACK: 'HARNESS READY - STACK VERIFIED - NATIVE EXECUTION NOT PERFORMED',
   READY_API: 'HARNESS READY - STACK AND API VERIFIED - NATIVE EXECUTION NOT PERFORMED',
@@ -43,7 +52,7 @@ export const MIN_FREE = { stack: 1.0 * GB, device: 6 * GB };
 const MIN_DISK = 5 * GB;
 
 class Blocked extends Error {}
-class Usage extends Error {}
+const Usage = UsageError;
 
 /* ---- tracking what a command changed, so a status line never claims more than is proven ---- */
 
@@ -56,7 +65,7 @@ export function isMutatingDocker(args, opts = {}) {
   if (a === 'exec' && opts.input === undefined) return false;
   return true;
 }
-export const isMutatingAdb = (args) => args.includes('reverse') && !args.includes('--list');
+export { isMutatingAdb };
 // `docker run` can create a container and fail to start it, and `docker rm -f` can stop one and fail
 // to remove it: a non-zero exit does not prove either changed nothing.
 const CHANGED_WHATEVER_THE_EXIT = new Set(['run', 'rm']);
@@ -90,25 +99,41 @@ export function trackIo(io, mark) {
       if (isMutatingRequest(opts)) mark('API request');
       return io.fetch(url, opts);
     },
-    adb: async (args) => {
-      const r = await io.adb(args);
-      if (isMutatingAdb(args) && (r.error || r.status === 0)) mark('adb reverse');
+    adb: async (args, ...rest) => {
+      const r = await io.adb(args, ...rest);
+      // A reverse entry, a device setting, or a call the driver's list does not know: all are changes.
+      if (isMutatingAdb(args) && (r.error || r.status === 0))
+        mark(args.includes('reverse') ? 'adb reverse' : 'adb setting');
       return r;
     },
     proc: {
       ...io.proc,
+      // every argument is passed on: killTree takes the creation time the caller verified
       kill: (pid) => {
         mark('process stop');
         return io.proc.kill(pid);
       },
+      killTree: (...a) => {
+        mark('process stop');
+        return io.proc.killTree(...a);
+      },
     },
-    spawnApi: (o) => {
+    spawnApi: (...a) => {
       mark('API process');
-      return io.spawnApi(o);
+      return io.spawnApi(...a);
     },
-    build: (c) => {
+    spawnMetro: (...a) => {
+      mark('Metro process');
+      return io.spawnMetro(...a);
+    },
+    // A flow clears the app's data and registers a device with the API: it changes things whatever it reports.
+    maestro: (...a) => {
+      mark('Maestro run');
+      return io.maestro(...a);
+    },
+    build: (...a) => {
       mark('API build');
-      return io.build(c);
+      return io.build(...a);
     },
     run: (...a) => {
       mark('node child process');
@@ -198,6 +223,8 @@ const RECOVERY = {
   fixtures: 'run `down --run <run>` (the run is in an unknown state)',
   api: 'run `api stop` and `down --run <run>`',
   device: 'run `device restore` and check `adb reverse --list`',
+  metro: 'run `metro stop` and `down --run <run>`',
+  native: 'run `device restore --run <run> --serial <serial>`, then `down --run <run>`',
   down: 'run `down --run <run>` again',
   purge: 'inspect the run directory by hand',
 };
@@ -210,6 +237,8 @@ export async function main(
     out = (s) => process.stdout.write(`${s}\n`),
     preflight = preflightProblems,
     rm,
+    native,
+    proc,
   } = {},
 ) {
   let status = null;
@@ -230,6 +259,9 @@ export async function main(
           sha: { type: 'string' },
           serial: { type: 'string' },
           set: { type: 'string' },
+          apk: { type: 'string' },
+          'built-at': { type: 'string' },
+          battery: { type: 'string' },
         },
       });
     } catch (e) {
@@ -339,6 +371,7 @@ export async function main(
       }
       case 'fixtures': {
         const { m, dir } = load(root, a.run);
+        await guardSession(dir, io);
         const name = need(a.set, '--set');
         if (!Object.hasOwn(SETS, name))
           throw new Usage(`unknown fixture set '${name}' (known: ${Object.keys(SETS).join(', ')})`);
@@ -350,6 +383,8 @@ export async function main(
         if (!['start', 'stop', 'canary'].includes(sub))
           throw new Usage('usage: api start|stop|canary');
         const { m, dir } = load(root, a.run);
+        // while a session runs the stack is not touched; a teardown does not care about an orphan Maestro
+        if (sub !== 'canary') await guardSession(dir, io, { allowOrphan: sub === 'stop' });
         if (sub === 'start') {
           const r = await startApi(m, io, {
             checkout: resolve(need(a.checkout, '--checkout')),
@@ -388,26 +423,23 @@ export async function main(
         break;
       }
       case 'device': {
-        if (!['check', 'prepare', 'restore'].includes(sub))
-          throw new Usage('usage: device check|prepare|restore');
+        if (!['check', 'prepare', 'restore', 'journal'].includes(sub))
+          throw new Usage('usage: device check|prepare|restore|journal');
         const { m, dir } = load(root, a.run);
-        const serial = a.serial ?? env.ANDROID_SERIAL;
-        const adb = (x) => io.adb(x);
-        const facts = serial ? await observeDevice(adb, serial) : {};
-        const p = deviceProblems(m, serial, facts);
-        if (p.length)
-          throw new Refusal(
-            'device',
-            p.map((detail) => ({ id: 'ID-11', verdict: 'FAIL', detail })),
-          );
-        if (sub === 'prepare') {
-          await assertTarget(m, 'API-WRITE', io, { dir, states: ['ready'] });
-          await prepareDevice(m, adb, serial);
-          say(`reverse ports set on ${serial}`);
-        } else if (sub === 'restore') {
-          await restoreDevice(m, adb, serial);
-          say(`reverse ports removed from ${serial}`);
-        } else say(`device ${serial} passes the device checks`);
+        ({ code, status } = await deviceCommand({ sub, m, dir, io, a, env, say, root }));
+        break;
+      }
+      case 'metro': {
+        if (!['start', 'stop'].includes(sub)) throw new Usage('usage: metro start|stop');
+        const { m, dir } = load(root, a.run);
+        ({ code, status } = await metroCommand({ sub, m, dir, io, a, say }));
+        break;
+      }
+      case 'native': {
+        if (!['conditions', 'run'].includes(sub)) throw new Usage('usage: native conditions|run');
+        const { m, dir } = load(root, a.run);
+        const r = await nativeCommand({ sub, m, dir, io, a, env, say, root, native, proc });
+        ({ code, status } = r);
         break;
       }
       case 'env': {
@@ -419,16 +451,28 @@ export async function main(
       }
       case 'status': {
         const { m } = load(root, a.run);
+        const j = summarize(runDir(root, m.run));
+        const device = j.corrupt
+          ? `journal unusable (${j.corrupt})`
+          : `device changes not restored: ${j.open.length}`;
         say(
-          `run ${m.run}: ${m.state}; fixtures [${m.fixtures.join(', ')}]; API ${m.api ? `pid ${m.api.pid}` : 'not started'}; nothing was verified by this command`,
+          `run ${m.run}: ${m.state}; fixtures [${m.fixtures.join(', ')}]; API ${m.api ? `pid ${m.api.pid}` : 'not started'}; Metro ${m.metro ? `pid ${m.metro.pid}` : 'not started'}; ${device}; nothing was verified by this command`,
         );
         break;
       }
       case 'down':
       case 'recover': {
         const { m, dir } = load(root, a.run);
+        // no session may run under a teardown; a Maestro process an earlier session left is stopped first
+        const reaped = await guardSession(dir, io, { reap: true });
+        if (reaped.stopped) say(`stopped the Maestro process ${reaped.pid} of an earlier session`);
         if (m.state === 'cleaned') {
           say('already cleaned');
+          const jp = journalProblems(dir);
+          if (jp.length) {
+            code = EXIT.INCOMPLETE;
+            status = `HARNESS INCOMPLETE - ${jp.join('; ')}; run \`device restore --run ${m.run} --serial <serial>\``;
+          }
           break;
         }
         const plan = await planDown(m, io);
@@ -448,6 +492,14 @@ export async function main(
             else left.push(`API process ${m.api.pid} may still run: ${e.message}`);
           }
         }
+        if (m.metro) {
+          try {
+            await stopMetro(m, io, dir);
+          } catch (e) {
+            if (e instanceof Refused) say(`warning: ${e.message}`);
+            else left.push(`Metro process ${m.metro.pid} may still run: ${e.message}`);
+          }
+        }
         writeManifest(dir, { ...m, state: 'cleanup' });
         const done = await executeDown(m, plan.steps, io, (e) => appendOp(dir, e));
         left.push(...done.left);
@@ -462,6 +514,7 @@ export async function main(
             ...m,
             state: 'cleaned',
             api: null,
+            metro: null,
             cleanup: {
               at: new Date().toISOString(),
               engineId: m.engine.id,
@@ -474,12 +527,21 @@ export async function main(
             );
           for (const l of m.left ?? []) say(`previously recorded, still to check by hand: ${l}`);
           status = `HARNESS OK - ${cmd} (${done.removed.length} removed)`;
+          // Docker is clean; the device is another matter. Unrestored changes make the run INCOMPLETE.
+          const jp = journalProblems(dir);
+          if (jp.length) {
+            code = EXIT.INCOMPLETE;
+            status = `HARNESS INCOMPLETE - ${jp.join('; ')} (the Docker resources are removed); run \`device restore --run ${m.run} --serial <serial>\``;
+          }
         }
         break;
       }
       case 'purge': {
         const run = need(a.run, '--run');
-        const { m } = load(root, run);
+        const { m, dir } = load(root, run);
+        // The journal is the only record of what the device looked like before: never deleted while it is open.
+        const jp = journalProblems(dir);
+        if (jp.length) throw new Refused(`refused purge: ${jp.join('; ')}`);
         const gate = await purgeGateProblems(m, io);
         if (gate.problems.length || gate.unknowns.length)
           throw new Refused(
@@ -493,7 +555,7 @@ export async function main(
       }
       default:
         throw new Usage(
-          'usage: harness.mjs plan|preflight|up|verify|reverify|fixtures|api|device|env|status|down|recover|purge|selftest',
+          'usage: harness.mjs plan|preflight|up|verify|reverify|fixtures|api|metro|device|native|env|status|down|recover|purge|selftest',
         );
     }
   } catch (e) {
@@ -508,12 +570,14 @@ export async function main(
       // Something was changed: never say otherwise, whatever stopped the command.
       code = EXIT.INCOMPLETE;
       const why =
-        e instanceof Refusal && e.firstId ? `${e.firstId} ${CHECKS[e.firstId]} refused` : e.message;
+        e instanceof Refusal && e.firstId
+          ? `${e.firstId} ${checkLabel(e.firstId)} refused`
+          : e.message;
       if (e instanceof Refused) out(e.message);
       status = `HARNESS INCOMPLETE - ${why}${changed}; ${how}`;
     } else if (e instanceof Refused) {
       code = e.code;
-      const first = e.firstId ? `${e.firstId} ${CHECKS[e.firstId]}` : e.message;
+      const first = e.firstId ? `${e.firstId} ${checkLabel(e.firstId)}` : e.message;
       status = `HARNESS REFUSED - ${first}${code === EXIT.COULD_NOT_CHECK ? ' (could not be checked)' : ''} - NO RESOURCE WAS CHANGED`;
       out(e.message);
     } else if (e instanceof Usage) {

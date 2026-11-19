@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1197 keys:
+1209 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -131,6 +131,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `chat.bot.escalated`
 - `notification.chat.escalated`
 - `common.loading`
+- `common.wait`
 - `buyer.wordmark`
 - `buyer.tab.home`
 - `buyer.tab.shop`
@@ -188,6 +189,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.product.description`
 - `buyer.product.options`
 - `buyer.product.option`
+- `buyer.product.option_dropped`
 - `buyer.product.details`
 - `buyer.product.attribute`
 - `buyer.seller.title`
@@ -206,6 +208,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.seller.trust.TRUSTED`
 - `buyer.seller.handoffs`
 - `buyer.seller.rating`
+- `buyer.seller.rating_one`
 - `buyer.seller.no_reviews`
 - `buyer.seller.scenes.empty`
 - `buyer.seller.scenes.loading`
@@ -238,12 +241,14 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.search.clear`
 - `buyer.search.hint`
 - `buyer.search.too_short`
+- `buyer.search.no_terms`
 - `buyer.search.tabs`
 - `buyer.search.tab.top`
 - `buyer.search.tab.products`
 - `buyer.search.tab.scenes`
 - `buyer.search.tab.sellers`
 - `buyer.search.results`
+- `buyer.search.order`
 - `buyer.search.loading`
 - `buyer.search.empty`
 - `buyer.search.no_market`
@@ -295,11 +300,15 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.chat.sending`
 - `buyer.chat.not_sent`
 - `buyer.chat.maybe_not_sent`
+- `buyer.chat.cannot_confirm`
+- `buyer.chat.appears_received`
 - `buyer.chat.too_long`
 - `buyer.chat.connected_only`
 - `buyer.chat.ask_seller`
 - `buyer.chat.ask_seller_hint`
 - `buyer.chat.ask_failed`
+- `buyer.chat.ask_unconfirmed`
+- `buyer.chat.ask_passed_on`
 - `buyer.chat.ask_about_product`
 - `buyer.chat.context_title`
 - `buyer.chat.context_note`
@@ -309,6 +318,7 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.chat.context_unchecked`
 - `buyer.chat.context_remove`
 - `buyer.chat.edit_unconfirmed`
+- `buyer.chat.discard_unconfirmed`
 - `buyer.chat.select_product`
 - `buyer.chat.change_product`
 - `buyer.chat.picker_title`
@@ -370,6 +380,8 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `buyer.save.removed_from`
 - `buyer.save.sign_in`
 - `buyer.save.failed`
+- `buyer.save.unconfirmed`
+- `buyer.save.check_failed`
 - `buyer.save.picker_title`
 - `buyer.save.target_gone`
 - `buyer.save.done`
