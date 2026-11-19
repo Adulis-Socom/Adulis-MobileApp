@@ -79,19 +79,19 @@ const textsOnChannel = (sentence: string) => [
   sentence,
   ...TAB_LABELS,
 ];
-/** The text a Text draws, as the screen shows it: strings, numbers and nested Text joined; a missing or boolean child draws nothing. */
-function drawn(children: unknown): string {
-  if (children === null || children === undefined || typeof children === 'boolean') return '';
-  if (typeof children === 'string' || typeof children === 'number') return String(children);
-  if (Array.isArray(children)) return children.map(drawn).join('');
-  return drawn((children as { props?: { children?: unknown } }).props?.children);
-}
+/**
+ * The text a Text draws, read from the rendered tree rather than from its props: a number, a mixed
+ * list of children, a nested Text and a component that returns a string all come out as the
+ * screen shows them; a missing or boolean child draws nothing.
+ */
+type Rendered = string | { children: Rendered[] };
+const drawn = (node: Rendered): string => (typeof node === 'string' ? node : node.children.map(drawn).join(''));
 /** Icon glyphs sit in the Unicode private-use area: they are drawn by a font, and are not text a Buyer reads. */
 const isGlyph = (text: string) => text.replace(/[\uE000-\uF8FF]/g, '').trim() === '';
 const visibleTexts = () =>
   screen
     .queryAllByText(/[\s\S]+/)
-    .map((node) => drawn(node.props.children))
+    .map((node) => drawn(node as unknown as Rendered))
     .filter((text) => !isGlyph(text));
 
 let api: ReturnType<typeof installFakeApi>;
@@ -115,6 +115,23 @@ describe('the drawn-text helper', () => {
       </>,
     );
     expect(visibleTexts()).toEqual(['A sentence.', '3', '4 items']);
+  });
+
+  // The text query returns the inner Text of a nested pair (not the outer one), so anything a channel
+  // drew inside a nested Text is listed through the inner one; a component's string output is read too.
+  it('lists a nested Text and a component that returns a string', async () => {
+    const Bare = () => 'bare';
+    await render(
+      <>
+        <Text>
+          outer <Text>inner</Text> tail
+        </Text>
+        <Text>
+          <Bare />
+        </Text>
+      </>,
+    );
+    expect(visibleTexts()).toEqual(['inner', 'bare']);
   });
 });
 
@@ -229,6 +246,10 @@ describe('what a channel may and may not read', () => {
   it('the channels say nothing about the connection and ask for nothing offline or on reconnecting', async () => {
     await startedOnForYou();
     const mark = api.calls.length;
+    // That reconnecting asks for nothing also rests on For You's list not refetching on reconnect or
+    // when stale (`refetchOnReconnect: false`, `staleTime: Infinity`, buyer/for-you-feed.ts) and on
+    // bootstrap's five-minute `staleTime` (api/bootstrap.ts), against about a minute of fake time
+    // here. If either default changes, this check goes red for that reason, not because of a channel.
     try {
       await act(async () => onlineManager.setOnline(false));
       expect(onlineManager.isOnline()).toBe(false);
