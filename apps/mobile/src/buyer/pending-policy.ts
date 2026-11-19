@@ -55,14 +55,19 @@ export function credentialTag(token: string): string {
   return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
 }
 
-/** The kept message of this conversation for this session, or null (and nothing left behind that is not usable). */
-export function restorePending(owner: string | null, conversationRef: string, now: number): PendingSendRecord | null {
+/** The kept message of this conversation for this session, or null. Reads only: nothing is changed, so it is safe to call while rendering. */
+export function peekPending(owner: string | null, conversationRef: string, now: number): PendingSendRecord | null {
   if (retention !== 'session' || owner === null) return null;
   const kept = useUiStore.getState().pendingSends[conversationRef];
-  if (kept === undefined) return null;
-  if (kept.owner !== owner || now - kept.startedAt >= PENDING_CAP_MS) {
+  if (kept === undefined || kept.owner !== owner || now - kept.startedAt >= PENDING_CAP_MS) return null;
+  return kept;
+}
+
+/** peekPending, and a kept message that cannot be used (another credential, past the cap) is dropped. Never while rendering. */
+export function restorePending(owner: string | null, conversationRef: string, now: number): PendingSendRecord | null {
+  const kept = peekPending(owner, conversationRef, now);
+  if (kept === null && retention === 'session' && owner !== null && useUiStore.getState().pendingSends[conversationRef] !== undefined) {
     useUiStore.getState().setPendingSend(conversationRef, null);
-    return null;
   }
   return kept;
 }

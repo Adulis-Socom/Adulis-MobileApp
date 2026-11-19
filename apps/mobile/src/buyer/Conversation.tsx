@@ -31,7 +31,7 @@ import type { ProductRef } from './MessageSellerButton';
 import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { candidatesFor, captureBaseline, type Baseline } from './pending-match';
-import { credentialTag, pendingRetention, restorePending, type PendingSendRecord } from './pending-policy';
+import { credentialTag, pendingRetention, peekPending, restorePending, type PendingSendRecord } from './pending-policy';
 import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
 import { judgeFailure, type SendStatus } from './send-intent';
@@ -125,8 +125,12 @@ function OwnedConversation({
   const conversations = useConversations();
   // An unconfirmed message kept from an earlier visit (pending-policy.ts), read once when this screen opens.
   const restored = useRef<PendingSendRecord | null | undefined>(undefined);
-  if (restored.current === undefined) restored.current = ref === null ? null : restorePending(ownerTag, ref, Date.now());
+  if (restored.current === undefined) restored.current = ref === null ? null : peekPending(ownerTag, ref, Date.now());
   const kept = restored.current;
+  // A kept message that cannot be used (another credential, past the cap) is dropped once the screen is on, never while it renders.
+  useEffect(() => {
+    if (kept === null && ref !== null) restorePending(ownerTag, ref, Date.now());
+  }, [kept, ref, ownerTag]);
   const [draft, setDraft] = useState(kept?.text ?? '');
   // failed: the server refused it; unknown: no answer (it may have been stored); sent: accepted.
   const [state, setState] = useState<SendStatus>(kept === null ? 'unsent' : 'unknown');
@@ -173,7 +177,11 @@ function OwnedConversation({
   const [context, setContext] = useState<ProductRef | null>(kept === null ? product : kept.product);
   // Keeps the unconfirmed message for the session, or drops it (pending-policy.ts; a no-op while the retention is off).
   const retain = (intent: NonNullable<typeof sendIntent.current> | null) => {
-    if (ownerTag === null || ref === null) return;
+    // The switch is read here too, not only where the owner tag is made: two independent guards while it is off.
+    if (pendingRetention() !== 'session' || ownerTag === null || ref === null) return;
+    // A message is kept only while the session it belongs to is still the signed-in one (a press can be handled just
+    // as the session ends); dropping one is always allowed.
+    if (intent !== null && !api?.isCurrent()) return;
     useUiStore.getState().setPendingSend(
       ref,
       intent === null

@@ -1891,6 +1891,35 @@ describe('Account change while a conversation is open', () => {
       expect(afterSignOut().filter(naming(theirs.id))).toEqual([]);
     });
 
+    // A press can be handled by the screen as it was rendered just before the session ended: that handler must
+    // not write the message into the store the sign-out has just emptied.
+    it('a Send handled just after the credential was cleared keeps nothing', async () => {
+      const { theirs } = accounts();
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${theirs.id}` });
+      await screen.findByText('First Account private reply');
+      await fireEvent.changeText(composer(), 'Handled too late');
+      // The handler of the screen as it is rendered now, kept across the end of the session: found where a press
+      // finds it, on the fibers above the button's host element.
+      type FiberLike = { memoizedProps: { onPress?: unknown } | null; return: { type: unknown } & FiberLike | null };
+      let fiber = (sendButton() as unknown as { unstable_fiber: FiberLike | null }).unstable_fiber;
+      while (fiber !== null && typeof fiber.memoizedProps?.onPress !== 'function') {
+        fiber = fiber.return !== null && typeof fiber.return.type !== 'string' ? fiber.return : null;
+      }
+      const handleSend = fiber?.memoizedProps?.onPress as (() => void) | undefined;
+      expect(handleSend).toBeInstanceOf(Function);
+      api.onPattern('GET', MESSAGES, () => problem(401, 'SESSION_EXPIRED', 'auth'));
+      await act(async () => {
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+        await jest.advanceTimersByTimeAsync(50);
+      });
+      // The session really ended (the credential is gone from the device) before the old handler runs.
+      await waitFor(() => expect(memory.get(TOKEN_KEY)).toBeUndefined());
+      await act(async () => handleSend?.());
+      await quiet();
+      expect(useUiStore.getState().pendingSends).toEqual({});
+      expect(sends()).toHaveLength(0);
+    });
+
     it('a failure that lands after the Account switched is not kept', async () => {
       const { theirs } = accounts();
       const { gate, release } = held();
@@ -2793,6 +2822,23 @@ describe('Message send reconciliation', () => {
       expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
       expect(composer().props.value).toBe('');
       expect(stored(chat, 'Given up')).toHaveLength(1);
+    });
+  });
+
+  // The default keeps nothing: pinned as an effect (what the store holds), not only as a constant.
+  describe('with the retention off (the default)', () => {
+    it('an unconfirmed message is not kept when the screen is left: the store holds nothing, and coming back finds nothing', async () => {
+      const { chat, c } = await open();
+      idempotent(chat, [{ lose: gatewayPage }]);
+      await typeAndSend('Not for the store');
+      await maybe();
+      expect(useUiStore.getState().pendingSends).toEqual({});
+      await act(() => router.replace('/messages'));
+      await act(() => router.push(`/chat/${c.id}`));
+      expect(await screen.findByText('Not for the store')).toBeOnTheScreen();
+      expect(composer().props.value).toBe('');
+      expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+      expect(useUiStore.getState().pendingSends).toEqual({});
     });
   });
 

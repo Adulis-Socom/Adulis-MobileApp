@@ -11,6 +11,7 @@ import {
   PENDING_CAP_MS,
   configurePendingRetention,
   credentialTag,
+  peekPending,
   pendingRetention,
   restorePending,
   type PendingSendRecord,
@@ -79,6 +80,40 @@ describe('what is restored', () => {
   });
 });
 
+// Reading a kept message happens while the screen renders: it must change nothing. Dropping an unusable one is
+// restorePending's job, called once the screen is on.
+describe('reading a kept message', () => {
+  beforeEach(() => {
+    configurePendingRetention('session');
+    useUiStore.getState().clearPendingSends();
+  });
+  afterEach(() => {
+    configurePendingRetention('none');
+    useUiStore.getState().clearPendingSends();
+  });
+
+  it('gives back the usable record and changes nothing', () => {
+    const kept = record(credentialTag('token-a'));
+    useUiStore.getState().setPendingSend(REF, kept);
+    expect(peekPending(credentialTag('token-a'), REF, kept.startedAt + 1000)).toEqual(kept);
+    expect(useUiStore.getState().pendingSends).toEqual({ [REF]: kept });
+  });
+
+  it('gives back nothing for another credential or past the cap, and leaves the record where it is', () => {
+    const kept = record(credentialTag('token-a'));
+    useUiStore.getState().setPendingSend(REF, kept);
+    expect(peekPending(credentialTag('token-b'), REF, kept.startedAt + 1000)).toBeNull();
+    expect(peekPending(credentialTag('token-a'), REF, kept.startedAt + PENDING_CAP_MS)).toBeNull();
+    expect(useUiStore.getState().pendingSends).toEqual({ [REF]: kept });
+  });
+
+  it('gives back nothing while the retention is off', () => {
+    useUiStore.getState().setPendingSend(REF, record(credentialTag('token-a')));
+    configurePendingRetention('none');
+    expect(peekPending(credentialTag('token-a'), REF, 1_000_001)).toBeNull();
+  });
+});
+
 describe('the credential tag', () => {
   it('is stable, differs between credentials, and does not contain the credential', () => {
     const token = 'Fake_credential_for_tests_0123456789abcdefg';
@@ -106,6 +141,21 @@ describe('the sign-out boundary', () => {
     writeRegistrationKey: async (key) => void entries.set('key', key),
     clearRegistrationKey: async () => void entries.delete('key'),
   };
+
+  it('forgets every kept message when another credential signs in over the live session, and keeps them for the same one', async () => {
+    useUiStore.getState().setPendingSend(REF, record(credentialTag('opaque-token')));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    await render(
+      <AppProviders queryClient={queryClient} sessionStorage={storage} deviceStorage={deviceStorage}>
+        <Probe />
+      </AppProviders>,
+    );
+    expect(await screen.findByText('signedIn')).toBeOnTheScreen();
+    await act(() => session!.signIn('opaque-token'));
+    expect(Object.keys(useUiStore.getState().pendingSends)).toHaveLength(1);
+    await act(() => session!.signIn('another-token'));
+    expect(useUiStore.getState().pendingSends).toEqual({});
+  });
 
   it('forgets every kept message with the credential and the cache', async () => {
     useUiStore.getState().setPendingSend(REF, record(credentialTag('opaque-token')));
