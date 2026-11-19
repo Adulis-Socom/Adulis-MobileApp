@@ -14,6 +14,7 @@ import { useT } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
 import { useTheme } from '../theme/theme';
 import { useSaveToggle } from './saved';
+import { outcomeUnknown } from './saved-write';
 
 /**
  * Save and Add to collection (WO-009 S15; ADU-SRC-01 v3.2 S21). Signed in: Save puts the target
@@ -53,6 +54,8 @@ function SignedInSave({ target, surface, sceneRef }: { target: SaveTarget; surfa
     }, [refetch]),
   );
   const failure = save.error ?? (save.state.status === 'error' ? save.state.error : null);
+  // A failed read asked for no change, so it never says one was not made; an unknown outcome says it was not confirmed.
+  const lead = t(save.error ? (outcomeUnknown(save.error) ? 'buyer.save.unconfirmed' : 'buyer.save.failed') : 'buyer.save.check_failed');
   return (
     <View style={{ gap: theme.space.sm }} testID="save-controls">
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
@@ -80,7 +83,7 @@ function SignedInSave({ target, surface, sceneRef }: { target: SaveTarget; surfa
       </View>
       {failure ? (
         <View style={{ gap: theme.space.xs }}>
-          <AlertText>{`${t('buyer.save.failed')} ${failureMessage(t, failure)}`}</AlertText>
+          <AlertText>{`${lead} ${failureMessage(t, failure)}`}</AlertText>
           {save.state.status === 'error' ? <Button label={t('common.retry')} variant="secondary" onPress={() => void refetch()} /> : null}
         </View>
       ) : null}

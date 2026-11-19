@@ -138,15 +138,17 @@ const clampWait = (seconds: number) => Math.min(Math.max(Math.ceil(seconds), 0),
 /**
  * A Retry-After value as whole seconds, 0 to an hour: delta-seconds or an HTTP-date (the two forms
  * the header has in current use). Anything else is ignored, never guessed: a loose date parser would
- * read "1.5" as a day in 2001.
+ * read "1.5" as a day in 2001. A date is the server's own time: it is measured against `serverNow`
+ * (the Date of the same answer, when it had a readable one), and only otherwise against `now`, the
+ * device's clock, which can be hours off.
  */
-export function parseRetryAfter(value: string | null, now = Date.now()): number | null {
+export function parseRetryAfter(value: string | null, now = Date.now(), serverNow: number | null = null): number | null {
   const v = value?.trim() ?? '';
   // Any run of digits: a huge value is clamped (Number() of a very long string is Infinity, clamped too).
   if (/^\d+$/.test(v)) return clampWait(Number(v));
   if (!HTTP_DATE.test(v)) return null;
   const at = Date.parse(v);
-  return Number.isNaN(at) ? null : clampWait((at - now) / 1000);
+  return Number.isNaN(at) ? null : clampWait((at - (serverNow ?? now)) / 1000);
 }
 
 /** How long to wait before another attempt, from a failed answer's Retry-After; null when none was given. */
@@ -161,8 +163,10 @@ export function retryAfterMs(error: unknown): number | null {
 /** The header first (it is what an intermediary can set), else the API's own slot. */
 function waitAsked(res: Response, problem: Problem | null): { retryAfterSeconds?: number } {
   const slot = problem?.slots?.retry_after_seconds;
+  const stamp = Date.parse(res.headers.get('Date') ?? '');
   const seconds =
-    parseRetryAfter(res.headers.get('Retry-After')) ?? (typeof slot === 'number' && Number.isFinite(slot) ? clampWait(slot) : null);
+    parseRetryAfter(res.headers.get('Retry-After'), Date.now(), Number.isNaN(stamp) ? null : stamp) ??
+    (typeof slot === 'number' && Number.isFinite(slot) ? clampWait(slot) : null);
   return seconds === null ? {} : { retryAfterSeconds: seconds };
 }
 

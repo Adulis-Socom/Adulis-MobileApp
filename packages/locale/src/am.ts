@@ -109,7 +109,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   // request
   'error.request.validation_failed': 'ጥያቄው ትክክል አይደለም።',
   'error.request.idempotency_key_missing': 'ጥያቄው የድጋሚ ሙከራ ቁልፉ ይጎድለዋል።',
-  'error.request.idempotency_key_reused': 'ይህ የድጋሚ ሙከራ ቁልፍ ለሌላ ጥያቄ አስቀድሞ ተጠቅሟል።',
+  // Changed with its English: still a placeholder awaiting the human pass.
+  'error.request.idempotency_key_reused': 'ይህን ጥያቄ በአስተማማኝ ሁኔታ መድገም አልተቻለም። እንደገና ከመሞከርዎ በፊት የሚታየውን ያረጋግጡ።',
   'error.request.rate_limited': 'በጣም ብዙ ጥያቄዎች። በ{retry_after_seconds} ሰከንድ ውስጥ እንደገና ይሞክሩ።',
   'error.request.client_upgrade_required': 'ለመቀጠል መተግበሪያውን ያዘምኑ።',
   'error.request.payload_too_large': 'ጥያቄው በጣም ትልቅ ነው።',
@@ -166,6 +167,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   // WO-002 Buyer shell: machine-translation placeholders, listed in MT-KEYS.md
   // and awaiting the human pass. The app shows Amharic in development builds only.
   'common.loading': 'በመጫን ላይ',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'common.wait': 'እባክዎ ይጠብቁ። በ{retry_after_seconds} ሰከንድ ውስጥ እንደገና መሞከር ይችላሉ።',
   'buyer.wordmark': 'Adulis',
   'buyer.tab.home': 'መነሻ',
   'buyer.tab.shop': 'ሱቅ',
@@ -223,6 +226,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.product.description': 'መግለጫ',
   'buyer.product.options': 'አማራጮች',
   'buyer.product.option': '{option}፣ {price}፣ {availability}',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.product.option_dropped': 'የመረጡት አማራጭ የማይገኝ ስለሆነ ከአሁን በኋላ አልተመረጠም። እባክዎ አማራጭ እንደገና ይምረጡ።',
   'buyer.product.details': 'የምርት ዝርዝሮች',
   'buyer.product.attribute': '{name}፦ {value}',
   'buyer.seller.title': 'ሻጭ',
@@ -241,6 +246,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.seller.trust.TRUSTED': 'የታመነ',
   'buyer.seller.handoffs': 'የተጠናቀቁ ርክክቦች፦ {count}',
   'buyer.seller.rating': 'የሻጭ አገልግሎት፦ ከ{count} ግምገማዎች {average} ከ5',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.seller.rating_one': 'የሻጭ አገልግሎት፦ ከ1 ግምገማ {average} ከ5',
   'buyer.seller.no_reviews': 'እስካሁን ምንም ግምገማ የለም',
   'buyer.seller.scenes.empty': 'አሁን የሚታዩ ትዕይንቶች የሉም።',
   'buyer.seller.scenes.loading': 'ትዕይንቶችን በመጫን ላይ',
@@ -249,7 +256,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.seller.products.loading': 'ምርቶችን በመጫን ላይ',
   'buyer.seller.reviews.empty': 'እስካሁን ምንም ግምገማ የለም።',
   'buyer.seller.reviews.loading': 'ግምገማዎችን በመጫን ላይ',
-  'buyer.seller.reviews.note': 'ግምገማዎች የሻጩን አገልግሎት ይገመግማሉ። የምርት ጥራት በእያንዳንዱ ምርት ላይ ይታያል።',
+  // The second sentence was dropped with the English one (it said a Product shows its quality, which is not so).
+  'buyer.seller.reviews.note': 'ግምገማዎች የሻጩን አገልግሎት ይገመግማሉ።',
   'buyer.seller.about.description': 'ስለዚህ ሻጭ',
   'buyer.seller.about.open': 'አሁን ክፍት ነው',
   'buyer.seller.about.closed': 'አሁን ዝግ ነው',
@@ -273,12 +281,16 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.search.clear': 'ፍለጋውን አጽዳ',
   'buyer.search.hint': 'በገበያዎ ውስጥ ምርቶችን፣ ሻጮችን እና ትዕይንቶችን ያግኙ።',
   'buyer.search.too_short': 'ለመፈለግ ቢያንስ 2 ፊደሎችን ይተይቡ።',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.search.no_terms': 'ለመፈለግ ፊደሎችን ወይም ቁጥሮችን ይጠቀሙ።',
   'buyer.search.tabs': 'የውጤት አይነቶች',
   'buyer.search.tab.top': 'ዋና',
   'buyer.search.tab.products': 'ምርቶች',
   'buyer.search.tab.scenes': 'ትዕይንቶች',
   'buyer.search.tab.sellers': 'ሻጮች',
   'buyer.search.results': 'የፍለጋ ውጤቶች',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.search.order': 'ከፍለጋዎ ጋር በጣም የሚቀራረቡት መጀመሪያ',
   'buyer.search.loading': 'በመፈለግ ላይ',
   'buyer.search.empty': 'ለ"{query}" ምንም ውጤት የለም።',
   'buyer.search.no_market': 'ፍለጋው ገበያዎን ማግኘት አልቻለም። እንደገና ይሞክሩ።',
@@ -335,11 +347,19 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.not_sent': 'መልእክትዎ አልተላከም። አሁንም ከታች ባለው ሳጥን ውስጥ አለ። እንደገና ይሞክሩ።',
   'buyer.chat.maybe_not_sent':
     'መልእክትዎ አስቀድሞ ደርሶ ሊሆን ይችላል። እንደገና መሞከር ያንኑ መልእክት ያረጋግጣል፣ ስለዚህ ሁለት ጊዜ አይላክም። ማስተካከል አዲስ መልእክት ይፈጥራል፣ ይህም ሁለት ጊዜ ሊደርስ ይችላል።',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.chat.cannot_confirm':
+    'ይህ መልእክት አስቀድሞ ደርሶ ሊሆን ይችላል፣ ነገር ግን መተግበሪያው ከአሁን በኋላ ማረጋገጥ አይችልም። እንደገና ከመጻፍዎ በፊት ከላይ ያለውን ውይይት ያረጋግጡ።',
+  'buyer.chat.appears_received': 'ይህን ጽሑፍ የያዘ መልእክት አሁን በውይይቱ ውስጥ ይታያል። የጻፉት መልእክት ሊሆን ይችላል።',
   'buyer.chat.too_long': 'አንድ መልእክት እስከ {max} ቁምፊዎች ሊሆን ይችላል።',
   'buyer.chat.connected_only': 'መልእክቶች የሚላኩት በተገናኙ ጂዜ ብቻ ነው። አዲስ መልእክቶች ሲያድሱ እና ይህ ውይይት ሲካፈት በየ 30 ሰከንዶች ይታያሉ።',
   'buyer.chat.ask_seller': 'ሻጉን ይጠይቁ',
   'buyer.chat.ask_seller_hint': 'ጥያቄዎን ከራስ-ሰር ረዳቱ ወደ ሻጉ ያስተላልፋል። ሻጉ ሲችል እዚህ ይመልሳል።',
   'buyer.chat.ask_failed': 'ጥያቄዎን ለሻጉ ማስተላለፍ አልተቻለም። እንደገና ይሞክሩ።',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.chat.ask_unconfirmed':
+    'ጥያቄዎ ለሻጩ መተላለፉን ማረጋገጥ አልተቻለም። እንደገና ከመጠየቅዎ በፊት ከላይ ያለውን ውይይት ያረጋግጡ።',
+  'buyer.chat.ask_passed_on': 'ጥያቄዎ ለሻጩ ተላልፏል።',
 
   // WO-014 Product-context messaging: machine-translation placeholders awaiting the human pass.
   'buyer.chat.ask_about_product': 'ስለዚህ ምርት ሻጉን ይጠይቁ',
@@ -351,6 +371,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.chat.context_unchecked': 'ይህን ምርት መፈተሽ አልተቻለም። ግንኝነትዎን ያረጋግጡ እና እንደገና ይሞክሩ።',
   'buyer.chat.context_remove': 'ምርቱን አስወግድ',
   'buyer.chat.edit_unconfirmed': 'ይልቁንም መልእክቱን አርትዕ',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.chat.discard_unconfirmed': 'መልእክቱን አጽዳ',
   // WO-015 in-conversation Product selector: machine-translation placeholders awaiting the human pass.
   'buyer.chat.select_product': 'ምርት ይምረጡ',
   'buyer.chat.change_product': 'ሌላ ምርት ይምረጡ',
@@ -414,6 +436,9 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.save.removed_from': 'ከ{name} ተወግዷል።',
   'buyer.save.sign_in': 'ምርቶችን እና ትዕይንቶችን ወደ የግል ስብስቦችዎ ለማስቀመጥ ይግቡ።',
   'buyer.save.failed': 'የተቀመጡት አልተቀየሩም።',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.save.unconfirmed': 'ይህ ለውጥ መደረጉን ማረጋገጥ አልተቻለም።',
+  'buyer.save.check_failed': 'ይህ መቀመጡን መፈተሽ አልተቻለም።',
   'buyer.save.picker_title': 'ወደ ስብስብ አስቀምጥ',
   'buyer.save.target_gone': 'ይህን ንጥል ከአሁን በኋላ ማስቀመጥ አይቻልም።',
   'buyer.save.done': 'ተጠናቅቋል',

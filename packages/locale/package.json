@@ -10,7 +10,7 @@
   "exports": { ".": "./src/index.ts", "./mobile": "./src/mobile.ts" },
   "scripts": {
     "build": "echo \"@adulis/locale: consumed as TypeScript source\"",
-    "test": "tsc --noEmit -p tsconfig.test.json && node test/mobile-boundary.mjs && echo \"locale: catalogues complete, mobile catalogue isolated\"",
+    "test": "tsc --noEmit -p tsconfig.test.json && node test/mobile-boundary.mjs && node test/copy-claims.mjs && echo \"locale: catalogues complete, mobile catalogue isolated, Buyer copy claims held\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },

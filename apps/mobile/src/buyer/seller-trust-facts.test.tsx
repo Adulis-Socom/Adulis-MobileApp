@@ -150,6 +150,84 @@ describe('contact and storefront facts', () => {
   });
 });
 
+describe('a Seller whose store sells nothing', () => {
+  // Open by its weekly pattern (the server derives that from the hours alone) and with every method active.
+  const TRADING_FACTS = {
+    availability: { is_open: true, reason: 'SCHEDULE', note: null },
+    fulfilment_methods: ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY'] as Storefront['fulfilment_methods'],
+  };
+  const openAbout = async () => {
+    await open();
+    await fireEvent.press(screen.getByTestId('seller-tab-about'));
+    expect(await screen.findByText(/^On Adulis since /)).toBeOnTheScreen();
+  };
+  const aboutText = () => renderedText(screen.getByTestId('seller-about')).join(' | ');
+  const NOT_TRADING_CLAIMS = () => {
+    expect(screen.queryByText(en['buyer.seller.about.open'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.closed'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.fulfilment'])).not.toBeOnTheScreen();
+    for (const method of ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY'] as const) {
+      expect(screen.queryByText(en[`buyer.seller.about.fulfilment.${method}`])).not.toBeOnTheScreen();
+    }
+  };
+
+  it.each(['CLOSING', 'BILLING_SUSPENDED'] as const)(
+    '%s: About says neither that it is open nor closed nor how orders are received, names no status, and keeps the facts about the Seller',
+    async (status) => {
+      profile({ status, ...TRADING_FACTS });
+      await openAbout();
+      NOT_TRADING_CLAIMS();
+      expect(aboutText()).not.toMatch(/suspend|billing|closing|plan|tier|subscription/i);
+      expect(screen.getByText('Baskets woven in Addis Ababa.')).toBeOnTheScreen();
+      // The header and About both state it (the server's level, not a claim that the store trades).
+      expect(screen.getAllByText(`Trust level: ${en['buyer.seller.trust.ESTABLISHED']}`).length).toBeGreaterThan(0);
+    },
+  );
+
+  it('a status this version does not know is treated as not trading: nothing is claimed', async () => {
+    profile({ status: 'PAUSED' as never, ...TRADING_FACTS });
+    await openAbout();
+    NOT_TRADING_CLAIMS();
+  });
+
+  it('an active Seller that is open says open and lists its fulfilment methods', async () => {
+    profile({ status: 'ACTIVE', ...TRADING_FACTS });
+    await openAbout();
+    expect(screen.getByText(en['buyer.seller.about.open'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.closed'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
+    for (const method of ['BUYER_COLLECTION', 'SELLER_DELIVERY', 'COURIER_DELIVERY'] as const) {
+      expect(screen.getByText(en[`buyer.seller.about.fulfilment.${method}`])).toBeOnTheScreen();
+    }
+  });
+
+  it('an active Seller that is closed by its hours says closed, not open, and still lists its methods', async () => {
+    profile({ status: 'ACTIVE', ...TRADING_FACTS, availability: { is_open: false, reason: 'OUT_OF_HOURS', note: null } });
+    await openAbout();
+    expect(screen.getByText(en['buyer.seller.about.closed'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.open'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
+  });
+
+  it('an active Seller with no availability says neither open nor closed, and still lists its methods', async () => {
+    profile({ status: 'ACTIVE', ...TRADING_FACTS, availability: null });
+    await openAbout();
+    expect(screen.queryByText(en['buyer.seller.about.open'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.seller.about.closed'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.seller.about.fulfilment'])).toBeOnTheScreen();
+  });
+
+  it('a Seller that turns CLOSING at the next read stops saying it is open', async () => {
+    let n = 0;
+    api.on(HEADER, () => ok(storefront(HANDLE, { ...TRADING_FACTS, status: n++ === 0 ? 'ACTIVE' : 'CLOSING' })));
+    await openAbout();
+    expect(screen.getByText(en['buyer.seller.about.open'])).toBeOnTheScreen();
+    await act(() => (screen.getByTestId('seller-about').props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
+    await settle();
+    NOT_TRADING_CLAIMS();
+  });
+});
+
 describe('the states of the profile', () => {
   it('a slow read says it is loading, and shows neither a failure nor a gone message nor any tab', async () => {
     let release: (reply: Reply) => void = () => undefined;

@@ -2,7 +2,7 @@
 // throw a typed refusal unless every one of them PASSES. There is no override flag.
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHECKS, verify } from './identity.mjs';
+import { CHECKS, checkLabel, verify } from './identity.mjs';
 
 const ALL = Object.keys(CHECKS);
 export const REQUIRED = {
@@ -30,7 +30,7 @@ export class Refusal extends Refused {
   constructor(op, results) {
     const notPass = results.filter((r) => r.verdict !== 'PASS');
     super(
-      `refused ${op}: ${notPass.map((r) => `${r.id} ${CHECKS[r.id]} ${r.verdict}${r.detail ? ` (${r.detail})` : ''}`).join('; ')}`,
+      `refused ${op}: ${notPass.map((r) => `${r.id} ${checkLabel(r.id)} ${r.verdict}${r.detail ? ` (${r.detail})` : ''}`).join('; ')}`,
     );
     this.op = op;
     this.results = results;
