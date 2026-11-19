@@ -5,6 +5,7 @@
 // it was given. Nothing here touches Docker, a database, a device or a port.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,20 +19,33 @@ const winOnly =
     : { skip: 'the process table is read through PowerShell (Windows only)' };
 
 const HOLD = 'setInterval(() => {}, 1000)';
+// Every long-lived child carries this token as an extra argument, so that the cleanup below can tell its own
+// processes from any other process that was given the same number since.
+const TOKEN = `native-io-test-${randomBytes(8).toString('hex')}`;
 // a parent that starts one child of its own and prints the child's pid
-const PARENT = `const { spawn } = require('node:child_process'); const c = spawn(process.execPath, ['-e', ${JSON.stringify(HOLD)}], { stdio: 'ignore' }); console.log(c.pid); ${HOLD}`;
+const PARENT = `const { spawn } = require('node:child_process'); const c = spawn(process.execPath, ['-e', ${JSON.stringify(HOLD)}, ${JSON.stringify(TOKEN)}], { stdio: 'ignore' }); console.log(c.pid); ${HOLD}`;
 
-const pids = new Set();
+const handles = new Set(); // children this file spawned: stopped through the handle, only while it has not exited
+const pids = new Set(); // processes known by number only (a grandchild, a runner's or a spawner's child)
 const dirs = [];
 const realKill = process.kill;
-after(() => {
+const commandLineOf = async (pid) => {
+  if (process.platform === 'win32') return (await proc.info(pid)).commandLine;
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').replaceAll('\0', ' ');
+  } catch {
+    return null;
+  }
+};
+after(async () => {
   process.kill = realKill;
-  for (const p of pids)
-    try {
-      realKill(p);
-    } catch {
-      // already gone
-    }
+  for (const c of handles) if (c.exitCode === null && c.signalCode === null) c.kill();
+  // a number is signalled only while the process behind it still carries this file's token
+  for (const p of pids) {
+    if (!alive(p)) continue;
+    const cmd = await commandLineOf(p).catch(() => null);
+    if (cmd?.includes(TOKEN)) realKill(p);
+  }
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 });
 
@@ -58,23 +72,23 @@ const until = async (fn, ms = 10_000) => {
   return false;
 };
 const hold = () => {
-  const c = spawn(process.execPath, ['-e', HOLD], { stdio: 'ignore', windowsHide: true });
-  pids.add(c.pid);
+  const c = spawn(process.execPath, ['-e', HOLD, TOKEN], { stdio: 'ignore', windowsHide: true });
+  handles.add(c);
   return c;
 };
 /** A parent and its child, both running: { parent, child } pids. */
 const family = async () => {
-  const p = spawn(process.execPath, ['-e', PARENT], {
+  const p = spawn(process.execPath, ['-e', PARENT, TOKEN], {
     stdio: ['ignore', 'pipe', 'ignore'],
     windowsHide: true,
   });
-  pids.add(p.pid);
+  handles.add(p);
   const child = await new Promise((resolve, reject) => {
     p.stdout.once('data', (b) => resolve(Number(`${b}`.trim())));
     p.once('error', reject);
   });
   pids.add(child);
-  return { parent: p.pid, child };
+  return { parent: p.pid, child, handle: p };
 };
 
 test(
@@ -84,10 +98,25 @@ test(
     const { parent, child } = await family();
     const other = hold();
     assert.ok(alive(parent) && alive(child) && alive(other.pid));
-    await proc.killTree(parent);
+    await proc.killTree(parent, (await proc.info(parent)).createdAt);
     assert.ok(await until(() => !alive(parent) && !alive(child)), 'the tree is gone');
     assert.ok(alive(other.pid), 'a process that is not in the tree is still running');
-    realKill(other.pid);
+    other.kill();
+  },
+);
+
+test(
+  'killTree leaves a root alone whose creation time is not the one that was verified',
+  winOnly,
+  async () => {
+    const { parent, child, handle } = await family();
+    await proc.killTree(parent, '2001-01-01T00:00:00.0000000Z');
+    assert.ok(
+      alive(parent) && alive(child),
+      'nothing was stopped: the number is not the verified process',
+    );
+    handle.kill();
+    assert.ok(await until(() => !alive(parent)));
   },
 );
 
@@ -167,7 +196,7 @@ test('a Maestro process that cannot be started resolves with the error, it does 
 
 test('an abort stops the process this call started, and the promise resolves', async () => {
   const ac = new AbortController();
-  const m = mrun({ args: ['-e', HOLD], signal: ac.signal });
+  const m = mrun({ args: ['-e', HOLD, TOKEN], signal: ac.signal });
   await until(() => m.spawned.length === 1);
   const pid = m.spawned[0];
   assert.ok(alive(pid));
@@ -180,14 +209,14 @@ test('an abort stops the process this call started, and the promise resolves', a
 test('a signal that is aborted before the start still stops the process and resolves', async () => {
   const ac = new AbortController();
   ac.abort();
-  const m = mrun({ args: ['-e', HOLD], signal: ac.signal });
+  const m = mrun({ args: ['-e', HOLD, TOKEN], signal: ac.signal });
   const r = await m.p;
   assert.equal(r.aborted, true);
   assert.ok(await until(() => !alive(m.spawned[0])));
 });
 
 test('a timeout stops the process, is reported as a timeout, and the promise resolves', async () => {
-  const m = mrun({ args: ['-e', HOLD], timeout: 400 });
+  const m = mrun({ args: ['-e', HOLD, TOKEN], timeout: 400 });
   const r = await m.p;
   assert.deepEqual([r.timedOut, r.aborted, !!r.stuck], [true, false, false]);
   assert.ok(await until(() => !alive(m.spawned[0])), 'the process is gone');
@@ -197,7 +226,7 @@ test('a process that is still there after it was stopped resolves as stuck, with
   const ac = new AbortController();
   let target = null;
   const m = mrun({
-    args: ['-e', HOLD],
+    args: ['-e', HOLD, TOKEN],
     signal: ac.signal,
     hardMs: 300,
     onSpawn: (pid) => {
@@ -225,12 +254,32 @@ test('a process that is still there after it was stopped resolves as stuck, with
   assert.ok(await until(() => !alive(target)));
 });
 
-test('onSpawn that fails does not break the run', async () => {
-  const r = await mrun({
-    onSpawn: async () => {
+test('a record that fails stops the process and is reported; the promise still resolves', async () => {
+  const m = mrun({
+    args: ['-e', HOLD, TOKEN], // would run for ever if it were not stopped
+    onSpawn: async (pid) => {
+      pids.add(pid);
+      m.spawned.push(pid);
       throw new Error('record failed');
     },
+  });
+  const r = await m.p;
+  assert.equal(r.recordError.message, 'record failed');
+  assert.equal(r.stuck ?? false, false);
+  assert.ok(await until(() => !alive(m.spawned[0])), 'the process was stopped by its handle');
+});
+
+test('a slow record is waited for: the run does not end before the process is recorded', async () => {
+  const order = [];
+  const r = await mrun({
+    onSpawn: async () => {
+      await sleep(400); // the process has long exited by then
+      order.push('recorded');
+    },
   }).p;
+  order.push('ended');
+  assert.deepEqual(order, ['recorded', 'ended']);
+  assert.equal(r.recordError, null);
   assert.equal(r.status, 0);
 });
 
@@ -246,6 +295,7 @@ test('the Metro spawn returns the pid of a detached process that keeps running, 
       args: [
         '-e',
         `console.log('secret=' + (process.env.NATIVE_TEST_SECRET ?? 'none') + ' api=' + process.env.EXPO_PUBLIC_API_BASE_URL); ${HOLD}`,
+        TOKEN,
       ],
       cwd: dir,
       env: childEnv({ EXPO_PUBLIC_API_BASE_URL: 'http://localhost:57500' }),
@@ -317,7 +367,7 @@ const TREE = table([
 ]);
 
 /** Runs killTree over the given snapshots (the last one repeats); `fail` maps a pid to an error code. */
-async function killWith(tables, { root = 100, fail = {} } = {}) {
+async function killWith(tables, { root = 100, fail = {}, expected } = {}) {
   const kills = [];
   let i = 0;
   const snapshots = { table: async () => tables[Math.min(i++, tables.length - 1)] };
@@ -327,7 +377,7 @@ async function killWith(tables, { root = 100, fail = {} } = {}) {
     return true;
   };
   try {
-    await proc.killTree.call(snapshots, root);
+    await proc.killTree.call(snapshots, root, expected);
     return { kills, error: null };
   } catch (error) {
     return { kills, error };
@@ -356,9 +406,37 @@ test('a number that belongs to another process by the second snapshot is not sto
   assert.ok(!b.kills.includes(102), 'a process that has already ended is not signalled');
 });
 
+test('the root is stopped only if it is the process that was verified, and only processes seen in the first snapshot are stopped', async () => {
+  const verified = at(1);
+  const ok = await killWith([TREE], { expected: verified });
+  assert.deepEqual([...ok.kills].sort(), [100, 101, 102, 103]);
+  const other = await killWith([TREE], { expected: at(7) }); // the number now belongs to another process
+  assert.deepEqual(
+    [other.error, other.kills],
+    [null, []],
+    'nothing is signalled, not even a child',
+  );
+  const gone = await killWith([TREE.filter((r) => r.ProcessId !== 100)], { expected: verified });
+  assert.deepEqual(
+    [gone.error, gone.kills],
+    [null, []],
+    'a root that is in no snapshot is left alone',
+  );
+  const later = [...TREE, ...table([[104, 100, 5]])]; // a child that appears after the first snapshot
+  const born = await killWith([TREE, later], { expected: verified });
+  assert.ok(
+    !born.kills.includes(104),
+    'a process that was not in the first snapshot is not stopped',
+  );
+});
+
 test('a process that has already ended is not a failure; any other failure is thrown after the rest were tried', async () => {
   const empty = await killWith([[]], { fail: { 100: 'ESRCH' } });
-  assert.equal(empty.error, null, 'the root is gone: nothing to do');
+  assert.deepEqual(
+    [empty.error, empty.kills],
+    [null, []],
+    'the root is gone: nothing is signalled',
+  );
   const child = await killWith([TREE], { fail: { 102: 'ESRCH' } });
   assert.equal(child.error, null);
   const root = await killWith([TREE], { fail: { 100: 'EPERM' } });

@@ -204,7 +204,7 @@ export async function stopMetro(m, io, dir, { tries = 20, delayMs = 500 } = {}) 
     throw new Refused(
       `refused: process ${rec.pid} is not the Metro this run started (creation time or command line differ); it was not stopped`,
     );
-  await io.proc.killTree(rec.pid);
+  await io.proc.killTree(rec.pid, rec.createdAt);
   for (let i = 0; i < tries; i += 1) {
     const now = await io.proc.info(rec.pid);
     const gone = !now?.createdAt || now.createdAt !== rec.createdAt;

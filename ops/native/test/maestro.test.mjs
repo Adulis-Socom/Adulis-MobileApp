@@ -14,6 +14,7 @@ import {
   executeFlow,
   FlowRefused,
   locateMaestro,
+  MaestroUnrecorded,
   maestroArgv,
   maestroEnv,
   parseJunit,
@@ -505,4 +506,25 @@ test('a Maestro process that would not stop stays recorded, is never retried and
   assert.equal(r.ended.length, 0, 'the record of the process is kept for the next restore');
   assert.equal(res.attempts[0].stuck, true);
   assert.equal(r.ctx.budget.infra, 3, 'no budget was spent');
+});
+
+test('a Maestro process that could not be recorded in the lock stops the flow before any result is read, and is said', async () => {
+  const r = rig(async () => ({ status: 0, junit: junit() }));
+  r.ctx.maestroStarted = async () => {
+    throw new Error('the lock is gone');
+  };
+  await assert.rejects(
+    () => executeFlow(r.ctx, r.flow),
+    (e) =>
+      e instanceof MaestroUnrecorded &&
+      /the Maestro process 4321 could not be recorded in the session lock \(the lock is gone\); it was stopped/.test(
+        e.message,
+      ),
+  );
+  assert.equal(r.m.calls.length, 1, 'no retry');
+  assert.equal(r.ended.length, 0);
+  assert.ok(
+    !existsSync(join(r.dir, 'foundation-smoke', 'attempt-1', 'attempt.json')),
+    'no result was written',
+  );
 });

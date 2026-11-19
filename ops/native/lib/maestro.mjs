@@ -197,6 +197,10 @@ export async function runAttempt(ctx, flow, n) {
     log: join(out, 'maestro.log'),
     onSpawn: (pid) => ctx.maestroStarted?.(pid),
   });
+  if (res.recordError)
+    throw new MaestroUnrecorded(
+      `the Maestro process ${res.pid} could not be recorded in the session lock (${res.recordError.message}); ${res.stuck ? 'it was NOT stopped: stop it by hand' : 'it was stopped'}`,
+    );
   if (!res.stuck) await ctx.maestroEnded?.(); // a process that would not stop stays recorded in the lock
   const logcat = await ctx.adb(['logcat', '-d', '-v', 'threadtime', '-t', '20000']);
   const lc = ok(logcat) ? logcat.stdout : '';
@@ -237,6 +241,9 @@ export async function runAttempt(ctx, flow, n) {
 
 /** A flow file that is not the pinned one: the session stops, nothing is run, the device is restored. */
 export class FlowRefused extends Error {}
+
+/** A Maestro process that could not be recorded in the lock: the session stops and the device is restored. */
+export class MaestroUnrecorded extends Error {}
 
 /** The verdict a flow gets from its last attempt. */
 export const verdictOf = (kind) =>

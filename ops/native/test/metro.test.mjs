@@ -311,7 +311,7 @@ test('there is no stop by port in the Metro module', () => {
     !/Stop-Process|taskkill|killPort|listeners\([^)]*\)\s*\.\s*(forEach|map)/.test(src),
     'it stops by the recorded pid through io.proc.killTree only',
   );
-  assert.ok(/io\.proc\.killTree\(rec\.pid\)/.test(src));
+  assert.ok(/io\.proc\.killTree\(rec\.pid, rec\.createdAt\)/.test(src));
 });
 
 test('the tree of a verified pid is its children and theirs, never an unrelated process or a stale parent id', () => {

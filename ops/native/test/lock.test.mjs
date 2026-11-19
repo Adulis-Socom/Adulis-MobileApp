@@ -164,9 +164,9 @@ test('a session never starts over an orphan Maestro: it is refused and told how 
   assert.deepEqual(r.kills, []);
 });
 
-test('the Maestro process a session started is recorded in its lock by identity, and the record is cleared when it ended', async () => {
+test('the Maestro process a session started is recorded in its lock by identity, the record is cleared when it ended, and a record that cannot be made throws', async () => {
   const r = rig();
-  await recordMaestro(r.dir, r.io, 200); // no lock: nothing is written
+  await assert.rejects(recordMaestro(r.dir, r.io, 200), /session lock cannot be read/); // no lock
   assert.ok(!existsSync(file(r.dir)));
   await acquireLock(r.dir, r.io, 100);
   await recordMaestro(r.dir, r.io, 200);
@@ -175,7 +175,11 @@ test('the Maestro process a session started is recorded in its lock by identity,
     createdAt: 'c-100',
     maestro: MAESTRO,
   });
-  await recordMaestro(r.dir, r.io, 4242); // a process that cannot be identified is not recorded
+  // a process that cannot be identified is not recorded, and that is an error, not a silent skip
+  await assert.rejects(
+    recordMaestro(r.dir, r.io, 4242),
+    /could not be identified: it is not recorded/,
+  );
   assert.deepEqual(JSON.parse(readFileSync(file(r.dir), 'utf8')).maestro, MAESTRO);
   clearMaestro(r.dir);
   assert.deepEqual(JSON.parse(readFileSync(file(r.dir), 'utf8')), { pid: 100, createdAt: 'c-100' });

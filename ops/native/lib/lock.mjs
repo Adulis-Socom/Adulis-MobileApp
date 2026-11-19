@@ -171,12 +171,14 @@ function writeLock(dir, rec) {
   renameSync(tmp, join(dir, LOCK));
 }
 
-/** Records the Maestro process this session started, by identity, in the lock it holds. */
+/** Records the Maestro process this session started, by identity, in the lock it holds; throws if it cannot. */
 export async function recordMaestro(dir, io, pid) {
   const l = readLock(dir);
-  if (l.state !== 'ok') return;
+  if (l.state !== 'ok')
+    throw new Error('the session lock cannot be read: the Maestro process is not recorded');
   const info = await io.proc.info(pid);
-  if (!info?.createdAt) return;
+  if (!info?.createdAt)
+    throw new Error(`the Maestro process ${pid} could not be identified: it is not recorded`);
   writeLock(dir, {
     ...l.rec,
     maestro: { pid, createdAt: info.createdAt, commandLine: info.commandLine },

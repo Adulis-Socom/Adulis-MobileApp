@@ -63,11 +63,19 @@ export const proc = {
   // A process is stopped only if a second snapshot, taken just before, still shows the creation time the
   // first one did (a number given to another process in between is left alone). A process that is already
   // gone is not a failure; any other failure, the root's included, is thrown after the rest was tried.
-  async killTree(root) {
+  async killTree(root, expectedCreatedAt) {
     if (!Number.isInteger(root) || root <= 0) throw new Error('pid must be a positive integer');
     const first = await this.table();
-    const order = [...descendants(first, root).reverse(), root];
     const created = new Map(first.map((x) => [x.ProcessId, x.c]));
+    // Only processes seen in the first snapshot are stopped, and the root only if it is the process the
+    // caller verified (its creation time): a root that is gone, or whose number belongs to another process
+    // by now, is left alone.
+    if (
+      !created.has(root) ||
+      (expectedCreatedAt !== undefined && created.get(root) !== expectedCreatedAt)
+    )
+      return;
+    const order = [...descendants(first, root).reverse(), root];
     const now = new Map((await this.table()).map((x) => [x.ProcessId, x.c]));
     const failures = [];
     for (const pid of order) {
@@ -127,7 +135,7 @@ export const spawnMetro = ({ node, args, cwd, env, log }) => {
  * signal and the timeout stop the process this call started (by its pid, while it is running), nothing
  * else, and the promise ALWAYS resolves: a process that is still there `hardMs` after it was stopped
  * resolves it with `stuck: true` and an error (the caller records the orphan). `onSpawn(pid)` runs right
- * after the process started.
+ * after the process started and is waited for; if it fails, the process is stopped and `recordError` is set.
  */
 export const maestro = ({ file, args, cwd, env, timeout, signal, log, onSpawn, hardMs = 15_000 }) =>
   new Promise((resolve) => {
@@ -137,6 +145,7 @@ export const maestro = ({ file, args, cwd, env, timeout, signal, log, onSpawn, h
     closeSync(fd);
     let timedOut = false;
     let aborted = false;
+    let recordError = null;
     let closed = false;
     let settled = false;
     let hard = null;
@@ -150,7 +159,7 @@ export const maestro = ({ file, args, cwd, env, timeout, signal, log, onSpawn, h
       clearTimeout(timer);
       clearTimeout(hard);
       signal?.removeEventListener('abort', onAbort);
-      resolve({ pid: child.pid, timedOut, aborted, ...r });
+      resolve({ pid: child.pid, timedOut, aborted, recordError, ...r });
     };
     function stop() {
       const { pid } = child; // the pid of a process this call started, and only while it has not ended
@@ -180,11 +189,27 @@ export const maestro = ({ file, args, cwd, env, timeout, signal, log, onSpawn, h
       closed = true;
       finish({ status: null, error });
     });
-    child.on('close', (status) => {
+    // The caller records the process (its identity goes into the session lock) and the run does not end before
+    // that finished. A record that fails stops the process and is reported as `recordError`: a Maestro that
+    // nothing recorded is never left running unnoticed.
+    const recorded = child.pid
+      ? Promise.resolve()
+          .then(() => onSpawn?.(child.pid))
+          .then(
+            () => null,
+            (e) => e ?? new Error('the process could not be recorded'),
+          )
+      : Promise.resolve(null);
+    recorded.then((e) => {
+      if (!e) return;
+      recordError = e;
+      stop();
+    });
+    child.on('close', async (status) => {
       closed = true;
+      await recorded;
       finish({ status, error: null });
     });
-    if (child.pid) Promise.resolve(onSpawn?.(child.pid)).catch(() => {});
   });
 
 /** Like `run`, with stdout as a Buffer (a screenshot). */

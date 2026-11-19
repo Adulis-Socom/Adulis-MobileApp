@@ -260,8 +260,23 @@ export function fakeMaestro(script) {
   const maestro = async (opts) => {
     const idx = calls.length;
     calls.push(opts);
-    // the process started: the session records it (pid 4321 unless the script says otherwise)
-    await opts.onSpawn?.(4321);
+    // the process started: the session records it (pid 4321), and a record that fails stops it
+    const recordError = await Promise.resolve()
+      .then(() => opts.onSpawn?.(4321))
+      .then(
+        () => null,
+        (e) => e,
+      );
+    if (recordError)
+      return {
+        status: null,
+        error: null,
+        pid: 4321,
+        timedOut: false,
+        aborted: false,
+        stuck: false,
+        recordError,
+      };
     const r = (await script(idx, opts)) ?? {};
     const out = opts.args[opts.args.indexOf('--output') + 1];
     mkdirSync(dirname(out), { recursive: true });

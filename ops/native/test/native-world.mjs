@@ -62,6 +62,8 @@ export function nativeWorld(opts = {}) {
     };
   }
   w.proc.byPid[process.pid] = { createdAt: 'test-process-created', commandLine: 'node test' };
+  // the Maestro process of the doubles (fakeMaestro reports pid 4321): the session records it in its lock
+  w.proc.byPid[4321] = { createdAt: 'maestro-created', commandLine: 'java maestro.cli.AppKt' };
   writeManifest(dir, w.m);
 
   const base = makeIo(w);
