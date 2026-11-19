@@ -23,6 +23,7 @@ import {
   escalatableAnswer,
   isConversationRef,
   rereadAfter,
+  sendOutcome,
   useConversationMessages,
   useConversations,
 } from './chat';
@@ -137,13 +138,15 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const sending = useRef(false);
   const askingRef = useRef(false);
   // The idempotency intent is the WHOLE payload: text and Product (or none). `attempts` counts the requests
-  // sent under the key; `baseline` is what the history held before the first one (server values only).
+  // sent under the key; `unanswered` is set once one of them ended without an answer from the API (the server
+  // may still be running it); `baseline` is what the history held before the first one (server values only).
   const sendIntent = useRef<{
     text: string;
     productId: string | null;
     key: string;
     startedAt: number;
     attempts: number;
+    unanswered: boolean;
     baseline: Baseline;
   } | null>(null);
   // An unconfirmed message the person chose to edit: kept (this screen only) so that its words can still be
@@ -170,7 +173,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     gcTime: 0,
     retry: (failures, e) => isTransient(e) && failures < 2,
   });
-  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number; attempts: number } | null>(null);
+  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number; attempts: number; unanswered: boolean } | null>(null);
 
   // Unknown and the same message can no longer be replayed (a key conflict, or past its safe age): the
   // app cannot confirm the outcome and offers no Try sending again, so its sentence does not promise one.
@@ -287,6 +290,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     setState('unsent');
     setError(null);
     setNotFound(null);
+    // The hint above Send is only as fresh as the last read: look again now that the person decides.
+    void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
   };
   // After the person has seen the message in the conversation: empties the box and ends the retry. It
   // sends nothing and claims nothing; the message in the list is the server's own.
@@ -369,6 +374,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           key: newIdempotencyKey(),
           startedAt: Date.now(),
           attempts: 0,
+          unanswered: false,
           baseline: captureBaseline({ read: messages.data !== undefined, items: messages.items }),
         };
         setKeyLost(false);
@@ -386,7 +392,9 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       setRefusal(null);
       setKeyLost(false);
       setState('sent');
-      await Promise.all([
+      // The next message is a new one: the lock ends with the request, not with the re-read of the conversation
+      // after it (a slow or paused read would otherwise swallow the next press).
+      void Promise.all([
         qc.invalidateQueries({ queryKey: [MESSAGES, ref] }),
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
@@ -398,11 +406,14 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       const verdict = judgeFailure(failure, sendIntent.current, Date.now());
       const answered = verdict.outcome === 'failed';
       if (answered) sendIntent.current = null;
+      // An attempt the API did not answer may still be running on the server: a later refusal of the replay proves less.
+      else if (sendIntent.current !== null && sendOutcome(failure) === 'unknown') sendIntent.current.unanswered = true;
       if (!api.isCurrent()) return;
       setKeyLost(!answered && !verdict.replay);
       const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
       if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
-      if (problemCode(failure) === 'NOT_FOUND') {
+      const missing = problemCode(failure) === 'NOT_FOUND';
+      if (missing && answered) {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
         // each decides that (a 404 there shows "no longer available" / "not available").
         setNotFound(context !== null ? 'anchored' : 'plain');
@@ -410,6 +421,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         if (context !== null) void contextRead.refetch();
         void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
       } else {
+        // A 404 that is not the whole story (an earlier attempt may still be stored) must not say "not sent".
+        if (missing && context !== null) void contextRead.refetch();
         // While held, the wait sentence says it: not the same sentence twice.
         setError(wait !== null ? null : failureMessage(t, failure));
       }
@@ -432,7 +445,9 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const ask = async () => {
     if (!api || !answer || askingRef.current || hold !== null) return;
     askingRef.current = true;
-    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now(), attempts: 0 };
+    if (askIntent.current?.forMessage !== answer.id) {
+      askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now(), attempts: 0, unanswered: false };
+    }
     setAsking(true);
     setAskFailed(false);
     try {
@@ -455,6 +470,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       // own 4xx rejection or when it can no longer be replayed. The conversation is read again either way.
       const verdict = judgeFailure(failure, askIntent.current, Date.now());
       if (verdict.outcome === 'failed' || !verdict.replay) askIntent.current = null;
+      else if (askIntent.current !== null && sendOutcome(failure) === 'unknown') askIntent.current.unanswered = true;
       if (api.isCurrent()) {
         const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
         if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);

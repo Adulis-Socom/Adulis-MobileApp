@@ -47,23 +47,26 @@ export type FailureJudgement = {
  * replay) some refusals say nothing about the first: a client that is too old, a recovery window, the
  * wrong audience or a missing session are raised before the server looks at its record, so a first
  * attempt that WAS stored would be reported "not sent". Only a refusal the same body would have met
- * the first time still proves nothing was stored.
+ * the first time still proves nothing was stored. A missing conversation or Product is raised after the
+ * server's record check, so on a replay it normally proves that too; not when an earlier attempt never got an
+ * answer (`unanswered`): the server may still be running it, and it can store the message after this refusal.
  */
 export function judgeFailure(
   failure: unknown,
-  intent: { startedAt: number; attempts?: number } | null,
+  intent: { startedAt: number; attempts?: number; unanswered?: boolean } | null,
   now: number,
 ): FailureJudgement {
   const holdMs = waitBeforeRetryMs(failure);
   if (keyConflict(failure)) return { outcome: 'unknown', replay: false, holdMs };
-  if (rejectedByApi(failure, intent?.attempts ?? 1)) return { outcome: 'failed', replay: false, holdMs };
+  if (rejectedByApi(failure, intent?.attempts ?? 1, intent?.unanswered === true)) return { outcome: 'failed', replay: false, holdMs };
   return { outcome: 'unknown', replay: intent !== null && keyUsable(intent, now), holdMs };
 }
 
 /** The API's own problem answer with a 4xx status other than a conflict (409) or a rate limit (429). */
-function rejectedByApi(failure: unknown, attempts: number): boolean {
+function rejectedByApi(failure: unknown, attempts: number, unanswered: boolean): boolean {
   if (!(failure instanceof ApiError) || failure.failure.kind !== 'problem' || sendOutcome(failure) !== 'refused') return false;
   const { status } = failure.failure;
   if (!(status >= 400 && status < 500 && status !== 409 && status !== 429)) return false;
-  return attempts < 2 || status === 400 || status === 404 || status === 413;
+  if (attempts < 2 || status === 400 || status === 413) return true;
+  return status === 404 && !unanswered;
 }

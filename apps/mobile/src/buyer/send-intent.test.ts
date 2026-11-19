@@ -150,6 +150,37 @@ describe('judging a failed replay', () => {
     expect(judgeFailure(envelope(429, 'RATE_LIMITED', { retry_after_seconds: 30 }, 30), replay, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: 30_000 });
     expect(judgeFailure(envelope(500, 'INTERNAL'), replay, NOW)).toMatchObject({ outcome: 'unknown', replay: true });
   });
+
+  /**
+   * A missing conversation or Product is raised inside the server's handler, after its record check, so on a
+   * replay it normally proves that nothing is stored under the key. The one exception is an earlier attempt that
+   * never got an answer: the server may still be running it, and it can store the message after this refusal.
+   */
+  describe('after an attempt that never got an answer', () => {
+    const silent = { startedAt: NOW - 1000, attempts: 2, unanswered: true };
+
+    it('a missing conversation on a replay is unknown, and the same key is kept', () => {
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), silent, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
+    });
+
+    it('a validation refusal and a body over the limit are still the API\'s own rejection (the same body failed the same way before anything was stored)', () => {
+      expect(judgeFailure(envelope(400, 'VALIDATION_FAILED'), silent, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+      expect(judgeFailure(envelope(413, 'PAYLOAD_TOO_LARGE'), silent, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    });
+
+    it('a missing conversation after attempts that were all answered is still the API\'s own rejection', () => {
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, unanswered: false }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), replay, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    });
+
+    it('the first attempt is never affected: its own 404 stored nothing', () => {
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { startedAt: NOW - 1000, attempts: 1, unanswered: true }, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+    });
+
+    it('a key too old to replay stays withdrawn: unknown without a replay', () => {
+      expect(judgeFailure(envelope(404, 'NOT_FOUND'), { ...silent, startedAt: NOW - KEY_SAFE_MS }, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
+    });
+  });
 });
 
 describe('the shared rules', () => {

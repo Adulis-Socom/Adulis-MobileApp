@@ -2039,6 +2039,102 @@ describe('Message send reconciliation', () => {
     expect(sends()).toHaveLength(1);
   });
 
+  // A missing conversation is raised inside the server's handler, after its record check, so on a replay it
+  // normally proves that nothing is stored under the key. Not when the first attempt never got an answer: the
+  // server may still be running it, and it stores the message after the refusal.
+  it('a 404 on the replay while the first attempt never got an answer is not "not sent": that attempt is still running on the server and stores the message afterwards', async () => {
+    const { chat } = await open();
+    const server = idempotent(chat, [{ commitAfterMs: 15_000 }, { refuse: problem(404, 'NOT_FOUND', 'request') }]);
+    await typeAndSend('Slow, then a 404');
+    await advance(10_000);
+    expect(await maybe()).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.sending'])).toBeNull());
+    // The replay got there before the first attempt committed, and was refused: the outcome is still unknown.
+    expect(stored(chat, 'Slow, then a 404')).toHaveLength(0);
+    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_found_plain'])).toBeNull();
+    expect(screen.queryByText(en['buyer.chat.not_sent'])).toBeNull();
+    expect(composer().props.editable).toBe(false);
+    // The first attempt commits; the message appears, and the same key still settles it with one message.
+    await advance(30_000);
+    expect(stored(chat, 'Slow, then a 404')).toHaveLength(1);
+    expect(await screen.findByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull());
+    expect(sends()).toHaveLength(3);
+    expect(new Set(keys()).size).toBe(1);
+    expect(server.replays()).toBe(1);
+    expect(stored(chat, 'Slow, then a 404')).toHaveLength(1);
+  });
+
+  it.each([
+    ['a lost connection', 'offline' as Reply],
+    ['a gateway page', gatewayPage],
+  ])('a 404 on the replay after %s on the first attempt is unknown too: the box stays frozen and the same key is kept', async (_name, first) => {
+    const { chat } = await open();
+    idempotent(chat, [{ refuse: first }, { refuse: problem(404, 'NOT_FOUND', 'request') }]);
+    await typeAndSend('Unanswered, then a 404');
+    await maybe();
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByText(en['buyer.chat.sending'])).toBeNull());
+    expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.not_found_plain'])).toBeNull();
+    expect(composer().props.editable).toBe(false);
+    await fireEvent.press(retryButton());
+    await waitFor(() => expect(sends()).toHaveLength(3));
+    expect(new Set(keys()).size).toBe(1);
+  });
+
+  it('a 404 on the replay after a first attempt the API DID answer (its own 500) is still its own rejection: not sent, the words stay in the box, and the next Send is a new message', async () => {
+    const { chat } = await open();
+    idempotent(chat, [{ refuse: problem(500, 'INTERNAL', 'request') }, { refuse: problem(404, 'NOT_FOUND', 'request') }]);
+    await typeAndSend('Answered, then gone');
+    await maybe();
+    await fireEvent.press(retryButton());
+    expect(await screen.findByText(en['buyer.chat.not_found_plain'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.maybe_not_sent'])).toBeNull();
+    expect(composer().props.editable).toBe(true);
+    expect(composer().props.value).toBe('Answered, then gone');
+    await fireEvent.press(sendButton());
+    await waitFor(() => expect(sends()).toHaveLength(3));
+    expect(keys()[2]).not.toBe(keys()[0]);
+  });
+
+  // The person's next message is a new one: the lock is the request, not the re-read of the conversation after it.
+  it('after an accepted message the next one can be sent at once, while the conversation is still being read again', async () => {
+    const { chat, c } = await open();
+    idempotent(chat, []);
+    let slow = false;
+    api.onPattern('GET', MESSAGES_PATH, () => (slow ? 'hang' : { status: 200, body: { data: c.messages, next_cursor: null } }));
+    slow = true;
+    await typeAndSend('First of two');
+    await waitFor(() => expect(composer().props.value).toBe(''));
+    await typeAndSend('Second of two');
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(keys()[1]).not.toBe(keys()[0]);
+    expect(stored(chat, 'First of two')).toHaveLength(1);
+    expect(stored(chat, 'Second of two')).toHaveLength(1);
+  });
+
+  it('an accepted message, an unconfirmed one and one that appears in the conversation are never described as delivered, received or read', async () => {
+    const claim = /deliver|\bseen\b|\bread\b/i;
+    const { chat } = await open();
+    idempotent(chat, [undefined, { lose: gatewayPage }]);
+    await typeAndSend('Accepted words');
+    expect(await screen.findByText('Accepted words')).toBeOnTheScreen();
+    expect(screen.queryByText(claim)).toBeNull();
+    expect(screen.queryByText(/received/i)).toBeNull();
+    await typeAndSend('Unconfirmed words');
+    await maybe();
+    expect(await screen.findByText(en['buyer.chat.appears_received'])).toBeOnTheScreen();
+    expect(screen.queryByText(claim)).toBeNull();
+    // The one sentence that says "received" is the hedged one ("may already have been received").
+    expect(screen.getAllByText(/received/i).map((node) => node.props.children)).toEqual([en['buyer.chat.maybe_not_sent']]);
+  });
+
   // Changed: the API's own 429 used to be "not sent" with a new key after the wait. A rate limit is not a
   // rejection of the message, so it is unknown and the same key is used again after the wait.
   it("the API's own 429 with a wait: unknown, and the controls stay off until the wait is over; taps on the disabled control send nothing; then the same key is used again", async () => {
@@ -2412,6 +2508,26 @@ describe('Message send reconciliation', () => {
       expect(composer().props.value).toBe('');
     });
 
+    // The conversation is read every 30 seconds: without a read of its own, the hint above Send would be as old
+    // as the last one when the person decides what to do with the words.
+    it('Edit the message instead reads the conversation again, so the hint above Send is as current as the moment the person decides', async () => {
+      const { chat } = await open();
+      idempotent(chat, [{ commitAfterMs: 15_000 }]);
+      await typeAndSend('Late and edited');
+      await advance(10_000);
+      expect(await maybe()).toBeOnTheScreen();
+      // The server stores it after the last read of the conversation; the next scheduled read is 14 seconds away.
+      await advance(6_000);
+      expect(stored(chat, 'Late and edited')).toHaveLength(1);
+      noHint();
+      const before = histories();
+      await fireEvent.press(edit());
+      expect(await appears()).toBeOnTheScreen();
+      expect(histories()).toBeGreaterThan(before);
+      expect(composer().props.value).toBe('Late and edited');
+      expect(sends()).toHaveLength(1);
+    });
+
     it('two rows that could be the message still make one sentence', async () => {
       const { chat, c } = await open();
       idempotent(chat, [{ lose: gatewayPage }]);
@@ -2670,6 +2786,35 @@ describe('Message send reconciliation', () => {
       expect(escalations(chat)).toHaveLength(1);
     });
 
+    it('a 404 on the second try after an attempt that never got an answer is unconfirmed, not refused: the same key is kept', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: 'offline' }, { refuse: problem(404, 'NOT_FOUND', 'request') }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
+      await fireEvent.press(ask());
+      await waitFor(() => expect(escalateCalls()).toHaveLength(2));
+      await waitFor(() => expect(ask()).toBeEnabled());
+      expect(screen.queryByText(en['buyer.chat.ask_failed'])).toBeNull();
+      expect(screen.getByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(new Set(keys(escalateCalls())).size).toBe(1);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
+    it('a 404 on the second try after an attempt the API DID answer is its own refusal: the key ends', async () => {
+      const chat = await openAnswered();
+      idempotentEscalate(chat, [{ refuse: problem(500, 'INTERNAL', 'request') }, { refuse: problem(404, 'NOT_FOUND', 'request') }]);
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_unconfirmed'])).toBeOnTheScreen();
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['buyer.chat.ask_failed'])).toBeOnTheScreen();
+      await fireEvent.press(ask());
+      expect(await screen.findByText(en['chat.bot.escalated'])).toBeOnTheScreen();
+      expect(keys(escalateCalls())[2]).not.toBe(keys(escalateCalls())[0]);
+      expect(escalations(chat)).toHaveLength(1);
+    });
+
     it('a 200 that does not confirm the escalation is not taken as done: it is unconfirmed, and the same key is used again', async () => {
       const chat = await openAnswered();
       idempotentEscalate(chat, [{ refuse: { status: 200, body: {} } }]);
@@ -2894,7 +3039,12 @@ describe('Message send reconciliation', () => {
       expect(String(value)).not.toContain('Before the restart');
       expect(String(value)).not.toContain(key);
     }
+    // The secure storage holds only the session and the install's identity, each under its own key.
+    const ownKeys = () => [...memory.keys()].every((entry) => /^adulis\.(session|device)\./.test(entry));
+    expect(ownKeys()).toBe(true);
     screen.unmount();
+    // A restart also starts every in-memory store from scratch; only the secure storage carries over.
+    useUiStore.setState(useUiStore.getInitialState(), true);
     await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
     expect(await screen.findByText('Before the restart')).toBeOnTheScreen();
     expect(composer().props.value).toBe('');
@@ -2903,5 +3053,6 @@ describe('Message send reconciliation', () => {
     // The server's message is shown once and nothing was sent by the restart.
     expect(screen.getAllByText('Before the restart')).toHaveLength(1);
     expect(sends()).toHaveLength(1);
+    expect(ownKeys()).toBe(true);
   });
 });
