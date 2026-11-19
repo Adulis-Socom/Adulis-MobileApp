@@ -69,7 +69,10 @@ export function createIntentStore(): IntentStore {
       const before = current(scope, input.variantId)?.state ?? IDLE;
       if (before.kind === 'UNRESOLVED') return { state: before, result: 'ignored' };
       if (isPending(before) && 'intent' in before) {
-        return { state: before, result: before.intent.quantity === input.quantity ? 'same' : 'ignored' };
+        return {
+          state: before,
+          result: before.intent.quantity === input.quantity ? 'same' : 'ignored',
+        };
       }
       // The key is made here, once, and only for an add that is really new.
       const after = reduceAdd(before, {

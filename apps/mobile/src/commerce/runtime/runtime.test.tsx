@@ -69,7 +69,11 @@ describe('the owner of the session scope', () => {
     const runtime = createRuntime();
     runtime.observe(account('a'));
     const scope = runtime.scope!;
-    runtime.intents.begin(scope, { variantId: V1, quantity: 1 }, { now: 1, online: true, mintKey: () => 'key-a' });
+    runtime.intents.begin(
+      scope,
+      { variantId: V1, quantity: 1 },
+      { now: 1, online: true, mintKey: () => 'key-a' },
+    );
     expect(runtime.intents.read(scope, V1).kind).toBe('SENDING');
     runtime.observe(account('b'));
     expect(runtime.intents.read(runtime.scope!, V1).kind).toBe('IDLE');
@@ -82,13 +86,21 @@ describe('which adapter is served', () => {
 
   it('serves a fixture adapter only when the build allows fixtures AND this is a development run', () => {
     expect(resolveAdapter({ requested: fixture, build: 'fixture', dev: true })).toBe(fixture);
-    expect(resolveAdapter({ requested: fixture, build: 'fixture', dev: false })).toBe(disabledCartAdapter);
-    expect(resolveAdapter({ requested: fixture, build: 'disabled', dev: true })).toBe(disabledCartAdapter);
-    expect(resolveAdapter({ requested: fixture, build: 'disabled', dev: false })).toBe(disabledCartAdapter);
+    expect(resolveAdapter({ requested: fixture, build: 'fixture', dev: false })).toBe(
+      disabledCartAdapter,
+    );
+    expect(resolveAdapter({ requested: fixture, build: 'disabled', dev: true })).toBe(
+      disabledCartAdapter,
+    );
+    expect(resolveAdapter({ requested: fixture, build: 'disabled', dev: false })).toBe(
+      disabledCartAdapter,
+    );
   });
 
   it('serves a non-fixture adapter as it is', () => {
-    expect(resolveAdapter({ requested: disabledCartAdapter, build: 'disabled', dev: false })).toBe(disabledCartAdapter);
+    expect(resolveAdapter({ requested: disabledCartAdapter, build: 'disabled', dev: false })).toBe(
+      disabledCartAdapter,
+    );
   });
 
   it('ships with the disabled mode', () => {
@@ -107,12 +119,20 @@ describe('the commerce provider', () => {
   });
 
   it('serves a fixture adapter when a test provider allows it', async () => {
-    await renderWithCommerce(<Mode />, { adapter: stubAdapter().adapter, build: 'fixture', dev: true });
+    await renderWithCommerce(<Mode />, {
+      adapter: stubAdapter().adapter,
+      build: 'fixture',
+      dev: true,
+    });
     expect(screen.getByTestId('mode')).toHaveTextContent('fixture');
   });
 
   it('serves the disabled adapter to a fixture request in a release run', async () => {
-    await renderWithCommerce(<Mode />, { adapter: stubAdapter().adapter, build: 'fixture', dev: false });
+    await renderWithCommerce(<Mode />, {
+      adapter: stubAdapter().adapter,
+      build: 'fixture',
+      dev: false,
+    });
     expect(screen.getByTestId('mode')).toHaveTextContent('disabled');
   });
 
@@ -132,10 +152,20 @@ describe('the commerce provider', () => {
 });
 
 describe('one scope for every screen', () => {
-  const seen: Array<{ name: string; kind: string | undefined; epoch: number | undefined; key: string }> = [];
+  const seen: Array<{
+    name: string;
+    kind: string | undefined;
+    epoch: number | undefined;
+    key: string;
+  }> = [];
   function ScopeProbe({ name }: { name: string }) {
     const scope = useCommerceContext()?.scope ?? null;
-    seen.push({ name, kind: scope?.kind, epoch: scope?.epoch, key: scope ? JSON.stringify(cartsKey(scope)) : 'none' });
+    seen.push({
+      name,
+      kind: scope?.kind,
+      epoch: scope?.epoch,
+      key: scope ? JSON.stringify(cartsKey(scope)) : 'none',
+    });
     return <Text testID={`scope-${name}`}>{scope ? `${scope.kind}:${scope.epoch}` : 'none'}</Text>;
   }
   const latest = (name: string) => [...seen].reverse().find((entry) => entry.name === name);
@@ -146,7 +176,10 @@ describe('one scope for every screen', () => {
 
   it('two screens mounted at different times read the same scope and build the same cache key', async () => {
     const stub = stubAdapter();
-    const { show } = await renderWithCommerce(<ScopeProbe name="early" />, { adapter: stub.adapter, token: 'token-a' });
+    const { show } = await renderWithCommerce(<ScopeProbe name="early" />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(screen.getByTestId('scope-early')).toHaveTextContent('account:1'));
     await show(
       <>
@@ -160,7 +193,11 @@ describe('one scope for every screen', () => {
 
   it('keeps one epoch across a re-render with the same credential, and under StrictMode', async () => {
     const stub = stubAdapter();
-    const { session } = await renderWithCommerce(<ScopeProbe name="a" />, { adapter: stub.adapter, token: 'token-a', strict: true });
+    const { session } = await renderWithCommerce(<ScopeProbe name="a" />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+      strict: true,
+    });
     await waitFor(() => expect(screen.getByTestId('scope-a')).toHaveTextContent('account:1'));
     await act(() => session.current!.clearSession());
     await waitFor(() => expect(screen.getByTestId('scope-a')).toHaveTextContent('guest:2'));
@@ -175,7 +212,10 @@ describe('one scope for every screen', () => {
       scopes.push(useCommerceContext());
       return null;
     }
-    const { session } = await renderWithCommerce(<Capture />, { adapter: stub.adapter, token: 'token-a' });
+    const { session } = await renderWithCommerce(<Capture />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(scopes.at(-1)?.scope?.kind).toBe('account'));
     const held = scopes.at(-1)!.scope!;
     expect(held.isCurrent()).toBe(true);
@@ -193,7 +233,10 @@ describe('an add left unconfirmed by a screen that has gone', () => {
       handle.current = hook;
       return <Text testID="add-state">{hook.state.kind}</Text>;
     }
-    const { show, session } = await renderWithCommerce(<Add />, { adapter: stub.adapter, token: 'token-a' });
+    const { show, session } = await renderWithCommerce(<Add />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(screen.getByTestId('add-state')).toHaveTextContent('IDLE'));
 
     stub.failNext('addLine', offline());
@@ -235,7 +278,10 @@ describe('an add left unconfirmed by a screen that has gone', () => {
     }
     const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      const { session } = await renderWithCommerce(<Add />, { adapter: stub.adapter, token: 'token-a' });
+      const { session } = await renderWithCommerce(<Add />, {
+        adapter: stub.adapter,
+        token: 'token-a',
+      });
       stub.failNext('addLine', offline());
       await act(async () => {
         handle.current!.add(1);
@@ -243,7 +289,11 @@ describe('an add left unconfirmed by a screen that has gone', () => {
       await waitFor(() => expect(screen.getByTestId('add-state')).toHaveTextContent('UNKNOWN'));
       await act(() => session.current!.clearSession());
       await waitFor(() => expect(screen.getByTestId('add-state')).toHaveTextContent('IDLE'));
-      expect(errors.mock.calls.map((call) => String(call[0])).filter((text) => text.includes('Cannot update a component'))).toEqual([]);
+      expect(
+        errors.mock.calls
+          .map((call) => String(call[0]))
+          .filter((text) => text.includes('Cannot update a component')),
+      ).toEqual([]);
     } finally {
       errors.mockRestore();
     }

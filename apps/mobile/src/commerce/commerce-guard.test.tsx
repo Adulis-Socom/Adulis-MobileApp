@@ -48,8 +48,10 @@ function stripComments(source: string): string {
     .join('\n');
 }
 
-const SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/g;
-const specifiersOf = (text: string): string[] => [...stripComments(text).matchAll(SPECIFIER)].map((m) => m[2]!);
+const SPECIFIER =
+  /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/g;
+const specifiersOf = (text: string): string[] =>
+  [...stripComments(text).matchAll(SPECIFIER)].map((m) => m[2]!);
 
 /** A specifier that names the commerce folder (a file in it, or the folder itself). */
 const NAMES_COMMERCE = /(^|\/)commerce(\/|$)/;
@@ -64,7 +66,8 @@ const commerceFiles = all.filter((s) => inCommerce(s.file));
 const isCore = (file: string) => inCommerce(file) && !file.startsWith('commerce/testing/');
 const core = all.filter((s) => isCore(s.file));
 
-const offenders = (files: SourceFile[], test: (text: string, file: string) => boolean) => files.filter((s) => test(s.text, s.file)).map((s) => s.file);
+const offenders = (files: SourceFile[], test: (text: string, file: string) => boolean) =>
+  files.filter((s) => test(s.text, s.file)).map((s) => s.file);
 const matching = (pattern: RegExp) => (text: string) => pattern.test(stripComments(text));
 
 describe('the scans look at the cart code', () => {
@@ -72,25 +75,47 @@ describe('the scans look at the cart code', () => {
     const files = all.map((s) => s.file);
     expect(core.length).toBeGreaterThanOrEqual(10);
     expect(files).toEqual(
-      expect.arrayContaining(['commerce/cart/model.ts', 'commerce/cart/hooks.ts', 'commerce/adapters/real.ts', 'commerce/runtime/provider.tsx', 'commerce/testing/harness.tsx', 'app/_layout.tsx']),
+      expect.arrayContaining([
+        'commerce/cart/model.ts',
+        'commerce/cart/hooks.ts',
+        'commerce/adapters/real.ts',
+        'commerce/runtime/provider.tsx',
+        'commerce/testing/harness.tsx',
+        'app/_layout.tsx',
+      ]),
     );
   });
 
   it('the specifier pattern bites on the forms it exists to catch', () => {
-    const samples = ["import x from '../commerce'", "import { a } from '../../commerce/cart/model'", "const m = require('../commerce/runtime/mode')", "const m = await import('../commerce/cart/hooks')", "export * from '../commerce/cart/port'"];
-    for (const sample of samples) expect(specifiersOf(sample).some((s) => NAMES_COMMERCE.test(s))).toBe(true);
-    expect(specifiersOf("import x from '../e-commerce-kit'").some((s) => NAMES_COMMERCE.test(s))).toBe(false);
+    const samples = [
+      "import x from '../commerce'",
+      "import { a } from '../../commerce/cart/model'",
+      "const m = require('../commerce/runtime/mode')",
+      "const m = await import('../commerce/cart/hooks')",
+      "export * from '../commerce/cart/port'",
+    ];
+    for (const sample of samples)
+      expect(specifiersOf(sample).some((s) => NAMES_COMMERCE.test(s))).toBe(true);
+    expect(
+      specifiersOf("import x from '../e-commerce-kit'").some((s) => NAMES_COMMERCE.test(s)),
+    ).toBe(false);
     expect(specifiersOf("// import x from '../commerce'\nconst a = 1;").length).toBe(0);
   });
 
   it('the specifier pattern also bites on a specifier written with backticks, which the bundler resolves too', () => {
-    const samples = ['const m = await import(`../commerce/cart/hooks`);', 'const m = require(`../commerce/runtime/provider`);'];
+    const samples = [
+      'const m = await import(`../commerce/cart/hooks`);',
+      'const m = require(`../commerce/runtime/provider`);',
+    ];
     for (const sample of samples) expect(reachesCommerce(sample)).toBe(true);
     expect(reachesCommerce('const m = await import(`../e-commerce-kit`);')).toBe(false);
   });
 
   it('a file that loads the folder with a backtick specifier is an offender of the same scans', () => {
-    const probe: SourceFile = { file: 'buyer/Probe.ts', text: 'export const load = () => import(`../commerce/cart/hooks`);' };
+    const probe: SourceFile = {
+      file: 'buyer/Probe.ts',
+      text: 'export const load = () => import(`../commerce/cart/hooks`);',
+    };
     expect(offenders([probe], reachesCommerce)).toEqual(['buyer/Probe.ts']);
   });
 });
@@ -118,28 +143,49 @@ describe('G1 and G2: nothing outside the cart code reaches it', () => {
     });
 
     it('bites on a path built from parts, and leaves ordinary words alone', () => {
-      for (const sample of ["const dir = '../' + 'commerce';", "load('../commerce/cart/hooks')", 'const p = `commerce/runtime`;']) {
+      for (const sample of [
+        "const dir = '../' + 'commerce';",
+        "load('../commerce/cart/hooks')",
+        'const p = `commerce/runtime`;',
+      ]) {
         expect(NAMES_FOLDER_IN_A_STRING.test(sample)).toBe(true);
       }
-      for (const sample of ["const t = 'e-commerce';", "const t = 'commerce is a word';"]) expect(NAMES_FOLDER_IN_A_STRING.test(sample)).toBe(false);
+      for (const sample of ["const t = 'e-commerce';", "const t = 'commerce is a word';"])
+        expect(NAMES_FOLDER_IN_A_STRING.test(sample)).toBe(false);
     });
   });
 });
 
 describe('G3: the test-only folder is reached only by tests and by itself', () => {
   it('no production file of the cart code imports a folder called testing', () => {
-    expect(offenders(core, (text) => specifiersOf(text).some((s) => NAMES_TESTING.test(s)))).toEqual([]);
+    expect(
+      offenders(core, (text) => specifiersOf(text).some((s) => NAMES_TESTING.test(s))),
+    ).toEqual([]);
   });
 
   it('no file outside the commerce folder imports commerce/testing', () => {
     const others = all.filter((s) => !inCommerce(s.file));
-    expect(offenders(others, (text) => specifiersOf(text).some((s) => /commerce\/testing/.test(s)))).toEqual([]);
+    expect(
+      offenders(others, (text) => specifiersOf(text).some((s) => /commerce\/testing/.test(s))),
+    ).toEqual([]);
   });
 
   it('the pattern bites on a testing import from a production folder', () => {
-    expect(specifiersOf("import { stubAdapter } from '../testing/stub-adapter'").some((s) => NAMES_TESTING.test(s))).toBe(true);
-    expect(specifiersOf("import { x } from '../../commerce/testing/harness'").some((s) => /commerce\/testing/.test(s))).toBe(true);
-    expect(specifiersOf('const m = await import(`../testing/stub-adapter`);').some((s) => NAMES_TESTING.test(s))).toBe(true);
+    expect(
+      specifiersOf("import { stubAdapter } from '../testing/stub-adapter'").some((s) =>
+        NAMES_TESTING.test(s),
+      ),
+    ).toBe(true);
+    expect(
+      specifiersOf("import { x } from '../../commerce/testing/harness'").some((s) =>
+        /commerce\/testing/.test(s),
+      ),
+    ).toBe(true);
+    expect(
+      specifiersOf('const m = await import(`../testing/stub-adapter`);').some((s) =>
+        NAMES_TESTING.test(s),
+      ),
+    ).toBe(true);
   });
 
   it('covers every folder of the cart code except the test-only one, including a folder added later', () => {
@@ -176,38 +222,71 @@ describe('G4: the cart code has no network binding', () => {
   }
 
   it('imports from the API client only the failure types and the key maker, and never the client itself', () => {
-    const bad = core.flatMap((s) => valueNamesFrom(s.text, /(^|\/)api\/client$/).filter((n) => !CLIENT_NAMES_ALLOWED.includes(n)).map((n) => `${s.file}: ${n}`));
+    const bad = core.flatMap((s) =>
+      valueNamesFrom(s.text, /(^|\/)api\/client$/)
+        .filter((n) => !CLIENT_NAMES_ALLOWED.includes(n))
+        .map((n) => `${s.file}: ${n}`),
+    );
     expect(bad).toEqual([]);
   });
 
   it('imports from the session only the hook that reads the session state', () => {
-    const bad = core.flatMap((s) => valueNamesFrom(s.text, /(^|\/)auth\/session$/).filter((n) => n !== 'useSession').map((n) => `${s.file}: ${n}`));
+    const bad = core.flatMap((s) =>
+      valueNamesFrom(s.text, /(^|\/)auth\/session$/)
+        .filter((n) => n !== 'useSession')
+        .map((n) => `${s.file}: ${n}`),
+    );
     expect(bad).toEqual([]);
   });
 
-  const FORBIDDEN = /\bcreateApiClient\b|\bApiClient\b|\bApiDeps\b|\bboundApi\b|@adulis\/api-client|\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(|\.\s*api\b/;
+  const FORBIDDEN =
+    /\bcreateApiClient\b|\bApiClient\b|\bApiDeps\b|\bboundApi\b|@adulis\/api-client|\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(|\.\s*api\b/;
 
   it('names no client constructor, no bound client and no generated client package', () => {
     expect(offenders(core, matching(FORBIDDEN))).toEqual([]);
   });
 
   it('does not reach the client through the session value either', () => {
-    for (const sample of ['const s = useSession(); s.api.get(x);', 'const { session } = useSession();\nsession.api\n  .post(y);']) expect(FORBIDDEN.test(sample)).toBe(true);
-    for (const sample of ["import { ApiError } from '../../api/client';", 'const label = session.apiVersion;']) expect(FORBIDDEN.test(sample)).toBe(false);
+    for (const sample of [
+      'const s = useSession(); s.api.get(x);',
+      'const { session } = useSession();\nsession.api\n  .post(y);',
+    ])
+      expect(FORBIDDEN.test(sample)).toBe(true);
+    for (const sample of [
+      "import { ApiError } from '../../api/client';",
+      'const label = session.apiVersion;',
+    ])
+      expect(FORBIDDEN.test(sample)).toBe(false);
   });
 
   it('the checks bite on the forms they exist to catch', () => {
-    expect(valueNamesFrom("import { createApiClient, ApiError } from '../../api/client';", /(^|\/)api\/client$/)).toEqual(['createApiClient', 'ApiError']);
-    expect(valueNamesFrom("import type { ApiClient } from '../../api/client';", /(^|\/)api\/client$/)).toEqual([]);
-    expect(valueNamesFrom("import { useSession, SessionProvider } from '../../auth/session';", /(^|\/)auth\/session$/)).toEqual(['useSession', 'SessionProvider']);
-    expect(/\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(/.test('const { session, api } = useSession();')).toBe(true);
+    expect(
+      valueNamesFrom(
+        "import { createApiClient, ApiError } from '../../api/client';",
+        /(^|\/)api\/client$/,
+      ),
+    ).toEqual(['createApiClient', 'ApiError']);
+    expect(
+      valueNamesFrom("import type { ApiClient } from '../../api/client';", /(^|\/)api\/client$/),
+    ).toEqual([]);
+    expect(
+      valueNamesFrom(
+        "import { useSession, SessionProvider } from '../../auth/session';",
+        /(^|\/)auth\/session$/,
+      ),
+    ).toEqual(['useSession', 'SessionProvider']);
+    expect(
+      /\{[^}]*\bapi\b[^}]*\}\s*=\s*useSession\(/.test('const { session, api } = useSession();'),
+    ).toBe(true);
   });
 });
 
 describe('G5, G6, G7: no network, no storage and no ambient switch anywhere in the cart folder', () => {
   const NETWORK = /\bfetch\s*\(|XMLHttpRequest|\bWebSocket\b|['"`]\/v1\/|https?:\/\/|EXPO_PUBLIC/;
-  const STORAGE = /expo-secure-store|expo-sqlite|async-storage|expo-file-system|\blocalStorage\b|\bsessionStorage\b|\bMMKV\b/;
-  const AMBIENT = /\buseBootstrap\b|feature_flags|process\.env|expo-constants|expo-linking|\buseLocalSearchParams\b|\buseGlobalSearchParams\b|\bLinking\./;
+  const STORAGE =
+    /expo-secure-store|expo-sqlite|async-storage|expo-file-system|\blocalStorage\b|\bsessionStorage\b|\bMMKV\b/;
+  const AMBIENT =
+    /\buseBootstrap\b|feature_flags|process\.env|expo-constants|expo-linking|\buseLocalSearchParams\b|\buseGlobalSearchParams\b|\bLinking\./;
 
   it('uses no network primitive, request path or web address', () => {
     expect(offenders(commerceFiles, matching(NETWORK))).toEqual([]);
@@ -222,11 +301,27 @@ describe('G5, G6, G7: no network, no storage and no ambient switch anywhere in t
   });
 
   it('the patterns bite on the forms they exist to catch', () => {
-    for (const sample of ["await fetch('x')", "const p = '/v1/cart'", 'const u = "https://example.org"', 'process.env.EXPO_PUBLIC_API_BASE_URL', 'new WebSocket(u)']) {
+    for (const sample of [
+      "await fetch('x')",
+      "const p = '/v1/cart'",
+      'const u = "https://example.org"',
+      'process.env.EXPO_PUBLIC_API_BASE_URL',
+      'new WebSocket(u)',
+    ]) {
       expect(NETWORK.test(sample) || AMBIENT.test(sample)).toBe(true);
     }
-    for (const sample of ["import * as S from 'expo-secure-store'", "import { openDatabaseSync } from 'expo-sqlite'", 'localStorage.setItem(a, b)']) expect(STORAGE.test(sample)).toBe(true);
-    for (const sample of ['useBootstrap()', 'Linking.getInitialURL()', 'const { slug } = useLocalSearchParams()']) expect(AMBIENT.test(sample)).toBe(true);
+    for (const sample of [
+      "import * as S from 'expo-secure-store'",
+      "import { openDatabaseSync } from 'expo-sqlite'",
+      'localStorage.setItem(a, b)',
+    ])
+      expect(STORAGE.test(sample)).toBe(true);
+    for (const sample of [
+      'useBootstrap()',
+      'Linking.getInitialURL()',
+      'const { slug } = useLocalSearchParams()',
+    ])
+      expect(AMBIENT.test(sample)).toBe(true);
     expect(NETWORK.test('const fetchStatus = 1; refetchOnReconnect: true')).toBe(false);
   });
 });
@@ -243,8 +338,13 @@ describe('G10: the surface is exactly reading the carts and adding a line', () =
   /** Every string key of the object and of its prototype chain (a class cannot hide a method on its prototype). */
   function surface(value: object): string[] {
     const keys = new Set<string>();
-    for (let o: object | null = value; o !== null && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) {
-      for (const key of Reflect.ownKeys(o)) if (typeof key === 'string' && key !== 'constructor') keys.add(key);
+    for (
+      let o: object | null = value;
+      o !== null && o !== Object.prototype;
+      o = Object.getPrototypeOf(o) as object | null
+    ) {
+      for (const key of Reflect.ownKeys(o))
+        if (typeof key === 'string' && key !== 'constructor') keys.add(key);
     }
     return [...keys].sort();
   }
@@ -256,10 +356,13 @@ describe('G10: the surface is exactly reading the carts and adding a line', () =
     ['the server simulator adapter', createFixtureWorld().adapter],
   ];
 
-  it.each(adapters)('%s has exactly the adapter surface and its port exactly the two cart methods', (_name, adapter) => {
-    expect(surface(adapter)).toEqual(['availability', 'bind', 'mode', 'provenance']);
-    expect(surface(adapter.bind(scope))).toEqual(['addLine', 'getCarts']);
-  });
+  it.each(adapters)(
+    '%s has exactly the adapter surface and its port exactly the two cart methods',
+    (_name, adapter) => {
+      expect(surface(adapter)).toEqual(['availability', 'bind', 'mode', 'provenance']);
+      expect(surface(adapter.bind(scope))).toEqual(['addLine', 'getCarts']);
+    },
+  );
 
   it('sees a method hidden on a prototype', () => {
     class Sneaky {
@@ -278,7 +381,9 @@ describe('G10b: the provider that takes the build and the run as props stays ins
   it('only its own file and the test-only folder name it', () => {
     const named = all.filter((s) => mentions(s.text)).map((s) => s.file);
     expect(named).toContain(OWN_FILE);
-    expect(named.filter((file) => file !== OWN_FILE && !file.startsWith('commerce/testing/'))).toEqual([]);
+    expect(
+      named.filter((file) => file !== OWN_FILE && !file.startsWith('commerce/testing/')),
+    ).toEqual([]);
   });
 
   it('bites on a mention in any other file, and ignores a comment', () => {
@@ -290,7 +395,9 @@ describe('G10b: the provider that takes the build and the run as props stays ins
 describe('G11 and G12: off by default, and refused in a release run', () => {
   it('ships disabled, and the shipped mode refuses a fixture adapter even in a development run', () => {
     expect(SHIPPED_COMMERCE_MODE).toBe('disabled');
-    expect(resolveAdapter({ requested: stubAdapter().adapter, build: SHIPPED_COMMERCE_MODE, dev: true })).toBe(disabledCartAdapter);
+    expect(
+      resolveAdapter({ requested: stubAdapter().adapter, build: SHIPPED_COMMERCE_MODE, dev: true }),
+    ).toBe(disabledCartAdapter);
   });
 
   it('draws nothing from a fixture adapter in a release run, and sends nothing', async () => {
@@ -306,7 +413,12 @@ describe('G11 and G12: off by default, and refused in a release run', () => {
         const { view } = useCarts({ focused: true });
         return <Text testID="probe">{view.kind}</Text>;
       }
-      await renderWithCommerce(<Probe />, { adapter: stub.adapter, build: 'fixture', dev: __DEV__, token: 'token-a' });
+      await renderWithCommerce(<Probe />, {
+        adapter: stub.adapter,
+        build: 'fixture',
+        dev: __DEV__,
+        token: 'token-a',
+      });
       expect(screen.getByTestId('probe')).toHaveTextContent('DISABLED');
       expect(stub.calls).toEqual([]);
       expect(fetchMock).not.toHaveBeenCalled();
@@ -320,15 +432,45 @@ describe('G11 and G12: off by default, and refused in a release run', () => {
 describe('G13: no route, tab or return path reaches it', () => {
   /** Every route file of the app at this commit. A new one fails this test until it is listed here on purpose. */
   const ROUTE_FILES = [
-    '(buyer)/(tabs)/_layout.tsx', '(buyer)/(tabs)/account.tsx', '(buyer)/(tabs)/home/_layout.tsx', '(buyer)/(tabs)/home/discounts.tsx',
-    '(buyer)/(tabs)/home/following.tsx', '(buyer)/(tabs)/home/for-you.tsx', '(buyer)/(tabs)/home/locally-made.tsx', '(buyer)/(tabs)/home/nearby.tsx',
-    '(buyer)/(tabs)/orders.tsx', '(buyer)/(tabs)/saved.tsx', '(buyer)/(tabs)/shop.tsx', '(buyer)/_layout.tsx',
-    '(buyer)/account/delete.tsx', '(buyer)/auth/sign-in.tsx', '(buyer)/auth/verify.tsx', '(buyer)/chat/[conversationRef].tsx',
-    '(buyer)/collections/[collectionRef].tsx', '(buyer)/messages.tsx', '(buyer)/notifications.tsx', '(buyer)/product/[handle]/[slug].tsx',
-    '(buyer)/save-to.tsx', '(buyer)/scenes/[scenePostRef].tsx', '(buyer)/search.tsx', '(buyer)/sellers/[handle].tsx',
-    '+not-found.tsx', '_layout.tsx', '_sitemap.tsx', 'courier/_layout.tsx', 'courier/index.tsx', 'dev/_layout.tsx', 'dev/index.tsx', 'index.tsx',
-    'seller/_layout.tsx', 'seller/index.tsx', 'seller/messages/[conversationId].tsx', 'seller/messages/index.tsx', 'seller/notifications.tsx',
-    'seller/orders/[orderId].tsx', 'seller/orders/index.tsx',
+    '(buyer)/(tabs)/_layout.tsx',
+    '(buyer)/(tabs)/account.tsx',
+    '(buyer)/(tabs)/home/_layout.tsx',
+    '(buyer)/(tabs)/home/discounts.tsx',
+    '(buyer)/(tabs)/home/following.tsx',
+    '(buyer)/(tabs)/home/for-you.tsx',
+    '(buyer)/(tabs)/home/locally-made.tsx',
+    '(buyer)/(tabs)/home/nearby.tsx',
+    '(buyer)/(tabs)/orders.tsx',
+    '(buyer)/(tabs)/saved.tsx',
+    '(buyer)/(tabs)/shop.tsx',
+    '(buyer)/_layout.tsx',
+    '(buyer)/account/delete.tsx',
+    '(buyer)/auth/sign-in.tsx',
+    '(buyer)/auth/verify.tsx',
+    '(buyer)/chat/[conversationRef].tsx',
+    '(buyer)/collections/[collectionRef].tsx',
+    '(buyer)/messages.tsx',
+    '(buyer)/notifications.tsx',
+    '(buyer)/product/[handle]/[slug].tsx',
+    '(buyer)/save-to.tsx',
+    '(buyer)/scenes/[scenePostRef].tsx',
+    '(buyer)/search.tsx',
+    '(buyer)/sellers/[handle].tsx',
+    '+not-found.tsx',
+    '_layout.tsx',
+    '_sitemap.tsx',
+    'courier/_layout.tsx',
+    'courier/index.tsx',
+    'dev/_layout.tsx',
+    'dev/index.tsx',
+    'index.tsx',
+    'seller/_layout.tsx',
+    'seller/index.tsx',
+    'seller/messages/[conversationId].tsx',
+    'seller/messages/index.tsx',
+    'seller/notifications.tsx',
+    'seller/orders/[orderId].tsx',
+    'seller/orders/index.tsx',
   ];
   const routeFiles = allSources()
     .filter((s) => s.file.startsWith('app/'))
@@ -352,7 +494,8 @@ describe('G13: no route, tab or return path reaches it', () => {
   });
 
   it('a sign-in cannot return to a cart or checkout path', () => {
-    for (const target of ['/cart', '/carts', '/checkout', '/cart/lines', '/commerce']) expect(parseReturnTo(target)).toBe('/account');
+    for (const target of ['/cart', '/carts', '/checkout', '/cart/lines', '/commerce'])
+      expect(parseReturnTo(target)).toBe('/account');
   });
 
   describe('opening a cart or checkout path', () => {
@@ -360,17 +503,28 @@ describe('G13: no route, tab or return path reaches it', () => {
     beforeEach(() => {
       resetSecureStore();
       api = installFakeApi();
-      useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
+      useUiStore.setState({
+        activeMode: null,
+        themePreference: 'system',
+        locale: 'en',
+        upgradeNoticeDismissed: false,
+        pendingSave: null,
+      });
     });
     const HOME_CALLS = ['GET /v1/bootstrap', 'GET /v1/fyp', 'POST /v1/devices'];
 
-    it.each(['/cart', '/carts', '/checkout'])('%s cold lands on Buyer Home and sends nothing authenticated', async (path) => {
-      await renderRouter(APP_DIR, { initialUrl: path });
-      expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
-      expect(screen).toHavePathname('/home/for-you');
-      expect(api.calls.filter((c) => c.headers.Authorization !== undefined)).toEqual([]);
-      expect(api.calls.map((c) => `${c.method} ${c.path}`).filter((c) => !HOME_CALLS.includes(c))).toEqual([]);
-    });
+    it.each(['/cart', '/carts', '/checkout'])(
+      '%s cold lands on Buyer Home and sends nothing authenticated',
+      async (path) => {
+        await renderRouter(APP_DIR, { initialUrl: path });
+        expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
+        expect(screen).toHavePathname('/home/for-you');
+        expect(api.calls.filter((c) => c.headers.Authorization !== undefined)).toEqual([]);
+        expect(
+          api.calls.map((c) => `${c.method} ${c.path}`).filter((c) => !HOME_CALLS.includes(c)),
+        ).toEqual([]);
+      },
+    );
 
     it('/cart as a link into a running app lands on Buyer Home too', async () => {
       await renderRouter(APP_DIR, { initialUrl: '/home/for-you' });
@@ -390,23 +544,41 @@ describe('G16: the cart code does no arithmetic on money', () => {
   const BEFORE = new RegExp(String.raw`${MINOR}\)?\s*${OP}`);
   const AFTER = new RegExp(String.raw`${OP}=?\s*(?:Number\s*\()?[\w$.?!]*${MINOR}`);
   const REDUCED = new RegExp(String.raw`\breduce\s*\([^;]*?${MINOR}`);
-  const CONVERTED = new RegExp(String.raw`\b(?:Number|parseFloat|parseInt|BigInt|Math\.\w+)\s*\([^)]*${MINOR}`);
-  const boundFromMinor = (code: string): string[] =>
-    [
-      ...[...code.matchAll(new RegExp(String.raw`\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=[^;\n]*${MINOR}`, 'g'))].map((m) => m[1]!),
-      ...[...code.matchAll(new RegExp(String.raw`\{[^}\n]*\b\w*Minor\s*:\s*([A-Za-z_]\w*)\s*[,}]`, 'g'))].map((m) => m[1]!),
-    ];
-  const usedInArithmetic = (code: string, name: string) => new RegExp(String.raw`\b${name}\b\s*${OP}|${OP}=?\s*[\w$.?!]*\b${name}\b`).test(code);
+  const CONVERTED = new RegExp(
+    String.raw`\b(?:Number|parseFloat|parseInt|BigInt|Math\.\w+)\s*\([^)]*${MINOR}`,
+  );
+  const boundFromMinor = (code: string): string[] => [
+    ...[
+      ...code.matchAll(
+        new RegExp(String.raw`\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=[^;\n]*${MINOR}`, 'g'),
+      ),
+    ].map((m) => m[1]!),
+    ...[
+      ...code.matchAll(
+        new RegExp(String.raw`\{[^}\n]*\b\w*Minor\s*:\s*([A-Za-z_]\w*)\s*[,}]`, 'g'),
+      ),
+    ].map((m) => m[1]!),
+  ];
+  const usedInArithmetic = (code: string, name: string) =>
+    new RegExp(String.raw`\b${name}\b\s*${OP}|${OP}=?\s*[\w$.?!]*\b${name}\b`).test(code);
   const arithmetic = (text: string) => {
     const code = stripComments(text);
-    return [BEFORE, AFTER, REDUCED, CONVERTED].some((pattern) => pattern.test(code)) || boundFromMinor(code).some((name) => usedInArithmetic(code, name));
+    return (
+      [BEFORE, AFTER, REDUCED, CONVERTED].some((pattern) => pattern.test(code)) ||
+      boundFromMinor(code).some((name) => usedInArithmetic(code, name))
+    );
   };
 
   /** The one file that answers for the server and sums a Seller subtotal there. Every other cart file is scanned. */
   const EXEMPT = ['commerce/testing/fixture/server.ts'];
 
   it('has no sum, difference, product or reduction over an amount, except in the server simulator', () => {
-    expect(offenders(commerceFiles.filter((s) => !EXEMPT.includes(s.file)), arithmetic)).toEqual([]);
+    expect(
+      offenders(
+        commerceFiles.filter((s) => !EXEMPT.includes(s.file)),
+        arithmetic,
+      ),
+    ).toEqual([]);
   });
 
   it('names its one exemption, which is a file of the server simulator that still needs it', () => {

@@ -46,12 +46,21 @@ export function CommerceProviderCore({
   runtime.observe(identity);
   const served = resolveAdapter({ requested: adapter, build, dev });
   const scope = runtime.scope;
-  const value = useMemo<CommerceContextValue>(() => ({ runtime, scope, adapter: served }), [runtime, scope, served]);
+  const value = useMemo<CommerceContextValue>(
+    () => ({ runtime, scope, adapter: served }),
+    [runtime, scope, served],
+  );
   return <CommerceContext.Provider value={value}>{children}</CommerceContext.Provider>;
 }
 
 /** The production provider. It reads the shipped mode and `__DEV__` each time it renders. */
-export function CommerceProvider({ adapter, children }: { adapter: CartAdapter; children: ReactNode }) {
+export function CommerceProvider({
+  adapter,
+  children,
+}: {
+  adapter: CartAdapter;
+  children: ReactNode;
+}) {
   return (
     <CommerceProviderCore adapter={adapter} build={SHIPPED_COMMERCE_MODE} dev={__DEV__}>
       {children}
@@ -63,4 +72,5 @@ export function CommerceProvider({ adapter, children }: { adapter: CartAdapter; 
 export const useCommerceContext = (): CommerceContextValue | null => useContext(CommerceContext);
 
 /** The adapter in use: the disabled one outside any provider. */
-export const useCommerce = (): CartAdapter => useContext(CommerceContext)?.adapter ?? disabledCartAdapter;
+export const useCommerce = (): CartAdapter =>
+  useContext(CommerceContext)?.adapter ?? disabledCartAdapter;

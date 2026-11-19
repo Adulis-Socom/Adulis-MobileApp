@@ -6,8 +6,16 @@ import { asVariantId, type Money, type VariantId } from '../../cart/model';
  */
 export type DemoSeller = Readonly<{ key: string; handle: string; storeName: string }>;
 
-export const SELLER_A: DemoSeller = { key: 'DEMO-SELLER-A', handle: 'demo-seller-a', storeName: 'Demo Seller A' };
-export const SELLER_B: DemoSeller = { key: 'DEMO-SELLER-B', handle: 'demo-seller-b', storeName: 'Demo Seller B' };
+export const SELLER_A: DemoSeller = {
+  key: 'DEMO-SELLER-A',
+  handle: 'demo-seller-a',
+  storeName: 'Demo Seller A',
+};
+export const SELLER_B: DemoSeller = {
+  key: 'DEMO-SELLER-B',
+  handle: 'demo-seller-b',
+  storeName: 'Demo Seller B',
+};
 
 export type DemoVariant = {
   id: VariantId;
@@ -21,7 +29,8 @@ export type DemoVariant = {
   status: 'ACTIVE' | 'WITHDRAWN';
 };
 
-const id = (n: number) => asVariantId(`de000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`);
+const id = (n: number) =>
+  asVariantId(`de000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`);
 
 export const A_SHIRT_SMALL = id(1);
 export const A_SHIRT_LARGE = id(2);
@@ -29,7 +38,15 @@ export const A_BOWL = id(3);
 export const B_MUG = id(4);
 export const B_LAMP = id(5);
 
-const make = (variantId: VariantId, seller: DemoSeller, productSlug: string, productName: string, option: string, priceMinor: number, quantityAvailable = 10): DemoVariant => ({
+const make = (
+  variantId: VariantId,
+  seller: DemoSeller,
+  productSlug: string,
+  productName: string,
+  option: string,
+  priceMinor: number,
+  quantityAvailable = 10,
+): DemoVariant => ({
   id: variantId,
   seller,
   productSlug,
@@ -52,4 +69,7 @@ export function demoCatalogue(): DemoVariant[] {
   ];
 }
 
-export const moneyOf = (priceMinor: number, currency: string): Money => ({ amountMinor: priceMinor, currency });
+export const moneyOf = (priceMinor: number, currency: string): Money => ({
+  amountMinor: priceMinor,
+  currency,
+});

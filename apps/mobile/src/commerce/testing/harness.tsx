@@ -49,11 +49,19 @@ export type CommerceRender = {
 
 export async function renderWithCommerce(
   children: ReactNode,
-  options: { adapter: CartAdapter; build?: CommerceMode; dev?: boolean; token?: string | null; strict?: boolean },
+  options: {
+    adapter: CartAdapter;
+    build?: CommerceMode;
+    dev?: boolean;
+    token?: string | null;
+    strict?: boolean;
+  },
 ): Promise<CommerceRender> {
   const { adapter, build = 'fixture', dev = true, token = null, strict = false } = options;
   const session: { current: SessionApi | null } = { current: null };
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
   const storage = fakeSessionStorage(token);
   const deviceStorage = fakeDeviceStorage();
   function Bridge() {
@@ -71,7 +79,8 @@ export async function renderWithCommerce(
     </QueryClientProvider>
   );
   // StrictMode around everything (the providers too) renders each component twice, as a development build does.
-  const tree = (kids: ReactNode) => (strict ? <StrictMode>{providers(kids)}</StrictMode> : providers(kids));
+  const tree = (kids: ReactNode) =>
+    strict ? <StrictMode>{providers(kids)}</StrictMode> : providers(kids);
   const view = await render(tree(children));
   await waitFor(() => expect(session.current?.session.status).not.toBe('restoring'));
   return {

@@ -16,7 +16,8 @@ import { deriveViewState, type CartViewState } from './view-state';
 export const cartsKey = (scope: Scope) => ['commerce', 'carts', scope.kind, scope.epoch] as const;
 
 /** A read is repeated only when the network failed it, and at most twice: a server answer never retries. */
-export const shouldRetryRead = (failures: number, error: unknown): boolean => isTransient(error) && failures < 2;
+export const shouldRetryRead = (failures: number, error: unknown): boolean =>
+  isTransient(error) && failures < 2;
 
 /**
  * The Seller carts of the session on screen. `focused`: whether the screen is the one the Buyer is on,
@@ -26,7 +27,10 @@ export const shouldRetryRead = (failures: number, error: unknown): boolean => is
  * while it is the server's last word (see `deriveViewState`); returning from the background past the
  * freshness interval withholds it until a new one lands.
  */
-export function useCarts({ focused }: { focused: boolean }): { view: CartViewState; refresh: () => void } {
+export function useCarts({ focused }: { focused: boolean }): {
+  view: CartViewState;
+  refresh: () => void;
+} {
   const context = useCommerceContext();
   const adapter = context?.adapter ?? disabledCartAdapter;
   const scope = context?.scope ?? null;
@@ -77,7 +81,12 @@ export function useCarts({ focused }: { focused: boolean }): { view: CartViewSta
   const view = deriveViewState({
     availability: adapter.availability,
     scopeCurrent: scope !== null && scope.isCurrent(),
-    query: { status: query.status, fetchStatus: query.fetchStatus, data: answer, error: query.error },
+    query: {
+      status: query.status,
+      fetchStatus: query.fetchStatus,
+      data: answer,
+      error: query.error,
+    },
     withheld,
   });
   return { view, refresh };
@@ -87,9 +96,17 @@ export type AddOutcome = 'started' | 'same' | 'ignored' | 'offline' | 'unavailab
 
 /** Whether the carts must be read again once an add has settled in this state. */
 const readsAgain = (state: AddState): boolean =>
-  state.kind === 'ADDED' || state.kind === 'UNKNOWN' || state.kind === 'UNRESOLVED' || state.kind === 'REFUSED_RELOAD';
+  state.kind === 'ADDED' ||
+  state.kind === 'UNKNOWN' ||
+  state.kind === 'UNRESOLVED' ||
+  state.kind === 'REFUSED_RELOAD';
 
-const unavailableJudgement: AddJudgement = { outcome: 'refused', reload: false, code: 'ADAPTER_UNAVAILABLE', holdMs: null };
+const unavailableJudgement: AddJudgement = {
+  outcome: 'refused',
+  reload: false,
+  code: 'ADAPTER_UNAVAILABLE',
+  holdMs: null,
+};
 
 /** Sends one request of an add and settles the intent with what came back. */
 async function send(args: {
@@ -144,13 +161,23 @@ export function useAddToCart(variantId: VariantId | null): {
   const scope = context?.scope ?? null;
   const adapter = context?.adapter ?? disabledCartAdapter;
 
-  const subscribe = useCallback((listener: () => void) => (store ? store.subscribe(listener) : () => undefined), [store]);
-  const state = useSyncExternalStore(subscribe, () => (store && scope && variantId ? store.read(scope, variantId) : IDLE));
+  const subscribe = useCallback(
+    (listener: () => void) => (store ? store.subscribe(listener) : () => undefined),
+    [store],
+  );
+  const state = useSyncExternalStore(subscribe, () =>
+    store && scope && variantId ? store.read(scope, variantId) : IDLE,
+  );
 
   const add = (quantity: number): AddOutcome => {
-    if (!store || !scope || variantId === null || !adapter.availability.available) return 'unavailable';
+    if (!store || !scope || variantId === null || !adapter.availability.available)
+      return 'unavailable';
     if (!Number.isSafeInteger(quantity) || quantity < 1) return 'invalid';
-    const begun = store.begin(scope, { variantId, quantity }, { now: Date.now(), online: onlineManager.isOnline(), mintKey: newIdempotencyKey });
+    const begun = store.begin(
+      scope,
+      { variantId, quantity },
+      { now: Date.now(), online: onlineManager.isOnline(), mintKey: newIdempotencyKey },
+    );
     if (begun === null) return 'unavailable';
     if (begun.result === 'started' && begun.state.kind === 'SENDING') {
       void send({ adapter, store, qc, scope, variantId, intent: begun.state.intent });
@@ -161,7 +188,11 @@ export function useAddToCart(variantId: VariantId | null): {
   const retry = () => {
     if (!store || !scope || variantId === null) return;
     const before = store.read(scope, variantId);
-    const after = store.apply(scope, variantId, { type: 'RETRY', now: Date.now(), online: onlineManager.isOnline() });
+    const after = store.apply(scope, variantId, {
+      type: 'RETRY',
+      now: Date.now(),
+      online: onlineManager.isOnline(),
+    });
     if (after && after.kind === 'SENDING' && before.kind !== 'SENDING') {
       void send({ adapter, store, qc, scope, variantId, intent: after.intent });
     }

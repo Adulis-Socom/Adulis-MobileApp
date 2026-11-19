@@ -1,5 +1,11 @@
 import { asLineId, type CartSet } from '../cart/model';
-import { ScopeChanged, type AddRequest, type CartAdapter, type Scope, type Verified } from '../cart/port';
+import {
+  ScopeChanged,
+  type AddRequest,
+  type CartAdapter,
+  type Scope,
+  type Verified,
+} from '../cart/port';
 
 /**
  * A scripted adapter for the tests of the hooks and the runtime: it records every call, answers from a

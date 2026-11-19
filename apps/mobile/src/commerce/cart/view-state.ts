@@ -15,7 +15,13 @@ export type Freshness =
 export type CartViewState =
   | Readonly<{ kind: 'DISABLED'; reason: UnavailableReason }>
   | Readonly<{ kind: 'LOADING'; waitingForConnection: boolean }>
-  | Readonly<{ kind: 'LISTED'; carts: CartSet; freshness: Freshness; provenance: Provenance; receivedAt: number }>
+  | Readonly<{
+      kind: 'LISTED';
+      carts: CartSet;
+      freshness: Freshness;
+      provenance: Provenance;
+      receivedAt: number;
+    }>
   | Readonly<{ kind: 'ERROR'; error: unknown }>;
 
 /** What a query says about itself, as far as the cart view needs it. */
@@ -53,8 +59,10 @@ export function deriveViewState(input: {
     provenance: data.provenance,
     receivedAt: data.receivedAt,
   });
-  if (query.fetchStatus === 'paused') return listed({ kind: 'UNVERIFIED', why: 'offline', error: null });
-  if (query.status === 'error') return listed({ kind: 'UNVERIFIED', why: 'failed', error: query.error });
+  if (query.fetchStatus === 'paused')
+    return listed({ kind: 'UNVERIFIED', why: 'offline', error: null });
+  if (query.status === 'error')
+    return listed({ kind: 'UNVERIFIED', why: 'failed', error: query.error });
   if (withheld) return listed({ kind: 'UNVERIFIED', why: 'checking', error: null });
   return listed(query.fetchStatus === 'fetching' ? { kind: 'REVALIDATING' } : { kind: 'VERIFIED' });
 }

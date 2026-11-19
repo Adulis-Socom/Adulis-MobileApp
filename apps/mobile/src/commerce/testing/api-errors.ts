@@ -12,7 +12,12 @@ export function apiProblem(status: number, code: string, retryAfterSeconds?: num
     request_id: 'req-1',
     retryable: false,
   } as unknown as Problem;
-  return new ApiError({ kind: 'problem', status, problem, ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }) });
+  return new ApiError({
+    kind: 'problem',
+    status,
+    problem,
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+  });
 }
 
 /** A proxy's JSON page: a string `code`, but none of the API's other fields. */
@@ -24,4 +29,8 @@ export const offline = () => new ApiError({ kind: 'offline' });
 export const timeout = () => new ApiError({ kind: 'timeout' });
 /** A non-success answer that is not JSON: a gateway page. */
 export const gatewayPage = (status: number, retryAfterSeconds?: number) =>
-  new ApiError({ kind: 'unexpected', status, ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }) });
+  new ApiError({
+    kind: 'unexpected',
+    status,
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+  });

@@ -8,7 +8,10 @@ import { createFixtureServer, type FixtureServer } from './server';
  * for whoever is signed in when it is released. Like a real adapter it refuses to send and refuses to
  * return for a scope that has ended.
  */
-export function createFixtureCartAdapter(server: FixtureServer, harness: { actor: () => string }): CartAdapter {
+export function createFixtureCartAdapter(
+  server: FixtureServer,
+  harness: { actor: () => string },
+): CartAdapter {
   return {
     mode: 'fixture',
     provenance: 'FIXTURE',

@@ -13,7 +13,11 @@ export type Verified<T> = Readonly<{ value: T; receivedAt: number; provenance: P
  */
 export type Scope = Readonly<{ kind: 'guest' | 'account'; epoch: number; isCurrent(): boolean }>;
 
-export type AddRequest = Readonly<{ variantId: VariantId; quantity: number; idempotencyKey: string }>;
+export type AddRequest = Readonly<{
+  variantId: VariantId;
+  quantity: number;
+  idempotencyKey: string;
+}>;
 /** The server's acknowledgement. It is never drawn: the carts are read again. */
 export type AddAccepted = Readonly<{ lineId: LineId }>;
 
@@ -32,8 +36,7 @@ export interface CartPort {
 export type UnavailableReason = 'ADAPTER_DISABLED' | 'CONTRACT_MISSING';
 
 export type Availability =
-  | Readonly<{ available: true }>
-  | Readonly<{ available: false; reason: UnavailableReason }>;
+  Readonly<{ available: true }> | Readonly<{ available: false; reason: UnavailableReason }>;
 
 export interface CartAdapter {
   /** There is no 'live' mode. */

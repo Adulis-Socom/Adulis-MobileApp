@@ -38,14 +38,26 @@ export type AddState =
   | Readonly<{ kind: 'ADDED'; intent: AddIntent; lineId: LineId }>
   | Readonly<{ kind: 'REFUSED'; intent: AddIntent; code: string | null }>
   | Readonly<{ kind: 'REFUSED_RELOAD'; intent: AddIntent; code: string | null }>
-  | Readonly<{ kind: 'UNKNOWN'; intent: AddIntent; holdUntil: number | null; offlineNotice: boolean }>
+  | Readonly<{
+      kind: 'UNKNOWN';
+      intent: AddIntent;
+      holdUntil: number | null;
+      offlineNotice: boolean;
+    }>
   | Readonly<{ kind: 'UNRESOLVED'; intent: AddIntent }>;
 
 export const IDLE: AddState = { kind: 'IDLE', earlierUnconfirmed: false };
 export const IDLE_UNCONFIRMED: AddState = { kind: 'IDLE', earlierUnconfirmed: true };
 
 export type AddEvent =
-  | Readonly<{ type: 'BEGIN'; variantId: VariantId; quantity: number; key: string; now: number; online: boolean }>
+  | Readonly<{
+      type: 'BEGIN';
+      variantId: VariantId;
+      quantity: number;
+      key: string;
+      now: number;
+      online: boolean;
+    }>
   | Readonly<{ type: 'ACCEPTED'; lineId: LineId }>
   | Readonly<{ type: 'FAILED'; judgement: AddJudgement; now: number }>
   | Readonly<{ type: 'RETRY'; now: number; online: boolean }>
@@ -75,7 +87,9 @@ export function reduceAdd(state: AddState, event: AddEvent): AddState {
       return event.online ? { kind: 'SENDING', intent } : { kind: 'OFFLINE_NOT_SENT', intent };
     }
     case 'ACCEPTED':
-      return state.kind === 'SENDING' ? { kind: 'ADDED', intent: state.intent, lineId: event.lineId } : state;
+      return state.kind === 'SENDING'
+        ? { kind: 'ADDED', intent: state.intent, lineId: event.lineId }
+        : state;
     case 'FAILED': {
       if (state.kind !== 'SENDING') return state;
       const { judgement, now } = event;
@@ -114,7 +128,11 @@ export type AddIntentInput = Readonly<{ variantId: VariantId; quantity: number }
  * that the server says can be bought now (the existing selectable-option rule), and a positive whole
  * quantity. There is no ceiling here: the most the server will take is the server's to refuse.
  */
-export function toAddIntent(product: StorefrontProduct, variantId: string, quantity: number): AddIntentInput | null {
+export function toAddIntent(
+  product: StorefrontProduct,
+  variantId: string,
+  quantity: number,
+): AddIntentInput | null {
   if (!Number.isSafeInteger(quantity) || quantity < 1) return null;
   const variant = product.variants.find((v) => v.id === variantId);
   if (!variant || !isSelectable(product, variant)) return null;

@@ -20,9 +20,17 @@ export type AddJudgement =
 function apiOwnProblem(failure: unknown): { status: number; code: string | null } | null {
   if (!(failure instanceof ApiError) || failure.failure.kind !== 'problem') return null;
   const { problem, status } = failure.failure;
-  const p = problem as { title_key?: unknown; request_id?: unknown; retryable?: unknown; status?: unknown };
+  const p = problem as {
+    title_key?: unknown;
+    request_id?: unknown;
+    retryable?: unknown;
+    status?: unknown;
+  };
   const whole =
-    typeof p.title_key === 'string' && typeof p.request_id === 'string' && typeof p.retryable === 'boolean' && p.status === status;
+    typeof p.title_key === 'string' &&
+    typeof p.request_id === 'string' &&
+    typeof p.retryable === 'boolean' &&
+    p.status === status;
   return whole ? { status, code: problemCode(failure) } : null;
 }
 

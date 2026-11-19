@@ -39,7 +39,13 @@ export type FailureSpec =
   | Readonly<{ kind: 'offline'; afterCommit?: boolean }>
   | Readonly<{ kind: 'timeout'; afterCommit?: boolean }>
   /** The API's own problem shape (every field of its envelope present). */
-  | Readonly<{ kind: 'problem'; status: number; code: string; retryAfterSeconds?: number; afterCommit?: boolean }>
+  | Readonly<{
+      kind: 'problem';
+      status: number;
+      code: string;
+      retryAfterSeconds?: number;
+      afterCommit?: boolean;
+    }>
   /** JSON with a `code` but none of the API's other fields: a proxy's page. */
   | Readonly<{ kind: 'proxy-json'; status: number; code: string; afterCommit?: boolean }>
   /** A non-success answer that is not JSON: a gateway page. */
@@ -100,7 +106,12 @@ export interface FixtureServer {
   carts(actor: string): CartSet;
 }
 
-type LineState = { lineId: LineId; variantId: VariantId; quantity: number; baselinePriceMinor: number };
+type LineState = {
+  lineId: LineId;
+  variantId: VariantId;
+  quantity: number;
+  baselinePriceMinor: number;
+};
 type SellerCartState = { seller: DemoSeller; lines: LineState[] };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -169,7 +180,11 @@ export function createFixtureServer(
     }
   };
 
-  const item = (code: string, variantId: string | null, over: Partial<ServerItem> = {}): ServerItem => ({
+  const item = (
+    code: string,
+    variantId: string | null,
+    over: Partial<ServerItem> = {},
+  ): ServerItem => ({
     code,
     variantId,
     requested: null,
@@ -208,13 +223,26 @@ export function createFixtureServer(
     for (const line of state.lines) {
       const variant = variantOf(line.variantId);
       if (variant.status !== 'ACTIVE') items.push(item('VARIANT_WITHDRAWN', line.variantId));
-      if (unpublished.has(variant.productSlug)) items.push(item('NO_LONGER_PUBLISHED', line.variantId));
-      if (variant.quantityAvailable === 0) items.push(item('SOLD_OUT', line.variantId, { requested: line.quantity, available: 0 }));
+      if (unpublished.has(variant.productSlug))
+        items.push(item('NO_LONGER_PUBLISHED', line.variantId));
+      if (variant.quantityAvailable === 0)
+        items.push(item('SOLD_OUT', line.variantId, { requested: line.quantity, available: 0 }));
       else if (variant.quantityAvailable < line.quantity) {
-        items.push(item('INSUFFICIENT_STOCK', line.variantId, { requested: line.quantity, available: variant.quantityAvailable }));
+        items.push(
+          item('INSUFFICIENT_STOCK', line.variantId, {
+            requested: line.quantity,
+            available: variant.quantityAvailable,
+          }),
+        );
       }
       if (server.reportPriceChanges && variant.priceMinor !== line.baselinePriceMinor) {
-        items.push(item('PRICE_CHANGED', line.variantId, { wasMinor: line.baselinePriceMinor, nowMinor: variant.priceMinor, currency: variant.currency }));
+        items.push(
+          item('PRICE_CHANGED', line.variantId, {
+            wasMinor: line.baselinePriceMinor,
+            nowMinor: variant.priceMinor,
+            currency: variant.currency,
+          }),
+        );
       }
     }
     if (inactive.has(state.seller.handle)) items.push(item('SELLER_UNAVAILABLE', null));
@@ -222,12 +250,17 @@ export function createFixtureServer(
     if (!server.serverSubtotal || state.lines.length === 0) return described;
     // The server's own sum, in the Seller's currency: the simulator answers for the server.
     const currency = variantOf(state.lines[0]!.variantId).currency;
-    const sum = state.lines.reduce((total, line) => total + variantOf(line.variantId).priceMinor * line.quantity, 0);
+    const sum = state.lines.reduce(
+      (total, line) => total + variantOf(line.variantId).priceMinor * line.quantity,
+      0,
+    );
     return { ...described, subtotal: moneyOf(sum, currency) };
   };
 
   const describeAll = (actor: string): CartSet => ({
-    carts: (cartsByActor.get(actor) ?? []).filter((cart) => cart.lines.length > 0).map(describeCart),
+    carts: (cartsByActor.get(actor) ?? [])
+      .filter((cart) => cart.lines.length > 0)
+      .map(describeCart),
     checkedAt: new Date(now()).toISOString(),
   });
 
@@ -317,7 +350,11 @@ export function createFixtureServer(
     },
 
     addLine(caller, request) {
-      const detail = { key: request.idempotencyKey, variantId: request.variantId, quantity: request.quantity };
+      const detail = {
+        key: request.idempotencyKey,
+        variantId: request.variantId,
+        quantity: request.quantity,
+      };
       return run('addLine', caller, detail, (actor): AddAccepted => {
         adoptIfPending(actor);
         const body = `${request.variantId}|${request.quantity}`;
@@ -325,32 +362,45 @@ export function createFixtureServer(
         const earlier = stored.get(recordKey);
         if (earlier) {
           // The same request returns what was stored; a different body, or a record past its life, is refused.
-          if (earlier.body !== body || now() - earlier.at >= keyLifeMs) throw apiProblem(409, 'IDEMPOTENCY_KEY_REUSED');
+          if (earlier.body !== body || now() - earlier.at >= keyLifeMs)
+            throw apiProblem(409, 'IDEMPOTENCY_KEY_REUSED');
           return earlier.answer;
         }
-        if (!Number.isInteger(request.quantity) || request.quantity < 1) throw apiProblem(400, 'VALIDATION_FAILED');
+        if (!Number.isInteger(request.quantity) || request.quantity < 1)
+          throw apiProblem(400, 'VALIDATION_FAILED');
         const variant = catalogue.get(request.variantId);
         if (!variant) throw apiProblem(404, 'NOT_FOUND');
         const buyable =
-          variant.status === 'ACTIVE' && !unpublished.has(variant.productSlug) && !inactive.has(variant.seller.handle) && variant.quantityAvailable > 0;
+          variant.status === 'ACTIVE' &&
+          !unpublished.has(variant.productSlug) &&
+          !inactive.has(variant.seller.handle) &&
+          variant.quantityAvailable > 0;
         if (server.refuseUnavailableAdds && !buyable) throw apiProblem(404, 'NOT_FOUND');
 
         // The Seller comes from the option, never from the request.
         const mine = cartsOf(actor);
         if (server.sellerCarts === 'SINGLE') {
           const held = mine.find((c) => c.lines.length > 0);
-          if (held && held.seller.key !== variant.seller.key) throw apiProblem(409, 'CART_SELLER_CONFLICT');
+          if (held && held.seller.key !== variant.seller.key)
+            throw apiProblem(409, 'CART_SELLER_CONFLICT');
         }
         let cart = mine.find((c) => c.seller.key === variant.seller.key);
         if (!cart) {
           cart = { seller: variant.seller, lines: [] };
           mine.push(cart);
         }
-        let line = server.mergeDuplicates ? cart.lines.find((l) => l.variantId === request.variantId) : undefined;
+        let line = server.mergeDuplicates
+          ? cart.lines.find((l) => l.variantId === request.variantId)
+          : undefined;
         if (line) line.quantity += request.quantity;
         else {
           lines += 1;
-          line = { lineId: asLineId(`DEMO-LINE-${lines}`), variantId: request.variantId, quantity: request.quantity, baselinePriceMinor: variant.priceMinor };
+          line = {
+            lineId: asLineId(`DEMO-LINE-${lines}`),
+            variantId: request.variantId,
+            quantity: request.quantity,
+            baselinePriceMinor: variant.priceMinor,
+          };
           cart.lines.push(line);
         }
         const answer: AddAccepted = { lineId: line.lineId };

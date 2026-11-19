@@ -3,8 +3,7 @@ import type { Scope } from '../cart/port';
 
 /** Who the session says is signed in: a guest, or an Account and its credential. Null while the session is being restored. */
 export type SessionIdentity =
-  | Readonly<{ kind: 'guest'; token: null }>
-  | Readonly<{ kind: 'account'; token: string }>;
+  Readonly<{ kind: 'guest'; token: null }> | Readonly<{ kind: 'account'; token: string }>;
 
 /**
  * The ONE owner of the cart's session scope. A provider makes one, and every hook reads the scope and

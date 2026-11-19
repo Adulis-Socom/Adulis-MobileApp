@@ -75,7 +75,8 @@ export type CartSet = Readonly<{
 export const isPurchasable = (line: CartLine): boolean => line.issues.length === 0;
 
 /** Every cart line the set holds, in order. */
-export const allLines = (set: CartSet): readonly CartLine[] => set.carts.flatMap((cart) => cart.lines);
+export const allLines = (set: CartSet): readonly CartLine[] =>
+  set.carts.flatMap((cart) => cart.lines);
 
 /** The line with this id, wherever it sits, or null. */
 export function findLine(set: CartSet, lineId: LineId): CartLine | null {
@@ -83,7 +84,11 @@ export function findLine(set: CartSet, lineId: LineId): CartLine | null {
 }
 
 /** Codes about the cart as a whole, not about a line. They mark no line. */
-const CART_LEVEL_CODES: readonly string[] = ['TRANSACTION_CAP_EXCEEDED', 'CART_EMPTY', 'CART_REVALIDATION_FAILED'];
+const CART_LEVEL_CODES: readonly string[] = [
+  'TRANSACTION_CAP_EXCEEDED',
+  'CART_EMPTY',
+  'CART_REVALIDATION_FAILED',
+];
 
 /**
  * The line reason for a server item code. Null for a code about the whole cart (it marks no line);
@@ -91,7 +96,9 @@ const CART_LEVEL_CODES: readonly string[] = ['TRANSACTION_CAP_EXCEEDED', 'CART_E
  */
 export function issueFromServerCode(code: string): LineIssue | null {
   if (CART_LEVEL_CODES.includes(code)) return null;
-  return (LINE_ISSUES as readonly string[]).includes(code) && code !== 'UNAVAILABLE' && code !== 'UNKNOWN'
+  return (LINE_ISSUES as readonly string[]).includes(code) &&
+    code !== 'UNAVAILABLE' &&
+    code !== 'UNKNOWN'
     ? (code as LineIssue)
     : 'UNKNOWN';
 }
@@ -108,16 +115,25 @@ export type ServerItem = Readonly<{
   currency: string | null;
 }>;
 
-const byPrecedence = (a: LineIssue, b: LineIssue) => LINE_ISSUES.indexOf(a) - LINE_ISSUES.indexOf(b);
+const byPrecedence = (a: LineIssue, b: LineIssue) =>
+  LINE_ISSUES.indexOf(a) - LINE_ISSUES.indexOf(b);
 
 function withIssue(line: CartLine, issue: LineIssue, item: ServerItem): CartLine {
-  const issues = line.issues.includes(issue) ? line.issues : [...line.issues, issue].sort(byPrecedence);
+  const issues = line.issues.includes(issue)
+    ? line.issues
+    : [...line.issues, issue].sort(byPrecedence);
   let next: CartLine = { ...line, issues };
   if (issue === 'SOLD_OUT') next = { ...next, availableQuantity: item.available ?? 0 };
-  if (issue === 'INSUFFICIENT_STOCK' && item.available !== null) next = { ...next, availableQuantity: item.available };
+  if (issue === 'INSUFFICIENT_STOCK' && item.available !== null)
+    next = { ...next, availableQuantity: item.available };
   if (issue === 'PRICE_CHANGED' && item.currency !== null) {
-    if (item.wasMinor !== null) next = { ...next, previousUnitPrice: { amountMinor: item.wasMinor, currency: item.currency } };
-    if (item.nowMinor !== null) next = { ...next, unitPrice: { amountMinor: item.nowMinor, currency: item.currency } };
+    if (item.wasMinor !== null)
+      next = {
+        ...next,
+        previousUnitPrice: { amountMinor: item.wasMinor, currency: item.currency },
+      };
+    if (item.nowMinor !== null)
+      next = { ...next, unitPrice: { amountMinor: item.nowMinor, currency: item.currency } };
   }
   return next;
 }
@@ -134,7 +150,9 @@ export function applyItems(cart: SellerCart, items: readonly ServerItem[]): Sell
     const issue = issueFromServerCode(item.code);
     if (issue === null) continue;
     lines = lines.map((line) =>
-      item.variantId === null || line.variantId === item.variantId ? withIssue(line, issue, item) : line,
+      item.variantId === null || line.variantId === item.variantId
+        ? withIssue(line, issue, item)
+        : line,
     );
   }
   return lines === cart.lines ? cart : { ...cart, lines };

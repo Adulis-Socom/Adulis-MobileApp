@@ -35,7 +35,11 @@ const DENIED: ReadonlyArray<[what: string, pattern: RegExp, sample: string]> = [
   ['a reservation route', /\/reservations\//, "'/reservations/{rid}/cancel'"],
   ['a refund route', /\/refunds\b/, "'/v1/seller/orders/{id}/refunds'"],
   ['a refund acknowledgement', /\/refunds\b/, "'/refunds/{rid}/acknowledge'"],
-  ['reissuing payment instructions', /reissue-instructions/, "'/v1/seller/orders/{id}/reissue-instructions'"],
+  [
+    'reissuing payment instructions',
+    /reissue-instructions/,
+    "'/v1/seller/orders/{id}/reissue-instructions'",
+  ],
   ['a billing route', /\/v1\/billing\b/, "'/v1/billing/purchase-intent'"],
   ['a Seller payout route', /\/v1\/seller\/payout\b/, "'/v1/seller/payout/history'"],
   ['a claim or its remedy', /\/v1\/(?:seller\/)?claims\b/, "'/v1/seller/claims/{id}/remedy'"],
@@ -47,7 +51,9 @@ const DENIED: ReadonlyArray<[what: string, pattern: RegExp, sample: string]> = [
 
 describe('the app names no cart, Order, payment, receipt, refund, billing, payout, claim or checkout route', () => {
   // The app's own code: the test helpers (a top-level testing folder, and the cart folder's own) are not shipped.
-  const sources = productionSources('.').filter((s) => !s.file.startsWith('testing/') && !s.file.startsWith('commerce/testing/'));
+  const sources = productionSources('.').filter(
+    (s) => !s.file.startsWith('testing/') && !s.file.startsWith('commerce/testing/'),
+  );
 
   it('the scan looks at the app: it sees the API client and the Seller Companion reads', () => {
     const files = sources.map((s) => s.file);
@@ -62,12 +68,15 @@ describe('the app names no cart, Order, payment, receipt, refund, billing, payou
     expect(offenders).toEqual([]);
   });
 
-  it.each(DENIED)('the pattern for %s bites on a sample, and ignores a comment', (_what, pattern, sample) => {
-    expect(pattern.test(stripComments(`const path = ${sample};`))).toBe(true);
-    expect(pattern.test(stripComments(`// ${sample}\nconst a = 1;`))).toBe(false);
-  });
+  it.each(DENIED)(
+    'the pattern for %s bites on a sample, and ignores a comment',
+    (_what, pattern, sample) => {
+      expect(pattern.test(stripComments(`const path = ${sample};`))).toBe(true);
+      expect(pattern.test(stripComments(`// ${sample}\nconst a = 1;`))).toBe(false);
+    },
+  );
 
-  it('does not match the Seller Companion\'s own store orders', () => {
+  it("does not match the Seller Companion's own store orders", () => {
     for (const [, pattern] of DENIED) {
       expect(pattern.test("'/v1/seller/orders'")).toBe(false);
       expect(pattern.test("'/v1/seller/orders/{id}'")).toBe(false);
@@ -76,8 +85,11 @@ describe('the app names no cart, Order, payment, receipt, refund, billing, payou
 });
 
 describe('every contract route that touches a cart, an Order, money or a claim is decided here', () => {
-  const contractPaths = Object.keys((JSON.parse(repoFile('contracts/openapi.json')) as { paths: Record<string, unknown> }).paths);
-  const TOUCHES = /cart|order|payment|refund|reissue|billing|payout|claim|checkout|handoff|remedy|reservation|receipt/i;
+  const contractPaths = Object.keys(
+    (JSON.parse(repoFile('contracts/openapi.json')) as { paths: Record<string, unknown> }).paths,
+  );
+  const TOUCHES =
+    /cart|order|payment|refund|reissue|billing|payout|claim|checkout|handoff|remedy|reservation|receipt/i;
 
   /**
    * Routes that name one of those words and are still allowed, each for a reviewed reason: the Seller
@@ -98,11 +110,15 @@ describe('every contract route that touches a cart, an Order, money or a claim i
   const denied = (path: string) => DENIED.some(([, pattern]) => pattern.test(`'${path}'`));
 
   it('reads the contract: it has the cart and Order routes', () => {
-    expect(contractPaths).toEqual(expect.arrayContaining(['/v1/cart', '/v1/cart/lines', '/v1/orders']));
+    expect(contractPaths).toEqual(
+      expect.arrayContaining(['/v1/cart', '/v1/cart/lines', '/v1/orders']),
+    );
   });
 
   it('leaves no such route undecided: a new one fails here until it is denied or allowed on purpose', () => {
-    const undecided = contractPaths.filter((path) => TOUCHES.test(path) && !ALLOWED.includes(path) && !denied(path));
+    const undecided = contractPaths.filter(
+      (path) => TOUCHES.test(path) && !ALLOWED.includes(path) && !denied(path),
+    );
     expect(undecided).toEqual([]);
   });
 

@@ -56,7 +56,15 @@ const label = (view: CartViewState): string => {
 };
 
 type CartsHandle = { current: { refresh: () => void } | null };
-function Carts({ name = 'carts', focused = true, handle }: { name?: string; focused?: boolean; handle?: CartsHandle }) {
+function Carts({
+  name = 'carts',
+  focused = true,
+  handle,
+}: {
+  name?: string;
+  focused?: boolean;
+  handle?: CartsHandle;
+}) {
   const { view, refresh } = useCarts({ focused });
   if (handle) handle.current = { refresh };
   return <Text testID={`view-${name}`}>{label(view)}</Text>;
@@ -71,8 +79,10 @@ function Add({ handle }: { handle: AddHandle }) {
 
 const view = (name = 'carts') => screen.getByTestId(`view-${name}`);
 const addState = () => screen.getByTestId('add-state');
-const reads = (stub: ReturnType<typeof stubAdapter>) => stub.calls.filter((c) => c.op === 'getCarts');
-const sends = (stub: ReturnType<typeof stubAdapter>) => stub.calls.filter((c) => c.op === 'addLine');
+const reads = (stub: ReturnType<typeof stubAdapter>) =>
+  stub.calls.filter((c) => c.op === 'getCarts');
+const sends = (stub: ReturnType<typeof stubAdapter>) =>
+  stub.calls.filter((c) => c.op === 'addLine');
 
 afterEach(() => {
   onlineManager.setOnline(true);
@@ -89,7 +99,7 @@ describe('which reads are repeated', () => {
 });
 
 describe('reading the carts', () => {
-  it('loads, then lists the answer as the server\'s last word', async () => {
+  it("loads, then lists the answer as the server's last word", async () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
     await renderWithCommerce(<Carts />, { adapter: stub.adapter, token: 'token-a' });
@@ -136,7 +146,10 @@ describe('reading the carts', () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
     const held = stub.hold('getCarts');
-    const { session, queryClient } = await renderWithCommerce(<Carts />, { adapter: stub.adapter, token: null });
+    const { session, queryClient } = await renderWithCommerce(<Carts />, {
+      adapter: stub.adapter,
+      token: null,
+    });
     await waitFor(() => expect(reads(stub)).toHaveLength(1));
     expect(reads(stub)[0]).toMatchObject({ scopeKind: 'guest', epoch: 1 });
     expect(view()).toHaveTextContent('LOADING');
@@ -154,7 +167,10 @@ describe('reading the carts', () => {
   it('shows nothing of a scope that has ended: a sign-out starts a new read as the guest', async () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
-    const { session } = await renderWithCommerce(<Carts />, { adapter: stub.adapter, token: 'token-a' });
+    const { session } = await renderWithCommerce(<Carts />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(view()).toHaveTextContent('LISTED:VERIFIED:1'));
     stub.setCarts({ carts: [], checkedAt: null });
     await act(() => session.current!.clearSession());
@@ -171,7 +187,10 @@ describe('revalidation', () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
     const handle: CartsHandle = { current: null };
-    await renderWithCommerce(<Carts handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    await renderWithCommerce(<Carts handle={handle} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(view()).toHaveTextContent('LISTED:VERIFIED:1'));
     await act(async () => handle.current!.refresh());
     await waitFor(() => expect(reads(stub)).toHaveLength(2));
@@ -205,7 +224,10 @@ describe('revalidation', () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
     const handle: CartsHandle = { current: null };
-    await renderWithCommerce(<Carts handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    await renderWithCommerce(<Carts handle={handle} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(view()).toHaveTextContent('LISTED:VERIFIED:1'));
     await act(async () => onlineManager.setOnline(false));
     await act(async () => handle.current!.refresh());
@@ -218,7 +240,10 @@ describe('revalidation', () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
     const handle: CartsHandle = { current: null };
-    await renderWithCommerce(<Carts handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    await renderWithCommerce(<Carts handle={handle} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(view()).toHaveTextContent('LISTED:VERIFIED:1'));
     stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
     await act(async () => handle.current!.refresh());
@@ -228,7 +253,10 @@ describe('revalidation', () => {
   it('asks again on regaining focus, and not for the first focus', async () => {
     const stub = stubAdapter();
     stub.setCarts(oneCart());
-    const { show } = await renderWithCommerce(<Carts focused={false} />, { adapter: stub.adapter, token: 'token-a' });
+    const { show } = await renderWithCommerce(<Carts focused={false} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     await waitFor(() => expect(view()).toHaveTextContent('LISTED:VERIFIED:1'));
     expect(reads(stub)).toHaveLength(1);
     await show(<Carts focused />);
@@ -255,7 +283,9 @@ describe('revalidation', () => {
       original = appState.getMockImplementation();
       appState.mockImplementation((type, listener) => {
         if (type === 'change') listeners.push(listener as (state: AppStateStatus) => void);
-        return { remove: () => (listeners = listeners.filter((l) => l !== listener)) } as ReturnType<typeof AppState.addEventListener>;
+        return {
+          remove: () => (listeners = listeners.filter((l) => l !== listener)),
+        } as ReturnType<typeof AppState.addEventListener>;
       });
     });
     afterEach(() => {
@@ -297,7 +327,10 @@ describe('revalidation', () => {
 describe('adding a line', () => {
   it('is unavailable with the disabled adapter, and sends nothing', async () => {
     const handle: AddHandle = { current: null };
-    await renderWithCommerce(<Add handle={handle} />, { adapter: disabledCartAdapter, token: 'token-a' });
+    await renderWithCommerce(<Add handle={handle} />, {
+      adapter: disabledCartAdapter,
+      token: 'token-a',
+    });
     expect(handle.current!.add(1)).toBe('unavailable');
     expect(addState()).toHaveTextContent('IDLE');
   });
@@ -306,7 +339,8 @@ describe('adding a line', () => {
     const stub = stubAdapter();
     const handle: AddHandle = { current: null };
     await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
-    for (const quantity of [0, -2, 1.5, 2 ** 53, 1e21, Number.NaN]) expect(handle.current!.add(quantity)).toBe('invalid');
+    for (const quantity of [0, -2, 1.5, 2 ** 53, 1e21, Number.NaN])
+      expect(handle.current!.add(quantity)).toBe('invalid');
     expect(sends(stub)).toHaveLength(0);
   });
 
@@ -437,7 +471,10 @@ describe('adding a line', () => {
   it('a stale screen cannot send for a session that has ended', async () => {
     const stub = stubAdapter();
     const handle: AddHandle = { current: null };
-    const { session } = await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    const { session } = await renderWithCommerce(<Add handle={handle} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     stub.failNext('addLine', gatewayPage(502));
     await act(async () => {
       handle.current!.add(1);
@@ -453,10 +490,13 @@ describe('adding a line', () => {
     expect(sends(stub)).toHaveLength(1);
   });
 
-  it('an answer for an add held across a sign-out never completes the next session\'s own add of the same option', async () => {
+  it("an answer for an add held across a sign-out never completes the next session's own add of the same option", async () => {
     const stub = stubAdapter();
     const handle: AddHandle = { current: null };
-    const { session } = await renderWithCommerce(<Add handle={handle} />, { adapter: stub.adapter, token: 'token-a' });
+    const { session } = await renderWithCommerce(<Add handle={handle} />, {
+      adapter: stub.adapter,
+      token: 'token-a',
+    });
     const heldBeforeSignOut = stub.hold('addLine');
     await act(async () => {
       handle.current!.add(1);
@@ -534,6 +574,11 @@ describe('adding a line', () => {
   });
 
   it('keeps the carts in the cache under the key of the scope that asked', () => {
-    expect(cartsKey({ kind: 'account', epoch: 3, isCurrent: () => true })).toEqual(['commerce', 'carts', 'account', 3]);
+    expect(cartsKey({ kind: 'account', epoch: 3, isCurrent: () => true })).toEqual([
+      'commerce',
+      'carts',
+      'account',
+      3,
+    ]);
   });
 });
