@@ -89,8 +89,8 @@ describe('the rows that could be an unconfirmed send', () => {
     const wrong = ['is this still available?', 'Is this still available? ', 'Is this still', 'Is this still available?!'];
     expect(candidatesFor(pending(baseline), wrong.map((body) => row({ body, sentAt: at('30') })))).toEqual([]);
     // The same letters composed and decomposed are different strings, so they are not the same message.
-    expect(candidatesFor(pending(baseline, { text: 'café' }), [row({ body: 'café', sentAt: at('30') })])).toEqual([]);
-    expect(candidatesFor(pending(baseline, { text: 'café' }), [row({ body: 'café', sentAt: at('30') })])).toHaveLength(1);
+    expect(candidatesFor(pending(baseline, { text: 'caf\u00e9' }), [row({ body: 'cafe\u0301', sentAt: at('30') })])).toEqual([]);
+    expect(candidatesFor(pending(baseline, { text: 'caf\u00e9' }), [row({ body: 'caf\u00e9', sentAt: at('30') })])).toHaveLength(1);
   });
 
   it('an anchored send matches only rows about a Product, and a plain one only plain rows', () => {
@@ -124,7 +124,7 @@ describe('the rows that could be an unconfirmed send', () => {
   });
 
   it('matches a message at the length limit written in Ge\'ez, which is three bytes a letter', () => {
-    const long = 'ሀ'.repeat(4000);
+    const long = '\u1200'.repeat(4000);
     const baseline = { newestSentAt: at('01'), edgeIds: [] };
     expect(candidatesFor(pending(baseline, { text: long }), [row({ body: long, sentAt: at('30') })])).toHaveLength(1);
     expect(candidatesFor(pending(baseline, { text: long }), [row({ body: long.slice(1), sentAt: at('30') })])).toEqual([]);
