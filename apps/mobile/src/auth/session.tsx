@@ -127,6 +127,7 @@ export function SessionProvider({
     queryClient.clear();
     useUiStore.getState().setActiveMode(null);
     useUiStore.getState().setPendingSave(null);
+    useUiStore.getState().clearPendingSends();
     setSession({ status: 'signedOut' });
   }, [queryClient]);
 
@@ -210,6 +211,8 @@ export function SessionProvider({
     async (credential: string) => {
       // SecureStore first: a sign-in the next launch would forget is not a sign-in.
       await storage.write(credential);
+      // Another Account signing in over a live session: no message of the first one stays in memory.
+      if (token.current !== null && token.current !== credential) useUiStore.getState().clearPendingSends();
       token.current = credential;
       setSession({ status: 'signedIn', token: credential });
       setOtpPhone(null); // the code flow is spent

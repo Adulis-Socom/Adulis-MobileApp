@@ -13,6 +13,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useLocale, useT } from '../i18n/i18n';
+import { useUiStore } from '../state/ui-store';
 import { useTheme } from '../theme/theme';
 import {
   CONVERSATIONS,
@@ -30,6 +31,7 @@ import type { ProductRef } from './MessageSellerButton';
 import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { candidatesFor, captureBaseline, type Baseline } from './pending-match';
+import { credentialTag, pendingRetention, peekPending, restorePending, type PendingSendRecord } from './pending-policy';
 import { isPathName } from './public-read';
 import { keepIfCurrent, usePrivateApi } from './saved';
 import { judgeFailure, type SendStatus } from './send-intent';
@@ -98,10 +100,20 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
       </>
     );
   }
-  return <OwnedConversation conversationRef={conversationRef} product={product} />;
+  // Whose a kept message would be (pending-policy.ts): only while the retention is on.
+  const ownerTag = pendingRetention() === 'session' ? credentialTag(current) : null;
+  return <OwnedConversation conversationRef={conversationRef} product={product} ownerTag={ownerTag} />;
 }
 
-function OwnedConversation({ conversationRef, product }: { conversationRef: unknown; product: ProductRef | null }) {
+function OwnedConversation({
+  conversationRef,
+  product,
+  ownerTag,
+}: {
+  conversationRef: unknown;
+  product: ProductRef | null;
+  ownerTag: string | null;
+}) {
   const t = useT();
   const theme = useTheme();
   const locale = useLocale();
@@ -111,9 +123,17 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const ref = isConversationRef(conversationRef) ? conversationRef : null;
   const messages = useConversationMessages(ref, focused);
   const conversations = useConversations();
-  const [draft, setDraft] = useState('');
+  // An unconfirmed message kept from an earlier visit (pending-policy.ts), read once when this screen opens.
+  const restored = useRef<PendingSendRecord | null | undefined>(undefined);
+  if (restored.current === undefined) restored.current = ref === null ? null : peekPending(ownerTag, ref, Date.now());
+  const kept = restored.current;
+  // A kept message that cannot be used (another credential, past the cap) is dropped once the screen is on, never while it renders.
+  useEffect(() => {
+    if (kept === null && ref !== null) restorePending(ownerTag, ref, Date.now());
+  }, [kept, ref, ownerTag]);
+  const [draft, setDraft] = useState(kept?.text ?? '');
   // failed: the server refused it; unknown: no answer (it may have been stored); sent: accepted.
-  const [state, setState] = useState<SendStatus>('unsent');
+  const [state, setState] = useState<SendStatus>(kept === null ? 'unsent' : 'unknown');
   // Unknown, and the same key can no longer be sent again (a key conflict, or older than its safe age).
   const [keyLost, setKeyLost] = useState(false);
   // A wait the server or an intermediary asked for: sending and Ask the Seller stay off until it ends.
@@ -145,12 +165,30 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     startedAt: number;
     attempts: number;
     baseline: Baseline;
-  } | null>(null);
+  } | null>(
+    kept === null
+      ? null
+      : { text: kept.text, productId: kept.productId, key: kept.key, startedAt: kept.startedAt, attempts: kept.attempts, baseline: kept.baseline },
+  );
   // An unconfirmed message the person chose to edit: kept (this screen only) so that its words can still be
   // recognised in the history while they are in the box again.
   const [watch, setWatch] = useState<{ text: string; aboutProduct: boolean; baseline: Baseline } | null>(null);
   // The next message's Product (lookup keys of a public read), and a refusal from the last check.
-  const [context, setContext] = useState<ProductRef | null>(product);
+  const [context, setContext] = useState<ProductRef | null>(kept === null ? product : kept.product);
+  // Keeps the unconfirmed message for the session, or drops it (pending-policy.ts; a no-op while the retention is off).
+  const retain = (intent: NonNullable<typeof sendIntent.current> | null) => {
+    // The switch is read here too, not only where the owner tag is made: two independent guards while it is off.
+    if (pendingRetention() !== 'session' || ownerTag === null || ref === null) return;
+    // A message is kept only while the session it belongs to is still the signed-in one (a press can be handled just
+    // as the session ends); dropping one is always allowed.
+    if (intent !== null && !api?.isCurrent()) return;
+    useUiStore.getState().setPendingSend(
+      ref,
+      intent === null
+        ? null
+        : { owner: ownerTag, text: intent.text, productId: intent.productId, product: context, key: intent.key, startedAt: intent.startedAt, attempts: intent.attempts, baseline: intent.baseline },
+    );
+  };
   const [refusal, setRefusal] = useState<'gone' | 'mismatch' | 'unchecked' | null>(null);
   const [picking, setPicking] = useState(false);
   const [entered, setEntered] = useState(product);
@@ -283,6 +321,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     const given = sendIntent.current;
     if (given !== null) setWatch({ text: given.text, aboutProduct: given.productId !== null, baseline: given.baseline });
     sendIntent.current = null;
+    retain(null);
     setKeyLost(false);
     setState('unsent');
     setError(null);
@@ -293,6 +332,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const discard = () => {
     if (sending.current) return;
     sendIntent.current = null;
+    retain(null);
     setWatch(null);
     setDraft('');
     setContext(null);
@@ -375,10 +415,13 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         setWatch(null);
       }
       sendIntent.current.attempts += 1;
+      // Written before the request leaves, so that leaving the screen while it is in flight keeps it.
+      retain(sendIntent.current);
       const body = await api.sendMessage(ref, text, sendIntent.current.key, productId);
       // An acceptance without a readable message id may still have stored it: unknown.
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
+      retain(null);
       if (!api.isCurrent()) return;
       setDraft('');
       // The Product described this message only: the next one starts without it.
@@ -397,7 +440,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       // so, and re-read. A wait that was asked for holds the next attempt.
       const verdict = judgeFailure(failure, sendIntent.current, Date.now());
       const answered = verdict.outcome === 'failed';
-      if (answered) sendIntent.current = null;
+      if (answered) {
+        sendIntent.current = null;
+        retain(null);
+      }
       if (!api.isCurrent()) return;
       setKeyLost(!answered && !verdict.replay);
       const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
