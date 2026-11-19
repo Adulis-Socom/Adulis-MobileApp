@@ -44,7 +44,11 @@ export default function You() {
   const setLocale = useUiStore((state) => state.setLocale);
   const signedIn = session.status === 'signedIn';
   const sellerAvailable = useAvailableModes().includes('seller');
-  const [signOutFailed, setSignOutFailed] = useState(false);
+  // The credential whose Sign out failed. The line shows only while that credential is the signed-in one:
+  // a session that ended, or another Account signing in, leaves this tab mounted and must not inherit it.
+  const credential = session.status === 'signedIn' ? session.token : null;
+  const [signOutFailedFor, setSignOutFailedFor] = useState<string | null>(null);
+  const signOutFailed = credential !== null && signOutFailedFor === credential;
 
   const section = (title: string, children: ReactNode) => (
     <View style={{ gap: theme.space.sm }}>
@@ -108,14 +112,15 @@ export default function You() {
               <Button
                 label={t('common.signOut')}
                 onPress={() => {
-                  setSignOutFailed(false);
+                  const pressed = credential;
+                  setSignOutFailedFor(null);
                   signOut().then(
                     // The button disappears with the session; say what happened (not the guest
                     // prompt that replaces the screen) instead of leaving a screen reader's focus
                     // on nothing.
                     () => AccessibilityInfo.announceForAccessibility(t('buyer.delete.signed_out')),
                     // The device could not forget the credential: still signed in, and says so.
-                    () => setSignOutFailed(true),
+                    () => setSignOutFailedFor(pressed),
                   );
                 }}
               />
