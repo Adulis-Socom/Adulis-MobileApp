@@ -1771,7 +1771,7 @@ test('each way git can fail has its own words: not started, no repository, anoth
   assert.match(other, /\(fatal: something odd\): git cannot read this checkout/);
   assert.match(
     ask(reply(0, 'false')).problem,
-    /it is not a work tree: a bare repository, or the inside of a git directory/,
+    /it is not a work tree: a bare repository, the inside of a git directory, or a repository whose work tree is configured elsewhere/,
   );
   assert.match(
     ask(reply(0, 'true\n../')).problem,
@@ -1801,6 +1801,16 @@ test('a bare repository and the inside of a git directory are not checkouts', ()
       /not a work tree/,
     );
     assert.deepEqual(readCheckoutHead(repo), { head }, 'the repository itself is still a checkout');
+    // a repository whose work tree is configured elsewhere is not a checkout at this path, and the words say so
+    const moved = path.join(base, 'moved');
+    repoWithCommit(moved, 'moved\n');
+    const elsewhere = path.join(base, 'elsewhere');
+    mkdirSync(elsewhere);
+    const set = spawnSync('git', ['-C', moved, 'config', 'core.worktree', elsewhere], {
+      encoding: 'utf8',
+    });
+    assert.equal(set.status, 0, set.stderr);
+    assert.match(readCheckoutHead(moved).problem, /work tree is configured elsewhere/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

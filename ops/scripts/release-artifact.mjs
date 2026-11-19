@@ -22,6 +22,7 @@ import {
   openSync,
   readFileSync,
   readSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -79,6 +80,8 @@ export function readRecordFile(file) {
   let text;
   let fd;
   try {
+    // checked before the open too: opening a FIFO would wait for a writer
+    if (!statSync(file).isFile()) return { problems: ['the record is not a regular file'] };
     fd = openSync(file, 'r');
     if (!fstatSync(fd).isFile()) return { problems: ['the record is not a regular file'] };
     const buffer = Buffer.alloc(MAX_RECORD_BYTES + 1);

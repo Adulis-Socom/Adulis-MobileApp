@@ -22,7 +22,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { buildManifest, checkDirectory, sha256 } from './migration-guard.mjs';
+import { buildManifest, checkDirectory, readCheckoutHead, sha256 } from './migration-guard.mjs';
 import {
   ARTIFACT_SCHEMA,
   MAX_RECORD_BYTES,
@@ -477,7 +477,12 @@ test('a pipeline simulation: the record written in the build checkout travels to
 function linkTo(dir) {
   const base = mkdtempSync(path.join(tmpdir(), 'rellink-'));
   const link = path.join(base, 'current');
-  symlinkSync(dir, link, 'junction');
+  try {
+    symlinkSync(dir, link, 'junction');
+  } catch (e) {
+    rmSync(base, { recursive: true, force: true });
+    throw e;
+  }
   return {
     link,
     cleanup: () => {
@@ -491,14 +496,38 @@ function linkTo(dir) {
   };
 }
 
+/**
+ * May a failure to create a directory link skip a test? Only on Windows, and only when it refuses the user (EPERM or EACCES).
+ * Anywhere else a failure is a failure: a skip there would turn the coverage of a silent exit 0 into a green gate.
+ */
+const mayNotLink = (platform, code) =>
+  platform === 'win32' && (code === 'EPERM' || code === 'EACCES');
+
+/** A link to `dir`, or null after `t.skip` when this Windows user may not create one. Everything else is rethrown. */
+function linkOrSkip(t, dir) {
+  try {
+    return linkTo(dir);
+  } catch (e) {
+    if (!mayNotLink(process.platform, e.code)) throw e;
+    t.skip(`this Windows user may not create a directory link (${e.code})`);
+    return null;
+  }
+}
+
+test('a link may be skipped only on Windows when the user may not create one, and every other failure is a failure', () => {
+  assert.equal(mayNotLink('win32', 'EPERM'), true);
+  assert.equal(mayNotLink('win32', 'EACCES'), true);
+  for (const code of ['EPERM', 'EACCES', 'ENOENT', 'EEXIST', 'ENOSYS', undefined])
+    assert.equal(mayNotLink('linux', code), false, `linux ${code}`);
+  for (const code of ['ENOENT', 'EEXIST', 'EINVAL', undefined])
+    assert.equal(mayNotLink('win32', code), false, `win32 ${code}`);
+});
+
 test('started through a directory link, the migration guard and the record script still run: the usage refusal and exit 2, never a silent exit 0', (t) => {
   const tree = artifactTree();
-  let l;
-  try {
-    l = linkTo(tree.dir);
-  } catch (e) {
+  const l = linkOrSkip(t, tree.dir);
+  if (!l) {
     tree.cleanup();
-    t.skip(`no directory link can be created here (${e.code}); the Linux CI run creates a symlink`);
     return;
   }
   try {
@@ -532,10 +561,9 @@ test('started through a directory link, the migration guard and the record scrip
   }
 });
 
-test('entryKind recognises the running script through a link and refuses an unresolvable name instead of guessing', async (t) => {
+test('entryKind compares real paths: the script itself, another file, no argument, and a name that cannot be resolved', async () => {
   const { entryKind } = await import('./migration-guard.mjs');
   const base = mkdtempSync(path.join(tmpdir(), 'relentry-'));
-  let l = null;
   try {
     const real = path.join(base, 'real');
     mkdirSync(real);
@@ -549,29 +577,80 @@ test('entryKind recognises the running script through a link and refuses an unre
     assert.equal(entryKind(meta, ''), 'import');
     assert.equal(entryKind(meta, path.join(base, 'gone', 'tool.mjs')), 'unresolved');
     assert.equal(entryKind(meta, path.join(base, 'gone', 'else.mjs')), 'import');
-    try {
-      l = linkTo(real);
-    } catch (e) {
-      t.diagnostic(
-        `no directory link can be created here (${e.code}); the link case ran in the Linux CI run`,
-      );
-    }
-    if (l) assert.equal(entryKind(meta, path.join(l.link, 'tool.mjs')), 'run');
   } finally {
-    l?.cleanup();
     rmSync(base, { recursive: true, force: true });
   }
 });
 
-test('no script in ops/scripts decides it is the running script by comparing its URL with argv[1] as typed', () => {
-  const dir = path.join(ROOT, 'ops', 'scripts');
-  const offenders = readdirSync(dir)
-    .filter((n) => n.endsWith('.mjs') && !n.endsWith('.test.mjs'))
-    .filter((n) => {
-      const src = readFileSync(path.join(dir, n), 'utf8');
-      return /import\.meta\.url\s*===/.test(src) || /resolve\(process\.argv\[1\]\)\s*===/.test(src);
-    });
-  assert.deepEqual(offenders, []);
+test('entryKind recognises the running script through a link', async (t) => {
+  const { entryKind } = await import('./migration-guard.mjs');
+  const base = mkdtempSync(path.join(tmpdir(), 'relentry-'));
+  try {
+    const real = path.join(base, 'real');
+    mkdirSync(real);
+    const file = path.join(real, 'tool.mjs');
+    writeFileSync(file, '');
+    const l = linkOrSkip(t, real);
+    if (!l) return;
+    try {
+      assert.equal(
+        entryKind(pathToFileURL(realpathSync(file)).href, path.join(l.link, 'tool.mjs')),
+        'run',
+      );
+    } finally {
+      l.cleanup();
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// A file that is not held to the rule yet. Each entry says why and what follows; the test fails when an entry is no longer
+// needed, so the list only ever shrinks.
+const START_BY_TYPED_PATH = new Set([
+  // The native harness compares its own path as typed. It belongs to the native harness work and changes there, with its own
+  // test; remove this entry in that change.
+  'ops/native/harness.mjs',
+]);
+
+/** Does this source decide "am I the script being run" by comparing paths as typed, or without resolving them at all? */
+const startsByTypedPath = (src) =>
+  /import\.meta\.url\s*===/.test(src) ||
+  /resolve\(process\.argv\[1\]\)\s*===/.test(src) ||
+  (src.includes('process.argv[1]') && !/realpathSync|entryKind/.test(src));
+
+test('no script under ops/ decides it is the running script from a path as typed: one that names argv[1] resolves real paths', () => {
+  const files = repositoryTextFiles().filter(
+    (rel) => /^ops\/.*\.mjs$/.test(rel) && !/\.test\.mjs$/.test(rel),
+  );
+  assert.ok(files.length > 20, `the scan sees the scripts (${files.length} files)`);
+  const offenders = files.filter((rel) =>
+    startsByTypedPath(readFileSync(path.join(ROOT, rel), 'utf8')),
+  );
+  assert.deepEqual(
+    offenders.filter((rel) => !START_BY_TYPED_PATH.has(rel)),
+    [],
+  );
+  // an exception that no longer applies must be removed
+  assert.deepEqual(
+    [...START_BY_TYPED_PATH].filter((rel) => !offenders.includes(rel)),
+    [],
+    'remove the entry: the file now resolves real paths',
+  );
+  // the rule recognises the spellings it is about (a small self-check, so a loosened pattern is noticed)
+  for (const bad of [
+    'if (import.meta.url === pathToFileURL(process.argv[1]).href) main();',
+    'if (resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();',
+    'if (process.argv[1] === fileURLToPath(import.meta.url)) main();',
+    'if (fileURLToPath(import.meta.url).endsWith(process.argv[1])) main();',
+  ])
+    assert.equal(startsByTypedPath(bad), true, bad);
+  for (const good of [
+    'const self = (p) => realpathSync(p); if (self(process.argv[1]) === self(fileURLToPath(import.meta.url))) main();',
+    'const entry = entryKind(import.meta.url, process.argv[1]);',
+    'const x = 1;',
+  ])
+    assert.equal(startsByTypedPath(good), false, good);
 });
 
 // ---- with git metadata the record is also a promise about the files -------------------------------------------------------
@@ -683,7 +762,7 @@ test('the record script imports only identity helpers from the guard, nothing th
   for (const i of imports.filter((x) => x.from !== './migration-guard.mjs'))
     assert.ok(i.from.startsWith('node:'), `${i.from}: only the standard library otherwise`);
   assert.doesNotMatch(src, /import\s+\w+\s+from\s+'(?!node:)|import\s*\*\s*as|import\s*\(/);
-  // every file of the repository that names the script
+  // every committed file of the repository that names the script
   const allowed = new Set([
     'ops/scripts/release-artifact.mjs',
     'ops/scripts/release-artifact.test.mjs',
@@ -691,27 +770,62 @@ test('the record script imports only identity helpers from the guard, nothing th
     'docs/infrastructure/MIGRATION-FILE-GUARD.md',
     'ops/runbooks/deploy.md',
   ]);
-  const skip = new Set(['node_modules', '.git', 'dist', 'build', 'coverage']);
-  const text = /\.(md|mjs|cjs|js|ts|tsx|json|ya?ml|sh|sql|toml|txt)$|^Dockerfile/;
   const found = [];
-  const walk = (dir) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (skip.has(e.name) || e.isSymbolicLink()) continue;
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (text.test(e.name) && statSync(p).size < 3 * 1024 * 1024) {
-        if (readFileSync(p, 'utf8').includes('release-artifact'))
-          found.push(path.relative(ROOT, p).replaceAll('\\', '/'));
-      }
+  for (const rel of repositoryTextFiles()) {
+    let content;
+    try {
+      content = readFileSync(path.join(ROOT, rel), 'utf8');
+    } catch (e) {
+      if (e.code === 'ENOENT') continue; // removed since the list was made (a concurrent run, a deleted tracked file)
+      throw e;
     }
-  };
-  walk(ROOT);
+    if (content.includes('release-artifact')) found.push(rel);
+  }
   assert.deepEqual(
     found.filter((f) => !allowed.has(f)),
     [],
     'a Dockerfile, workflow, compose file, blueprint or script that starts using the record script must be reviewed on purpose',
   );
 });
+
+/**
+ * The text files of the repository to scan: the tracked files when the repository has git metadata of its own (so an untracked
+ * scratch file or a nested worktree cannot make the scan fail), otherwise a walk that skips what is not source.
+ */
+function repositoryTextFiles() {
+  const text = /\.(md|mjs|cjs|js|ts|tsx|json|ya?ml|sh|sql|toml|txt)$|(^|\/)Dockerfile/;
+  const small = (rel) => {
+    try {
+      return statSync(path.join(ROOT, rel)).size < 3 * 1024 * 1024;
+    } catch (e) {
+      if (e.code === 'ENOENT') return false;
+      throw e;
+    }
+  };
+  if (readCheckoutHead(ROOT).head) {
+    const r = spawnSync('git', ['-C', ROOT, 'ls-files', '-z'], {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+    });
+    assert.equal(r.status, 0, `git ls-files: ${r.stderr}`);
+    return r.stdout.split('\0').filter((rel) => rel && text.test(rel) && small(rel));
+  }
+  const skip = new Set(['node_modules', '.git', 'dist', 'build', 'coverage']);
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(e.name) || e.isSymbolicLink()) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else {
+        const rel = path.relative(ROOT, p).replaceAll('\\', '/');
+        if (text.test(rel) && small(rel)) out.push(rel);
+      }
+    }
+  };
+  walk(ROOT);
+  return out;
+}
 
 // ---- a record path is read with a limit, and an odd commit value is a refusal, not a crash ------------------------------
 
@@ -734,12 +848,9 @@ test('the backup verifier and the recovery verdict also run through a directory 
   mkdirSync(path.join(dir, 'ops', 'scripts'), { recursive: true });
   for (const f of ['db-backup-verify.mjs', 'pg-recovery-verdict.mjs'])
     cpSync(path.join(ROOT, 'ops', 'scripts', f), path.join(dir, 'ops', 'scripts', f));
-  let l;
-  try {
-    l = linkTo(dir);
-  } catch (e) {
+  const l = linkOrSkip(t, dir);
+  if (!l) {
     rmSync(dir, { recursive: true, force: true });
-    t.skip(`no directory link can be created here (${e.code}); the Linux CI run creates a symlink`);
     return;
   }
   try {

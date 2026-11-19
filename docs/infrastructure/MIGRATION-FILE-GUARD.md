@@ -207,9 +207,10 @@ Three situations have an exit that does not touch history:
   (the guard classifies them UNKNOWN), and an IPv6 URL such as `[::1]` is refused (the URL parser reports that host with its
   brackets): name the host `localhost` or `127.0.0.1`. A reset reaches a database through its published loopback port. `pnpm db:seed`
   likewise accepts loopback hosts only.
-- A script that is started through a symlink, a junction or a substituted drive still runs: the guard, `release-artifact.mjs` and
-  the other scripts that decide "am I the running script" compare real paths, and a start that cannot recognise itself is a
-  refusal with exit 2, never a silent exit 0.
+- A script that is started through a symlink or a junction still runs: the guard, `release-artifact.mjs` and the other scripts
+  under `ops/scripts` that decide "am I the running script" compare real paths, and a start that cannot recognise itself is a
+  refusal with exit 2, never a silent exit 0. A test fails for any script under `ops/` that names `process.argv[1]` without
+  resolving real paths, apart from one named entry that changes with its own owner.
 - The runner reads the SQL files after the guard hashed them. On a checkout that is being edited that is a window of a few
   seconds; an immutable checkout (CI, a deployed build) has none.
 - The ordinary checks compare the manifest with the directory only. A hand edit of an old migration together with

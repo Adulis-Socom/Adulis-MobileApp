@@ -232,7 +232,10 @@ export function readCheckoutHead(root, run = git) {
   }
   const [inside, cdup = ''] = top.out.split(/\r?\n/);
   if (inside !== 'true')
-    return refuse('it is not a work tree: a bare repository, or the inside of a git directory', '');
+    return refuse(
+      'it is not a work tree: a bare repository, the inside of a git directory, or a repository whose work tree is configured elsewhere',
+      '',
+    );
   if (cdup !== '')
     return refuse('it has no .git of its own and sits inside another repository', '');
   const head = run(root, ['rev-parse', 'HEAD']);
