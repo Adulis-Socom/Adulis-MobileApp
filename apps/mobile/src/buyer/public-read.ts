@@ -35,6 +35,11 @@ export function isGone(error: unknown): boolean {
  * - `revalidate` asks again keeping the content on screen (a pull, a return from another
  *   screen). Only a success shows content: a 404 is `gone` whatever was shown before, and
  *   any other failure is an error, never the previous answer standing in for the current one.
+ * - A screen that cannot afford to lose what the Buyer was reading (the Product) passes
+ *   `keepOnFailure`. Then a failed or waiting re-read also hands back the last answer as `stale`
+ *   (and `refreshPaused` while it waits for a connection): the screen keeps what is not
+ *   time-sensitive and says what it can no longer vouch for. Never after a 404, never for a first
+ *   read or a new generation, and the kept answer still counts as shown for the background rule.
  *
  * `read` is null when the route parameters are malformed: nothing is requested. It is told
  * whether the request is a REVALIDATION: true once this screen has had an answer (a pull, a
@@ -44,6 +49,7 @@ export function isGone(error: unknown): boolean {
 export function usePublicRead<T>(
   resource: readonly string[],
   read: ((revalidation: boolean) => Promise<T>) | null,
+  { keepOnFailure = false }: { keepOnFailure?: boolean } = {},
 ) {
   const [generation, setGeneration] = useState(0);
   const answered = useRef(false);
@@ -64,7 +70,8 @@ export function usePublicRead<T>(
   });
 
   useForegroundRevalidation(
-    () => (query.status === 'success' ? query.data.receivedAt : undefined),
+    // An answer kept after a failed re-read is still on screen, so it is withheld like any other.
+    () => (query.status === 'success' || keepOnFailure ? query.data?.receivedAt : undefined),
     () => setGeneration((g) => g + 1),
   );
 
@@ -87,6 +94,13 @@ export function usePublicRead<T>(
     status: query.status,
     error: query.error,
     gone: isGone(query.error),
+    /** `keepOnFailure` only: a re-read failed (not a 404) and an earlier answer is held. */
+    stale:
+      keepOnFailure && query.isRefetchError && query.data !== undefined && !isGone(query.error)
+        ? { value: query.data.value, receivedAt: query.data.receivedAt, error: query.error }
+        : undefined,
+    /** `keepOnFailure` only: an earlier answer is held and its re-read waits for a connection. */
+    refreshPaused: keepOnFailure && query.fetchStatus === 'paused' && query.data !== undefined,
     /** Nothing to show and the request waits for a connection. */
     paused: query.fetchStatus === 'paused' && query.status !== 'success',
     revalidating: query.isRefetching,
