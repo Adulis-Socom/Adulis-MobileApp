@@ -8,8 +8,10 @@ import { requiresSellerContext } from '../auth/auth.guard';
  *
  * The idempotency lookup serves a stored response only while the caller's
  * CURRENT role still holds the route's @ReplayGrant code(s) on the presenting
- * surface. A route that declares nothing keeps the older standing-only
- * check, so the declarations are this control's only input.
+ * surface. A seller-context route that declares nothing is never served from
+ * the store (the handler decides every retry), and a store-side route outside
+ * /v1/seller that declares nothing keeps the standing-only check, so the
+ * declarations are this control's only input there.
  *
  * LEXICAL, like no-nested-pool-acquisition.spec.ts: it reads sources, never
  * builds the app, and needs no database. What it GUARANTEES:

@@ -45,9 +45,10 @@ export const REPLAY_GRANT_KEY = 'adulis:replay-grant';
  * fn_has_permission. It AUTHORISES NOTHING: the idempotency lookup
  * reads it to decide whether a stored response may be replayed to the
  * caller's CURRENT role and surface; when it may not, the handler runs and
- * fn_has_permission answers exactly as for a fresh request. A route without
- * it keeps the standing-only replay check, and
- * idempotency/replay-grant.spec.ts fails the build for any seller route
+ * fn_has_permission answers exactly as for a fresh request. A seller-context
+ * route without it is never served from the store: the handler decides every
+ * retry. Any other route without it keeps the standing-only replay check.
+ * idempotency/replay-grant.spec.ts also fails the build for any seller route
  * that leaves it out.
  */
 export const ReplayGrant = (...codes: string[]) => SetMetadata(REPLAY_GRANT_KEY, codes);

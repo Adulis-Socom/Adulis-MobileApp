@@ -9,7 +9,7 @@ import type { Response } from 'express';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { HandlerTransaction } from '../src/common/db/handler-transaction';
-import { Public } from '../src/common/auth/auth.guard';
+import { Public, REPLAY_GRANT_KEY } from '../src/common/auth/auth.guard';
 import { AdulisException } from '../src/common/errors/adulis-exception';
 import { hashRequest } from '../src/common/idempotency/idempotency';
 import type { LocalizedRequest } from '../src/common/http/locale.middleware';
@@ -272,6 +272,9 @@ describe('WO-SEC-002 idempotency scope and identifier validation', () => {
         ORDER BY p.code LIMIT 1`,
     );
     permissionCode = perm.rows[0].code as string;
+    // Like every real seller-context route, the probe declares the permission its handler asserts; a seller-context
+    // route that declares none is never served from the store. The code is chosen above, so it is declared here.
+    Reflect.defineMetadata(REPLAY_GRANT_KEY, [permissionCode], WoSec002Probe.prototype.seller);
 
     const moduleRef = await Test.createTestingModule({ imports: [WoSec002Module] }).compile();
     app = moduleRef.createNestApplication();

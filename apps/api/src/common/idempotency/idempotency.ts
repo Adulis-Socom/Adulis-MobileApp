@@ -132,7 +132,8 @@ export class IdempotencyService {
    * surface step, read-only and without raising. A member demoted since the
    * first request, or a session on a surface the permission does not reach,
    * is not served; the handler runs and fn_has_permission refuses exactly as
-   * it would a fresh request. No grants: standing alone, as before.
+   * it would a fresh request. No grants: standing alone, as before (runIdempotent
+   * does not ask at all for a seller-context route that declares none).
    */
   async check(
     key: string,
