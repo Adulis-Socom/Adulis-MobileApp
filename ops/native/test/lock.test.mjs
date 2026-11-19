@@ -2,7 +2,15 @@
 // a lock that cannot be read is a lock that is held, the lock is created atomically, and a Maestro process
 // that outlived its session is found and stopped by its recorded identity, never by its number alone.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -228,4 +236,53 @@ test('while a session runs nothing else changes the run; an orphan is stopped on
   assert.deepEqual(r.kills, [200]);
   assert.ok(!existsSync(file(r.dir)));
   assert.deepEqual(await guardSession(r.dir, r.io), { stopped: false });
+});
+
+test('of two sessions that find the same stale lock exactly one gets the run', async () => {
+  const r = rig();
+  put(r.dir, { pid: 999, createdAt: 'long gone' }); // its process is not there
+  const results = await Promise.allSettled([
+    acquireLock(r.dir, r.io, 100),
+    acquireLock(r.dir, r.io, 101),
+  ]);
+  assert.deepEqual(results.map((x) => x.status).sort(), ['fulfilled', 'rejected']);
+  const won = results.find((x) => x.status === 'fulfilled').value;
+  assert.deepEqual(JSON.parse(readFileSync(file(r.dir), 'utf8')), won);
+  assert.ok(results.find((x) => x.status === 'rejected').reason instanceof Refused);
+  assert.deepEqual(
+    readdirSync(r.dir).filter((n) => n.includes('stale')),
+    [],
+    'no stale copy is left behind',
+  );
+});
+
+test('a lock that another session replaced while the stale one was being judged is put back, and the second session is refused', async () => {
+  const r = rig();
+  put(r.dir, { pid: 999, createdAt: 'long gone' });
+  const fresh = { pid: 101, createdAt: 'c-101' };
+  const look = r.io.proc.info;
+  r.io.proc.info = async (p) => {
+    if (p === 999) put(r.dir, fresh); // a live session takes over while 999 is looked up
+    return look(p);
+  };
+  await rejects(acquireLock(r.dir, r.io, 100), /taken by another session at the same moment/);
+  assert.deepEqual(
+    JSON.parse(readFileSync(file(r.dir), 'utf8')),
+    fresh,
+    "the other session's lock stands",
+  );
+  assert.deepEqual(
+    readdirSync(r.dir).filter((n) => n.includes('stale')),
+    [],
+  );
+});
+
+test('a lock that cannot be read names what to do about it, in every refusal that mentions it', async () => {
+  const r = rig();
+  put(r.dir, '');
+  await rejects(acquireLock(r.dir, r.io, 101), /delete .*native\.lock and try again/);
+  await rejects(guardSession(r.dir, r.io), /delete .*native\.lock and try again/);
+  // a lock of a live session says nothing of the kind
+  put(r.dir, { pid: 100, createdAt: 'c-100' });
+  await assert.rejects(acquireLock(r.dir, r.io, 101), (e) => !/delete/.test(e.message));
 });

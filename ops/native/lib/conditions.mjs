@@ -274,7 +274,7 @@ export function evaluateConditions(f) {
       R(
         'NC-12',
         'FAIL',
-        `another native session holds this run (pid ${f.lock.pid ?? 'unknown'}${f.lock.why ? `, ${f.lock.why}` : ''})`,
+        `another native session holds this run (pid ${f.lock.pid ?? 'unknown'}${f.lock.why ? `, ${f.lock.why}` : ''})${f.lock.pid === undefined ? '; if no harness process of this run is running, delete native.lock in the run directory' : ''}`,
       ),
     );
   else if (f.lock.orphan)

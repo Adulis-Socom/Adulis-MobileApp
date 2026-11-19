@@ -482,3 +482,9 @@ test("the addresses of the device are this run's: a protected port or a foreign 
     /not this run's/,
   );
 });
+
+test('NC-12: a lock that cannot be read says what to do about it; a live session does not', () => {
+  const unreadable = run({ lock: { held: true, unknown: true, why: 'the lock file is empty' } });
+  assert.match(unreadable.by('NC-12').detail, /delete native\.lock in the run directory/);
+  assert.doesNotMatch(run({ lock: { held: true, pid: 4242 } }).by('NC-12').detail, /delete/);
+});
