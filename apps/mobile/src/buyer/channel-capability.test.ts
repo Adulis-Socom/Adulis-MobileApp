@@ -8,9 +8,20 @@ import { productionSources, repoFile } from '../testing/source-scan';
  * Home's Following, Nearby, Discounts and Locally Made channels have no server feed, no
  * eligibility fact and no flag, and the app asks the OS for nothing on their behalf. These
  * checks hold that: they fail the day the contract, the API client, the app or the manifest
- * gains a fact for one of these channels, so the change is made on purpose, with the channel's
- * capability record updated, and never by accident. Each scan is proved on synthetic input as
- * well as on the real files, so a pattern that stops matching cannot pass silently.
+ * gains a fact for one of these channels, so the change is made on purpose and never by
+ * accident. Each scan is proved on synthetic input as well as on the real files, so a pattern
+ * that stops matching cannot pass silently.
+ *
+ * When the contract scan fails, the contract gained a name that matches a channel fact. Decide
+ * which it is. If it IS a channel fact, the channel's own states, the tests here and the
+ * founder's ruling for that channel change in the same change as the code that uses it. If it
+ * is unrelated (a Seller store location for another purpose, a commerce offer that is not a
+ * discount), add its exact entry to ACKNOWLEDGED with the reason, in the same change as the API
+ * addition. A pattern is never loosened to make a name pass.
+ *
+ * The contract scan covers every operation, not only the ones a Buyer can reach: the earliest
+ * sign of a channel fact is on the Seller side (a Seller creating a discount, marking a Product
+ * locally made, saving a store location), long before any Buyer feed exists.
  */
 
 type Parameter = { name: string };
@@ -20,17 +31,28 @@ type Contract = {
   components: { schemas: Record<string, { properties?: Record<string, unknown> } | undefined> };
 };
 
-const PATH_NAME = /follow|feed|nearby|discount|locally|offer|promotion/i;
+/** A path segment that is the follow or feed resource itself (`/v1/feed`, not `/v1/feedback`). */
+const PATH_SEGMENT = /^(follows?|following|followers|feed)$/i;
+const PATH_WORD = /nearby|discount|locally|offer|promotion/i;
 const PARAMETER_NAME = /follow|nearby|discount|locally|lat(itude)?$|lng|lon(gitude)?$|radius|distance|\barea\b|geo|location|market|country/i;
 // "following", not "follow": the contract's Seller-verification and Seller-analytics counts
 // (follower_count, followers) are not a Buyer follow relationship.
 const PROPERTY_NAME = /discount|compare_at|original_price|sale_price|offer|promotion|locally|made_in|latitude|longitude|geo|distance|radius|nearby|following|ends_at/i;
 
+/**
+ * Names in the contract that are acknowledged as NOT being a Home channel fact: the exact entry
+ * `channelFactsIn` reports, and why. Empty today. An entry whose name no longer exists in the
+ * contract, or that has no reason, fails below.
+ */
+const ACKNOWLEDGED: readonly { fact: string; reason: string }[] = [];
+
+const pathMatches = (path: string) => PATH_WORD.test(path) || path.split('/').some((segment) => PATH_SEGMENT.test(segment.replace(/[{}]/g, '')));
+
 /** Every name in the contract that belongs to a Home channel fact, as `kind name`. */
 function channelFactsIn(contract: Contract): string[] {
   const found: string[] = [];
   for (const [path, item] of Object.entries(contract.paths)) {
-    if (PATH_NAME.test(path)) found.push(`path ${path}`);
+    if (pathMatches(path)) found.push(`path ${path}`);
     for (const [method, operation] of Object.entries(item)) {
       for (const parameter of operation.parameters ?? []) {
         if (PARAMETER_NAME.test(parameter.name)) found.push(`parameter ${method} ${path} ${parameter.name}`);
@@ -55,9 +77,21 @@ const contract = JSON.parse(repoFile('contracts/openapi.json')) as Contract;
 describe('what the contract says about the four channels', () => {
   it('carries no Following, Nearby, Discounts or Locally Made fact in any path, parameter or property', () => {
     expect(Object.keys(contract.paths).length).toBeGreaterThan(100);
-    // A name here means a channel fact exists: update the capability record and the channel's own
-    // states before using it, and change this check in the same change.
-    expect(channelFactsIn(contract)).toEqual([]);
+    const acknowledged = new Set(ACKNOWLEDGED.map((entry) => entry.fact));
+    const unacknowledged = channelFactsIn(contract).filter((fact) => !acknowledged.has(fact));
+    if (unacknowledged.length > 0) {
+      throw new Error(
+        `The contract names something that looks like a Home channel fact (Following, Nearby, Discounts, Locally Made):\n  ${unacknowledged.join('\n  ')}\n` +
+          'If it is a channel fact, update that channel (its states, these tests and the ruling that allows it) in the same change as the code that uses it. ' +
+          'If it is unrelated, add the exact entry above to ACKNOWLEDGED in this file with the reason. Do not loosen a pattern.',
+      );
+    }
+  });
+
+  it('keeps no acknowledgement that has lost its name or its reason', () => {
+    const present = new Set(channelFactsIn(contract));
+    expect(ACKNOWLEDGED.filter((entry) => entry.reason.trim().length < 12).map((entry) => entry.fact)).toEqual([]);
+    expect(ACKNOWLEDGED.filter((entry) => !present.has(entry.fact)).map((entry) => entry.fact)).toEqual([]);
   });
 
   const synthetic = (extra: Partial<Contract>): Contract => ({ paths: {}, components: { schemas: {} }, ...extra });
@@ -77,6 +111,14 @@ describe('what the contract says about the four channels', () => {
     expect(channelFactsIn(input)).toEqual([expected]);
   });
 
+  it('does not take a feedback path or a follower count for a channel fact', () => {
+    const near = synthetic({
+      paths: { '/v1/feedback': { post: {} } },
+      components: { schemas: { Dto: { properties: { follower_count: {}, followers: {} } } } },
+    });
+    expect(channelFactsIn(near)).toEqual([]);
+  });
+
   it('names no feature flag: bootstrap sends an open boolean map', () => {
     const flags = contract.components.schemas['BootstrapResponseDto']?.properties?.['feature_flags'];
     expect(flags).toEqual({ type: 'object', additionalProperties: { type: 'boolean' } });
@@ -92,16 +134,56 @@ describe('what the app can do', () => {
   });
 });
 
-const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+/**
+ * The text of a source file without its comments. Only a comment that begins a line (`//`, or a
+ * block comment) and a trailing `//` after code with balanced quotes are removed, so a string such
+ * as 'image/*' can never open a comment and hide the code after it: what is not recognised as a
+ * comment is scanned, which fails closed.
+ */
+function stripComments(source: string): string {
+  const withoutBlocks = source.replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '');
+  return withoutBlocks
+    .split('\n')
+    .map((line) => {
+      if (/^\s*\/\//.test(line)) return '';
+      const at = line.search(/\s\/\/\s/);
+      if (at < 0) return line;
+      const before = line.slice(0, at);
+      const quotes = (before.match(/['"`]/g) ?? []).length;
+      return quotes % 2 === 0 ? before : line;
+    })
+    .join('\n');
+}
+
+describe('the comment stripper used by the scans below', () => {
+  it('removes a comment line, a block comment and a trailing comment', () => {
+    expect(stripComments('// expo-location\n/* PermissionsAndroid */\nconst a = 1; // NSLocation here\n')).toBe('\n\nconst a = 1;\n');
+  });
+
+  it('does not let a string that contains /* hide the code after it', () => {
+    const source = "const accept = 'image/*';\nawait Location.getCurrentPositionAsync({});\n/* done */\n";
+    expect(stripComments(source)).toContain('getCurrentPositionAsync');
+  });
+
+  it('keeps code when a trailing // sits inside a string', () => {
+    expect(stripComments("const url = 'https://x.test/a'; const n = 'expo-location';")).toContain('expo-location');
+  });
+});
 
 const LOCATION_API =
-  /expo-location|requestForegroundPermissionsAsync|requestBackgroundPermissionsAsync|getCurrentPositionAsync|watchPositionAsync|PermissionsAndroid|navigator\.geolocation|ACCESS_(FINE|COARSE|BACKGROUND)_LOCATION|NSLocation|react-native-maps|expo-task-manager/;
+  /expo-location|expo-maps|react-native-maps|@rnmapbox\/maps|@react-native-community\/geolocation|react-native-geolocation-service|react-native-background-geolocation|expo-task-manager|expo-background-fetch|expo-background-task|requestForegroundPermissionsAsync|requestBackgroundPermissionsAsync|getCurrentPositionAsync|watchPositionAsync|getCurrentPosition\(|watchPosition\(|navigator\.geolocation|ACCESS_(FINE|COARSE|BACKGROUND)_LOCATION|NSLocation/;
+
+/** Whether a source file uses a listed location, map or background-task API, or asks Android for a location permission. */
+function locationApiIn(text: string): boolean {
+  const code = stripComments(text);
+  return LOCATION_API.test(code) || (/PermissionsAndroid/.test(code) && /LOCATION/i.test(code));
+}
 
 describe('what the app asks the OS for', () => {
-  it('no production source uses a location, map or background-task API', () => {
+  it('no production source uses a listed location, map or background-task API', () => {
     const files = productionSources('.');
     expect(files.length).toBeGreaterThan(100);
-    expect(files.filter(({ text }) => LOCATION_API.test(code(text))).map(({ file }) => file)).toEqual([]);
+    expect(files.filter(({ text }) => locationApiIn(text)).map(({ file }) => file)).toEqual([]);
   });
 
   it.each([
@@ -111,22 +193,42 @@ describe('what the app asks the OS for', () => {
     'await Location.getCurrentPositionAsync({});',
     'Location.watchPositionAsync({}, () => {});',
     "PermissionsAndroid.request('android.permission.ACCESS_COARSE_LOCATION');",
+    'PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);',
     'navigator.geolocation.getCurrentPosition(ok);',
+    "import Geolocation from '@react-native-community/geolocation';",
+    "import Geolocation from 'react-native-geolocation-service';",
+    'Geolocation.getCurrentPosition(ok, fail);',
     "const p = 'android.permission.ACCESS_FINE_LOCATION';",
     "const p = 'NSLocationWhenInUseUsageDescription';",
     "import MapView from 'react-native-maps';",
+    "import Mapbox from '@rnmapbox/maps';",
+    "import { MapView } from 'expo-maps';",
     "import * as TaskManager from 'expo-task-manager';",
+    "import * as BackgroundTask from 'expo-background-task';",
+    "const accept = 'image/*';\nawait Location.getCurrentPositionAsync({});\n/* done */",
   ])('the scan finds %s', (sample) => {
-    expect(LOCATION_API.test(code(sample))).toBe(true);
+    expect(locationApiIn(sample)).toBe(true);
   });
 
-  it('the scan does not take a comment for a call', () => {
-    expect(LOCATION_API.test(code('// the app never calls PermissionsAndroid\n/* expo-location is not installed */'))).toBe(false);
+  it('does not take a comment for a call, or a camera permission for a location one', () => {
+    expect(locationApiIn('// the app never calls PermissionsAndroid\n/* expo-location is not installed */')).toBe(false);
+    expect(locationApiIn("PermissionsAndroid.request('android.permission.CAMERA');")).toBe(false);
   });
 });
 
 type Json = Record<string, unknown>;
-const LOCATION_PACKAGES = ['expo-location', 'react-native-maps', 'expo-task-manager', 'expo-background-fetch'];
+const LOCATION_PACKAGES = [
+  'expo-location',
+  'expo-maps',
+  'react-native-maps',
+  '@rnmapbox/maps',
+  '@react-native-community/geolocation',
+  'react-native-geolocation-service',
+  'react-native-background-geolocation',
+  'expo-task-manager',
+  'expo-background-fetch',
+  'expo-background-task',
+];
 
 /** What in a package.json and an app.json would give the app a location capability. */
 function locationCapabilityIn(pkg: Json, app: Json): string[] {
@@ -138,7 +240,10 @@ function locationCapabilityIn(pkg: Json, app: Json): string[] {
     const name = Array.isArray(plugin) ? String(plugin[0]) : String(plugin);
     if (LOCATION_PACKAGES.includes(name)) found.push(`plugin ${name}`);
   }
-  if (((expo['android'] as Json | undefined) ?? {})['permissions'] !== undefined) found.push('android.permissions');
+  const permissions = ((expo['android'] as Json | undefined) ?? {})['permissions'] as unknown[] | undefined;
+  for (const permission of permissions ?? []) {
+    if (/LOCATION/i.test(String(permission))) found.push(`android.permissions ${String(permission)}`);
+  }
   const infoPlist = ((expo['ios'] as Json | undefined) ?? {})['infoPlist'] as Json | undefined;
   for (const key of Object.keys(infoPlist ?? {})) {
     if (key.startsWith('NSLocation')) found.push(`ios.infoPlist ${key}`);
@@ -147,7 +252,7 @@ function locationCapabilityIn(pkg: Json, app: Json): string[] {
 }
 
 describe('what the package and the manifest carry', () => {
-  it('carry no location, map or background-task capability', () => {
+  it('carry no listed location, map or background-task package, plugin or permission', () => {
     const pkg = JSON.parse(repoFile('apps/mobile/package.json')) as Json;
     const app = JSON.parse(repoFile('apps/mobile/app.json')) as Json;
     expect(Object.keys(pkg['dependencies'] as Json).length).toBeGreaterThan(10);
@@ -157,11 +262,17 @@ describe('what the package and the manifest carry', () => {
   it.each([
     ['a location dependency', { dependencies: { 'expo-location': '~58.0.0' } }, {}, ['dependency expo-location']],
     ['a maps dev dependency', { devDependencies: { 'react-native-maps': '1.0.0' } }, {}, ['dependency react-native-maps']],
+    ['a geolocation dependency', { dependencies: { '@react-native-community/geolocation': '3.0.0' } }, {}, ['dependency @react-native-community/geolocation']],
+    ['a background task dependency', { dependencies: { 'expo-background-task': '~1.0.0' } }, {}, ['dependency expo-background-task']],
     ['a location plugin', {}, { expo: { plugins: ['expo-router', ['expo-location', { isIosBackgroundLocationEnabled: false }]] } }, ['plugin expo-location']],
-    ['an Android permission list', {}, { expo: { android: { permissions: ['ACCESS_COARSE_LOCATION'] } } }, ['android.permissions']],
+    ['an Android location permission', {}, { expo: { android: { permissions: ['CAMERA', 'ACCESS_COARSE_LOCATION'] } } }, ['android.permissions ACCESS_COARSE_LOCATION']],
     ['an iOS location usage string', {}, { expo: { ios: { infoPlist: { NSLocationWhenInUseUsageDescription: 'x' } } } }, ['ios.infoPlist NSLocationWhenInUseUsageDescription']],
   ])('the scan finds %s', (_name, pkg, app, expected) => {
     expect(locationCapabilityIn(pkg as Json, app as Json)).toEqual(expected);
+  });
+
+  it('does not take an Android camera or notification permission for a location one', () => {
+    expect(locationCapabilityIn({}, { expo: { android: { permissions: ['CAMERA', 'POST_NOTIFICATIONS'] } } })).toEqual([]);
   });
 });
 
@@ -173,42 +284,47 @@ const CHANNEL_FILES = [
   'app/(buyer)/(tabs)/home/discounts.tsx',
   'app/(buyer)/(tabs)/home/locally-made.tsx',
 ];
-/** What a channel that has no feed must not do: read data, a Market or an Account, keep anything, or build a list on the device. */
+/**
+ * What a channel that has no feed must not do: read data, a flag, a Market or an Account, keep
+ * anything, or build a list on the device. (Reading the flag map for an unrelated purpose, a kill
+ * switch for sharing say, is not banned elsewhere; only these channel files are held.)
+ */
 const CHANNEL_FORBIDDEN =
-  /\b(useQuery|useInfiniteQuery|usePublicList|useForYouFeed|useSession|useBootstrap)\b|expo-sqlite|expo-secure-store|\.(filter|sort|toSorted|reverse|toReversed)\(|candidate_source|price_|category|market|country/i;
+  /\b(useQuery|useInfiniteQuery|usePublicList|useForYouFeed|useSession|useBootstrap)\b|feature_flags|expo-sqlite|expo-secure-store|\.(filter|sort|toSorted|reverse|toReversed)\(|candidate_source|price_|category|market|country/i;
 
 describe('the four channel files', () => {
-  it('read no feed, list, price, category, Market or Account, and keep nothing', () => {
+  it('read no feed, list, flag, price, category, Market or Account, and keep nothing', () => {
     const files = productionSources('buyer', 'app').filter(({ file }) => CHANNEL_FILES.includes(file));
     expect(files.map(({ file }) => file).sort()).toEqual([...CHANNEL_FILES].sort());
-    expect(files.filter(({ text }) => CHANNEL_FORBIDDEN.test(code(text))).map(({ file }) => file)).toEqual([]);
+    expect(files.filter(({ text }) => CHANNEL_FORBIDDEN.test(stripComments(text))).map(({ file }) => file)).toEqual([]);
   });
 
   it.each([
     'const feed = useForYouFeed();',
     'const list = usePublicList({ resource: [] });',
     'const session = useSession();',
-    'const flags = useBootstrap().data?.feature_flags;',
+    'const boot = useBootstrap();',
+    'const flags = data.feature_flags;',
     "import * as SecureStore from 'expo-secure-store';",
     'const shown = units.filter((u) => u.candidate_source === x);',
     'const cheapest = items.sort((a, b) => a.price_min_minor - b.price_min_minor);',
     "const label = market.code === 'ET' ? a : b;",
     'const local = products.filter((p) => p.category === c);',
   ])('the scan finds %s', (sample) => {
-    expect(CHANNEL_FORBIDDEN.test(code(sample))).toBe(true);
+    expect(CHANNEL_FORBIDDEN.test(stripComments(sample))).toBe(true);
   });
 
   it('is not fooled by a comment', () => {
-    expect(CHANNEL_FORBIDDEN.test(code('// no useSession, no market, no category'))).toBe(false);
+    expect(CHANNEL_FORBIDDEN.test(stripComments('// no useSession, no market, no category, no feature_flags'))).toBe(false);
   });
 });
 
-describe('where the app reads the feed and the flags', () => {
-  it('no production file reads candidate_source or feature_flags', () => {
+describe('where the app reads a feed unit source', () => {
+  it('no production file outside the test helpers reads candidate_source', () => {
     const files = productionSources('.').filter(({ file }) => !file.startsWith('testing/'));
     expect(files.length).toBeGreaterThan(100);
-    // When a later change reads a flag or a feed's source, it updates this check on purpose.
-    expect(files.filter(({ text }) => /candidate_source|feature_flags/.test(code(text))).map(({ file }) => file)).toEqual([]);
+    // A feed unit's source is the server's ranking detail; the app never classifies on it.
+    expect(files.filter(({ text }) => /candidate_source/.test(stripComments(text))).map(({ file }) => file)).toEqual([]);
   });
 });
 
