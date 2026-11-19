@@ -105,6 +105,53 @@ describe('judging a failed send', () => {
   });
 });
 
+/**
+ * An answer to a REPLAY. Some refusals are raised before the server looks at its idempotency record (an
+ * old app, a recovery window, the wrong audience, a missing session): if the first attempt had been
+ * stored, such an answer says nothing about it. Only a refusal the same body would have met on the first
+ * attempt (400, 404, 413) still proves that nothing was stored.
+ */
+describe('judging a failed replay', () => {
+  const first = { startedAt: NOW - 1000, attempts: 1 };
+  const replay = { startedAt: NOW - 1000, attempts: 2 };
+  const guards = [
+    ['a client the API no longer serves', 403, 'CLIENT_UPGRADE_REQUIRED'],
+    ['a recovery window', 403, 'RECOVERY_REQUIRED'],
+    ['the wrong audience', 403, 'AUDIENCE_NOT_PERMITTED'],
+    ['a refused origin', 403, 'PERMISSION_DENIED'],
+  ] as const;
+
+  it.each(guards)('%s on the FIRST attempt is the API\'s own rejection: failed, nothing stored', (_name, status, code) => {
+    expect(judgeFailure(envelope(status, code), first, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+  });
+
+  it.each(guards)('%s on a REPLAY proves nothing about the first attempt: unknown, the same key is kept', (_name, status, code) => {
+    expect(judgeFailure(envelope(status, code), replay, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: null });
+  });
+
+  it('a session refusal (401) on a replay is not a rejection of the message either', () => {
+    expect(judgeFailure(envelope(401, 'SESSION_EXPIRED'), replay, NOW)).toMatchObject({ outcome: 'unknown', replay: true });
+  });
+
+  it.each([
+    ['a validation refusal', 400, 'VALIDATION_FAILED'],
+    ['a missing conversation', 404, 'NOT_FOUND'],
+    ['a body over the limit', 413, 'PAYLOAD_TOO_LARGE'],
+  ] as const)('%s on a replay is still the API\'s own rejection: the same body failed the same way before anything was stored', (_name, status, code) => {
+    expect(judgeFailure(envelope(status, code), replay, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+  });
+
+  it('an intent that does not count its attempts is judged as before', () => {
+    expect(judgeFailure(envelope(403, 'PERMISSION_DENIED'), fresh, NOW)).toEqual({ outcome: 'failed', replay: false, holdMs: null });
+  });
+
+  it('a replay\'s key conflict, rate limit and 5xx are judged exactly as on the first attempt', () => {
+    expect(judgeFailure(envelope(409, 'IDEMPOTENCY_KEY_REUSED'), replay, NOW)).toEqual({ outcome: 'unknown', replay: false, holdMs: null });
+    expect(judgeFailure(envelope(429, 'RATE_LIMITED', { retry_after_seconds: 30 }, 30), replay, NOW)).toEqual({ outcome: 'unknown', replay: true, holdMs: 30_000 });
+    expect(judgeFailure(envelope(500, 'INTERNAL'), replay, NOW)).toMatchObject({ outcome: 'unknown', replay: true });
+  });
+});
+
 describe('the shared rules', () => {
   it('keyUsable counts from the first attempt and is false exactly at the safe age', () => {
     expect(keyUsable({ startedAt: NOW }, NOW)).toBe(true);

@@ -42,17 +42,28 @@ export type FailureJudgement = {
  * API's own answer, leave the outcome unknown: sending the same text again under the SAME key is
  * always safe inside the key's life (stored: the stored answer comes back; not stored: it is
  * processed once). A wait that was asked for holds the next attempt whatever the outcome.
+ *
+ * `attempts` counts the requests already sent under the intent's key. On the second or a later one (a
+ * replay) some refusals say nothing about the first: a client that is too old, a recovery window, the
+ * wrong audience or a missing session are raised before the server looks at its record, so a first
+ * attempt that WAS stored would be reported "not sent". Only a refusal the same body would have met
+ * the first time still proves nothing was stored.
  */
-export function judgeFailure(failure: unknown, intent: { startedAt: number } | null, now: number): FailureJudgement {
+export function judgeFailure(
+  failure: unknown,
+  intent: { startedAt: number; attempts?: number } | null,
+  now: number,
+): FailureJudgement {
   const holdMs = waitBeforeRetryMs(failure);
   if (keyConflict(failure)) return { outcome: 'unknown', replay: false, holdMs };
-  if (rejectedByApi(failure)) return { outcome: 'failed', replay: false, holdMs };
+  if (rejectedByApi(failure, intent?.attempts ?? 1)) return { outcome: 'failed', replay: false, holdMs };
   return { outcome: 'unknown', replay: intent !== null && keyUsable(intent, now), holdMs };
 }
 
 /** The API's own problem answer with a 4xx status other than a conflict (409) or a rate limit (429). */
-function rejectedByApi(failure: unknown): boolean {
+function rejectedByApi(failure: unknown, attempts: number): boolean {
   if (!(failure instanceof ApiError) || failure.failure.kind !== 'problem' || sendOutcome(failure) !== 'refused') return false;
   const { status } = failure.failure;
-  return status >= 400 && status < 500 && status !== 409 && status !== 429;
+  if (!(status >= 400 && status < 500 && status !== 409 && status !== 429)) return false;
+  return attempts < 2 || status === 400 || status === 404 || status === 413;
 }

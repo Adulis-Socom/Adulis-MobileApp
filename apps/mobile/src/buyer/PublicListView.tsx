@@ -80,7 +80,7 @@ export function PublicListView<I>({
   saves?: ListSaves<I>;
   /** A capped answer that has no next page and no end: it never claims to be everything there is (Search Top). */
   bounded?: boolean;
-  /** A sentence for a failure this screen can name; null leaves the generic one (the retry stays either way). */
+  /** A sentence for a failure that asking again cannot change; null leaves the generic one, with its Try again. */
   failureText?: (error: unknown) => string | null;
 }) {
   const t = useT();
@@ -113,12 +113,14 @@ export function PublicListView<I>({
       );
     }
     if (list.status === 'error') {
+      const named = failureText?.(list.error) ?? null;
       return (
         <>
           <AlertText style={{ textAlign: 'center' }}>
-            {failureText?.(list.error) ?? failureMessage(t, list.error)}
+            {named ?? failureMessage(t, list.error)}
           </AlertText>
-          <Button label={t('common.retry')} onPress={list.retry} />
+          {/* A failure the screen can name is one that asking again cannot change. */}
+          {named === null ? <Button label={t('common.retry')} onPress={list.retry} /> : null}
         </>
       );
     }
