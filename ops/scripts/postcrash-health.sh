@@ -95,7 +95,7 @@ fi
 [ -z "$(docker volume ls -q --filter "name=^${TARGET_VOLUME}$")" ] && say PASS "migration target volume $TARGET_VOLUME absent" || say FAIL "migration target volume $TARGET_VOLUME exists"
 
 # --- Leftovers (reported; never removed here) -----------------------------------------------------------
-left=$(docker ps -a --filter label=adulis.test-db.owner --format '{{.Names}}({{.Label "adulis.test-db.owner"}})'; docker ps -a --filter label=adulis.inf04.owner --format '{{.Names}}'; docker ps -a --format '{{.Names}}' | grep -E '^(inf04|minio-migrate)'; docker volume ls -q | grep -E '^(inf04|minio-migrate)'; docker network ls --format '{{.Name}}' | grep -E '^inf04')
+left=$(docker ps -a --filter label=adulis.test-db.owner --format '{{.Names}}({{.Label "adulis.test-db.owner"}})'; docker ps -a --filter label=adulis.inf04.owner --format '{{.Names}}'; docker ps -a --format '{{.Names}}' | grep -E '^(inf04|minio-migrate)'; docker volume ls -q | grep -E '^(inf04|minio-migrate)'; docker network ls --format '{{.Name}}' | grep -E '^inf04'; docker ps -a --filter label=adulis.native-harness.owner --format '{{.Names}}'; docker volume ls -q --filter label=adulis.native-harness.owner; docker network ls --filter label=adulis.native-harness.owner --format '{{.Name}}')
 [ -z "$left" ] && say PASS "no disposable or rehearsal leftovers" || say UNKNOWN "leftovers to identify before any removal: $(printf '%s' "$left" | tr '\n' ' ')" advisory
 
 echo "SUMMARY  $fails failed, $unknowns mandatory unknown"
