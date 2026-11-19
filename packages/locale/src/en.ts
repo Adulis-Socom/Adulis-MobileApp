@@ -133,7 +133,8 @@ export const enCommon = {
   // request
   'error.request.validation_failed': 'The request is not valid.',
   // The next two are also shown by the Seller Console and by the Seller Companion's failed-reply line.
-  'error.request.idempotency_key_missing': 'This request could not be sent safely. Try again.',
+  // The server marks the first one not retryable, so it offers no "try again".
+  'error.request.idempotency_key_missing': 'This request could not be sent safely.',
   'error.request.idempotency_key_reused': 'This request could not be repeated safely. Check what is shown before trying again.',
   'error.request.rate_limited': 'Too many requests. Try again in {retry_after_seconds} seconds.',
   'error.request.client_upgrade_required': 'Update the app to continue.',
@@ -207,8 +208,7 @@ export const enCommon = {
 
   // Chat (C7) - the escalation is the one bot utterance with no intent
   // behind it, so it lives here rather than in nlu.answer_template.
-  // Also drawn in the Seller's conversation view. It promises no reply: a Seller may not write one.
-  'chat.bot.escalated': 'Your question has been passed to the Seller. Any reply will appear here.',
+  'chat.bot.escalated': 'Your question has been passed to the Seller. They will reply here.',
   'notification.chat.escalated': 'A buyer question needs your reply.',
 
   'common.loading': 'Loading',
@@ -565,9 +565,8 @@ export const enCommon = {
   'buyer.you.session.location': 'Approximate location: {location}',
   'buyer.you.privacy': 'Privacy',
   'buyer.you.delete': 'Delete Account',
-  // Deletion starts from a phone number, so it can be another Account than the one signed in here.
   'buyer.delete.intro':
-    'Deleting your Adulis Account is permanent. It cannot be undone, and if this device is signed in to that Account it will be signed out.',
+    'Deleting your Adulis Account is permanent. It cannot be undone, and this device will be signed out.',
   'buyer.delete.steps':
     'To continue, confirm your phone number with a code sent by SMS, review what deletion does, and then confirm.',
   'buyer.delete.continue': 'Continue',
