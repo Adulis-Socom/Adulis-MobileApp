@@ -13,8 +13,8 @@ export const amConsole: Record<ConsoleMessageKey, string> = {
 
 
   // ---- Seller console (T7 Phase 5) -- MACHINE-TRANSLATION PLACEHOLDERS.
-  // Every key here is listed in packages/locale/MT-KEYS.md; AM_ENABLED
-  // stays off until the human pass replaces them (T7 S7.4).
+  // Every key here is listed in packages/locale/MT-KEYS.md; Amharic stays
+  // development-only until the human pass replaces them (T7 S7.4).
   'console.a11y.loading': '\u12a5\u12eb\u1320\u1290 \u1290\u12cd', // MT
   'console.a11y.skip_to_content': 'ወደ ይዘቱ ዝለል',
   'console.a11y.primary_nav': 'ዋና ማውጫ',
@@ -44,8 +44,8 @@ export const amConsole: Record<ConsoleMessageKey, string> = {
    * The English stands here until a human translator supplies Amharic. A
    * person reading a sentence in a language they may not prefer is a worse
    * experience and an honest one; an unverified Amharic attestation would be
-   * a better experience and evidence of nothing. AM_ENABLED is off, so no
-   * seller sees either today.
+   * a better experience and evidence of nothing. The console imports English
+   * only, so no seller sees either today.
    */
   'console.signin.age_declaration': 'I confirm that I am 18 years of age or older.', // HUMAN-REQUIRED
   'console.signin.age_refused':
