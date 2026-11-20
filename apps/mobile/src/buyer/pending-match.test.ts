@@ -72,6 +72,19 @@ describe('the rows that could be an unconfirmed send', () => {
     expect(candidatesFor(pending(baseline), [answer, stored, earlier])).toEqual([stored]);
   });
 
+  // A read that lands after the next, identical message began shows the earlier message too: the server's own
+  // answer to that send named its id, so the row is that message and never this one.
+  it('a row the server already accepted a send with is never a candidate, whatever the baseline held', () => {
+    const accepted = row({ sentAt: at('40') });
+    const other = row({ sentAt: at('41') });
+    const baseline = { newestSentAt: at('01'), edgeIds: [] };
+    expect(candidatesFor(pending(baseline), [other, accepted])).toEqual([other, accepted]);
+    expect(candidatesFor(pending(baseline), [other, accepted], [accepted.id])).toEqual([other]);
+    expect(
+      candidatesFor(pending({ newestSentAt: null, edgeIds: [] }), [accepted], [accepted.id]),
+    ).toEqual([]);
+  });
+
   it('a row older than the newest baseline row is never a candidate, however it got there', () => {
     const newest = row({ sentAt: at('50'), body: 'Something else' });
     const baseline = captureBaseline({ read: true, items: [newest] });
