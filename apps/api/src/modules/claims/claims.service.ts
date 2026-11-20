@@ -125,11 +125,16 @@ export class ClaimsService {
     };
   }
 
-  /** The claim, from whichever side the caller stands on — or 404. */
+  /**
+   * The claim, from whichever side the caller stands on, or 404. The seller
+   * side needs the read permission, or the response permission when the caller
+   * is about to change the claim (`forWrite`).
+   */
   private async claimFor(
     trx: Transaction<Database>,
     req: AuthedRequest,
     claimId: string,
+    forWrite = false,
   ): Promise<{ id: string; order_id: string; seller_id: string; state: string; side: 'BUYER' | 'SELLER' }> {
     const accountId = req.ctx?.accountId as string;
     const r = await sql<{
@@ -149,9 +154,10 @@ export class ClaimsService {
       return { ...claim, side: 'BUYER' };
     }
     if (req.ctx?.sellerId === claim.seller_id) {
+      const permission = forWrite ? 'seller.claims:respond' : 'seller.claims:read';
       await sql`
         SELECT core.fn_has_permission(${accountId}, ${claim.seller_id},
-          'seller.claims:read',
+          ${permission},
           ${(req.ctx?.audience as string) ?? ''}::core.session_audience)`.execute(trx);
       return { ...claim, side: 'SELLER' };
     }
@@ -177,7 +183,8 @@ export class ClaimsService {
   /**
    * POST /v1/claims/{id}/evidence — the bank record: a single transaction,
    * not a statement (X15). It attaches BY REFERENCE to a record the system
-   * already holds; there is no upload body to launder prose through.
+   * already holds; there is no upload body to launder prose through. On the
+   * seller side it changes the claim, so it takes the response permission.
    */
   async attachEvidence(
     trx: Transaction<Database>,
@@ -185,7 +192,7 @@ export class ClaimsService {
     claimId: string,
     referenceId: string,
   ): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, true);
     if (claim.state === 'RESOLVED') {
       throw new AdulisException('ORDER_ALREADY_TERMINAL', {
         slots: { subject: 'claim' },
