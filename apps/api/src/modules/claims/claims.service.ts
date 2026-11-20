@@ -125,11 +125,16 @@ export class ClaimsService {
     };
   }
 
-  /** The claim, from whichever side the caller stands on — or 404. */
+  /**
+   * The claim, from whichever side the caller stands on, or 404. A caller on
+   * the seller side must hold `permission`: every caller names the one it
+   * needs, the read permission to look and the response permission to change.
+   */
   private async claimFor(
     trx: Transaction<Database>,
     req: AuthedRequest,
     claimId: string,
+    permission: 'seller.claims:read' | 'seller.claims:respond',
   ): Promise<{ id: string; order_id: string; seller_id: string; state: string; side: 'BUYER' | 'SELLER' }> {
     const accountId = req.ctx?.accountId as string;
     const r = await sql<{
@@ -151,7 +156,7 @@ export class ClaimsService {
     if (req.ctx?.sellerId === claim.seller_id) {
       await sql`
         SELECT core.fn_has_permission(${accountId}, ${claim.seller_id},
-          'seller.claims:read',
+          ${permission},
           ${(req.ctx?.audience as string) ?? ''}::core.session_audience)`.execute(trx);
       return { ...claim, side: 'SELLER' };
     }
@@ -160,7 +165,7 @@ export class ClaimsService {
 
   /** GET /v1/claims/{id} — with its evidence set. */
   async read(trx: Transaction<Database>, req: AuthedRequest, claimId: string): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:read');
     const detail = await sql<Record<string, unknown>>`
       SELECT c.id, c.order_id, c.reservation_id, c.trigger, c.state, c.severity,
              c.remedy, c.outcome, c.outcome_reason, c.opened_at,
@@ -177,7 +182,8 @@ export class ClaimsService {
   /**
    * POST /v1/claims/{id}/evidence — the bank record: a single transaction,
    * not a statement (X15). It attaches BY REFERENCE to a record the system
-   * already holds; there is no upload body to launder prose through.
+   * already holds; there is no upload body to launder prose through. On the
+   * seller side it changes the claim, so it takes the response permission.
    */
   async attachEvidence(
     trx: Transaction<Database>,
@@ -185,7 +191,7 @@ export class ClaimsService {
     claimId: string,
     referenceId: string,
   ): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:respond');
     if (claim.state === 'RESOLVED') {
       throw new AdulisException('ORDER_ALREADY_TERMINAL', {
         slots: { subject: 'claim' },
@@ -221,7 +227,7 @@ export class ClaimsService {
     req: AuthedRequest,
     claimId: string,
   ): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:read');
     if (claim.side !== 'BUYER') throw new AdulisException('NOT_FOUND');
     const buyer = req.ctx?.accountId as string;
 
