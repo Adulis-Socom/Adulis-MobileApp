@@ -53,15 +53,23 @@ export interface ObjectStorageConfig {
  * Per-instance client behaviour (every instance owns its own S3Client).
  * `responseChecksumValidation: 'WHEN_REQUIRED'` stops the SDK from validating a
  * whole-object checksum header against the partial body of a ranged read.
- * `stallTimeoutMs` bounds how long a connection attempt or an idle socket may
- * hold a request open; a transfer that keeps moving is never cut.
+ * `stallTimeoutMs` sets the SDK's connection timeout and its socket inactivity
+ * timeout. That bounds a connection that cannot be made and a request that
+ * gets no response headers (per attempt; the SDK retries a timeout twice). It
+ * does NOT bound a body that stalls after the headers arrived (the SDK stops
+ * arming its inactivity timer once headers are in), and it is not a total time
+ * limit: a response that keeps trickling is never cut.
  */
 export interface StorageClientOptions {
   readonly responseChecksumValidation?: 'WHEN_SUPPORTED' | 'WHEN_REQUIRED';
   readonly stallTimeoutMs?: number;
 }
 
-/** The evidence store reads ranges of the buyer's upload and runs inside a request's transaction. */
+/**
+ * The evidence store reads ranges of the buyer's upload inside a request's
+ * transaction. The stall bound is partial (see StorageClientOptions): a body
+ * that stalls after fast headers is not covered.
+ */
 export const EVIDENCE_CLIENT_OPTIONS: StorageClientOptions = {
   responseChecksumValidation: 'WHEN_REQUIRED',
   stallTimeoutMs: 15_000,

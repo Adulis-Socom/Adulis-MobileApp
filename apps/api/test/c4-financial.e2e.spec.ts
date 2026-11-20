@@ -1042,15 +1042,15 @@ describe('C4 — the financial boundary', () => {
       return r.body as Buffer;
     };
     /**
-     * Runs `run` with an INSERT on `table` failing for rows matching `when`. Safe to repeat: the function is
-     * replaced, an old trigger from a killed run is dropped first, and everything is dropped again in `finally`.
+     * Runs `run` with an INSERT on `table` failing for rows matching `when`. The only place that runs DDL on
+     * that table. Written to be repeatable: the function is replaced, a trigger left by a killed run on this
+     * table (or any other, through CASCADE) is dropped first, and everything is dropped again in `finally`.
+     * A killed run is not simulated by a test.
      */
     const failingInsert = async <T>(table: string, when: string, run: () => Promise<T>): Promise<T> => {
       const drop = async () => {
-        for (const t of ['core.payment_submission', 'core.idempotency_record']) {
-          await admin.query(`DROP TRIGGER IF EXISTS zz_commit_test_failure ON ${t}`);
-        }
-        await admin.query(`DROP FUNCTION IF EXISTS core.zz_commit_test_failure()`);
+        await admin.query(`DROP TRIGGER IF EXISTS zz_commit_test_failure ON ${table}`);
+        await admin.query(`DROP FUNCTION IF EXISTS core.zz_commit_test_failure() CASCADE`);
       };
       await drop();
       try {
@@ -1315,13 +1315,6 @@ describe('C4 — the financial boundary', () => {
       const screenshot = Buffer.from('screenshot-for-retry');
       storage.seed(rawKey, screenshot);
       const idem = key();
-      // Leftovers of a killed earlier run must not break this one.
-      await admin.query(`
-        CREATE OR REPLACE FUNCTION core.zz_commit_test_failure() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN RETURN NEW; END $$`);
-      await admin.query(`
-        CREATE TRIGGER zz_commit_test_failure BEFORE INSERT ON core.payment_submission
-        FOR EACH ROW WHEN (false) EXECUTE FUNCTION core.zz_commit_test_failure()`);
       await failingInsert('core.payment_submission', `NEW.order_id = '${oid}'`, async () => {
         const r = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(500);
         expect(r.body.code).toBe('INTERNAL');

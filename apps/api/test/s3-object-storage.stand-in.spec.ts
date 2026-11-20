@@ -203,11 +203,13 @@ describe('S3ObjectStorage against a stand-in store', () => {
     }
   });
 
-  it('a store that stops answering is given up on instead of holding the request open', async () => {
+  it('a store that never answers is given up on instead of holding the request open', async () => {
     const url = await standIn(() => {
       // accepts the request and never answers
     });
-    // The SDK waits 3 s before it arms a socket timeout and retries a timed-out request twice.
+    // Covers a stall before any response headers only: a body that stalls after the headers is not
+    // bounded (see StorageClientOptions). The SDK arms the socket timeout 3 s after the request
+    // starts and retries a timed-out request twice.
     const outcome = await within(
       40_000,
       adapter(url, { stallTimeoutMs: 6_001 }).getObject('k', 10).then(
