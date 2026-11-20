@@ -69,7 +69,12 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
     const { view } = useCarts({ focused: true });
     const edit = useCartEdit(L1, view);
     handle.current = edit;
-    return <Text testID="edit-state">{edit.state.kind}</Text>;
+    const fresh = view.kind === 'LISTED' ? view.freshness.kind : view.kind;
+    return (
+      <Text testID="edit-state">
+        {edit.state.kind} {fresh}
+      </Text>
+    );
   }
   const state = () => screen.getByTestId('edit-state');
   const sent = (stub: ReturnType<typeof stubAdapter>) =>
@@ -82,8 +87,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
       adapter: stub.adapter,
       token: 'token-a',
     });
-    await waitFor(() => expect(state()).toHaveTextContent('IDLE', contains));
-    await waitFor(() => expect(stub.calls.some((c) => c.op === 'getCarts')).toBe(true));
+    await waitFor(() => expect(state()).toHaveTextContent('IDLE VERIFIED', contains));
 
     stub.failNext('setQuantity', offline());
     await act(async () => {
@@ -97,7 +101,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
     await act(() => session.current!.signIn('token-b'));
 
     await show(<Edit />);
-    await waitFor(() => expect(state()).toHaveTextContent('IDLE', contains));
+    await waitFor(() => expect(state()).toHaveTextContent('IDLE VERIFIED', contains));
     expect(sent(stub)).toHaveLength(1);
 
     // A fresh edit as B is a new intent with a new key, in B's scope.
@@ -119,8 +123,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
         adapter: stub.adapter,
         token: 'token-a',
       });
-      await waitFor(() => expect(stub.calls.some((c) => c.op === 'getCarts')).toBe(true));
-      await waitFor(() => expect(handle.current).not.toBeNull());
+      await waitFor(() => expect(state()).toHaveTextContent('IDLE VERIFIED', contains));
       stub.failNext('setQuantity', offline());
       await act(async () => {
         handle.current!.setQuantity(3);
@@ -150,12 +153,13 @@ describe('two screens, one set of stores', () => {
     const first = useCartEdit(L1, view);
     const second = useCartEdit(L1, view);
     const review = useCartReview(view);
+    const fresh = view.kind === 'LISTED' ? view.freshness.kind : view.kind;
     handles.first = first;
     handles.second = second;
     handles.review = review;
     return (
       <Text testID="two">
-        {first.state.kind}/{second.state.kind}
+        {first.state.kind}/{second.state.kind} {fresh}
       </Text>
     );
   }
@@ -163,8 +167,9 @@ describe('two screens, one set of stores', () => {
     const stub = stubAdapter();
     stub.setCarts(holding());
     await renderWithCommerce(<Two />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(stub.calls.some((c) => c.op === 'getCarts')).toBe(true));
-    await waitFor(() => expect(handles.first).not.toBeNull());
+    await waitFor(() =>
+      expect(screen.getByTestId('two')).toHaveTextContent('IDLE/IDLE VERIFIED', contains),
+    );
     const release = stub.hold('setQuantity');
     let outcomes: string[] = [];
     await act(async () => {
