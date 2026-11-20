@@ -256,11 +256,12 @@ describe('production sources', () => {
     texts.map((text) => `${file} :: ${text}`),
   );
 
+  // Exact in both directions: a literal that is not listed fails, and so does a listed entry no literal matches.
   it('has no text written into a component, apart from the listed development-only text', () => {
     expect([...all].sort()).toEqual([...listed].sort());
   });
 
-  it('lists nothing that is no longer there (the list above is exact in both directions)', () => {
+  it('lists only files that still hold written-in text, each with its reason', () => {
     for (const [file, { why }] of Object.entries(DEVELOPMENT_ONLY_TEXT)) {
       expect({
         file,
