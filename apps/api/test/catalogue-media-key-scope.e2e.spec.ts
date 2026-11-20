@@ -1,6 +1,7 @@
 import { Module, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
+import { Kysely, PostgresDialect } from 'kysely';
 import { Client, Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -10,6 +11,7 @@ import {
   FakeMediaStorageAdapter,
   MEDIA_STORAGE_ADAPTER,
 } from '../src/modules/catalogue/media-storage.adapter';
+import type { Database } from '../src/common/db/database.types';
 import { createJobHarness, type Harness } from './jobs-harness';
 import { armFixtureSessions, sessionToken } from './session-fixture';
 
@@ -31,10 +33,14 @@ const SELLER_A = '5eed0001-0000-4000-8000-000000000005';
 const SELLER_B = '5eed0001-0000-4000-8000-000000000006';
 const SESSION_A = '5eed0001-0000-4000-8000-000000000007';
 const SESSION_B = '5eed0001-0000-4000-8000-000000000008';
+const OWNER_C = '5eed0001-0000-4000-8000-000000000009';
+const SELLER_C = '5eed0001-0000-4000-8000-00000000000a';
+const SESSION_C = '5eed0001-0000-4000-8000-00000000000b';
 
 type Actor = { session: string; seller: string };
 const A: Actor = { session: SESSION_A, seller: SELLER_A };
 const B: Actor = { session: SESSION_B, seller: SELLER_B };
+const C: Actor = { session: SESSION_C, seller: SELLER_C };
 
 type ImageKeys = { thumb: string; card: string; full: string };
 
@@ -135,15 +141,56 @@ describe('Product media: key scope and purge scheduling', () => {
     ).rows.sort((a, b) => (a.object_key < b.object_key ? -1 : 1));
   const scheduledKeys = async (...pids: string[]) => (await scheduled(...pids)).map((r) => r.object_key).sort();
 
-  /** Makes this Product's schedule due, then runs the purge job against the shared fake storage. */
+  /**
+   * Runs the purge job, unchanged, against the shared fake storage. The job reads EVERY due row
+   * of the one shared schedule table, and another suite counts its own rows through the same job,
+   * so this suite never lets the two meet: (1) the job's due-row query is limited, at the driver,
+   * to this suite's Products (a query the limit cannot be applied to fails the test); (2) the
+   * rows made due are this suite's, dated one day ahead of the wall clock, so no other suite's
+   * clock (a fixed past date, or now) ever finds them due; (3) the job runs at two days ahead.
+   * A row of this suite that was not made due stays at its natural date, 30 days ahead.
+   */
   const runPurge = async (...pids: string[]) => {
     await admin.query(
-      `UPDATE core.media_lifecycle SET purge_after = '2001-01-01T00:00:00Z'
+      `UPDATE core.media_lifecycle SET purge_after = now() + interval '1 day'
         WHERE object_key LIKE ANY($1::text[])`,
       [pids.map((p) => `products/${p}/%`)],
     );
-    harness.clock.set(new Date('2001-01-02T00:00:00Z'));
-    return mediaLifecycle.run({ ...harness.ctx, mediaStorage: storage });
+    const patterns = products.map((p) => `'products/${p}/%'`).join(', ');
+    const real = new Pool({ connectionString: process.env['DATABASE_URL_JOBS'], max: 1 });
+    let limited = 0;
+    const db = new Kysely<Database>({
+      dialect: new PostgresDialect({
+        pool: {
+          connect: async () => {
+            const client = await real.connect();
+            return {
+              query: ((text: unknown, values?: unknown[]) => {
+                let sqlText = text as string;
+                if (sqlText.includes('FROM core.media_lifecycle') && sqlText.includes('WHERE purge_after <')) {
+                  limited += 1;
+                  sqlText = sqlText.replace(
+                    'WHERE purge_after <',
+                    `WHERE object_key LIKE ANY (ARRAY[${patterns}]) AND purge_after <`,
+                  );
+                }
+                return client.query(sqlText, values);
+              }) as never,
+              release: () => client.release(),
+            };
+          },
+          end: () => real.end(),
+        },
+      }),
+    });
+    try {
+      harness.clock.set(new Date(Date.now() + 2 * 86_400_000));
+      const result = await mediaLifecycle.run({ ...harness.ctx, db, mediaStorage: storage });
+      expect(limited).toBe(1);
+      return result;
+    } finally {
+      await db.destroy();
+    }
   };
 
   const expectRefused = (res: request.Response, path: string) => {
@@ -179,23 +226,26 @@ describe('Product media: key scope and purge scheduling', () => {
     );
     await admin.query(
       `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
-        ($1,'+251919000101',$3,'ACTIVE'), ($2,'+251919000102',$3,'ACTIVE')`,
-      [OWNER_A, OWNER_B, M],
+        ($1,'+251919000101',$3,'ACTIVE'), ($2,'+251919000102',$3,'ACTIVE'),
+        ($4,'+251919000103',$3,'ACTIVE')`,
+      [OWNER_A, OWNER_B, M, OWNER_C],
     );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     await admin.query(
       `INSERT INTO core.seller (id, market_id, owner_account_id, entity_type, store_name, handle, status)
        VALUES ($1,$3,$4,'INDIVIDUAL','Scope A','scope-a','ACTIVE'),
-              ($2,$3,$5,'INDIVIDUAL','Scope B','scope-b','ACTIVE')`,
-      [SELLER_A, SELLER_B, M, OWNER_A, OWNER_B],
+              ($2,$3,$5,'INDIVIDUAL','Scope B','scope-b','ACTIVE'),
+              ($6,$3,$7,'INDIVIDUAL','Scope C','scope-c','ACTIVE')`,
+      [SELLER_A, SELLER_B, M, OWNER_A, OWNER_B, SELLER_C, OWNER_C],
     );
     await admin.query(
       `INSERT INTO core.session (id, account_id, audience, device_id, expires_at) VALUES
-        ($1,$3,'CONSOLE',$5, now()+interval '12 hours'),
-        ($2,$4,'CONSOLE',$5, now()+interval '12 hours')`,
-      [SESSION_A, SESSION_B, OWNER_A, OWNER_B, DEVICE],
+        ($1,$4,'CONSOLE',$7, now()+interval '12 hours'),
+        ($2,$5,'CONSOLE',$7, now()+interval '12 hours'),
+        ($3,$6,'CONSOLE',$7, now()+interval '12 hours')`,
+      [SESSION_A, SESSION_B, SESSION_C, OWNER_A, OWNER_B, OWNER_C, DEVICE],
     );
-    await armFixtureSessions(admin, [SESSION_A, SESSION_B]);
+    await armFixtureSessions(admin, [SESSION_A, SESSION_B, SESSION_C]);
 
     const moduleRef = await Test.createTestingModule({ imports: [MediaKeyScopeAppModule] })
       .overrideProvider(MEDIA_STORAGE_ADAPTER)
@@ -212,18 +262,18 @@ describe('Product media: key scope and purge scheduling', () => {
     await harness?.close();
     await admin.query(`SET session_replication_role = replica`);
     for (const q of [
-      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER_A}','${OWNER_B}')`,
-      `DELETE FROM core.stock_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
-      `DELETE FROM core.product_variant WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
+      `DELETE FROM core.idempotency_record WHERE actor_id IN ('${OWNER_A}','${OWNER_B}','${OWNER_C}')`,
+      `DELETE FROM core.stock_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${SELLER_C}')`,
+      `DELETE FROM core.product_variant WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${SELLER_C}')`,
       `DELETE FROM core.product_image WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.product_video WHERE product_id IN (SELECT id FROM core.product WHERE market_id='${M}')`,
       `DELETE FROM core.product WHERE market_id='${M}'`,
-      `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
-      `DELETE FROM core.seller_level_state WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
-      `DELETE FROM core.seller_level_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}')`,
+      `DELETE FROM core.seller_public_stats WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${SELLER_C}')`,
+      `DELETE FROM core.seller_level_state WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${SELLER_C}')`,
+      `DELETE FROM core.seller_level_event WHERE seller_id IN ('${SELLER_A}','${SELLER_B}','${SELLER_C}')`,
       `DELETE FROM core.seller WHERE market_id='${M}'`,
-      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER_A}','${OWNER_B}')`,
-      `DELETE FROM core.session WHERE account_id IN ('${OWNER_A}','${OWNER_B}')`,
+      `DELETE FROM core.notification WHERE recipient_account_id IN ('${OWNER_A}','${OWNER_B}','${OWNER_C}')`,
+      `DELETE FROM core.session WHERE account_id IN ('${OWNER_A}','${OWNER_B}','${OWNER_C}')`,
       `DELETE FROM core.device WHERE id='${DEVICE}'`,
       `DELETE FROM core.account WHERE market_id='${M}'`,
       `DELETE FROM core.timing_config WHERE market_id='${M}'`,
@@ -318,6 +368,48 @@ describe('Product media: key scope and purge scheduling', () => {
       expect(await scheduled(pid, other)).toEqual([]);
     });
 
+    it('the upload id must be the lower-case one that was minted', async () => {
+      const pid = await newProduct(A);
+      const minted = await mintVideo(A, pid);
+      const upper = minted.replace(/[0-9a-f-]{36}(?=\.mp4$)/, (id) => id.toUpperCase());
+      expect(upper).not.toBe(minted);
+      land(upper);
+      expectRefused(await commitVideo(A, pid, upper), 'key');
+      expect(await videoKey(pid)).toBeNull();
+    });
+
+    it('an upper-case Product id in the path mints and accepts keys under the canonical id only', async () => {
+      const pid = await newProduct(A);
+      const path = `/v1/seller/products/${pid.toUpperCase()}`;
+      expect(path).not.toContain(pid);
+
+      const v = await call(A, 'post', `${path}/video`).send({ action: 'REQUEST_UPLOAD' }).expect(200);
+      const video = v.body.upload.key as string;
+      expect(video.startsWith(`products/${pid}/video/`)).toBe(true);
+      land(video);
+      await call(A, 'post', `${path}/video`)
+        .send({ action: 'COMMIT', key: video, duration_seconds: 20, height_px: 480 })
+        .expect(201);
+      expect(await videoKey(pid)).toBe(video);
+
+      const i = await call(A, 'post', `${path}/images`).send({ action: 'REQUEST_UPLOAD', position: 1 }).expect(200);
+      const image = { thumb: i.body.uploads.thumb.key, card: i.body.uploads.card.key, full: i.body.uploads.full.key };
+      expect(image.full.startsWith(`products/${pid}/img/`)).toBe(true);
+      land(image.thumb, image.card, image.full);
+      await call(A, 'post', `${path}/images`)
+        .send({ action: 'COMMIT', position: 1, thumb_key: image.thumb, card_key: image.card, full_key: image.full })
+        .expect(201);
+      expect(await imageKeys(pid)).toEqual([image.thumb, image.card, image.full]);
+
+      // The same keys under an upper-case prefix are not the minted shape, through either spelling of the path.
+      const shouting = (key: string) => key.replace(pid, pid.toUpperCase());
+      land(shouting(video));
+      expectRefused(await commitVideo(A, pid, shouting(video)), 'key');
+      const shoutingImage = { thumb: shouting(image.thumb), card: shouting(image.card), full: shouting(image.full) };
+      land(shoutingImage.thumb, shoutingImage.card, shoutingImage.full);
+      expectRefused(await commitImage(A, pid, 2, shoutingImage), 'thumb_key');
+    });
+
     it('a well-formed key whose object was never uploaded is a 409', async () => {
       const pid = await newProduct(A);
       const key = await mintVideo(A, pid);
@@ -329,6 +421,17 @@ describe('Product media: key scope and purge scheduling', () => {
   });
 
   describe('an image commit accepts only the three keys minted together for this Product', () => {
+    it('the upload id must be the lower-case one that was minted', async () => {
+      const pid = await newProduct(A);
+      const minted = await mintImage(A, pid);
+      const upper = (key: string) => key.replace(/(\/img\/)([0-9a-f-]{36})/, (_all, dir: string, id: string) => dir + id.toUpperCase());
+      const keys = { thumb: upper(minted.thumb), card: upper(minted.card), full: upper(minted.full) };
+      expect(keys.full).not.toBe(minted.full);
+      land(keys.thumb, keys.card, keys.full);
+      expectRefused(await commitImage(A, pid, 1, keys), 'thumb_key');
+      expect(await imageKeys(pid)).toEqual([]);
+    });
+
     it('keys from another Seller are refused', async () => {
       const mine = await newProduct(A);
       const theirs = await newProduct(B);
@@ -342,9 +445,9 @@ describe('Product media: key scope and purge scheduling', () => {
       const other = await newProduct(A);
       const one = await mintImage(A, pid);
       const two = await mintImage(A, pid);
-      const sneaky = `products/${pid}/img/../../${other}/img/${randomUUID()}`;
+      const traversal = `products/${pid}/img/../../${other}/img/${randomUUID()}`;
       const cases: [ImageKeys, string][] = [
-        [{ thumb: `${sneaky}/thumb.webp`, card: `${sneaky}/card.webp`, full: `${sneaky}/full.webp` }, 'thumb_key'],
+        [{ thumb: `${traversal}/thumb.webp`, card: `${traversal}/card.webp`, full: `${traversal}/full.webp` }, 'thumb_key'],
         [{ thumb: one.thumb, card: two.card, full: two.full }, 'thumb_key'],
         [{ thumb: one.card, card: one.thumb, full: one.full }, 'thumb_key'],
         [{ thumb: one.thumb, card: one.card, full: one.card }, 'full_key'],
@@ -500,6 +603,93 @@ describe('Product media: key scope and purge scheduling', () => {
       expect(await scheduled(kept)).toEqual([]);
       expect(await videoKey(kept)).toBe(keptVideo);
       expect(await imageKeys(kept)).toEqual([keptImage.thumb, keptImage.card, keptImage.full]);
+    });
+
+    it('a Product whose media row names the same upload twice schedules each key once', async () => {
+      const pid = await newProduct(A);
+      const keys = await committedImage(A, pid, 1);
+      await commitImage(A, pid, 2, keys).expect(201);
+      await call(A, 'delete', `/v1/seller/products/${pid}`).expect(200);
+      expect(await scheduledKeys(pid)).toEqual([keys.thumb, keys.card, keys.full].sort());
+    });
+  });
+
+  describe("a schedule written for another reason is the other writer's", () => {
+    const rowsOf = async (pid: string) =>
+      (
+        await admin.query(
+          `SELECT object_key, reason, purge_after FROM core.media_lifecycle WHERE object_key LIKE $1`,
+          [`products/${pid}/%`],
+        )
+      ).rows.sort((a, b) => (a.object_key < b.object_key ? -1 : 1));
+
+    it('a deleted store keeps its retention schedule whatever its former Owner re-registers', async () => {
+      const pid = await newProduct(C);
+      const video = await committedVideo(C, pid);
+      const image = await committedImage(C, pid, 1);
+      await admin.query(`SELECT core.fn_delete_seller_effects($1)`, [SELLER_C]);
+      const before = await rowsOf(pid);
+      expect(before.map((r) => [r.object_key, r.reason])).toEqual(
+        [video, image.thumb, image.card, image.full].sort().map((k) => [k, 'SELLER_DELETED']),
+      );
+
+      // The former Owner's session is still valid: the same media, registered again, deleted, registered again.
+      const attempts = [
+        (await commitVideo(C, pid, video)).status,
+        (await call(C, 'delete', `/v1/seller/products/${pid}/images/1`)).status,
+        (await commitImage(C, pid, 1, image)).status,
+        (await call(C, 'delete', `/v1/seller/products/${pid}/video`)).status,
+        (await commitVideo(C, pid, video)).status,
+      ];
+      // However each of these is answered, none may be a server error, and the schedule must be unchanged.
+      expect(attempts.every((s) => s < 500)).toBe(true);
+
+      const after = await rowsOf(pid);
+      expect(after.map((r) => [r.object_key, r.reason])).toEqual(before.map((r) => [r.object_key, r.reason]));
+      for (const [i, row] of after.entries()) {
+        expect(row.purge_after.getTime()).toBeLessThanOrEqual(before[i].purge_after.getTime());
+      }
+    });
+
+    it('an earlier schedule is never postponed, and keeps its reason', async () => {
+      const pid = await newProduct(A);
+      const key = await committedVideo(A, pid);
+      const inserted = await admin.query(
+        `INSERT INTO core.media_lifecycle (object_key, class, purge_after, reason)
+         VALUES ($1, 'INFREQUENT', now() + interval '5 days', 'SELLER_DELETED') RETURNING purge_after`,
+        [key],
+      );
+      await call(A, 'delete', `/v1/seller/products/${pid}/video`).expect(204);
+      const after = await rowsOf(pid);
+      expect(after).toHaveLength(1);
+      expect(after[0].reason).toBe('SELLER_DELETED');
+      expect(after[0].purge_after).toEqual(inserted.rows[0].purge_after);
+    });
+  });
+
+  describe("only this Product's own keys are scheduled", () => {
+    it("a media row that names an object outside the Product's prefix schedules nothing for it", async () => {
+      const pid = await newProduct(A);
+      const other = await newProduct(A);
+      const outside = [`scenes/${randomUUID()}/img/${randomUUID()}/full.webp`, `products/${other}/video/${randomUUID()}.mp4`];
+      await admin.query(
+        `INSERT INTO core.product_video (id, product_id, key, duration_seconds, height_px, bytes)
+         VALUES ($1,$2,$3,10,480,1000)`,
+        [randomUUID(), pid, outside[0]],
+      );
+      await call(A, 'delete', `/v1/seller/products/${pid}/video`).expect(204);
+
+      const own = await mintImage(A, pid);
+      await admin.query(
+        `INSERT INTO core.product_image (id, product_id, position, thumb_key, card_key, full_key)
+         VALUES ($1,$2,1,$3,$4,$5)`,
+        [randomUUID(), pid, own.thumb, own.card, outside[1]],
+      );
+      await call(A, 'delete', `/v1/seller/products/${pid}`).expect(200);
+
+      const rows = await admin.query(`SELECT object_key FROM core.media_lifecycle WHERE object_key = ANY($1::text[])`, [outside]);
+      expect(rows.rows).toEqual([]);
+      expect(await scheduledKeys(pid)).toEqual([own.thumb, own.card].sort());
     });
   });
 
