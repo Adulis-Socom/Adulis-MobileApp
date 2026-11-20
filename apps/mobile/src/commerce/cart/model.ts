@@ -71,7 +71,12 @@ export type CartSet = Readonly<{
   checkedAt: string | null;
 }>;
 
-/** A line may be bought only when the server reports nothing against it (an unknown reason counts). */
+/**
+ * A line may be bought only when the server reports nothing against it (an unknown reason counts).
+ * This is not a purchase decision: a code about the whole cart is not represented on any line, so a clean
+ * line is not permission to buy, and nothing may gate a checkout on this alone. An item that names no
+ * Variant reaches every line, so a line it is not about may be marked; that errs on the side of not buying.
+ */
 export const isPurchasable = (line: CartLine): boolean => line.issues.length === 0;
 
 /** Every cart line the set holds, in order. */

@@ -72,7 +72,12 @@ export const mayDrawFacts = (freshness: Freshness): boolean => freshness.kind !=
 
 export type SellerCartStatus = 'EMPTY' | 'CLEAN' | 'HAS_ISSUES' | 'UNVERIFIED';
 
-/** A Seller cart's status, derived. Each Seller cart stands alone: nothing in another one changes it. */
+/**
+ * A Seller cart's status, derived. Each Seller cart stands alone: nothing in another one changes it.
+ * CLEAN is not permission to buy: a code about the whole cart is not represented here, so nothing may gate
+ * a checkout on it. An item that names no Variant reaches every line, so a cart may show more issues than
+ * the server meant, never fewer.
+ */
 export function sellerCartStatus(cart: SellerCart, freshness: Freshness): SellerCartStatus {
   if (cart.lines.length === 0) return 'EMPTY';
   if (freshness.kind === 'UNVERIFIED') return 'UNVERIFIED';

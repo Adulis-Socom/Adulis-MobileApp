@@ -10,7 +10,12 @@ import {
   type ServerItem,
   type VariantId,
 } from '../../cart/model';
-import type { AddAccepted, AddRequest } from '../../cart/port';
+import type {
+  AddAccepted,
+  AddRequest,
+  RemoveLineRequest,
+  SetQuantityRequest,
+} from '../../cart/port';
 import { apiProblem, gatewayPage, offline, proxyJson, timeout } from '../api-errors';
 import { demoCatalogue, moneyOf, type DemoSeller, type DemoVariant } from './scenarios';
 
@@ -20,8 +25,9 @@ import { demoCatalogue, moneyOf, type DemoSeller, type DemoVariant } from './sce
  * on command. It models no payment, no fee, no quote, no delivery and no Order, and it calls no network.
  * Whether it exists in any build is not decided; it is imported only by tests and by the test-only folder.
  *
- * Its defaults follow what the cart contract says: a cart holds one Seller (an add for a second Seller is
- * a 409 CART_SELLER_CONFLICT) and adding an option that is already in the cart makes a second line.
+ * The contract states one thing about this: an add for a second Seller is a 409 CART_SELLER_CONFLICT, so a
+ * cart holds one Seller. The defaults follow that, and then what the current implementation does, which the
+ * contract does not say: adding an option that is already in the cart makes a second line (no merge).
  * Everything else is an opt-in scenario that the contract does not describe: several Seller carts at
  * once (`sellerCarts: 'MULTI'`), merging a repeated option (`mergeDuplicates`), a refused add for an option
  * that cannot be bought (`refuseUnavailableAdds`), a Seller subtotal (`serverSubtotal`) and price changes
@@ -53,7 +59,7 @@ export type FailureSpec =
   /** A success answer whose body cannot be read: the request was processed. */
   | Readonly<{ kind: 'unreadable-2xx' }>;
 
-export type Op = 'getCarts' | 'addLine';
+export type Op = 'getCarts' | 'addLine' | 'setQuantity' | 'removeLine';
 export type Held = { release(): void };
 
 /** Who a request speaks for. The credential is read once when the request is made, as a bearer is. */
@@ -68,6 +74,8 @@ export type RecordedCall = Readonly<{
   key: string | null;
   variantId: string | null;
   quantity: number | null;
+  /** Only an edit names a line. */
+  lineId?: string;
 }>;
 
 export interface FixtureServer {
@@ -85,6 +93,18 @@ export interface FixtureServer {
   mergeDuplicates: boolean;
   /** Whether adding an option that cannot be bought now is refused (true) or accepted and reported on the next read. */
   refuseUnavailableAdds: boolean;
+  /**
+   * Whether a quantity edit or a removal is recorded under its key, so a replay returns the stored answer
+   * (true), or the key is ignored (false, the default: the current implementation takes no key on these two
+   * operations, and answers a replayed removal with 404). The contract says nothing about keys for edits.
+   */
+  editsKeyed: boolean;
+  /**
+   * The most one line may hold (default 99, 1 at least): the current implementation's request rule for a
+   * quantity edit, answered with a 400 above it. The contract states no range; the client sets none of its
+   * own and shows the refusal. Lift it on purpose with `Number.POSITIVE_INFINITY`.
+   */
+  maxLineQuantity: number;
 
   setPrice(variant: VariantId, priceMinor: number, currency?: string): void;
   setQuantityAvailable(variant: VariantId, quantity: number): void;
@@ -100,6 +120,10 @@ export interface FixtureServer {
 
   getCarts(caller: Caller): Promise<CartSet>;
   addLine(caller: Caller, request: AddRequest): Promise<AddAccepted>;
+  /** Sets the absolute quantity of one line of the caller's carts; 404 for a line that is not in them. */
+  setQuantity(caller: Caller, request: SetQuantityRequest): Promise<void>;
+  /** Removes one line of the caller's carts; 404 for a line that is not in them. */
+  removeLine(caller: Caller, request: RemoveLineRequest): Promise<void>;
 
   readonly calls: readonly RecordedCall[];
   /** The carts a caller holds now, as the server would answer them, without recording a call. */
@@ -124,6 +148,8 @@ export function createFixtureServer(
     sellerCarts: 'SINGLE' | 'MULTI';
     mergeDuplicates: boolean;
     refuseUnavailableAdds: boolean;
+    editsKeyed: boolean;
+    maxLineQuantity: number;
     keyLifeMs: number;
     clock: () => number;
   }> = {},
@@ -132,10 +158,20 @@ export function createFixtureServer(
   const unpublished = new Set<string>();
   const inactive = new Set<string>();
   const cartsByActor = new Map<string, SellerCartState[]>();
-  const stored = new Map<string, { body: string; answer: AddAccepted; at: number }>();
+  const stored = new Map<string, { body: string; answer: AddAccepted | null; at: number }>();
   const pendingAdoption = new Map<string, string>();
-  const failures: Record<Op, FailureSpec[]> = { getCarts: [], addLine: [] };
-  const holds: Record<Op, Array<Promise<void>>> = { getCarts: [], addLine: [] };
+  const failures: Record<Op, FailureSpec[]> = {
+    getCarts: [],
+    addLine: [],
+    setQuantity: [],
+    removeLine: [],
+  };
+  const holds: Record<Op, Array<Promise<void>>> = {
+    getCarts: [],
+    addLine: [],
+    setQuantity: [],
+    removeLine: [],
+  };
   const calls: RecordedCall[] = [];
   const now = options.clock ?? Date.now;
   const keyLifeMs = options.keyLifeMs ?? DAY_MS;
@@ -285,7 +321,12 @@ export function createFixtureServer(
   async function run<T>(
     op: Op,
     caller: Caller,
-    detail: { key: string | null; variantId: string | null; quantity: number | null },
+    detail: {
+      key: string | null;
+      variantId: string | null;
+      quantity: number | null;
+      lineId?: string;
+    },
     process: (actor: string) => T,
   ): Promise<T> {
     const actorAtSend = caller.actor;
@@ -302,6 +343,38 @@ export function createFixtureServer(
     throw toError(failure);
   }
 
+  /**
+   * One edit, keyed like an add: the same key and body returns what was stored, a different body or a record
+   * past its life is a 409, an invalid body is a 400 that stores nothing, and a line that is not in the
+   * caller's carts is a 404 (a missing line and another caller's line look the same).
+   */
+  const edit = (
+    actor: string,
+    request: { lineId: LineId; idempotencyKey: string },
+    body: string,
+    valid: boolean,
+    change: (line: LineState, cart: SellerCartState) => void,
+  ): void => {
+    adoptIfPending(actor);
+    const recordKey = `${actor}|${request.idempotencyKey}`;
+    const earlier = server.editsKeyed ? stored.get(recordKey) : undefined;
+    if (earlier) {
+      if (earlier.body !== body || now() - earlier.at >= keyLifeMs)
+        throw apiProblem(409, 'IDEMPOTENCY_KEY_REUSED');
+      return;
+    }
+    if (!valid) throw apiProblem(400, 'VALIDATION_FAILED');
+    for (const cart of cartsOf(actor)) {
+      const line = cart.lines.find((l) => l.lineId === request.lineId);
+      if (line) {
+        change(line, cart);
+        if (server.editsKeyed) stored.set(recordKey, { body, answer: null, at: now() });
+        return;
+      }
+    }
+    throw apiProblem(404, 'NOT_FOUND');
+  };
+
   const server: FixtureServer = {
     adoption: options.adoption ?? 'ADOPT_IF_EMPTY',
     serverSubtotal: options.serverSubtotal ?? false,
@@ -309,6 +382,8 @@ export function createFixtureServer(
     sellerCarts: options.sellerCarts ?? 'SINGLE',
     mergeDuplicates: options.mergeDuplicates ?? false,
     refuseUnavailableAdds: options.refuseUnavailableAdds ?? false,
+    editsKeyed: options.editsKeyed ?? false,
+    maxLineQuantity: options.maxLineQuantity ?? 99,
 
     setPrice(variant, priceMinor, currency) {
       const v = variantOf(variant);
@@ -362,7 +437,7 @@ export function createFixtureServer(
         const earlier = stored.get(recordKey);
         if (earlier) {
           // The same request returns what was stored; a different body, or a record past its life, is refused.
-          if (earlier.body !== body || now() - earlier.at >= keyLifeMs)
+          if (earlier.body !== body || earlier.answer === null || now() - earlier.at >= keyLifeMs)
             throw apiProblem(409, 'IDEMPOTENCY_KEY_REUSED');
           return earlier.answer;
         }
@@ -407,6 +482,38 @@ export function createFixtureServer(
         stored.set(recordKey, { body, answer, at: now() });
         return answer;
       });
+    },
+
+    setQuantity(caller, request) {
+      const detail = {
+        key: request.idempotencyKey,
+        variantId: null,
+        quantity: request.quantity,
+        lineId: request.lineId,
+      };
+      const valid =
+        Number.isInteger(request.quantity) &&
+        request.quantity >= 1 &&
+        request.quantity <= server.maxLineQuantity;
+      return run('setQuantity', caller, detail, (actor) =>
+        edit(actor, request, `SET|${request.lineId}|${request.quantity}`, valid, (line) => {
+          line.quantity = request.quantity;
+        }),
+      );
+    },
+
+    removeLine(caller, request) {
+      const detail = {
+        key: request.idempotencyKey,
+        variantId: null,
+        quantity: null,
+        lineId: request.lineId,
+      };
+      return run('removeLine', caller, detail, (actor) =>
+        edit(actor, request, `REMOVE|${request.lineId}`, true, (line, cart) => {
+          cart.lines = cart.lines.filter((l) => l !== line);
+        }),
+      );
     },
 
     calls,

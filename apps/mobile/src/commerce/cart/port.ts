@@ -21,8 +21,16 @@ export type AddRequest = Readonly<{
 /** The server's acknowledgement. It is never drawn: the carts are read again. */
 export type AddAccepted = Readonly<{ lineId: LineId }>;
 
+/** The absolute quantity of one line. The request names the line only: never a Seller, a Product or a price. */
+export type SetQuantityRequest = Readonly<{
+  lineId: LineId;
+  quantity: number;
+  idempotencyKey: string;
+}>;
+export type RemoveLineRequest = Readonly<{ lineId: LineId; idempotencyKey: string }>;
+
 /**
- * Both methods REJECT: with an ApiError (the class the client throws), with ScopeChanged, or with
+ * Every method REJECTS: with an ApiError (the class the client throws), with ScopeChanged, or with
  * AdapterUnavailable. They never resolve with a failure value, so the one classification of failures
  * the app already has is the only one.
  */
@@ -31,6 +39,10 @@ export interface CartPort {
   getCarts(): Promise<Verified<CartSet>>;
   /** Idempotent by key. The request names no Seller: the server derives it from the Variant. */
   addLine(request: AddRequest): Promise<AddAccepted>;
+  /** Resolves once the server accepted the change; the carts are read again and nothing is drawn from this. */
+  setQuantity(request: SetQuantityRequest): Promise<void>;
+  /** As `setQuantity`: resolves once accepted, and a line that is already absent is the server's to answer. */
+  removeLine(request: RemoveLineRequest): Promise<void>;
 }
 
 export type UnavailableReason = 'ADAPTER_DISABLED' | 'CONTRACT_MISSING';

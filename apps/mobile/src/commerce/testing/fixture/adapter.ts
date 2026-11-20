@@ -31,6 +31,18 @@ export function createFixtureCartAdapter(
         if (!scope.isCurrent()) throw new ScopeChanged();
         return accepted;
       },
+      setQuantity: async (request) => {
+        if (!scope.isCurrent()) throw new ScopeChanged();
+        const caller = { actor: harness.actor() };
+        await server.setQuantity(caller, request);
+        if (!scope.isCurrent()) throw new ScopeChanged();
+      },
+      removeLine: async (request) => {
+        if (!scope.isCurrent()) throw new ScopeChanged();
+        const caller = { actor: harness.actor() };
+        await server.removeLine(caller, request);
+        if (!scope.isCurrent()) throw new ScopeChanged();
+      },
     }),
   };
 }
