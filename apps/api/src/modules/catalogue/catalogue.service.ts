@@ -783,8 +783,9 @@ export class CatalogueService {
    * object leaves service, collected by the daily media.lifecycle job. 30 days' grace is a
    * recovery window, not a ruled value. Call it in the transaction that removed the reference,
    * after that change: a key some row still names is not scheduled, and neither is a key outside
-   * this Product's own prefix. An earlier schedule (any writer's) is never postponed, and keeps
-   * its reason, so the writer that scheduled it stays the one that may withdraw it.
+   * this Product's own prefix. A schedule this module wrote earlier is never postponed and keeps
+   * its reason; a schedule written for any other reason (a deleted store's retention) is left
+   * completely untouched, neither postponed nor brought forward.
    * shortcut: the reference test scans both media tables (no index on the key columns); fine
    * for the rare delete or replace, index them if their volume grows.
    */
@@ -803,7 +804,8 @@ export class CatalogueService {
          AND NOT EXISTS (SELECT 1 FROM core.product_image i WHERE u.k IN (i.thumb_key, i.card_key, i.full_key))
          AND NOT EXISTS (SELECT 1 FROM core.product_video v WHERE v.key = u.k)
       ON CONFLICT (object_key) DO UPDATE
-        SET purge_after = LEAST(core.media_lifecycle.purge_after, EXCLUDED.purge_after)`.execute(trx);
+        SET purge_after = LEAST(core.media_lifecycle.purge_after, EXCLUDED.purge_after)
+        WHERE core.media_lifecycle.reason = ANY(${sql.val([...CATALOGUE_PURGE_REASONS])}::text[])`.execute(trx);
   }
 
   /**

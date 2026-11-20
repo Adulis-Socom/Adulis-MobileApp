@@ -641,22 +641,35 @@ describe('Product media: key scope and purge scheduling', () => {
         (await call(C, 'delete', `/v1/seller/products/${pid}/video`)).status,
         (await commitVideo(C, pid, video)).status,
       ];
-      // However each of these is answered, none may be a server error, and the schedule must be unchanged.
-      expect(attempts.every((s) => s < 500)).toBe(true);
+      expect(attempts).toEqual([201, 204, 201, 204, 201]);
 
       const after = await rowsOf(pid);
-      expect(after.map((r) => [r.object_key, r.reason])).toEqual(before.map((r) => [r.object_key, r.reason]));
-      for (const [i, row] of after.entries()) {
-        expect(row.purge_after.getTime()).toBeLessThanOrEqual(before[i].purge_after.getTime());
-      }
+      expect(after.map((r) => [r.object_key, r.reason, r.purge_after])).toEqual(
+        before.map((r) => [r.object_key, r.reason, r.purge_after]),
+      );
     });
 
-    it('an earlier schedule is never postponed, and keeps its reason', async () => {
+    it('a schedule this module wrote earlier is never postponed, and keeps its reason', async () => {
       const pid = await newProduct(A);
       const key = await committedVideo(A, pid);
       const inserted = await admin.query(
         `INSERT INTO core.media_lifecycle (object_key, class, purge_after, reason)
-         VALUES ($1, 'INFREQUENT', now() + interval '5 days', 'SELLER_DELETED') RETURNING purge_after`,
+         VALUES ($1, 'INFREQUENT', now() + interval '5 days', 'VIDEO_REPLACED') RETURNING purge_after`,
+        [key],
+      );
+      await call(A, 'delete', `/v1/seller/products/${pid}/video`).expect(204);
+      const after = await rowsOf(pid);
+      expect(after).toHaveLength(1);
+      expect(after[0].reason).toBe('VIDEO_REPLACED');
+      expect(after[0].purge_after).toEqual(inserted.rows[0].purge_after);
+    });
+
+    it('a deleted store schedule is neither postponed nor brought forward, and keeps its reason', async () => {
+      const pid = await newProduct(A);
+      const key = await committedVideo(A, pid);
+      const inserted = await admin.query(
+        `INSERT INTO core.media_lifecycle (object_key, class, purge_after, reason)
+         VALUES ($1, 'INFREQUENT', now() + interval '90 days', 'SELLER_DELETED') RETURNING purge_after`,
         [key],
       );
       await call(A, 'delete', `/v1/seller/products/${pid}/video`).expect(204);
