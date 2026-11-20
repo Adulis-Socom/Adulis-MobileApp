@@ -93,7 +93,10 @@ the message is "not sent" and the context says the Product is no longer availabl
 **Idempotency.** The intent is the whole payload: the conversation, the text, and the Product or
 none. One key per intent.
 
-- A server answer ends the intent; the next attempt gets a new key.
+- The API's own refusal of the request (a 4xx other than a key conflict or a rate limit) ends the
+  intent; the next attempt gets a new key. A 5xx, a rate limit or a key conflict keeps the key, and so
+  does a 404 on a replay after an earlier attempt of the same message that never got an answer: the
+  outcome stays unconfirmed (WO-022, sections 2 and 7).
 - No answer (offline, timeout) keeps the key, and the outcome is "unconfirmed". While a send is
   unconfirmed, its payload is frozen: the composer and Remove Product are locked, and Send replays
   the same text, Product and key. If the Product now reads as a different id, the replay is

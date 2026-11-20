@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parseAllDocuments } from 'yaml';
 import {
   ALLOWED_HAZARDS,
   ALLOWED_PERMISSIONS,
@@ -621,5 +622,62 @@ test('every flow in the repository directory is read as YAML: none is unparseabl
       [],
       d.file,
     );
+  }
+});
+
+/* ---- a flow that runs as a guest does not tap, wait for or assert visible a Seller mode control ---- */
+
+// What a flow taps, waits for or asserts is visible, at any depth. What it asserts is ABSENT is not
+// collected: `assertNotVisible` is how a flow checks that a control is missing.
+const WANTS_VISIBLE = ['tapOn', 'assertVisible', 'scrollUntilVisible'];
+const stringsIn = (v) =>
+  typeof v === 'string'
+    ? [v]
+    : Array.isArray(v)
+      ? v.flatMap(stringsIn)
+      : v && typeof v === 'object'
+        ? Object.values(v).flatMap(stringsIn)
+        : [];
+function visibleTexts(node, out = []) {
+  if (Array.isArray(node)) node.forEach((n) => visibleTexts(n, out));
+  else if (node && typeof node === 'object')
+    for (const [key, value] of Object.entries(node)) {
+      if (WANTS_VISIBLE.includes(key)) out.push(...stringsIn(value));
+      else if (key === 'extendedWaitUntil') out.push(...stringsIn(value?.visible));
+      else visibleTexts(value, out);
+    }
+  return out;
+}
+
+// The rule in the app that gives the approved flows no Seller mode: Seller is offered only to a signed-in
+// Account whose server context says so. Either operand order, with or without `=== true`, any whitespace.
+const SELLER_RULE =
+  /signedIn\s*&&\s*sellerCompanion(?:\s*===\s*true)?\b|sellerCompanion(?:\s*===\s*true)?\s*&&\s*signedIn\b/;
+// The Seller mode controls a guest is never offered: the diagnostic ones and the product switch. Only these
+// two spellings are read, not an id selector and not another label.
+const SELLER_MODE_CONTROL = /Seller Companion|Switch to Seller/;
+
+test('a flow that runs as a guest never taps, waits for or asserts visible a Seller mode control', () => {
+  const modes = readFileSync(join(repo, 'apps', 'mobile', 'src', 'modes', 'modes.ts'), 'utf8');
+  assert.match(
+    modes,
+    SELLER_RULE,
+    'modes.ts no longer offers Seller Companion only to a signed-in Account whose server context says so ' +
+      '(signedIn && sellerCompanion): the approved flows run as a guest, so re-read foundation-smoke.yaml and ' +
+      'buyer-shell.yaml for steps that depend on it before changing this rule or this test',
+  );
+  const real = loadDeclaration(REAL_DECL);
+  for (const [name, d] of Object.entries(real.flows)) {
+    const text = readFileSync(join(REAL_FLOWS, d.file), 'utf8');
+    // a guest: the app's data is cleared at launch, so no stored session survives, and no variable can carry a code
+    assert.ok(
+      scanFlow(text).hazards.includes('clearState'),
+      `${name} does not clear the app's data at launch: it may start signed in, so it is not a guest flow`,
+    );
+    assert.deepEqual(d.vars, [], `${name} takes a variable: it may sign in, read it again`);
+    const wanted = visibleTexts(parseAllDocuments(text).map((doc) => doc.toJS())).filter((t) =>
+      SELLER_MODE_CONTROL.test(t),
+    );
+    assert.deepEqual(wanted, [], `${name} asks a guest for a Seller mode control`);
   }
 });
