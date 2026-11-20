@@ -7,9 +7,10 @@ import { assertFakeIsPermitted } from '../../common/adapters/fake-guard';
  *
  * Evidence is the one media class that DOES transit the API: R18 requires
  * it stored as our AEAD frames (a raw screenshot at a guessable key is the
- * disclosure S13 exists to prevent), so the commit fetches the buyer's raw
- * upload, encrypts, stores the framed object, and DELETES the raw — one
- * transit, 5 MB cap, priced in A1 and accepted.
+ * disclosure S13 exists to prevent), so the commit checks the buyer's raw
+ * upload by size, fetches it, encrypts, stores the framed object, and, once
+ * the database has committed, DELETES the raw: one transit, 5 MB cap, priced
+ * in A1 and accepted.
  */
 
 export interface SignedUpload {
@@ -20,7 +21,10 @@ export interface SignedUpload {
 
 export interface FinancialStorageAdapter {
   signPut(key: string, contentType: string, maxBytes: number): Promise<SignedUpload>;
-  getObject(key: string): Promise<Buffer | null>;
+  /** The stored size, without reading the body; null when the object does not exist. */
+  inspect(key: string): Promise<{ readonly bytes: number } | null>;
+  /** At most `maxBytes` bytes from the start (the whole object when omitted); null when absent. */
+  getObject(key: string, maxBytes?: number): Promise<Buffer | null>;
   putObject(key: string, bytes: Buffer): Promise<void>;
   deleteObject(key: string): Promise<void>;
 }
@@ -48,8 +52,15 @@ export class FakeFinancialStorageAdapter implements FinancialStorageAdapter {
     };
   }
 
-  async getObject(key: string): Promise<Buffer | null> {
-    return this.objects.get(key) ?? null;
+  async inspect(key: string): Promise<{ readonly bytes: number } | null> {
+    const obj = this.objects.get(key);
+    return obj ? { bytes: obj.length } : null;
+  }
+
+  async getObject(key: string, maxBytes?: number): Promise<Buffer | null> {
+    const obj = this.objects.get(key);
+    if (!obj) return null;
+    return maxBytes === undefined ? obj : obj.subarray(0, maxBytes);
   }
 
   async putObject(key: string, bytes: Buffer): Promise<void> {
