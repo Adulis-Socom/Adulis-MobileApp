@@ -3,8 +3,8 @@
  * Regenerate packages/locale/MT-KEYS.md -- the human translation pass's
  * WORK LIST (T7 S7.4): every key whose Amharic string is a
  * machine-translation placeholder. When the human pass replaces a batch, it
- * deletes those keys from this manifest in the same change, and AM_ENABLED
- * turns on when the manifest is empty.
+ * deletes those keys from this manifest in the same change; Amharic is
+ * released to users only when the manifest is empty and a person approved it.
  *
  * TWO LISTS, NOT ONE (ADU-RUL-03 S4). A machine-translated placeholder is
  * not acceptable for a string a person is legally BOUND by -- an attestation
@@ -59,8 +59,8 @@ const out = [
   "untranslated, because unverifiable text in a seller's own language is worse",
   'than text they can see is untranslated (D-144). Neither is a translation.',
   'The placeholders satisfy the completeness gate (a missing key is a compile',
-  'error) and nothing else. `AM_ENABLED` stays off until BOTH lists are',
-  'clear.',
+  'error) and nothing else. Amharic stays development-only until BOTH lists',
+  'are clear.',
   '',
   'When a batch is humanly translated: replace the strings in `am.ts` and',
   'delete the keys here, in the same change. Regenerate after ADDING keys:',

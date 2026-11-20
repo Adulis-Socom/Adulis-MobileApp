@@ -28,7 +28,7 @@ backend change, no new endpoint and no new error code.
 | **Original bug** | A 404 on an anchored send always said "This Product is no longer available to ask about", though the API returns the same NOT_FOUND when the conversation is not available. |
 | **Reproduction** | An anchored send answered 404 while the Product still reads as public. |
 | **Root cause** | The client turned every NOT_FOUND on an anchored send into "Product gone". |
-| **Exact fix** | A 404 on send shows a neutral, privacy-safe line and keeps the text. Anchored: "Your message was not sent. This conversation or the Product with it may not be available right now. Your message is still in the box below." Plain: the same without the Product. The screen then reads the Product again and the messages again. Only a current 404 from those reads says "This Product is no longer available to ask about" or "This conversation is not available". Offline and timeout stay "may already have been received" (unconfirmed), never a refusal. Idempotency is unchanged: a 404 is an answer, so the next attempt is a new intent. |
+| **Exact fix** | A 404 on send shows a neutral, privacy-safe line and keeps the text. Anchored: "Your message was not sent. This conversation or the Product with it may not be available right now. Your message is still in the box below." Plain: the same without the Product. The screen then reads the Product again and the messages again. Only a current 404 from those reads says "This Product is no longer available to ask about" or "This conversation is not available". Offline and timeout stay "may already have been received" (unconfirmed), never a refusal. Idempotency is unchanged: a 404 is an answer, so the next attempt is a new intent. The one exception is a 404 on a replay after an earlier attempt of the same message that never got an answer from the API: that outcome stays unknown and the key is kept (WO-022, section 7). |
 | **Regression test** | Jest "20, 28. a 404 at send time is not sent and says so neutrally ..." (the Product still readable stays attached); "ON-168. a 404 on an anchored send, then a current read that answers 404: only then is the Product called gone" (with the screen-reader announcement); "ON-168. a 404 on a plain send names no cause; a messages read that answers 404 then shows the conversation as not available". |
 | **Native verification** | Not reproducible natively without a server fault injection (the server does not refuse an eligible Product); covered by the Jest cases against the in-memory server's rules. |
 
@@ -41,7 +41,9 @@ When a send gets no answer (offline, timeout), the message may have been stored:
 - the main button reads **Try sending again**. It sends the same text, Product and idempotency key,
   so a message the server already stored is answered as already stored, never duplicated;
 - **Edit the message instead** gives the attempt up explicitly. It is ignored while a send is in
-  flight (security review L2);
+  flight (security review L2). It also reads the conversation again in the background, so a message
+  stored in the meantime can be recognised beside Send; Send is not held back for that read (WO-022,
+  section 7);
 - the text, Remove Product and Select Product are locked until one of the two is chosen;
 - it is never shown as "not sent" (a confirmed refusal), and never as sent until the server
   confirms.

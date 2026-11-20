@@ -28,9 +28,26 @@ export function productionSources(...dirs: string[]): SourceFile[] {
   return dirs.flatMap((dir) => walk(dir, false));
 }
 
+/** Folders of `src` that draw nothing a person reads or touches: fixtures, tokens, the API client, device and storage plumbing, state, catalogue plumbing. */
+export const NON_UI_DIRS: readonly string[] = ['testing', 'theme', 'api', 'device', 'state', 'storage', 'i18n'];
+
+/** Every production source that can draw a screen: all of `src` except NON_UI_DIRS, so a new folder is read by default. */
+export function uiSources(): SourceFile[] {
+  return walk('.', false).filter(({ file }) => !NON_UI_DIRS.includes(file.split('/')[0] ?? ''));
+}
+
 /** Every source file under `src`, test files included (for checks that no file may import something). */
 export function allSources(): SourceFile[] {
   return walk('.', true);
+}
+
+/** The files directly inside a repository folder whose name ends with `suffix`, as `name` and text (for a test that reads every migration). */
+export function repoFolderFiles(fromRoot: string, suffix: string): SourceFile[] {
+  const dir = path.resolve(SRC, '../../..', fromRoot);
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => !entry.isDirectory() && entry.name.endsWith(suffix))
+    .map((entry) => ({ file: entry.name, text: fs.readFileSync(path.join(dir, entry.name), 'utf8') }));
 }
 
 /** A file of the repository by its path from the repository root (for a test that checks a package's twin file). */
