@@ -47,10 +47,20 @@ const S_ANALYST = `${P}16`;
 const S_SUPPORT = `${P}17`;
 const S_ADMIN = `${P}18`;
 const S_DEMOTE = `${P}19`;
+const INVENTORY_M = `${P}1a`; // INVENTORY of SELLER_A: no claims permission
+const CAMPAIGN_M = `${P}1b`; // CAMPAIGN_MANAGER of SELLER_A: no claims permission
+const TM_INVENTORY = `${P}1c`;
+const TM_CAMPAIGN = `${P}1d`;
+const S_INVENTORY = `${P}1e`;
+const S_CAMPAIGN = `${P}1f`;
+const S_OWNER_A_MOBILE = `${P}20`; // MOBILE session of the store owner
+const S_SUPPORT_MOBILE = `${P}21`; // MOBILE session of the SALES_SUPPORT member
 
 const ACCOUNTS = [OWNER_A, OWNER_B, BUYER, ANALYST_M, SUPPORT_M, ADMIN_M, DEMOTE_M];
 const SELLERS = [SELLER_A, SELLER_A2, SELLER_B];
 const SESSIONS = [S_OWNER_A, S_OWNER_B, S_BUYER, S_ANALYST, S_SUPPORT, S_ADMIN, S_DEMOTE];
+const MORE_ACCOUNTS = [INVENTORY_M, CAMPAIGN_M];
+const MORE_SESSIONS = [S_INVENTORY, S_CAMPAIGN, S_OWNER_A_MOBILE, S_SUPPORT_MOBILE];
 
 @Module({ imports: [AppModule] })
 class ClaimsEvidenceAppModule {}
@@ -66,6 +76,15 @@ describe('claims evidence: attaching a bank record needs the response permission
       .post(`/v1/claims/${CLAIM}/evidence`)
       .set('Cookie', `__Host-adulis_session=${sessionToken(session)}`)
       .set('Origin', CONSOLE_ORIGIN)
+      .set('X-Adulis-Seller', store)
+      .set('Idempotency-Key', key)
+      .send({ kind: 'BANK_RECORD', reference_id: ref });
+  /** A mobile session naming the store (the Companion surface): claims permissions are Console-only. */
+  const attachAsStoreOnMobile = (session: string, store: string, key: string, ref: string) =>
+    http()
+      .post(`/v1/claims/${CLAIM}/evidence`)
+      .set('Authorization', `Bearer ${sessionToken(session)}`)
+      .set('X-Adulis-Device', DEVICE)
       .set('X-Adulis-Seller', store)
       .set('Idempotency-Key', key)
       .send({ kind: 'BANK_RECORD', reference_id: ref });
@@ -158,6 +177,16 @@ describe('claims evidence: attaching a bank record needs the response permission
         ($3,$5,$8,'ADMIN'), ($4,$5,$9,'SALES_SUPPORT')`,
       [TM_ANALYST, TM_SUPPORT, TM_ADMIN, TM_DEMOTE, SELLER_A, ANALYST_M, SUPPORT_M, ADMIN_M, DEMOTE_M],
     );
+    await admin.query(
+      `INSERT INTO core.account (id, phone_e164, market_id, status) VALUES
+        ($1,'+251911481008',$3,'ACTIVE'), ($2,'+251911481009',$3,'ACTIVE')`,
+      [INVENTORY_M, CAMPAIGN_M, M],
+    );
+    await admin.query(
+      `INSERT INTO core.seller_team_member (id, seller_id, account_id, role) VALUES
+        ($1,$3,$4,'INVENTORY'), ($2,$3,$5,'CAMPAIGN_MANAGER')`,
+      [TM_INVENTORY, TM_CAMPAIGN, SELLER_A, INVENTORY_M, CAMPAIGN_M],
+    );
     await admin.query(`INSERT INTO core.device (id, platform) VALUES ($1,'ANDROID')`, [DEVICE]);
     await admin.query(
       `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
@@ -170,7 +199,15 @@ describe('claims evidence: attaching a bank record needs the response permission
               ($7,$14,'CONSOLE',$15, now()+interval '12 hours', now())`,
       [...SESSIONS, ...ACCOUNTS, DEVICE],
     );
-    await armFixtureSessions(admin, SESSIONS);
+    await admin.query(
+      `INSERT INTO core.session (id, account_id, audience, device_id, expires_at, last_activity_at)
+       VALUES ($1,$5,'CONSOLE',$9, now()+interval '12 hours', now()),
+              ($2,$6,'CONSOLE',$9, now()+interval '12 hours', now()),
+              ($3,$7,'MOBILE',$9, now()+interval '30 days', now()),
+              ($4,$8,'MOBILE',$9, now()+interval '30 days', now())`,
+      [...MORE_SESSIONS, INVENTORY_M, CAMPAIGN_M, OWNER_A, SUPPORT_M, DEVICE],
+    );
+    await armFixtureSessions(admin, [...SESSIONS, ...MORE_SESSIONS]);
     await admin.query(
       `INSERT INTO core."order" (id, market_id, seller_id, buyer_account_id, state, expires_at,
          clock_stopped_at, total_minor, total_currency, display_currency)
@@ -191,7 +228,7 @@ describe('claims evidence: attaching a bank record needs the response permission
 
   afterAll(async () => {
     await app?.close();
-    const accounts = ACCOUNTS.map((a) => `'${a}'`).join(',');
+    const accounts = [...ACCOUNTS, ...MORE_ACCOUNTS].map((a) => `'${a}'`).join(',');
     const sellers = SELLERS.map((s) => `'${s}'`).join(',');
     // Evidence items are append-only by trigger: replica mode, children before parents.
     await admin.query(`SET session_replication_role = replica`);
@@ -284,6 +321,24 @@ describe('claims evidence: attaching a bank record needs the response permission
     const r = await attachAsStore(S_DEMOTE, SELLER_A, key, ref);
     await expectRefusedAndUnwritten(r, 403, 'PERMISSION_DENIED', key, ref);
     expect(await rows(before)).toBe(1);
+  });
+
+  it('roles without any claims permission are refused, and nothing is written', async () => {
+    for (const session of [S_INVENTORY, S_CAMPAIGN]) {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const r = await attachAsStore(session, SELLER_A, key, ref);
+      await expectRefusedAndUnwritten(r, 403, 'PERMISSION_DENIED', key, ref);
+    }
+  });
+
+  it('a mobile session naming the store is refused, whatever the role, and nothing is written', async () => {
+    for (const session of [S_OWNER_A_MOBILE, S_SUPPORT_MOBILE]) {
+      const key = randomUUID();
+      const ref = randomUUID();
+      const r = await attachAsStoreOnMobile(session, SELLER_A, key, ref);
+      await expectRefusedAndUnwritten(r, 403, 'PERMISSION_DENIED', key, ref);
+    }
   });
 
   it("a member of another store cannot attach to this store's claim", async () => {

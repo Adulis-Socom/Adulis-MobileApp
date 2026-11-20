@@ -126,15 +126,15 @@ export class ClaimsService {
   }
 
   /**
-   * The claim, from whichever side the caller stands on, or 404. The seller
-   * side needs the read permission, or the response permission when the caller
-   * is about to change the claim (`forWrite`).
+   * The claim, from whichever side the caller stands on, or 404. A caller on
+   * the seller side must hold `permission`: every caller names the one it
+   * needs, the read permission to look and the response permission to change.
    */
   private async claimFor(
     trx: Transaction<Database>,
     req: AuthedRequest,
     claimId: string,
-    forWrite = false,
+    permission: 'seller.claims:read' | 'seller.claims:respond',
   ): Promise<{ id: string; order_id: string; seller_id: string; state: string; side: 'BUYER' | 'SELLER' }> {
     const accountId = req.ctx?.accountId as string;
     const r = await sql<{
@@ -154,7 +154,6 @@ export class ClaimsService {
       return { ...claim, side: 'BUYER' };
     }
     if (req.ctx?.sellerId === claim.seller_id) {
-      const permission = forWrite ? 'seller.claims:respond' : 'seller.claims:read';
       await sql`
         SELECT core.fn_has_permission(${accountId}, ${claim.seller_id},
           ${permission},
@@ -166,7 +165,7 @@ export class ClaimsService {
 
   /** GET /v1/claims/{id} — with its evidence set. */
   async read(trx: Transaction<Database>, req: AuthedRequest, claimId: string): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:read');
     const detail = await sql<Record<string, unknown>>`
       SELECT c.id, c.order_id, c.reservation_id, c.trigger, c.state, c.severity,
              c.remedy, c.outcome, c.outcome_reason, c.opened_at,
@@ -192,7 +191,7 @@ export class ClaimsService {
     claimId: string,
     referenceId: string,
   ): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId, true);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:respond');
     if (claim.state === 'RESOLVED') {
       throw new AdulisException('ORDER_ALREADY_TERMINAL', {
         slots: { subject: 'claim' },
@@ -228,7 +227,7 @@ export class ClaimsService {
     req: AuthedRequest,
     claimId: string,
   ): Promise<unknown> {
-    const claim = await this.claimFor(trx, req, claimId);
+    const claim = await this.claimFor(trx, req, claimId, 'seller.claims:read');
     if (claim.side !== 'BUYER') throw new AdulisException('NOT_FOUND');
     const buyer = req.ctx?.accountId as string;
 
