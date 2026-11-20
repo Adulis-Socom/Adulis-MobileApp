@@ -21,8 +21,8 @@ machine-translation placeholder in `am.ts`; C-3's keys carry the English
 untranslated, because unverifiable text in a seller's own language is worse
 than text they can see is untranslated (D-144). Neither is a translation.
 The placeholders satisfy the completeness gate (a missing key is a compile
-error) and nothing else. `AM_ENABLED` stays off until BOTH lists are
-clear.
+error) and nothing else. Amharic stays development-only until BOTH lists
+are clear.
 
 When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
