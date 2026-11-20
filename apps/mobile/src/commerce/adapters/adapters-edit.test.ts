@@ -90,10 +90,10 @@ describe('the cart operations the contract names', () => {
   it('the check sees a fifth operation, a new method on a known path and a sibling path', () => {
     const probe: Paths = {
       ...paths,
-      '/v1/cart/lines/{id}/accept-price': { post: {} },
+      '/v1/cart/lines/{id}/extra-operation': { post: {} },
     };
     expect(cartOperations(probe)).toEqual(
-      [...KNOWN, 'post /v1/cart/lines/{id}/accept-price'].sort(),
+      [...KNOWN, 'post /v1/cart/lines/{id}/extra-operation'].sort(),
     );
     const method: Paths = { ...paths, '/v1/cart': { ...paths['/v1/cart'], delete: {} } };
     expect(cartOperations(method)).toContain('delete /v1/cart');

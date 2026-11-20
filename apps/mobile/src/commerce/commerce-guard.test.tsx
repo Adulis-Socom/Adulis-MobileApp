@@ -387,11 +387,11 @@ describe('G10: the surface is exactly reading the carts, adding a line, and chan
       addLine() {}
       setQuantity() {}
       removeLine() {}
-      acceptPrice() {}
+      extraMethod() {}
     }
     expect(surface(new Wider())).toEqual([
-      'acceptPrice',
       'addLine',
+      'extraMethod',
       'getCarts',
       'removeLine',
       'setQuantity',
