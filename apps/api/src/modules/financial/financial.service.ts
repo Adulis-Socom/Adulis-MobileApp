@@ -7,6 +7,7 @@ import type { AuthedRequest } from '../../common/auth/auth.guard';
 import { assertPermission } from '../../common/auth/permission';
 import { grantSet, allowedActions } from '../../common/auth/grant-set';
 import { AdulisException } from '../../common/errors/adulis-exception';
+import { createLogger } from '../../common/logging';
 import {
   decryptFramed,
   decryptValue,
@@ -30,7 +31,10 @@ import type { PayoutChangeBody } from './financial.schemas';
  * get them wrong and a first place to skip the log.
  */
 
+/** The 5 MB EVIDENCE_TOO_LARGE cap (ADU-CON-02 v3.2 R18; A1 section 4.3). */
 const EVIDENCE_CAP_BYTES = 5 * 1024 * 1024;
+
+const log = createLogger();
 
 @Injectable()
 export class FinancialService {
@@ -74,10 +78,13 @@ export class FinancialService {
 
   /**
    * POST /v1/orders/{id}/payment-evidence — upload via signed URL, then
-   * commit. The commit fetches the raw upload, enforces the 5 MB cap,
-   * encrypts to R18 frames, stores the framed object, DELETES the raw,
-   * registers through the boundary's writer, and moves the order to
-   * PAYMENT_SUBMITTED with its submission row — one transaction.
+   * commit. The commit checks the raw upload's size (5 MB cap) before it
+   * reads a byte, reads at most cap + 1 bytes, encrypts to R18 frames and
+   * stores the framed object WITHOUT the order lock, then takes the lock to
+   * re-verify the order, registers through the boundary's writer, and moves
+   * the order to PAYMENT_SUBMITTED with its submission row, one transaction.
+   * The raw object is deleted by the caller once that transaction has
+   * committed (`discardCommittedRaw`), so a rolled-back commit stays retryable.
    */
   async requestEvidenceUpload(
     trx: Transaction<Database>,
@@ -102,22 +109,27 @@ export class FinancialService {
     orderId: string,
     rawKey: string,
   ): Promise<unknown> {
-    const order = await sql<{ state: string }>`
-      SELECT state::text FROM core."order"
-       WHERE id = ${orderId} AND buyer_account_id = ${req.ctx?.accountId}
-       FOR UPDATE`.execute(trx);
-    if (!order.rows[0]) throw new AdulisException('NOT_FOUND');
-    if (!['CREATED', 'NOTIFIED'].includes(order.rows[0].state)) {
-      throw new AdulisException('ORDER_NOT_PAYABLE', {
-        slots: { state: order.rows[0].state },
-      });
-    }
+    await this.assertPayable(trx, req, orderId, false);
     if (!rawKey.startsWith(`evidence/raw/${orderId}/`)) {
       throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'key' } });
     }
 
-    const raw = await this.storage.getObject(rawKey);
-    if (!raw) {
+    // The size is read from the object's metadata BEFORE any byte is fetched.
+    const head = await this.storage.inspect(rawKey);
+    if (!head || !Number.isSafeInteger(head.bytes) || head.bytes <= 0) {
+      throw new AdulisException('EVIDENCE_REQUIRED', {
+        slots: { reason: 'OBJECT_NOT_UPLOADED' },
+      });
+    }
+    if (head.bytes > EVIDENCE_CAP_BYTES) {
+      throw new AdulisException('EVIDENCE_TOO_LARGE', {
+        slots: { max_bytes: EVIDENCE_CAP_BYTES, bytes: head.bytes },
+      });
+    }
+
+    // Cap + 1 bytes at most, even if the object grew after the check above.
+    const raw = await this.storage.getObject(rawKey, EVIDENCE_CAP_BYTES + 1);
+    if (!raw || raw.length === 0) {
       throw new AdulisException('EVIDENCE_REQUIRED', {
         slots: { reason: 'OBJECT_NOT_UPLOADED' },
       });
@@ -130,37 +142,79 @@ export class FinancialService {
 
     const framed = encryptFramed(raw, keyForRef('EVID_V1'));
     const storedKey = `evidence/framed/${orderId}/${randomUUID()}`;
-    await this.storage.putObject(storedKey, framed.payload);
-    await this.storage.deleteObject(rawKey);
+    try {
+      await this.storage.putObject(storedKey, framed.payload);
 
-    const evidence = await sql<{ id: string }>`
-      SELECT financial.write_payment_evidence(
-        ${orderId}, ${storedKey}, 'EVID_V1',
-        ${framed.frameSize}, ${framed.frameCount}) AS id`.execute(trx);
+      // The order lock is taken only now, for the writes: the storage work
+      // above held none, so the order is judged again under it.
+      await this.assertPayable(trx, req, orderId, true);
+      const evidence = await sql<{ id: string }>`
+        SELECT financial.write_payment_evidence(
+          ${orderId}, ${storedKey}, 'EVID_V1',
+          ${framed.frameSize}, ${framed.frameCount}) AS id`.execute(trx);
 
-    await sql`UPDATE core."order" SET state = 'PAYMENT_SUBMITTED'
-               WHERE id = ${orderId}`.execute(trx);
-    const submission = await sql`
-      INSERT INTO core.payment_submission
-        (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
-      SELECT ${randomUUID()}, ${orderId}, now(), ${evidence.rows[0]?.id}, 'SUBMITTED',
-             now() + tc.payment_confirmation_window
-        FROM core."order" o
-        JOIN core.timing_config tc
-          ON tc.market_id = o.market_id AND tc.effective @> now()
-       WHERE o.id = ${orderId}`.execute(trx);
-    if (Number(submission.numAffectedRows ?? 0) === 0) {
-      // T16 pass F2: with no timing_config in force, this INSERT..SELECT used
-      // to write ZERO rows AFTER the state flip -- a PAYMENT_SUBMITTED order
-      // with no submission, invisible to the confirmation clock and the
-      // obligations list while the lapse job (which derives its own deadline
-      // from the transition time) would still open the SLA claim: the purest
-      // false negative. A missing config is OUR defect; fail loudly, roll the
-      // whole commit back (500, the 42501 doctrine's spirit).
-      throw new AdulisException('INTERNAL');
+      await sql`UPDATE core."order" SET state = 'PAYMENT_SUBMITTED'
+                 WHERE id = ${orderId}`.execute(trx);
+      const submission = await sql`
+        INSERT INTO core.payment_submission
+          (id, order_id, submitted_at, evidence_ref, state, sla_deadline)
+        SELECT ${randomUUID()}, ${orderId}, now(), ${evidence.rows[0]?.id}, 'SUBMITTED',
+               now() + tc.payment_confirmation_window
+          FROM core."order" o
+          JOIN core.timing_config tc
+            ON tc.market_id = o.market_id AND tc.effective @> now()
+         WHERE o.id = ${orderId}`.execute(trx);
+      if (Number(submission.numAffectedRows ?? 0) === 0) {
+        // T16 pass F2: with no timing_config in force, this INSERT..SELECT used
+        // to write ZERO rows AFTER the state flip -- a PAYMENT_SUBMITTED order
+        // with no submission, invisible to the confirmation clock and the
+        // obligations list while the lapse job (which derives its own deadline
+        // from the transition time) would still open the SLA claim: the purest
+        // false negative. A missing config is OUR defect; fail loudly, roll the
+        // whole commit back (500, the 42501 doctrine's spirit).
+        throw new AdulisException('INTERNAL');
+      }
+
+      return { evidence_id: evidence.rows[0]?.id, state: 'PAYMENT_SUBMITTED' };
+    } catch (e) {
+      // The transaction rolls back with this error, so nothing can reference
+      // the framed copy; the raw upload is untouched and the commit retryable.
+      await this.storage.deleteObject(storedKey).catch(() => {
+        log.warn({ msg: 'evidence cleanup after a refused commit failed' });
+      });
+      throw e;
     }
+  }
 
-    return { evidence_id: evidence.rows[0]?.id, state: 'PAYMENT_SUBMITTED' };
+  /**
+   * The raw upload is deleted only after the commit's transaction has
+   * committed: a rolled-back commit must leave it in place for the retry. A
+   * failed delete does not undo the commit, so it is logged, not thrown.
+   */
+  async discardCommittedRaw(orderId: string, rawKey: string): Promise<void> {
+    if (!rawKey.startsWith(`evidence/raw/${orderId}/`)) return;
+    await this.storage.deleteObject(rawKey).catch(() => {
+      log.warn({ msg: 'raw evidence upload could not be deleted after commit' });
+    });
+  }
+
+  /** Ownership and state of a buyer's order; the row lock only when asked for. */
+  private async assertPayable(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+    orderId: string,
+    lock: boolean,
+  ): Promise<void> {
+    const order = await sql<{ state: string }>`
+      SELECT state::text FROM core."order"
+       WHERE id = ${orderId} AND buyer_account_id = ${req.ctx?.accountId}
+       ${lock ? sql`FOR UPDATE` : sql``}`.execute(trx);
+    if (!order.rows[0]) throw new AdulisException('NOT_FOUND');
+    if (!['CREATED', 'NOTIFIED'].includes(order.rows[0].state)) {
+      throw new AdulisException('ORDER_NOT_PAYABLE', {
+        slots: { state: order.rows[0].state },
+      });
+    }
   }
 
   /**

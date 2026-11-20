@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import { S3Client, HeadObjectCommand, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createLogger } from '../logging';
@@ -48,11 +49,37 @@ export interface ObjectStorageConfig {
   readonly bucket: string;
 }
 
+/**
+ * Per-instance client behaviour (every instance owns its own S3Client).
+ * `responseChecksumValidation: 'WHEN_REQUIRED'` stops the SDK from validating a
+ * whole-object checksum header against the partial body of a ranged read.
+ * `stallTimeoutMs` sets the SDK's connection timeout and its socket inactivity
+ * timeout. That bounds a connection that cannot be made and a request that
+ * gets no response headers (per attempt; the SDK retries a timeout twice). It
+ * does NOT bound a body that stalls after the headers arrived (the SDK stops
+ * arming its inactivity timer once headers are in), and it is not a total time
+ * limit: a response that keeps trickling is never cut.
+ */
+export interface StorageClientOptions {
+  readonly responseChecksumValidation?: 'WHEN_SUPPORTED' | 'WHEN_REQUIRED';
+  readonly stallTimeoutMs?: number;
+}
+
+/**
+ * The evidence store reads ranges of the buyer's upload inside a request's
+ * transaction. The stall bound is partial (see StorageClientOptions): a body
+ * that stalls after fast headers is not covered.
+ */
+export const EVIDENCE_CLIENT_OPTIONS: StorageClientOptions = {
+  responseChecksumValidation: 'WHEN_REQUIRED',
+  stallTimeoutMs: 15_000,
+};
+
 export class S3ObjectStorage implements MediaStorageAdapter, FinancialStorageAdapter {
   private readonly client: S3Client;
   private readonly bucket: string;
 
-  constructor(cfg: ObjectStorageConfig, label: string) {
+  constructor(cfg: ObjectStorageConfig, label: string, options: StorageClientOptions = {}) {
     const isUrl = /^https?:\/\//i.test(cfg.accountId);
     const endpoint = isUrl ? cfg.accountId : `https://${cfg.accountId}.r2.cloudflarestorage.com`;
     this.bucket = cfg.bucket;
@@ -61,6 +88,17 @@ export class S3ObjectStorage implements MediaStorageAdapter, FinancialStorageAda
       endpoint,
       forcePathStyle: isUrl, // MinIO addresses buckets by path; R2 by host
       credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+      ...(options.responseChecksumValidation
+        ? { responseChecksumValidation: options.responseChecksumValidation }
+        : {}),
+      ...(options.stallTimeoutMs
+        ? {
+            requestHandler: {
+              connectionTimeout: options.stallTimeoutMs,
+              socketTimeout: options.stallTimeoutMs,
+            },
+          }
+        : {}),
     });
     log.warn({
       msg: `[OBJECT STORE] ${label} bound to ${isUrl ? 'S3-compatible endpoint' : 'Cloudflare R2'} bucket "${cfg.bucket}".`,
@@ -91,11 +129,42 @@ export class S3ObjectStorage implements MediaStorageAdapter, FinancialStorageAda
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
-  async getObject(key: string): Promise<Buffer | null> {
+  async getObject(key: string, maxBytes?: number): Promise<Buffer | null> {
+    // A malformed Range is ignored by S3 and would return the whole object: refuse it here instead.
+    if (maxBytes !== undefined && !(Number.isSafeInteger(maxBytes) && maxBytes > 0)) {
+      throw new RangeError('getObject: maxBytes must be a positive integer');
+    }
     try {
-      const r = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
-      const bytes = await r.Body?.transformToByteArray();
-      return bytes ? Buffer.from(bytes) : null;
+      const r = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          ...(maxBytes === undefined ? {} : { Range: `bytes=0-${maxBytes - 1}` }),
+        }),
+      );
+      if (maxBytes === undefined) {
+        const bytes = await r.Body?.transformToByteArray();
+        return bytes ? Buffer.from(bytes) : null;
+      }
+      // The limit must hold even if the server ignored the Range header: refuse an oversized
+      // answer from its declared length, or count while reading, and drop the connection.
+      const body = r.Body as Readable | undefined;
+      if (!body) return null;
+      if (typeof r.ContentLength === 'number' && r.ContentLength > maxBytes) {
+        body.destroy();
+        throw new RangeError('getObject: the store answered with more than maxBytes');
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for await (const chunk of body) {
+        total += (chunk as Buffer).length;
+        if (total > maxBytes) {
+          body.destroy();
+          throw new RangeError('getObject: the store answered with more than maxBytes');
+        }
+        chunks.push(chunk as Buffer);
+      }
+      return Buffer.concat(chunks, total);
     } catch (e) {
       if (isNotFound(e)) return null;
       throw e;
