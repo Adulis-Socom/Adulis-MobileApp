@@ -23,6 +23,7 @@ import {
   escalatableAnswer,
   isConversationRef,
   rereadAfter,
+  sendOutcome,
   useConversationMessages,
   useConversations,
 } from './chat';
@@ -136,14 +137,19 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const [askFailed, setAskFailed] = useState<'refused' | 'unknown' | false>(false);
   const sending = useRef(false);
   const askingRef = useRef(false);
+  // The ids of the messages the server has answered a send of this screen with: a history row with one of them is
+  // that message, never the hint for a later, identical one (the read that shows it can land after that began).
+  const accepted = useRef<string[]>([]);
   // The idempotency intent is the WHOLE payload: text and Product (or none). `attempts` counts the requests
-  // sent under the key; `baseline` is what the history held before the first one (server values only).
+  // sent under the key; `unanswered` is set once one of them ended without an answer from the API (the server
+  // may still be running it); `baseline` is what the history held before the first one (server values only).
   const sendIntent = useRef<{
     text: string;
     productId: string | null;
     key: string;
     startedAt: number;
     attempts: number;
+    unanswered: boolean;
     baseline: Baseline;
   } | null>(null);
   // An unconfirmed message the person chose to edit: kept (this screen only) so that its words can still be
@@ -170,7 +176,13 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     gcTime: 0,
     retry: (failures, e) => isTransient(e) && failures < 2,
   });
-  const askIntent = useRef<{ forMessage: string; key: string; startedAt: number; attempts: number } | null>(null);
+  const askIntent = useRef<{
+    forMessage: string;
+    key: string;
+    startedAt: number;
+    attempts: number;
+    unanswered: boolean;
+  } | null>(null);
 
   // Unknown and the same message can no longer be replayed (a key conflict, or past its safe age): the
   // app cannot confirm the outcome and offers no Try sending again, so its sentence does not promise one.
@@ -182,14 +194,33 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const pendingSend = sendIntent.current;
   const candidates =
     state === 'unknown' && pendingSend !== null
-      ? candidatesFor({ text: pendingSend.text, aboutProduct: pendingSend.productId !== null, baseline: pendingSend.baseline }, messages.items)
+      ? candidatesFor(
+          {
+            text: pendingSend.text,
+            aboutProduct: pendingSend.productId !== null,
+            baseline: pendingSend.baseline,
+          },
+          messages.items,
+          accepted.current,
+        )
       : state === 'unsent' && watch !== null && draft.trim() === watch.text
-        ? candidatesFor(watch, messages.items)
+        ? candidatesFor(watch, messages.items, accepted.current)
         : [];
   const hint = candidates.length > 0 ? t('buyer.chat.appears_received') : null;
   useEffect(() => {
     if (hint !== null) AccessibilityInfo.announceForAccessibility(hint);
   }, [hint]);
+  // The edited words are in the box and the hint is only as current as the last read: when that read failed or is
+  // waiting for a connection, say so beside the words, so that no hint is not taken for "not stored". It is drawn
+  // as an AlertText, which announces it itself.
+  const recheckText =
+    state === 'unsent' && watch !== null && draft.trim() === watch.text
+      ? messages.fetchStatus === 'paused'
+        ? t('common.offline')
+        : messages.isRefetchError
+          ? t('buyer.chat.failed')
+          : null
+      : null;
   // The alert role alone is not spoken on Android: announce what happened to the message. The effect
   // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
   // withdrawn at a press (the state does not change then).
@@ -287,6 +318,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     setState('unsent');
     setError(null);
     setNotFound(null);
+    // The conversation is read again in the background as the editor opens, so the hint above Send can catch up
+    // while the person edits. Send is not held back for that read; one that fails or waits for a connection is
+    // said so beside the words (recheckText), so that no hint is not taken for "not stored".
+    void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
   };
   // After the person has seen the message in the conversation: empties the box and ends the retry. It
   // sends nothing and claims nothing; the message in the list is the server's own.
@@ -369,6 +404,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           key: newIdempotencyKey(),
           startedAt: Date.now(),
           attempts: 0,
+          unanswered: false,
           baseline: captureBaseline({ read: messages.data !== undefined, items: messages.items }),
         };
         setKeyLost(false);
@@ -379,6 +415,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       // An acceptance without a readable message id may still have stored it: unknown.
       if (!acceptedMessage(body)) throw new ApiError({ kind: 'unexpected', status: 201 });
       sendIntent.current = null;
+      accepted.current.push(body.message_id);
       if (!api.isCurrent()) return;
       setDraft('');
       // The Product described this message only: the next one starts without it.
@@ -386,7 +423,9 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       setRefusal(null);
       setKeyLost(false);
       setState('sent');
-      await Promise.all([
+      // The next message is a new one: the lock ends with the request, not with the re-read of the conversation
+      // after it (a slow or paused read would otherwise swallow the next press).
+      void Promise.all([
         qc.invalidateQueries({ queryKey: [MESSAGES, ref] }),
         qc.invalidateQueries({ queryKey: [CONVERSATIONS] }),
       ]);
@@ -398,11 +437,15 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       const verdict = judgeFailure(failure, sendIntent.current, Date.now());
       const answered = verdict.outcome === 'failed';
       if (answered) sendIntent.current = null;
+      // An attempt the API did not answer may still be running on the server: a later refusal of the replay proves less.
+      else if (sendIntent.current !== null && sendOutcome(failure) === 'unknown')
+        sendIntent.current.unanswered = true;
       if (!api.isCurrent()) return;
       setKeyLost(!answered && !verdict.replay);
       const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
       if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
-      if (problemCode(failure) === 'NOT_FOUND') {
+      const missing = problemCode(failure) === 'NOT_FOUND';
+      if (missing && answered) {
         // Not "the Product was removed" and not "the conversation was deleted": a current read of
         // each decides that (a 404 there shows "no longer available" / "not available").
         setNotFound(context !== null ? 'anchored' : 'plain');
@@ -410,8 +453,11 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         if (context !== null) void contextRead.refetch();
         void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
       } else {
+        // A 404 that is not the whole story (an earlier attempt may still be stored) must not say "not sent",
+        // and says nothing of its own: the hedged sentence above is all there is to say.
+        if (missing && context !== null) void contextRead.refetch();
         // While held, the wait sentence says it: not the same sentence twice.
-        setError(wait !== null ? null : failureMessage(t, failure));
+        setError(wait !== null || missing ? null : failureMessage(t, failure));
       }
       setState(answered ? 'failed' : 'unknown');
       if (verdict.outcome === 'unknown' || rereadAfter(failure)) void qc.invalidateQueries({ queryKey: [MESSAGES, ref] });
@@ -432,7 +478,15 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const ask = async () => {
     if (!api || !answer || askingRef.current || hold !== null) return;
     askingRef.current = true;
-    if (askIntent.current?.forMessage !== answer.id) askIntent.current = { forMessage: answer.id, key: newIdempotencyKey(), startedAt: Date.now(), attempts: 0 };
+    if (askIntent.current?.forMessage !== answer.id) {
+      askIntent.current = {
+        forMessage: answer.id,
+        key: newIdempotencyKey(),
+        startedAt: Date.now(),
+        attempts: 0,
+        unanswered: false,
+      };
+    }
     setAsking(true);
     setAskFailed(false);
     try {
@@ -455,6 +509,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       // own 4xx rejection or when it can no longer be replayed. The conversation is read again either way.
       const verdict = judgeFailure(failure, askIntent.current, Date.now());
       if (verdict.outcome === 'failed' || !verdict.replay) askIntent.current = null;
+      else if (askIntent.current !== null && sendOutcome(failure) === 'unknown')
+        askIntent.current.unanswered = true;
       if (api.isCurrent()) {
         const wait = verdict.holdMs === null ? null : fillSlots(t('common.wait'), { retry_after_seconds: Math.ceil(verdict.holdMs / 1000) });
         if (verdict.holdMs !== null && wait !== null) holdFor(verdict.holdMs, wait);
@@ -589,6 +645,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         ) : null}
         {/* The same words are in the box again (after Edit the message instead): the hint stays above Send, which it never blocks. */}
         {hint !== null && state === 'unsent' ? <AppText>{hint}</AppText> : null}
+        {recheckText !== null ? <AlertText>{recheckText}</AlertText> : null}
         {hold !== null ? (
           <View accessibilityRole="alert">
             <AppText>{hold.text}</AppText>
