@@ -1,20 +1,24 @@
-import { en } from '@adulis/locale/mobile';
+import { am, en, type MobileMessageKey } from '@adulis/locale/mobile';
 import { act, render, screen } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
 
+import { GoneState } from '../buyer/ReadStates';
 import { SceneCard } from '../buyer/SceneCard';
 import { useUiStore } from '../state/ui-store';
 import { fypUnit } from '../testing/fake-api';
 import { LONG, MIXED, SENTENCE, STORE_NAME, UNBROKEN } from '../testing/ethiopic';
+import { productionSources } from '../testing/source-scan';
 import { themes } from '../theme/theme';
-import { AlertText } from './AlertText';
+import { AlertText, StatusText } from './AlertText';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { ChoiceGroup } from './ChoiceGroup';
+import { ErrorState } from './ErrorState';
 import { Placeholder } from './Placeholder';
 import { Screen } from './Screen';
 import { TextField } from './TextField';
+import { UpgradeRequired } from './UpgradeRequired';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('expo-router'),
@@ -22,10 +26,21 @@ jest.mock('expo-router', () => ({
 }));
 
 /**
- * Long Ge'ez, mixed and unbroken text on a 360dp-wide screen at 200% type. Jest has no layout
- * engine, so what is checked is what decides the layout: no height or line limit on text, no
- * fixed-height box holding a text block, and the whole string reaching the screen reader.
- * Whether a line breaks well on a device is a device check.
+ * Long Ge'ez, mixed and unbroken text, and every sentence of the catalogue (English and Amharic), in
+ * the components that draw sentences, on a screen the Dimensions mock reports as 360dp wide at 200%
+ * type.
+ *
+ * WHAT JEST CAN PROVE here: in the rendered tree, every word of every sentence is in one text node
+ * (nothing cuts, ellipsises or slices it); no text node has a line limit (`numberOfLines`); no text
+ * sits inside a box with a fixed `height` or `maxHeight`; a field keeps `minHeight` (the touch target)
+ * and no `height`; and each title the navigator draws is a short name. These are the props that
+ * decide whether text can grow with its content and with the type size.
+ *
+ * WHAT JEST CANNOT PROVE: Jest has no layout engine, so it cannot show where a line breaks, that a
+ * Ge'ez glyph is not clipped at the line height, that text does not overlap its neighbour, that the
+ * keyboard leaves the field visible, that an unbroken run wraps inside the screen width, or that the
+ * navigator's own tab label and header title (clamped to one line by the library) fit. Those are
+ * device checks at 360dp, 200% type, in Amharic and in English; none has been run.
  */
 
 const WINDOW = Dimensions.get('window');
@@ -194,5 +209,91 @@ describe('a For You card with a long Ge\'ez store name and caption', () => {
   ])('shows the avatar initials of %s, at most two characters in the fixed avatar', async (_label, store, initials) => {
     await card(store, 'caption');
     expect(inFixedBoxes()).toEqual([initials]);
+  });
+});
+
+/** Every distinct sentence of the catalogue in one language, longest first, so a failure names the worst one. */
+const sentencesOf = (catalogue: Record<MobileMessageKey, string>) =>
+  [...new Set(Object.values(catalogue).filter((text) => text !== ''))].sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
+
+/** The components that draw a catalogue sentence, each given the sentences as its own text. */
+const SENTENCE_SURFACES: [name: string, draw: (sentences: string[]) => ReactElement][] = [
+  ['Button', (all) => <>{all.map((s, i) => <Button key={i} label={s} onPress={noop} />)}</>],
+  ['a secondary Button', (all) => <>{all.map((s, i) => <Button key={i} label={s} variant="secondary" onPress={noop} />)}</>],
+  ['Checkbox', (all) => <>{all.map((s, i) => <Checkbox key={i} label={s} checked={false} onChange={noop} />)}</>],
+  // No option is selected: a selected option draws a check mark before its label (the next test covers that).
+  ['ChoiceGroup options', (all) => <ChoiceGroup label="Choose" value="none" onChange={noop} options={all.map((s, i) => ({ value: String(i), label: s }))} />],
+  ['TextField label, hint and error', (all) => <>{all.map((s, i) => <TextField key={i} label={s} hint={s} error={s} value="" onChangeText={noop} />)}</>],
+  ['Placeholder message and note', (all) => <>{all.map((s, i) => <Placeholder key={i} message={s} note={s} />)}</>],
+  ['Screen title', (all) => <>{all.map((s, i) => <Screen key={i} title={s}><Placeholder message="." /></Screen>)}</>],
+  ['AlertText', (all) => <>{all.map((s, i) => <AlertText key={i}>{s}</AlertText>)}</>],
+  ['StatusText', (all) => <>{all.map((s, i) => <StatusText key={i}>{s}</StatusText>)}</>],
+];
+
+describe('every catalogue sentence at 360dp and 200% type, in every component that draws a sentence', () => {
+  it('the screen the components are drawn on is 360dp wide at 200% type', () => {
+    expect(Dimensions.get('window').width).toBe(360);
+    expect(Dimensions.get('window').fontScale).toBe(2);
+    expect(Dimensions.get('screen').fontScale).toBe(2);
+  });
+
+  it.each(
+    SENTENCE_SURFACES.flatMap(([name, draw]) => [
+      [name, 'English', en, draw] as const,
+      [name, 'Amharic', am, draw] as const,
+    ]),
+  )('%s, %s: every sentence reaches a text node whole, with no line limit and no fixed-height box around text', async (_name, _language, catalogue, draw) => {
+    const sentences = sentencesOf(catalogue);
+    expect(sentences.length).toBeGreaterThan(400);
+    await render(draw(sentences));
+    const drawn = new Set(screen.getAllByText(/[\s\S]/).map((node) => textOf(node as never)));
+    expect(sentences.filter((sentence) => !drawn.has(sentence))).toEqual([]);
+    expect(inFixedBoxes()).toEqual([]);
+    expect(clamped()).toEqual([]);
+  }, 120_000);
+
+  it.each(['en', 'am'] as const)('the notice screens (route error, update required, gone) keep their catalogue sentences whole in %s', async (locale) => {
+    await act(async () => useUiStore.setState({ locale }));
+    const catalogue = locale === 'en' ? en : am;
+    await render(
+      <>
+        <ErrorState retry={async () => undefined} />
+        <UpgradeRequired onCheckAgain={noop} checking={false} />
+        <GoneState message="buyer.scene.gone" />
+      </>,
+    );
+    const drawn = new Set(screen.getAllByText(/[\s\S]/).map((node) => textOf(node as never)));
+    const expected = ['error.request.internal', 'common.retry', 'app.upgrade.required.title', 'app.upgrade.required.body', 'app.upgrade.check_again', 'buyer.scene.gone', 'buyer.scene.go_back'] as const;
+    expect(expected.filter((key) => !drawn.has(catalogue[key]))).toEqual([]);
+    expect(inFixedBoxes()).toEqual([]);
+    expect(clamped()).toEqual([]);
+  });
+});
+
+describe('what the navigator draws: tab labels and header titles', () => {
+  // expo-router's navigator draws these, not this app, and it clamps both to ONE line (Label.js and
+  // HeaderTitle.js set numberOfLines: 1). A sentence there would be cut on a 360dp screen. What the
+  // app controls is the text: every title key used in the route layouts is a short name, in both
+  // languages, and the tab bar also names each tab in full for the screen reader.
+  const TITLE_KEY = /(?:\btitle|\btabBarAccessibilityLabel|\bheaderTitle|\btabBarLabel)\s*:\s*t\('([a-z0-9_.]+)'\)/g;
+  const keys = [
+    ...new Set(
+      productionSources('app').flatMap(({ text }) => [...text.matchAll(TITLE_KEY)].map((match) => match[1] as MobileMessageKey)),
+    ),
+  ];
+  const MOST_CHARACTERS = 24;
+
+  it('reads the title keys of the tab bar and of the Buyer and Seller Companion stacks', () => {
+    expect(keys.length).toBeGreaterThanOrEqual(20);
+    for (const key of ['buyer.tab.home', 'buyer.tab.you', 'buyer.messages', 'seller.title', 'seller.orders.title'] as const) {
+      expect({ key, read: keys.includes(key) }).toEqual({ key, read: true });
+    }
+  });
+
+  it.each(keys)('%s is a short name in English and in Amharic, not a sentence', (key) => {
+    for (const catalogue of [en, am]) {
+      expect(catalogue[key].length).toBeLessThanOrEqual(MOST_CHARACTERS);
+      expect(catalogue[key]).not.toMatch(/[.!?\u{1362}]$/u);
+    }
   });
 });
