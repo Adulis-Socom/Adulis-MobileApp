@@ -17,7 +17,7 @@ export type AddJudgement =
  * HTTP status. The client reads any JSON body with a string `code` as a problem, so a proxy's error
  * page that happens to carry one must not count as the server refusing the request.
  */
-function apiOwnProblem(failure: unknown): { status: number; code: string | null } | null {
+export function apiOwnProblem(failure: unknown): { status: number; code: string | null } | null {
   if (!(failure instanceof ApiError) || failure.failure.kind !== 'problem') return null;
   const { problem, status } = failure.failure;
   const p = problem as {
