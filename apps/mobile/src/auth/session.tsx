@@ -210,11 +210,18 @@ export function SessionProvider({
     async (credential: string) => {
       // SecureStore first: a sign-in the next launch would forget is not a sign-in.
       await storage.write(credential);
+      // Another Account signing in over a live session: nothing the first one held stays in memory. A guest's
+      // own state (public reads, a pending Save) is kept; so is the same credential's.
+      if (token.current !== null && token.current !== credential) {
+        queryClient.clear();
+        useUiStore.getState().setActiveMode(null);
+        useUiStore.getState().setPendingSave(null);
+      }
       token.current = credential;
       setSession({ status: 'signedIn', token: credential });
       setOtpPhone(null); // the code flow is spent
     },
-    [storage],
+    [storage, queryClient],
   );
 
   const signOut = useCallback(async () => {

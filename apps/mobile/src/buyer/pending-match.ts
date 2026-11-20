@@ -28,13 +28,20 @@ export function captureBaseline(history: { read: boolean; items: readonly ChatMe
  * The Buyer's own rows that could be this send: same sender, exactly the same text (the server stores
  * the trimmed text unchanged), the same kind of anchor, and newer than the baseline (or at its newest
  * instant under an id the baseline did not hold: a message and its automated answer share one instant).
+ * `accepted` are ids the server already answered a send with: such a row is that earlier message, never
+ * this one, whatever the baseline held (a read can land after the next message has begun).
  */
-export function candidatesFor(pending: PendingSend, items: readonly ChatMessage[]): ChatMessage[] {
+export function candidatesFor(
+  pending: PendingSend,
+  items: readonly ChatMessage[],
+  accepted: readonly string[] = [],
+): ChatMessage[] {
   const { baseline } = pending;
   if (baseline === null) return [];
   const mark = baseline.newestSentAt === null ? null : Date.parse(baseline.newestSentAt);
   return items.filter((m) => {
     if (m.kind !== 'BUYER' || m.body !== pending.text || m.aboutProduct !== pending.aboutProduct) return false;
+    if (accepted.includes(m.id)) return false;
     if (mark === null) return true;
     const at = Date.parse(m.sentAt);
     return at > mark || (at === mark && !baseline.edgeIds.includes(m.id));

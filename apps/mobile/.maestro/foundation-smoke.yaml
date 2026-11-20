@@ -1,9 +1,10 @@
 # Foundation smoke (WO-001, WO-001A; diagnostics moved to /dev in WO-002) against the Adulis
-# DEVELOPMENT build, com.adulis.app: the Buyer shell loads, You offers Developer diagnostics
-# (development builds only), every diagnostic mode shell is reachable from there, switching
-# keeps the one session (no sign-in surface, session line unchanged), and Amharic renders
-# from the real mobile catalogue. A release build has none of this; buyer-shell.yaml is the
-# product flow.
+# DEVELOPMENT build, com.adulis.app, as a guest: the Buyer shell loads, You offers Developer
+# diagnostics (development builds only), the Courier diagnostic shell is reachable from there
+# and keeps the one session (no sign-in surface, session line unchanged), and Amharic renders
+# from the real mobile catalogue. A guest is offered no Seller Companion shell (it needs a
+# signed-in Account that the server says has Seller access), so the flow asserts that control
+# is absent. A release build has none of this; buyer-shell.yaml is the product flow.
 #
 # Prerequisites: the debug build installed (`pnpm --filter @adulis/mobile android`) and
 # Metro serving on 8081.
@@ -27,14 +28,12 @@ tags:
 - tapOn: Developer diagnostics
 - assertVisible: Development builds only. Not product UI.
 - assertVisible: 'Session: signed out'
-- tapOn: Open Seller Companion
-- assertVisible: Seller Companion foundation ready
-- assertVisible: 'Active mode: Seller Companion'
-- assertVisible: 'Session: signed out'
-- tapOn: Switch to Courier
+- assertNotVisible: Open Seller Companion
+- tapOn: Open Courier
 - assertVisible: Courier foundation ready
 - assertVisible: 'Active mode: Courier'
 - assertVisible: 'Session: signed out'
+- assertNotVisible: Switch to Seller Companion
 - tapOn: Back to diagnostics
 - assertVisible: Development builds only. Not product UI.
 - tapOn: Amharic

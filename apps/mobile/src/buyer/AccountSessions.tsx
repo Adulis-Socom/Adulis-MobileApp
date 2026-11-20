@@ -47,14 +47,16 @@ export function AccountSessions() {
   return (
     <View style={{ gap: theme.space.sm }}>
       <AppText style={{ fontWeight: theme.fontWeight.semibold }}>{t('buyer.you.sessions')}</AppText>
-      {sessions.data ? (
-        sessions.data.length > 0 ? sessions.data.map(row) : <AppText style={secondary}>{t('buyer.you.sessions.empty')}</AppText>
-      ) : sessions.isError ? (
+      {/* A failed Refresh keeps the sessions it has and says so: they may be out of date. */}
+      {sessions.isError ? (
         <View>
           <AlertText>{t('buyer.you.sessions.failed')}</AlertText>
           <AppText style={secondary}>{failureMessage(t, sessions.error)}</AppText>
         </View>
-      ) : (
+      ) : null}
+      {sessions.data ? (
+        sessions.data.length > 0 ? sessions.data.map(row) : <AppText style={secondary}>{t('buyer.you.sessions.empty')}</AppText>
+      ) : sessions.isError ? null : (
         <AppText style={secondary}>{t(sessions.fetchStatus === 'paused' ? 'common.offline' : 'common.loading')}</AppText>
       )}
       <Button

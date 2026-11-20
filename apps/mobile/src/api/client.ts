@@ -131,7 +131,8 @@ export function problemCode(error: unknown): Problem['code'] | null {
 
 const TIMEOUT_MS = 10_000;
 const MAX_RETRY_AFTER_SECONDS = 3600;
-const HTTP_DATE = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+const HTTP_DATE =
+  /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
 
 const clampWait = (seconds: number) => Math.min(Math.max(Math.ceil(seconds), 0), MAX_RETRY_AFTER_SECONDS);
 
@@ -163,7 +164,9 @@ export function retryAfterMs(error: unknown): number | null {
 /** The header first (it is what an intermediary can set), else the API's own slot. */
 function waitAsked(res: Response, problem: Problem | null): { retryAfterSeconds?: number } {
   const slot = problem?.slots?.retry_after_seconds;
-  const stamp = Date.parse(res.headers.get('Date') ?? '');
+  // The same shape test as Retry-After's: a loose parser reads "1.5" as a day in 2001.
+  const date = res.headers.get('Date')?.trim() ?? '';
+  const stamp = HTTP_DATE.test(date) ? Date.parse(date) : Number.NaN;
   const seconds =
     parseRetryAfter(res.headers.get('Retry-After'), Date.now(), Number.isNaN(stamp) ? null : stamp) ??
     (typeof slot === 'number' && Number.isFinite(slot) ? clampWait(slot) : null);
