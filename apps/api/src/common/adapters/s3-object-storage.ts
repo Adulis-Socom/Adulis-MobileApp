@@ -91,9 +91,19 @@ export class S3ObjectStorage implements MediaStorageAdapter, FinancialStorageAda
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
-  async getObject(key: string): Promise<Buffer | null> {
+  async getObject(key: string, maxBytes?: number): Promise<Buffer | null> {
+    // A malformed Range is ignored by S3 and would return the whole object: refuse it here instead.
+    if (maxBytes !== undefined && !(Number.isSafeInteger(maxBytes) && maxBytes > 0)) {
+      throw new RangeError('getObject: maxBytes must be a positive integer');
+    }
     try {
-      const r = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      const r = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          ...(maxBytes === undefined ? {} : { Range: `bytes=0-${maxBytes - 1}` }),
+        }),
+      );
       const bytes = await r.Body?.transformToByteArray();
       return bytes ? Buffer.from(bytes) : null;
     } catch (e) {

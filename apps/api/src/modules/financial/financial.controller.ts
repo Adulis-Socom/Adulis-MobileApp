@@ -47,11 +47,18 @@ export class FinancialController {
   ): Promise<unknown> {
     assertUuid(id, 'id');
     const body = evidenceBody.parse(req.body);
-    return this.tx.runIdempotent(req, res, body.action === 'COMMIT' ? 201 : 200, (trx) =>
-      body.action === 'COMMIT'
-        ? this.svc.commitEvidence(trx, req, id, body.key)
-        : this.svc.requestEvidenceUpload(trx, req, id),
+    if (body.action !== 'COMMIT') {
+      return this.tx.runIdempotent(req, res, 200, (trx) =>
+        this.svc.requestEvidenceUpload(trx, req, id),
+      );
+    }
+    const committed = await this.tx.runIdempotent(req, res, 201, (trx) =>
+      this.svc.commitEvidence(trx, req, id, body.key),
     );
+    // Only now that the transaction has committed (or an identical request's
+    // committed answer was replayed) is the raw upload surplus.
+    await this.svc.discardCommittedRaw(id, body.key);
+    return committed;
   }
 
   @Get('seller/orders/:id/payment-evidence')

@@ -8,6 +8,7 @@ import { configureApp } from '../src/configure-app';
 import {
   FakeFinancialStorageAdapter,
   FINANCIAL_STORAGE_ADAPTER,
+  type FinancialStorageAdapter,
 } from '../src/modules/financial/financial-storage.adapter';
 import { payoutActivateDue } from '../src/jobs/e5-transport-ledger';
 import { createJobHarness } from './jobs-harness';
@@ -50,7 +51,89 @@ const SELLER_SWEEP = 'aaaa1111-2222-4000-8000-000000000011';
 const PD_SWEEP = 'aaaa1111-2222-4000-8000-000000000012';
 
 const ACCOUNT_NUMBER = '1000123456789';
-const storage = new FakeFinancialStorageAdapter();
+const EVIDENCE_CAP = 5 * 1024 * 1024;
+
+/**
+ * The fake evidence store with the seams the commit tests need: every call is
+ * recorded, a size can be REPORTED without allocating it, a read can be held
+ * open or made to fail, and the moment the raw upload is deleted can be
+ * observed. With nothing configured it behaves exactly like the fake.
+ */
+class InstrumentedStorage implements FinancialStorageAdapter {
+  private readonly inner = new FakeFinancialStorageAdapter();
+  reportedBytes = new Map<string, number>();
+  inspects: string[] = [];
+  reads: Array<{ key: string; maxBytes: number | undefined; returned: number }> = [];
+  puts: string[] = [];
+  deletes: string[] = [];
+  failRead = false;
+  failPut = false;
+  failDelete = false;
+  holdRead: { started: () => void; release: Promise<void> } | null = null;
+  onDelete: ((key: string) => Promise<void>) | null = null;
+
+  reset(): void {
+    this.reportedBytes = new Map();
+    this.inspects = [];
+    this.reads = [];
+    this.puts = [];
+    this.deletes = [];
+    this.failRead = false;
+    this.failPut = false;
+    this.failDelete = false;
+    this.holdRead = null;
+    this.onDelete = null;
+  }
+
+  seed(key: string, bytes: Buffer): void {
+    this.inner.seed(key, bytes);
+  }
+
+  async has(key: string): Promise<boolean> {
+    return (await this.inner.getObject(key)) !== null;
+  }
+
+  signPut(key: string, contentType: string, maxBytes: number) {
+    return this.inner.signPut(key, contentType, maxBytes);
+  }
+
+  async inspect(key: string): Promise<{ readonly bytes: number } | null> {
+    this.inspects.push(key);
+    const reported = this.reportedBytes.get(key);
+    if (reported !== undefined) return { bytes: reported };
+    const obj = await this.inner.getObject(key);
+    return obj ? { bytes: obj.length } : null;
+  }
+
+  async getObject(key: string, maxBytes?: number): Promise<Buffer | null> {
+    const call = { key, maxBytes, returned: 0 };
+    this.reads.push(call);
+    if (this.holdRead) {
+      this.holdRead.started();
+      await this.holdRead.release;
+    }
+    if (this.failRead) throw new Error('injected read failure');
+    const obj = await this.inner.getObject(key);
+    const out = obj && maxBytes !== undefined ? obj.subarray(0, maxBytes) : obj;
+    call.returned = out?.length ?? 0;
+    return out;
+  }
+
+  async putObject(key: string, bytes: Buffer): Promise<void> {
+    if (this.failPut) throw new Error('injected store failure');
+    this.puts.push(key);
+    await this.inner.putObject(key, bytes);
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.deletes.push(key);
+    await this.onDelete?.(key);
+    if (this.failDelete && key.startsWith('evidence/raw/')) throw new Error('injected delete failure');
+    await this.inner.deleteObject(key);
+  }
+}
+
+const storage = new InstrumentedStorage();
 
 @Module({ imports: [AppModule] })
 class C4AppModule {}
@@ -221,6 +304,7 @@ describe('C4 — the financial boundary', () => {
       `DELETE FROM core.reservation WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.order_state_transition WHERE order_id IN (SELECT id FROM core."order" WHERE market_id='${M}')`,
       `DELETE FROM core."order" WHERE market_id='${M}'`,
+      `DELETE FROM core.buyer_cancellation_counter WHERE buyer_account_id IN ('${OWNER}','${BUYER}','${STRANGER}')`,
       `DELETE FROM core.order_payout_snapshot WHERE seller_id='${SELLER}'`,
       `DELETE FROM core.cart_line WHERE cart_id IN (SELECT id FROM core.cart WHERE market_id='${M}')`,
       `DELETE FROM core.cart WHERE market_id='${M}'`,
@@ -893,6 +977,368 @@ describe('C4 — the financial boundary', () => {
         .send({ step_up_challenge_id: await freshStepUp('PAYOUT_CHANGE') })
         .expect(403);
       expect(r.body.code).toBe('STEP_UP_ACTION_MISMATCH');
+    });
+  });
+
+  /*
+   * The evidence commit's resource and failure behaviour: the size is judged
+   * from the object's metadata before a byte is read, what is read is bounded
+   * even if the object changes, the storage work holds no order lock, and the
+   * raw upload is deleted only after the database has committed. Every refusal
+   * is judged on the response, the stored objects and the database rows.
+   */
+  describe('evidence commit: size first, bounded read, no lock during storage work', () => {
+    const buyerAuth = (r: request.Test, token = BUYER_S) =>
+      r.set('Authorization', `Bearer ${sessionToken(token)}`).set('X-Adulis-Device', DEVICE);
+    // A buyer holds one reservation per variant, so each order here takes its own variant.
+    const spareVariants: string[] = [];
+    const newOrder = async (): Promise<string> => {
+      const variant = spareVariants.shift() as string;
+      await buyerPost('/v1/cart/lines').send({ variant_id: variant, quantity: 1 }).expect(201);
+      const cart = await buyerAuth(request(app.getHttpServer()).get('/v1/cart')).expect(200);
+      const order = await buyerPost('/v1/orders')
+        .send({
+          cart_id: cart.body.cart_id,
+          expected: [{ variant_id: variant, unit_price_minor: 145000 }],
+        })
+        .expect(201);
+      return order.body.id as string;
+    };
+    const rawUpload = async (oid: string): Promise<string> => {
+      const up = await buyerPost(`/v1/orders/${oid}/payment-evidence`)
+        .send({ action: 'REQUEST_UPLOAD' })
+        .expect(200);
+      return up.body.upload.key as string;
+    };
+    const commit = (oid: string, rawKey: string, token = BUYER_S) =>
+      buyerAuth(
+        request(app.getHttpServer())
+          .post(`/v1/orders/${oid}/payment-evidence`)
+          .set('Idempotency-Key', key()),
+        token,
+      ).send({ action: 'COMMIT', key: rawKey });
+    /** What the database holds for an order, as one comparable value. */
+    const rowsOf = async (oid: string) => {
+      const q = (text: string) => admin.query(text, [oid]).then((r) => r.rows[0].n as number | string);
+      return {
+        state: await q(`SELECT state::text AS n FROM core."order" WHERE id=$1`),
+        evidence: await q(`SELECT count(*)::int AS n FROM financial.payment_evidence WHERE order_id=$1`),
+        submissions: await q(`SELECT count(*)::int AS n FROM core.payment_submission WHERE order_id=$1`),
+      };
+    };
+    const unchanged = (before: Awaited<ReturnType<typeof rowsOf>>) => ({ ...before, evidence: 0, submissions: 0 });
+    const streamBack = async (oid: string): Promise<Buffer> => {
+      const r = await sellerReq('get', `/v1/seller/orders/${oid}/payment-evidence`)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      return r.body as Buffer;
+    };
+
+    beforeAll(async () => {
+      for (let i = 1; i <= 20; i++) {
+        const id = `aaaa1111-2222-4000-8000-0000000020${String(i).padStart(2, '0')}`;
+        await admin.query(
+          `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor,
+             price_currency, variant_key)
+           VALUES ($1,$2,$3,145000,'ETB',$4)`,
+          [id, PRODUCT, SELLER, `evidence-${i}`],
+        );
+        await admin.query(
+          `INSERT INTO core.stock_event (id, variant_id, seller_id, delta, reason)
+           VALUES (gen_random_uuid(),$1,$2,10,'SELLER_SET')`,
+          [id, SELLER],
+        );
+        spareVariants.push(id);
+      }
+    });
+    beforeEach(() => {
+      storage.reset();
+    });
+
+    it('an object reporting a size far over the cap is refused before any read', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('tiny'));
+      const reported = 8 * 1024 * 1024 * 1024;
+      storage.reportedBytes.set(rawKey, reported);
+
+      const r = await commit(oid, rawKey).expect(413);
+      expect(r.body.code).toBe('EVIDENCE_TOO_LARGE');
+      expect(r.body.slots).toEqual({ max_bytes: EVIDENCE_CAP, bytes: reported });
+      expect(storage.reads).toEqual([]);
+      expect(storage.puts).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it('one byte over the cap is refused before any read', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.alloc(EVIDENCE_CAP + 1));
+
+      const r = await commit(oid, rawKey).expect(413);
+      expect(r.body.code).toBe('EVIDENCE_TOO_LARGE');
+      expect(r.body.slots).toEqual({ max_bytes: EVIDENCE_CAP, bytes: EVIDENCE_CAP + 1 });
+      expect(storage.reads).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it.each([
+      ['missing', undefined],
+      ['empty', 0],
+      ['reporting a negative size', -1],
+      ['reporting a size that is not a number', Number.NaN],
+      ['reporting a fractional size', 1.5],
+    ])('an object that is %s is refused before any read', async (_label, shape) => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      if (shape === 0) storage.seed(rawKey, Buffer.alloc(0));
+      else if (shape !== undefined) {
+        storage.seed(rawKey, Buffer.from('tiny'));
+        storage.reportedBytes.set(rawKey, shape);
+      }
+
+      const r = await commit(oid, rawKey).expect(409);
+      expect(r.body.code).toBe('EVIDENCE_REQUIRED');
+      expect(r.body.slots).toEqual({ reason: 'OBJECT_NOT_UPLOADED' });
+      expect(storage.reads).toEqual([]);
+      expect(storage.puts).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+    });
+
+    it('an object that grew after the size check is read only up to the cap plus one byte and refused', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.alloc(EVIDENCE_CAP + 4096));
+      storage.reportedBytes.set(rawKey, 100); // what the earlier size check saw
+
+      const r = await commit(oid, rawKey).expect(413);
+      expect(r.body.code).toBe('EVIDENCE_TOO_LARGE');
+      expect(storage.reads).toEqual([
+        { key: rawKey, maxBytes: EVIDENCE_CAP + 1, returned: EVIDENCE_CAP + 1 },
+      ]);
+      expect(storage.puts).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it('a failing read leaves no reference, no stored copy and the raw upload in place', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      storage.failRead = true;
+
+      const r = await commit(oid, rawKey).expect(500);
+      expect(r.body.code).toBe('INTERNAL');
+      expect(storage.puts).toEqual([]);
+      expect(storage.deletes).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it('a failing store leaves no reference and the raw upload in place', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      storage.failPut = true;
+
+      const r = await commit(oid, rawKey).expect(500);
+      expect(r.body.code).toBe('INTERNAL');
+      expect(storage.deletes).not.toContain(rawKey);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it('a failing encryption leaves no reference, no stored copy and the raw upload in place', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      const configured = process.env['EVIDENCE_ENCRYPTION_KEY_V1'];
+      delete process.env['EVIDENCE_ENCRYPTION_KEY_V1'];
+      try {
+        const r = await commit(oid, rawKey).expect(500);
+        expect(r.body.code).toBe('INTERNAL');
+      } finally {
+        process.env['EVIDENCE_ENCRYPTION_KEY_V1'] = configured;
+      }
+      expect(storage.puts).toEqual([]);
+      expect(storage.deletes).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it("another buyer's commit is refused as not found and no object is touched", async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+
+      const r = await commit(oid, rawKey, STRANGER_S).expect(404);
+      expect(r.body.code).toBe('NOT_FOUND');
+      expect(storage.inspects).toEqual([]);
+      expect(storage.reads).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it("a key under another order's prefix is refused and no object is touched", async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const foreignKey = `evidence/raw/${orderId}/${randomUUID()}`;
+      storage.seed(foreignKey, Buffer.from('screenshot'));
+
+      const r = await commit(oid, foreignKey).expect(400);
+      expect(r.body.code).toBe('VALIDATION_FAILED');
+      expect(r.body.slots).toEqual({ path: 'key' });
+      expect(storage.inspects).toEqual([]);
+      expect(storage.reads).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(foreignKey)).toBe(true);
+    });
+
+    it('an object of exactly the cap is accepted, read with a bounded read, and served back byte for byte', async () => {
+      const oid = await newOrder();
+      const rawKey = await rawUpload(oid);
+      const screenshot = Buffer.alloc(EVIDENCE_CAP);
+      for (let i = 0; i < screenshot.length; i += 251) screenshot[i] = (i / 251) & 0xff;
+      storage.seed(rawKey, screenshot);
+
+      const r = await commit(oid, rawKey).expect(201);
+      expect(r.body.state).toBe('PAYMENT_SUBMITTED');
+      expect(storage.reads).toEqual([
+        { key: rawKey, maxBytes: EVIDENCE_CAP + 1, returned: EVIDENCE_CAP },
+      ]);
+      expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
+      expect(await storage.has(rawKey)).toBe(false);
+      expect(storage.puts).toHaveLength(1);
+      expect(Buffer.compare(await streamBack(oid), screenshot)).toBe(0);
+    });
+
+    it('the raw upload is deleted only after the commit is visible, and a replay touches no storage', async () => {
+      const oid = await newOrder();
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      const evidenceRowsWhenRawDeleted: number[] = [];
+      storage.onDelete = async (k) => {
+        if (k !== rawKey) return;
+        const n = await admin.query(
+          `SELECT count(*)::int AS n FROM financial.payment_evidence WHERE order_id=$1`,
+          [oid],
+        );
+        evidenceRowsWhenRawDeleted.push(n.rows[0].n);
+      };
+      const idem = key();
+
+      const first = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(201);
+      expect(evidenceRowsWhenRawDeleted).toEqual([1]);
+
+      const replay = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(201);
+      expect(replay.headers['x-adulis-idempotent-replay']).toBe('true');
+      expect(replay.body).toEqual(first.body);
+      expect(storage.reads).toHaveLength(1);
+      expect(storage.puts).toHaveLength(1);
+      expect((await rowsOf(oid)).evidence).toBe(1);
+    });
+
+    it('a failed delete of the raw upload after the commit does not undo the commit', async () => {
+      const oid = await newOrder();
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      storage.failDelete = true;
+
+      const r = await commit(oid, rawKey).expect(201);
+      expect(r.body.state).toBe('PAYMENT_SUBMITTED');
+      expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
+    });
+
+    it('a database failure after the storage work leaves no reference and the raw upload retryable', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      const screenshot = Buffer.from('screenshot-for-retry');
+      storage.seed(rawKey, screenshot);
+      const idem = key();
+      await admin.query(`
+        CREATE FUNCTION core.zz_commit_test_failure() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN RAISE EXCEPTION 'injected commit failure'; END $$`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION core.zz_commit_test_failure() TO PUBLIC`);
+      await admin.query(`
+        CREATE TRIGGER zz_commit_test_failure BEFORE INSERT ON core.payment_submission
+        FOR EACH ROW WHEN (NEW.order_id = '${oid}')
+        EXECUTE FUNCTION core.zz_commit_test_failure()`);
+      try {
+        const r = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(500);
+        expect(r.body.code).toBe('INTERNAL');
+      } finally {
+        await admin.query(`DROP TRIGGER zz_commit_test_failure ON core.payment_submission`);
+        await admin.query(`DROP FUNCTION core.zz_commit_test_failure()`);
+      }
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+      for (const stored of storage.puts) expect(await storage.has(stored)).toBe(false);
+
+      // The failed request recorded nothing, so the same request can simply be sent again.
+      const retry = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(201);
+      expect(retry.body.state).toBe('PAYMENT_SUBMITTED');
+      expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
+      expect(await storage.has(rawKey)).toBe(false);
+      expect(Buffer.compare(await streamBack(oid), screenshot)).toBe(0);
+    });
+
+    it('the order row is not locked while the storage work runs, and the order is judged again afterwards', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('screenshot'));
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let started!: () => void;
+      const readStarted = new Promise<void>((resolve) => (started = resolve));
+      storage.holdRead = { started, release: released };
+
+      const pending = commit(oid, rawKey).then((res) => res);
+      try {
+        await readStarted;
+
+        // 1. The row can be locked by someone else without waiting.
+        const probe = await admin.connect();
+        try {
+          await probe.query('BEGIN');
+          await probe.query(`SELECT id FROM core."order" WHERE id=$1 FOR UPDATE NOWAIT`, [oid]);
+        } finally {
+          await probe.query('ROLLBACK');
+          probe.release();
+        }
+
+        // 2. A request on the same order is served while the read is still blocked.
+        const cancelled = await buyerPost(`/v1/orders/${oid}/cancel`).send({}).expect(200);
+        expect(cancelled.body).toBeDefined();
+      } finally {
+        release();
+      }
+
+      // 3. The held commit then finds the order changed and writes nothing.
+      const r = await pending;
+      expect(r.status).toBe(409);
+      expect(r.body.code).toBe('ORDER_NOT_PAYABLE');
+      const after = await rowsOf(oid);
+      expect(after.state).not.toBe(before.state);
+      expect(after).toEqual({ state: after.state, evidence: 0, submissions: 0 });
+      expect(await storage.has(rawKey)).toBe(true);
+      for (const stored of storage.puts) expect(await storage.has(stored)).toBe(false);
     });
   });
 });
