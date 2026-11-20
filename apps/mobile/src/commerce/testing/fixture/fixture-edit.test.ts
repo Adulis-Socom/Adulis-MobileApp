@@ -228,40 +228,17 @@ describe('what the simulator records', () => {
   });
 });
 
-describe('what the simulator reports about a price, and what an edit does not change', () => {
-  it('reports the same difference on every read, so its identity is stable', async () => {
-    const { server } = await withLine({ reportPriceChanges: true });
-    server.setPrice(A_SHIRT_SMALL, 150000);
-    const refs = [server.carts(GUEST.actor), server.carts(GUEST.actor)].map(
-      (set) => lines(set)[0]?.priceChangeRef,
-    );
-    expect(refs[0]).toEqual(expect.any(String));
-    expect(refs[1]).toBe(refs[0]);
-  });
-
-  it('gives a different identity when the price moves again, up or down', async () => {
-    const { server } = await withLine({ reportPriceChanges: true });
-    server.setPrice(A_SHIRT_SMALL, 150000);
-    const up = lines(server.carts(GUEST.actor))[0]?.priceChangeRef;
-    server.setPrice(A_SHIRT_SMALL, 100000);
-    const down = lines(server.carts(GUEST.actor))[0]?.priceChangeRef;
-    expect(down).toEqual(expect.any(String));
-    expect(down).not.toBe(up);
-  });
-
-  it('keeps reporting a difference after a quantity edit: no operation accepts a changed price', async () => {
+describe('what an edit leaves alone', () => {
+  it('a quantity edit changes nothing the server reports about a price', async () => {
     const { server, lineId } = await withLine({ reportPriceChanges: true });
     server.setPrice(A_SHIRT_SMALL, 150000);
-    const before = findLine(server.carts(GUEST.actor), lineId);
     await server.setQuantity(GUEST, setQty(lineId, 4));
-    const after = findLine(server.carts(GUEST.actor), lineId);
-    expect(after).toMatchObject({
+    expect(findLine(server.carts(GUEST.actor), lineId)).toMatchObject({
       quantity: 4,
       issues: ['PRICE_CHANGED'],
       previousUnitPrice: { amountMinor: 120000 },
       unitPrice: { amountMinor: 150000 },
     });
-    expect(after?.priceChangeRef).toBe(before?.priceChangeRef);
   });
 });
 

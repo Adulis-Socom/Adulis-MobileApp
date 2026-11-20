@@ -26,7 +26,7 @@ import { useCarts } from './cart/hooks';
  * Limit: the scans read import specifiers written out in the source, in quotes or backticks, and a second
  * scan looks for a string that names the folder. A path that only running code can work out is invisible
  * to both (as it is to the repository's dependency checker); the other layers (the disabled default, the
- * release refusal, the exact surface and review) stand behind them.
+ * release refusal and the exact surface) stand behind them.
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -570,12 +570,12 @@ describe('G13: no route, tab or return path reaches it', () => {
   });
 });
 
-describe('G17 to G20: editing and reviewing stay where they belong', () => {
+describe('G18 and G20: editing stays where it belongs', () => {
   const inFiles = (pattern: RegExp) => commerceFiles.filter((s) => pattern.test(s.file));
   const without = (files: SourceFile[], allowed: RegExp) =>
     files.filter((s) => !allowed.test(s.file));
 
-  it('sees the editing and review files, so a rename or a deletion fails here instead of silently leaving them unscanned', () => {
+  it('sees the editing files, so a rename or a deletion fails here instead of silently leaving them unscanned', () => {
     const names = commerceFiles.map((s) => s.file);
     expect(names).toEqual(
       expect.arrayContaining([
@@ -583,47 +583,19 @@ describe('G17 to G20: editing and reviewing stay where they belong', () => {
         'commerce/cart/edit-outcome.ts',
         'commerce/cart/edit-store.ts',
         'commerce/cart/edit-hooks.ts',
-        'commerce/cart/review.ts',
-        'commerce/cart/review-hooks.ts',
         'commerce/cart/variant-change.ts',
       ]),
     );
   });
 
-  describe('G17: a consent is recorded only by the review hook', () => {
-    const CALLS_ACCEPT = /\baccept\s*\(/;
-    const ALLOWED = /^commerce\/cart\/review(-hooks)?\.tsx?$/;
-
-    it('no other file of the cart code calls accept', () => {
-      expect(offenders(without(commerceFiles, ALLOWED), matching(CALLS_ACCEPT))).toEqual([]);
-    });
-
-    it('the review hook is where it is called, and the store only defines it', () => {
-      const hook = commerceFiles.find((s) => s.file === 'commerce/cart/review-hooks.ts')!;
-      expect(/\.accept\s*\(/.test(stripComments(hook.text))).toBe(true);
-      const store = commerceFiles.find((s) => s.file === 'commerce/cart/review.ts')!;
-      expect(/\.accept\s*\(/.test(stripComments(store.text))).toBe(false);
-    });
-
-    it('the pattern bites on the forms it exists to catch', () => {
-      for (const sample of [
-        'runtime.reviews.accept(scope, id, ref, answer);',
-        'reviews.accept(scope, id, ref, answer)',
-        'store\n  .accept (scope, id, ref, answer)',
-      ])
-        expect(CALLS_ACCEPT.test(sample)).toBe(true);
-      expect(CALLS_ACCEPT.test('const accepted = acceptedFor(scope, id);')).toBe(false);
-    });
-  });
-
-  describe('G18: the editing and review modules never hold a price', () => {
-    const MODULES = /^commerce\/cart\/(edit[\w-]*|review[\w-]*|variant-change)\.tsx?$/;
+  describe('G18: the editing modules never hold a price', () => {
+    const MODULES = /^commerce\/cart\/(edit[\w-]*|variant-change)\.tsx?$/;
     const PRICE =
       /\b\w*Minor\b|\bMoney\b|\bunitPrice\b|\bpreviousUnitPrice\b|\bsubtotal\b|\btoFixed\b|\btoLocale\w*|\bIntl\b/;
 
     it('none of them names an amount, a currency formatter or a price field', () => {
       const modules = inFiles(MODULES);
-      expect(modules.length).toBeGreaterThanOrEqual(7);
+      expect(modules.length).toBeGreaterThanOrEqual(5);
       expect(offenders(modules, matching(PRICE))).toEqual([]);
     });
 
@@ -637,35 +609,7 @@ describe('G17 to G20: editing and reviewing stay where they belong', () => {
         'new Intl.NumberFormat()',
       ])
         expect(PRICE.test(sample)).toBe(true);
-      expect(PRICE.test('const ref = line.priceChangeRef;')).toBe(false);
-    });
-  });
-
-  describe('G19: the review code has no clock and no trigger of its own', () => {
-    const REVIEW = /^commerce\/cart\/review(-hooks)?\.tsx?$/;
-    const TRIGGER =
-      /\bsetTimeout\b|\bsetInterval\b|\brequestAnimationFrame\b|\bAppState\b|\bonlineManager\b|\buseForegroundRevalidation\b|\bDate\b/;
-
-    it('neither the review store nor the review hook sets a timer or watches the app or the connection', () => {
-      const files = inFiles(REVIEW);
-      expect(files.map((s) => s.file).sort()).toEqual([
-        'commerce/cart/review-hooks.ts',
-        'commerce/cart/review.ts',
-      ]);
-      expect(offenders(files, matching(TRIGGER))).toEqual([]);
-    });
-
-    it('the pattern bites on the forms it exists to catch', () => {
-      for (const sample of [
-        'setTimeout(() => accept(), 1000)',
-        'setInterval(tick, 5)',
-        "import { AppState } from 'react-native';",
-        "import { onlineManager } from '@tanstack/react-query';",
-        'useForegroundRevalidation(a, b)',
-        'const at = Date.now();',
-      ])
-        expect(TRIGGER.test(sample)).toBe(true);
-      expect(TRIGGER.test('const consent = acceptedFor(scope, id);')).toBe(false);
+      expect(PRICE.test('const quantity = line.quantity;')).toBe(false);
     });
   });
 

@@ -4,14 +4,13 @@ import { Text } from 'react-native';
 
 import { disabledCartAdapter } from '../adapters/disabled';
 import { apiProblem, gatewayPage, offline, proxyJson } from '../testing/api-errors';
-import { cartSet, line, sellerCart, serverItem, V1, V2 } from '../testing/builders';
+import { cartSet, line, sellerCart, V1, V2 } from '../testing/builders';
 import { renderWithCommerce } from '../testing/harness';
 import { stubAdapter } from '../testing/stub-adapter';
 import { useCartEdit } from './edit-hooks';
 import { useCarts } from './hooks';
-import { applyItems, asLineId, findLine, type CartSet } from './model';
+import { asLineId, findLine, type CartSet } from './model';
 import { AdapterUnavailable, ScopeChanged } from './port';
-import { useCartReview } from './review-hooks';
 import type { CartViewState } from './view-state';
 
 jest.mock('expo-secure-store', () => jest.requireActual('../../testing/secure-store-mock'));
@@ -553,153 +552,5 @@ describe('nothing is sent but by the Buyer', () => {
     await waitFor(() => expect(reads(stub)).toHaveLength(2));
     expect(sent(stub, 'setQuantity')).toHaveLength(0);
     expect(sent(stub, 'removeLine')).toHaveLength(0);
-  });
-});
-
-describe("the Buyer's review of a reported price change", () => {
-  const changed = (price = 1000): CartSet => {
-    const base = sellerCart([line('line-1', { quantity: 2 }), line('line-2', { quantity: 1 })]);
-    return cartSet(
-      applyItems(base, [serverItem({ variantId: line('line-1').variantId, nowMinor: price })]),
-    );
-  };
-  type ReviewHandle = { current: ReturnType<typeof useCartReview> | null; refresh: () => void };
-  const review: ReviewHandle = { current: null, refresh: () => undefined };
-  function Review({ focused = true }: { focused?: boolean }) {
-    const { view, refresh } = useCarts({ focused });
-    const reviews = useCartReview(view);
-    const edit = useCartEdit(L2, view);
-    review.current = reviews;
-    review.refresh = refresh;
-    handles.set('review', { current: { edit, refresh, view } });
-    const target = view.kind === 'LISTED' ? findLine(view.carts, L1) : null;
-    return (
-      <Text testID="review">
-        {target ? reviews.reviewOf(target) : view.kind}
-        {target?.priceChangeRef ? ' ref' : ''}
-      </Text>
-    );
-  }
-  const reviewText = () => screen.getByTestId('review');
-  const refOf = () => {
-    const view = handles.get('review')!.current!.view;
-    return view.kind === 'LISTED' ? (findLine(view.carts, L1)?.priceChangeRef ?? '') : '';
-  };
-
-  it('needs the Buyer: a reported change is NEEDS_ACCEPT, and no re-read, focus, reconnect, edit or wait accepts it', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed());
-    const { show } = await renderWithCommerce(<Review focused />, {
-      adapter: stub.adapter,
-      token: 'token-a',
-    });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    // Pull.
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reads(stub)).toHaveLength(2));
-    // Focus lost and regained.
-    await show(<Review focused={false} />);
-    await show(<Review focused />);
-    await waitFor(() => expect(reads(stub)).toHaveLength(3));
-    // Connection lost and returned.
-    await act(async () => onlineManager.setOnline(false));
-    await act(async () => onlineManager.setOnline(true));
-    await waitFor(() => expect(reads(stub)).toHaveLength(4));
-    // An edit of another line, settled by a read.
-    stub.setCarts(changed());
-    await act(async () => {
-      handles.get('review')!.current!.edit.setQuantity(5);
-    });
-    await waitFor(() => expect(sent(stub, 'setQuantity')).toHaveLength(1));
-    // A while.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    await act(async () => undefined);
-    expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains);
-    expect(review.current!.consentOf(L1)).toBeNull();
-  });
-
-  it('accepts exactly the difference shown, and only through accept', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed());
-    await renderWithCommerce(<Review />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    let result = '';
-    await act(async () => {
-      result = review.current!.accept(L1, refOf());
-    });
-    expect(result).toBe('ACCEPTED');
-    await waitFor(() => expect(reviewText()).toHaveTextContent('ACCEPTED', contains));
-    expect(review.current!.consentOf(L1)?.ref).toBe(refOf());
-    // Nothing was sent to the server for it.
-    expect(stub.calls.filter((c) => c.op !== 'getCarts')).toEqual([]);
-  });
-
-  it('records nothing when the difference moved between what was drawn and the tap', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed(1000));
-    await renderWithCommerce(<Review />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    const drawn = refOf();
-    stub.setCarts(changed(1100));
-    await act(async () => review.refresh());
-    await waitFor(() => expect(refOf()).not.toBe(drawn));
-    let result = '';
-    await act(async () => {
-      result = review.current!.accept(L1, drawn);
-    });
-    expect(result).toBe('CHANGED');
-    expect(review.current!.consentOf(L1)).toBeNull();
-    expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains);
-  });
-
-  it('reviews the same difference again after a clean answer in between', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed());
-    await renderWithCommerce(<Review />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    await act(async () => {
-      review.current!.accept(L1, refOf());
-    });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('ACCEPTED', contains));
-    stub.setCarts(holding());
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reviewText()).toHaveTextContent('OK', contains));
-    expect(review.current!.consentOf(L1)).toBeNull();
-    stub.setCarts(changed());
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-  });
-
-  it('draws no review state while the view cannot be vouched for, and refuses to accept then', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed());
-    await renderWithCommerce(<Review />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    const drawn = refOf();
-    stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reviewText()).toHaveTextContent('UNVERIFIED', contains));
-    let result = '';
-    await act(async () => {
-      result = review.current!.accept(L1, drawn);
-    });
-    expect(result).toBe('NOT_ACCEPTABLE');
-    expect(review.current!.consentOf(L1)).toBeNull();
-  });
-
-  it('keeps a consent while the view is unverified and the same difference comes back', async () => {
-    const stub = stubAdapter();
-    stub.setCarts(changed());
-    await renderWithCommerce(<Review />, { adapter: stub.adapter, token: 'token-a' });
-    await waitFor(() => expect(reviewText()).toHaveTextContent('NEEDS_ACCEPT', contains));
-    await act(async () => {
-      review.current!.accept(L1, refOf());
-    });
-    stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reviewText()).toHaveTextContent('UNVERIFIED', contains));
-    expect(review.current!.consentOf(L1)).not.toBeNull();
-    await act(async () => review.refresh());
-    await waitFor(() => expect(reviewText()).toHaveTextContent('ACCEPTED', contains));
   });
 });

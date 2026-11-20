@@ -47,11 +47,9 @@ describe('what the real adapter slot is waiting for, for edits', () => {
     expect(text).toMatch(/key requirement for edits is not yet declared/);
   });
 
-  it('lists that no operation accepts a changed price or changes an option, and that a reported difference has no identity', () => {
+  it('lists that no operation changes the option of a line', () => {
     const text = [...REAL_ADAPTER_GAPS.getCarts, ...REAL_ADAPTER_GAPS.addLine].join(' ');
-    expect(text).toMatch(/no operation accepts a changed price/);
     expect(text).toMatch(/no operation changes the option of a line/);
-    expect(text).toMatch(/no identity for a reported difference/);
   });
 
   it('lists the send-time session check for each edit operation', () => {

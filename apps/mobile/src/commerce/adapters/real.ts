@@ -11,8 +11,6 @@ export const REAL_ADAPTER_GAPS = {
     'the answer carries no Seller handle, store name, option label, Product slug or image',
     'the answer carries no per-line reasons',
     'the answer carries no previous price or subtotal',
-    'the answer carries no identity for a reported difference',
-    'no operation accepts a changed price',
   ],
   addLine: [
     'the contract does not yet type the request or the answer',

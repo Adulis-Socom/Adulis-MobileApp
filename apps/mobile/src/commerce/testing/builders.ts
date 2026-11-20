@@ -5,7 +5,6 @@ import {
   type CartLine,
   type CartSet,
   type SellerCart,
-  type ServerItem,
 } from '../cart/model';
 import type { CartViewState, Freshness } from '../cart/view-state';
 
@@ -43,17 +42,6 @@ export const sellerCart = (
 });
 
 export const cartSet = (...carts: SellerCart[]): CartSet => ({ carts, checkedAt: null });
-
-export const serverItem = (over: Partial<ServerItem> = {}): ServerItem => ({
-  code: 'PRICE_CHANGED',
-  variantId: V1,
-  requested: null,
-  available: null,
-  wasMinor: 900,
-  nowMinor: 1000,
-  currency: 'ETB',
-  ...over,
-});
 
 export const VERIFIED: Freshness = { kind: 'VERIFIED' };
 export const UNVERIFIED: Freshness = { kind: 'UNVERIFIED', why: 'failed', error: null };

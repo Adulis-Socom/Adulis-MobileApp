@@ -3,10 +3,9 @@ import { Text } from 'react-native';
 
 import { useCartEdit } from '../cart/edit-hooks';
 import { useCarts } from '../cart/hooks';
-import { applyItems, asLineId, findLine } from '../cart/model';
-import { useCartReview } from '../cart/review-hooks';
+import { asLineId } from '../cart/model';
 import { offline } from '../testing/api-errors';
-import { cartSet, line, sellerCart, serverItem } from '../testing/builders';
+import { cartSet, line, sellerCart } from '../testing/builders';
 import { renderWithCommerce } from '../testing/harness';
 import { stubAdapter } from '../testing/stub-adapter';
 import { createRuntime } from './runtime';
@@ -20,8 +19,8 @@ const L1 = asLineId('line-1');
 const account = (token: string) => ({ kind: 'account', token }) as const;
 const holding = () => cartSet(sellerCart([line('line-1', { quantity: 2 })]));
 
-describe('the runtime owns the edit and review stores', () => {
-  it('empties both inside observe() when the identity changes, before any screen draws for the new one', () => {
+describe('the runtime owns the edit store', () => {
+  it('empties it inside observe() when the identity changes, before any screen draws for the new one', () => {
     const runtime = createRuntime();
     runtime.observe(account('a'));
     const scope = runtime.scope!;
@@ -30,19 +29,11 @@ describe('the runtime owns the edit and review stores', () => {
       { kind: 'SET_QUANTITY', lineId: L1, quantity: 3 },
       { now: 1, online: true, mintKey: () => 'key-a' },
     );
-    const answer = {
-      carts: cartSet(applyItems(sellerCart([line('line-1')]), [serverItem()])),
-      verified: true,
-    };
-    runtime.reviews.accept(scope, L1, findLine(answer.carts, L1)!.priceChangeRef as string, answer);
     expect(runtime.edits.read(scope, L1).kind).toBe('SENDING');
-    expect(runtime.reviews.acceptedFor(scope, L1)).not.toBeNull();
 
     runtime.observe(account('b'));
     expect(runtime.edits.read(runtime.scope!, L1).kind).toBe('IDLE');
     expect(runtime.edits.read(scope, L1).kind).toBe('IDLE');
-    expect(runtime.reviews.acceptedFor(runtime.scope!, L1)).toBeNull();
-    expect(runtime.reviews.snapshot().size).toBe(0);
   });
 
   it('does not tell watchers while it clears, so a screen that is rendering is not updated', () => {
@@ -50,7 +41,6 @@ describe('the runtime owns the edit and review stores', () => {
     runtime.observe(account('a'));
     const told = jest.fn();
     runtime.edits.subscribe(told);
-    runtime.reviews.subscribe(told);
     runtime.edits.begin(
       runtime.scope!,
       { kind: 'REMOVE', lineId: L1 },
@@ -146,17 +136,14 @@ describe('two screens, one set of stores', () => {
   const handles: {
     first: ReturnType<typeof useCartEdit> | null;
     second: ReturnType<typeof useCartEdit> | null;
-    review: ReturnType<typeof useCartReview> | null;
-  } = { first: null, second: null, review: null };
+  } = { first: null, second: null };
   function Two() {
     const { view } = useCarts({ focused: true });
     const first = useCartEdit(L1, view);
     const second = useCartEdit(L1, view);
-    const review = useCartReview(view);
     const fresh = view.kind === 'LISTED' ? view.freshness.kind : view.kind;
     handles.first = first;
     handles.second = second;
-    handles.review = review;
     return (
       <Text testID="two">
         {first.state.kind}/{second.state.kind} {fresh}

@@ -4,7 +4,6 @@ import { Text } from 'react-native';
 import { useCartEdit } from '../../cart/edit-hooks';
 import { useCarts } from '../../cart/hooks';
 import { findLine, type LineId } from '../../cart/model';
-import { useCartReview } from '../../cart/review-hooks';
 import { renderWithCommerce } from '../harness';
 import { DEMO_DEVICE, createFixtureWorld } from './adapter';
 import { A_BOWL, A_SHIRT_SMALL } from './scenarios';
@@ -21,23 +20,19 @@ const contains = { exact: false } as const;
 const GUEST = { actor: `DEVICE:${DEMO_DEVICE}` };
 const frames: string[] = [];
 let edit: ReturnType<typeof useCartEdit> | null = null;
-let review: ReturnType<typeof useCartReview> | null = null;
 let refresh: () => void = () => undefined;
 
 function Probe({ lineId }: { lineId: LineId }) {
   const { view, refresh: reread } = useCarts({ focused: true });
   const editing = useCartEdit(lineId, view);
-  const reviewing = useCartReview(view);
   edit = editing;
-  review = reviewing;
   refresh = reread;
   const line = view.kind === 'LISTED' ? findLine(view.carts, lineId) : null;
   const names =
     view.kind === 'LISTED'
       ? view.carts.carts.flatMap((c) => c.lines.map((l) => l.name)).join(',')
       : '';
-  const state = line ? reviewing.reviewOf(line) : '-';
-  const frame = `${editing.state.kind} q=${line?.quantity ?? 'none'} review=${state} [${names}]`;
+  const frame = `${editing.state.kind} q=${line?.quantity ?? 'none'} [${names}]`;
   frames.push(frame);
   return <Text testID="probe">{frame}</Text>;
 }
@@ -50,7 +45,6 @@ const removeCalls = (world: ReturnType<typeof createFixtureWorld>) =>
 beforeEach(() => {
   frames.length = 0;
   edit = null;
-  review = null;
 });
 
 async function startGuest(options: Parameters<typeof createFixtureWorld>[0] = {}) {
@@ -155,47 +149,6 @@ describe('another device changes the same line', () => {
     await act(async () => refresh());
     await waitFor(() => expect(probe()).toHaveTextContent('UNKNOWN q=7', contains));
     expect(probe()).not.toHaveTextContent(/CONFIRMED|REFUSED/);
-  });
-});
-
-describe('a reported price change is reviewed by the Buyer, and editing does not accept it', () => {
-  it('needs an explicit accept, survives a quantity edit of the same line, and is reviewed again when the price moves', async () => {
-    const { world, lineId } = await startGuest({ reportPriceChanges: true });
-    world.server.setPrice(A_SHIRT_SMALL, 150000);
-    await act(async () => refresh());
-    await waitFor(() => expect(probe()).toHaveTextContent('review=NEEDS_ACCEPT', contains));
-    // Quantity edits and re-reads accept nothing.
-    await act(async () => {
-      edit!.setQuantity(4);
-    });
-    await waitFor(() => expect(probe()).toHaveTextContent('CONFIRMED q=4', contains));
-    expect(probe()).toHaveTextContent('review=NEEDS_ACCEPT', contains);
-
-    const drawn = findLine(world.server.carts(GUEST.actor), lineId)!.priceChangeRef!;
-    let result = '';
-    await act(async () => {
-      result = review!.accept(lineId, drawn);
-    });
-    expect(result).toBe('ACCEPTED');
-    await waitFor(() => expect(probe()).toHaveTextContent('review=ACCEPTED', contains));
-    // The server was told nothing: it still reports the difference.
-    expect(findLine(world.server.carts(GUEST.actor), lineId)?.issues).toEqual(['PRICE_CHANGED']);
-    expect(
-      world.server.calls.filter((c) => c.op !== 'getCarts' && c.op !== 'addLine'),
-    ).toHaveLength(1);
-
-    // An edit of the quantity keeps the accepted difference accepted: the difference is the same.
-    await act(async () => {
-      edit!.setQuantity(6);
-    });
-    await waitFor(() => expect(probe()).toHaveTextContent('q=6', contains));
-    expect(probe()).toHaveTextContent('review=ACCEPTED', contains);
-
-    // The price moves again: the old consent is dropped and the new difference is reviewed afresh.
-    world.server.setPrice(A_SHIRT_SMALL, 160000);
-    await act(async () => refresh());
-    await waitFor(() => expect(probe()).toHaveTextContent('review=NEEDS_ACCEPT', contains));
-    expect(review!.consentOf(lineId)).toBeNull();
   });
 });
 

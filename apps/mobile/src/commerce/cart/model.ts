@@ -54,12 +54,6 @@ export type CartLine = Readonly<{
   /** How many the server says it can supply, only when it says so. Never derived from a stock count. */
   availableQuantity: number | null;
   issues: readonly LineIssue[];
-  /**
-   * An opaque identity for the price difference the server reports on this line now (see
-   * `differenceRef`). Absent or null when none is reported, or when it cannot be told apart from another
-   * report about the same line: such a difference is never acceptable. Never drawn, never a price.
-   */
-  priceChangeRef?: string | null;
 }>;
 
 export type SellerCart = Readonly<{
@@ -126,17 +120,6 @@ export type ServerItem = Readonly<{
   currency: string | null;
 }>;
 
-/**
- * The identity of a reported price difference, made only from what the server reported: the previous
- * price (which may be absent), the current price and the currency. Two reports are the same difference
- * only when all three are equal. Null when the report lacks the current price or the currency.
- */
-export function differenceRef(item: ServerItem): string | null {
-  if (item.code !== 'PRICE_CHANGED' || item.nowMinor === null || item.currency === null)
-    return null;
-  return JSON.stringify([item.wasMinor, item.nowMinor, item.currency]);
-}
-
 const byPrecedence = (a: LineIssue, b: LineIssue) =>
   LINE_ISSUES.indexOf(a) - LINE_ISSUES.indexOf(b);
 
@@ -145,12 +128,6 @@ function withIssue(line: CartLine, issue: LineIssue, item: ServerItem): CartLine
     ? line.issues
     : [...line.issues, issue].sort(byPrecedence);
   let next: CartLine = { ...line, issues };
-  if (issue === 'PRICE_CHANGED') {
-    const ref = differenceRef(item);
-    // Two different reports about one line cannot be told apart, so neither one is acceptable.
-    const conflicting = line.issues.includes('PRICE_CHANGED') && line.priceChangeRef !== ref;
-    next = { ...next, priceChangeRef: conflicting ? null : ref };
-  }
   if (issue === 'SOLD_OUT') next = { ...next, availableQuantity: item.available ?? 0 };
   if (issue === 'INSUFFICIENT_STOCK' && item.available !== null)
     next = { ...next, availableQuantity: item.available };
