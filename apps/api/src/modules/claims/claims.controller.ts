@@ -3,7 +3,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ClaimsService } from './claims.service';
@@ -77,6 +77,7 @@ export class ClaimsController {
   }
 
   @Post('claims/:id/evidence')
+  @ReplayGrant('seller.claims:read')
   @ApiOperation({ summary: 'The bank record: a single transaction, not a statement (X15).' })
   async evidence(
     @Req() req: AuthedRequest,
@@ -105,6 +106,7 @@ export class ClaimsController {
   }
 
   @Post('seller/claims/:id/remedy')
+  @ReplayGrant('seller.claims:respond')
   @HttpCode(200)
   @ApiOperation({ summary: "REFUND or FULFIL — the seller's choice (X15)." })
   async remedy(

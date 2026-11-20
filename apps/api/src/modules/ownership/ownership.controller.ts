@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
@@ -93,6 +93,7 @@ export class OwnershipController {
   @ApiGate({ permission: ['seller.ownership:transfer'], surfaces: ['CONSOLE'] })
   @ApiCreatedResponse({ type: OwnershipTransferRequestedDto })
   @Post('seller/ownership-transfer')
+  @ReplayGrant('seller.ownership:transfer')
   @ApiOperation({
     summary: 'Owner only, step-up OWNERSHIP_TRANSFER. Activates after 24 hours.',
   })

@@ -15,6 +15,7 @@ import {
   type StoredResponse,
 } from '../idempotency/idempotency';
 import { BROWSER_DEVICE_COOKIE, clientSurface, deviceHeader, readCookie } from '../http/cookies';
+import { requiresSellerContext } from '../auth/auth.guard';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -217,8 +218,24 @@ export class HandlerTransaction {
     // as the store from the header with role BUYER. Without standing the
     // handler runs and decides; where it does not refuse, the existing record
     // collides at commit and the same-hash response is served after all.
+    // The route's @ReplayGrant codes are re-tested against the CURRENT role
+    // and the session's surface. A seller-context route that declares none has
+    // nothing to test a stored response against, so it is never served from
+    // the store: the handler runs, authorises exactly as for a fresh request,
+    // and a commit that finds the earlier record answers with it.
     const standingSeller = actor.kind === 'ACCOUNT' ? ctx.sellerId : null;
-    const replay = await this.idempotency.check(key, actor, endpoint, requestHash, standingSeller);
+    const undeclared = (req.replayGrants ?? []).length === 0 && requiresSellerContext(req.path, req.method);
+    const replay = undeclared
+      ? null
+      : await this.idempotency.check(
+          key,
+          actor,
+          endpoint,
+          requestHash,
+          standingSeller,
+          req.replayGrants ?? [],
+          req.auth?.audience ?? null,
+        );
     if (replay) {
       res.setHeader('X-Adulis-Idempotent-Replay', 'true');
       res.status(replay.status);
@@ -245,6 +262,8 @@ export class HandlerTransaction {
       // back with the transaction; the winner's stored response is the
       // truthful answer to "did my request succeed?" -- if it was the same
       // request. A different body or seller, or an expired record, is 409.
+      // A twin whose own write meets a uniqueness rule before it reaches the
+      // record (claims evidence) answers that rule's 409 and never gets here.
       if (
         typeof e === 'object' &&
         e !== null &&

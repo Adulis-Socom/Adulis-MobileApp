@@ -3,7 +3,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import { ActorRole } from '../../common/auth/auth.guard';
+import { ActorRole, ReplayGrant } from '../../common/auth/auth.guard';
 import { IdempotencyService, hashRequest, idempotencyKey } from '../../common/idempotency/idempotency';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
@@ -77,6 +77,7 @@ export class HandoffController {
   }
 
   @Post('seller/orders/:id/custody-transfer')
+  @ReplayGrant('seller.handoff:custody_transfer')
   @ApiOperation({ summary: 'Event A, seller side. Never completes an order.' })
   async custodyTransfer(
     @Req() req: LocalizedRequest,
@@ -91,6 +92,7 @@ export class HandoffController {
   }
 
   @Post('seller/orders/:id/courier-assignment')
+  @ReplayGrant('seller.couriers:manage')
   async assignCourier(
     @Req() req: LocalizedRequest,
     @Res({ passthrough: true }) res: Response,

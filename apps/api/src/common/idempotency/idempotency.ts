@@ -27,9 +27,13 @@ import { AdulisException } from '../errors/adulis-exception';
  *    record not yet purged is 409 IDEMPOTENCY_KEY_REUSED, never a replay.
  *
  * The record is written INSIDE the handler's transaction, at the end: a
- * crash mid-handler leaves no claim, so the retry is a first use; a
- * concurrent duplicate loses the UNIQUE race at commit, rolls its own
- * effects back, and is served the winner's stored response.
+ * crash mid-handler leaves no claim, so the retry is a first use. A
+ * concurrent duplicate that reaches the record loses the UNIQUE race at
+ * commit, rolls its own effects back, and is served the winner's stored
+ * response. A duplicate whose own write meets a uniqueness rule first (the
+ * evidence item a claim holds once per reference) answers that rule's 409
+ * and never reaches the record; its next retry is served the stored
+ * response, and a client reads the resource to see what was stored.
  */
 
 export interface IdempotencyActor {
@@ -66,7 +70,9 @@ export function idempotencyKey(header: unknown): string {
  * seller the hash is byte-identical to the one stored before the seller was
  * added (JSON.stringify never emits a raw newline, so the suffix cannot
  * collide with a body). Lower-cased, as the database spells a uuid, so a
- * retry that only changes the header's letter case is the same request.
+ * retry that only changes the header's letter case is the same request. The
+ * guard now lower-cases the header once for every consumer; it stays here so
+ * a caller that hashes a raw value still gets the same bytes.
  */
 export function hashRequest(
   method: string,
@@ -115,12 +121,23 @@ export class IdempotencyService {
    * `standingSeller` (the selected seller of an account request): the replay
    * is served only while the account still stands in that seller -- its
    * Owner, or a team member neither suspended nor revoked, the predicate
-   * fn_has_permission reads. An Owner whose ownership transfer is due but not
-   * yet activated does not stand: activation happens only inside a handler
-   * transaction, which a replay never opens. Otherwise null: the handler runs
+   * fn_has_permission reads. An account with an ownership transfer away from
+   * that seller that is due but not yet activated does not stand at all,
+   * through either arm: activation happens only inside a handler transaction,
+   * which a replay never opens, and it can change every role the account
+   * holds there. Otherwise null: the handler runs
    * and decides (fn_has_permission's 403 or 404 on a seller-authorised
    * path); were it to pass, the existing record still refuses a second
    * commit (the unique-collision path).
+   *
+   * `grants` (the route's @ReplayGrant codes) and `audience` (the
+   * presenting session's): standing must also be in a role that still holds
+   * every one of those codes on that surface -- fn_has_permission's role and
+   * surface step, read-only and without raising. A member demoted since the
+   * first request, or a session on a surface the permission does not reach,
+   * is not served; the handler runs and fn_has_permission refuses exactly as
+   * it would a fresh request. No grants: standing alone, as before (runIdempotent
+   * does not ask at all for a seller-context route that declares none).
    */
   async check(
     key: string,
@@ -128,26 +145,40 @@ export class IdempotencyService {
     endpoint: string,
     requestHash: Buffer,
     standingSeller: string | null = null,
+    grants: readonly string[] = [],
+    audience: string | null = null,
   ): Promise<StoredResponse | null> {
     const r = await sql<RecordRow & { standing: boolean }>`
       SELECT r.request_hash, r.response_status, r.response_body,
              r.expires_at > now() AS live,
              (${standingSeller}::uuid IS NULL
-              OR EXISTS (SELECT 1 FROM core.seller s
-                          WHERE s.id = ${standingSeller}::uuid
-                            AND s.owner_account_id = ${actor.id}::uuid
-                            AND NOT EXISTS (
-                              SELECT 1 FROM core.seller_ownership_transfer t
-                               WHERE t.seller_id = s.id
-                                 AND t.from_account_id = ${actor.id}::uuid
-                                 AND t.activates_at <= now()
-                                 AND t.activated_at IS NULL
-                                 AND t.cancelled_at IS NULL))
-              OR EXISTS (SELECT 1 FROM core.seller_team_member tm
-                          WHERE tm.seller_id = ${standingSeller}::uuid
-                            AND tm.account_id = ${actor.id}::uuid
-                            AND tm.suspended_at IS NULL
-                            AND tm.revoked_at IS NULL)) AS standing
+              OR (NOT EXISTS (
+                    SELECT 1 FROM core.seller_ownership_transfer t
+                     WHERE t.seller_id = ${standingSeller}::uuid
+                       AND t.from_account_id = ${actor.id}::uuid
+                       AND t.activates_at <= now()
+                       AND t.activated_at IS NULL
+                       AND t.cancelled_at IS NULL)
+                  AND EXISTS (
+                    SELECT 1 FROM (
+                      SELECT 'OWNER'::core.team_role AS role
+                        FROM core.seller s
+                       WHERE s.id = ${standingSeller}::uuid
+                         AND s.owner_account_id = ${actor.id}::uuid
+                      UNION ALL
+                      SELECT tm.role FROM core.seller_team_member tm
+                       WHERE tm.seller_id = ${standingSeller}::uuid
+                         AND tm.account_id = ${actor.id}::uuid
+                         AND tm.suspended_at IS NULL
+                         AND tm.revoked_at IS NULL) standing_role
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM unnest(${sql.val(grants)}::text[]) AS g(code)
+                       WHERE NOT EXISTS (
+                         SELECT 1 FROM core.role_permission rp
+                           JOIN core.permission p ON p.code = rp.permission_code
+                          WHERE rp.role = standing_role.role
+                            AND rp.permission_code = g.code
+                            AND ${audience}::core.session_audience = ANY(p.surfaces)))))) AS standing
         FROM core.idempotency_record r
        WHERE r.key = ${key} AND r.actor_kind = ${actor.kind}
          AND r.actor_id = ${actor.id} AND r.endpoint = ${endpoint}`.execute(this.db);
@@ -179,6 +210,14 @@ export class IdempotencyService {
   /**
    * After losing the commit race: the winner's response, which now exists,
    * served only if it answers THIS request (same hash, not expired).
+   *
+   * INVARIANT: this re-tests no standing and no grant, and must stay reachable only from the unique-violation
+   * path of runIdempotent. That path is entered after the handler ran to its insert in THIS attempt, i.e. after the
+   * handler's own permission statement passed in the same transaction. A caller whose handler refused never gets here.
+   * "Passed" must mean passed on the SAME SIDE as the winner: on a route a Buyer and a store share, the side follows
+   * the store header, which is part of the hash, so an equal hash is an equal header. That holds only because the guard
+   * gives every consumer one spelling of the header (lower case); a consumer that compared it as typed could classify
+   * a retry as the other side while the hash still matched the winner's.
    */
   async readWinner(
     key: string,

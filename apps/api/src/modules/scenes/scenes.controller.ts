@@ -11,7 +11,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { Public } from '../../common/auth/auth.guard';
+import { Public, ReplayGrant } from '../../common/auth/auth.guard';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { PROBLEM_RESPONSE, ProblemDto } from '../../common/errors/problem.dto';
@@ -83,6 +83,7 @@ export class ScenesController {
 
   @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts')
+  @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary: 'Create a private DRAFT Scene. Seller and Market are server-derived.',
   })
@@ -166,6 +167,7 @@ export class ScenesController {
 
   @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts/:id/image-uploads')
+  @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary:
       'Presigned PUTs for the three image derivatives under this Scene. Attach the keys with PATCH .../draft.',
@@ -186,6 +188,7 @@ export class ScenesController {
 
   @ApiGate({ permission: ['seller.broadcasts:send', 'seller.media:write'], surfaces: ['CONSOLE'] })
   @Post('seller/scene-posts/:id/publish')
+  @ReplayGrant('seller.media:write', 'seller.broadcasts:send')
   @ApiOperation({
     summary:
       'Publish the working revision. Every gate is recomputed; a blocked publish is 409 PUBLICATION_BLOCKED with every item (slots.item: PRODUCT_TAG_REQUIRED, NO_AVAILABLE_TAGGED_PRODUCT, ...).',

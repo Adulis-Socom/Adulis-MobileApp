@@ -13,7 +13,7 @@ import {
 import { ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import { Public } from '../../common/auth/auth.guard';
+import { Public, ReplayGrant } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { AdulisException } from '../../common/errors/adulis-exception';
 import { ORDER_BUCKETS, type OrderBucket } from './order-buckets';
@@ -194,6 +194,7 @@ export class OrdersController {
   }
 
   @Post('seller/orders/:id/ready')
+  @ReplayGrant('seller.order_ready:update')
   @ApiOperation({ summary: 'Idempotent by state, not only by key. 409 before PAYMENT_CONFIRMED.' })
   async markReady(
     @Req() req: LocalizedRequest,
@@ -205,6 +206,7 @@ export class OrdersController {
   }
 
   @Post('seller/orders/:id/payment/confirm')
+  @ReplayGrant('seller.payment:confirm')
   @ApiOperation({ summary: '"Confirm Payment Received", never "Accept Payment".' })
   async confirmPayment(
     @Req() req: LocalizedRequest,
@@ -218,6 +220,7 @@ export class OrdersController {
   }
 
   @Post('seller/orders/:id/payment/reject')
+  @ReplayGrant('seller.payment:confirm')
   @ApiOperation({ summary: 'First rejection opens a 12-hour retry window; the second ends the order.' })
   async rejectPayment(
     @Req() req: LocalizedRequest,
@@ -232,6 +235,7 @@ export class OrdersController {
   }
 
   @Post('seller/orders/:id/reservations/:rid/cancel')
+  @ReplayGrant('seller.orders:respond')
   @ApiOperation({ summary: '"Can\'t Fulfil". There is no accept action.' })
   async cancelLineAsSeller(
     @Req() req: LocalizedRequest,
@@ -247,6 +251,7 @@ export class OrdersController {
   }
 
   @Post('seller/orders/:id/refunds')
+  @ReplayGrant('seller.refunds:report')
   @ApiOperation({ summary: 'Seller reports; buyer acknowledges separately.' })
   async reportRefund(
     @Req() req: LocalizedRequest,

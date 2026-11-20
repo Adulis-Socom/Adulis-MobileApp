@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { sql, type Transaction } from 'kysely';
 import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
-import type { AuthedRequest } from '../../common/auth/auth.guard';
+import { ReplayGrant, type AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import type { Database } from '../../common/db/database.types';
 import { AdulisException } from '../../common/errors/adulis-exception';
@@ -123,6 +123,7 @@ export class CouriersController {
   }
 
   @Post('seller/couriers')
+  @ReplayGrant('seller.couriers:manage')
   @ApiOperation({ summary: 'Invite by phone; the courier signs in with their own OTP.' })
   async invite(
     @Req() req: AuthedRequest,

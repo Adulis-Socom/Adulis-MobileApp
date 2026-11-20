@@ -111,7 +111,7 @@ export class ChatService {
 
     // as=seller additionally requires the header to MATCH seller_id (R10).
     const sellerId = req.ctx?.sellerId as string | null;
-    if (!sellerParam || sellerParam !== sellerId) {
+    if (typeof sellerParam !== 'string' || sellerParam.toLowerCase() !== sellerId) {
       throw new AdulisException('SCOPE_PARAMETER_REQUIRED');
     }
     await sql`
