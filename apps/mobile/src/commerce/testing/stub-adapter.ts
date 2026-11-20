@@ -3,7 +3,9 @@ import {
   ScopeChanged,
   type AddRequest,
   type CartAdapter,
+  type RemoveLineRequest,
   type Scope,
+  type SetQuantityRequest,
   type Verified,
 } from '../cart/port';
 
@@ -15,13 +17,16 @@ import {
  */
 export type Held = { release(): void };
 
+export type StubOp = 'getCarts' | 'addLine' | 'setQuantity' | 'removeLine';
+
 export type StubCall = Readonly<{
-  op: 'getCarts' | 'addLine';
+  op: StubOp;
   scopeKind: 'guest' | 'account';
   epoch: number;
   key: string | null;
   variantId: string | null;
   quantity: number | null;
+  lineId: string | null;
 }>;
 
 export const EMPTY_CARTS: CartSet = { carts: [], checkedAt: null };
@@ -30,18 +35,33 @@ export function stubAdapter() {
   let carts: CartSet = EMPTY_CARTS;
   let lines = 0;
   const calls: StubCall[] = [];
-  const failures: Record<'getCarts' | 'addLine', unknown[]> = { getCarts: [], addLine: [] };
-  const holds: Record<'getCarts' | 'addLine', Array<Promise<void>>> = { getCarts: [], addLine: [] };
+  const failures: Record<StubOp, unknown[]> = {
+    getCarts: [],
+    addLine: [],
+    setQuantity: [],
+    removeLine: [],
+  };
+  const holds: Record<StubOp, Array<Promise<void>>> = {
+    getCarts: [],
+    addLine: [],
+    setQuantity: [],
+    removeLine: [],
+  };
 
-  const enter = async (op: 'getCarts' | 'addLine', scope: Scope, request: AddRequest | null) => {
+  const enter = async (
+    op: StubOp,
+    scope: Scope,
+    request: AddRequest | SetQuantityRequest | RemoveLineRequest | null,
+  ) => {
     if (!scope.isCurrent()) throw new ScopeChanged();
     calls.push({
       op,
       scopeKind: scope.kind,
       epoch: scope.epoch,
       key: request?.idempotencyKey ?? null,
-      variantId: request?.variantId ?? null,
-      quantity: request?.quantity ?? null,
+      variantId: request !== null && 'variantId' in request ? request.variantId : null,
+      quantity: request !== null && 'quantity' in request ? request.quantity : null,
+      lineId: request !== null && 'lineId' in request ? request.lineId : null,
     });
     const hold = holds[op].shift();
     if (hold) await hold;
@@ -55,13 +75,21 @@ export function stubAdapter() {
     availability: { available: true },
     bind: (scope) => ({
       getCarts: async (): Promise<Verified<CartSet>> => {
+        // A read answers with the carts as they were when it was made, even if it is held and released later.
+        const asked = carts;
         await enter('getCarts', scope, null);
-        return { value: carts, receivedAt: Date.now(), provenance: 'FIXTURE' };
+        return { value: asked, receivedAt: Date.now(), provenance: 'FIXTURE' };
       },
       addLine: async (request) => {
         await enter('addLine', scope, request);
         lines += 1;
         return { lineId: asLineId(`DEMO-LINE-${lines}`) };
+      },
+      setQuantity: async (request) => {
+        await enter('setQuantity', scope, request);
+      },
+      removeLine: async (request) => {
+        await enter('removeLine', scope, request);
       },
     }),
   };
@@ -71,9 +99,9 @@ export function stubAdapter() {
     calls,
     setCarts: (next: CartSet) => void (carts = next),
     /** The next call of this operation rejects with `error`. */
-    failNext: (op: 'getCarts' | 'addLine', error: unknown) => void failures[op].push(error),
+    failNext: (op: StubOp, error: unknown) => void failures[op].push(error),
     /** The next call of this operation waits (after it is recorded) until released. */
-    hold: (op: 'getCarts' | 'addLine'): Held => {
+    hold: (op: StubOp): Held => {
       let release: () => void = () => undefined;
       holds[op].push(new Promise<void>((resolve) => (release = resolve)));
       return { release: () => release() };

@@ -19,7 +19,7 @@ import { useCarts } from './cart/hooks';
 
 /**
  * The cart code is switched OFF by construction: nothing reaches it, nothing in it reaches the network or
- * the disk, and nothing beyond reading and adding a cart line exists in it. Each rule below fails the day
+ * the disk, and nothing beyond reading the carts, adding a line and changing or removing one exists in it. Each rule below fails the day
  * it is broken, so a change that turns commerce on is made on purpose and never by accident. Every scan is
  * proved on a sample it exists to catch, so a pattern that stops matching cannot pass silently.
  *
@@ -334,7 +334,7 @@ describe('G8: no stock count', () => {
   });
 });
 
-describe('G10: the surface is exactly reading the carts and adding a line', () => {
+describe('G10: the surface is exactly reading the carts, adding a line, and changing or removing one', () => {
   /** Every string key of the object and of its prototype chain (a class cannot hide a method on its prototype). */
   function surface(value: object): string[] {
     const keys = new Set<string>();
@@ -357,12 +357,46 @@ describe('G10: the surface is exactly reading the carts and adding a line', () =
   ];
 
   it.each(adapters)(
-    '%s has exactly the adapter surface and its port exactly the two cart methods',
+    '%s has exactly the adapter surface and its port exactly the four cart methods',
     (_name, adapter) => {
       expect(surface(adapter)).toEqual(['availability', 'bind', 'mode', 'provenance']);
-      expect(surface(adapter.bind(scope))).toEqual(['addLine', 'getCarts']);
+      expect(surface(adapter.bind(scope))).toEqual([
+        'addLine',
+        'getCarts',
+        'removeLine',
+        'setQuantity',
+      ]);
     },
   );
+
+  it('sees an own property beyond the four', () => {
+    const ownExtra = Object.create(null) as Record<string, unknown>;
+    Object.assign(ownExtra, disabledCartAdapter.bind(scope), { createOrder: () => undefined });
+    expect(surface(ownExtra)).toEqual([
+      'addLine',
+      'createOrder',
+      'getCarts',
+      'removeLine',
+      'setQuantity',
+    ]);
+  });
+
+  it('sees a method beyond the four hidden on a prototype', () => {
+    class Wider {
+      getCarts() {}
+      addLine() {}
+      setQuantity() {}
+      removeLine() {}
+      acceptPrice() {}
+    }
+    expect(surface(new Wider())).toEqual([
+      'acceptPrice',
+      'addLine',
+      'getCarts',
+      'removeLine',
+      'setQuantity',
+    ]);
+  });
 
   it('sees a method hidden on a prototype', () => {
     class Sneaky {
@@ -532,6 +566,133 @@ describe('G13: no route, tab or return path reaches it', () => {
       await act(() => router.push('/cart' as never));
       expect(await screen.findByText(en['buyer.for_you.empty'])).toBeOnTheScreen();
       expect(screen).toHavePathname('/home/for-you');
+    });
+  });
+});
+
+describe('G17 to G20: editing and reviewing stay where they belong', () => {
+  const inFiles = (pattern: RegExp) => commerceFiles.filter((s) => pattern.test(s.file));
+  const without = (files: SourceFile[], allowed: RegExp) =>
+    files.filter((s) => !allowed.test(s.file));
+
+  it('sees the editing and review files, so a rename or a deletion fails here instead of silently leaving them unscanned', () => {
+    const names = commerceFiles.map((s) => s.file);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'commerce/cart/edit.ts',
+        'commerce/cart/edit-outcome.ts',
+        'commerce/cart/edit-store.ts',
+        'commerce/cart/edit-hooks.ts',
+        'commerce/cart/review.ts',
+        'commerce/cart/review-hooks.ts',
+        'commerce/cart/variant-change.ts',
+      ]),
+    );
+  });
+
+  describe('G17: a consent is recorded only by the review hook', () => {
+    const CALLS_ACCEPT = /\baccept\s*\(/;
+    const ALLOWED = /^commerce\/cart\/review(-hooks)?\.tsx?$/;
+
+    it('no other file of the cart code calls accept', () => {
+      expect(offenders(without(commerceFiles, ALLOWED), matching(CALLS_ACCEPT))).toEqual([]);
+    });
+
+    it('the review hook is where it is called, and the store only defines it', () => {
+      const hook = commerceFiles.find((s) => s.file === 'commerce/cart/review-hooks.ts')!;
+      expect(/\.accept\s*\(/.test(stripComments(hook.text))).toBe(true);
+      const store = commerceFiles.find((s) => s.file === 'commerce/cart/review.ts')!;
+      expect(/\.accept\s*\(/.test(stripComments(store.text))).toBe(false);
+    });
+
+    it('the pattern bites on the forms it exists to catch', () => {
+      for (const sample of [
+        'runtime.reviews.accept(scope, id, ref, answer);',
+        'reviews.accept(scope, id, ref, answer)',
+        'store\n  .accept (scope, id, ref, answer)',
+      ])
+        expect(CALLS_ACCEPT.test(sample)).toBe(true);
+      expect(CALLS_ACCEPT.test('const accepted = acceptedFor(scope, id);')).toBe(false);
+    });
+  });
+
+  describe('G18: the editing and review modules never hold a price', () => {
+    const MODULES = /^commerce\/cart\/(edit[\w-]*|review[\w-]*|variant-change)\.tsx?$/;
+    const PRICE =
+      /\b\w*Minor\b|\bMoney\b|\bunitPrice\b|\bpreviousUnitPrice\b|\bsubtotal\b|\btoFixed\b|\btoLocale\w*|\bIntl\b/;
+
+    it('none of them names an amount, a currency formatter or a price field', () => {
+      const modules = inFiles(MODULES);
+      expect(modules.length).toBeGreaterThanOrEqual(7);
+      expect(offenders(modules, matching(PRICE))).toEqual([]);
+    });
+
+    it('the pattern bites on the forms it exists to catch, and leaves the reference alone', () => {
+      for (const sample of [
+        'const a = line.unitPrice;',
+        'if (m.amountMinor > 0) {}',
+        'const total = a.nowMinor - b.wasMinor;',
+        'import type { Money } from "./model";',
+        'return (n / 100).toFixed(2);',
+        'new Intl.NumberFormat()',
+      ])
+        expect(PRICE.test(sample)).toBe(true);
+      expect(PRICE.test('const ref = line.priceChangeRef;')).toBe(false);
+    });
+  });
+
+  describe('G19: the review code has no clock and no trigger of its own', () => {
+    const REVIEW = /^commerce\/cart\/review(-hooks)?\.tsx?$/;
+    const TRIGGER =
+      /\bsetTimeout\b|\bsetInterval\b|\brequestAnimationFrame\b|\bAppState\b|\bonlineManager\b|\buseForegroundRevalidation\b|\bDate\b/;
+
+    it('neither the review store nor the review hook sets a timer or watches the app or the connection', () => {
+      const files = inFiles(REVIEW);
+      expect(files.map((s) => s.file).sort()).toEqual([
+        'commerce/cart/review-hooks.ts',
+        'commerce/cart/review.ts',
+      ]);
+      expect(offenders(files, matching(TRIGGER))).toEqual([]);
+    });
+
+    it('the pattern bites on the forms it exists to catch', () => {
+      for (const sample of [
+        'setTimeout(() => accept(), 1000)',
+        'setInterval(tick, 5)',
+        "import { AppState } from 'react-native';",
+        "import { onlineManager } from '@tanstack/react-query';",
+        'useForegroundRevalidation(a, b)',
+        'const at = Date.now();',
+      ])
+        expect(TRIGGER.test(sample)).toBe(true);
+      expect(TRIGGER.test('const consent = acceptedFor(scope, id);')).toBe(false);
+    });
+  });
+
+  describe('G20: an edit is sent only by the edit hook', () => {
+    const CALLS_EDIT = /\.\s*(?:setQuantity|removeLine)\s*\(/;
+    const ALLOWED = /^commerce\/(cart\/edit-hooks\.ts|testing\/)/;
+
+    it('no other file of the cart code calls setQuantity or removeLine', () => {
+      expect(offenders(without(commerceFiles, ALLOWED), matching(CALLS_EDIT))).toEqual([]);
+    });
+
+    it('the edit hook is where they are called', () => {
+      const hook = commerceFiles.find((s) => s.file === 'commerce/cart/edit-hooks.ts')!;
+      const code = stripComments(hook.text);
+      expect(/\.\s*setQuantity\s*\(/.test(code)).toBe(true);
+      expect(/\.\s*removeLine\s*\(/.test(code)).toBe(true);
+    });
+
+    it('the pattern bites on the forms it exists to catch, and not on a similar name', () => {
+      for (const sample of [
+        'await port.setQuantity(request);',
+        'adapter.bind(scope)\n  .removeLine(request)',
+        'void bound.removeLine (request)',
+      ])
+        expect(CALLS_EDIT.test(sample)).toBe(true);
+      expect(CALLS_EDIT.test('server.setQuantityAvailable(v, 1)')).toBe(false);
+      expect(CALLS_EDIT.test('setQuantity: () => Promise.reject(error)')).toBe(false);
     });
   });
 });
