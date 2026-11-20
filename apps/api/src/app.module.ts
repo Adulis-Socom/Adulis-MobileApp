@@ -29,7 +29,11 @@ import {
 } from './modules/financial/financial-storage.adapter';
 import { OrdersService } from './modules/orders/orders.service';
 import { CatalogueService } from './modules/catalogue/catalogue.service';
-import { S3ObjectStorage, resolveObjectStorageEnv } from './common/adapters/s3-object-storage';
+import {
+  EVIDENCE_CLIENT_OPTIONS,
+  S3ObjectStorage,
+  resolveObjectStorageEnv,
+} from './common/adapters/s3-object-storage';
 import {
   FakeMediaStorageAdapter,
   MEDIA_STORAGE_ADAPTER,
@@ -166,7 +170,7 @@ export const LOGGER = Symbol('LOGGER');
       useFactory: (): FinancialStorageAdapter => {
         const env = resolveObjectStorageEnv();
         return env
-          ? new S3ObjectStorage(env.evidence, 'FINANCIAL_STORAGE_ADAPTER')
+          ? new S3ObjectStorage(env.evidence, 'FINANCIAL_STORAGE_ADAPTER', EVIDENCE_CLIENT_OPTIONS)
           : new FakeFinancialStorageAdapter();
       },
     },

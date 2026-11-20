@@ -67,6 +67,7 @@ class InstrumentedStorage implements FinancialStorageAdapter {
   puts: string[] = [];
   deletes: string[] = [];
   failRead = false;
+  emptyRead = false;
   failPut = false;
   failDelete = false;
   holdRead: { started: () => void; release: Promise<void> } | null = null;
@@ -79,6 +80,7 @@ class InstrumentedStorage implements FinancialStorageAdapter {
     this.puts = [];
     this.deletes = [];
     this.failRead = false;
+    this.emptyRead = false;
     this.failPut = false;
     this.failDelete = false;
     this.holdRead = null;
@@ -113,6 +115,7 @@ class InstrumentedStorage implements FinancialStorageAdapter {
       await this.holdRead.release;
     }
     if (this.failRead) throw new Error('injected read failure');
+    if (this.emptyRead) return Buffer.alloc(0);
     const obj = await this.inner.getObject(key);
     const out = obj && maxBytes !== undefined ? obj.subarray(0, maxBytes) : obj;
     call.returned = out?.length ?? 0;
@@ -1038,9 +1041,34 @@ describe('C4 — the financial boundary', () => {
         .expect(200);
       return r.body as Buffer;
     };
+    /**
+     * Runs `run` with an INSERT on `table` failing for rows matching `when`. Safe to repeat: the function is
+     * replaced, an old trigger from a killed run is dropped first, and everything is dropped again in `finally`.
+     */
+    const failingInsert = async <T>(table: string, when: string, run: () => Promise<T>): Promise<T> => {
+      const drop = async () => {
+        for (const t of ['core.payment_submission', 'core.idempotency_record']) {
+          await admin.query(`DROP TRIGGER IF EXISTS zz_commit_test_failure ON ${t}`);
+        }
+        await admin.query(`DROP FUNCTION IF EXISTS core.zz_commit_test_failure()`);
+      };
+      await drop();
+      try {
+        await admin.query(`
+          CREATE OR REPLACE FUNCTION core.zz_commit_test_failure() RETURNS trigger LANGUAGE plpgsql
+          AS $$ BEGIN RAISE EXCEPTION 'injected failure'; END $$`);
+        await admin.query(`GRANT EXECUTE ON FUNCTION core.zz_commit_test_failure() TO PUBLIC`);
+        await admin.query(`
+          CREATE TRIGGER zz_commit_test_failure BEFORE INSERT ON ${table}
+          FOR EACH ROW WHEN (${when}) EXECUTE FUNCTION core.zz_commit_test_failure()`);
+        return await run();
+      } finally {
+        await drop();
+      }
+    };
 
     beforeAll(async () => {
-      for (let i = 1; i <= 20; i++) {
+      for (let i = 1; i <= 24; i++) {
         const id = `aaaa1111-2222-4000-8000-0000000020${String(i).padStart(2, '0')}`;
         await admin.query(
           `INSERT INTO core.product_variant (id, product_id, seller_id, price_minor,
@@ -1127,6 +1155,22 @@ describe('C4 — the financial boundary', () => {
       expect(storage.reads).toEqual([
         { key: rawKey, maxBytes: EVIDENCE_CAP + 1, returned: EVIDENCE_CAP + 1 },
       ]);
+      expect(storage.puts).toEqual([]);
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+    });
+
+    it('an empty read after a positive reported size is refused and nothing is stored', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      storage.seed(rawKey, Buffer.from('tiny'));
+      storage.emptyRead = true;
+
+      const r = await commit(oid, rawKey).expect(409);
+      expect(r.body.code).toBe('EVIDENCE_REQUIRED');
+      expect(r.body.slots).toEqual({ reason: 'OBJECT_NOT_UPLOADED' });
+      expect(storage.reads).toHaveLength(1);
       expect(storage.puts).toEqual([]);
       expect(await rowsOf(oid)).toEqual(unchanged(before));
       expect(await storage.has(rawKey)).toBe(true);
@@ -1271,21 +1315,17 @@ describe('C4 — the financial boundary', () => {
       const screenshot = Buffer.from('screenshot-for-retry');
       storage.seed(rawKey, screenshot);
       const idem = key();
+      // Leftovers of a killed earlier run must not break this one.
       await admin.query(`
-        CREATE FUNCTION core.zz_commit_test_failure() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN RAISE EXCEPTION 'injected commit failure'; END $$`);
-      await admin.query(`GRANT EXECUTE ON FUNCTION core.zz_commit_test_failure() TO PUBLIC`);
+        CREATE OR REPLACE FUNCTION core.zz_commit_test_failure() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN RETURN NEW; END $$`);
       await admin.query(`
         CREATE TRIGGER zz_commit_test_failure BEFORE INSERT ON core.payment_submission
-        FOR EACH ROW WHEN (NEW.order_id = '${oid}')
-        EXECUTE FUNCTION core.zz_commit_test_failure()`);
-      try {
+        FOR EACH ROW WHEN (false) EXECUTE FUNCTION core.zz_commit_test_failure()`);
+      await failingInsert('core.payment_submission', `NEW.order_id = '${oid}'`, async () => {
         const r = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(500);
         expect(r.body.code).toBe('INTERNAL');
-      } finally {
-        await admin.query(`DROP TRIGGER zz_commit_test_failure ON core.payment_submission`);
-        await admin.query(`DROP FUNCTION core.zz_commit_test_failure()`);
-      }
+      });
       expect(await rowsOf(oid)).toEqual(unchanged(before));
       expect(await storage.has(rawKey)).toBe(true);
       for (const stored of storage.puts) expect(await storage.has(stored)).toBe(false);
@@ -1296,6 +1336,72 @@ describe('C4 — the financial boundary', () => {
       expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
       expect(await storage.has(rawKey)).toBe(false);
       expect(Buffer.compare(await streamBack(oid), screenshot)).toBe(0);
+    });
+
+    it('a failure while recording the answer leaves no reference and the raw upload, and the same request succeeds afterwards', async () => {
+      const oid = await newOrder();
+      const before = await rowsOf(oid);
+      const rawKey = await rawUpload(oid);
+      const screenshot = Buffer.from('screenshot-after-record-failure');
+      storage.seed(rawKey, screenshot);
+      const idem = key();
+
+      await failingInsert('core.idempotency_record', `NEW.key = '${idem}'`, async () => {
+        const r = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(500);
+        expect(r.body.code).toBe('INTERNAL');
+      });
+      expect(await rowsOf(oid)).toEqual(unchanged(before));
+      expect(await storage.has(rawKey)).toBe(true);
+      // The handler had finished, so the outcome was not known to it: its stored copy is deliberately left
+      // (nothing references it) rather than risking the deletion of an object a commit refers to.
+      expect(storage.puts).toHaveLength(1);
+      expect(await storage.has(storage.puts[0] as string)).toBe(true);
+
+      const retry = await commit(oid, rawKey).set('Idempotency-Key', idem).expect(201);
+      expect(retry.body.state).toBe('PAYMENT_SUBMITTED');
+      expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
+      expect(Buffer.compare(await streamBack(oid), screenshot)).toBe(0);
+      expect(await storage.has(rawKey)).toBe(false);
+    });
+
+    it('two concurrent commits of one order leave one evidence row, one stored copy, and the loser refused', async () => {
+      const oid = await newOrder();
+      const keyA = await rawUpload(oid);
+      const keyB = await rawUpload(oid);
+      storage.seed(keyA, Buffer.from('screenshot-a'));
+      storage.seed(keyB, Buffer.from('screenshot-b'));
+      // Both reads are held until both requests are inside the storage work, so both store a copy
+      // before either reaches the lock.
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let bothStarted!: () => void;
+      const inStorageWork = new Promise<void>((resolve) => (bothStarted = resolve));
+      let started = 0;
+      storage.holdRead = { started: () => { if (++started === 2) bothStarted(); }, release: released };
+
+      const a = commit(oid, keyA).then((res) => res);
+      const b = commit(oid, keyB).then((res) => res);
+      try {
+        await inStorageWork;
+      } finally {
+        release();
+      }
+      const [ra, rb] = await Promise.all([a, b]);
+
+      expect([ra.status, rb.status].sort()).toEqual([201, 409]);
+      const [winner, loser] = ra.status === 201 ? [ra, rb] : [rb, ra];
+      const [winnerRaw, loserRaw] = ra.status === 201 ? [keyA, keyB] : [keyB, keyA];
+      expect(winner.body.state).toBe('PAYMENT_SUBMITTED');
+      expect(loser.body.code).toBe('ORDER_NOT_PAYABLE');
+      expect(await rowsOf(oid)).toEqual({ state: 'PAYMENT_SUBMITTED', evidence: 1, submissions: 1 });
+
+      expect(storage.puts).toHaveLength(2);
+      const kept: string[] = [];
+      for (const stored of storage.puts) if (await storage.has(stored)) kept.push(stored);
+      const row = await admin.query(`SELECT object_key FROM financial.payment_evidence WHERE order_id=$1`, [oid]);
+      expect(kept).toEqual([row.rows[0].object_key]);
+      expect(await storage.has(winnerRaw)).toBe(false);
+      expect(await storage.has(loserRaw)).toBe(true);
     });
 
     it('the order row is not locked while the storage work runs, and the order is judged again afterwards', async () => {

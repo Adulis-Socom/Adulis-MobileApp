@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { S3ObjectStorage, resolveObjectStorageEnv } from '../src/common/adapters/s3-object-storage';
+import {
+  EVIDENCE_CLIENT_OPTIONS,
+  S3ObjectStorage,
+  resolveObjectStorageEnv,
+} from '../src/common/adapters/s3-object-storage';
 
 /**
  * The real adapter against the disposable object store (the suites refuse any
@@ -9,10 +13,12 @@ import { S3ObjectStorage, resolveObjectStorageEnv } from '../src/common/adapters
  */
 
 const env = resolveObjectStorageEnv();
+if (!env) throw new Error('the six R2_* values are required: eval "$(bash ops/scripts/test-db.sh env)"');
 const runPrefix = `evidence/raw/test-${randomUUID()}`;
 
 describe('S3ObjectStorage: size and limited read', () => {
-  const storage = new S3ObjectStorage(env!.evidence, 'S3_ADAPTER_TEST');
+  // Built with the options the API binds for the evidence store.
+  const storage = new S3ObjectStorage(env.evidence, 'S3_ADAPTER_TEST', EVIDENCE_CLIENT_OPTIONS);
   const key = `${runPrefix}/object`;
   const body = Buffer.from('0123456789abcdefghij');
 

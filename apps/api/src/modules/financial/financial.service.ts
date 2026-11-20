@@ -129,7 +129,7 @@ export class FinancialService {
 
     // Cap + 1 bytes at most, even if the object grew after the check above.
     const raw = await this.storage.getObject(rawKey, EVIDENCE_CAP_BYTES + 1);
-    if (!raw) {
+    if (!raw || raw.length === 0) {
       throw new AdulisException('EVIDENCE_REQUIRED', {
         slots: { reason: 'OBJECT_NOT_UPLOADED' },
       });
