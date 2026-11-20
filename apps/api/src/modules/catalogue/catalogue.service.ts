@@ -44,6 +44,10 @@ export const IMAGE_CAPS = {
   full: 5 * 1024 * 1024,
 } as const;
 const VIDEO_CAP_BYTES = 50 * 1024 * 1024;
+const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The reasons this module writes to the purge schedule; it withdraws only these. */
+const CATALOGUE_PURGE_REASONS = ['IMAGE_DELETED', 'VIDEO_DELETED', 'VIDEO_REPLACED', 'PRODUCT_DELETED'] as const;
+type CataloguePurgeReason = (typeof CATALOGUE_PURGE_REASONS)[number];
 
 @Injectable()
 export class CatalogueService {
@@ -342,10 +346,7 @@ export class CatalogueService {
      * so the rule for this whole class is the order of the two statements,
      * not the wording of either.
      */
-    const owner = await sql<{ id: string }>`
-      SELECT id FROM core.product
-       WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
-    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+    const pid = await this.lockOwnedProduct(trx, req, productId);
 
     // The seller predicate stays on the count as well. It is redundant now
     // that ownership is resolved above, and it is the redundancy that makes
@@ -359,6 +360,12 @@ export class CatalogueService {
     if ((live.rows[0]?.n ?? 0) > 0) {
       throw new AdulisException('PRODUCT_HAS_ACTIVE_ORDERS');
     }
+    // The media rows go with the Product, so their objects are scheduled in this transaction.
+    const media = await sql<{ key: string }>`
+      SELECT unnest(ARRAY[thumb_key, card_key, full_key]) AS key
+        FROM core.product_image WHERE product_id = ${productId}
+      UNION ALL
+      SELECT key FROM core.product_video WHERE product_id = ${productId}`.execute(trx);
     try {
       await sql`DELETE FROM core.product_attribute_value WHERE product_id = ${productId}`.execute(trx);
       await sql`DELETE FROM core.variant_attribute_value WHERE variant_id IN
@@ -384,6 +391,12 @@ export class CatalogueService {
       }
       throw e;
     }
+    await this.schedulePurge(
+      trx,
+      pid,
+      media.rows.map((m) => m.key),
+      'PRODUCT_DELETED',
+    );
     return { deleted: true };
   }
 
@@ -486,10 +499,7 @@ export class CatalogueService {
     body: ImageBody,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.media:write');
-    const owner = await sql<{ id: string }>`
-      SELECT id FROM core.product
-       WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
-    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+    const pid = await this.lockOwnedProduct(trx, req, productId);
 
     if (body.action === 'REQUEST_UPLOAD') {
       // THE PRE-MINT CAP CHECK (T20 S4). The structural cap -- UNIQUE
@@ -516,7 +526,7 @@ export class CatalogueService {
       // (a randomUUID() segment is the only thing that must be unguessable),
       // nothing derives position from a key, and there are no production
       // objects, so dropping it is free and removes the lie.
-      const base = `products/${productId}/img/${randomUUID()}`;
+      const base = `products/${pid}/img/${randomUUID()}`;
       const [thumb, card, full] = await Promise.all([
         this.storage.signPut(`${base}/thumb.webp`, 'image/webp', IMAGE_CAPS.thumb),
         this.storage.signPut(`${base}/card.webp`, 'image/webp', IMAGE_CAPS.card),
@@ -525,15 +535,22 @@ export class CatalogueService {
       return { position: body.position, uploads: { thumb, card, full } };
     }
 
-    // COMMIT — validate what actually landed before a row exists.
-    for (const [kind, key, cap] of [
+    // COMMIT: validate what actually landed before a row exists. Only the three keys
+    // REQUEST_UPLOAD minted together for this Product: one upload id, each file in its slot.
+    const dir = `products/${pid}/img/`;
+    const uploadId = body.full_key.startsWith(dir) ? body.full_key.slice(dir.length, -'/full.webp'.length) : '';
+    const commitKeys = [
       ['thumb', body.thumb_key, IMAGE_CAPS.thumb],
       ['card', body.card_key, IMAGE_CAPS.card],
       ['full', body.full_key, IMAGE_CAPS.full],
-    ] as const) {
-      if (!key.startsWith(`products/${productId}/img/`)) {
+    ] as const;
+    // Every shape first, so a key that was not minted here never reaches storage.
+    for (const [kind, key] of commitKeys) {
+      if (!UPLOAD_ID.test(uploadId) || key !== `${dir}${uploadId}/${kind}.webp`) {
         throw new AdulisException('VALIDATION_FAILED', { slots: { path: `${kind}_key` } });
       }
+    }
+    for (const [kind, key, cap] of commitKeys) {
       const obj = await this.storage.inspect(key);
       if (!obj) {
         throw new AdulisException('VALIDATION_FAILED', {
@@ -563,6 +580,8 @@ export class CatalogueService {
       }
       throw e;
     }
+    // A key re-registered inside its grace period is live again: its purge is withdrawn.
+    await this.unschedulePurge(trx, [body.thumb_key, body.card_key, body.full_key]);
     return { position: body.position, committed: true };
   }
 
@@ -573,6 +592,7 @@ export class CatalogueService {
     position: number,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.media:write');
+    const pid = await this.lockOwnedProduct(trx, req, productId);
     const r = await sql<{ thumb_key: string; card_key: string; full_key: string }>`
       DELETE FROM core.product_image pi
        USING core.product p
@@ -581,17 +601,12 @@ export class CatalogueService {
        RETURNING pi.thumb_key, pi.card_key, pi.full_key`.execute(trx);
     const row = r.rows[0];
     if (!row) throw new AdulisException('NOT_FOUND');
-    // A lifecycle row is a SCHEDULED PURGE (purge_after is NOT NULL by
-    // schema): rows are written when an object leaves service, and the
-    // daily media.lifecycle job collects what is due. 30 days' grace is a
-    // recovery window, not a ruled value.
-    for (const key of [row.thumb_key, row.card_key, row.full_key]) {
-      await sql`
-        INSERT INTO core.media_lifecycle (object_key, class, purge_after, reason)
-        VALUES (${key}, 'INFREQUENT', now() + interval '30 days', 'IMAGE_DELETED')
-        ON CONFLICT (object_key) DO UPDATE
-          SET purge_after = EXCLUDED.purge_after, reason = EXCLUDED.reason`.execute(trx);
-    }
+    await this.schedulePurge(
+      trx,
+      pid,
+      [row.thumb_key, row.card_key, row.full_key],
+      'IMAGE_DELETED',
+    );
     return null;
   }
 
@@ -676,20 +691,26 @@ export class CatalogueService {
     body: VideoBody,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.media:write');
-    const owner = await sql<{ id: string }>`
-      SELECT id FROM core.product
-       WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}`.execute(trx);
-    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+    const pid = await this.lockOwnedProduct(trx, req, productId);
 
     if (body.action === 'REQUEST_UPLOAD') {
       const upload = await this.storage.signPut(
-        `products/${productId}/video/${randomUUID()}.mp4`,
+        `products/${pid}/video/${randomUUID()}.mp4`,
         'video/mp4',
         VIDEO_CAP_BYTES,
       );
       return { upload };
     }
 
+    // Only the key REQUEST_UPLOAD minted for this Product's video.
+    const dir = `products/${pid}/video/`;
+    if (
+      !body.key.startsWith(dir) ||
+      !body.key.endsWith('.mp4') ||
+      !UPLOAD_ID.test(body.key.slice(dir.length, -'.mp4'.length))
+    ) {
+      throw new AdulisException('VALIDATION_FAILED', { slots: { path: 'key' } });
+    }
     const obj = await this.storage.inspect(body.key);
     if (!obj) {
       throw new AdulisException('VALIDATION_FAILED', {
@@ -702,6 +723,8 @@ export class CatalogueService {
         slots: { max_bytes: VIDEO_CAP_BYTES, bytes: obj.bytes },
       });
     }
+    const previous = await sql<{ key: string }>`
+      SELECT key FROM core.product_video WHERE product_id = ${productId}`.execute(trx);
     await sql`
       INSERT INTO core.product_video (id, product_id, key, duration_seconds, height_px, bytes)
       VALUES (${randomUUID()}, ${productId}, ${body.key},
@@ -710,6 +733,11 @@ export class CatalogueService {
         key = EXCLUDED.key, duration_seconds = EXCLUDED.duration_seconds,
         height_px = EXCLUDED.height_px, bytes = EXCLUDED.bytes,
         uploaded_at = now()`.execute(trx);
+    await this.unschedulePurge(trx, [body.key]);
+    // The replaced file leaves service in this transaction, so it is scheduled in it.
+    if (previous.rows[0]) {
+      await this.schedulePurge(trx, pid, [previous.rows[0].key], 'VIDEO_REPLACED');
+    }
     return { committed: true };
   }
 
@@ -719,6 +747,7 @@ export class CatalogueService {
     productId: string,
   ): Promise<unknown> {
     await assertPermission(trx, req, 'seller.media:write');
+    const pid = await this.lockOwnedProduct(trx, req, productId);
     const r = await sql<{ key: string }>`
       DELETE FROM core.product_video pv
        USING core.product p
@@ -726,12 +755,68 @@ export class CatalogueService {
          AND pv.product_id = ${productId}
        RETURNING pv.key`.execute(trx);
     if (!r.rows[0]) throw new AdulisException('NOT_FOUND');
+    await this.schedulePurge(trx, pid, [r.rows[0].key], 'VIDEO_DELETED');
+    return null;
+  }
+
+  /**
+   * Serialises every media change of one Product (replace, delete, commit) on its row, so the
+   * state a change reads is the state it writes against. Without it two concurrent commits can
+   * both see "no video" and one of the files is never scheduled.
+   */
+  private async lockOwnedProduct(
+    trx: Transaction<Database>,
+    req: AuthedRequest,
+    productId: string,
+  ): Promise<string> {
+    const owner = await sql<{ id: string }>`
+      SELECT id FROM core.product
+       WHERE id = ${productId} AND seller_id = ${req.ctx?.sellerId}
+         FOR NO KEY UPDATE`.execute(trx);
+    if (!owner.rows[0]) throw new AdulisException('NOT_FOUND');
+    // The canonical (lower-case) id: object keys are built from it, whatever case the path had.
+    return owner.rows[0].id;
+  }
+
+  /**
+   * A lifecycle row is a SCHEDULED PURGE (purge_after is NOT NULL by schema): written when an
+   * object leaves service, collected by the daily media.lifecycle job. 30 days' grace is a
+   * recovery window, not a ruled value. Call it in the transaction that removed the reference,
+   * after that change: a key some row still names is not scheduled, and neither is a key outside
+   * this Product's own prefix. A schedule this module wrote earlier is never postponed and keeps
+   * its reason; a schedule written for any other reason (a deleted store's retention) is left
+   * completely untouched, neither postponed nor brought forward.
+   * shortcut: the reference test scans both media tables (no index on the key columns); fine
+   * for the rare delete or replace, index them if their volume grows.
+   */
+  private async schedulePurge(
+    trx: Transaction<Database>,
+    productId: string,
+    keys: string[],
+    reason: CataloguePurgeReason,
+  ): Promise<void> {
+    if (keys.length === 0) return;
     await sql`
       INSERT INTO core.media_lifecycle (object_key, class, purge_after, reason)
-      VALUES (${r.rows[0].key}, 'INFREQUENT', now() + interval '30 days', 'VIDEO_DELETED')
+      SELECT DISTINCT u.k, 'INFREQUENT'::core.media_class, now() + interval '30 days', ${reason}
+        FROM unnest(${sql.val(keys)}::text[]) AS u (k)
+       WHERE starts_with(u.k, ${`products/${productId}/`})
+         AND NOT EXISTS (SELECT 1 FROM core.product_image i WHERE u.k IN (i.thumb_key, i.card_key, i.full_key))
+         AND NOT EXISTS (SELECT 1 FROM core.product_video v WHERE v.key = u.k)
       ON CONFLICT (object_key) DO UPDATE
-        SET purge_after = EXCLUDED.purge_after, reason = EXCLUDED.reason`.execute(trx);
-    return null;
+        SET purge_after = LEAST(core.media_lifecycle.purge_after, EXCLUDED.purge_after)
+        WHERE core.media_lifecycle.reason = ANY(${sql.val([...CATALOGUE_PURGE_REASONS])}::text[])`.execute(trx);
+  }
+
+  /**
+   * The reverse: a key a row names again is live, so a purge this module scheduled for it is
+   * withdrawn. A purge scheduled for another reason (a deleted store's retention) is not ours.
+   */
+  private async unschedulePurge(trx: Transaction<Database>, keys: string[]): Promise<void> {
+    await sql`
+      DELETE FROM core.media_lifecycle
+       WHERE object_key = ANY(${sql.val(keys)}::text[])
+         AND reason = ANY(${sql.val([...CATALOGUE_PURGE_REASONS])}::text[])`.execute(trx);
   }
 
   // ------------------------------------------------------------ social posts
