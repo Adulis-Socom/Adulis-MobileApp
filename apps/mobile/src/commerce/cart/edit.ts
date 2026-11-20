@@ -36,6 +36,12 @@ export type EditIntent = EditTarget &
  *   UNRESOLVED        no proof and the key can no longer be sent: the Buyer reads the carts and decides, and no
  *                     new edit of this line begins until it is dismissed
  *   CONFIRMED         a verified read shows the result
+ *
+ * Dismiss ends an edit that waits on the Buyer. Dismissing an UNKNOWN or UNRESOLVED one RELEASES its key: the
+ * next edit of the line is a new intent with a new key, started only by the Buyer (the same rule as an add).
+ * The server takes no key on these operations today, so the dismissed request, if it did reach the server,
+ * may still land after a newer one; the mark the store keeps on the line says so. An edit that is SENDING or
+ * APPLIED has no Dismiss: it settles on its own, or by the connection returning or the session changing.
  */
 export type EditState =
   | Readonly<{ kind: 'IDLE' }>

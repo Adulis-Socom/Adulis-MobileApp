@@ -66,7 +66,7 @@ describe('changing a quantity and removing a line', () => {
   it('confirms a quantity only when the read made after the edit shows it, naming the line and the number and nothing else', async () => {
     const { world, lineId } = await startGuest();
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('CONFIRMED q=5', contains));
     expect(setCalls(world)).toHaveLength(1);
@@ -91,12 +91,28 @@ describe('changing a quantity and removing a line', () => {
   });
 });
 
+describe('a quantity the server will not take', () => {
+  it('is sent as typed, and the server refusal is what is shown, with no Try again: the client sets no ceiling of its own', async () => {
+    const { world } = await startGuest();
+    await act(async () => {
+      edit!.changeQuantity(100);
+    });
+    await waitFor(() => expect(probe()).toHaveTextContent('REFUSED', contains));
+    expect(setCalls(world)).toHaveLength(1);
+    expect(setCalls(world)[0]).toMatchObject({ quantity: 100 });
+    await act(async () => edit!.retry());
+    expect(setCalls(world)).toHaveLength(1);
+    // The refusal stored nothing: the line still shows the server quantity.
+    expect(probe()).toHaveTextContent('q=2', contains);
+  });
+});
+
 describe('when the answer to an edit is lost', () => {
   it('reads first: a change that committed is found by the read, and nothing is sent again', async () => {
     const { world } = await startGuest();
     world.server.failNext('setQuantity', { kind: 'timeout', afterCommit: true });
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('CONFIRMED q=5', contains));
     expect(setCalls(world)).toHaveLength(1);
@@ -116,7 +132,7 @@ describe('when the answer to an edit is lost', () => {
     const { world } = await startGuest();
     world.server.failNext('setQuantity', { kind: 'offline' });
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('UNKNOWN q=2', contains));
     await act(async () => edit!.retry());
@@ -130,7 +146,7 @@ describe('when the answer to an edit is lost', () => {
     const { world, lineId } = await startGuest();
     await world.server.removeLine(GUEST, { lineId, idempotencyKey: 'elsewhere' });
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('LINE_GONE', contains));
     await waitFor(() => expect(probe()).toHaveTextContent('q=none', contains));
@@ -142,7 +158,7 @@ describe('another device changes the same line', () => {
     const { world, lineId } = await startGuest();
     world.server.failNext('setQuantity', { kind: 'offline' });
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('UNKNOWN q=2', contains));
     await world.server.setQuantity(GUEST, { lineId, quantity: 7, idempotencyKey: 'device-2' });
@@ -177,7 +193,7 @@ describe('another Account', () => {
     const { world, lineId, actor, session } = await startAs('A');
     const held = world.server.pause('setQuantity');
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(setCalls(world)).toHaveLength(1));
     expect(setCalls(world)[0]).toMatchObject({ actorAtSend: actor });
@@ -206,7 +222,7 @@ describe('another Account', () => {
     const { world, session } = await startAs('A');
     world.server.failNext('setQuantity', { kind: 'offline' });
     await act(async () => {
-      edit!.setQuantity(5);
+      edit!.changeQuantity(5);
     });
     await waitFor(() => expect(probe()).toHaveTextContent('UNKNOWN', contains));
     const stale = edit!;

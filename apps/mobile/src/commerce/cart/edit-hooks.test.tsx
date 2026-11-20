@@ -87,7 +87,7 @@ describe('beginning an edit', () => {
     await renderWithCommerce(<Probe />, { adapter: disabledCartAdapter, token: 'token-a' });
     let outcome = '';
     await act(async () => {
-      outcome = now().edit.setQuantity(3);
+      outcome = now().edit.changeQuantity(3);
     });
     expect(outcome).toBe('unavailable');
     expect(text()).toHaveTextContent('IDLE', contains);
@@ -98,8 +98,8 @@ describe('beginning an edit', () => {
     const outcomes: string[] = [];
     await act(async () => {
       for (const quantity of [0, -1, 1.5, Number.NaN, 2 ** 53, 1e21])
-        outcomes.push(now().edit.setQuantity(quantity));
-      outcomes.push(now().edit.setQuantity(2));
+        outcomes.push(now().edit.changeQuantity(quantity));
+      outcomes.push(now().edit.changeQuantity(2));
     });
     expect(outcomes).toEqual([
       'invalid',
@@ -119,7 +119,7 @@ describe('beginning an edit', () => {
     await waitFor(() => expect(text('absent')).toHaveTextContent('VERIFIED', contains));
     const outcomes: string[] = [];
     await act(async () => {
-      outcomes.push(now('absent').edit.remove(), now('absent').edit.setQuantity(3));
+      outcomes.push(now('absent').edit.remove(), now('absent').edit.changeQuantity(3));
     });
     expect(outcomes).toEqual(['absent', 'absent']);
     expect(stub.calls.filter((c) => c.op !== 'getCarts')).toEqual([]);
@@ -132,7 +132,7 @@ describe('beginning an edit', () => {
     await waitFor(() => expect(text()).toHaveTextContent('UNVERIFIED', contains));
     const outcomes: string[] = [];
     await act(async () => {
-      outcomes.push(now().edit.setQuantity(3), now().edit.remove());
+      outcomes.push(now().edit.changeQuantity(3), now().edit.remove());
     });
     expect(outcomes).toEqual(['unverified', 'unverified']);
     expect(stub.calls.filter((c) => c.op !== 'getCarts')).toEqual([]);
@@ -172,7 +172,11 @@ describe('beginning an edit', () => {
     const release = stub.hold('setQuantity');
     let outcomes: string[] = [];
     await act(async () => {
-      outcomes = [now().edit.setQuantity(3), now().edit.setQuantity(3), now().edit.setQuantity(5)];
+      outcomes = [
+        now().edit.changeQuantity(3),
+        now().edit.changeQuantity(3),
+        now().edit.changeQuantity(5),
+      ];
     });
     expect(outcomes).toEqual(['started', 'same', 'ignored']);
     expect(sent(stub, 'setQuantity')).toHaveLength(1);
@@ -192,7 +196,7 @@ describe('beginning an edit', () => {
     await act(async () => onlineManager.setOnline(false));
     let outcome = '';
     await act(async () => {
-      outcome = now().edit.setQuantity(3);
+      outcome = now().edit.changeQuantity(3);
     });
     expect(outcome).toBe('offline');
     expect(text()).toHaveTextContent('OFFLINE_NOT_SENT', contains);
@@ -222,8 +226,8 @@ describe('beginning an edit', () => {
     const first = stub.hold('setQuantity');
     const second = stub.hold('setQuantity');
     await act(async () => {
-      now('a').edit.setQuantity(3);
-      now('b').edit.setQuantity(4);
+      now('a').edit.changeQuantity(3);
+      now('b').edit.changeQuantity(4);
     });
     expect(sent(stub, 'setQuantity').map((c) => [c.lineId, c.quantity])).toEqual([
       [L1, 3],
@@ -249,7 +253,7 @@ describe('what is drawn after an edit', () => {
     const after = stub.hold('getCarts');
     stub.setCarts(holding(3));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('APPLIED', contains));
     await waitFor(() => expect(reads(stub)).toHaveLength(3));
@@ -266,7 +270,7 @@ describe('what is drawn after an edit', () => {
     const { stub } = await start();
     // The server accepted, yet its next answer still shows the old quantity (another device, a late commit).
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(reads(stub)).toHaveLength(2));
     await waitFor(() => expect(text()).toHaveTextContent('IDLE q=2', contains));
@@ -278,11 +282,65 @@ describe('what is drawn after an edit', () => {
     // The next read is the one made after the edit settles.
     stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNVERIFIED', contains));
     expect(text()).toHaveTextContent('IDLE q=2', contains);
     expect(text()).not.toHaveTextContent('CONFIRMED', contains);
+  });
+
+  it('claims nothing from an answer that was already on screen when the edit settled, when the read made after it fails', async () => {
+    const { stub } = await start();
+    const onTheWire = stub.hold('setQuantity');
+    await act(async () => {
+      now().edit.changeQuantity(3);
+    });
+    await waitFor(() => expect(sent(stub, 'setQuantity')).toHaveLength(1));
+    // While the edit is still on the wire a read lands, and it already shows the target.
+    stub.setCarts(holding(3));
+    await act(async () => now().refresh());
+    await waitFor(() => expect(text()).toHaveTextContent('q=3', contains));
+    // The read made after the edit settles fails: the answer on screen is not one that read produced.
+    stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
+    await act(async () => onTheWire.release());
+    await waitFor(() => expect(text()).toHaveTextContent('UNVERIFIED', contains));
+    expect(text()).toHaveTextContent('IDLE', contains);
+    expect(text()).not.toHaveTextContent('CONFIRMED', contains);
+  });
+
+  it('drops the answer it knows is out of date when no screen is mounted to read again, so a later screen starts from loading', async () => {
+    const { stub, show, queryClient } = await start();
+    const onTheWire = stub.hold('setQuantity');
+    await act(async () => {
+      now().edit.changeQuantity(3);
+    });
+    await waitFor(() => expect(sent(stub, 'setQuantity')).toHaveLength(1));
+    // The Buyer leaves the screen while the edit is on the wire.
+    await show(null);
+    stub.setCarts(holding(3));
+    await act(async () => onTheWire.release());
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryCache().findAll({ queryKey: ['commerce', 'carts', 'account'] }),
+      ).toHaveLength(0),
+    );
+    // A screen mounted later starts from nothing and reads: it never draws the old quantity as the server's last word.
+    await show(<Probe />);
+    await waitFor(() => expect(text()).toHaveTextContent('IDLE q=3 VERIFIED', contains));
+  });
+
+  it('keeps the answer on screen when the read fails while a screen is mounted: it is withheld, not dropped', async () => {
+    const { stub, queryClient } = await start();
+    stub.setCarts(holding(3));
+    stub.failNext('getCarts', apiProblem(500, 'INTERNAL'));
+    await act(async () => {
+      now().edit.changeQuantity(3);
+    });
+    await waitFor(() => expect(text()).toHaveTextContent('UNVERIFIED', contains));
+    expect(
+      queryClient.getQueryCache().findAll({ queryKey: ['commerce', 'carts', 'account'] }),
+    ).toHaveLength(1);
+    expect(text()).toHaveTextContent('q=2', contains);
   });
 
   it('removing a line is confirmed only when the read no longer lists it', async () => {
@@ -302,7 +360,7 @@ describe('when the outcome is not known', () => {
     stub.setCarts(holding(3));
     stub.failNext('setQuantity', gatewayPage(502));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     // The edit committed before the answer was lost: the read made afterwards shows it.
     await waitFor(() => expect(text()).toHaveTextContent('CONFIRMED q=3', contains));
@@ -312,7 +370,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', offline());
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(reads(stub)).toHaveLength(2));
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN q=2', contains));
@@ -328,7 +386,7 @@ describe('when the outcome is not known', () => {
     stub.setCarts(without('line-1'));
     stub.failNext('setQuantity', gatewayPage(500));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('LINE_GONE', contains));
   });
@@ -347,7 +405,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', gatewayPage(502));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
     stub.setCarts(holding(3));
@@ -356,6 +414,24 @@ describe('when the outcome is not known', () => {
     const [firstSend, secondSend] = sent(stub, 'setQuantity');
     expect(secondSend?.key).toBe(firstSend?.key);
     expect(secondSend).toMatchObject({ lineId: L1, quantity: 3 });
+  });
+
+  it('a double tap on Try again sends one more request, not two', async () => {
+    const { stub } = await start();
+    stub.failNext('setQuantity', gatewayPage(502));
+    await act(async () => {
+      now().edit.changeQuantity(3);
+    });
+    await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
+    const onTheWire = stub.hold('setQuantity');
+    await act(async () => {
+      now().edit.retry();
+      now().edit.retry();
+    });
+    expect(sent(stub, 'setQuantity')).toHaveLength(2);
+    expect(sent(stub, 'setQuantity')[1]?.key).toBe(sent(stub, 'setQuantity')[0]?.key);
+    await act(async () => onTheWire.release());
+    expect(sent(stub, 'setQuantity')).toHaveLength(2);
   });
 
   it('an unconfirmed removal is replayed under the same key too', async () => {
@@ -374,7 +450,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', apiProblem(409, 'IDEMPOTENCY_KEY_REUSED'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNRESOLVED', contains));
     await act(async () => now().edit.retry());
@@ -382,7 +458,7 @@ describe('when the outcome is not known', () => {
     expect(text()).toHaveTextContent('UNRESOLVED', contains);
     let outcome = '';
     await act(async () => {
-      outcome = now().edit.setQuantity(3);
+      outcome = now().edit.changeQuantity(3);
     });
     expect(outcome).toBe('ignored');
     expect(sent(stub, 'setQuantity')).toHaveLength(1);
@@ -390,7 +466,7 @@ describe('when the outcome is not known', () => {
     expect(text()).toHaveTextContent('IDLE', contains);
     expect(text()).toHaveTextContent('earlier-unconfirmed', contains);
     await act(async () => {
-      outcome = now().edit.setQuantity(3);
+      outcome = now().edit.changeQuantity(3);
     });
     expect(outcome).toBe('started');
     expect(sent(stub, 'setQuantity')[1]?.key).not.toBe(sent(stub, 'setQuantity')[0]?.key);
@@ -400,7 +476,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', apiProblem(400, 'VALIDATION_FAILED'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('REFUSED', contains));
     const readsBefore = reads(stub).length;
@@ -415,7 +491,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', proxyJson(400, 'VALIDATION_FAILED'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
     expect(text()).not.toHaveTextContent('REFUSED', contains);
@@ -425,7 +501,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', apiProblem(404, 'NOT_FOUND'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('LINE_GONE', contains));
     await waitFor(() => expect(reads(stub)).toHaveLength(2));
@@ -446,7 +522,7 @@ describe('when the outcome is not known', () => {
       const { stub } = await start();
       stub.failNext('setQuantity', apiProblem(429, 'RATE_LIMITED', 60));
       await act(async () => {
-        now().edit.setQuantity(3);
+        now().edit.changeQuantity(3);
       });
       await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
       await act(async () => now().edit.retry());
@@ -463,7 +539,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', gatewayPage(502));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
     await act(async () => onlineManager.setOnline(false));
@@ -476,7 +552,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', new ScopeChanged());
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
     await act(async () => now().edit.retry());
@@ -488,7 +564,7 @@ describe('when the outcome is not known', () => {
     const { stub } = await start();
     stub.failNext('setQuantity', new AdapterUnavailable('CONTRACT_MISSING'));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('REFUSED', contains));
   });
@@ -499,7 +575,7 @@ describe('another session', () => {
     const { stub, session } = await start();
     const held = stub.hold('setQuantity');
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(sent(stub, 'setQuantity')).toHaveLength(1));
     await act(() => session.current!.clearSession());
@@ -517,7 +593,7 @@ describe('another session', () => {
     const held = stub.hold('setQuantity');
     stub.failNext('setQuantity', offline());
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(sent(stub, 'setQuantity')).toHaveLength(1));
     await act(() => session.current!.clearSession());
@@ -530,14 +606,14 @@ describe('another session', () => {
     const { stub, session } = await start();
     stub.failNext('setQuantity', gatewayPage(502));
     await act(async () => {
-      now().edit.setQuantity(3);
+      now().edit.changeQuantity(3);
     });
     await waitFor(() => expect(text()).toHaveTextContent('UNKNOWN', contains));
     const stale = now().edit;
     await act(() => session.current!.clearSession());
     await act(async () => {
       stale.retry();
-      stale.setQuantity(3);
+      stale.changeQuantity(3);
       stale.remove();
     });
     expect(sent(stub, 'setQuantity')).toHaveLength(1);

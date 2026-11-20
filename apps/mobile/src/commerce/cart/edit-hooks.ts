@@ -52,6 +52,10 @@ const readsAgain = (state: EditState): boolean =>
  * as a NEW request, begun after the edit settled: a read that began earlier may not show the change, and a
  * claim is drawn only from the answer THAT read produced. No read, a failed read or an answer that shows
  * something else claims nothing.
+ *
+ * A read happens only for a query that has a screen mounted. When none has, the answer in the cache is
+ * known to be out of date (the server accepted a change it does not show), so it is dropped: the next
+ * screen to show the carts starts from "loading", not from the old answer.
  */
 async function sendEdit(args: {
   adapter: CartAdapter;
@@ -93,14 +97,20 @@ async function sendEdit(args: {
   await qc.invalidateQueries({ queryKey: key }, { cancelRefetch: true });
   if (!scope.isCurrent()) return;
   const after = qc.getQueryData<Verified<CartSet>>(key);
-  const verdict =
-    after !== undefined && after !== before
-      ? reconcileEdit(
-          intent,
-          { carts: after.value, receivedAt: after.receivedAt, verified: true, epoch: scope.epoch },
-          scope.epoch,
-        )
-      : 'NOT_A_BASIS';
+  const produced = after !== undefined && after !== before;
+  if (
+    !produced &&
+    qc.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount() === 0
+  ) {
+    qc.removeQueries({ queryKey: key, exact: true });
+  }
+  const verdict = produced
+    ? reconcileEdit(
+        intent,
+        { carts: after.value, receivedAt: after.receivedAt, verified: true, epoch: scope.epoch },
+        scope.epoch,
+      )
+    : 'NOT_A_BASIS';
   store.apply(scope, intent.lineId, { type: 'READ', verdict });
 }
 
@@ -119,7 +129,7 @@ export function useCartEdit(
   state: EditState;
   /** An earlier change to this line ended unconfirmed and was dismissed. */
   earlierUnconfirmed: boolean;
-  setQuantity: (quantity: number) => EditOutcome;
+  changeQuantity: (quantity: number) => EditOutcome;
   remove: () => EditOutcome;
   retry: () => void;
   dismiss: () => void;
@@ -191,7 +201,7 @@ export function useCartEdit(
   return {
     state,
     earlierUnconfirmed,
-    setQuantity: (quantity) => begin('SET_QUANTITY', quantity),
+    changeQuantity: (quantity) => begin('SET_QUANTITY', quantity),
     remove: () => begin('REMOVE'),
     retry,
     dismiss,

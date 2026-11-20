@@ -613,12 +613,19 @@ describe('G18 and G20: editing stays where it belongs', () => {
     });
   });
 
+  /**
+   * G20: the two port methods are named in one place. Any access to the name counts, not only a call: a
+   * call with optional chaining, `.call`, a copied function, a bracket and a destructuring all read it.
+   * The scan reads source text, so a name built at run time evades it; the adapter-surface guard (G10) and
+   * the behavioural tests (one request per decision) stand behind it.
+   */
   describe('G20: an edit is sent only by the edit hook', () => {
-    const CALLS_EDIT = /\.\s*(?:setQuantity|removeLine)\s*\(/;
+    const READS_EDIT_METHOD =
+      /\??\.\s*(?:setQuantity|removeLine)\b|\[\s*['"`](?:setQuantity|removeLine)['"`]\s*\]|\{[^}]*\b(?:setQuantity|removeLine)\b[^}]*\}\s*=/;
     const ALLOWED = /^commerce\/(cart\/edit-hooks\.ts|testing\/)/;
 
-    it('no other file of the cart code calls setQuantity or removeLine', () => {
-      expect(offenders(without(commerceFiles, ALLOWED), matching(CALLS_EDIT))).toEqual([]);
+    it('no other file of the cart code reads setQuantity or removeLine off anything', () => {
+      expect(offenders(without(commerceFiles, ALLOWED), matching(READS_EDIT_METHOD))).toEqual([]);
     });
 
     it('the edit hook is where they are called', () => {
@@ -628,15 +635,39 @@ describe('G18 and G20: editing stays where it belongs', () => {
       expect(/\.\s*removeLine\s*\(/.test(code)).toBe(true);
     });
 
-    it('the pattern bites on the forms it exists to catch, and not on a similar name', () => {
+    it('the hook the screens use names its method differently, so a screen never needs the port name', () => {
+      const hook = commerceFiles.find((s) => s.file === 'commerce/cart/edit-hooks.ts')!;
+      const code = stripComments(hook.text);
+      const returned = code.slice(code.lastIndexOf('return {'));
+      expect(/\bsetQuantity\b/.test(returned)).toBe(false);
+      expect(/\bchangeQuantity\b/.test(returned)).toBe(true);
+    });
+
+    it('the pattern bites on every form that reads the method, and not on a similar name', () => {
       for (const sample of [
         'await port.setQuantity(request);',
         'adapter.bind(scope)\n  .removeLine(request)',
         'void bound.removeLine (request)',
+        'await port.setQuantity?.(request);',
+        'await port?.removeLine(request);',
+        'await port.setQuantity.call(port, request);',
+        'await port.removeLine.apply(port, [request]);',
+        'const send = port.setQuantity; await send(request);',
+        'Reflect.apply(port.setQuantity, port, [request]);',
+        "await port['removeLine'](request);",
+        'await port[`setQuantity`](request);',
+        'const { removeLine } = port;',
+        'const { getCarts, setQuantity: send } = port;',
       ])
-        expect(CALLS_EDIT.test(sample)).toBe(true);
-      expect(CALLS_EDIT.test('server.setQuantityAvailable(v, 1)')).toBe(false);
-      expect(CALLS_EDIT.test('setQuantity: () => Promise.reject(error)')).toBe(false);
+        expect(READS_EDIT_METHOD.test(sample)).toBe(true);
+      for (const sample of [
+        'server.setQuantityAvailable(v, 1)',
+        'setQuantity: () => Promise.reject(error)',
+        'edit.changeQuantity(3)',
+        'const quantity = line.quantity;',
+        'const { lineId, quantity } = request;',
+      ])
+        expect(READS_EDIT_METHOD.test(sample)).toBe(false);
     });
   });
 });

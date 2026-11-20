@@ -1,3 +1,4 @@
+import { repoFile } from '../../testing/source-scan';
 import { asLineId } from '../cart/model';
 import { AdapterUnavailable, type CartAdapter, type Scope } from '../cart/port';
 import { disabledCartAdapter } from './disabled';
@@ -58,5 +59,47 @@ describe('what the real adapter slot is waiting for, for edits', () => {
         gaps.some((gap) => /session that asked is still the session on screen/.test(gap)),
       ).toBe(true);
     }
+  });
+});
+
+describe('the cart operations the contract names', () => {
+  type Paths = Record<string, Record<string, unknown>>;
+  const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
+  /** Every operation of every path under /v1/cart, as "method path", in a stable order. */
+  const cartOperations = (paths: Paths): string[] =>
+    Object.entries(paths)
+      .filter(([path]) => /^\/v1\/carts?(?:[/-]|$)/.test(path))
+      .flatMap(([path, item]) =>
+        Object.keys(item)
+          .filter((key) => METHODS.includes(key))
+          .map((method) => `${method} ${path}`),
+      )
+      .sort();
+  const KNOWN = [
+    'delete /v1/cart/lines/{id}',
+    'get /v1/cart',
+    'patch /v1/cart/lines/{id}',
+    'post /v1/cart/lines',
+  ];
+  const paths = (JSON.parse(repoFile('contracts/openapi.json')) as { paths: Paths }).paths;
+
+  it('are exactly the four the port and the gap register were written for: a fifth one means they must be revisited', () => {
+    expect(cartOperations(paths)).toEqual(KNOWN);
+  });
+
+  it('the check sees a fifth operation, a new method on a known path and a sibling path', () => {
+    const probe: Paths = {
+      ...paths,
+      '/v1/cart/lines/{id}/accept-price': { post: {} },
+    };
+    expect(cartOperations(probe)).toEqual(
+      [...KNOWN, 'post /v1/cart/lines/{id}/accept-price'].sort(),
+    );
+    const method: Paths = { ...paths, '/v1/cart': { ...paths['/v1/cart'], delete: {} } };
+    expect(cartOperations(method)).toContain('delete /v1/cart');
+    const sibling: Paths = { ...paths, '/v1/cart-items': { get: {} } };
+    expect(cartOperations(sibling)).toContain('get /v1/cart-items');
+    expect(cartOperations({ '/v1/cartography': { get: {} } })).toEqual([]);
+    expect(cartOperations({ '/v1/carts': { get: {} } })).toEqual(['get /v1/carts']);
   });
 });

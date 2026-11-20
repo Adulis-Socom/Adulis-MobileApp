@@ -38,21 +38,27 @@ describe('the simulator changes a quantity the way a server would, for tests onl
     expect(quantities(server)).toEqual([[lineId, 1]]);
   });
 
-  it('takes a very large quantity (it has no ceiling) and refuses one that is not a positive whole number with a 400 that stores nothing', async () => {
+  it('takes 1 to 99 and refuses anything outside them, as the current implementation does: a 400 that stores nothing', async () => {
     const { server, lineId } = await withLine();
-    await server.setQuantity(GUEST, setQty(lineId, 1_000_000, 'big'));
-    expect(quantities(server)).toEqual([[lineId, 1_000_000]]);
-    for (const quantity of [0, -1, 1.5, Number.NaN]) {
+    await server.setQuantity(GUEST, setQty(lineId, 99, 'top'));
+    expect(quantities(server)).toEqual([[lineId, 99]]);
+    for (const quantity of [100, 1_000_000, 0, -1, 1.5, Number.NaN]) {
       await expect(
         server.setQuantity(GUEST, setQty(lineId, quantity, 'bad')),
       ).rejects.toMatchObject({
         failure: { status: 400, problem: { code: 'VALIDATION_FAILED' } },
       });
     }
-    expect(quantities(server)).toEqual([[lineId, 1_000_000]]);
+    expect(quantities(server)).toEqual([[lineId, 99]]);
     // The refusals kept nothing under that key: it can still be used for a valid body.
     await server.setQuantity(GUEST, setQty(lineId, 3, 'bad'));
     expect(quantities(server)).toEqual([[lineId, 3]]);
+  });
+
+  it('takes a larger quantity only when the limit is lifted on purpose', async () => {
+    const { server, lineId } = await withLine({ maxLineQuantity: Number.POSITIVE_INFINITY });
+    await server.setQuantity(GUEST, setQty(lineId, 1_000_000, 'big'));
+    expect(quantities(server)).toEqual([[lineId, 1_000_000]]);
   });
 
   it('removes one line, and removing the last line of a Seller makes that Seller cart disappear', async () => {
@@ -106,9 +112,21 @@ describe("a line that is not in the caller's carts", () => {
   });
 });
 
-describe('keys on edits', () => {
-  it('returns what was stored for the same key and body, without a second effect', async () => {
+describe('keys on edits (the current implementation keeps none, so the simulator keeps none unless asked)', () => {
+  it('does not key edits by default: a replayed removal is a 404 and a replayed set is simply set again', async () => {
     const { server, lineId } = await withLine();
+    await server.setQuantity(GUEST, setQty(lineId, 5, 'k'));
+    await server.setQuantity(GUEST, setQty(lineId, 8, 'other'));
+    await server.setQuantity(GUEST, setQty(lineId, 5, 'k'));
+    expect(quantities(server)).toEqual([[lineId, 5]]);
+    await server.removeLine(GUEST, remove(lineId, 'r'));
+    await expect(server.removeLine(GUEST, remove(lineId, 'r'))).rejects.toMatchObject({
+      failure: { status: 404 },
+    });
+  });
+
+  it('returns what was stored for the same key and body, without a second effect, when edits are keyed', async () => {
+    const { server, lineId } = await withLine({ editsKeyed: true });
     await server.setQuantity(GUEST, setQty(lineId, 5, 'k'));
     // Something else changes the quantity; the replay must not set it again.
     await server.setQuantity(GUEST, setQty(lineId, 8, 'other'));
@@ -116,23 +134,19 @@ describe('keys on edits', () => {
     expect(quantities(server)).toEqual([[lineId, 8]]);
   });
 
-  it('answers a replayed removal with the stored answer, not a 404', async () => {
-    const { server, lineId } = await withLine();
+  it('answers a replayed removal with the stored answer, not a 404, when edits are keyed', async () => {
+    const { server, lineId } = await withLine({ editsKeyed: true });
     await server.removeLine(GUEST, remove(lineId, 'k'));
     await expect(server.removeLine(GUEST, remove(lineId, 'k'))).resolves.toBeUndefined();
   });
 
-  it('answers a replayed removal with a 404 when edits are not keyed (a server that never kept them)', async () => {
-    const { server, lineId } = await withLine({ editsKeyed: false });
-    await server.removeLine(GUEST, remove(lineId, 'k'));
-    await expect(server.removeLine(GUEST, remove(lineId, 'k'))).rejects.toMatchObject({
-      failure: { status: 404 },
-    });
-  });
-
   it('answers 409 IDEMPOTENCY_KEY_REUSED for the same key with another body, and for a record past its life', async () => {
     let clock = 1_000;
-    const { server, lineId } = await withLine({ clock: () => clock, keyLifeMs: 5_000 });
+    const { server, lineId } = await withLine({
+      editsKeyed: true,
+      clock: () => clock,
+      keyLifeMs: 5_000,
+    });
     await server.setQuantity(GUEST, setQty(lineId, 5, 'k'));
     await expect(server.setQuantity(GUEST, setQty(lineId, 6, 'k'))).rejects.toMatchObject({
       failure: { status: 409, problem: { code: 'IDEMPOTENCY_KEY_REUSED' } },
@@ -160,8 +174,8 @@ describe('failures of an edit', () => {
     expect(quantities(server)).toEqual([[lineId, 5]]);
   });
 
-  it('a failure after the commit loses the answer but not the change, and a replay returns the stored answer', async () => {
-    const { server, lineId } = await withLine();
+  it('a failure after the commit loses the answer but not the change, and a replay returns the stored answer when edits are keyed', async () => {
+    const { server, lineId } = await withLine({ editsKeyed: true });
     server.failNext('setQuantity', { kind: 'timeout', afterCommit: true });
     await expect(server.setQuantity(GUEST, setQty(lineId, 5, 'k'))).rejects.toBeInstanceOf(
       ApiError,

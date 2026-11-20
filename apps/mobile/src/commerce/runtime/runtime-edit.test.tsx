@@ -81,7 +81,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
 
     stub.failNext('setQuantity', offline());
     await act(async () => {
-      handle.current!.setQuantity(3);
+      handle.current!.changeQuantity(3);
     });
     await waitFor(() => expect(state()).toHaveTextContent('UNKNOWN', contains));
     const keyOfA = sent(stub)[0]!.key;
@@ -97,7 +97,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
     // A fresh edit as B is a new intent with a new key, in B's scope.
     await waitFor(() => expect(handle.current).not.toBeNull());
     await act(async () => {
-      handle.current!.setQuantity(3);
+      handle.current!.changeQuantity(3);
     });
     await waitFor(() => expect(sent(stub)).toHaveLength(2));
     expect(sent(stub)[1]!.key).not.toBe(keyOfA);
@@ -116,7 +116,7 @@ describe('an edit left unconfirmed by a screen that has gone', () => {
       await waitFor(() => expect(state()).toHaveTextContent('IDLE VERIFIED', contains));
       stub.failNext('setQuantity', offline());
       await act(async () => {
-        handle.current!.setQuantity(3);
+        handle.current!.changeQuantity(3);
       });
       await waitFor(() => expect(state()).toHaveTextContent('UNKNOWN', contains));
       await act(() => session.current!.clearSession());
@@ -160,7 +160,7 @@ describe('two screens, one set of stores', () => {
     const release = stub.hold('setQuantity');
     let outcomes: string[] = [];
     await act(async () => {
-      outcomes = [handles.first!.setQuantity(3), handles.second!.setQuantity(3)];
+      outcomes = [handles.first!.changeQuantity(3), handles.second!.changeQuantity(3)];
     });
     expect(outcomes).toEqual(['started', 'same']);
     expect(screen.getByTestId('two')).toHaveTextContent('SENDING/SENDING', contains);

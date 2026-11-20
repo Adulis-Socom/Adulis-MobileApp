@@ -95,10 +95,16 @@ export interface FixtureServer {
   refuseUnavailableAdds: boolean;
   /**
    * Whether a quantity edit or a removal is recorded under its key, so a replay returns the stored answer
-   * (true, the default), or the key is ignored (false: a server that never keyed edits, which answers a
-   * replayed removal with 404). The contract says nothing about keys for edits.
+   * (true), or the key is ignored (false, the default: the current implementation takes no key on these two
+   * operations, and answers a replayed removal with 404). The contract says nothing about keys for edits.
    */
   editsKeyed: boolean;
+  /**
+   * The most one line may hold (default 99, 1 at least): the current implementation's request rule for a
+   * quantity edit, answered with a 400 above it. The contract states no range; the client sets none of its
+   * own and shows the refusal. Lift it on purpose with `Number.POSITIVE_INFINITY`.
+   */
+  maxLineQuantity: number;
 
   setPrice(variant: VariantId, priceMinor: number, currency?: string): void;
   setQuantityAvailable(variant: VariantId, quantity: number): void;
@@ -143,6 +149,7 @@ export function createFixtureServer(
     mergeDuplicates: boolean;
     refuseUnavailableAdds: boolean;
     editsKeyed: boolean;
+    maxLineQuantity: number;
     keyLifeMs: number;
     clock: () => number;
   }> = {},
@@ -375,7 +382,8 @@ export function createFixtureServer(
     sellerCarts: options.sellerCarts ?? 'SINGLE',
     mergeDuplicates: options.mergeDuplicates ?? false,
     refuseUnavailableAdds: options.refuseUnavailableAdds ?? false,
-    editsKeyed: options.editsKeyed ?? true,
+    editsKeyed: options.editsKeyed ?? false,
+    maxLineQuantity: options.maxLineQuantity ?? 99,
 
     setPrice(variant, priceMinor, currency) {
       const v = variantOf(variant);
@@ -483,7 +491,10 @@ export function createFixtureServer(
         quantity: request.quantity,
         lineId: request.lineId,
       };
-      const valid = Number.isInteger(request.quantity) && request.quantity >= 1;
+      const valid =
+        Number.isInteger(request.quantity) &&
+        request.quantity >= 1 &&
+        request.quantity <= server.maxLineQuantity;
       return run('setQuantity', caller, detail, (actor) =>
         edit(actor, request, `SET|${request.lineId}|${request.quantity}`, valid, (line) => {
           line.quantity = request.quantity;

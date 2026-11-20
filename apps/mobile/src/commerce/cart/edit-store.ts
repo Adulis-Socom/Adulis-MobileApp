@@ -39,7 +39,10 @@ export interface EditStore {
   read(scope: Scope, lineId: LineId): EditState;
   /** Applies one event. Null when the scope is not current: nothing is touched. */
   apply(scope: Scope, lineId: LineId, event: EditEvent): EditState | null;
-  /** Ends an edit that is not in flight. One that ended without proof leaves the line marked. */
+  /**
+   * Ends an edit that is not in flight (never one that is SENDING or APPLIED). One that ended without proof
+   * leaves the line marked and RELEASES its key: the next edit of the line makes a new one, on the Buyer's act.
+   */
   dismiss(scope: Scope, lineId: LineId): EditState;
   /**
    * Whether an earlier change to this line ended unconfirmed and was dismissed, so the next one starts by

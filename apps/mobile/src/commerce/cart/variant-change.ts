@@ -1,7 +1,7 @@
 import type { StorefrontProduct } from '../../api/client';
 import { toEditInput, type EditState } from './edit';
 import { toAddIntent, type AddIntentInput, type AddState } from './intent';
-import type { LineId } from './model';
+import { findLine, type CartSet, type LineId } from './model';
 import type { CartViewState } from './view-state';
 
 /**
@@ -64,20 +64,40 @@ export function planVariantChange(
 }
 
 /**
+ * Whether the line the add was ACCEPTED with now holds the new option. This is the only evidence that lets a
+ * change go on to remove the old line: a line for the same option that was already in the cart says nothing
+ * about this add, so "some line has the option" is never enough.
+ */
+export const addedLineHoldsOption = (
+  carts: CartSet,
+  plan: VariantChangePlan,
+  addedLineId: LineId,
+): boolean =>
+  addedLineId !== plan.oldLineId && findLine(carts, addedLineId)?.variantId === plan.add.variantId;
+
+/**
  * Where one change stands.
  *
- *   ADDING    the new option is being added
+ *   ADDING    the new option is being added; nothing else can happen yet
  *   STALLED   the add is unknown: the old line is NOT removed, and nothing continues on its own
- *   REMOVING  a read made after the add holds the new option: the old line is being removed
- *   PARTIAL   the removal did not complete: both lines remain, and the Buyer decides
+ *   ADDED     the add was accepted, with this line id; a read made after it must show THAT line
+ *             holding the new option before anything else happens
+ *   REMOVING  that read showed it: the old line is being removed (`begun`: its removal has started)
+ *   PARTIAL   the removal did not complete or was given up on: both lines remain, and the Buyer decides
  *   DONE      the old line is gone
- *   ABORTED   the add did not happen, or a read after it does not hold the new option: nothing was removed
+ *   ABORTED   the add did not happen, or the read after it does not show the added line: nothing was removed
+ *
+ * The old line is removed by nothing here: REMOVING only says that, and only after an accepted add whose own
+ * line a later read shows. Every state can be left: a change that waits on the Buyer by Dismiss, ADDED and
+ * REMOVING by Dismiss into PARTIAL (nothing is removed unconfirmed and nothing is stranded), ADDING by the
+ * add machine settling.
  */
 export type ChangeState =
   | Readonly<{ kind: 'IDLE' }>
   | Readonly<{ kind: 'ADDING'; plan: VariantChangePlan }>
   | Readonly<{ kind: 'STALLED'; plan: VariantChangePlan }>
-  | Readonly<{ kind: 'REMOVING'; plan: VariantChangePlan }>
+  | Readonly<{ kind: 'ADDED'; plan: VariantChangePlan; lineId: LineId }>
+  | Readonly<{ kind: 'REMOVING'; plan: VariantChangePlan; begun: boolean }>
   | Readonly<{ kind: 'PARTIAL'; plan: VariantChangePlan }>
   | Readonly<{ kind: 'DONE'; plan: VariantChangePlan }>
   | Readonly<{ kind: 'ABORTED'; plan: VariantChangePlan }>;
@@ -86,16 +106,15 @@ export const IDLE_CHANGE: ChangeState = { kind: 'IDLE' };
 
 export type ChangeEvent =
   | Readonly<{ type: 'BEGIN'; plan: VariantChangePlan }>
-  /** The add leg's state, as the add machine reports it. */
-  | Readonly<{ type: 'ADD'; add: AddState['kind'] }>
-  /** A read made AFTER the add was accepted: whether it holds a line for the new option. */
-  | Readonly<{ type: 'READ_AFTER_ADD'; holdsNew: boolean }>
+  /** The add leg's state, as the add machine reports it (an accepted add carries its line id). */
+  | Readonly<{ type: 'ADD'; add: AddState }>
+  /** A read made AFTER the add was accepted: whether the added line holds the new option (`addedLineHoldsOption`). */
+  | Readonly<{ type: 'READ_AFTER_ADD'; holdsAdded: boolean }>
+  /** The removal of the old line has been started as an edit. */
+  | Readonly<{ type: 'REMOVE_BEGUN' }>
   /** The remove leg's state, as the edit machine reports it. */
   | Readonly<{ type: 'REMOVE'; edit: EditState['kind'] }>
   | Readonly<{ type: 'DISMISS' }>;
-
-const inFlight = (state: ChangeState): boolean =>
-  state.kind === 'ADDING' || state.kind === 'REMOVING';
 
 /** The next state. The same object comes back when nothing changes, so a caller can tell. Pure. */
 export function reduceChange(state: ChangeState, event: ChangeEvent): ChangeState {
@@ -108,36 +127,46 @@ export function reduceChange(state: ChangeState, event: ChangeEvent): ChangeStat
     case 'ADD': {
       if (state.kind !== 'ADDING' && state.kind !== 'STALLED') return state;
       const { plan } = state;
+      const { add } = event;
       if (
-        event.add === 'REFUSED' ||
-        event.add === 'REFUSED_RELOAD' ||
-        event.add === 'OFFLINE_NOT_SENT'
+        add.kind === 'REFUSED' ||
+        add.kind === 'REFUSED_RELOAD' ||
+        add.kind === 'OFFLINE_NOT_SENT'
       ) {
         return { kind: 'ABORTED', plan };
       }
-      if (event.add === 'UNKNOWN' || event.add === 'UNRESOLVED') {
+      if (add.kind === 'UNKNOWN' || add.kind === 'UNRESOLVED') {
         return state.kind === 'STALLED' ? state : { kind: 'STALLED', plan };
       }
-      // An add that was unknown and is now accepted (the Buyer tried again) goes on as if it never stalled.
-      return event.add === 'ADDED' && state.kind === 'STALLED' ? { kind: 'ADDING', plan } : state;
+      // Only an accepted add moves on, from ADDING and from a stall the Buyer cleared by trying again.
+      return add.kind === 'ADDED' ? { kind: 'ADDED', plan, lineId: add.lineId } : state;
     }
     case 'READ_AFTER_ADD':
-      if (state.kind !== 'ADDING') return state;
-      return event.holdsNew
-        ? { kind: 'REMOVING', plan: state.plan }
+      if (state.kind !== 'ADDED') return state;
+      return event.holdsAdded
+        ? { kind: 'REMOVING', plan: state.plan, begun: false }
         : { kind: 'ABORTED', plan: state.plan };
+    case 'REMOVE_BEGUN':
+      return state.kind === 'REMOVING' && !state.begun ? { ...state, begun: true } : state;
     case 'REMOVE': {
       if (state.kind !== 'REMOVING' && state.kind !== 'PARTIAL') return state;
       const { plan } = state;
       if (event.edit === 'CONFIRMED' || event.edit === 'LINE_GONE') return { kind: 'DONE', plan };
-      if (state.kind === 'REMOVING') {
-        if (event.edit === 'REFUSED' || event.edit === 'UNKNOWN' || event.edit === 'UNRESOLVED') {
-          return { kind: 'PARTIAL', plan };
-        }
-      }
-      return state;
+      if (state.kind !== 'REMOVING') return state;
+      // The removal did not happen or ended without proof: nothing was removed unconfirmed, both lines stay.
+      // IDLE counts only once the removal has begun (before that it is simply the edit not started yet).
+      const ended =
+        event.edit === 'REFUSED' ||
+        event.edit === 'UNKNOWN' ||
+        event.edit === 'UNRESOLVED' ||
+        event.edit === 'OFFLINE_NOT_SENT' ||
+        (event.edit === 'IDLE' && state.begun);
+      return ended ? { kind: 'PARTIAL', plan } : state;
     }
     case 'DISMISS':
-      return inFlight(state) ? state : IDLE_CHANGE;
+      if (state.kind === 'ADDING') return state;
+      if (state.kind === 'ADDED' || state.kind === 'REMOVING')
+        return { kind: 'PARTIAL', plan: state.plan };
+      return IDLE_CHANGE;
   }
 }
