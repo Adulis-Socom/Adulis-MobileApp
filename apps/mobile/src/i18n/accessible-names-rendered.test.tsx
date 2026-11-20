@@ -9,7 +9,8 @@ import { TOKEN_KEY, resetSecureStore } from '../testing/secure-store-mock';
  * The static scan in accessible-names.test.ts reads the sources; this draws four screens as a Buyer sees
  * them and asks the way a screen reader does: every control with a button, tab, link, checkbox or radio
  * role has a non-empty accessible name, which is its own label or the words inside it. Text that is
- * hidden from the screen reader (an icon glyph) is not a name.
+ * hidden from the screen reader is not a name, and neither is an icon-font glyph (a private-use
+ * character, which a screen reader has nothing to say for), hidden or not.
  *
  * WHAT IT COVERS: Home (For You, the header buttons, the channels and the five bottom tabs), the You tab
  * as a guest, the You tab signed in (sessions, Sign out, Delete Account, Messages) and the Shop with one
@@ -32,9 +33,15 @@ const hidden = (node: Node) =>
   node.props['aria-hidden'] === true ||
   String(node.props.importantForAccessibility ?? '').startsWith('no');
 
+/** Icon fonts draw their glyphs from the Unicode private use area (U+E000 to U+F8FF), written as code so this file stays ASCII. */
+const ICON_GLYPHS = new RegExp(
+  `[${String.fromCodePoint(0xe000)}-${String.fromCodePoint(0xf8ff)}]`,
+  'gu',
+);
+
 /** What a screen reader would say for this node: its own label, else the visible words inside it. */
 function spoken(node: Node | string): string {
-  if (typeof node === 'string') return node;
+  if (typeof node === 'string') return node.replace(ICON_GLYPHS, '');
   if (hidden(node)) return '';
   const label = node.props['aria-label'] ?? node.props.accessibilityLabel;
   if (typeof label === 'string' && label.trim() !== '') return label;
@@ -77,6 +84,22 @@ beforeEach(() => {
     themePreference: 'system',
     locale: 'en',
     upgradeNoticeDismissed: false,
+  });
+});
+
+describe('the check itself', () => {
+  const part = (props: Record<string, unknown>, ...children: (Node | string)[]): Node => ({
+    props,
+    children,
+  });
+  const glyph = String.fromCodePoint(0xf3e1);
+
+  it('hears a label and words, and nothing for an icon glyph or a hidden node', () => {
+    expect(spoken(part({}, glyph)).trim()).toBe('');
+    expect(spoken(part({}, part({ accessibilityElementsHidden: true }, 'Save'))).trim()).toBe('');
+    expect(spoken(part({ accessibilityLabel: 'Save' }, glyph)).trim()).toBe('Save');
+    expect(spoken(part({ 'aria-label': ' ' }, glyph)).trim()).toBe('');
+    expect(spoken(part({}, glyph, 'Save')).trim()).toBe('Save');
   });
 });
 
