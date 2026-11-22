@@ -94,7 +94,7 @@ function installChat() {
     return { unpublish: () => (entry.published = false) };
   };
   /** A fault switch for the list's later pages (a server error, never a lost connection). */
-  const faults = { laterPages: false };
+  const faults = { laterPages: false, laterMessagePages: false, messageReads: false };
   const listing = (sellerHandle: string) => (call: Recorded) => {
     const all = [...catalogue.values()].filter((e) => e.published && e.product.seller.handle === sellerHandle);
     const limit = Number(call.query.limit ?? 100);
@@ -150,6 +150,7 @@ function installChat() {
   api.onPattern('GET', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
     const c = byPath(call);
     if (!c) return problem(404, 'NOT_FOUND', 'request');
+    if (faults.messageReads || (call.query.cursor && faults.laterMessagePages)) return problem(500, 'INTERNAL', 'server');
     const start = call.query.cursor ? c.messages.findIndex((m) => m.sent_at < call.query.cursor!) : 0;
     const slice = start < 0 ? [] : c.messages.slice(start, start + 50);
     return { status: 200, body: { data: slice, next_cursor: start >= 0 && start + 50 < c.messages.length ? slice[slice.length - 1]!.sent_at : null } };
@@ -503,6 +504,84 @@ describe('a conversation', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
     expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
     expect(screen.queryByText('First Account store')).toBeNull();
+  });
+});
+
+describe('BUYER-COMMS-01: a failure with rows already shown is never silent', () => {
+  const messageCalls = () => api.calls.filter((call) => call.method === 'GET' && /\/messages$/.test(call.path));
+
+  it('C1a. Load earlier messages that fails says so, is announced, keeps the messages, and Try again loads the page', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    for (let i = 60; i >= 1; i--) chat.msg(c, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText('Line 1')).toBeOnTheScreen();
+    chat.faults.laterMessagePages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    const failed = new RegExp(en['buyer.list.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByText('Line 1')).toBeOnTheScreen();
+    // The same control, now Try again.
+    chat.faults.laterMessagePages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
+    expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
+  });
+
+  it('C1b. a refresh that fails with messages shown says so and keeps them', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    chat.msg(c, { sender_kind: 'SELLER', body: 'Still here', sent_at: ago(30) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText('Still here')).toBeOnTheScreen();
+    chat.faults.messageReads = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    const failed = new RegExp(en['buyer.chat.failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByText('Still here')).toBeOnTheScreen();
+    chat.faults.messageReads = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(screen.getByText('Still here')).toBeOnTheScreen();
+  });
+
+  it('C1c. Load older conversations that fails says so, is announced, and Try again loads the page', async () => {
+    signedIn();
+    const chat = installChat();
+    for (let i = 0; i < 27; i++) chat.conv(A, SELLER_ID, `Store ${i + 1}`, `store-${i + 1}`, ago(100 + i));
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    chat.faults.laterPages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.messages.load_older'] }));
+    const failed = new RegExp(en['buyer.list.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByRole('button', { name: 'Store 1' })).toBeOnTheScreen();
+    chat.faults.laterPages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(api.callsTo('GET /v1/conversations').at(-1)?.query.cursor).toBe(chat.convs[24]!.last_message_at);
+    expect(await screen.findByText(en['buyer.list.end'])).toBeOnTheScreen();
+  });
+
+  it('C1d. a refresh of the conversation list that fails says so and keeps the rows', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.conv(A, SELLER_ID, 'Store 1');
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    api.on('GET /v1/conversations', () => 'offline');
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.messages.refresh'] }));
+    expect(await screen.findByText(new RegExp(en['buyer.messages.failed']), {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Store 1' })).toBeOnTheScreen();
   });
 });
 

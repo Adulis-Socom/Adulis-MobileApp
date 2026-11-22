@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { useConversations, type Conversation } from './chat';
+import { LoadMoreFooter, type Paging } from './LoadMoreFooter';
 
 /**
  * The signed-in Buyer's conversations (WO-013): GET /v1/conversations?as=buyer, newest activity
@@ -58,6 +59,25 @@ export function Conversations() {
     </AppText>
   );
 
+  // The same end of a paged list as every other list: Load older, Loading more, a failure with Try again, the end.
+  const paging: Paging = {
+    count: list.items.length,
+    pageCount: list.data?.pages.length ?? 0,
+    hasNextPage: list.hasNextPage,
+    isFetchingNextPage: list.isFetchingNextPage,
+    isFetchNextPageError: list.isFetchNextPageError,
+    error: list.error,
+    loadMore: () => void list.fetchNextPage(),
+    retryNextPage: () => void list.fetchNextPage(),
+  };
+  const footer =
+    list.items.length > 0 || list.hasNextPage ? (
+      <LoadMoreFooter
+        paging={paging}
+        keys={{ load: 'buyer.messages.load_older', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
+      />
+    ) : null;
+
   return (
     <FlashList
       data={list.items}
@@ -68,21 +88,16 @@ export function Conversations() {
         <RefreshControl refreshing={list.isRefetching && !list.isFetchingNextPage} onRefresh={() => void list.refetch()} colors={[theme.color.accent]} />
       }
       ListHeaderComponent={
-        <View style={{ marginBottom: theme.space.sm }}>
+        <View style={{ gap: theme.space.sm, marginBottom: theme.space.sm }}>
           <Button label={t('buyer.messages.refresh')} variant="secondary" onPress={() => void list.refetch()} disabled={list.isFetching} />
+          {/* A refresh that failed leaves the rows as they were, and says so; an older page says it in the footer, and an empty list in its own block. */}
+          {list.isRefetchError && !list.isFetchNextPageError && list.items.length > 0 ? (
+            <AlertText>{`${t('buyer.messages.failed')} ${failureMessage(t, list.error)}`}</AlertText>
+          ) : null}
         </View>
       }
       ListEmptyComponent={empty}
-      ListFooterComponent={
-        list.hasNextPage ? (
-          <Button
-            label={t('buyer.messages.load_older')}
-            variant="secondary"
-            onPress={() => void list.fetchNextPage()}
-            disabled={list.isFetchingNextPage}
-          />
-        ) : null
-      }
+      ListFooterComponent={footer}
     />
   );
 }

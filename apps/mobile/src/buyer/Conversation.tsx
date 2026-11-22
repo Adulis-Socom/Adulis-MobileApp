@@ -28,6 +28,7 @@ import {
   useConversations,
 } from './chat';
 import type { ProductRef } from './MessageSellerButton';
+import { LoadMoreFooter, type Paging } from './LoadMoreFooter';
 import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { candidatesFor, captureBaseline, type Baseline } from './pending-match';
@@ -527,6 +528,16 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     }
   };
 
+  const paging: Paging = {
+    count: messages.items.length,
+    pageCount: messages.data?.pages.length ?? 0,
+    hasNextPage: messages.hasNextPage,
+    isFetchingNextPage: messages.isFetchingNextPage,
+    isFetchNextPageError: messages.isFetchNextPageError,
+    error: messages.error,
+    loadMore: () => void messages.fetchNextPage(),
+    retryNextPage: () => void messages.fetchNextPage(),
+  };
   const list =
     messages.items.length > 0 ? (
       <FlatList
@@ -535,16 +546,12 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         keyExtractor={(m) => m.id}
         renderItem={({ item }) => <MessageBubble message={item} viewer="buyer" />}
         contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.sm }}
-        // Inverted: the footer is drawn at the top, above the oldest message.
+        // Inverted: the footer is drawn at the top, above the oldest message. The same end of a paged list as every other list.
         ListFooterComponent={
-          messages.hasNextPage ? (
-            <Button
-              label={t('buyer.chat.load_earlier')}
-              variant="secondary"
-              onPress={() => void messages.fetchNextPage()}
-              disabled={messages.isFetchingNextPage}
-            />
-          ) : undefined
+          <LoadMoreFooter
+            paging={paging}
+            keys={{ load: 'buyer.chat.load_earlier', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
+          />
         }
       />
     ) : (
@@ -568,6 +575,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       {header}
       <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.sm }}>
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
+        {/* A refresh or poll that failed leaves the messages as they were, and says so; an earlier page says it in the footer, and an empty conversation in its own block. */}
+        {messages.isRefetchError && !messages.isFetchNextPageError && messages.items.length > 0 ? (
+          <AlertText>{`${t('buyer.chat.failed')} ${failureMessage(t, messages.error)}`}</AlertText>
+        ) : null}
       </View>
       <View style={{ flex: 1, minHeight: HISTORY_MIN }}>{list}</View>
       <View style={{ maxHeight: COMPOSER_MAX, borderTopWidth: 1, borderColor: theme.color.border }}>
