@@ -8,6 +8,7 @@ import { useBootstrap } from '../api/bootstrap';
 import type { SellerProduct, SellerReview, SellerScene, Storefront } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { useFocusRequest } from '../components/focus';
 import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
@@ -77,7 +78,9 @@ export function SellerProfile({ handle }: { handle: unknown }) {
     );
   }
   const seller = header.value;
-  const top = <ProfileHeader seller={seller} tab={tab} onTab={chooseTab} focusRequest={tabPresses || null} />;
+  const top = (
+    <ProfileHeader seller={seller} tab={tab} onTab={chooseTab} focusRequest={tabPresses || null} offline={header.offline} />
+  );
   if (tab === 'about') {
     return <AboutTab seller={seller} header={top} pulling={header.pulling} onPull={header.pull} />;
   }
@@ -93,11 +96,14 @@ function ProfileHeader({
   tab,
   onTab,
   focusRequest,
+  offline,
 }: {
   seller: Storefront;
   tab: Tab;
   onTab: (t: Tab) => void;
   focusRequest: number | null;
+  /** The header's re-read waits for a connection: what is shown is the last answer. */
+  offline: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -112,6 +118,7 @@ function ProfileHeader({
         paddingBottom: theme.space.sm,
       }}
     >
+      {offline ? <AlertText>{t('common.offline')}</AlertText> : null}
       <AppText variant="heading" accessibilityRole="header">
         {seller.store_name}
       </AppText>

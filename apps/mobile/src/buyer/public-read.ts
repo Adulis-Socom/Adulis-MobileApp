@@ -117,6 +117,9 @@ export function usePublicRead<T>(
     setPulling(true);
     void refetch({ cancelRefetch: false }).finally(() => setPulling(false));
   }, [refetch]);
+  // An answer is on screen and its re-read waits for a connection (TanStack pauses it, and the pull's
+  // promise with it): the screen says so, and the spinner stops rather than turning until reconnect.
+  const offline = query.fetchStatus === 'paused' && query.status === 'success';
   return {
     /** Shown only when the latest answer was a success. */
     value: query.status === 'success' ? query.data.value : undefined,
@@ -130,8 +133,10 @@ export function usePublicRead<T>(
     /** Nothing to show and the request waits for a connection. */
     paused: query.fetchStatus === 'paused' && query.status !== 'success',
     revalidating: query.isRefetching,
+    /** The shown answer's re-read is waiting for a connection: the answer stays (WO-005 S13), and says so. */
+    offline,
     revalidate,
-    pulling,
+    pulling: pulling && !offline,
     pull,
   };
 }
