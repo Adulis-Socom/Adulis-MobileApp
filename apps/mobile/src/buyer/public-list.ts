@@ -97,7 +97,12 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     () => setList((l) => ({ generation: l.generation + 1, withhold: oldest.current === undefined })),
     [],
   );
-  const retry = useCallback(() => void refetch(), [refetch]);
+  // Retrying a failed first page shows no placeholder either: TanStack would offer the last generation
+  // that HAD data, and its items would be live again while the retry is in flight (as For You).
+  const retry = useCallback(() => {
+    setList((l) => (l.withhold ? l : { ...l, withhold: true }));
+    void refetch();
+  }, [refetch]);
 
   return {
     status: query.status,

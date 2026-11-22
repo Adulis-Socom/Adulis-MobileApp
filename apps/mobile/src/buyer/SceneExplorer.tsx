@@ -8,6 +8,7 @@ import { useBootstrap } from '../api/bootstrap';
 import type { PublicScene, SceneProduct } from '../api/client';
 import { fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
+import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { formatPriceSpan, useLocale, useT } from '../i18n/i18n';
@@ -78,6 +79,7 @@ export function SceneExplorer({ scenePostRef }: { scenePostRef: unknown }) {
       scene={read.value}
       receivedAt={read.receivedAt ?? 0}
       pulling={read.pulling}
+      offline={read.offline}
       onPull={read.pull}
       selected={selected}
       onSelect={setSelected}
@@ -89,6 +91,7 @@ function SceneContent({
   scene,
   receivedAt,
   pulling,
+  offline,
   onPull,
   selected,
   onSelect,
@@ -96,6 +99,8 @@ function SceneContent({
   scene: PublicScene;
   receivedAt: number;
   pulling: boolean;
+  /** Its re-read waits for a connection: what is shown is the last answer. */
+  offline: boolean;
   onPull: () => void;
   selected: string | null;
   onSelect: (slug: string) => void;
@@ -121,6 +126,7 @@ function SceneContent({
         <RefreshControl refreshing={pulling} onRefresh={onPull} colors={[theme.color.accent]} />
       }
     >
+      {offline ? <AlertText>{t('common.offline')}</AlertText> : null}
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={fillSlots(t('buyer.scene.seller'), { store }) ?? store}
