@@ -656,6 +656,30 @@ describe('privacy and lifecycle', () => {
     }
   });
 
+  it('a pull while offline says so and stops the spinner; the Scene stays and is replaced when the connection returns', async () => {
+    serve(SCENE, ok(threeProducts), ok(publicScene(1, { caption: 'The caption after reconnecting' })));
+    try {
+      await openFromFeed();
+      await explore();
+      await screen.findByText(READ_CAPTION);
+      await act(async () => onlineManager.setOnline(false));
+      await pull('scene-explorer');
+      await settle();
+      const refreshing = () =>
+        (screen.getByTestId('scene-explorer').props.refreshControl as { props: { refreshing: boolean } }).props.refreshing;
+      expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+      expect(refreshing()).toBe(false);
+      // The recorded rule: a revalidation waiting for the network keeps the last success on screen.
+      expect(screen.getByText(READ_CAPTION)).toBeOnTheScreen();
+      expect(calls(SCENE)).toHaveLength(1); // paused, not spent
+      await act(async () => onlineManager.setOnline(true));
+      expect(await screen.findByText('The caption after reconnecting')).toBeOnTheScreen();
+      expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+  });
+
   it('a late answer for one Scene never fills another', async () => {
     const first = held();
     api.on(SCENE, () => first.reply);

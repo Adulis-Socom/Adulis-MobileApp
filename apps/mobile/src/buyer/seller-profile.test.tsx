@@ -1,4 +1,5 @@
 import { en } from '@adulis/locale/mobile';
+import { onlineManager } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { AccessibilityInfo, AppState, Dimensions, type AppStateStatus } from 'react-native';
@@ -206,6 +207,25 @@ describe('the Seller Profile', () => {
     expect(screen.getByText(/^On Adulis since /)).toBeOnTheScreen();
   });
 
+  it('About: a pull while offline says so and stops the spinner; the Seller stays on screen', async () => {
+    await openProfile();
+    await fireEvent.press(tab(en['buyer.seller.tab.about']));
+    try {
+      await act(async () => onlineManager.setOnline(false));
+      await act(() =>
+        (screen.getByTestId('seller-about').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+      );
+      await settle();
+      expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+      expect(
+        (screen.getByTestId('seller-about').props as { refreshControl: { props: { refreshing: boolean } } }).refreshControl.props.refreshing,
+      ).toBe(false);
+      expect(screen.getByRole('header', { name: 'Store 1' })).toBeOnTheScreen();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+  });
+
   it('a Seller that is not public (another Market, ambiguous, gone) says only the neutral message', async () => {
     serve(HEADER, gone());
     await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
@@ -256,6 +276,36 @@ describe('the Seller Profile', () => {
     expect(screen.getByText('Store 1')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     expect(await screen.findByLabelText('Scene: Seller scene 1')).toBeOnTheScreen();
+  });
+
+  it('a Retry after a failed pull never brings the old cards back', async () => {
+    let release: (reply: Reply) => void = () => undefined;
+    const inFlight = new Promise<Reply>((resolve) => {
+      release = resolve;
+    });
+    let n = 0;
+    api.on(SCENES, () => {
+      n += 1;
+      if (n === 1) return ok({ data: [sellerScene(1), sellerScene(2)], next_cursor: null });
+      return n === 2 ? problem(500, 'INTERNAL', 'request') : inFlight;
+    });
+    serve(HEADER, ok(storefront(HANDLE)));
+    await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
+    expect(await screen.findByLabelText('Scene: Seller scene 1')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Scene: Seller scene 2')).toBeOnTheScreen();
+    await act(() =>
+      (screen.getByTestId('seller-scenes').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+    );
+    await settle();
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await settle();
+    // The old generation's cards are not live while the retry is in flight.
+    expect(screen.queryAllByLabelText(/^Scene: Seller scene/)).toHaveLength(0);
+    expect(await screen.findByText(en['buyer.seller.scenes.loading'])).toBeOnTheScreen();
+    await act(async () => release(ok({ data: [sellerScene(1)], next_cursor: null })));
+    expect(await screen.findByLabelText('Scene: Seller scene 1')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Scene: Seller scene 2')).not.toBeOnTheScreen();
   });
 
   it('signed in, the Seller reads present the session (one Market with the feed)', async () => {
