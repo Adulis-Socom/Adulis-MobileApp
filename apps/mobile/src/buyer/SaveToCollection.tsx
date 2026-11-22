@@ -50,7 +50,9 @@ export function SaveToCollection({ params }: { params: ReturnType<typeof parsePi
   const priv = usePrivateApi();
   const state = useSavedState(params?.target ?? null);
   const collections = usePublicList({
-    resource: ['collections'],
+    // Its own key, never the Saved tab's ['collections']: that tab stays mounted, and sharing its cached
+    // entry made the picker miss Collections created since the tab last read (BUYER-SAVED-01).
+    resource: ['picker-collections'],
     read: params && priv ? (cursor) => keepIfCurrent(priv, (a) => a.collections(cursor)) : null,
     items: (page) => page.data,
     keyOf: (c: Collection) => c.ref,

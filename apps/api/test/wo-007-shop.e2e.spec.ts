@@ -280,12 +280,30 @@ describe('WO-007 -- Shop products', () => {
     }
   });
 
+  // What idx_product_shop is for (migration 0057, ADU-DB-01 index table): it serves the Market filter AND
+  // the newest-first keyset order directly, so a page never scans and sorts other Markets' Products.
+  //
+  // Only sequential scans used to be switched off. That left the planner free to choose between two
+  // index plans whose estimated costs are nearly equal on the small, constantly changing tables of the
+  // shared test database: this index in order, or idx_product_storefront (seller_id, ...) merge-joined
+  // to the Sellers and followed by a Sort. Which one won depended on the table statistics at that
+  // moment (autovacuum timing, other suites' rows), so the check failed intermittently in CI with the
+  // storefront plan. Switching Sorts off as well removes that coin toss without excusing anything:
+  // the only plan that needs neither a sequential scan nor a Sort is the one this index exists to give.
+  // The assertions pin all three properties, so a missing index, a reordered one or one without the
+  // Market as its leading column each fail.
+  const planNodes = (node: Record<string, unknown>): Array<Record<string, unknown>> => [
+    node,
+    ...((node['Plans'] as Array<Record<string, unknown>> | undefined) ?? []).flatMap(planNodes),
+  ];
+
   it('the read uses the Shop index when the planner is made to choose', async () => {
     const c = await admin.connect();
     try {
       await c.query('BEGIN');
       await c.query('SET LOCAL enable_seqscan = off');
-      const plan = await c.query<{ 'QUERY PLAN': unknown }>(
+      await c.query('SET LOCAL enable_sort = off');
+      const plan = await c.query<{ 'QUERY PLAN': Array<{ Plan: Record<string, unknown> }> }>(
         `EXPLAIN (FORMAT JSON) SELECT p.id FROM core.product p
            JOIN core.seller s ON s.id = p.seller_id
            JOIN core.market m ON m.id = p.market_id
@@ -296,8 +314,16 @@ describe('WO-007 -- Shop products', () => {
         [MA, ['ACTIVE', 'CLOSING', 'BILLING_SUSPENDED'], '2026-11-11T00:00:00.000000Z', id(0x104)],
       );
       expect(JSON.stringify(plan.rows[0])).toContain('idx_product_shop');
-      await c.query('ROLLBACK');
+      const nodes = planNodes(plan.rows[0]!['QUERY PLAN'][0]!.Plan);
+      const shopScans = nodes.filter((n) => n['Index Name'] === 'idx_product_shop');
+      expect(shopScans).toHaveLength(1);
+      // The Market is an index condition, not a filter applied after reading every Market's rows.
+      expect(String(shopScans[0]!['Index Cond'])).toContain('market_id');
+      // The order comes from the index: no Sort of any kind sits above it.
+      expect(nodes.filter((n) => /Sort/.test(String(n['Node Type'])))).toEqual([]);
     } finally {
+      // In finally, so a failed assertion never returns the connection to the pool mid-transaction.
+      await c.query('ROLLBACK');
       c.release();
     }
   });
