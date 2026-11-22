@@ -187,6 +187,40 @@ describe('PROBE TEST-STABILISE-01 -- Shop planner check across statistics states
     for (const r of rows) expect({ cell: `${r['data']}/${r['stats']}`, pass: (r['new'] as Verdict).newPass }).toEqual({ cell: `${r['data']}/${r['stats']}`, pass: true });
   });
 
+  // Question 1b: sweep the planner's cost constants so the two candidate plans cross over.
+  const COSTS: string[][] = [];
+  for (const rpc of ['1.1', '4', '20', '60'])
+    for (const cit of ['0.001', '0.005', '0.05'])
+      for (const cop of ['0.0025', '0.05'])
+        COSTS.push([`SET LOCAL random_page_cost = ${rpc}`, `SET LOCAL cpu_index_tuple_cost = ${cit}`, `SET LOCAL cpu_operator_cost = ${cop}`]);
+
+  it('cost sweep: records where OLD flips; NEW passes in every cell', async () => {
+    const rows: Array<Record<string, unknown>> = [];
+    for (const [dataName, dataSql] of Object.entries(DATA)) {
+      for (const [statsName, statsSql] of Object.entries(STATS)) {
+        for (const cost of COSTS) {
+          const c = await admin.connect();
+          try {
+            await c.query('BEGIN');
+            await c.query(`SET LOCAL lock_timeout = '10s'`);
+            for (const q of [...dataSql, ...statsSql, ...cost]) await c.query(q);
+            const v = await verdict(c);
+            rows.push({ data: dataName, stats: statsName, cost: cost.map((x) => x.split(' = ')[1]).join('/'), ...v });
+            await c.query('ROLLBACK');
+          } finally {
+            c.release();
+          }
+        }
+      }
+    }
+    const oldFails = rows.filter((r) => !(r['old'] as Verdict).oldPass);
+    // eslint-disable-next-line no-console
+    console.log('PROBE-COST-OLDFAILS ' + JSON.stringify(oldFails));
+    // eslint-disable-next-line no-console
+    console.log(`PROBE-COST-SUMMARY cells=${rows.length} oldFails=${oldFails.length} newFails=${rows.filter((r) => !(r['new'] as Verdict).newPass).length}`);
+    for (const r of rows) expect({ cell: `${r['data']}/${r['stats']}/${r['cost']}`, pass: (r['new'] as Verdict).newPass }).toEqual({ cell: `${r['data']}/${r['stats']}/${r['cost']}`, pass: true });
+  }, 600_000);
+
   const MUTATIONS: Record<string, string[]> = {
     dropped: ['DROP INDEX core.idx_product_shop'],
     marketOnly: [
