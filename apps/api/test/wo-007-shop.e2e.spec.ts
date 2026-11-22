@@ -321,8 +321,9 @@ describe('WO-007 -- Shop products', () => {
       expect(String(shopScans[0]!['Index Cond'])).toContain('market_id');
       // The order comes from the index: no Sort of any kind sits above it.
       expect(nodes.filter((n) => /Sort/.test(String(n['Node Type'])))).toEqual([]);
-      await c.query('ROLLBACK');
     } finally {
+      // In finally, so a failed assertion never returns the connection to the pool mid-transaction.
+      await c.query('ROLLBACK');
       c.release();
     }
   });
