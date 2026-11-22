@@ -219,7 +219,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     state === 'unsent' && watch !== null && draft.trim() === watch.text
       ? messages.fetchStatus === 'paused'
         ? t('common.offline')
-        : messages.isRefetchError
+        : failure === 'refetch' && messages.isRefetchError
           ? t('buyer.chat.failed')
           : null
       : null;

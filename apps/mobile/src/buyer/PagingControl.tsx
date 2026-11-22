@@ -10,11 +10,11 @@ import { useTheme } from '../theme/theme';
 
 /**
  * What the Buyer messaging screens need of a paged query (conversation messages, conversation list).
- * `errorUpdatedAt` and `isFetchNextPageError` are TanStack Query's own fields.
+ * `errorUpdateCount` and `isFetchNextPageError` are TanStack Query's own fields.
  */
 export type PagedQuery = {
   isError: boolean;
-  errorUpdatedAt: number;
+  errorUpdateCount: number;
   isFetchNextPageError: boolean;
   isFetchingNextPage: boolean;
   hasNextPage: boolean;
@@ -27,12 +27,12 @@ export type PagedQuery = {
  * loaded ('next') or a refresh or poll that could not ('refetch'). The query's own flag cannot say: it
  * describes the fetch in flight, so a poll that starts after a failed older page would turn the older
  * page's error into a refresh failure (and announce it) before the poll has answered. The kind is read
- * once per failure (errorUpdatedAt) and dropped when the query is no longer in error.
+ * once per failure (errorUpdateCount) and dropped when the query is no longer in error.
  */
-export function useSettledFailure(q: Pick<PagedQuery, 'isError' | 'errorUpdatedAt' | 'isFetchNextPageError'>): 'next' | 'refetch' | null {
+export function useSettledFailure(q: Pick<PagedQuery, 'isError' | 'errorUpdateCount' | 'isFetchNextPageError'>): 'next' | 'refetch' | null {
   const seen = useRef<{ at: number; kind: 'next' | 'refetch' | null }>({ at: 0, kind: null });
   if (!q.isError) seen.current = { at: 0, kind: null };
-  else if (seen.current.at !== q.errorUpdatedAt) seen.current = { at: q.errorUpdatedAt, kind: q.isFetchNextPageError ? 'next' : 'refetch' };
+  else if (seen.current.at !== q.errorUpdateCount) seen.current = { at: q.errorUpdateCount, kind: q.isFetchNextPageError ? 'next' : 'refetch' };
   return seen.current.kind;
 }
 

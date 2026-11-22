@@ -2809,6 +2809,31 @@ describe('Message send reconciliation', () => {
       expect(screen.getAllByText(new RegExp(en['buyer.chat.failed']))).toHaveLength(1);
     });
 
+    it('Edit the message instead after a failed Load earlier: the read that is running says nothing about the box, until it fails itself', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWith((seed, conversation) => {
+          for (let i = 60; i >= 1; i--) seed.msg(conversation, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10 + 300) });
+        }, 'Line 1');
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit after a failed page');
+        await maybe();
+        chat.faults.laterMessagePages = true;
+        await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+        await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+        // The next read of the conversation is still running (the older page's failure must not be read as its failure).
+        api.onPattern('GET', MESSAGES_PATH, () => 'hang');
+        await fireEvent.press(edit());
+        await advance(2000);
+        const failed = new RegExp(en['buyer.chat.failed']);
+        expect(screen.queryByText(failed)).toBeNull();
+        expect(announce.mock.calls.filter(([said]) => failed.test(String(said)))).toEqual([]);
+        expect(screen.getByText(new RegExp(en['buyer.list.more_failed']))).toBeOnTheScreen();
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
     it('Edit the message instead while offline: the box says so, and the line goes when the connection returns', async () => {
       const { chat } = await openWithWelcome();
       idempotent(chat, [{ refuse: 'offline' }]);
