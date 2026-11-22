@@ -94,7 +94,7 @@ function installChat() {
     return { unpublish: () => (entry.published = false) };
   };
   /** A fault switch for the list's later pages (a server error, never a lost connection). */
-  const faults = { laterPages: false };
+  const faults = { laterPages: false, laterMessagePages: false, messageReads: false };
   const listing = (sellerHandle: string) => (call: Recorded) => {
     const all = [...catalogue.values()].filter((e) => e.published && e.product.seller.handle === sellerHandle);
     const limit = Number(call.query.limit ?? 100);
@@ -150,6 +150,7 @@ function installChat() {
   api.onPattern('GET', /^\/v1\/conversations\/[^/]+\/messages$/, (call) => {
     const c = byPath(call);
     if (!c) return problem(404, 'NOT_FOUND', 'request');
+    if (faults.messageReads || (call.query.cursor && faults.laterMessagePages)) return problem(500, 'INTERNAL', 'server');
     const start = call.query.cursor ? c.messages.findIndex((m) => m.sent_at < call.query.cursor!) : 0;
     const slice = start < 0 ? [] : c.messages.slice(start, start + 50);
     return { status: 200, body: { data: slice, next_cursor: start >= 0 && start + 50 < c.messages.length ? slice[slice.length - 1]!.sent_at : null } };
@@ -503,6 +504,196 @@ describe('a conversation', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
     expect(await screen.findByRole('button', { name: 'Second Account store' })).toBeOnTheScreen();
     expect(screen.queryByText('First Account store')).toBeNull();
+  });
+});
+
+describe('BUYER-COMMS-01: a failure with rows already shown is never silent', () => {
+  const messageCalls = () => api.calls.filter((call) => call.method === 'GET' && /\/messages$/.test(call.path));
+
+  it('C1a. Load earlier messages that fails says so, is announced, keeps the messages, and Try again loads the page', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    for (let i = 60; i >= 1; i--) chat.msg(c, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText('Line 1')).toBeOnTheScreen();
+    chat.faults.laterMessagePages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    const failed = new RegExp(en['buyer.list.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByText('Line 1')).toBeOnTheScreen();
+    // The same control, now Try again.
+    chat.faults.laterMessagePages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
+    await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.load_earlier'] })).toBeNull());
+  });
+
+  it('C1b. a refresh that fails with messages shown says so and keeps them', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    chat.msg(c, { sender_kind: 'SELLER', body: 'Still here', sent_at: ago(30) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText('Still here')).toBeOnTheScreen();
+    chat.faults.messageReads = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    const failed = new RegExp(en['buyer.chat.failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByText('Still here')).toBeOnTheScreen();
+    chat.faults.messageReads = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(screen.getByText('Still here')).toBeOnTheScreen();
+  });
+
+  it('C1c. Load older conversations that fails says so, is announced, and Try again loads the page', async () => {
+    signedIn();
+    const chat = installChat();
+    for (let i = 0; i < 27; i++) chat.conv(A, SELLER_ID, `Store ${i + 1}`, `store-${i + 1}`, ago(100 + i));
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    chat.faults.laterPages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.messages.load_older'] }));
+    const failed = new RegExp(en['buyer.list.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(expect.stringMatching(failed));
+    expect(screen.getByRole('button', { name: 'Store 1' })).toBeOnTheScreen();
+    chat.faults.laterPages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(api.callsTo('GET /v1/conversations').at(-1)?.query.cursor).toBe(chat.convs[24]!.last_message_at);
+    await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.messages.load_older'] })).toBeNull());
+  });
+
+  it('C1d. a refresh of the conversation list that fails says so and keeps the rows', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.conv(A, SELLER_ID, 'Store 1');
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    api.on('GET /v1/conversations', () => 'offline');
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.messages.refresh'] }));
+    expect(await screen.findByText(new RegExp(en['buyer.messages.failed']), {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Store 1' })).toBeOnTheScreen();
+  });
+
+  const MESSAGES_RE = /^\/v1\/conversations\/[^/]+\/messages$/;
+  const sixty = (chat: ReturnType<typeof installChat>, c: Conv) => {
+    for (let i = 60; i >= 1; i--) chat.msg(c, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10) });
+    return c;
+  };
+  const spoken = (announce: jest.SpyInstance, text: RegExp) => announce.mock.calls.filter(([said]) => text.test(String(said)));
+
+  it('R1a. after a failed Load earlier, a refresh that succeeds shows no refresh failure and announces none', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = sixty(chat, chat.conv(A));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText('Line 1');
+    chat.faults.laterMessagePages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+    const refreshFailure = new RegExp(en['buyer.chat.failed']);
+    chat.faults.laterMessagePages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    await act(() => jest.advanceTimersByTimeAsync(2000));
+    expect(screen.queryByText(refreshFailure)).toBeNull();
+    expect(spoken(announce, refreshFailure)).toEqual([]);
+    expect(screen.getByText('Line 1')).toBeOnTheScreen();
+  });
+
+  it('R1b. while a refresh runs after a failed Load earlier, the failure stays with its control, Try again stays, and no refresh failure is shown or announced', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = sixty(chat, chat.conv(A));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText('Line 1');
+    chat.faults.laterMessagePages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+    api.onPattern('GET', MESSAGES_RE, () => 'hang');
+    const refreshFailure = new RegExp(en['buyer.chat.failed']);
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    await act(() => jest.advanceTimersByTimeAsync(2000));
+    expect(screen.queryByText(refreshFailure)).toBeNull();
+    expect(spoken(announce, refreshFailure)).toEqual([]);
+    expect(screen.getByText(new RegExp(en['buyer.list.more_failed']))).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['common.retry'] })).toBeOnTheScreen();
+  });
+
+  it('R1c. after a failed Load older, a refresh of the conversation list that has succeeded shows no refresh failure', async () => {
+    signedIn();
+    const chat = installChat();
+    for (let i = 0; i < 27; i++) chat.conv(A, SELLER_ID, `Store ${i + 1}`, `store-${i + 1}`, ago(100 + i));
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    chat.faults.laterPages = true;
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.messages.load_older'] }));
+    await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+    const refreshFailure = new RegExp(en['buyer.messages.failed']);
+    chat.faults.laterPages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.messages.refresh'] }));
+    await act(() => jest.advanceTimersByTimeAsync(2000));
+    expect(screen.queryByText(refreshFailure)).toBeNull();
+    expect(spoken(announce, refreshFailure)).toEqual([]);
+  });
+
+  it('R1d. a refresh that fails after a failed Load earlier is a refresh failure of its own', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = sixty(chat, chat.conv(A));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText('Line 1');
+    chat.faults.laterMessagePages = true;
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+    chat.faults.messageReads = true;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    expect(await screen.findByText(new RegExp(en['buyer.chat.failed']), {}, { timeout: 10_000 })).toBeOnTheScreen();
+  });
+
+  it('R3a. no end sentence in a conversation or a list that fits in one page, and no "Loaded N more" after Load earlier', async () => {
+    signedIn();
+    const chat = installChat();
+    const short = chat.conv(A);
+    chat.msg(short, { sender_kind: 'SELLER', body: 'Only one', sent_at: ago(30) });
+    const long = sixty(chat, chat.conv(A, SELLER_ID, 'Store 2', 'store-2', ago(500)));
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    expect(screen.queryByText(en['buyer.list.end'])).toBeNull();
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${short.id}` });
+    expect(await screen.findByText('Only one')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.list.end'])).toBeNull();
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${long.id}` });
+    await screen.findByText('Line 1');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: en['buyer.chat.load_earlier'] })).toBeNull());
+    expect(screen.queryByText(en['buyer.list.end'])).toBeNull();
+    expect(spoken(announce, /^Loaded \d+ more/)).toEqual([]);
+  });
+
+  it('R3b. Load earlier speaks "Loading more" while the page loads', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = sixty(chat, chat.conv(A));
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText('Line 1');
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    api.onPattern('GET', MESSAGES_RE, () => 'hang');
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    expect(await screen.findByText(en['buyer.list.loading_more'])).toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith(en['buyer.list.loading_more']);
   });
 });
 
@@ -2601,6 +2792,43 @@ describe('Message send reconciliation', () => {
         expect(
           announce.mock.calls.filter(([text]) => text === en['buyer.chat.failed']),
         ).toHaveLength(1);
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('Edit the message instead, then a read that fails: the failure is said once, not twice', async () => {
+      const { chat } = await openWithWelcome();
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await typeAndSend('Edit, then a failed read, once');
+      await maybe();
+      api.onPattern('GET', MESSAGES_PATH, () => problem(500, 'INTERNAL', 'request'));
+      await fireEvent.press(edit());
+      expect(await screen.findByText(en['buyer.chat.failed'])).toBeOnTheScreen();
+      await advance(1000);
+      expect(screen.getAllByText(new RegExp(en['buyer.chat.failed']))).toHaveLength(1);
+    });
+
+    it('Edit the message instead after a failed Load earlier: the read that is running says nothing about the box, until it fails itself', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWith((seed, conversation) => {
+          for (let i = 60; i >= 1; i--) seed.msg(conversation, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10 + 300) });
+        }, 'Line 1');
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit after a failed page');
+        await maybe();
+        chat.faults.laterMessagePages = true;
+        await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+        await screen.findByText(new RegExp(en['buyer.list.more_failed']), {}, { timeout: 10_000 });
+        // The next read of the conversation is still running (the older page's failure must not be read as its failure).
+        api.onPattern('GET', MESSAGES_PATH, () => 'hang');
+        await fireEvent.press(edit());
+        await advance(2000);
+        const failed = new RegExp(en['buyer.chat.failed']);
+        expect(screen.queryByText(failed)).toBeNull();
+        expect(announce.mock.calls.filter(([said]) => failed.test(String(said)))).toEqual([]);
+        expect(screen.getByText(new RegExp(en['buyer.list.more_failed']))).toBeOnTheScreen();
       } finally {
         announce.mockRestore();
       }

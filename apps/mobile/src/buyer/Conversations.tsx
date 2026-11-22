@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { useLocale, useT } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { useConversations, type Conversation } from './chat';
+import { PagingControl, useSettledFailure } from './PagingControl';
 
 /**
  * The signed-in Buyer's conversations (WO-013): GET /v1/conversations?as=buyer, newest activity
@@ -58,6 +59,8 @@ export function Conversations() {
     </AppText>
   );
 
+  const failure = useSettledFailure(list);
+
   return (
     <FlashList
       data={list.items}
@@ -68,21 +71,16 @@ export function Conversations() {
         <RefreshControl refreshing={list.isRefetching && !list.isFetchingNextPage} onRefresh={() => void list.refetch()} colors={[theme.color.accent]} />
       }
       ListHeaderComponent={
-        <View style={{ marginBottom: theme.space.sm }}>
+        <View style={{ gap: theme.space.sm, marginBottom: theme.space.sm }}>
           <Button label={t('buyer.messages.refresh')} variant="secondary" onPress={() => void list.refetch()} disabled={list.isFetching} />
+          {/* A refresh that failed leaves the rows as they were, and says so; an older page says it beside its control, and an empty list in its own block. */}
+          {failure === 'refetch' && list.items.length > 0 ? (
+            <AlertText>{`${t('buyer.messages.failed')} ${failureMessage(t, list.error)}`}</AlertText>
+          ) : null}
         </View>
       }
       ListEmptyComponent={empty}
-      ListFooterComponent={
-        list.hasNextPage ? (
-          <Button
-            label={t('buyer.messages.load_older')}
-            variant="secondary"
-            onPress={() => void list.fetchNextPage()}
-            disabled={list.isFetchingNextPage}
-          />
-        ) : null
-      }
+      ListFooterComponent={<PagingControl query={list} failure={failure} label="buyer.messages.load_older" />}
     />
   );
 }

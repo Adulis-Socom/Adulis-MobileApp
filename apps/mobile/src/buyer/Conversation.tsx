@@ -28,6 +28,7 @@ import {
   useConversations,
 } from './chat';
 import type { ProductRef } from './MessageSellerButton';
+import { PagingControl, useSettledFailure } from './PagingControl';
 import { MessageBubble } from './MessageBubble';
 import { ProductPicker } from './ProductPicker';
 import { candidatesFor, captureBaseline, type Baseline } from './pending-match';
@@ -111,6 +112,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const api = usePrivateApi();
   const ref = isConversationRef(conversationRef) ? conversationRef : null;
   const messages = useConversationMessages(ref, focused);
+  const failure = useSettledFailure(messages);
   const conversations = useConversations();
   const [draft, setDraft] = useState('');
   // failed: the server refused it; unknown: no answer (it may have been stored); sent: accepted.
@@ -217,7 +219,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
     state === 'unsent' && watch !== null && draft.trim() === watch.text
       ? messages.fetchStatus === 'paused'
         ? t('common.offline')
-        : messages.isRefetchError
+        : failure === 'refetch' && messages.isRefetchError
           ? t('buyer.chat.failed')
           : null
       : null;
@@ -536,16 +538,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         renderItem={({ item }) => <MessageBubble message={item} viewer="buyer" />}
         contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.sm }}
         // Inverted: the footer is drawn at the top, above the oldest message.
-        ListFooterComponent={
-          messages.hasNextPage ? (
-            <Button
-              label={t('buyer.chat.load_earlier')}
-              variant="secondary"
-              onPress={() => void messages.fetchNextPage()}
-              disabled={messages.isFetchingNextPage}
-            />
-          ) : undefined
-        }
+        ListFooterComponent={<PagingControl query={messages} failure={failure} label="buyer.chat.load_earlier" />}
       />
     ) : (
       <View style={{ flex: 1, padding: theme.space.lg, gap: theme.space.sm }}>
@@ -568,6 +561,11 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       {header}
       <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.sm }}>
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
+        {/* A refresh or poll that failed leaves the messages as they were, and says so; an earlier page says it beside its control, and an empty conversation in its own block.
+            In the edited-unsent state the recheck line already says the read failed: one alert, not two. */}
+        {failure === 'refetch' && messages.items.length > 0 && recheckText !== t('buyer.chat.failed') ? (
+          <AlertText>{`${t('buyer.chat.failed')} ${failureMessage(t, messages.error)}`}</AlertText>
+        ) : null}
       </View>
       <View style={{ flex: 1, minHeight: HISTORY_MIN }}>{list}</View>
       <View style={{ maxHeight: COMPOSER_MAX, borderTopWidth: 1, borderColor: theme.color.border }}>
