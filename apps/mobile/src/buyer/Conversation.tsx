@@ -216,20 +216,41 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   }, [hint]);
   // The edited words are in the box and the hint is only as current as the last read: when that read failed or is
   // waiting for a connection, say so beside the words, so that no hint is not taken for "not stored". It is drawn
-  // as an AlertText, which announces it itself.
-  const recheckText =
-    state === 'unsent' && watch !== null && draft.trim() === watch.text
+  // with the alert role and spoken by the effect below (once per condition), not by an AlertText.
+  const recheckCondition =
+    state === 'unsent' && watch !== null
       ? messages.fetchStatus === 'paused'
         ? t('common.offline')
         : failure === 'refetch' && messages.isRefetchError
           ? t('buyer.chat.failed')
           : null
       : null;
+  const recheckText = watch !== null && draft.trim() === watch.text ? recheckCondition : null;
+  // Spoken once per condition, not each time the words come to match it again (BUY-10B-lite C): editing away
+  // and back is one fact, heard once. A different condition for the same words (offline, then a failed read)
+  // is new and is spoken; so is the same condition after it cleared and came back.
+  const recheckSpoken = useRef<string | null>(null);
+  useEffect(() => {
+    if (recheckCondition === null) {
+      recheckSpoken.current = null;
+      return;
+    }
+    if (recheckText !== null && recheckSpoken.current !== recheckText) {
+      recheckSpoken.current = recheckText;
+      AccessibilityInfo.announceForAccessibility(recheckText);
+    }
+  }, [recheckCondition, recheckText]);
   // The offline line under Refresh is spoken when the connection is first found missing, not each time the line is drawn
   // (it steps aside for the recheck line and returns as the words change: that is one fact, heard once).
   const offlineText = t('common.offline');
-  const offlineWithRows = messages.fetchStatus === 'paused' && messages.items.length > 0;
+  // Any read of a conversation already loaded, shown or not: messages on screen, a newest page nothing of which this app can
+  // show (older pages wait behind Load earlier), or an empty conversation (BUY-10B-lite B). Nothing loaded yet says it in its own state.
+  const offlineWithRows = messages.fetchStatus === 'paused' && messages.data !== undefined;
   const recheckSaysOffline = recheckText === offlineText;
+  // A send that failed offline says so in its own alert beside the words: the same sentence under Refresh
+  // would be the second copy of one fact (BUY-10B-lite A). The send's outcome and the read's state stay
+  // distinct: the outcome is always said, and the line returns once the intent is given up (Edit the message instead).
+  const composerSaysOffline = (state === 'failed' || state === 'unknown') && error === offlineText;
   const recheckSaysOfflineRef = useRef(recheckSaysOffline);
   recheckSaysOfflineRef.current = recheckSaysOffline;
   useEffect(() => {
@@ -580,7 +601,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
         {/* A read that waits for a connection (a refresh, the poll, an earlier page, a return to the app), with messages shown: say so; nothing was sent or lost.
             In the edited-unsent state the recheck line already says it: one message, not two. */}
-        {offlineWithRows && !recheckSaysOffline ? (
+        {offlineWithRows && !recheckSaysOffline && !composerSaysOffline ? (
           <AppText testID="chat-offline" style={secondary}>
             {offlineText}
           </AppText>
@@ -669,7 +690,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         ) : null}
         {/* The same words are in the box again (after Edit the message instead): the hint stays above Send, which it never blocks. */}
         {hint !== null && state === 'unsent' ? <AppText>{hint}</AppText> : null}
-        {recheckText !== null ? <AlertText>{recheckText}</AlertText> : null}
+        {recheckText !== null ? <AppText accessibilityRole="alert">{recheckText}</AppText> : null}
         {hold !== null ? (
           <View accessibilityRole="alert">
             <AppText>{hold.text}</AppText>
