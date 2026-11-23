@@ -14,6 +14,8 @@ import { useTheme } from '../../theme/theme';
 
 /** The server's own minimum (2 characters after normalisation): shorter is never sent. */
 const MIN_LENGTH = 2;
+/** The server's own maximum, counted in characters AFTER normalisation (NFKC can expand: U+FDFA becomes 18). */
+const MAX_LENGTH = 100;
 /** Typing settles for this long before a query is sent; Search submits at once. */
 const DEBOUNCE_MS = 350;
 const TABS: ReadonlyArray<{ type: SearchType; label: 'buyer.search.tab.top' | 'buyer.search.tab.products' | 'buyer.search.tab.scenes' | 'buyer.search.tab.sellers' }> = [
@@ -87,6 +89,10 @@ export default function Search() {
   // The server refuses a query with no letter or digit every time; asking would only spend a search and
   // end in a Try again that cannot help.
   const noTerms = query.length > 0 && folded !== null && !tooShort && !/[\p{L}\p{N}]/u.test(folded);
+  // The field counts what was typed; the server counts what it becomes. A query the server would always refuse for
+  // length is said here, not sent: asking again could only end in a Try again that cannot help (BUY-06A). Where this
+  // runtime cannot normalise, the guard steps aside and the server's refusal is named instead (SearchResults).
+  const tooLong = query.length > 0 && folded !== null && !tooShort && [...folded].length > MAX_LENGTH;
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.color.bg }}>
@@ -165,6 +171,10 @@ export default function Search() {
       ) : tooShort ? (
         <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
           {t('buyer.search.too_short')}
+        </AppText>
+      ) : tooLong ? (
+        <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
+          {t('buyer.search.too_long')}
         </AppText>
       ) : noTerms ? (
         <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
