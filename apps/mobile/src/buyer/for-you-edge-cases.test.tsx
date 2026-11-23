@@ -1,7 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
-import { AccessibilityInfo, Platform } from 'react-native';
+import { AccessibilityInfo, AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import { GOOD_TOKEN, SIGN_IN_CODE, fypPage, fypUnit, installFakeApi, problem, type Reply } from '../testing/fake-api';
@@ -262,7 +262,8 @@ describe('review findings (BUY-05E)', () => {
       accountCalls += 1;
       if (accountCalls === 1) return ok(fypPage([fypUnit(1, { seller: { handle: 'a', store_name: 'Account pick' } })], null, 'session-a'));
       if (accountCalls === 2) return new Promise<Reply>(() => undefined); // the pull that is pending when the Buyer signs out
-      return second.promise; // the new Account's first page, held
+      if (accountCalls === 3) return second.promise; // the new Account's first page, held
+      return new Promise<Reply>(() => undefined); // a later pull by the new Account, never answered here
     });
     await renderRouter(APP_DIR);
     expect(await screen.findByText('Account pick')).toBeOnTheScreen();
@@ -284,6 +285,10 @@ describe('review findings (BUY-05E)', () => {
     expect(screen.queryByText('Account pick')).not.toBeOnTheScreen(); // the earlier session's card is not the new answer
     await act(async () => second.release(ok(fypPage([fypUnit(9, { seller: { handle: 'n', store_name: 'New pick' } })], null, 'session-new'))));
     expect(await screen.findByText('New pick')).toBeOnTheScreen();
+    // After the new sign-in the Buyer's own pull keeps the cards on screen (the stay's epoch is not the first one).
+    await pullList();
+    await act(() => jest.advanceTimersByTimeAsync(10));
+    expect(screen.getByText('New pick')).toBeOnTheScreen();
   });
 
   it('a pull pending over the walk panel does not claim the feed is empty, and offers no Load more for the old session', async () => {
@@ -300,6 +305,7 @@ describe('review findings (BUY-05E)', () => {
     await pullPanel();
     await act(() => jest.advanceTimersByTimeAsync(10));
     expect(screen.queryByText(en['buyer.for_you.empty'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.for_you.end'])).not.toBeOnTheScreen(); // the pending session's own "no next page" is not the feed's end
     expect(screen.queryByRole('button', { name: en['buyer.for_you.load_more'] })).not.toBeOnTheScreen();
     await act(async () => pending.release(ok(fypPage([fypUnit(5)], null, 'session-new'))));
     expect(await screen.findByText('Store 5')).toBeOnTheScreen();
@@ -324,5 +330,85 @@ describe('review findings (BUY-05E)', () => {
     expect(feedCalls()).toHaveLength(4);
     await act(async () => onlineManager.setOnline(true));
     expect(await screen.findByText('Store 8')).toBeOnTheScreen();
+  });
+});
+
+describe('re-review findings (BUY-05E)', () => {
+  it('the walk panel replaces a stale page failure with the offline line when Try again waits for a connection', async () => {
+    serveByCursor({
+      '': [emptyPage(1, 'c1')],
+      c1: [problem(500, 'INTERNAL', 'request'), ok(fypPage([fypUnit(6)], null, 'session-6'))],
+    });
+    await renderRouter(APP_DIR);
+    const failed = new RegExp(en['buyer.for_you.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await settle();
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    expect(screen.getAllByText(en['common.offline'])).toHaveLength(1);
+    expect(screen.queryByText(failed)).not.toBeOnTheScreen(); // the stale failure gives way, as in the list
+    expect(feedCalls()).toHaveLength(2); // waiting, not spent
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText('Store 6')).toBeOnTheScreen();
+  });
+
+  it('a signed-in Buyer\'s pull pending twice keeps the cards still on screen', async () => {
+    resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
+    const second = held();
+    let calls = 0;
+    api.on(FEED, (): Reply | Promise<Reply> => {
+      calls += 1;
+      if (calls === 1) return ok(fypPage([fypUnit(1, { seller: { handle: 'a', store_name: 'Account pick' } })], null, 'session-a'));
+      return calls === 2 ? new Promise<Reply>(() => undefined) : second.promise;
+    });
+    await renderRouter(APP_DIR);
+    expect(await screen.findByText('Account pick')).toBeOnTheScreen();
+    await pullList();
+    await act(() => jest.advanceTimersByTimeAsync(10));
+    await pullList();
+    await act(() => jest.advanceTimersByTimeAsync(10));
+    expect(screen.getByText('Account pick')).toBeOnTheScreen();
+    await act(async () => second.release(ok(fypPage([fypUnit(8, { seller: { handle: 'n', store_name: 'Newer pick' } })], null, 'session-b'))));
+    expect(await screen.findByText('Newer pick')).toBeOnTheScreen();
+  });
+
+  describe('a return from the background and a pull in the same moment', () => {
+    let listeners: ((state: AppStateStatus) => void)[] = [];
+    let appState: jest.SpyInstance | undefined;
+    let original: ((...args: never[]) => unknown) | undefined;
+    beforeEach(() => {
+      listeners = [];
+      appState = jest.spyOn(AppState, 'addEventListener');
+      original = appState.getMockImplementation();
+      appState.mockImplementation((type, listener) => {
+        if (type === 'change') listeners.push(listener as (state: AppStateStatus) => void);
+        return { remove: () => void (listeners = listeners.filter((l) => l !== listener)) } as ReturnType<typeof AppState.addEventListener>;
+      });
+    });
+    afterEach(() => {
+      if (appState && original) appState.mockImplementation(original);
+    });
+
+    it('never lets the cards that were not re-checked stand in (the pull does not know what is on screen yet)', async () => {
+      const next = held();
+      serveByCursor({ '': [ok(fypPage([fypUnit(1)], null, 'session-old')), next.promise] });
+      await renderRouter(APP_DIR);
+      await screen.findByText('Store 1');
+      const onRefresh = (screen.getByTestId('for-you-list').props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh;
+      await act(() => {
+        for (const l of [...listeners]) l('background');
+      });
+      await act(() => jest.advanceTimersByTimeAsync(6 * 60_000));
+      // Both land in one batch: the return (which withholds the old cards) and a pull made from the old screen.
+      await act(() => {
+        for (const l of [...listeners]) l('active');
+        onRefresh();
+      });
+      await act(() => jest.advanceTimersByTimeAsync(10));
+      expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+      await act(async () => next.release(ok(fypPage([fypUnit(5)], null, 'session-new'))));
+      expect(await screen.findByText('Store 5')).toBeOnTheScreen();
+    });
   });
 });

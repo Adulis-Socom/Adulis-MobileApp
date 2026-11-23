@@ -87,12 +87,15 @@ export function ForYouFeed() {
   if (feed.units.length === 0 && (feed.moreFollow || feed.isFetchNextPageError)) {
     return (
       <Centered refreshing={feed.refreshing} onRefresh={feed.refresh}>
-        {/* The one offline line of this panel (the footer's own is switched off: two would say the same thing side by side). */}
-        {feed.paused ? <AlertText style={{ textAlign: 'center' }}>{t('common.offline')}</AlertText> : null}
-        {/* While a pull's new session is pending the shown pages are the old session's: nothing about more pages is offered. */}
-        {feed.refreshPending ? null : (
+        {/* While a pull's new session is pending the shown pages are the old session's: nothing about more pages is offered,
+            and the panel says offline itself. Otherwise the footer says it (announced, and in place of a stale page
+            failure, as in the list): one line, one announcement. */}
+        {feed.refreshPending ? (
+          feed.paused ? <AlertText style={{ textAlign: 'center' }}>{t('common.offline')}</AlertText> : null
+        ) : (
           <LoadMoreFooter
-            paging={{ ...feed, paused: false, count: 0, pageCount: feed.pageCount }}
+            announceOffline
+            paging={{ ...feed, count: 0, pageCount: feed.pageCount }}
             keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
           />
         )}
