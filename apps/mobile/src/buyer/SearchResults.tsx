@@ -41,7 +41,6 @@ export const searchTarget = (item: SearchItem): SaveTarget | null =>
       ? { type: 'SCENE_POST', ref: item.payload.public_ref }
       : null;
 
-/** The server refused a query made only of symbols or punctuation: its own reason, not a guess from the text. */
 /** The server's refusals of the query itself: asking again cannot change them, so each has its own sentence. */
 const refusedQuery = (error: unknown): 'buyer.search.no_terms' | 'buyer.search.too_long' | null => {
   if (!(error instanceof ApiError) || error.failure.kind !== 'problem' || error.failure.problem.code !== 'VALIDATION_FAILED') return null;

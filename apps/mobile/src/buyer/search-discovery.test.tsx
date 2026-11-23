@@ -658,11 +658,27 @@ describe('a query that is too long once normalised (BUY-06A, B23-006)', () => {
     expect(calls()).toHaveLength(2);
   });
 
+  it('counts characters, not UTF-16 units: 97 characters that are 103 units are sent', async () => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    // Five U+FDFA fold to 90, six emoji are 6 characters but 12 units, one letter: 97 characters, 103 units.
+    const text = `${'ﷺ'.repeat(5)}${'😀'.repeat(6)}a`;
+    expect([...text.normalize('NFKC')]).toHaveLength(97);
+    expect(text.normalize('NFKC').length).toBe(103);
+    await typeQuery(text);
+    await screen.findByLabelText(label('Woven basket'));
+    expect(screen.queryByText(en['buyer.search.too_long'])).not.toBeOnTheScreen();
+    expect(calls()).toHaveLength(1);
+  });
+
   it('the server stays the authority: a refusal for length the device could not foresee is named, with no Try again', async () => {
     serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_LONG' }));
     await openSearch();
     await typeQuery('basket');
     expect(await screen.findByText(en['buyer.search.too_long'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['error.request.validation_failed'])).not.toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(30_000));
+    expect(calls()).toHaveLength(1);
   });
 });
