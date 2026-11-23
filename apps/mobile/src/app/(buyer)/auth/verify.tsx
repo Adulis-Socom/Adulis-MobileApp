@@ -60,9 +60,7 @@ export default function Verify() {
   useEffect(() => {
     if (ageError) AccessibilityInfo.announceForAccessibility(ageMessage);
   }, [ageError, ageMessage]);
-  useEffect(() => {
-    if (notice) AccessibilityInfo.announceForAccessibility(notice);
-  }, [notice]);
+  // The notice below is a StatusText, which speaks it when it appears: no second announcement here.
   // The code flow ends whenever this screen loses focus in the navigator (Back, a tab link, a
   // notification, anything opened on top, sign-in); the app going to the background is not a
   // blur, so reading the SMS keeps it. A navigation event, not an unmount cleanup, so a
