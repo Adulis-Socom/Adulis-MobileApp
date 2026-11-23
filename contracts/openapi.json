@@ -3925,6 +3925,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequestBodyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -13461,6 +13471,43 @@
         },
         "required": [
           "updated"
+        ]
+      },
+      "ReportRequestBodyDto": {
+        "type": "object",
+        "properties": {
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "PRODUCT",
+              "REVIEW",
+              "MESSAGE",
+              "SELLER",
+              "STOREFRONT"
+            ],
+            "description": "What is reported: PRODUCT, REVIEW, MESSAGE, SELLER or STOREFRONT (core.report_target_kind). There is no Scene target."
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the reported item. The server does not check that it exists."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Free text, stored as the report reason code. The server defines no reason list."
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional additional information."
+          }
+        },
+        "required": [
+          "subject_kind",
+          "subject_id",
+          "reason"
         ]
       },
       "ReportCreatedDto": {
