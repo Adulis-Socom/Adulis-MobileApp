@@ -499,6 +499,49 @@ describe('returning from the background', () => {
   });
 });
 
+describe('offline with cards on screen (BUY-05A, B23-009)', () => {
+  afterEach(() => onlineManager.setOnline(true));
+  const refreshing = () =>
+    (screen.getByTestId('for-you-list').props.refreshControl as { props: { refreshing: boolean } }).props.refreshing;
+
+  it('a pull while offline keeps the cards, says the Buyer is offline, spends no request, and the new session arrives on reconnect', async () => {
+    serveByCursor({ '': [ok(fypPage([fypUnit(1)], null, 'session-old')), ok(fypPage([fypUnit(4)], null, 'session-new'))] });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    await pullToRefresh();
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    expect(refreshing()).toBe(false);
+    expect(screen.getByText('Store 1')).toBeOnTheScreen(); // the cards the Buyer was reading stay
+    expect(feedCalls()).toHaveLength(1); // paused, not spent
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText('Store 4')).toBeOnTheScreen();
+    expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    expect(screen.queryByText('Store 1')).not.toBeOnTheScreen();
+  });
+
+  it('Load more while offline says so instead of doing nothing, and the page arrives on reconnect', async () => {
+    const first = Array.from({ length: 20 }, (_, i) => fypUnit(i + 1, { position: i + 1 }));
+    serveByCursor({
+      '': [ok(fypPage(first, 'cursor-A'))],
+      'cursor-A': [ok(fypPage([fypUnit(30, { position: 21 })], null))],
+    });
+    await renderRouter(APP_DIR);
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.for_you.load_more'] }));
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    expect(feedCalls()).toHaveLength(1);
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }]);
+  });
+});
+
 describe('signing in', () => {
   it('never shows the guest cards as the Account feed: a new Account session, with the bearer', async () => {
     api.on(FEED, (call) =>

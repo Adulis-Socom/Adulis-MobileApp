@@ -938,6 +938,30 @@ describe('Product-context messaging (WO-014)', () => {
     expect(screen.queryByText(en['buyer.product.available'])).toBeNull();
   });
 
+  it('22b. a context read waiting for a connection says the Buyer is offline, never "Checking", and nothing is sent (B23-014)', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.publish(BASKET);
+    await renderRouter(APP_DIR, { initialUrl: `/product/${BASKET.seller.handle}/${BASKET.slug}` });
+    const askButton = await screen.findByRole('button', { name: en['buyer.chat.ask_about_product'] });
+    // Signed in and looking at the Product, the Buyer loses the connection and then asks the Seller about it.
+    await act(async () => onlineManager.setOnline(false));
+    try {
+      await fireEvent.press(askButton);
+      await screen.findByTestId('chat-product-context');
+      // The read is paused, not failed and not running: the card says what is true and verifies nothing.
+      expect(await context().findByText(en['common.offline'])).toBeOnTheScreen();
+      expect(context().queryByText(en['buyer.chat.context_checking'])).toBeNull();
+      expect(screen.queryByText('Woven basket')).toBeNull();
+      expect(sends()).toEqual([]);
+      await act(async () => onlineManager.setOnline(true));
+      expect(await context().findByText('Woven basket')).toBeOnTheScreen();
+      expect(context().queryByText(en['common.offline'])).toBeNull();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+  });
+
   it('25. a second press while an anchored message is sending sends nothing', async () => {
     const { gate, release } = held();
     const chat = await askFrom(BASKET);
