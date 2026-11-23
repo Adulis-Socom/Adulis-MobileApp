@@ -12,7 +12,8 @@ import { SavedItemCard } from './SavedItemCard';
 /**
  * BUY-09 (B25-005): Load more on the other paged lists says "offline" beside the control, as For You
  * does (for-you.test.tsx): no spinner, no end sentence, no extra request, the page arrives on reconnect.
- * Plus the Saved card trusts `state`, and the Saved screens never touch Cart.
+ * Plus the Saved card trusts `state`. ("Saved never touches Cart" is structural, not tested here: no HTTP cart adapter is mounted
+ * and the real one rejects without a request; see commerce/commerce-guard.test.tsx.)
  */
 const APP_DIR = 'src/app';
 jest.mock('expo-secure-store', () => jest.requireActual('../testing/secure-store-mock'));
@@ -149,15 +150,5 @@ describe('SavedItemCard trusts the resolved state, not the nullable fields (desi
     );
     expect(rntlScreen.queryByText(/Secret scene/)).not.toBeOnTheScreen();
     expect(rntlScreen.getByText(en['buyer.saved.scene_unavailable'])).toBeOnTheScreen();
-  });
-});
-
-describe('Saved never touches Cart (BUY-09)', () => {
-  it('opening Saved and removing nothing sends no request whose path mentions the cart', async () => {
-    resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
-    await renderRouter(APP_DIR, { initialUrl: '/saved' });
-    await settle();
-    expect(api.calls.length).toBeGreaterThan(0);
-    expect(api.calls.filter((c) => /cart/i.test(c.path))).toEqual([]);
   });
 });

@@ -122,7 +122,7 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     firstPage: query.data?.pages[0]?.page,
     /** Nothing to show yet and the request waits for a connection. */
     paused: query.fetchStatus === 'paused' && query.data === undefined,
-    /** A read of this list (a pull, Load more or a retry) waits for a connection, whether or not items are shown; said beside Load more (B25-005). */
+    /** A read of this list waits for a connection, whether or not items are shown; said beside Load more (B25-005). A pull is a new query, so it does not raise this line beside a next page. */
     fetchPaused: query.fetchStatus === 'paused',
     /** A pull is in flight; the previous items are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
