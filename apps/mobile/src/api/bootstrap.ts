@@ -34,8 +34,9 @@ export function useBootstrap() {
 /**
  * The server's account_context for the signed-in Account, or null (guest, not loaded yet,
  * or offline). Read as delivered; never computed or completed on the device. WO-003
- * consumes it for nothing user-facing: mode switching is a later work order, Courier is
- * fail-closed, and release builds stay Buyer-only whatever it says.
+ * reads it for mode availability only (modes/modes.ts: Seller needs a signed-in Account whose
+ * `seller_companion.available` is true, Courier is a development diagnostic). Whether a Buyer-only release
+ * should hide the Switch to Seller button is the founder's open decision D-08 and is NOT decided here.
  */
 export function useAccountContext(): AccountContext | null {
   return useBootstrap().data?.account_context ?? null;
