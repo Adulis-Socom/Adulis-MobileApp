@@ -13,7 +13,8 @@ import { apiOrigin } from './config';
  * without reading English:
  *
  *   offline     the request never reached the server (no connection, DNS, refused)
- *   timeout     no answer within TIMEOUT_MS (React Native's Android client never times out)
+ *   timeout     no complete answer within TIMEOUT_MS, headers and body together (React Native's
+ *               Android client never times out; a body that stalls after its headers counts)
  *   problem     the server answered with its problem envelope (code, title_key, slots)
  *   unexpected  any other non-success answer
  *
@@ -211,9 +212,9 @@ type Call = {
   ok: number;
 };
 
-async function readProblem(res: Response): Promise<Problem | null> {
+async function readProblem(res: Response, deadline: Promise<never>): Promise<Problem | null> {
   try {
-    const body: unknown = await res.json();
+    const body: unknown = await Promise.race([res.json(), deadline]);
     if (body && typeof body === 'object' && typeof (body as Problem).code === 'string') {
       return body as Problem;
     }
@@ -255,40 +256,52 @@ export function createApiClient(deps: ApiDeps) {
     });
     const url = `${apiOrigin()}${resolved}${search ? `?${search}` : ''}`;
     const controller = new AbortController();
+    // One deadline for the whole exchange, headers and body (BUY-27A): the timer is cleared only
+    // once the body is read, and a body read that ignores the abort signal is raced against it.
+    // A timeout stays an unknown outcome: it is never read as the server having refused, so a keyed
+    // retry keeps its Idempotency-Key.
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    let res: Response;
+    const deadline = new Promise<never>((_resolve, reject) =>
+      controller.signal.addEventListener('abort', () => reject(new ApiError({ kind: 'timeout' })), { once: true }),
+    );
+    deadline.catch(() => undefined);
     try {
-      res = await fetch(url, {
-        method,
-        headers,
-        body: init.body === undefined ? null : JSON.stringify(init.body),
-        signal: controller.signal,
-      });
-    } catch {
-      throw new ApiError(controller.signal.aborted ? { kind: 'timeout' } : { kind: 'offline' });
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method,
+          headers,
+          body: init.body === undefined ? null : JSON.stringify(init.body),
+          signal: controller.signal,
+        });
+      } catch {
+        throw new ApiError(controller.signal.aborted ? { kind: 'timeout' } : { kind: 'offline' });
+      }
+
+      if (res.status === init.ok) {
+        if (res.status === 204) return undefined as T;
+        try {
+          return (await Promise.race([res.json(), deadline])) as T;
+        } catch {
+          // The deadline passed while the body was still arriving: the server accepted the request
+          // and the result is unknown, not a malformed answer.
+          throw new ApiError(controller.signal.aborted ? { kind: 'timeout' } : { kind: 'unexpected', status: res.status });
+        }
+      }
+      const problem = await readProblem(res, deadline);
+      const asked = waitAsked(res, problem);
+      if (!problem) throw new ApiError({ kind: 'unexpected', status: res.status, ...asked });
+      if (
+        sessionToken &&
+        res.status === 401 &&
+        (problem.code === 'SESSION_EXPIRED' || problem.code === 'SESSION_REVOKED')
+      ) {
+        deps.onSessionEnded(sessionToken);
+      }
+      throw new ApiError({ kind: 'problem', status: res.status, problem, ...asked });
     } finally {
       clearTimeout(timer);
     }
-
-    if (res.status === init.ok) {
-      if (res.status === 204) return undefined as T;
-      try {
-        return (await res.json()) as T;
-      } catch {
-        throw new ApiError({ kind: 'unexpected', status: res.status });
-      }
-    }
-    const problem = await readProblem(res);
-    const asked = waitAsked(res, problem);
-    if (!problem) throw new ApiError({ kind: 'unexpected', status: res.status, ...asked });
-    if (
-      sessionToken &&
-      res.status === 401 &&
-      (problem.code === 'SESSION_EXPIRED' || problem.code === 'SESSION_REVOKED')
-    ) {
-      deps.onSessionEnded(sessionToken);
-    }
-    throw new ApiError({ kind: 'problem', status: res.status, problem, ...asked });
   }
 
   return {
