@@ -107,13 +107,20 @@ export function isTransient(error: unknown): boolean {
 }
 
 /**
- * True when the server definitely answered (a problem or another non-success). The outcome
- * is known, so a retry is a new attempt and gets a new idempotency key: a stored refusal
- * (a 429, a 500) would otherwise be replayed for as long as the key lives. Offline and
- * timeout leave the outcome unknown, so the retry keeps the key.
+ * True when the server definitely answered AND the answer settles the attempt: a problem or another
+ * non-success. The outcome is known, so a retry is a new attempt and gets a new idempotency key: a
+ * stored refusal (a 429, a 500) would otherwise be replayed for as long as the key lives.
+ *
+ * Not answered, whatever arrived: offline and timeout (nothing, or not all of it, came back), and a
+ * SUCCESS status whose body could not be read (a connection reset mid-body, a body that is not JSON;
+ * `unexpected` with a 2xx status). The server accepted the request there, so the operation may be
+ * stored and only its answer is lost: the retry keeps the key and the server replays the stored
+ * answer, where a new key could store the operation a second time (BUY-27B, B24-010).
  */
 export function wasAnswered(error: unknown): boolean {
-  return error instanceof ApiError && !isTransient(error);
+  if (!(error instanceof ApiError) || isTransient(error)) return false;
+  const f = error.failure;
+  return !(f.kind === 'unexpected' && f.status >= 200 && f.status < 300);
 }
 
 /**
@@ -285,7 +292,9 @@ export function createApiClient(deps: ApiDeps) {
           return (await Promise.race([res.json(), deadline])) as T;
         } catch {
           // The deadline passed while the body was still arriving: the server accepted the request
-          // and the result is unknown, not a malformed answer.
+          // and the result is unknown, not a malformed answer. Any other failure here (a reset mid-body, a
+          // body that is not JSON) is `unexpected` with this success status, which `wasAnswered` reads as
+          // unknown as well: the key is kept (BUY-27B).
           throw new ApiError(controller.signal.aborted ? { kind: 'timeout' } : { kind: 'unexpected', status: res.status });
         }
       }

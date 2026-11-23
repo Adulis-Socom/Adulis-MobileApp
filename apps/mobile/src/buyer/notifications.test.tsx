@@ -216,6 +216,27 @@ describe('the Buyer inbox', () => {
     expect(keys[0]).toBe(keys[1]);
   });
 
+  it('BUY-27B: a read answered 200 whose body cannot be read is unknown: the retry carries the same key', async () => {
+    signedIn();
+    installInbox({ [`Bearer ${GOOD_TOKEN}`]: [row(1)] });
+    let first = true;
+    api.onPattern('POST', /^\/v1\/notifications\/[^/]+\/read$/, () => {
+      if (first) {
+        first = false;
+        return { status: 200, unreadable: true };
+      }
+      return { status: 200, body: { read_at: new Date().toISOString() } };
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/notifications' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.notifications.mark_read'] }));
+    expect(await screen.findByText(en['buyer.notifications.mark_read_failed'])).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.notifications.mark_read'] }));
+    expect(await screen.findByText(en['buyer.notifications.read_state'])).toBeOnTheScreen();
+    const keys = readCalls().map((c) => c.headers['Idempotency-Key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
   it('14. an inbox that cannot load says so, and Try again recovers', async () => {
     signedIn();
     let reply: Reply = 'offline';

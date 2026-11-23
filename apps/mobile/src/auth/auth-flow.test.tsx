@@ -193,6 +193,40 @@ describe('sign in', () => {
     expect(keys[1]).toBe(keys[0]);
   });
 
+  it('BUY-27B: a 202 whose answer cannot be read is unknown: the retry carries the same key', async () => {
+    await renderRouter(APP_DIR, { initialUrl: '/auth/sign-in' });
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+    api.on('POST /v1/auth/otp/request', () => ({ status: 202, unreadable: true }));
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await waitFor(() => expect(api.callsTo('POST /v1/auth/otp/request')).toHaveLength(1));
+    expect(screen.queryByLabelText(en['auth.code.label'])).not.toBeOnTheScreen(); // not taken as sent
+
+    api.on('POST /v1/auth/otp/request', () => ({ status: 202, body: {} }));
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await screen.findByLabelText(en['auth.code.label']);
+    const keys = api.callsTo('POST /v1/auth/otp/request').map((c) => c.headers['Idempotency-Key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('BUY-27B: a 200 verify whose answer cannot be read is unknown: the retry carries the same key and signs in', async () => {
+    await requestCode();
+    api.on('POST /v1/auth/otp/verify', () => ({ status: 200, unreadable: true }));
+    await enterCode();
+    await waitFor(() => expect(api.callsTo('POST /v1/auth/otp/verify')).toHaveLength(1));
+    expect(memory.has(TOKEN_KEY)).toBe(false); // nothing is signed in from an answer that could not be read
+
+    api.on('POST /v1/auth/otp/verify', () => ({
+      status: 200,
+      body: { account_id: 'a', audience: 'MOBILE', roles: [], expires_at: 'x', token: GOOD_TOKEN },
+    }));
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
+    expect(await screen.findByText(en['buyer.orders.coming'])).toBeOnTheScreen();
+    const keys = api.callsTo('POST /v1/auth/otp/verify').map((c) => c.headers['Idempotency-Key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it('shows and speaks the server message for a refused request; trying again is a new request', async () => {
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     api.on('POST /v1/auth/otp/request', () => problem(429, 'RATE_LIMITED', 'request', { retry_after_seconds: 42 }));
