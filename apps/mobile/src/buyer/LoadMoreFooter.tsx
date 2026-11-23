@@ -41,8 +41,11 @@ export type Paging = {
 export function LoadMoreFooter({
   paging,
   keys,
+  announceOffline = false,
 }: {
   paging: Paging;
+  /** The screen has no other offline alert of its own (the empty walk panel): say it here, announced, once. */
+  announceOffline?: boolean;
   keys: { load: MobileMessageKey; loading: MobileMessageKey; failed: MobileMessageKey; end: MobileMessageKey };
 }) {
   const t = useT();
@@ -87,9 +90,15 @@ export function LoadMoreFooter({
         </View>
       ) : null}
       {waitingForConnection ? (
-        <AppText testID="load-more-offline" style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
-          {t('common.offline')}
-        </AppText>
+        announceOffline ? (
+          <AlertText testID="load-more-offline" style={{ textAlign: 'center' }}>
+            {t('common.offline')}
+          </AlertText>
+        ) : (
+          <AppText testID="load-more-offline" style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
+            {t('common.offline')}
+          </AppText>
+        )
       ) : null}
       {hasNextPage ? (
         <View style={{ alignSelf: 'stretch' }} testID="load-more">
