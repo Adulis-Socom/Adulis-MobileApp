@@ -130,7 +130,7 @@ export default function Search() {
               accessibilityRole="button"
               accessibilityLabel={t('buyer.search.clear')}
               onPress={clear}
-              hitSlop={8}
+              hitSlop={theme.space.sm}
               style={{ minWidth: theme.touchTarget, minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center' }}
               testID="search-clear"
             >

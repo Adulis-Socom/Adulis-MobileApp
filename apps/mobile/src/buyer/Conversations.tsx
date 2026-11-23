@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, View } from 'react-native';
 
 import { failureMessage, fillSlots } from '../api/messages';
-import { AlertText } from '../components/AlertText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useLocale, useT, formatDateTime } from '../i18n/i18n';
@@ -75,9 +75,9 @@ export function Conversations() {
           <Button label={t('buyer.messages.refresh')} variant="secondary" onPress={() => void list.refetch()} disabled={list.isFetching} />
           {/* A refresh that waits for a connection, with rows shown: say so. */}
           {list.fetchStatus === 'paused' && list.items.length > 0 ? (
-            <AppText testID="conversations-offline" style={secondary}>
+            <StatusText testID="conversations-offline" style={secondary}>
               {t('common.offline')}
-            </AppText>
+            </StatusText>
           ) : null}
           {/* A refresh that failed leaves the rows as they were, and says so; an older page says it beside its control, and an empty list in its own block. */}
           {failure === 'refetch' && list.items.length > 0 ? (
