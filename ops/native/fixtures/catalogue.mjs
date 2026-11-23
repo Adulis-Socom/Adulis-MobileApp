@@ -29,7 +29,8 @@ export const publicRef = (seed) =>
 
 // The newest `published_at` already in the SEED Market (the seeded 'Seed Coffee 1kg' is published at seed
 // time) or now(), whichever is later: the four Weaves Products are published after both, by explicit seconds.
-const BASE = `greatest(now(), coalesce((SELECT max(published_at) FROM core.product WHERE market_id = ${SEED_MARKET}), now()))`;
+const base = (seller) =>
+  `greatest(now(), coalesce((SELECT max(published_at) FROM core.product WHERE market_id = ${SEED_MARKET} AND seller_id <> '${seller}'), now()))`;
 
 /** Seller 'Fixture Weaves' and its four Products (inventory E2, E3; ordered by created_at and published_at). */
 export const WEAVES_PRODUCTS = [
@@ -183,8 +184,8 @@ export function catalogueSets(uuid) {
         const items = WEAVES_PRODUCTS.map((p, i) => ({
           ...p,
           idKey: `cat-product:${p.key}`,
-          created: `${BASE} + interval '${i + 1} seconds'`,
-          published: `${BASE} + interval '${i + 1} seconds'`,
+          created: `${base(w.seller)} + interval '${i + 1} seconds'`,
+          published: `${base(w.seller)} + interval '${i + 1} seconds'`,
         }));
         return `${sellerRows({ uuid, m, account: w.account, seller: w.seller, market: SEED_MARKET, phone: WEAVES.phone, who: WEAVES, handoff: WEAVES.handoffNote, created: `now() - interval '45 days'` })}
 INSERT INTO billing.subscription (id, seller_id, state, beta_started_at)
