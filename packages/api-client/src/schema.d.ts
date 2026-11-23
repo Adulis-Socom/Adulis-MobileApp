@@ -3108,6 +3108,22 @@ export interface components {
             /** @description What was reported: PRODUCT, REVIEW, MESSAGE, SELLER or STOREFRONT. */
             target_kind: string;
         };
+        ReportRequestBodyDto: {
+            /** @description Optional additional information. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2. */
+            detail?: string;
+            /** @description Free text, stored as the report reason code. The server defines no reason list. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2. */
+            reason: string;
+            /**
+             * Format: uuid
+             * @description The id of the reported item. The server does not check that it exists.
+             */
+            subject_id: string;
+            /**
+             * @description What is reported: PRODUCT, REVIEW, MESSAGE, SELLER or STOREFRONT (core.report_target_kind). There is no Scene target.
+             * @enum {string}
+             */
+            subject_kind: "PRODUCT" | "REVIEW" | "MESSAGE" | "SELLER" | "STOREFRONT";
+        };
         ReviewBasisCountsDto: {
             /** @description Verified payment and accepted final receipt. */
             FINAL_HANDOFF: number;
@@ -6546,7 +6562,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequestBodyDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
