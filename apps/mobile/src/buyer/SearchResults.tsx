@@ -7,6 +7,7 @@ import { useBootstrap } from '../api/bootstrap';
 import { ApiError, type SaveTarget, type SearchItem, type SearchPage, type SearchType } from '../api/client';
 import { failureMessage, fillSlots } from '../api/messages';
 import { useSession } from '../auth/session';
+import { StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
@@ -130,9 +131,9 @@ export function SearchResults({
       empty="buyer.search.loading"
       emptyState={
         <View style={{ gap: theme.space.md, alignItems: 'center' }}>
-          <AppText accessibilityLiveRegion="polite" style={{ textAlign: 'center', color: theme.color.textSecondary }}>
+          <StatusText style={{ textAlign: 'center', color: theme.color.textSecondary }}>
             {fillSlots(t('buyer.search.empty'), { query }) ?? query}
-          </AppText>
+          </StatusText>
           <Button label={t('buyer.search.go_shop')} onPress={() => router.navigate('/shop')} />
           <Button label={t('buyer.search.go_home')} onPress={() => router.navigate('/home/for-you')} />
         </View>

@@ -12,6 +12,8 @@ import { productionSources, uiSources } from '../testing/source-scan';
  * - A spinner is named, or hidden from both screen readers, never an unnamed element beside the text that already
  *   says "Loading".
  * - Motion the app asks for follows the reduced-motion setting, read by the parent before the picker mounts.
+ * - A status line is spoken through StatusText/AlertText (an announcement), never a live region: iOS ignores a
+ *   live region (the line is silent there) and Android reads it twice beside an announcement (BUY-04D).
  */
 
 const BUYER_UI = productionSources('buyer', 'components', 'app');
@@ -92,5 +94,25 @@ describe('motion', () => {
     const parent = BUYER_UI.find(({ file }) => file === 'buyer/Conversation.tsx');
     expect(parent?.text).toMatch(/useReduceMotion\(\)/);
     expect(parent?.text).toMatch(/reduceMotion=\{reduceMotion\}/);
+  });
+});
+
+describe('announcements', () => {
+  /** A live region by either spelling: the React Native prop and the web-style alias. */
+  const LIVE_REGION = /\baccessibilityLiveRegion\b|\baria-live\b/g;
+
+  it('no screen draws a live region: status lines are StatusText or AlertText, which announce on both platforms', () => {
+    const files = uiSources();
+    expect(files.length).toBeGreaterThan(50);
+    expect(counts(files, LIVE_REGION)).toEqual({});
+  });
+
+  it('would notice a live region on either spelling, and not an announced line (proved on samples)', () => {
+    const prop = [{ file: 'x.tsx', text: '<AppText accessibilityLiveRegion="polite">{t(loading)}</AppText>' }];
+    expect(counts(prop, LIVE_REGION)).toEqual({ 'x.tsx': 1 });
+    const alias = [{ file: 'x.tsx', text: '<Text aria-live="polite">{x}</Text>' }];
+    expect(counts(alias, LIVE_REGION)).toEqual({ 'x.tsx': 1 });
+    const announced = [{ file: 'x.tsx', text: '<StatusText style={s}>{t(loading)}</StatusText><AlertText>{e}</AlertText>' }];
+    expect(counts(announced, LIVE_REGION)).toEqual({});
   });
 });

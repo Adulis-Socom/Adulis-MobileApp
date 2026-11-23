@@ -317,6 +317,16 @@ describe('sign in', () => {
     expect(second?.body).not.toHaveProperty('date_of_birth');
   });
 
+  it('speaks the resent-code notice exactly once (BUY-04D)', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    await requestCode();
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.resend'] }));
+    expect(await screen.findByText(en['auth.code.resent'])).toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(500));
+    expect(announce.mock.calls.filter(([said]) => said === en['auth.code.resent'])).toHaveLength(1);
+    expect(screen.getByText(en['auth.code.resent']).props.accessibilityLiveRegion).toBeUndefined();
+  });
+
   it('resends a new code, and reports the server backoff in its own words', async () => {
     await requestCode();
     await fireEvent.press(screen.getByRole('button', { name: en['auth.resend'] }));

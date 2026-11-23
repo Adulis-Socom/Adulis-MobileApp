@@ -9,6 +9,7 @@ import { failureMessage, fillSlots } from '../../../api/messages';
 import { useSession } from '../../../auth/session';
 import { isOtpCode, parseReturnTo, parseSaveNonce } from '../../../auth/sign-in-flow';
 import { completePendingSave } from '../../../buyer/saved';
+import { StatusText } from '../../../components/AlertText';
 import { AppText } from '../../../components/AppText';
 import { Button } from '../../../components/Button';
 import { Checkbox } from '../../../components/Checkbox';
@@ -59,9 +60,7 @@ export default function Verify() {
   useEffect(() => {
     if (ageError) AccessibilityInfo.announceForAccessibility(ageMessage);
   }, [ageError, ageMessage]);
-  useEffect(() => {
-    if (notice) AccessibilityInfo.announceForAccessibility(notice);
-  }, [notice]);
+  // The notice below is a StatusText, which speaks it when it appears: no second announcement here.
   // The code flow ends whenever this screen loses focus in the navigator (Back, a tab link, a
   // notification, anything opened on top, sign-in); the app going to the background is not a
   // blur, so reading the SMS keeps it. A navigation event, not an unmount cleanup, so a
@@ -184,9 +183,9 @@ export default function Verify() {
           </AppText>
         ) : null}
         {notice ? (
-          <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
+          <StatusText style={{ color: theme.color.textSecondary }}>
             {notice}
-          </AppText>
+          </StatusText>
         ) : null}
         <Button label={t('auth.verify')} onPress={() => void verify()} disabled={busy !== null} />
         <Button label={t('auth.resend')} onPress={() => void resend()} disabled={busy !== null} variant="secondary" />
