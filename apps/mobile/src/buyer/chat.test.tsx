@@ -552,6 +552,61 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     expect(screen.getByText('Still here')).toBeOnTheScreen();
   });
 
+  it('C1d (BUY-10A). a refresh that waits for a connection with messages shown says offline, keeps them, spends no request, and the line goes on reconnect', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    chat.msg(c, { sender_kind: 'SELLER', body: 'Still here', sent_at: ago(30) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText('Still here')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-offline')).not.toBeOnTheScreen();
+    const before = messageCalls().length;
+    await act(async () => onlineManager.setOnline(false));
+    try {
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+      expect(await screen.findByTestId('chat-offline')).toHaveTextContent(en['common.offline']);
+      expect(screen.getByText('Still here')).toBeOnTheScreen();
+      expect(messageCalls()).toHaveLength(before); // paused, not spent
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+    await waitFor(() => expect(screen.queryByTestId('chat-offline')).not.toBeOnTheScreen());
+    expect(screen.getByText('Still here')).toBeOnTheScreen();
+  });
+
+  it('C1e (BUY-10A). the conversation list says offline the same way when a refresh waits for a connection', async () => {
+    signedIn();
+    const chat = installChat();
+    chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: '/messages' });
+    await screen.findByRole('button', { name: 'Store 1' });
+    expect(screen.queryByTestId('conversations-offline')).not.toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    try {
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.messages.refresh'] }));
+      expect(await screen.findByTestId('conversations-offline')).toHaveTextContent(en['common.offline']);
+      expect(screen.getByRole('button', { name: 'Store 1' })).toBeOnTheScreen();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+    await waitFor(() => expect(screen.queryByTestId('conversations-offline')).not.toBeOnTheScreen());
+  });
+
+  it('C2 (BUY-10A). a first page whose rows the parser cannot show never reads as an empty conversation: Load earlier stays', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    // 50 newest rows from a sender kind this app has no word for (dropped, never guessed), then one older Seller row.
+    chat.msg(c, { sender_kind: 'SELLER', body: 'The oldest line', sent_at: ago(1000) });
+    for (let i = 50; i >= 1; i--) chat.msg(c, { sender_kind: 'OPERATOR', body: `Unknown ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    const more = await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] });
+    expect(screen.queryByText(en['buyer.chat.empty'])).not.toBeOnTheScreen();
+    await fireEvent.press(more);
+    expect(await screen.findByText('The oldest line')).toBeOnTheScreen();
+    expect(screen.queryByText(/Unknown/)).not.toBeOnTheScreen(); // never shown, never guessed
+  });
+
   it('C1c. Load older conversations that fails says so, is announced, and Try again loads the page', async () => {
     signedIn();
     const chat = installChat();

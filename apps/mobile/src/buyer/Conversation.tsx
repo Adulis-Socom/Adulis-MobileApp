@@ -550,6 +550,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
             <AppText style={secondary}>{failureMessage(t, messages.error)}</AppText>
             <Button label={t('common.retry')} onPress={() => void messages.refetch()} />
           </View>
+        ) : messages.hasNextPage ? (
+          // The newest page held nothing this app can show (a row it has no word for is dropped, never guessed), but older
+          // pages exist: that is not an empty conversation, and the way back must stay.
+          <PagingControl query={messages} failure={failure} label="buyer.chat.load_earlier" />
         ) : (
           <AppText style={secondary}>
             {t(messages.fetchStatus === 'paused' && messages.data === undefined ? 'common.offline' : messages.isPending ? 'common.loading' : 'buyer.chat.empty')}
@@ -563,6 +567,13 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       {header}
       <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.sm }}>
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
+        {/* A read (a refresh, or the poll) that waits for a connection, with messages shown: say so; nothing was sent or lost.
+            In the edited-unsent state the recheck line already says it: one message, not two. */}
+        {messages.fetchStatus === 'paused' && messages.items.length > 0 && recheckText !== t('common.offline') ? (
+          <AppText testID="chat-offline" style={secondary}>
+            {t('common.offline')}
+          </AppText>
+        ) : null}
         {/* A refresh or poll that failed leaves the messages as they were, and says so; an earlier page says it beside its control, and an empty conversation in its own block.
             In the edited-unsent state the recheck line already says the read failed: one alert, not two. */}
         {failure === 'refetch' && messages.items.length > 0 && recheckText !== t('buyer.chat.failed') ? (

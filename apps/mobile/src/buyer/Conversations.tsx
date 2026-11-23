@@ -73,6 +73,12 @@ export function Conversations() {
       ListHeaderComponent={
         <View style={{ gap: theme.space.sm, marginBottom: theme.space.sm }}>
           <Button label={t('buyer.messages.refresh')} variant="secondary" onPress={() => void list.refetch()} disabled={list.isFetching} />
+          {/* A refresh that waits for a connection, with rows shown: say so. */}
+          {list.fetchStatus === 'paused' && list.items.length > 0 ? (
+            <AppText testID="conversations-offline" style={secondary}>
+              {t('common.offline')}
+            </AppText>
+          ) : null}
           {/* A refresh that failed leaves the rows as they were, and says so; an older page says it beside its control, and an empty list in its own block. */}
           {failure === 'refetch' && list.items.length > 0 ? (
             <AlertText>{`${t('buyer.messages.failed')} ${failureMessage(t, list.error)}`}</AlertText>
