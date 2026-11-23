@@ -101,7 +101,7 @@ export function PublicListView<I>({
         </>
       );
     }
-    if (list.paused) return <AlertText>{t('common.offline')}</AlertText>;
+    if (list.firstReadPaused) return <AlertText>{t('common.offline')}</AlertText>;
     if (list.status === 'pending') {
       return (
         <>
@@ -157,9 +157,18 @@ export function PublicListView<I>({
         </View>
       }
       ListFooterComponent={
-        list.items.length === 0 || bounded ? null : (
+        list.items.length === 0 || bounded ? null : list.refreshPending ? (
+          // A pull is pending: the items are the previous answer, so the footer describes the pull and never the end.
+          list.refreshPaused ? (
+            <View testID="list-refresh-offline" style={{ padding: theme.space.lg, alignItems: 'center' }}>
+              <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
+                {t('common.offline')}
+              </AppText>
+            </View>
+          ) : null
+        ) : (
           <LoadMoreFooter
-            paging={{ ...list, paused: list.fetchPaused, count: list.items.length, pageCount: list.pages.length }}
+            paging={{ ...list, paused: list.readPaused, count: list.items.length, pageCount: list.pages.length }}
             keys={{ load: 'buyer.list.load_more', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
           />
         )

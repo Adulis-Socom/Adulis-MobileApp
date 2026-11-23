@@ -98,10 +98,10 @@ function CollectionsSection({ list }: { list: ReturnType<typeof usePublicList<{ 
     if (hasNextPage) loadMore();
   }, [hasNextPage, loadMore, list.items.length]);
   if (list.items.length === 0) {
-    if (list.status === 'error' || list.paused) {
+    if (list.status === 'error' || list.firstReadPaused) {
       return (
         <View style={{ gap: theme.space.sm }}>
-          <AlertText>{`${t('buyer.saved.collections_failed')} ${list.paused ? t('common.offline') : failureMessage(t, list.error)}`}</AlertText>
+          <AlertText>{`${t('buyer.saved.collections_failed')} ${list.firstReadPaused ? t('common.offline') : failureMessage(t, list.error)}`}</AlertText>
           <Button label={t('common.retry')} variant="secondary" onPress={list.retry} />
         </View>
       );
