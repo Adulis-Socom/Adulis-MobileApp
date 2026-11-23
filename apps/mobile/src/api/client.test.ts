@@ -391,3 +391,55 @@ describe('retry hints on a failed answer', () => {
     }
   });
 });
+
+describe('an accepted request whose answer cannot be read (BUY-27B, B24-010)', () => {
+  const REF = 'c0000000-0000-4000-8000-000000000001';
+  const stub = (status: number, json: () => Promise<unknown>, headers: Record<string, string> = {}) => {
+    globalThis.fetch = jest.fn(() =>
+      Promise.resolve({ status, headers: { get: (n: string) => headers[n.toLowerCase()] ?? null }, json } as unknown as Response),
+    ) as unknown as typeof fetch;
+    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
+  };
+  const send = () => client(GOOD_TOKEN).api.sendMessage(REF, 'Hello', 'k');
+
+  it('a complete success answer is returned and is not a failure', async () => {
+    stub(201, async () => ({ message_id: 'm' }));
+    await expect(send()).resolves.toEqual({ message_id: 'm' });
+  });
+
+  it.each([
+    ['a connection reset in the middle of the body', () => Promise.reject(new TypeError('Network request failed'))],
+    ['a body that is not JSON', () => Promise.reject(new SyntaxError('Unexpected token < in JSON'))],
+  ])('%s after a success status: the server accepted the request, so the outcome is UNKNOWN, not answered', async (_name, json) => {
+    stub(201, json);
+    const error = (await failureOf(send())) as ApiError;
+    expect(error.failure).toEqual({ kind: 'unexpected', status: 201 });
+    // The caller must keep its idempotency key: a new key could store the operation a second time.
+    expect(wasAnswered(error)).toBe(false);
+    // Not an automatic retry either: nothing is sent again by itself.
+    expect(isTransient(error)).toBe(false);
+    expect((globalThis.fetch as jest.Mock).mock.calls).toHaveLength(1);
+  });
+
+  it('a success status other than the expected one (200 for 201) with no readable problem is unknown too', async () => {
+    stub(200, () => Promise.reject(new SyntaxError('bad')));
+    expect(wasAnswered(await failureOf(send()))).toBe(false);
+  });
+
+  it('what is known stays known: a refusal, a conflict and a gateway page are answers', async () => {
+    stub(409, async () => problem(409, 'IDEMPOTENCY_KEY_REUSED', 'request').body);
+    expect(wasAnswered(await failureOf(send()))).toBe(true);
+    stub(500, async () => problem(500, 'INTERNAL', 'request').body);
+    expect(wasAnswered(await failureOf(send()))).toBe(true);
+    stub(502, () => Promise.reject(new SyntaxError('<html>')));
+    expect(wasAnswered(await failureOf(send()))).toBe(true);
+  });
+
+  it('no answer at all stays unknown: offline before a response', async () => {
+    globalThis.fetch = jest.fn(() => Promise.reject(new TypeError('Network request failed'))) as unknown as typeof fetch;
+    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
+    const offline = await failureOf(send());
+    expect(wasAnswered(offline)).toBe(false);
+    expect(isTransient(offline)).toBe(true);
+  });
+});

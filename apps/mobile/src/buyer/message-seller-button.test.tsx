@@ -7,7 +7,7 @@ import { useSession } from '../auth/session';
 import type { SessionStorage } from '../auth/session-storage';
 import type { DeviceStorage } from '../device/device-storage';
 import { AppProviders } from '../providers/AppProviders';
-import { GOOD_TOKEN, installFakeApi } from '../testing/fake-api';
+import { GOOD_TOKEN, installFakeApi, type Reply } from '../testing/fake-api';
 import { MessageSellerButton } from './MessageSellerButton';
 
 jest.mock('expo-router', () => ({ ...jest.requireActual('expo-router'), useRouter: () => ({ push: jest.fn() }) }));
@@ -47,10 +47,10 @@ function Probe() {
 describe('Message Seller across an Account change', () => {
   beforeEach(() => entries.clear());
 
-  async function boot() {
+  async function boot(reply: Reply = 'offline') {
     const fake = installFakeApi();
     // Never answered: the outcome of the open stays unknown, so its key is kept for the retry.
-    fake.on('POST /v1/conversations', () => 'offline');
+    fake.on('POST /v1/conversations', () => reply);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     await render(
       <AppProviders queryClient={queryClient} sessionStorage={sessionStorage(GOOD_TOKEN)} deviceStorage={deviceStorage}>
@@ -66,6 +66,15 @@ describe('Message Seller across an Account change', () => {
 
   it('keeps the key for the same Account: a second tap after a lost answer is the same request', async () => {
     const { opens, press } = await boot();
+    await press();
+    await waitFor(() => expect(opens()).toHaveLength(1));
+    await press();
+    await waitFor(() => expect(opens()).toHaveLength(2));
+    expect(opens()[1]!.headers['Idempotency-Key']).toBe(opens()[0]!.headers['Idempotency-Key']);
+  });
+
+  it('BUY-27B: a 201 whose answer cannot be read is unknown: a second tap is the same request, same key', async () => {
+    const { opens, press } = await boot({ status: 201, unreadable: true });
     await press();
     await waitFor(() => expect(opens()).toHaveLength(1));
     await press();

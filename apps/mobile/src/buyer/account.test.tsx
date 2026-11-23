@@ -549,6 +549,32 @@ describe('Delete Account', () => {
     expect(keys[0]).toBe(keys[1]);
   });
 
+  it('BUY-27B: a deletion code request answered 202 whose body cannot be read is unknown: the retry carries the same key', async () => {
+    signedIn();
+    installDeletion();
+    let first = true;
+    api.on('POST /v1/deletion/otp/request', () => {
+      if (first) {
+        first = false;
+        return { status: 202, unreadable: true }; // the server sent the code; only the answer was lost
+      }
+      return { status: 202, body: {} };
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/account' });
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.you.delete'] }));
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.delete.continue'] }));
+    await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/deletion/otp/request')).toHaveLength(1);
+    expect(screen.queryByLabelText(en['auth.code.label'])).not.toBeOnTheScreen(); // not taken as sent
+    await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
+    await screen.findByLabelText(en['auth.code.label']);
+    const keys = api.callsTo('POST /v1/deletion/otp/request').map((c) => c.headers['Idempotency-Key']);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
   it('21. a lost answer followed by a refused ticket is reported as unconfirmed, never as either outcome', async () => {
     signedIn();
     installDeletion();
