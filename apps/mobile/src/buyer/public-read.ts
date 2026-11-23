@@ -117,6 +117,10 @@ export function usePublicRead<T>(
     setPulling(true);
     void refetch({ cancelRefetch: false }).finally(() => setPulling(false));
   }, [refetch]);
+  // A pull whose read is paused cannot progress: its spinner ends here, whatever the status is (a Product kept
+  // after a failed re-read has status 'error', so `offline` below does not cover it, B23-010). The paused read
+  // resuming on reconnect is TanStack's, not a gesture, so it must not turn the spinner back on (B23-011).
+  if (pulling && query.fetchStatus === 'paused') setPulling(false);
   // An answer is on screen and its re-read waits for a connection (TanStack pauses it, and the pull's
   // promise with it): the screen says so, and the spinner stops rather than turning until reconnect.
   const offline = query.fetchStatus === 'paused' && query.status === 'success';

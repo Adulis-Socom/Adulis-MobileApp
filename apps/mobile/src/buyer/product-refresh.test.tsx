@@ -313,6 +313,32 @@ describe('a re-read that waits for a connection', () => {
   });
 });
 
+describe('a pull while offline, after a failed re-read (BUY-05A, B23-010, B23-011)', () => {
+  const refreshing = () =>
+    (screen.getByTestId('product-detail').props.refreshControl as { props: { refreshing: boolean } }).props.refreshing;
+
+  it('stops the spinner while the pull waits for a connection, and does not turn it on again by itself on reconnect', async () => {
+    serve(ok(BOTH()), problem(500, 'INTERNAL', 'request'), ok(basket([option(SMALL, { price_minor: 70000 }), option(LARGE)])));
+    await open();
+    await pull();
+    expect(screen.getByText(FAILED)).toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    await pull();
+    // Nothing can progress: the Buyer is told so and the spinner is not left turning.
+    expect(screen.getByText(en['common.offline'])).toBeOnTheScreen();
+    expect(refreshing()).toBe(false);
+    withheldParts();
+    expect(reads()).toBe(2); // paused, not spent
+    await act(async () => onlineManager.setOnline(true));
+    // The paused read resumes by itself; that is not a gesture, so no pull spinner.
+    expect(refreshing()).toBe(false);
+    await settle();
+    expect(reads()).toBe(3);
+    expect(headline()).toBe(`${etb(70000)} – ${etb(95000)}`);
+    expect(refreshing()).toBe(false);
+  });
+});
+
 describe('Try again', () => {
   it('is off while the read is on its way, keeps the same state on a second failure, and shows the new answer on success', async () => {
     let n = 0;

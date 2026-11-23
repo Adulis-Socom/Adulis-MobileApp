@@ -110,6 +110,13 @@ export function ForYouFeed() {
         contentContainerStyle={{ padding: theme.space.md }}
         accessibilityLabel={t('buyer.for_you.feed')}
         testID="for-you-list"
+        // Cards are on screen and the feed's read waits for a connection (a pull, or Load more, made offline):
+        // say so rather than leave the gesture without an answer. TanStack resumes it on reconnect (B23-009).
+        ListHeaderComponent={
+          feed.paused ? (
+            <AlertText style={{ textAlign: 'center', paddingBottom: theme.space.md }}>{t('common.offline')}</AlertText>
+          ) : null
+        }
         ListFooterComponent={
           <LoadMoreFooter
             paging={{ ...feed, count: feed.units.length, pageCount: feed.pageCount }}

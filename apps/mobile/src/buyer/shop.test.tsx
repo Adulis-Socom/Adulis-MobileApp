@@ -315,6 +315,29 @@ describe('the shared public list (ON-040)', () => {
     expect(screen.queryByLabelText(/^Older,/)).not.toBeOnTheScreen();
   });
 
+  it('two overlapping pulls keep the items on screen until an answer arrives, never a flash to loading (B23-007)', async () => {
+    const pending: Array<(reply: Reply) => void> = [];
+    let n = 0;
+    api.on(SHOP, () =>
+      n++ === 0
+        ? ok({ market_resolved: true, data: [shopProduct('a', 'Item A')], next_cursor: null })
+        : new Promise<Reply>((resolve) => pending.push(resolve)),
+    );
+    await openShop();
+    await screen.findByLabelText(/^Item A,/);
+    await pull();
+    await settle();
+    expect(screen.getByLabelText(/^Item A,/)).toBeOnTheScreen();
+    // A second pull while the first is still loading: the items the Buyer is reading do not go.
+    await pull();
+    await settle();
+    expect(pending).toHaveLength(2);
+    expect(screen.getByLabelText(/^Item A,/)).toBeOnTheScreen();
+    await act(async () => pending[1]!(ok({ market_resolved: true, data: [shopProduct('new', 'Newer')], next_cursor: null })));
+    expect(await screen.findByLabelText(/^Newer,/)).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Item A,/)).not.toBeOnTheScreen();
+  });
+
   it('a session that ends mid-browse reads the list again as a guest, and nothing of the signed-in answer stays', async () => {
     resetSecureStore({ [TOKEN_KEY]: GOOD_TOKEN });
     api.on(SHOP, (call) =>

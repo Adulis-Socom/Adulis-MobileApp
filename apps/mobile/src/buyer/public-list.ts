@@ -34,6 +34,9 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
   const subject = session.status === 'signedIn' ? 'account' : 'guest';
   const [list, setList] = useState({ generation: 0, withhold: false });
   const depth = resource.length;
+  // The generation whose real (not placeholder) answer is on screen: a refresh started while an earlier one is
+  // still loading takes its placeholder from THAT answer, so overlapping pulls never flash to loading (B23-007).
+  const shownGeneration = useRef(0);
 
   const query = useInfiniteQuery({
     queryKey: [...resource, subject, list.generation],
@@ -48,13 +51,14 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     refetchOnReconnect: false,
     // The network may retry; a server answer never does.
     retry: (failures, error) => isTransient(error) && failures < 2,
-    // Only the immediately previous generation of the same subject stands in while a pull loads.
+    // Only the answer on screen, of the same subject and resource, stands in while a pull loads (the immediately
+    // previous generation, or the one before it while that one is still loading).
     placeholderData: (previous, previousQuery) =>
       !list.withhold &&
       // The same resource only (WO-010 review R2: another category's or filter's items never stand in).
       resource.every((part, i) => previousQuery?.queryKey[i] === part) &&
       previousQuery?.queryKey[depth] === subject &&
-      previousQuery.queryKey[depth + 1] === list.generation - 1
+      previousQuery.queryKey[depth + 1] === shownGeneration.current
         ? previous
         : undefined,
   });
@@ -82,6 +86,9 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
   const oldest = useRef<number | undefined>(undefined);
   useLayoutEffect(() => {
     oldest.current = query.data?.pages[0]?.receivedAt;
+    // Nothing on screen: nothing may stand in later (a removed query of the same key, after a change of resource or
+    // subject and back, would otherwise read as current).
+    shownGeneration.current = query.data === undefined ? -1 : query.isPlaceholderData ? shownGeneration.current : list.generation;
   });
   useForegroundRevalidation(
     () => oldest.current,

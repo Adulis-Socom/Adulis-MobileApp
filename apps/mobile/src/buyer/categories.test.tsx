@@ -108,6 +108,25 @@ describe('Shop categories', () => {
     await waitFor(() => expect(api.callsTo('GET /v1/categories').length).toBeGreaterThan(reads));
   });
 
+  it('back to All after a category that could not be read never shows the earlier All items as if current (B23-007 review)', async () => {
+    let allReads = 0;
+    let release: (reply: Reply) => void = () => undefined;
+    api.on('GET /v1/shop/products', (call) => {
+      if (call.query.category) return problem(500, 'INTERNAL', 'request');
+      return allReads++ === 0 ? ok({ market_resolved: true, data: [MUG], next_cursor: null }) : new Promise<Reply>((resolve) => (release = resolve));
+    });
+    await renderRouter(APP_DIR, { initialUrl: '/shop' });
+    await screen.findByLabelText(/^Plain mug,/);
+    await fireEvent.press(tab('FASHION'));
+    expect(await screen.findByText(en['error.request.internal'], {}, { timeout: 10_000 })).toBeOnTheScreen();
+    await fireEvent.press(tab('ALL'));
+    await waitFor(() => expect(allReads).toBe(2));
+    // The second All read is still in flight: nothing from the first stands in, because nothing was on screen between.
+    expect(screen.queryByLabelText(/^Plain mug,/)).not.toBeOnTheScreen();
+    await act(async () => release(ok({ market_resolved: true, data: [SCARF], next_cursor: null })));
+    expect(await screen.findByLabelText(/^Silk scarf,/)).toBeOnTheScreen();
+  });
+
   it('categories that cannot be read: All Products still works, the notice offers Try again', async () => {
     serveShop({ ALL: [[MUG]] });
     let fail = true;
