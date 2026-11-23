@@ -64,6 +64,7 @@ const FIXED_HEIGHTS = [
   ['buyer/Conversation.tsx', 'maxHeight: COMPOSER_MAX', 'cap on a ScrollView, so a long composer scrolls inside it rather than clipping'],
   ['buyer/Conversation.tsx', 'minHeight: HISTORY_MIN', 'a minimum, grows'],
   ['buyer/ForYouFeed.tsx', 'height: theme.space.md', 'list separator, no content'],
+  ['buyer/ProductDetail.tsx', 'height: theme.space.sm', 'gallery position dot: a bare circle, no text'],
   ['buyer/ProductPicker.tsx', 'height: 56', 'product thumbnail (image)'],
   ['buyer/ProductPicker.tsx', 'height: 56', 'product thumbnail placeholder (empty)'],
   ['buyer/ProductPicker.tsx', 'minHeight: 64', 'a minimum, grows with the name and availability'],

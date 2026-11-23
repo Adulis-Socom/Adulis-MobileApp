@@ -1,9 +1,18 @@
 import { en } from '@adulis/locale/mobile';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { StyleSheet } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
-import { bootstrapBody, installFakeApi, storefront, storefrontProduct, type Reply, type StorefrontProduct } from '../testing/fake-api';
+import {
+  bootstrapBody,
+  installFakeApi,
+  storefront,
+  storefrontProduct,
+  type Reply,
+  type StorefrontProduct,
+} from '../testing/fake-api';
 import { resetSecureStore } from '../testing/secure-store-mock';
+import { themes } from '../theme/theme';
 
 /**
  * The Product's own screen as a reader meets it: its photos, the states before there is anything
@@ -27,7 +36,12 @@ function serve(route: string, ...replies: Reply[]) {
 const settle = () => act(() => jest.advanceTimersByTimeAsync(1000));
 const withImages = (keys: string[], over: Partial<StorefrontProduct> = {}) =>
   storefrontProduct('basket', 'Woven basket', {
-    images: keys.map((key, i) => ({ position: i + 1, thumb_key: `${key}/thumb.webp`, card_key: `${key}/card.webp`, full_key: `${key}/full.webp` })),
+    images: keys.map((key, i) => ({
+      position: i + 1,
+      thumb_key: `${key}/thumb.webp`,
+      card_key: `${key}/card.webp`,
+      full_key: `${key}/full.webp`,
+    })),
     ...over,
   });
 const photos = () => screen.queryAllByTestId('product-photo');
@@ -38,15 +52,77 @@ beforeEach(() => {
   resetSecureStore();
   api = installFakeApi();
   api.on('GET /v1/bootstrap', () => ok(bootstrapBody({ media_public_origin: ORIGIN })));
-  useUiStore.setState({ activeMode: null, themePreference: 'system', locale: 'en', upgradeNoticeDismissed: false, pendingSave: null });
+  useUiStore.setState({
+    activeMode: null,
+    themePreference: 'system',
+    locale: 'en',
+    upgradeNoticeDismissed: false,
+    pendingSave: null,
+  });
 });
 
 describe('the Product photos', () => {
+  const dots = () => screen.queryAllByTestId('product-photo-dot', { includeHiddenElements: true });
+  const dotColours = () =>
+    dots().map(
+      (d) =>
+        (StyleSheet.flatten(d.props.style as never) as { backgroundColor: string }).backgroundColor,
+    );
+  /** Scroll the gallery to photo n (0-based) the way the platform reports a finished page swipe. */
+  const swipeTo = async (n: number) => {
+    const gallery = screen.getByTestId('product-gallery');
+    const width = (StyleSheet.flatten(gallery.props.style as never) as { width: number }).width;
+    await fireEvent(gallery, 'momentumScrollEnd', {
+      nativeEvent: { contentOffset: { x: n * width, y: 0 } },
+    });
+  };
+
+  it('show where the Buyer is in the gallery: one dot per photo, the shown one in the accent, hidden from screen readers (each photo already says "Photo i of n")', async () => {
+    serve(BASKET, ok(withImages(['products/a', 'products/b', 'products/c'])));
+    await renderRouter(APP_DIR, { initialUrl: PATH });
+    await screen.findByRole('header', { name: 'Woven basket' });
+    const accent = themes.light.color.accent;
+    const strong = themes.light.color.borderStrong;
+    expect(dots()).toHaveLength(3);
+    expect(dotColours()).toEqual([accent, strong, strong]);
+    const cue = screen.getByTestId('product-photo-position', { includeHiddenElements: true });
+    expect(cue.props.importantForAccessibility).toBe('no');
+    expect(cue.props.accessibilityElementsHidden).toBe(true);
+    await swipeTo(2);
+    expect(dotColours()).toEqual([strong, strong, accent]);
+    await swipeTo(1);
+    expect(dotColours()).toEqual([strong, accent, strong]);
+  });
+
+  it('draw no position cue for a single photo', async () => {
+    serve(BASKET, ok(withImages(['products/a'])));
+    await renderRouter(APP_DIR, { initialUrl: PATH });
+    await screen.findByRole('header', { name: 'Woven basket' });
+    expect(photos()).toHaveLength(1);
+    expect(dots()).toHaveLength(0);
+  });
+
+  it('keep the cue in step when a photo fails: fewer dots, and the shown one never past the end', async () => {
+    serve(BASKET, ok(withImages(['products/a', 'products/b', 'products/c'])));
+    await renderRouter(APP_DIR, { initialUrl: PATH });
+    await screen.findByRole('header', { name: 'Woven basket' });
+    await swipeTo(2);
+    await fireEvent(photos()[2]!, 'error', { nativeEvent: { error: 'network' } });
+    expect(photos()).toHaveLength(2);
+    expect(dots()).toHaveLength(2);
+    const accent = themes.light.color.accent;
+    expect(dotColours()).toEqual([themes.light.color.borderStrong, accent]);
+  });
+
   it('are shown in the server order, each by its card key under the media origin, each named by its place and the Product', async () => {
     serve(BASKET, ok(withImages(['products/a', 'products/b', 'products/c'])));
     await renderRouter(APP_DIR, { initialUrl: PATH });
     expect(await screen.findByRole('header', { name: 'Woven basket' })).toBeOnTheScreen();
-    expect(uris()).toEqual([`${ORIGIN}/products/a/card.webp`, `${ORIGIN}/products/b/card.webp`, `${ORIGIN}/products/c/card.webp`]);
+    expect(uris()).toEqual([
+      `${ORIGIN}/products/a/card.webp`,
+      `${ORIGIN}/products/b/card.webp`,
+      `${ORIGIN}/products/c/card.webp`,
+    ]);
     expect(photos().map((p) => p.props.accessibilityLabel)).toEqual([
       'Photo 1 of 3 of Woven basket',
       'Photo 2 of 3 of Woven basket',
@@ -71,7 +147,13 @@ describe('the Product photos', () => {
     await fireEvent(photos()[0]!, 'error', { nativeEvent: { error: 'network' } });
     expect(photos()).toHaveLength(0);
     expect(screen.getByText(en['buyer.scene.photo_unavailable'])).toBeOnTheScreen();
-    await act(() => (screen.getByTestId('product-detail').props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
+    await act(() =>
+      (
+        screen.getByTestId('product-detail').props.refreshControl as {
+          props: { onRefresh: () => void };
+        }
+      ).props.onRefresh(),
+    );
     await settle();
     expect(uris()).toEqual([`${ORIGIN}/products/a/card.webp`]);
     expect(screen.queryByText(en['buyer.scene.photo_unavailable'])).not.toBeOnTheScreen();
@@ -101,7 +183,11 @@ describe('before there is a Product to show', () => {
     api.on(BASKET, () => new Promise<Reply>((resolve) => (release = resolve)));
     await renderRouter(APP_DIR, { initialUrl: PATH });
     expect(await screen.findByText(en['buyer.product.loading'])).toBeOnTheScreen();
-    for (const text of [en['buyer.product.gone'], en['error.request.internal'], en['common.offline']]) {
+    for (const text of [
+      en['buyer.product.gone'],
+      en['error.request.internal'],
+      en['common.offline'],
+    ]) {
       expect(screen.queryByText(text)).not.toBeOnTheScreen();
     }
     expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
@@ -124,14 +210,27 @@ describe('before there is a Product to show', () => {
 
 describe('the Seller the Product names', () => {
   it('is the Seller of the read: the store name as the link, and Ask the Seller; nothing about trust, rating or sales', async () => {
-    serve(BASKET, ok(storefrontProduct('basket', 'Woven basket', { seller: { handle: HANDLE, store_name: 'Zeme Store' } })));
+    serve(
+      BASKET,
+      ok(
+        storefrontProduct('basket', 'Woven basket', {
+          seller: { handle: HANDLE, store_name: 'Zeme Store' },
+        }),
+      ),
+    );
     api.on(`GET /v1/storefronts/${HANDLE}`, () => ok(storefront(HANDLE)));
     await renderRouter(APP_DIR, { initialUrl: PATH });
     expect(await screen.findByText('Sold by Zeme Store')).toBeOnTheScreen();
     expect(screen.getByRole('link', { name: 'Sold by Zeme Store' })).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: en['buyer.chat.ask_about_product'] })).toBeOnTheScreen();
+    expect(
+      screen.getByRole('button', { name: en['buyer.chat.ask_about_product'] }),
+    ).toBeOnTheScreen();
     // The Product read carries no Trust fact; none is drawn, and none is fetched to fill the gap.
-    expect(screen.queryByText(/trust|established|trusted|handoff|rating|out of 5|sold\b.*\d|verified/i, { exact: false })).not.toBeOnTheScreen();
+    expect(
+      screen.queryByText(/trust|established|trusted|handoff|rating|out of 5|sold\b.*\d|verified/i, {
+        exact: false,
+      }),
+    ).not.toBeOnTheScreen();
     expect(api.calls.filter((c) => c.path === `/v1/storefronts/${HANDLE}`)).toEqual([]);
   });
 
@@ -139,6 +238,8 @@ describe('the Seller the Product names', () => {
     serve(BASKET, ok(storefrontProduct('basket', 'Woven basket')));
     await renderRouter(APP_DIR, { initialUrl: PATH });
     await screen.findByRole('header', { name: 'Woven basket' });
-    expect(screen.queryByText(/deliver|collect|pick ?up|courier|ship|fulfil|arrive|days/i)).not.toBeOnTheScreen();
+    expect(
+      screen.queryByText(/deliver|collect|pick ?up|courier|ship|fulfil|arrive|days/i),
+    ).not.toBeOnTheScreen();
   });
 });
