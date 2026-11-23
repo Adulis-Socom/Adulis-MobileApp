@@ -120,10 +120,17 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     pages,
     /** The first page as the server sent it (for a list-level fact such as the Shop's market_resolved). */
     firstPage: query.data?.pages[0]?.page,
-    /** Nothing to show yet and the request waits for a connection. */
-    paused: query.fetchStatus === 'paused' && query.data === undefined,
+    /** There is NOTHING to show yet and the first read waits for a connection (the offline first-page state). */
+    firstReadPaused: query.fetchStatus === 'paused' && query.data === undefined,
     /** A read of this list waits for a connection, whether or not items are shown; said beside Load more (B25-005). A pull is a new query, so it does not raise this line beside a next page. */
-    fetchPaused: query.fetchStatus === 'paused',
+    readPaused: query.fetchStatus === 'paused',
+    /**
+     * A pull has not been answered: the items on screen are the PREVIOUS answer, standing in (placeholder data). The
+     * new query knows nothing of a next page yet, so nothing about the end or about more may be said for it.
+     */
+    refreshPending: isPlaceholderData,
+    /** That pull is waiting for a connection (it spends no request until one returns). */
+    refreshPaused: isPlaceholderData && query.fetchStatus === 'paused',
     /** A pull is in flight; the previous items are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
     hasNextPage,
