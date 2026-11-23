@@ -233,6 +233,8 @@ function ScenesTab({ handle, header, onPull }: TabProps) {
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
+      // The pull also re-reads the header above, whose own alert says "offline" (it pauses with the list): heard once.
+      refreshOfflineSpoken
       list={list}
       onRefresh={() => {
         onPull();
@@ -324,6 +326,8 @@ function ProductsTab({ handle, header, onPull }: TabProps) {
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
+      // The pull also re-reads the header above, whose own alert says "offline" (it pauses with the list): heard once.
+      refreshOfflineSpoken
       list={list}
       onRefresh={() => {
         onPull();
@@ -466,6 +470,8 @@ function ReviewsTab({ handle, seller, header, onPull }: TabProps & { seller: Sto
   if (list.gone) return <GoneState message="buyer.seller.gone" />;
   return (
     <PublicListView
+      // The pull also re-reads the header above, whose own alert says "offline" (it pauses with the list): heard once.
+      refreshOfflineSpoken
       list={list}
       onRefresh={() => {
         onPull();

@@ -225,6 +225,16 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           ? t('buyer.chat.failed')
           : null
       : null;
+  // The offline line under Refresh is spoken when the connection is first found missing, not each time the line is drawn
+  // (it steps aside for the recheck line and returns as the words change: that is one fact, heard once).
+  const offlineText = t('common.offline');
+  const offlineWithRows = messages.fetchStatus === 'paused' && messages.items.length > 0;
+  const recheckSaysOffline = recheckText === offlineText;
+  const recheckSaysOfflineRef = useRef(recheckSaysOffline);
+  recheckSaysOfflineRef.current = recheckSaysOffline;
+  useEffect(() => {
+    if (offlineWithRows && !recheckSaysOfflineRef.current) AccessibilityInfo.announceForAccessibility(offlineText);
+  }, [offlineWithRows, offlineText]);
   // The alert role alone is not spoken on Android: announce what happened to the message. The effect
   // runs when the sentence changes (not at every render, which `t` would cause), and when a key is
   // withdrawn at a press (the state does not change then).
@@ -570,10 +580,10 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
         {/* A read that waits for a connection (a refresh, the poll, an earlier page, a return to the app), with messages shown: say so; nothing was sent or lost.
             In the edited-unsent state the recheck line already says it: one message, not two. */}
-        {messages.fetchStatus === 'paused' && messages.items.length > 0 && recheckText !== t('common.offline') ? (
-          <StatusText testID="chat-offline" style={secondary}>
-            {t('common.offline')}
-          </StatusText>
+        {offlineWithRows && !recheckSaysOffline ? (
+          <AppText testID="chat-offline" style={secondary}>
+            {offlineText}
+          </AppText>
         ) : null}
         {/* A refresh or poll that failed leaves the messages as they were, and says so; an earlier page says it beside its control, and an empty conversation in its own block.
             In the edited-unsent state the recheck line already says the read failed: one alert, not two. */}

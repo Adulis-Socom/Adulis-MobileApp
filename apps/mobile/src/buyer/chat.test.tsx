@@ -626,7 +626,7 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
   });
 
-  it('C1f (BUY-04C). the offline lines under Refresh are announced, once each', async () => {
+  it('C1f (BUY-04C). the conversation offline line under Refresh is announced once', async () => {
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     try {
       signedIn();
@@ -2992,6 +2992,31 @@ describe('Message send reconciliation', () => {
         await waitFor(() => expect(screen.queryByText(en['common.offline'])).toBeNull());
       } finally {
         await act(async () => onlineManager.setOnline(true));
+      }
+    });
+
+    it('changing the words while offline does not say "offline" again (BUY-04C review): one announcement for one fact', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWithWelcome();
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit, offline');
+        await maybe();
+        await act(async () => onlineManager.setOnline(false));
+        try {
+          await fireEvent.press(edit());
+          expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+          const spoken = () => announce.mock.calls.filter(([text]) => text === en['common.offline']).length;
+          const first = spoken();
+          // (Typing the original words back would bring the recheck alert back, which says it itself.)
+          await fireEvent.changeText(composer(), 'Other words');
+          await fireEvent.changeText(composer(), 'Other words again');
+          expect(spoken()).toBe(first);
+        } finally {
+          await act(async () => onlineManager.setOnline(true));
+        }
+      } finally {
+        announce.mockRestore();
       }
     });
 

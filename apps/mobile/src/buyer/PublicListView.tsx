@@ -57,6 +57,7 @@ export function PublicListView<I>({
   saves,
   bounded = false,
   failureText,
+  refreshOfflineSpoken = false,
 }: {
   list: ReturnType<typeof usePublicList<{ next_cursor: string | null }, I>>;
   renderItem: ListRenderItem<I>;
@@ -82,6 +83,8 @@ export function PublicListView<I>({
   bounded?: boolean;
   /** A sentence for a failure that asking again cannot change; null leaves the generic one, with its Try again. */
   failureText?: (error: unknown) => string | null;
+  /** The screen already says "offline" for this pull (a Seller Profile header does): the foot line stays plain text, so it is heard once. */
+  refreshOfflineSpoken?: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -161,7 +164,11 @@ export function PublicListView<I>({
           // A pull is pending: the items are the previous answer, so the footer describes the pull and never the end.
           list.refreshPaused ? (
             <View testID="list-refresh-offline" style={{ padding: theme.space.lg, alignItems: 'center' }}>
-              <StatusText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t('common.offline')}</StatusText>
+              {refreshOfflineSpoken ? (
+                <AppText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t('common.offline')}</AppText>
+              ) : (
+                <StatusText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t('common.offline')}</StatusText>
+              )}
             </View>
           ) : null
         ) : (

@@ -220,3 +220,31 @@ describe('the pending-pull offline line is a status the Buyer hears (BUY-04C)', 
     }
   });
 });
+
+describe('one announcement where the screen already says offline (BUY-04C review)', () => {
+  it('Seller Profile products: an offline pull is announced once (the header says it; the foot stays plain)', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      api.on('GET /v1/storefronts/seller-1', () => ({ status: 200, body: storefront('seller-1') }));
+      api.on('GET /v1/storefronts/seller-1/scenes', () => ({ status: 200, body: { data: [sellerScene(1)], next_cursor: null } }));
+      api.on('GET /v1/storefronts/seller-1/products', () => ({
+        status: 200,
+        body: { data: Array.from({ length: 20 }, (_, i) => sellerProduct(`p${i}`, `Thing ${i}`)), next_cursor: 'page-2' },
+      }));
+      await renderRouter(APP_DIR, { initialUrl: '/sellers/seller-1' });
+      await screen.findByRole('header', { name: 'Store 1' });
+      await fireEvent.press(screen.getByRole('tab', { name: en['buyer.seller.tab.products'] }));
+      await screen.findByLabelText(/^Thing 0,/);
+      await settle();
+      await act(async () => onlineManager.setOnline(false));
+      await act(() =>
+        (screen.getByTestId('seller-products').props as { refreshControl: { props: { onRefresh: () => void } } }).refreshControl.props.onRefresh(),
+      );
+      await settle();
+      await screen.findByTestId('list-refresh-offline');
+      expect(announce.mock.calls.filter(([text]) => text === en['common.offline'])).toHaveLength(1);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+});
