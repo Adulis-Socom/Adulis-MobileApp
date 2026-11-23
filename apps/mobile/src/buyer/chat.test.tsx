@@ -3104,7 +3104,7 @@ describe('Message send reconciliation', () => {
       }
     });
 
-    it('BUY-10B-lite A. the offline line returns on its own once the send outcome is settled (Edit the message instead) and the refresh still waits', async () => {
+    it('BUY-10B-lite A. the offline line returns once the send intent is given up (Edit the message instead) and the refresh still waits', async () => {
       const { chat } = await openWithWelcome();
       idempotent(chat, [{ refuse: 'offline' }]);
       await act(async () => onlineManager.setOnline(false));
@@ -3136,6 +3136,7 @@ describe('Message send reconciliation', () => {
           expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
           const spoken = () => announce.mock.calls.filter(([text]) => text === en['common.offline']).length;
           const first = spoken();
+          expect(first).toBe(1); // said once when the words first met the condition
           await fireEvent.changeText(composer(), 'Other words');
           await fireEvent.changeText(composer(), 'Edit, offline');
           expect(screen.getAllByText(en['common.offline'])).toHaveLength(1);
@@ -3166,6 +3167,36 @@ describe('Message send reconciliation', () => {
         await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
         expect(await screen.findByText(en['buyer.chat.failed'], {}, { timeout: 10_000 })).toBeOnTheScreen();
         expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.failed'])).toHaveLength(1);
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('BUY-10B-lite C. the same condition coming back after it cleared is announced again (offline, reconnect, offline)', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWithWelcome();
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit, offline twice');
+        await maybe();
+        const spoken = () => announce.mock.calls.filter(([text]) => text === en['common.offline']).length;
+        await act(async () => onlineManager.setOnline(false));
+        try {
+          await fireEvent.press(edit());
+          expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+          expect(spoken()).toBe(1);
+        } finally {
+          await act(async () => onlineManager.setOnline(true));
+        }
+        await waitFor(() => expect(screen.queryByText(en['common.offline'])).toBeNull());
+        await act(async () => onlineManager.setOnline(false));
+        try {
+          await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+          expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+          expect(spoken()).toBe(2); // a new occurrence of the condition, not a repeat
+        } finally {
+          await act(async () => onlineManager.setOnline(true));
+        }
       } finally {
         announce.mockRestore();
       }

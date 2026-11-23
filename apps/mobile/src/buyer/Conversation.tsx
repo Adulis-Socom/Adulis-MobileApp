@@ -216,7 +216,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   }, [hint]);
   // The edited words are in the box and the hint is only as current as the last read: when that read failed or is
   // waiting for a connection, say so beside the words, so that no hint is not taken for "not stored". It is drawn
-  // as an AlertText, which announces it itself.
+  // with the alert role and spoken by the effect below (once per condition), not by an AlertText.
   const recheckCondition =
     state === 'unsent' && watch !== null
       ? messages.fetchStatus === 'paused'
@@ -249,7 +249,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
   const recheckSaysOffline = recheckText === offlineText;
   // A send that failed offline says so in its own alert beside the words: the same sentence under Refresh
   // would be the second copy of one fact (BUY-10B-lite A). The send's outcome and the read's state stay
-  // distinct: the outcome is always said, and the line returns once the outcome is settled.
+  // distinct: the outcome is always said, and the line returns once the intent is given up (Edit the message instead).
   const composerSaysOffline = (state === 'failed' || state === 'unknown') && error === offlineText;
   const recheckSaysOfflineRef = useRef(recheckSaysOffline);
   recheckSaysOfflineRef.current = recheckSaysOffline;
