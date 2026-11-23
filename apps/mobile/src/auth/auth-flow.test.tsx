@@ -198,7 +198,8 @@ describe('sign in', () => {
     await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
     api.on('POST /v1/auth/otp/request', () => ({ status: 202, unreadable: true }));
     await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
-    await waitFor(() => expect(api.callsTo('POST /v1/auth/otp/request')).toHaveLength(1));
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/auth/otp/request')).toHaveLength(1);
     expect(screen.queryByLabelText(en['auth.code.label'])).not.toBeOnTheScreen(); // not taken as sent
 
     api.on('POST /v1/auth/otp/request', () => ({ status: 202, body: {} }));
@@ -209,22 +210,22 @@ describe('sign in', () => {
     expect(keys[1]).toBe(keys[0]);
   });
 
-  it('BUY-27B: a 200 verify whose answer cannot be read is unknown: the retry carries the same key and signs in', async () => {
+  it('BUY-27B: a 200 verify whose answer cannot be read is unknown: the retry carries the same key (the server then answers a completed verify with 401 OTP_EXPIRED, never a token)', async () => {
     await requestCode();
     api.on('POST /v1/auth/otp/verify', () => ({ status: 200, unreadable: true }));
     await enterCode();
-    await waitFor(() => expect(api.callsTo('POST /v1/auth/otp/verify')).toHaveLength(1));
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/auth/otp/verify')).toHaveLength(1);
     expect(memory.has(TOKEN_KEY)).toBe(false); // nothing is signed in from an answer that could not be read
 
-    api.on('POST /v1/auth/otp/verify', () => ({
-      status: 200,
-      body: { account_id: 'a', audience: 'MOBILE', roles: [], expires_at: 'x', token: GOOD_TOKEN },
-    }));
+    // WO-API-001A SEC-3: an identical replay of a completed verify is a 401 OTP_EXPIRED with no token.
+    api.on('POST /v1/auth/otp/verify', () => problem(401, 'OTP_EXPIRED', 'auth'));
     await fireEvent.press(screen.getByRole('button', { name: en['auth.verify'] }));
-    expect(await screen.findByText(en['buyer.orders.coming'])).toBeOnTheScreen();
+    expect(await screen.findByText(en['error.auth.otp_expired'])).toBeOnTheScreen();
+    expect(memory.has(TOKEN_KEY)).toBe(false);
     const keys = api.callsTo('POST /v1/auth/otp/verify').map((c) => c.headers['Idempotency-Key']);
     expect(keys).toHaveLength(2);
-    expect(keys[1]).toBe(keys[0]);
+    expect(keys[1]).toBe(keys[0]); // the same request, not a second attempt under a new key
   });
 
   it('shows and speaks the server message for a refused request; trying again is a new request', async () => {

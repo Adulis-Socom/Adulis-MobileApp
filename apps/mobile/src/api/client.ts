@@ -115,7 +115,9 @@ export function isTransient(error: unknown): boolean {
  * SUCCESS status whose body could not be read (a connection reset mid-body, a body that is not JSON;
  * `unexpected` with a 2xx status). The server accepted the request there, so the operation may be
  * stored and only its answer is lost: the retry keeps the key and the server replays the stored
- * answer, where a new key could store the operation a second time (BUY-27B, B24-010).
+ * answer, where a new key could store the operation a second time (BUY-27B, B24-010). The same rule
+ * covers an `unexpected` error a CALLER raises for a readable 2xx body that is not the answer it needs
+ * (no conversation id, no message id): the request was accepted there too, so its key is kept.
  */
 export function wasAnswered(error: unknown): boolean {
   if (!(error instanceof ApiError) || isTransient(error)) return false;

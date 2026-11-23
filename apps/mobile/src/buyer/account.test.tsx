@@ -565,7 +565,8 @@ describe('Delete Account', () => {
     await fireEvent.press(await screen.findByRole('button', { name: en['buyer.delete.continue'] }));
     await fireEvent.changeText(await screen.findByLabelText(en['auth.phone.label']), PHONE);
     await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
-    await waitFor(() => expect(api.callsTo('POST /v1/deletion/otp/request')).toHaveLength(1));
+    expect(await screen.findByText(en['error.request.internal'])).toBeOnTheScreen();
+    expect(api.callsTo('POST /v1/deletion/otp/request')).toHaveLength(1);
     expect(screen.queryByLabelText(en['auth.code.label'])).not.toBeOnTheScreen(); // not taken as sent
     await fireEvent.press(screen.getByRole('button', { name: en['auth.send_code'] }));
     await screen.findByLabelText(en['auth.code.label']);

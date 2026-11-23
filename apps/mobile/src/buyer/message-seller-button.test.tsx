@@ -47,10 +47,10 @@ function Probe() {
 describe('Message Seller across an Account change', () => {
   beforeEach(() => entries.clear());
 
-  async function boot(firstReply: Reply = 'offline') {
+  async function boot(reply: Reply = 'offline') {
     const fake = installFakeApi();
     // Never answered: the outcome of the open stays unknown, so its key is kept for the retry.
-    fake.on('POST /v1/conversations', () => firstReply);
+    fake.on('POST /v1/conversations', () => reply);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     await render(
       <AppProviders queryClient={queryClient} sessionStorage={sessionStorage(GOOD_TOKEN)} deviceStorage={deviceStorage}>
