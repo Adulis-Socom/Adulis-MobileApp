@@ -626,6 +626,47 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
   });
 
+  it('BUY-10B-lite B. a newest page with nothing showable, Load earlier pressed offline: the Buyer is told they are offline, Load earlier stays, and the page arrives on reconnect', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    chat.msg(c, { sender_kind: 'SELLER', body: 'The oldest line', sent_at: ago(1000) });
+    for (let i = 50; i >= 1; i--) chat.msg(c, { sender_kind: 'OPERATOR', body: `Unknown ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] });
+    expect(screen.queryByTestId('chat-offline')).not.toBeOnTheScreen();
+    const before = api.calls.filter((call) => call.method === 'GET' && /\/messages$/.test(call.path)).length;
+    await act(async () => onlineManager.setOnline(false));
+    try {
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.load_earlier'] }));
+      expect(await screen.findByTestId('chat-offline')).toHaveTextContent(en['common.offline']);
+      expect(screen.queryByText(en['buyer.chat.empty'])).not.toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: en['buyer.chat.load_earlier'] })).toBeOnTheScreen();
+      expect(api.calls.filter((call) => call.method === 'GET' && /\/messages$/.test(call.path))).toHaveLength(before); // paused, not spent
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+    expect(await screen.findByText('The oldest line')).toBeOnTheScreen();
+    await waitFor(() => expect(screen.queryByTestId('chat-offline')).not.toBeOnTheScreen());
+  });
+
+  it('BUY-10B-lite B. an empty conversation refreshed offline says offline too, and keeps the empty sentence', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    expect(await screen.findByText(en['buyer.chat.empty'])).toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    try {
+      await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+      expect(await screen.findByTestId('chat-offline')).toHaveTextContent(en['common.offline']);
+      expect(screen.getByText(en['buyer.chat.empty'])).toBeOnTheScreen();
+    } finally {
+      await act(async () => onlineManager.setOnline(true));
+    }
+    await waitFor(() => expect(screen.queryByTestId('chat-offline')).not.toBeOnTheScreen());
+  });
+
   it('C1f (BUY-04C). the conversation offline line under Refresh is announced once', async () => {
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     try {
@@ -707,6 +748,30 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     return c;
   };
   const spoken = (announce: jest.SpyInstance, text: RegExp) => announce.mock.calls.filter(([said]) => text.test(String(said)));
+
+  it('BUY-10B-lite D (characterisation). a refresh re-reads every page already loaded: one GET per page, in order from the newest', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    for (let i = 120; i >= 1; i--) chat.msg(c, { sender_kind: 'SELLER', body: `Line ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByText('Line 1');
+    const reads = () => api.calls.filter((call) => call.method === 'GET' && /\/messages$/.test(call.path));
+    expect(reads()).toHaveLength(1);
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    await fireEvent.press(await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    await waitFor(() => expect(reads()).toHaveLength(3)); // one per page loaded
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(reads()).toHaveLength(3);
+    // Evidence for the polling assessment (BUY-10B-lite D): the contract has only `cursor`, no `since`, and a
+    // refetch of an infinite query walks the cursors again, so a Refresh (and each 30 s poll while the screen
+    // is focused) costs one GET per loaded page, sequentially. A change here is a decision, not a fix.
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+    await act(() => jest.advanceTimersByTimeAsync(2000));
+    expect(reads()).toHaveLength(6);
+    expect(reads().slice(3).map((call) => call.query.cursor ?? null)).toEqual([null, reads()[1]!.query.cursor ?? null, reads()[2]!.query.cursor ?? null]);
+  });
 
   it('R1a. after a failed Load earlier, a refresh that succeeds shows no refresh failure and announces none', async () => {
     signedIn();
@@ -3015,6 +3080,92 @@ describe('Message send reconciliation', () => {
         } finally {
           await act(async () => onlineManager.setOnline(true));
         }
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('BUY-10B-lite A. a send lost offline while the refresh also waits for a connection says "offline" once; the unknown outcome and its retry stay', async () => {
+      const { chat } = await openWithWelcome();
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await act(async () => onlineManager.setOnline(false));
+      try {
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+        await screen.findByTestId('chat-offline');
+        await typeAndSend('Lost while offline');
+        await maybe();
+        // The same sentence, once: the unknown outcome is still said, and so is its Try sending again.
+        expect(screen.getAllByText(en['common.offline'])).toHaveLength(1);
+        expect(screen.getByText(en['buyer.chat.maybe_not_sent'])).toBeOnTheScreen();
+        expect(screen.getByRole('button', { name: en['buyer.chat.retry_send'] })).toBeOnTheScreen();
+        expect(composer().props.value).toBe('Lost while offline');
+      } finally {
+        await act(async () => onlineManager.setOnline(true));
+      }
+    });
+
+    it('BUY-10B-lite A. the offline line returns on its own once the send outcome is settled (Edit the message instead) and the refresh still waits', async () => {
+      const { chat } = await openWithWelcome();
+      idempotent(chat, [{ refuse: 'offline' }]);
+      await act(async () => onlineManager.setOnline(false));
+      try {
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+        await screen.findByTestId('chat-offline');
+        await typeAndSend('Lost, then edit');
+        await maybe();
+        await fireEvent.press(edit());
+        expect(await screen.findAllByText(en['common.offline'])).toHaveLength(1); // recheck line stands in, one sentence
+        await fireEvent.changeText(composer(), 'Different words');
+        expect(await screen.findByTestId('chat-offline')).toHaveTextContent(en['common.offline']);
+        expect(screen.getAllByText(en['common.offline'])).toHaveLength(1);
+      } finally {
+        await act(async () => onlineManager.setOnline(true));
+      }
+    });
+
+    it('BUY-10B-lite C. typing the original words back while offline does not announce "offline" a second time', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWithWelcome();
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit, offline');
+        await maybe();
+        await act(async () => onlineManager.setOnline(false));
+        try {
+          await fireEvent.press(edit());
+          expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+          const spoken = () => announce.mock.calls.filter(([text]) => text === en['common.offline']).length;
+          const first = spoken();
+          await fireEvent.changeText(composer(), 'Other words');
+          await fireEvent.changeText(composer(), 'Edit, offline');
+          expect(screen.getAllByText(en['common.offline'])).toHaveLength(1);
+          expect(spoken()).toBe(first);
+        } finally {
+          await act(async () => onlineManager.setOnline(true));
+        }
+      } finally {
+        announce.mockRestore();
+      }
+    });
+
+    it('BUY-10B-lite C. a genuinely new condition for the same words is still announced (offline, then a failed read)', async () => {
+      const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+      try {
+        const { chat } = await openWithWelcome();
+        idempotent(chat, [{ refuse: 'offline' }]);
+        await typeAndSend('Edit, then fail');
+        await maybe();
+        await act(async () => onlineManager.setOnline(false));
+        try {
+          await fireEvent.press(edit());
+          expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+        } finally {
+          await act(async () => onlineManager.setOnline(true));
+        }
+        api.onPattern('GET', MESSAGES_PATH, () => problem(500, 'INTERNAL', 'request'));
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+        expect(await screen.findByText(en['buyer.chat.failed'], {}, { timeout: 10_000 })).toBeOnTheScreen();
+        expect(announce.mock.calls.filter(([text]) => text === en['buyer.chat.failed'])).toHaveLength(1);
       } finally {
         announce.mockRestore();
       }
