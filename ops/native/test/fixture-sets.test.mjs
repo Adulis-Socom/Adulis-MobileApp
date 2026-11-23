@@ -204,6 +204,10 @@ test('catalogue-core orders created_at and published_at strictly ascending: bask
     'created_at and published_at, each a different explicit second',
   );
   assert.ok(/greatest\(now\(\)/.test(sql), 'later than every Product already published');
+  assert.ok(
+    sql.includes('AND seller_id <> '),
+    'the base ignores the Weaves Products themselves (no drift)',
+  );
 });
 
 test('scenes: two Scenes published through the function, exact captions, tags in order, newest first', () => {
