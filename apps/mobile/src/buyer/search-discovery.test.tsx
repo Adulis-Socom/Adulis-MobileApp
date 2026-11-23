@@ -399,6 +399,28 @@ describe('a query the server would always refuse', () => {
       expect(await screen.findByText(en['buyer.search.no_terms'])).toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
     });
+
+    // B24-017: only the no-terms case was covered. The too-long guard needs the folded length, so without a fold it
+    // steps aside and the server decides; the too-short guard falls back to the typed length and still applies.
+    it.each([
+      ['is missing', undefined],
+      [
+        'throws',
+        () => {
+          throw new RangeError('The normalization form should be one of NFC, NFD, NFKC, NFKD.');
+        },
+      ],
+    ])('a normalize that %s: a query over the length cap is sent (the server decides), and one under the floor is still not', async (_name, replacement) => {
+      serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_LONG' }));
+      await openSearch();
+      Object.defineProperty(String.prototype, 'normalize', { value: replacement, configurable: true, writable: true });
+      await typeQuery('x'.repeat(101));
+      expect(calls()).toHaveLength(1);
+      expect(await screen.findByText(en['buyer.search.too_long'])).toBeOnTheScreen(); // the server's own refusal, named
+      await typeQuery('a');
+      expect(screen.getByText(en['buyer.search.too_short'])).toBeOnTheScreen();
+      expect(calls()).toHaveLength(1); // nothing new was sent for the one-character text
+    });
   });
 });
 
@@ -429,6 +451,17 @@ describe('answers that fail', () => {
     await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
     await act(async () => undefined);
     expect(calls()).toHaveLength(2);
+  });
+
+  it('a server QUERY_TOO_SHORT refusal (BUY-06B, B24-016) says the minimum, offers no Try again that could not help, and is not retried by itself', async () => {
+    serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_SHORT' }));
+    await openSearch();
+    await typeQuery('mug');
+    expect(await screen.findByText(en['buyer.search.too_short'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['error.request.validation_failed'])).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(30_000));
+    expect(calls()).toHaveLength(1);
   });
 
   it('rate limited: says when to try again, and Try again asks once more', async () => {
