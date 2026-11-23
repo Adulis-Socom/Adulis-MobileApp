@@ -18,7 +18,7 @@ export type Paging = {
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
   error: unknown;
-  /** The next page's read waits for a connection (TanStack paused it): said beside the control, never a spinner (BUY-05B). */
+  /** A read of this list waits for a connection (TanStack paused it; that includes a retry, and it cannot be narrowed to the next page): said beside the control, never a spinner (BUY-05B). */
   paused?: boolean;
   loadMore: () => void;
   retryNextPage: () => void;
@@ -48,7 +48,8 @@ export function LoadMoreFooter({
   const t = useT();
   const theme = useTheme();
   const { count, pageCount, hasNextPage, isFetchingNextPage, isFetchNextPageError } = paging;
-  const waitingForConnection = paging.paused === true && hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
+  // A failed page whose Try again is waiting for the connection says so too: the stale failure gives way to it.
+  const waitingForConnection = paging.paused === true && hasNextPage && !isFetchingNextPage;
   // Items and pages when the Buyer pressed the button. The in-flight state is not watched: an
   // answer that comes at once can arrive in the same render as the request (never "fetching").
   const asked = useRef<{ from: number; pages: number } | null>(null);
@@ -76,7 +77,7 @@ export function LoadMoreFooter({
   return (
     <View testID="load-more-footer" style={{ paddingVertical: theme.space.lg, paddingHorizontal: theme.space.sm, gap: theme.space.sm, alignItems: 'center' }}>
       {/* Fixed slots: the button keeps its place in the tree, and so its native view, in every state. */}
-      {isFetchNextPageError ? (
+      {isFetchNextPageError && !waitingForConnection ? (
         <AlertText style={{ textAlign: 'center' }}>{`${t(keys.failed)} ${failureMessage(t, paging.error)}`}</AlertText>
       ) : null}
       {isFetchingNextPage ? (
