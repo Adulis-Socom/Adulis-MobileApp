@@ -420,7 +420,8 @@ describe('answers that fail', () => {
   });
 
   it('only the reason the server names changes the sentence: any other refusal keeps the generic one, with its Try again', async () => {
-    serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_LONG' }));
+    // QUERY_TOO_LONG used to be this example; it now has its own sentence (BUY-06A), so another reason stands in.
+    serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_REQUIRED' }));
     await openSearch();
     await typeQuery('mug');
     expect(await screen.findByText(en['error.request.validation_failed'])).toBeOnTheScreen();
@@ -621,5 +622,63 @@ describe('what Search keeps', () => {
     for (const [key, value] of secureStore.memory) expect(`${key} ${value}`).not.toContain('basket');
     for (const [key, value] of secureStore.setItemAsync.mock.calls) expect(`${key} ${value}`).not.toContain('basket');
     expect(JSON.stringify(useUiStore.getState())).not.toContain('basket');
+  });
+});
+
+describe('a query that is too long once normalised (BUY-06A, B23-006)', () => {
+  const TOO_LONG = () => screen.getByText(en['buyer.search.too_long']);
+  // U+FDFA folds to 18 characters under NFKC, so six of them are 6 typed characters and 108 on the server.
+  const LONG_AFTER_FOLD = 'ﷺ'.repeat(6);
+
+  it('is said at once, nothing is sent, and there is no Try again that cannot help', async () => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    expect([...LONG_AFTER_FOLD.normalize('NFKC')]).toHaveLength(108);
+    await typeQuery(LONG_AFTER_FOLD);
+    expect(TOO_LONG()).toBeOnTheScreen();
+    expect(calls()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.too_short'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.search.no_terms'])).not.toBeOnTheScreen();
+  });
+
+  it('exactly the limit after normalisation is sent; one more is not, and a shorter edit searches again', async () => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    const atLimit = `${'ﷺ'.repeat(5)}${'a'.repeat(10)}`; // 90 + 10 = 100
+    await typeQuery(atLimit);
+    await screen.findByLabelText(label('Woven basket'));
+    expect(calls()).toHaveLength(1);
+    await typeQuery(`${atLimit}a`); // 101
+    expect(TOO_LONG()).toBeOnTheScreen();
+    expect(calls()).toHaveLength(1);
+    await typeQuery('ﷺﷺ');
+    await screen.findByLabelText(label('Woven basket'));
+    expect(screen.queryByText(en['buyer.search.too_long'])).not.toBeOnTheScreen();
+    expect(calls()).toHaveLength(2);
+  });
+
+  it('counts characters, not UTF-16 units: 97 characters that are 103 units are sent', async () => {
+    serve(({ type }) => page(type, [product('basket', 'Woven basket')]));
+    await openSearch();
+    // Five U+FDFA fold to 90, six emoji are 6 characters but 12 units, one letter: 97 characters, 103 units.
+    const text = `${'ﷺ'.repeat(5)}${'😀'.repeat(6)}a`;
+    expect([...text.normalize('NFKC')]).toHaveLength(97);
+    expect(text.normalize('NFKC').length).toBe(103);
+    await typeQuery(text);
+    await screen.findByLabelText(label('Woven basket'));
+    expect(screen.queryByText(en['buyer.search.too_long'])).not.toBeOnTheScreen();
+    expect(calls()).toHaveLength(1);
+  });
+
+  it('the server stays the authority: a refusal for length the device could not foresee is named, with no Try again', async () => {
+    serve(() => problem(400, 'VALIDATION_FAILED', 'request', { path: 'q', reason: 'QUERY_TOO_LONG' }));
+    await openSearch();
+    await typeQuery('basket');
+    expect(await screen.findByText(en['buyer.search.too_long'])).toBeOnTheScreen();
+    expect(screen.queryByText(en['error.request.validation_failed'])).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: en['common.retry'] })).not.toBeOnTheScreen();
+    await act(() => jest.advanceTimersByTimeAsync(30_000));
+    expect(calls()).toHaveLength(1);
   });
 });

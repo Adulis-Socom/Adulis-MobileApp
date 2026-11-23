@@ -41,12 +41,12 @@ export const searchTarget = (item: SearchItem): SaveTarget | null =>
       ? { type: 'SCENE_POST', ref: item.payload.public_ref }
       : null;
 
-/** The server refused a query made only of symbols or punctuation: its own reason, not a guess from the text. */
-const refusedForNoTerms = (error: unknown) =>
-  error instanceof ApiError &&
-  error.failure.kind === 'problem' &&
-  error.failure.problem.code === 'VALIDATION_FAILED' &&
-  error.failure.problem.slots?.['reason'] === 'QUERY_NO_TERMS';
+/** The server's refusals of the query itself: asking again cannot change them, so each has its own sentence. */
+const refusedQuery = (error: unknown): 'buyer.search.no_terms' | 'buyer.search.too_long' | null => {
+  if (!(error instanceof ApiError) || error.failure.kind !== 'problem' || error.failure.problem.code !== 'VALIDATION_FAILED') return null;
+  const reason = error.failure.problem.slots?.['reason'];
+  return reason === 'QUERY_NO_TERMS' ? 'buyer.search.no_terms' : reason === 'QUERY_TOO_LONG' ? 'buyer.search.too_long' : null;
+};
 
 /**
  * The results of one query in one tab (WO-008): Top is one bounded mixed page; Products and
@@ -117,7 +117,10 @@ export function SearchResults({
           </AppText>
         ) : null
       }
-      failureText={(error) => (refusedForNoTerms(error) ? t('buyer.search.no_terms') : null)}
+      failureText={(error) => {
+        const key = refusedQuery(error);
+        return key ? t(key) : null;
+      }}
       empty="buyer.search.loading"
       emptyState={
         <View style={{ gap: theme.space.md, alignItems: 'center' }}>
