@@ -47,7 +47,15 @@ import { SaveButton } from './SaveButton';
  *   the Buyer is told why with a way to try again. A 404 and the background interval are not
  *   covered by this: the first is "no longer available", the second withholds everything.
  */
-export function ProductDetail({ handle, slug, from }: { handle: unknown; slug: unknown; from?: unknown }) {
+export function ProductDetail({
+  handle,
+  slug,
+  from,
+}: {
+  handle: unknown;
+  slug: unknown;
+  from?: unknown;
+}) {
   const { api } = useSession();
   const valid = isPathName(handle) && isPathName(slug);
   const read = usePublicRead(
@@ -177,9 +185,15 @@ function ProductContent({
             // The connection is back (or a retry is on its way) and the old answer has not been replaced yet.
             <StatusText>{t('buyer.product.loading')}</StatusText>
           ) : (
-            <AlertText>{unverified.why === 'offline' ? t('common.offline') : failureMessage(t, unverified.error)}</AlertText>
+            <AlertText>
+              {unverified.why === 'offline'
+                ? t('common.offline')
+                : failureMessage(t, unverified.error)}
+            </AlertText>
           )}
-          {unverified.why === 'failed' ? <Button label={t('common.retry')} onPress={onRetry} disabled={retrying} /> : null}
+          {unverified.why === 'failed' ? (
+            <Button label={t('common.retry')} onPress={onRetry} disabled={retrying} />
+          ) : null}
         </View>
       ) : null}
       {withheld || price === null ? null : (
@@ -197,11 +211,20 @@ function ProductContent({
           {availability(product.available)}
         </AppText>
       )}
-      <SaveButton target={{ type: 'PRODUCT_POST', ref: product.id }} surface="PRODUCT_DETAIL" sceneRef={sceneRef} returnTo={route} />
+      <SaveButton
+        target={{ type: 'PRODUCT_POST', ref: product.id }}
+        surface="PRODUCT_DETAIL"
+        sceneRef={sceneRef}
+        returnTo={route}
+      />
       <Pressable
         accessibilityRole="link"
-        accessibilityHint={fillSlots(t('buyer.seller.view'), { store: product.seller.store_name }) ?? undefined}
-        onPress={() => router.push({ pathname: '/sellers/[handle]', params: { handle: product.seller.handle } })}
+        accessibilityHint={
+          fillSlots(t('buyer.seller.view'), { store: product.seller.store_name }) ?? undefined
+        }
+        onPress={() =>
+          router.push({ pathname: '/sellers/[handle]', params: { handle: product.seller.handle } })
+        }
         style={{ minHeight: theme.touchTarget, justifyContent: 'center' }}
         testID="product-seller"
       >
@@ -236,11 +259,17 @@ function ProductContent({
       ) : null}
 
       {!withheld && product.variants.length > 0 ? (
-        <View accessibilityRole="radiogroup" testID="product-options" style={{ gap: theme.space.xs }}>
+        <View
+          accessibilityRole="radiogroup"
+          testID="product-options"
+          style={{ gap: theme.space.xs }}
+        >
           <AppText accessibilityRole="header" style={{ fontWeight: theme.fontWeight.semibold }}>
             {t('buyer.product.options')}
           </AppText>
-          {dropped && chosen === null && product.variants.some((v) => isSelectable(product, v)) ? <StatusText>{t('buyer.product.option_dropped')}</StatusText> : null}
+          {dropped && chosen === null && product.variants.some((v) => isSelectable(product, v)) ? (
+            <StatusText>{t('buyer.product.option_dropped')}</StatusText>
+          ) : null}
           {product.variants.map((v) => {
             const price = money(v.price_minor, v.price_currency);
             // The server's per-option answer (OVN-074), never true here while the Product is not.
@@ -260,7 +289,9 @@ function ProductContent({
                   }) ?? v.variant_key
                 }
                 disabled={!selectable}
-                onPress={() => setSelection((s) => transition(s, { type: 'SELECT', id: v.id }, product))}
+                onPress={() =>
+                  setSelection((s) => transition(s, { type: 'SELECT', id: v.id }, product))
+                }
                 testID="product-option"
                 style={{
                   minHeight: theme.touchTarget,
@@ -319,8 +350,12 @@ function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attem
   const mediaOrigin = useBootstrap().data?.media_public_origin;
   const width = useWindowDimensions().width - theme.space.md * 2;
   // Failures hold for this answer only: a new answer (`attempt`) tries the photos again.
-  const [failures, setFailures] = useState({ attempt, keys: new Set<string>() as ReadonlySet<string> });
+  const [failures, setFailures] = useState({
+    attempt,
+    keys: new Set<string>() as ReadonlySet<string>,
+  });
   const failed = failures.attempt === attempt ? failures.keys : new Set<string>();
+  const [shown, setShown] = useState(0);
   const photos = product.images
     .map((image) => ({ key: image.card_key, uri: mediaUrl(mediaOrigin, image.card_key) }))
     .filter((p): p is { key: string; uri: string } => p.uri !== null && !failed.has(p.key));
@@ -344,36 +379,77 @@ function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attem
     );
   }
   return (
-    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width }}>
-      {photos.map((photo, index) => (
-        <Image
-          key={photo.key}
-          source={{ uri: photo.uri }}
-          accessible
-          accessibilityLabel={
-            fillSlots(t('buyer.product.photo'), {
-              index: index + 1,
-              count: photos.length,
-              name: product.name,
-            }) ?? product.name
-          }
-          contentFit="contain"
-          cachePolicy="disk"
-          onError={() =>
-            setFailures((f) => ({
-              attempt,
-              keys: new Set(f.attempt === attempt ? f.keys : []).add(photo.key),
-            }))
-          }
+    <View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        style={{ width }}
+        testID="product-gallery"
+        scrollEventThrottle={16}
+        onScroll={(e) => setShown(Math.round(e.nativeEvent.contentOffset.x / width))}
+      >
+        {photos.map((photo, index) => (
+          <Image
+            key={photo.key}
+            source={{ uri: photo.uri }}
+            accessible
+            accessibilityLabel={
+              fillSlots(t('buyer.product.photo'), {
+                index: index + 1,
+                count: photos.length,
+                name: product.name,
+              }) ?? product.name
+            }
+            contentFit="contain"
+            cachePolicy="disk"
+            onError={() =>
+              setFailures((f) => ({
+                attempt,
+                keys: new Set(f.attempt === attempt ? f.keys : []).add(photo.key),
+              }))
+            }
+            style={{
+              width,
+              aspectRatio: 1,
+              backgroundColor: theme.color.surfaceMuted,
+              borderRadius: theme.radius.lg,
+            }}
+            testID="product-photo"
+          />
+        ))}
+      </ScrollView>
+      {photos.length > 1 ? (
+        // Each photo already says "Photo i of n"; the dots are only the sighted cue of where the swipe is.
+        <View
+          testID="product-photo-position"
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
           style={{
-            width,
-            aspectRatio: 1,
-            backgroundColor: theme.color.surfaceMuted,
-            borderRadius: theme.radius.lg,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: theme.space.xs,
+            marginTop: theme.space.sm,
           }}
-          testID="product-photo"
-        />
-      ))}
-    </ScrollView>
+        >
+          {photos.map((photo, index) => (
+            <View
+              key={photo.key}
+              testID="product-photo-dot"
+              style={{
+                width:
+                  index === Math.min(shown, photos.length - 1) ? theme.space.md : theme.space.sm,
+                height: theme.space.sm,
+                borderRadius: theme.radius.full,
+                backgroundColor:
+                  index === Math.min(shown, photos.length - 1)
+                    ? theme.color.accent
+                    : theme.color.borderStrong,
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
   );
 }
