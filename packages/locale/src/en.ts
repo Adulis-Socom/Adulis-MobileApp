@@ -339,6 +339,8 @@ export const enCommon = {
   'buyer.search.too_short': 'Type at least 2 characters to search.',
   // The server refuses a query with no letter or digit; this is the only change it asks for.
   'buyer.search.no_terms': 'Use letters or numbers to search.',
+  // The server counts length after Unicode (NFKC) normalisation, where some characters become several; the field cannot show that, so the sentence names the cause and the fix.
+  'buyer.search.too_long': 'This search is too long. Use fewer or shorter words.',
   'buyer.search.tabs': 'Result types',
   'buyer.search.tab.top': 'Top',
   'buyer.search.tab.products': 'Products',
