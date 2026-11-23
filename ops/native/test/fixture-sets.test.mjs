@@ -120,7 +120,7 @@ test('ids are deterministic for a run, differ between runs, and phones are synth
   const sql = allSql(a);
   const phones = [...sql.matchAll(/'(\+[0-9]+)'/g)].map((x) => x[1]);
   assert.ok(phones.length === 3);
-  for (const p of phones) assert.match(p, /^\+2519[0-9]{8}$/);
+  for (const p of phones) assert.match(p, /^\+25190000[0-9]{4}$/, `${p} is in the synthetic range`);
   assert.equal(new Set(phones).size, phones.length, 'no phone twice');
   assert.ok(!phones.includes('+251900000901'), 'the baseline phone is not reused');
   assert.doesNotMatch(sql, /@/, 'no e-mail address');

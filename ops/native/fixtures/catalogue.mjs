@@ -1,7 +1,13 @@
 // Catalogue fixture sets for the native flows (BUY-03A): a Seller with four Products, two Scenes, a
 // second Market, a second Seller with 32 Products, and one assistant intent. Plain SQL, written as the
 // superuser behind guardSql in ONE transaction (see index.mjs). Every id is derived from the run id; every
-// phone number is a synthetic +2519... one; no image object is written (key columns are plain strings).
+// phone number is a synthetic +25190000xxxx one (the range the baseline and seed.mjs use, never a live mobile range);
+// no image object is written (key columns are plain strings).
+//
+// Known limits of a row fixture (disclosed, not bugs): Fixture Pottery is a NEW-level Seller with 32 PUBLISHED Products,
+// above the API's NEW cap of 10, so a future Seller-API step on it would get LEVEL_LIMIT_REACHED; Market B is inserted
+// directly as ACTIVE (fn_guard_market_live fires on UPDATE only) with no timing, eligibility or ladder rows, which is
+// enough for the Market-isolation assertions but not for a flow run from a Market B device.
 //
 // Why rows and not the Seller API: the harness has no session or object-store channel for fixtures, and
 // every column below has a SQL form. What a row skips (publication readiness, presigned-URL validation) is
@@ -79,7 +85,7 @@ export const WEAVES = {
   handle: 'fixture-weaves',
   description: 'Baskets, scarves and cups from our Addis Ababa workshop.',
   handoffNote: 'Collect at the Merkato workshop.',
-  phone: '+251911602001',
+  phone: '+251900000902',
 };
 
 /** The two Scenes (inventory E4). `tags` are Product keys in position order; `hoursAgo` orders the feed. */
@@ -102,7 +108,7 @@ export const SCENES = [
 export const MARKET_B = {
   code: 'FXB',
   displayName: 'Fixture Market B',
-  phone: '+251911606002',
+  phone: '+251900000903',
   storeName: 'Fixture Weaves B',
   handle: 'fixture-weaves',
   product: {
@@ -116,7 +122,7 @@ export const MARKET_B = {
 export const POTTERY = {
   storeName: 'Fixture Pottery',
   handle: 'fixture-pottery',
-  phone: '+251911607300',
+  phone: '+251900000904',
   items: 32,
   // Shop item NN: category assignments (inventory E5/E6)
   categories: { 30: 'ELECTRONICS', 31: 'COSMETICS', 32: 'COSMETICS' },

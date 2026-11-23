@@ -75,9 +75,7 @@
   "batteries": {
     "smoke": {
       "flows": ["foundation-smoke", "buyer-shell"],
-      "settings": {
-        "stay_awake": "7"
-      },
+      "settings": { "stay_awake": "7" },
       "canary": "foundation-smoke",
       "fixtures": ["baseline"]
     },
@@ -93,9 +91,7 @@
         "seller-profile-private-1",
         "shop-refresh-1"
       ],
-      "settings": {
-        "stay_awake": "7"
-      },
+      "settings": { "stay_awake": "7" },
       "canary": "foundation-smoke",
       "fixtures": ["baseline", "catalogue-core", "scenes", "market-b", "extras"]
     }

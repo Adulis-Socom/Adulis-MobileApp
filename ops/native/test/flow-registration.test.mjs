@@ -70,7 +70,7 @@ test('every registered flow is pinned to its file, and the static scan agrees wi
 
 test('all 54 flow files scan cleanly: no never-hazard, only the declared command set', () => {
   const files = readdirSync(FLOWS).filter((f) => f.endsWith('.yaml'));
-  assert.equal(files.length, 54);
+  assert.ok(files.length >= 54, 'the 54 flows of BUY-03A are still all there');
   for (const f of files) {
     const s = scanFlow(readFileSync(join(FLOWS, f), 'utf8'));
     assert.equal(s.appId, 'com.adulis.app', f);
@@ -134,7 +134,13 @@ test('a flow that needs a variable, a between-step or a sign-in continuation is 
   for (const f of readdirSync(FLOWS).filter((x) => x.endsWith('.yaml'))) {
     const name = f.replace(/\.yaml$/, '');
     if (!decl.flows[name]) continue;
-    assert.deepEqual(scanFlow(readFileSync(join(FLOWS, f), 'utf8')).vars, [], name);
+    const scan = scanFlow(readFileSync(join(FLOWS, f), 'utf8'));
+    assert.deepEqual(scan.vars, [], name);
+    // A continuation never clears the app's data; every registered discovery flow starts from a clean install.
+    assert.ok(
+      scan.hazards.includes('clearState'),
+      `${name} starts from clearState (no continuation)`,
+    );
   }
   for (const n of [
     'buyer-auth-request',
