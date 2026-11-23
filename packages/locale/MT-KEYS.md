@@ -28,7 +28,7 @@ When a batch is humanly translated: replace the strings in `am.ts` and
 delete the keys here, in the same change. Regenerate after ADDING keys:
 `node packages/locale/generate-mt-keys.mjs`.
 
-1210 keys:
+1237 keys:
 
 - `health.ok`
 - `health.degraded`
@@ -571,6 +571,33 @@ delete the keys here, in the same change. Regenerate after ADDING keys:
 - `seller.messages.send_gone`
 - `seller.messages.store`
 - `seller.messages.replying_as`
+- `buyer.cart.title`
+- `buyer.cart.fixture_marker`
+- `buyer.cart.empty`
+- `buyer.cart.loading`
+- `buyer.cart.checking`
+- `buyer.cart.error`
+- `buyer.cart.unavailable`
+- `buyer.cart.unverified_offline`
+- `buyer.cart.unverified_failed`
+- `buyer.cart.unverified_checking`
+- `buyer.cart.refresh`
+- `buyer.cart.seller_fallback`
+- `buyer.cart.seller_empty`
+- `buyer.cart.item_fallback`
+- `buyer.cart.quantity`
+- `buyer.cart.price_each`
+- `buyer.cart.was_price`
+- `buyer.cart.subtotal`
+- `buyer.cart.available_count`
+- `buyer.cart.issue.NO_LONGER_PUBLISHED`
+- `buyer.cart.issue.VARIANT_WITHDRAWN`
+- `buyer.cart.issue.SELLER_UNAVAILABLE`
+- `buyer.cart.issue.SOLD_OUT`
+- `buyer.cart.issue.UNAVAILABLE`
+- `buyer.cart.issue.INSUFFICIENT_STOCK`
+- `buyer.cart.issue.PRICE_CHANGED`
+- `buyer.cart.issue.UNKNOWN`
 - `app.title`
 - `error.seller.tier_limit_reached`
 - `sms.otp.step_up.subscription_change`
