@@ -386,7 +386,8 @@ function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attem
         showsHorizontalScrollIndicator={false}
         style={{ width }}
         testID="product-gallery"
-        onMomentumScrollEnd={(e) => setShown(Math.round(e.nativeEvent.contentOffset.x / width))}
+        scrollEventThrottle={16}
+        onScroll={(e) => setShown(Math.round(e.nativeEvent.contentOffset.x / width))}
       >
         {photos.map((photo, index) => (
           <Image
@@ -422,7 +423,7 @@ function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attem
         // Each photo already says "Photo i of n"; the dots are only the sighted cue of where the swipe is.
         <View
           testID="product-photo-position"
-          importantForAccessibility="no"
+          importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
           style={{
             flexDirection: 'row',
@@ -436,7 +437,8 @@ function ProductPhotos({ product, attempt }: { product: StorefrontProduct; attem
               key={photo.key}
               testID="product-photo-dot"
               style={{
-                width: theme.space.sm,
+                width:
+                  index === Math.min(shown, photos.length - 1) ? theme.space.md : theme.space.sm,
                 height: theme.space.sm,
                 borderRadius: theme.radius.full,
                 backgroundColor:

@@ -72,8 +72,8 @@ describe('the Product photos', () => {
   const swipeTo = async (n: number) => {
     const gallery = screen.getByTestId('product-gallery');
     const width = (StyleSheet.flatten(gallery.props.style as never) as { width: number }).width;
-    await fireEvent(gallery, 'momentumScrollEnd', {
-      nativeEvent: { contentOffset: { x: n * width, y: 0 } },
+    await fireEvent(gallery, 'scroll', {
+      nativeEvent: { contentOffset: { x: n * width + 0.4, y: 0 } },
     });
   };
 
@@ -86,7 +86,7 @@ describe('the Product photos', () => {
     expect(dots()).toHaveLength(3);
     expect(dotColours()).toEqual([accent, strong, strong]);
     const cue = screen.getByTestId('product-photo-position', { includeHiddenElements: true });
-    expect(cue.props.importantForAccessibility).toBe('no');
+    expect(cue.props.importantForAccessibility).toBe('no-hide-descendants');
     expect(cue.props.accessibilityElementsHidden).toBe(true);
     await swipeTo(2);
     expect(dotColours()).toEqual([strong, strong, accent]);
