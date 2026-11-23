@@ -607,6 +607,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         {context !== null ? (
           <ProductContext
             status={contextStatus}
+            // The read waits for a connection (TanStack paused it): say that, not "Checking" (B23-014).
+            offline={contextStatus === 'checking' && contextRead.fetchStatus === 'paused' && contextRead.data === undefined}
             name={contextStatus === 'ok' ? (contextRead.data?.name ?? null) : null}
             available={contextStatus === 'ok' ? (contextRead.data?.available ?? null) : null}
             locked={state === 'sending' || frozen}
@@ -676,6 +678,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
  */
 function ProductContext({
   status,
+  offline,
   name,
   available,
   locked,
@@ -683,6 +686,7 @@ function ProductContext({
   onRetry,
 }: {
   status: 'checking' | 'ok' | 'gone' | 'mismatch' | 'unchecked' | 'unresolved' | 'none';
+  offline: boolean;
   name: string | null;
   available: boolean | null;
   locked: boolean;
@@ -724,7 +728,7 @@ function ProductContext({
           <AppText style={secondary}>{t('buyer.chat.context_note')}</AppText>
         </>
       ) : status === 'checking' ? (
-        <AppText style={secondary}>{t('buyer.chat.context_checking')}</AppText>
+        <AppText style={secondary}>{t(offline ? 'common.offline' : 'buyer.chat.context_checking')}</AppText>
       ) : refusal !== null ? (
         <AlertText>{t(refusal)}</AlertText>
       ) : null}
