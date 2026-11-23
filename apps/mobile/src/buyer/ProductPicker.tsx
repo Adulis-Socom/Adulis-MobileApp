@@ -30,12 +30,13 @@ export function ProductPicker({
   handle,
   store,
   onSelect,
-  onCancel,
-}: {
+  onCancel, reduceMotion }: {
   handle: string;
   store: string;
   onSelect: (slug: string) => void;
   onCancel: () => void;
+  /** The system's reduce-motion setting, read by the parent before this mounts (it mounts fresh each time it opens). */
+  reduceMotion: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -49,7 +50,7 @@ export function ProductPicker({
   const secondary = { color: theme.color.textSecondary };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onCancel}>
+    <Modal visible animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onCancel}>
       {/* A modal is its own window, drawn edge to edge: it needs its own safe-area provider (B-005). */}
       <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: theme.color.bg }}>
@@ -102,7 +103,7 @@ function PickerRow({ product, onPress }: { product: SellerProduct; onPress: () =
         marginBottom: theme.space.xs,
         borderRadius: theme.radius.md,
         borderWidth: 1,
-        borderColor: theme.color.border,
+        borderColor: theme.color.borderStrong,
         backgroundColor: pressed ? theme.color.surfaceMuted : theme.color.surface,
       })}
     >

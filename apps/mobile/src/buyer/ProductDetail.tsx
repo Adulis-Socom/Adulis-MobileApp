@@ -265,7 +265,7 @@ function ProductContent({
                 style={{
                   minHeight: theme.touchTarget,
                   borderWidth: selected ? 2 : 1,
-                  borderColor: selected ? theme.color.accent : theme.color.border,
+                  borderColor: selected ? theme.color.accent : theme.color.borderStrong,
                   borderRadius: theme.radius.md,
                   padding: theme.space.sm,
                   backgroundColor: theme.color.surface,

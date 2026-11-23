@@ -6,7 +6,7 @@ import { failureMessage, fillSlots } from '../api/messages';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
-import { useLocale, useT } from '../i18n/i18n';
+import { useLocale, useT, formatDateTime } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { useConversations, type Conversation } from './chat';
 import { PagingControl, useSettledFailure } from './PagingControl';
@@ -21,7 +21,7 @@ export function Conversations() {
   const locale = useLocale();
   const router = useRouter();
   const list = useConversations();
-  const when = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  const when = (iso: string) => formatDateTime(locale, iso);
   const secondary = { color: theme.color.textSecondary };
 
   const row = (c: Conversation) => (

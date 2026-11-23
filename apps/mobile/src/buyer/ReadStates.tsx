@@ -63,7 +63,7 @@ export function ReadStates({
   if (read.status === 'pending') {
     return (
       <Screen centered edges={['bottom', 'left', 'right']}>
-        <ActivityIndicator color={theme.color.accent} />
+        <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
         <AppText
           accessibilityLiveRegion="polite"
           style={{ color: theme.color.textSecondary, textAlign: 'center' }}

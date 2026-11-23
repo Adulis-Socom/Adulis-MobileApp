@@ -99,7 +99,7 @@ export function CategoryTabs({
                 justifyContent: 'center',
                 borderRadius: theme.radius.md,
                 borderWidth: 1,
-                borderColor: selected ? theme.color.accent : theme.color.border,
+                borderColor: selected ? theme.color.accent : theme.color.borderStrong,
                 backgroundColor: selected ? theme.color.surfaceMuted : theme.color.bg,
               }}
             >

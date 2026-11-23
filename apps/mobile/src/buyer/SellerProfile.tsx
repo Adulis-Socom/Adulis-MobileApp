@@ -11,7 +11,7 @@ import { useSession } from '../auth/session';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { useFocusRequest } from '../components/focus';
-import { formatPriceSpan, hasMessage, useLocale, useT } from '../i18n/i18n';
+import { formatPriceSpan, hasMessage, useLocale, useT, formatDate, formatCalendarDay } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
@@ -502,9 +502,8 @@ function ReviewRow({ review }: { review: SellerReview }) {
   const rating =
     fillSlots(t('buyer.review.rating'), { rating: review.seller_rating }) ??
     String(review.seller_rating);
-  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
-    new Date(review.published_at),
-  );
+  // A date the server sent that is not a date leaves the date line out; the review itself still shows.
+  const date = formatDate(locale, review.published_at);
   return (
     <View
       style={{
@@ -555,9 +554,7 @@ function AboutTab({
   // A store that is closing or suspended stays public but sells nothing, and the server's open/closed answer
   // comes from the opening hours alone: only an ACTIVE Seller may be said to be open or to take orders.
   const trading = seller.status === 'ACTIVE';
-  const since = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(`${seller.member_since}T00:00:00Z`),
-  );
+  const since = formatCalendarDay(locale, seller.member_since);
   return (
     <ScrollView
       testID="seller-about"
