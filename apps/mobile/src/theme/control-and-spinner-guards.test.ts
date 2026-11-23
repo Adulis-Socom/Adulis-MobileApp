@@ -78,6 +78,13 @@ describe('spinners', () => {
     expect(bad).toEqual([]);
   });
 
+  it('every ActivityIndicator of the cart code (commerce/) is named or hidden from both platforms too', () => {
+    const files = productionSources('commerce');
+    expect(files.length).toBeGreaterThan(20);
+    const bad = files.flatMap(({ file, text }) => [...text.matchAll(SPINNER)].filter((m) => !named(m[0])).map(() => file));
+    expect(bad).toEqual([]);
+  });
+
   it('would notice a bare spinner and one hidden on one platform only (proved on samples)', () => {
     expect(named('<ActivityIndicator color={c} />')).toBe(false);
     expect(named('<ActivityIndicator color={c} importantForAccessibility="no" />')).toBe(false);
