@@ -125,7 +125,7 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
     /** A read of this list waits for a connection, whether or not items are shown; said beside Load more (B25-005). A pull is a new query, so it does not raise this line beside a next page. */
     readPaused: query.fetchStatus === 'paused',
     /**
-     * A pull has not been answered: the items on screen are the PREVIOUS answer, standing in (placeholder data). The
+     * A refresh (a pull, or one the screen starts) has not been answered: the items on screen are the PREVIOUS answer, standing in (placeholder data). The
      * new query knows nothing of a next page yet, so nothing about the end or about more may be said for it.
      */
     refreshPending: isPlaceholderData,
