@@ -23,6 +23,20 @@ describe('useReduceMotion', () => {
     expect(remove).toHaveBeenCalled();
   });
 
+  it('a change that arrives before the first answer is not overwritten by it', async () => {
+    let listener: ((enabled: boolean) => void) | undefined;
+    let answer: (enabled: boolean) => void = () => undefined;
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)));
+    jest.spyOn(AccessibilityInfo, 'addEventListener').mockImplementation(((name: string, fn: (enabled: boolean) => void) => {
+      if (name === 'reduceMotionChanged') listener = fn;
+      return { remove: jest.fn() };
+    }) as never);
+    const { result } = await renderHook(() => useReduceMotion());
+    await act(async () => listener?.(true)); // the newer fact
+    await act(async () => answer(false)); // the stale first answer
+    expect(result.current).toBe(true);
+  });
+
   it('stays false when the platform cannot answer', async () => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockRejectedValue(new Error('unsupported'));
     jest.spyOn(AccessibilityInfo, 'addEventListener').mockReturnValue({ remove: jest.fn() } as never);

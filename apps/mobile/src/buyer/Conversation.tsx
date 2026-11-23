@@ -13,6 +13,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useLocale, useT } from '../i18n/i18n';
+import { useReduceMotion } from '../theme/reduce-motion';
 import { useTheme } from '../theme/theme';
 import {
   CONVERSATIONS,
@@ -106,6 +107,7 @@ export function ConversationScreen({ conversationRef, product = null }: { conver
 function OwnedConversation({ conversationRef, product }: { conversationRef: unknown; product: ProductRef | null }) {
   const t = useT();
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
   const locale = useLocale();
   const qc = useQueryClient();
   const focused = useIsFocused();
@@ -602,7 +604,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           ) : null}
         </View>
         {picking && canSelect && conversation ? (
-          <ProductPicker handle={conversation.handle} store={conversation.storeName} onSelect={choose} onCancel={() => setPicking(false)} />
+          <ProductPicker handle={conversation.handle} store={conversation.storeName} onSelect={choose} onCancel={() => setPicking(false)} reduceMotion={reduceMotion} />
         ) : null}
         {context !== null ? (
           <ProductContext

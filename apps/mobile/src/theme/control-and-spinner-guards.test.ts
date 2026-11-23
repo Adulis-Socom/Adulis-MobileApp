@@ -1,19 +1,21 @@
-import { productionSources } from '../testing/source-scan';
+import { productionSources, uiSources } from '../testing/source-scan';
 
 /**
  * Source guards for BUY-04 (design foundation). Each lists what exists today with the reason it is allowed, so a
  * new one cannot arrive without somebody reading the rule it touches.
  *
- * - A control with no outline of its own draws its edge in borderStrong (3:1, WCAG 1.4.11; the token's comment and
- *   components/control-outline.test.tsx). The plain `border` token (about 1.4:1) is for decoration: dividers and
- *   cards whose text identifies them.
- * - Dates come from the one helper in i18n/i18n.ts, which cannot throw in render.
- * - A spinner is named or hidden, never an unnamed element beside the text that already says "Loading".
- * - Motion the app asks for follows the reduced-motion setting.
+ * - The rule for edges: a control whose edge is how it is found and chosen (an input, an option, a chip, an icon
+ *   button, a row the person chooses among) draws it in borderStrong (3:1, WCAG 1.4.11; the token's own comment and
+ *   components/control-outline.test.tsx). The plain \`border\` token (about 1.4:1) is for decoration only: rules
+ *   between regions, and cards or rows that open something and are identified by their text.
+ * - Dates come from the helpers in i18n/i18n.ts, which cannot throw in render (the frozen Seller sources are not read).
+ * - A spinner is named, or hidden from both screen readers, never an unnamed element beside the text that already
+ *   says "Loading".
+ * - Motion the app asks for follows the reduced-motion setting, read by the parent before the picker mounts.
  */
 
 const BUYER_UI = productionSources('buyer', 'components', 'app');
-const counts = (files: typeof BUYER_UI, pattern: RegExp) =>
+const counts = (files: readonly { file: string; text: string }[], pattern: RegExp) =>
   Object.fromEntries(
     files
       .map(({ file, text }) => [file, [...text.matchAll(pattern)].length] as const)
@@ -21,60 +23,74 @@ const counts = (files: typeof BUYER_UI, pattern: RegExp) =>
       .sort(([a], [b]) => a.localeCompare(b)),
   );
 
+/** A border edge (all sides, top or bottom) drawn in the plain token, across lines (Prettier wraps ternaries). */
+const PLAIN_EDGE = /border(?:Top|Bottom)?Color:\s*[^,}]*?\btheme\.color\.border\b/g;
+
 describe('control edges', () => {
-  it('draws no control edge in the plain border token: only these decorative edges remain', () => {
-    expect(counts(BUYER_UI, /borderColor:[^,}\n]*\btheme\.color\.border\b/g)).toEqual({
-      // Dividers (a rule between regions) and the tab strip underline.
+  it('draws no choosable control in the plain border token: only these decorative edges remain', () => {
+    expect(counts(BUYER_UI, PLAIN_EDGE)).toEqual({
+      // Rules between regions (header, tab bar, composer, picker header and footer, tab strips) and the tab strip underline.
+      'app/(buyer)/(tabs)/_layout.tsx': 1,
       'app/(buyer)/search.tsx': 1,
+      'buyer/HomeHeader.tsx': 1,
       'buyer/ProductPicker.tsx': 2,
-      'buyer/SavedScreen.tsx': 2, // one divider, one Collection card
-      // Cards and rows whose text and spacing identify them; the edge is decoration, not the control.
+      'buyer/SavedScreen.tsx': 2, // one tab strip rule, one Collection card (opens a Collection; named by its text)
+      'buyer/SceneExplorer.tsx': 1, // the rule above the selected Product's preview (the Product rows themselves are radios in borderStrong)
+      // Cards and rows that open something or only show something, identified by their text.
       'buyer/AccountSessions.tsx': 1,
       'buyer/BuyerNotifications.tsx': 1,
       'buyer/Conversation.tsx': 2, // the composer's top rule and the Product context card
-      'buyer/Conversations.tsx': 1,
+      'buyer/Conversations.tsx': 1, // a row that opens a conversation
       'buyer/MessageBubble.tsx': 1,
       'buyer/SceneCard.tsx': 2, // the card, and an unavailable tag's quieter edge (an available tag uses borderStrong)
-      'buyer/SceneExplorer.tsx': 1,
       'buyer/SellerProfile.tsx': 2,
     });
   });
 
-  it('would notice a control drawn in the plain token (proved on a sample)', () => {
-    const sample = [{ file: 'x.tsx', text: 'style={{ borderColor: selected ? theme.color.accent : theme.color.border }}' }];
-    expect(counts(sample, /borderColor:[^,}\n]*\btheme\.color\.border\b/g)).toEqual({ 'x.tsx': 1 });
+  it('would notice a control drawn in the plain token, also across lines (proved on samples)', () => {
+    const wrapped = [{ file: 'x.tsx', text: 'style={{ borderColor: selected\n  ? theme.color.accent\n  : theme.color.border }}' }];
+    expect(counts(wrapped, PLAIN_EDGE)).toEqual({ 'x.tsx': 1 });
+    const bottom = [{ file: 'x.tsx', text: 'style={{ borderBottomColor: theme.color.border }}' }];
+    expect(counts(bottom, PLAIN_EDGE)).toEqual({ 'x.tsx': 1 });
     const strong = [{ file: 'x.tsx', text: 'style={{ borderColor: theme.color.borderStrong }}' }];
-    expect(counts(strong, /borderColor:[^,}\n]*\btheme\.color\.border\b/g)).toEqual({});
+    expect(counts(strong, PLAIN_EDGE)).toEqual({});
   });
 });
 
 describe('dates', () => {
-  it('are formatted only by the helpers in i18n/i18n.ts (Buyer sources; the frozen Seller sources are not read)', () => {
-    expect(counts(productionSources('buyer', 'components', 'app', 'modes', 'auth'), /Intl\.DateTimeFormat/g)).toEqual({});
+  it('are formatted only by the helpers in i18n/i18n.ts (every UI source except the frozen Seller ones)', () => {
+    const files = uiSources().filter(({ file }) => !file.startsWith('seller/'));
+    expect(files.length).toBeGreaterThan(50);
+    expect(counts(files, /Intl\.DateTimeFormat/g)).toEqual({});
   });
 });
 
 describe('spinners', () => {
-  it('every ActivityIndicator is named or hidden from assistive technology', () => {
-    const bare = BUYER_UI.flatMap(({ file, text }) =>
-      [...text.matchAll(/<ActivityIndicator\b[^>]*?\/>/g)]
-        .filter((m) => !/accessibilityLabel=|importantForAccessibility="no"/.test(m[0]))
-        .map(() => file),
-    );
-    expect(bare).toEqual([]);
+  const SPINNER = /<ActivityIndicator\b[\s\S]*?\/>/g;
+  /** Named, or hidden from both Android (importantForAccessibility) and iOS (accessibilityElementsHidden) screen readers. */
+  const named = (element: string) =>
+    /accessibilityLabel=/.test(element) || (/importantForAccessibility="no"/.test(element) && /accessibilityElementsHidden\b/.test(element));
+
+  it('every ActivityIndicator is named or hidden from both platforms', () => {
+    const bad = BUYER_UI.flatMap(({ file, text }) => [...text.matchAll(SPINNER)].filter((m) => !named(m[0])).map(() => file));
+    expect(bad).toEqual([]);
   });
 
-  it('would notice a bare spinner (proved on a sample)', () => {
-    const m = '<ActivityIndicator color={c} />'.match(/<ActivityIndicator\b[^>]*?\/>/);
-    expect(m && /accessibilityLabel=|importantForAccessibility="no"/.test(m[0])).toBe(false);
+  it('would notice a bare spinner and one hidden on one platform only (proved on samples)', () => {
+    expect(named('<ActivityIndicator color={c} />')).toBe(false);
+    expect(named('<ActivityIndicator color={c} importantForAccessibility="no" />')).toBe(false);
+    expect(named('<ActivityIndicator color={c} importantForAccessibility="no" accessibilityElementsHidden />')).toBe(true);
+    expect(named('<ActivityIndicator color={c} accessibilityLabel={t("x")} />')).toBe(true);
   });
 });
 
 describe('motion', () => {
-  it('asks for no fixed modal animation: the picker follows the reduced-motion setting', () => {
+  it('asks for no fixed modal animation: the picker follows the reduced-motion setting its parent read', () => {
     expect(counts(BUYER_UI, /animationType=["'][a-z]+["']/g)).toEqual({});
     const picker = BUYER_UI.find(({ file }) => file === 'buyer/ProductPicker.tsx');
-    expect(picker?.text).toMatch(/useReduceMotion\(\)/);
     expect(picker?.text).toMatch(/animationType=\{reduceMotion \? 'none' : 'slide'\}/);
+    const parent = BUYER_UI.find(({ file }) => file === 'buyer/Conversation.tsx');
+    expect(parent?.text).toMatch(/useReduceMotion\(\)/);
+    expect(parent?.text).toMatch(/reduceMotion=\{reduceMotion\}/);
   });
 });

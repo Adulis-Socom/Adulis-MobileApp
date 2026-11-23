@@ -26,9 +26,16 @@ describe('formatDateTime, formatDate and formatCalendarDay', () => {
     }
   });
 
-  it('read a calendar day as that day, whatever the device time zone, and refuse a malformed one', () => {
+  it('read a calendar day as that day (UTC; Jest sets no time zone, so a device west of UTC is not exercised here)', () => {
     expect(formatCalendarDay('en', '2026-03-01')).toBe('Mar 1, 2026');
+    expect(formatCalendarDay('en', '2024-02-29')).toBe('Feb 29, 2024');
+  });
+
+  it('refuse a malformed day and a day that does not exist (it would roll over into the next month)', () => {
     expect(formatCalendarDay('en', '2026-03-01T00:00:00Z')).toBeNull();
     expect(formatCalendarDay('en', '2026-3-1')).toBeNull();
+    expect(formatCalendarDay('en', '2026-02-30')).toBeNull();
+    expect(formatCalendarDay('en', '2026-13-01')).toBeNull();
+    expect(formatCalendarDay('en', '2025-02-29')).toBeNull();
   });
 });

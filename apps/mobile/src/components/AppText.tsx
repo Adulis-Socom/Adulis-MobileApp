@@ -13,6 +13,8 @@ export function AppText({
   ...props
 }: ComponentProps<typeof Text> & { variant?: 'body' | 'heading' }) {
   const theme = useTheme();
+  // Nothing to say, nothing drawn: a sentence whose slot was null (fillSlots) must not leave an empty line in a gap.
+  if (props.children === null || props.children === undefined || props.children === false) return null;
   const heading = variant === 'heading';
   const fontSize = heading ? theme.fontSize.xl : theme.fontSize.base;
   return (

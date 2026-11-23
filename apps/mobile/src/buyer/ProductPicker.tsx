@@ -8,7 +8,6 @@ import { fillSlots } from '../api/messages';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
-import { useReduceMotion } from '../theme/reduce-motion';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
@@ -31,14 +30,14 @@ export function ProductPicker({
   handle,
   store,
   onSelect,
-  onCancel,
-}: {
+  onCancel, reduceMotion }: {
   handle: string;
   store: string;
   onSelect: (slug: string) => void;
   onCancel: () => void;
+  /** The system's reduce-motion setting, read by the parent before this mounts (it mounts fresh each time it opens). */
+  reduceMotion: boolean;
 }) {
-  const reduceMotion = useReduceMotion();
   const t = useT();
   const theme = useTheme();
   const api = usePrivateApi();

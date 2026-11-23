@@ -301,7 +301,7 @@ function ProductRow({
     <View
       style={{
         borderWidth: selected ? 2 : 1,
-        borderColor: selected ? theme.color.accent : theme.color.border,
+        borderColor: selected ? theme.color.accent : theme.color.borderStrong,
         borderRadius: theme.radius.lg,
         backgroundColor: theme.color.surface,
         overflow: 'hidden',
