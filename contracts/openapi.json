@@ -13496,12 +13496,12 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "Free text, stored as the report reason code. The server defines no reason list."
+            "description": "Free text, stored as the report reason code. The server defines no reason list. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2."
           },
           "detail": {
             "type": "string",
             "maxLength": 2000,
-            "description": "Optional additional information."
+            "description": "Optional additional information. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2."
           }
         },
         "required": [

@@ -3109,9 +3109,9 @@ export interface components {
             target_kind: string;
         };
         ReportRequestBodyDto: {
-            /** @description Optional additional information. */
+            /** @description Optional additional information. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2. */
             detail?: string;
-            /** @description Free text, stored as the report reason code. The server defines no reason list. */
+            /** @description Free text, stored as the report reason code. The server defines no reason list. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2. */
             reason: string;
             /**
              * Format: uuid

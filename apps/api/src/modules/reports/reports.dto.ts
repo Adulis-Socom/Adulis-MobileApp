@@ -33,11 +33,16 @@ export class ReportRequestBodyDto {
   @ApiProperty({
     minLength: 1,
     maxLength: REPORT_REASON_MAX,
-    description: 'Free text, stored as the report reason code. The server defines no reason list.',
+    description:
+      'Free text, stored as the report reason code. The server defines no reason list. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2.',
   })
   reason!: string;
 
-  @ApiProperty({ required: false, maxLength: REPORT_DETAIL_MAX, description: 'Optional additional information.' })
+  @ApiProperty({
+    required: false,
+    maxLength: REPORT_DETAIL_MAX,
+    description: 'Optional additional information. The limit counts JavaScript string length (UTF-16 code units): an emoji counts as 2.',
+  })
   detail?: string;
 }
 

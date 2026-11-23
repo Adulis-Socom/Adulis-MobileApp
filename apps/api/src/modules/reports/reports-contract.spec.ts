@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { loadContract } from '../../../test/contract-support';
+import type { AuthedRequest } from '../../common/auth/auth.guard';
+import type { HandlerTransaction } from '../../common/db/handler-transaction';
+import { ReportsController } from './reports.controller';
 import {
   REPORT_DETAIL_MAX,
   REPORT_REASON_MAX,
@@ -99,6 +102,16 @@ describe('the request body the runtime accepts and refuses', () => {
     },
   );
 
+  it('keeps the behaviour it has always had: unknown keys are stripped, a whitespace-only reason is accepted, length counts UTF-16 units', () => {
+    const emoji = String.fromCodePoint(0x1f600);
+    const parsed = reportRequestBody.safeParse({ ...valid, extra: 'x', reason: '   ' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && 'extra' in parsed.data).toBe(false);
+    expect(parsed.success && parsed.data.reason).toBe('   ');
+    expect(reportRequestBody.safeParse({ ...valid, reason: emoji.repeat(41) }).success).toBe(false); // 41 characters, 82 units
+    expect(reportRequestBody.safeParse({ ...valid, reason: emoji.repeat(40) }).success).toBe(true);
+  });
+
   it('refuses a bad id, an empty or over-long reason, an over-long detail, and a missing required field', () => {
     expect(reportRequestBody.safeParse({ ...valid, subject_id: 'not-a-uuid' }).success).toBe(false);
     expect(reportRequestBody.safeParse({ ...valid, reason: '' }).success).toBe(false);
@@ -113,16 +126,70 @@ describe('the request body the runtime accepts and refuses', () => {
 
 describe('the subject kinds are the shipped enum', () => {
   it('equals core.report_target_kind in the foundation migration, value for value', () => {
-    const sql = readFileSync(resolve(__dirname, '../../../../../db/migrations/0001_foundation.sql'), 'utf8');
+    const dir = resolve(__dirname, '../../../../../db/migrations');
+    const sql = readFileSync(resolve(dir, '0001_foundation.sql'), 'utf8');
     const m = /CREATE TYPE core\.report_target_kind AS ENUM\s*\(([^)]*)\)/i.exec(sql);
     expect(m).not.toBeNull();
     const values = [...m![1]!.matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]);
     expect([...values].sort()).toEqual([...REPORT_SUBJECT_KINDS].sort());
   });
 
+  it('is not changed by a later migration: no ALTER TYPE touches core.report_target_kind', () => {
+    const dir = resolve(__dirname, '../../../../../db/migrations');
+    const later = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .filter((f) => /ALTER\s+TYPE\s+core\.report_target_kind/i.test(readFileSync(resolve(dir, f), 'utf8')));
+    expect(later).toEqual([]);
+  });
+
   it('has no Scene target and no Block operation anywhere in the contract', () => {
     expect([...REPORT_SUBJECT_KINDS].some((k) => /SCENE/.test(k))).toBe(false);
-    const paths = Object.keys(contract.paths).filter((p) => /block|unblock/i.test(p) && !/deletion/.test(p));
+    // Whole path segments, so an unrelated `.../blockers` (deletion, onboarding) is not mistaken for a Block operation.
+    const paths = Object.keys(contract.paths).filter((p) => p.split('/').some((s) => /^(un)?block(ed|s)?$/i.test(s)));
     expect(paths).toEqual([]);
+  });
+});
+
+describe('the controller parses with the shared schema', () => {
+  const id = '0b6f1a3e-1111-4111-8111-111111111111';
+  const call = async (body: unknown) => {
+    const tx = {
+      // The real transaction would run the insert; here only whether it is opened, and with which status, matters.
+      runIdempotent: jest.fn(async () => ({ report_id: 'x' })),
+    };
+    const controller = new ReportsController(tx as unknown as HandlerTransaction);
+    const outcome = await controller
+      .create({ body, ctx: { accountId: 'acct' } } as unknown as AuthedRequest, {} as never)
+      .then(() => 'ok' as const)
+      .catch((e: unknown) => e);
+    return { outcome, tx };
+  };
+
+  it('refuses an invalid body with a ZodError before any transaction is opened', async () => {
+    for (const body of [
+      { subject_kind: 'SCENE', subject_id: id, reason: 'x' },
+      { subject_kind: 'PRODUCT', subject_id: 'nope', reason: 'x' },
+      { subject_kind: 'PRODUCT', subject_id: id, reason: '' },
+      { subject_kind: 'PRODUCT', reason: 'x' },
+      {},
+      null,
+    ]) {
+      const { outcome, tx } = await call(body);
+      expect(outcome).toBeInstanceOf(z.ZodError);
+      expect(tx.runIdempotent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('accepts a valid body, with and without detail, and opens the idempotent transaction once with status 201', async () => {
+    for (const body of [
+      { subject_kind: 'REVIEW', subject_id: id, reason: 'COUNTERFEIT' },
+      { subject_kind: 'MESSAGE', subject_id: id, reason: 'SPAM', detail: 'more' },
+      { subject_kind: 'SELLER', subject_id: id, reason: 'x', unknown_key: 1 }, // unknown keys are ignored, as before
+    ]) {
+      const { outcome, tx } = await call(body);
+      expect(outcome).toBe('ok');
+      expect(tx.runIdempotent).toHaveBeenCalledTimes(1);
+      expect((tx.runIdempotent.mock.calls[0] as unknown[])[2]).toBe(201);
+    }
   });
 });
