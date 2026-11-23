@@ -571,9 +571,9 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
         {/* A read that waits for a connection (a refresh, the poll, an earlier page, a return to the app), with messages shown: say so; nothing was sent or lost.
             In the edited-unsent state the recheck line already says it: one message, not two. */}
         {messages.fetchStatus === 'paused' && messages.items.length > 0 && recheckText !== t('common.offline') ? (
-          <AppText testID="chat-offline" style={secondary}>
+          <StatusText testID="chat-offline" style={secondary}>
             {t('common.offline')}
-          </AppText>
+          </StatusText>
         ) : null}
         {/* A refresh or poll that failed leaves the messages as they were, and says so; an earlier page says it beside its control, and an empty conversation in its own block.
             In the edited-unsent state the recheck line already says the read failed: one alert, not two. */}

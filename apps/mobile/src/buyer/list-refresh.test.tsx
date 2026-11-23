@@ -1,6 +1,7 @@
 import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { AccessibilityInfo } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
 import {
@@ -198,5 +199,24 @@ describe('the same footer on the Seller Products list (another PublicListView sc
     expect(screen.getByLabelText(/^Thing 0,/)).toBeOnTheScreen();
     expect(ended()).not.toBeOnTheScreen();
     expect(await screen.findByTestId('list-refresh-offline')).toBeOnTheScreen();
+  });
+});
+
+describe('the pending-pull offline line is a status the Buyer hears (BUY-04C)', () => {
+  it('is announced once when it appears, and is not also a live region', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      script(page(first(), 'page-2'), page(first('New'), 'page-2'));
+      await openShop();
+      await act(async () => onlineManager.setOnline(false));
+      await pull();
+      await settle();
+      const line = await screen.findByTestId('list-refresh-offline');
+      expect(announce.mock.calls.filter(([text]) => text === en['common.offline'])).toHaveLength(1);
+      expect(screen.getByText(en['common.offline']).props.accessibilityLiveRegion).toBeUndefined();
+      expect(line).toBeOnTheScreen();
+    } finally {
+      announce.mockRestore();
+    }
   });
 });

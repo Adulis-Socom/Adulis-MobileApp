@@ -626,6 +626,49 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
   });
 
+  it('C1f (BUY-04C). the offline lines under Refresh are announced, once each', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      signedIn();
+      const chat = installChat();
+      const c = chat.conv(A);
+      chat.msg(c, { sender_kind: 'SELLER', body: 'Still here', sent_at: ago(30) });
+      await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+      expect(await screen.findByText('Still here')).toBeOnTheScreen();
+      await act(async () => onlineManager.setOnline(false));
+      try {
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.refresh'] }));
+        await screen.findByTestId('chat-offline');
+        expect(announce.mock.calls.filter(([text]) => text === en['common.offline'])).toHaveLength(1);
+      } finally {
+        await act(async () => onlineManager.setOnline(true));
+      }
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('C1g (BUY-04C). the conversation list offline line is announced once', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      signedIn();
+      const chat = installChat();
+      chat.conv(A);
+      await renderRouter(APP_DIR, { initialUrl: '/messages' });
+      await screen.findByRole('button', { name: 'Store 1' });
+      await act(async () => onlineManager.setOnline(false));
+      try {
+        await fireEvent.press(screen.getByRole('button', { name: en['buyer.messages.refresh'] }));
+        await screen.findByTestId('conversations-offline');
+        expect(announce.mock.calls.filter(([text]) => text === en['common.offline'])).toHaveLength(1);
+      } finally {
+        await act(async () => onlineManager.setOnline(true));
+      }
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
   it('C1c. Load older conversations that fails says so, is announced, and Try again loads the page', async () => {
     signedIn();
     const chat = installChat();

@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { ActivityIndicator, RefreshControl, View, useWindowDimensions } from 'react-native';
 
 import { failureMessage } from '../api/messages';
-import { AlertText } from '../components/AlertText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import type { MobileMessageKey } from '@adulis/locale/mobile';
@@ -161,9 +161,7 @@ export function PublicListView<I>({
           // A pull is pending: the items are the previous answer, so the footer describes the pull and never the end.
           list.refreshPaused ? (
             <View testID="list-refresh-offline" style={{ padding: theme.space.lg, alignItems: 'center' }}>
-              <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
-                {t('common.offline')}
-              </AppText>
+              <StatusText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t('common.offline')}</StatusText>
             </View>
           ) : null
         ) : (
