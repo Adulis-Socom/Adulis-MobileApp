@@ -159,7 +159,7 @@ export function PublicListView<I>({
       ListFooterComponent={
         list.items.length === 0 || bounded ? null : (
           <LoadMoreFooter
-            paging={{ ...list, count: list.items.length, pageCount: list.pages.length }}
+            paging={{ ...list, paused: list.fetchPaused, count: list.items.length, pageCount: list.pages.length }}
             keys={{ load: 'buyer.list.load_more', loading: 'buyer.list.loading_more', failed: 'buyer.list.more_failed', end: 'buyer.list.end' }}
           />
         )

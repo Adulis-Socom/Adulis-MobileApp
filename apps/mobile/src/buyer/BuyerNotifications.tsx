@@ -93,6 +93,7 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
     isFetchingNextPage: inbox.isFetchingNextPage,
     isFetchNextPageError: inbox.isFetchNextPageError,
     error: inbox.error,
+    paused: inbox.fetchStatus === 'paused',
     loadMore: () => void inbox.fetchNextPage(),
     retryNextPage: () => void inbox.fetchNextPage(),
   };
