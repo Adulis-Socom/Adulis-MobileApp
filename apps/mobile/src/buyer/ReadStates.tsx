@@ -2,8 +2,7 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 
 import { failureMessage } from '../api/messages';
-import { AlertText } from '../components/AlertText';
-import { AppText } from '../components/AppText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { useT } from '../i18n/i18n';
@@ -64,12 +63,9 @@ export function ReadStates({
     return (
       <Screen centered edges={['bottom', 'left', 'right']}>
         <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
-        <AppText
-          accessibilityLiveRegion="polite"
-          style={{ color: theme.color.textSecondary, textAlign: 'center' }}
-        >
+        <StatusText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
           {t(loading)}
-        </AppText>
+        </StatusText>
       </Screen>
     );
   }

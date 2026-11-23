@@ -7,8 +7,7 @@ import type { SaveSurface, SaveTarget } from '../api/client';
 import { failureMessage } from '../api/messages';
 import { useSession } from '../auth/session';
 import type { ReturnTo } from '../auth/sign-in-flow';
-import { AlertText } from '../components/AlertText';
-import { AppText } from '../components/AppText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
 import { useUiStore } from '../state/ui-store';
@@ -99,7 +98,7 @@ function GuestSave({ target, surface, sceneRef, returnTo }: { target: SaveTarget
   if (!asked) return <Button label={t('buyer.save.save')} onPress={() => setAsked(true)} />;
   return (
     <View style={{ gap: theme.space.sm }} testID="save-sign-in">
-      <AppText accessibilityLiveRegion="polite">{t('buyer.save.sign_in')}</AppText>
+      <StatusText>{t('buyer.save.sign_in')}</StatusText>
       <Button label={t('auth.sign_in')} onPress={() => startGuestSave(router, { target, surface, sceneRef }, returnTo)} />
     </View>
   );

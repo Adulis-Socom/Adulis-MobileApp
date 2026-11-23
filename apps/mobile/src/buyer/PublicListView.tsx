@@ -109,9 +109,9 @@ export function PublicListView<I>({
       return (
         <>
           <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
-          <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
+          <StatusText style={{ color: theme.color.textSecondary }}>
             {t(loading)}
-          </AppText>
+          </StatusText>
         </>
       );
     }

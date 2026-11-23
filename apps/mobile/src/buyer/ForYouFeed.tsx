@@ -5,7 +5,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-nativ
 import { useBootstrap } from '../api/bootstrap';
 import type { FypUnit } from '../api/client';
 import { failureMessage } from '../api/messages';
-import { AlertText } from '../components/AlertText';
+import { AlertText, StatusText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
@@ -50,9 +50,9 @@ export function ForYouFeed() {
     return (
       <Centered>
         <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
-        <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
+        <StatusText style={{ color: theme.color.textSecondary }}>
           {t('buyer.for_you.loading')}
-        </AppText>
+        </StatusText>
       </Centered>
     );
   }

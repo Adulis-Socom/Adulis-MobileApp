@@ -8,6 +8,7 @@ import type { SearchType } from '../../api/client';
 import { CategoryTabs, useCategories, useCategoryStillOffered } from '../../buyer/categories';
 import { useTabLayout } from '../../buyer/PublicListView';
 import { SearchResults } from '../../buyer/SearchResults';
+import { StatusText } from '../../components/AlertText';
 import { AppText } from '../../components/AppText';
 import { useT } from '../../i18n/i18n';
 import { useTheme } from '../../theme/theme';
@@ -169,17 +170,17 @@ export default function Search() {
       {query.length === 0 ? (
         <AppText style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>{t('buyer.search.hint')}</AppText>
       ) : tooShort ? (
-        <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
+        <StatusText style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
           {t('buyer.search.too_short')}
-        </AppText>
+        </StatusText>
       ) : tooLong ? (
-        <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
+        <StatusText style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
           {t('buyer.search.too_long')}
-        </AppText>
+        </StatusText>
       ) : noTerms ? (
-        <AppText accessibilityLiveRegion="polite" style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
+        <StatusText style={{ padding: theme.space.lg, textAlign: 'center', color: theme.color.textSecondary }}>
           {t('buyer.search.no_terms')}
-        </AppText>
+        </StatusText>
       ) : (
         <View style={{ flex: 1 }}>
           <SearchResults
