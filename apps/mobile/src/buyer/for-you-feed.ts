@@ -114,7 +114,7 @@ export const forYouKey = (subject: 'guest' | 'account', generation: number) =>
  * many further pages by itself, one at a time, only while nothing is shown; after that Load more is the Buyer's
  * (BUY-05E). The bound is on pages loaded, so it cannot be spent twice for one session.
  */
-export const EMPTY_PAGE_WALK_LIMIT = 3;
+export const EMPTY_PAGE_WALK_LIMIT = 3; // PROVISIONAL technical value (no document sets it); a founder-review item, like the OVN-055 interval.
 
 /**
  * Every loaded page's Scene units, in order, each Scene once. A unit type this build does
@@ -206,11 +206,20 @@ export function useForYouFeed() {
   // `from`: the generation whose cards are on screen and may stand in for this one. A pull made while an earlier
   // pull is still pending keeps the SAME cards (the ones the Buyer is looking at), so it names their generation, not
   // the pending one's; nothing else may stand in (BUY-05E).
-  const [feed, setFeed] = useState<{ generation: number; withhold: boolean; from: number | undefined }>({
-    generation: 0,
-    withhold: false,
-    from: undefined,
-  });
+  //
+  // `owner`: which signed-in or signed-out stay the cards belong to. A key can be reused after sign-out and a new
+  // sign-in (it names the subject, not the Account), and the query observer may still hold the earlier Account's
+  // cards; so a placeholder is eligible only for the stay it was shown in (BUY-05E review).
+  const token = session.status === 'signedIn' ? session.token : null;
+  const [stay, setStay] = useState({ token, epoch: 0 });
+  if (stay.token !== token) setStay({ token, epoch: stay.epoch + 1 });
+  const ownerEpoch = stay.epoch;
+  const [feed, setFeed] = useState<{
+    generation: number;
+    withhold: boolean;
+    from: number | undefined;
+    owner: number | undefined;
+  }>({ generation: 0, withhold: false, from: undefined, owner: undefined });
 
   const query = useInfiniteQuery({
     queryKey: forYouKey(subject, feed.generation),
@@ -237,6 +246,7 @@ export function useForYouFeed() {
     placeholderData: (previous, previousQuery) =>
       !feed.withhold &&
       feed.from !== undefined &&
+      feed.owner === ownerEpoch &&
       previousQuery?.queryKey[1] === subject &&
       previousQuery.queryKey[2] === feed.from
         ? previous
@@ -265,11 +275,20 @@ export function useForYouFeed() {
   // `session`: the feed session on screen (its first page).
   // `source`: the generation the cards on screen belong to: this one's own, or, while a pull is pending, the one
   // its placeholders came from; undefined when no card is shown.
-  const shown = useRef<{ oldest: number | undefined; ended: boolean; session: object | undefined; source: number | undefined }>({
+  // `generation`: the feed generation this was recorded for, so a refresh made in the same batch as another state
+  // change (and so before this was recorded again) is seen as not knowing what is on screen.
+  const shown = useRef<{
+    oldest: number | undefined;
+    ended: boolean;
+    session: object | undefined;
+    source: number | undefined;
+    generation: number;
+  }>({
     oldest: undefined,
     ended: false,
     session: undefined,
     source: undefined,
+    generation: 0,
   });
   useLayoutEffect(() => {
     shown.current = {
@@ -277,6 +296,7 @@ export function useForYouFeed() {
       ended: isFetchNextPageError && feedSessionEnded(query.error),
       session: query.data?.pages[0],
       source: query.data === undefined ? undefined : isPlaceholderData ? feed.from : feed.generation,
+      generation: feed.generation,
     };
   });
   useEffect(() => {
@@ -291,12 +311,17 @@ export function useForYouFeed() {
   // placeholders -- a query key cannot tell an older Query with the same key apart.
   const refresh = useCallback(
     () =>
-      setFeed((f) => ({
-        generation: f.generation + 1,
-        withhold: shown.current.ended || shown.current.oldest === undefined,
-        from: shown.current.source,
-      })),
-    [],
+      setFeed((f) => {
+        // Not recorded for this generation yet: nothing is known to be on screen, so nothing stands in.
+        const known = shown.current.generation === f.generation;
+        return {
+          generation: f.generation + 1,
+          withhold: !known || shown.current.ended || shown.current.oldest === undefined,
+          from: known ? shown.current.source : undefined,
+          owner: ownerEpoch,
+        };
+      }),
+    [ownerEpoch],
   );
   // Retrying a failed first page shows no placeholder either, for the same reason.
   const { refetch } = query;
@@ -307,7 +332,7 @@ export function useForYouFeed() {
 
   useForegroundRevalidation(
     () => shown.current.oldest,
-    () => setFeed((f) => ({ generation: f.generation + 1, withhold: true, from: undefined })),
+    () => setFeed((f) => ({ generation: f.generation + 1, withhold: true, from: undefined, owner: undefined })),
   );
 
   /**
@@ -346,6 +371,11 @@ export function useForYouFeed() {
     hasNextPage,
     isFetchingNextPage,
     isFetchNextPageError,
+    /**
+     * The shown pages say more follow (their last page has a cursor). Read from what is on screen, so a pull pending
+     * over such a session still counts, while `hasNextPage` (the new session's own) is false until it answers.
+     */
+    moreFollow: (query.data?.pages.at(-1)?.next_cursor ?? null) !== null,
     /** Nothing to show yet and the request waits for a connection (TanStack paused it). */
     paused: query.fetchStatus === 'paused',
     /** A pull-to-refresh is in flight: the old session's cards are still shown. */

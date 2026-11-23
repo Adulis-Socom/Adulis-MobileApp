@@ -84,14 +84,18 @@ export function ForYouFeed() {
 
   // Nothing this build can show, but the server says more pages follow: not an empty feed. The hook walks a bounded
   // number of pages by itself; Load more (and Try again for a failed page) is the Buyer's after that (BUY-05E).
-  if (feed.units.length === 0 && (feed.hasNextPage || feed.isFetchNextPageError)) {
+  if (feed.units.length === 0 && (feed.moreFollow || feed.isFetchNextPageError)) {
     return (
       <Centered refreshing={feed.refreshing} onRefresh={feed.refresh}>
+        {/* The one offline line of this panel (the footer's own is switched off: two would say the same thing side by side). */}
         {feed.paused ? <AlertText style={{ textAlign: 'center' }}>{t('common.offline')}</AlertText> : null}
-        <LoadMoreFooter
-          paging={{ ...feed, count: 0, pageCount: feed.pageCount }}
-          keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
-        />
+        {/* While a pull's new session is pending the shown pages are the old session's: nothing about more pages is offered. */}
+        {feed.refreshPending ? null : (
+          <LoadMoreFooter
+            paging={{ ...feed, paused: false, count: 0, pageCount: feed.pageCount }}
+            keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
+          />
+        )}
         <Button label={t('buyer.for_you.refresh')} onPress={feed.refresh} variant="secondary" />
       </Centered>
     );
