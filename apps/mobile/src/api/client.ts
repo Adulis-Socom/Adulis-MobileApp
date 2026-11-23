@@ -257,7 +257,8 @@ export function createApiClient(deps: ApiDeps) {
     const url = `${apiOrigin()}${resolved}${search ? `?${search}` : ''}`;
     const controller = new AbortController();
     // One deadline for the whole exchange, headers and body (BUY-27A): the timer is cleared only
-    // once the body is read, and a body read that ignores the abort signal is raced against it.
+    // once the body is read. Fetch itself is bounded by the abort signal (the platform clients honour
+    // it); a body read that ignores the signal is raced against the same deadline.
     // A timeout stays an unknown outcome: it is never read as the server having refused, so a keyed
     // retry keeps its Idempotency-Key.
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

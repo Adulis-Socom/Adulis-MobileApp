@@ -220,6 +220,7 @@ describe('a response whose body stalls (BUY-27A, B23-013)', () => {
       expect(error.failure).toEqual({ kind: 'timeout' });
       expect(isTransient(error)).toBe(true);
       expect(wasAnswered(error)).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
     } finally {
       jest.useRealTimers();
     }
@@ -234,6 +235,7 @@ describe('a response whose body stalls (BUY-27A, B23-013)', () => {
       const error = (await pending) as ApiError;
       expect(error.failure).toMatchObject({ kind: 'unexpected', status: 500 });
       expect(wasAnswered(error)).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
     } finally {
       jest.useRealTimers();
     }
