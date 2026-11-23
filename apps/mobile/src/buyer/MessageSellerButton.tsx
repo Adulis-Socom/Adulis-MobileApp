@@ -27,8 +27,10 @@ export type ProductRef = { handle: string; slug: string };
  *   used as an id. The conversation then opens with the Product as the composer's next-message
  *   context, passed as its public handle and slug only: the conversation screen reads the Product
  *   itself.
- * - A guest is sent to sign in, returning to where it started; nothing is created for a guest, and
- *   nothing is sent after sign-in.
+ * - A guest is sent to sign in; nothing is created for a guest, and nothing is sent after sign-in. From a
+ *   Product the guest returns to that Product; from a Seller profile the guest returns to Messages, not the
+ *   profile (BB18-087, deferred: the sign-in return allow-list has no Seller route and guest continuity there
+ *   is the founder's decision).
  */
 export function MessageSellerButton(props: { sellerId: string } | { product: ProductRef }) {
   const t = useT();
