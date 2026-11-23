@@ -7,7 +7,7 @@ import { Button } from '../../components/Button';
 import { formatMinor, useLocale, useT } from '../../i18n/i18n';
 import { useTheme } from '../../theme/theme';
 import { useCarts } from '../cart/hooks';
-import { allLines, type CartLine, type SellerCart } from '../cart/model';
+import { LINE_ISSUES, allLines, type CartLine, type SellerCart } from '../cart/model';
 import { mayDrawFacts, sellerCartStatus, type CartViewState, type Freshness } from '../cart/view-state';
 import { LINE_ISSUE_KEY, UNVERIFIED_KEY } from './cart-copy';
 
@@ -22,8 +22,8 @@ import { LINE_ISSUE_KEY, UNVERIFIED_KEY } from './cart-copy';
  * build serves the disabled adapter, so it draws "not available" there (commerce-guard.test.tsx G1, G2, G11, G13).
  */
 
-/** The carts the commerce provider serves, drawn. Mounted by tests and development harnesses only. */
-export function FixtureCart() {
+/** The carts the commerce provider serves, drawn, whatever adapter it serves. Mounted by tests only today. */
+export function InternalCart() {
   const { view, refresh } = useCarts({ focused: true });
   return <CartView view={view} onRefresh={refresh} />;
 }
@@ -67,31 +67,38 @@ export function CartView({ view, onRefresh }: { view: CartViewState; onRefresh: 
   const facts = mayDrawFacts(freshness);
   const anyIssue = facts && allLines(carts).some((line) => line.issues.length > 0);
   const noLines = carts.carts.every((c) => c.lines.length === 0);
+  // Empty is claimed only of an answer that is the server's last word: not while a new one is awaited, not when unverified.
+  const verified = freshness.kind === 'VERIFIED';
   return (
-    <ScrollView
-      testID="fixture-cart"
-      style={{ backgroundColor: theme.color.bg }}
-      contentContainerStyle={{ padding: theme.space.lg, gap: theme.space.lg }}
-      refreshControl={
-        <RefreshControl refreshing={freshness.kind === 'REVALIDATING'} onRefresh={onRefresh} colors={[theme.color.accent]} />
-      }
-    >
-      <AppText variant="heading" accessibilityRole="header">
-        {t('buyer.cart.title')}
-      </AppText>
+    <View style={{ flex: 1, backgroundColor: theme.color.bg }}>
+      {/* Persistent: outside the scrolling content, so a long cart cannot scroll the marker away (rev 2 section 8). */}
       {provenance === 'FIXTURE' ? (
-        <AppText testID="cart-fixture-marker" style={{ color: theme.color.textSecondary }}>
-          {t('buyer.cart.fixture_marker')}
-        </AppText>
+        <View style={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.sm, borderBottomWidth: 1, borderBottomColor: theme.color.border }}>
+          <AppText testID="cart-fixture-marker" style={{ color: theme.color.textSecondary }}>
+            {t('buyer.cart.fixture_marker')}
+          </AppText>
+        </View>
       ) : null}
-      <FreshnessNote freshness={freshness} onRefresh={onRefresh} />
-      {/* An empty cart is said only of an answer that can be vouched for: an unverified one says nothing of its contents. */}
-      {noLines && facts ? <AppText>{t('buyer.cart.empty')}</AppText> : null}
-      {carts.carts.map((cart) => (
-        <SellerSection key={cart.key} cart={cart} freshness={freshness} />
-      ))}
-      {anyIssue ? <Button label={t('buyer.cart.refresh')} variant="secondary" onPress={onRefresh} /> : null}
-    </ScrollView>
+      <ScrollView
+        testID="fixture-cart"
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: theme.space.lg, gap: theme.space.lg }}
+        refreshControl={
+          <RefreshControl refreshing={freshness.kind === 'REVALIDATING'} onRefresh={onRefresh} colors={[theme.color.accent]} />
+        }
+      >
+        <AppText variant="heading" accessibilityRole="header">
+          {t('buyer.cart.title')}
+        </AppText>
+        <FreshnessNote freshness={freshness} onRefresh={onRefresh} />
+        {noLines && verified ? <AppText>{t('buyer.cart.empty')}</AppText> : null}
+        {carts.carts.map((cart, index) => (
+          // Two Seller carts can share a key (an unresolved guest-to-Account conflict): the index keeps them apart.
+          <SellerSection key={`${cart.key}-${index}`} cart={cart} freshness={freshness} />
+        ))}
+        {anyIssue ? <Button label={t('buyer.cart.refresh')} variant="secondary" onPress={onRefresh} /> : null}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -148,7 +155,7 @@ function SellerSection({ cart, freshness }: { cart: SellerCart; freshness: Fresh
       <AppText variant="heading" accessibilityRole="header">
         {name}
       </AppText>
-      {status === 'EMPTY' && facts ? (
+      {status === 'EMPTY' && freshness.kind === 'VERIFIED' ? (
         <AppText style={{ color: theme.color.textSecondary }}>{t('buyer.cart.seller_empty')}</AppText>
       ) : null}
       {cart.lines.map((line) => (
@@ -177,7 +184,10 @@ function LineRow({ line, freshness }: { line: CartLine; freshness: Freshness }) 
           price: formatMinor(locale, line.previousUnitPrice.amountMinor, line.previousUnitPrice.currency),
         })
       : null;
-  const issues = facts ? line.issues.map((issue) => t(LINE_ISSUE_KEY[issue])) : [];
+  // In the model's display precedence, whatever order the line arrived in.
+  const issues = facts
+    ? [...line.issues].sort((a, b) => LINE_ISSUES.indexOf(a) - LINE_ISSUES.indexOf(b)).map((issue) => t(LINE_ISSUE_KEY[issue]))
+    : [];
   const only =
     facts && line.issues.includes('INSUFFICIENT_STOCK') && line.availableQuantity !== null
       ? fillSlots(t('buyer.cart.available_count'), { count: line.availableQuantity.toLocaleString(locale) })

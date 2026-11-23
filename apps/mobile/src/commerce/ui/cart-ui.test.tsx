@@ -1,17 +1,17 @@
 import { en } from '@adulis/locale/mobile';
 import { colorModes } from '@adulis/tokens';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { useUiStore } from '../../state/ui-store';
 import { productionSources } from '../../testing/source-scan';
-import { LINE_ISSUES, asLineId, type LineIssue } from '../cart/model';
+import { LINE_ISSUES, type LineIssue } from '../cart/model';
 import { renderWithCommerce } from '../testing/harness';
 import { cartSet, line, listed, sellerCart, UNVERIFIED, V2 } from '../testing/builders';
 import { DEMO_DEVICE, createFixtureWorld } from '../testing/fixture/adapter';
 import { A_BOWL, A_SHIRT_SMALL, B_LAMP, B_MUG } from '../testing/fixture/scenarios';
 import { LINE_ISSUE_KEY } from './cart-copy';
-import { CartView, FixtureCart } from './CartView';
+import { CartView, InternalCart } from './CartView';
 
 jest.mock('expo-secure-store', () => jest.requireActual('../../testing/secure-store-mock'));
 
@@ -100,9 +100,9 @@ describe('the drawn cart (pure presentation)', () => {
       ),
     );
     await render(<CartView view={view} onRefresh={noop} />);
-    expect(screen.getByText('Only 2 available')).toBeOnTheScreen();
-    expect(screen.queryByText('Only 0 available')).not.toBeOnTheScreen();
-    expect(screen.getByText(/Was.*9\.00/)).toBeOnTheScreen();
+    expect(screen.getByText('2 available')).toBeOnTheScreen();
+    expect(screen.queryByText('0 available')).not.toBeOnTheScreen();
+    expect(screen.getByText(/Previous price.*9\.00/)).toBeOnTheScreen();
     expect(screen.getByText(/11\.00.*each/)).toBeOnTheScreen();
   });
 
@@ -176,7 +176,7 @@ describe('the same screen against the fixture world', () => {
     world.server.sellerCarts = 'MULTI'; // an assumption of the simulator: the contract describes one Seller per cart
     await world.server.addLine(GUEST, { variantId: A_SHIRT_SMALL, quantity: 2, idempotencyKey: 'a1' });
     await world.server.addLine(GUEST, { variantId: B_MUG, quantity: 1, idempotencyKey: 'b1' });
-    await renderWithCommerce(<FixtureCart />, { adapter: world.adapter });
+    await renderWithCommerce(<InternalCart />, { adapter: world.adapter });
     expect(await screen.findByText('Demo Seller A')).toBeOnTheScreen();
     expect(screen.getByText('Demo Seller B')).toBeOnTheScreen();
     expect(screen.getByText('Demo shirt')).toBeOnTheScreen();
@@ -194,20 +194,18 @@ describe('the same screen against the fixture world', () => {
     await world.server.addLine(GUEST, { variantId: B_LAMP, quantity: 1, idempotencyKey: 'l1' });
     await world.server.addLine(GUEST, { variantId: A_BOWL, quantity: 3, idempotencyKey: 'b1' });
     await world.server.addLine(GUEST, { variantId: A_SHIRT_SMALL, quantity: 1, idempotencyKey: 's1' });
-    await renderWithCommerce(<FixtureCart />, { adapter: world.adapter });
+    await renderWithCommerce(<InternalCart />, { adapter: world.adapter });
     await screen.findByText('Demo lamp');
     expect(screen.queryByText(en['buyer.cart.issue.SOLD_OUT'])).not.toBeOnTheScreen();
     world.server.setQuantityAvailable(B_LAMP, 0);
     world.server.setQuantityAvailable(A_BOWL, 2);
     world.server.setVariantStatus(A_SHIRT_SMALL, 'WITHDRAWN');
-    // Nothing is drawn from the earlier answer's reasons until the server is asked again.
-    await act(async () => undefined);
     // A clean cart offers no button; the line problems arrive with the next answer (a pull asks again).
     const list = screen.getByTestId('fixture-cart');
     await act(async () => (list.props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
     expect(await screen.findByText(en['buyer.cart.issue.SOLD_OUT'])).toBeOnTheScreen();
     expect(screen.getByText(en['buyer.cart.issue.INSUFFICIENT_STOCK'])).toBeOnTheScreen();
-    expect(screen.getByText('Only 2 available')).toBeOnTheScreen();
+    expect(screen.getByText('2 available')).toBeOnTheScreen();
     expect(screen.getByText(en['buyer.cart.issue.VARIANT_WITHDRAWN'])).toBeOnTheScreen();
     expect(buttons()).toEqual([en['buyer.cart.refresh']]);
   });
@@ -216,7 +214,7 @@ describe('the same screen against the fixture world', () => {
     const world = createFixtureWorld();
     await world.server.addLine(GUEST, { variantId: A_BOWL, quantity: 1, idempotencyKey: 'b1' });
     const before = world.server.calls.length;
-    await renderWithCommerce(<FixtureCart />, { adapter: world.adapter, build: 'disabled', dev: true });
+    await renderWithCommerce(<InternalCart />, { adapter: world.adapter, build: 'disabled', dev: true });
     expect(await screen.findByText(en['buyer.cart.unavailable'])).toBeOnTheScreen();
     expect(screen.queryByText('Demo bowl')).not.toBeOnTheScreen();
     expect(screen.queryByTestId('cart-fixture-marker')).not.toBeOnTheScreen();
@@ -228,7 +226,7 @@ describe('the same screen against the fixture world', () => {
     const world = createFixtureWorld();
     await world.server.addLine(GUEST, { variantId: A_BOWL, quantity: 1, idempotencyKey: 'b1' });
     const before = world.server.calls.length;
-    await renderWithCommerce(<FixtureCart />, { adapter: world.adapter, build: 'fixture', dev: false });
+    await renderWithCommerce(<InternalCart />, { adapter: world.adapter, build: 'fixture', dev: false });
     expect(await screen.findByText(en['buyer.cart.unavailable'])).toBeOnTheScreen();
     expect(world.server.calls.length).toBe(before);
   });
@@ -238,7 +236,7 @@ describe('the same screen against the fixture world', () => {
     world.asAccount('A');
     await world.server.addLine({ actor: 'ACCOUNT:A' }, { variantId: A_SHIRT_SMALL, quantity: 2, idempotencyKey: 'seed-a' });
     await world.server.addLine({ actor: 'ACCOUNT:B' }, { variantId: A_BOWL, quantity: 1, idempotencyKey: 'seed-b' });
-    const { session } = await renderWithCommerce(<FixtureCart />, { adapter: world.adapter, token: 'token-a' });
+    const { session } = await renderWithCommerce(<InternalCart />, { adapter: world.adapter, token: 'token-a' });
     expect(await screen.findByText('Demo shirt')).toBeOnTheScreen();
     world.asGuest();
     await act(() => session.current!.clearSession());
@@ -254,7 +252,7 @@ describe('the same screen against the fixture world', () => {
     world.server.reportPriceChanges = true;
     await world.server.addLine(GUEST, { variantId: A_SHIRT_SMALL, quantity: 1, idempotencyKey: 's1' });
     await world.server.addLine(GUEST, { variantId: B_LAMP, quantity: 1, idempotencyKey: 'l1' });
-    await renderWithCommerce(<FixtureCart />, { adapter: world.adapter });
+    await renderWithCommerce(<InternalCart />, { adapter: world.adapter });
     await screen.findByText('Demo shirt');
     world.server.setPrice(A_SHIRT_SMALL, 99000);
     world.server.setQuantityAvailable(B_LAMP, 0);
@@ -262,15 +260,90 @@ describe('the same screen against the fixture world', () => {
     await act(async () => (list.props.refreshControl as { props: { onRefresh: () => void } }).props.onRefresh());
     expect(await screen.findByText(en['buyer.cart.issue.PRICE_CHANGED'])).toBeOnTheScreen();
     expect(screen.getByText(en['buyer.cart.issue.SOLD_OUT'])).toBeOnTheScreen();
-    expect(screen.getByText(/Was.*1,200\.00/)).toBeOnTheScreen();
+    expect(screen.getByText(/Previous price.*1,200\.00/)).toBeOnTheScreen();
     expect(buttons()).toEqual([en['buyer.cart.refresh']]); // no accept, remove, quantity or purchase control
     const sent = world.server.calls.filter((c) => c.op !== 'getCarts');
     expect(sent.map((c) => c.op)).toEqual(['addLine', 'addLine']); // drawing sent nothing but reads
   });
 
-  it('never asks for a line it has not been given: an unknown line id is just not there', async () => {
+});
+
+describe('review findings (BUY-12A)', () => {
+  it('draws the previous price, the count and the Seller-empty line from no answer it cannot vouch for', async () => {
+    const view = listed(
+      cartSet(
+        sellerCart(
+          [
+            line('l1', { issues: ['INSUFFICIENT_STOCK'], availableQuantity: 2 }),
+            line('l2', { variantId: V2, issues: ['PRICE_CHANGED'], previousUnitPrice: { amountMinor: 900, currency: 'ETB' }, unitPrice: { amountMinor: 1100, currency: 'ETB' } }),
+          ],
+          {},
+          'a',
+        ),
+        sellerCart([], { storeName: 'Demo Seller B' }, 'b'),
+      ),
+      { kind: 'UNVERIFIED', why: 'failed', error: null },
+    );
+    await render(<CartView view={view} onRefresh={noop} />);
+    expect(screen.queryByText(/Previous price/)).not.toBeOnTheScreen();
+    expect(screen.queryByText('2 available')).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.cart.seller_empty'])).not.toBeOnTheScreen();
+    expect(screen.queryByText(/each/)).not.toBeOnTheScreen();
+  });
+
+  it('says each reason in its own words, by name, for every reason the model defines', () => {
+    for (const issue of LINE_ISSUES) expect(LINE_ISSUE_KEY[issue]).toBe(`buyer.cart.issue.${issue}`);
+    expect(en['buyer.cart.issue.NO_LONGER_PUBLISHED']).not.toBe(en['buyer.cart.issue.UNKNOWN']);
+  });
+
+  it('says why an unverified cart is hidden, in the words for each of the three reasons', async () => {
+    for (const why of ['offline', 'failed', 'checking'] as const) {
+      const { unmount } = await render(<CartView view={listed(cartSet(sellerCart([line('l1')])), { kind: 'UNVERIFIED', why, error: null })} onRefresh={noop} />);
+      expect(screen.getByText(en[`buyer.cart.unverified_${why}`])).toBeOnTheScreen();
+      await unmount();
+    }
+  });
+
+  it('keeps two Seller carts that share a key apart, without a duplicate-key warning', async () => {
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const view = listed(cartSet(sellerCart([line('l1', { name: 'First' })], { storeName: 'Same key' }, 'dup'), sellerCart([line('l2', { name: 'Second' })], { storeName: 'Same key' }, 'dup')));
+      await render(<CartView view={view} onRefresh={noop} />);
+      expect(screen.getByText('First')).toBeOnTheScreen();
+      expect(screen.getByText('Second')).toBeOnTheScreen();
+      expect(warn.mock.calls.filter(([m]) => /same key/i.test(String(m)))).toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('says an empty cart is empty only once the answer is verified: not while a new one is awaited', async () => {
+    const { unmount } = await render(<CartView view={listed(cartSet(), { kind: 'REVALIDATING' })} onRefresh={noop} />);
+    expect(screen.queryByText(en['buyer.cart.empty'])).not.toBeOnTheScreen();
+    expect(screen.getByText(en['buyer.cart.checking'])).toBeOnTheScreen();
+    await unmount();
+    await render(<CartView view={listed(cartSet(sellerCart([], { storeName: 'Demo Seller A' }, 'a')), { kind: 'REVALIDATING' })} onRefresh={noop} />);
+    expect(screen.queryByText(en['buyer.cart.seller_empty'])).not.toBeOnTheScreen();
+  });
+
+  it('shows the pull spinner only while a new answer is awaited', async () => {
+    const refreshing = () => (screen.getByTestId('fixture-cart').props.refreshControl as { props: { refreshing: boolean } }).props.refreshing;
+    const { rerender } = await render(<CartView view={listed(cartSet(sellerCart([line('l1')])), { kind: 'REVALIDATING' })} onRefresh={noop} />);
+    expect(refreshing()).toBe(true);
+    await rerender(<CartView view={listed(cartSet(sellerCart([line('l1')])))} onRefresh={noop} />);
+    expect(refreshing()).toBe(false);
+  });
+
+  it('draws two reasons of one line in the model\'s precedence, whatever order they arrived in', async () => {
+    await render(<CartView view={listed(cartSet(sellerCart([line('l1', { issues: ['PRICE_CHANGED', 'SOLD_OUT'] })])))} onRefresh={noop} />);
+    const label = String(screen.getByTestId('cart-line-l1').props.accessibilityLabel);
+    expect(label.indexOf(en['buyer.cart.issue.SOLD_OUT'])).toBeLessThan(label.indexOf(en['buyer.cart.issue.PRICE_CHANGED']));
+  });
+
+  it('keeps the fixture marker outside the scrolling content, so a long cart cannot scroll it away', async () => {
     await render(<CartView view={listed(cartSet(sellerCart([line('l1')])))} onRefresh={noop} />);
-    expect(screen.queryByTestId(`cart-line-${asLineId('nope')}`)).not.toBeOnTheScreen();
+    expect(screen.getByTestId('cart-fixture-marker')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('fixture-cart')).queryByTestId('cart-fixture-marker')).not.toBeOnTheScreen();
   });
 });
 
@@ -293,10 +366,10 @@ describe('the Cart UI stays inside the development boundary (BUY-12A)', () => {
   });
 
   it('is named by no route and by nothing outside the commerce folder', () => {
-    const NAME = /\b(FixtureCart|CartView)\b/;
-    const outside = productionSources('app', 'buyer', 'components', 'auth', 'api', 'i18n', 'theme').filter((f) => NAME.test(code(f.text)));
+    const NAME = /\b(InternalCart|CartView)\b/;
+    const outside = productionSources('app', 'buyer', 'components', 'auth', 'api', 'i18n', 'theme', 'seller', 'modes', 'providers', 'state', 'device', 'storage').filter((f) => NAME.test(code(f.text)));
     expect(outside.map((f) => f.file)).toEqual([]);
-    expect(NAME.test('<FixtureCart />')).toBe(true);
+    expect(NAME.test('<InternalCart />')).toBe(true);
   });
 
   it('computes no amount: no arithmetic on a price or a quantity anywhere in it', () => {
