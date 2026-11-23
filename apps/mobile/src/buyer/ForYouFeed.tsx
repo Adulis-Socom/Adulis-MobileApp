@@ -84,6 +84,8 @@ export function ForYouFeed() {
   if (feed.units.length === 0) {
     return (
       <Centered refreshing={feed.refreshing} onRefresh={feed.refresh}>
+        {/* A pull that waits for a connection is answered here too, as with cards on screen (BUY-05D). */}
+        {feed.paused ? <AlertText style={{ textAlign: 'center' }}>{t('common.offline')}</AlertText> : null}
         <AppText style={{ textAlign: 'center' }}>{t('buyer.for_you.empty')}</AppText>
         <Button label={t('buyer.for_you.refresh')} onPress={feed.refresh} variant="secondary" />
       </Centered>
@@ -117,11 +119,16 @@ export function ForYouFeed() {
             <AlertText style={{ textAlign: 'center', paddingBottom: theme.space.md }}>{t('common.offline')}</AlertText>
           ) : null
         }
+        // While a pull's new session is pending the old cards stand in for it, and it has no next
+        // page of its own: the footer says nothing about the end of the feed until it answers
+        // (BUY-05D; the pending state itself is the spinner, or the header's offline line).
         ListFooterComponent={
-          <LoadMoreFooter
-            paging={{ ...feed, count: feed.units.length, pageCount: feed.pageCount }}
-            keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
-          />
+          feed.refreshPending ? null : (
+            <LoadMoreFooter
+              paging={{ ...feed, count: feed.units.length, pageCount: feed.pageCount }}
+              keys={{ load: 'buyer.for_you.load_more', loading: 'buyer.for_you.loading_more', failed: 'buyer.for_you.more_failed', end: 'buyer.for_you.end' }}
+            />
+          )
         }
       />
     </View>

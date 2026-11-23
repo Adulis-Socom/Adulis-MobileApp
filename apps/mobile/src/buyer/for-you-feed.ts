@@ -313,6 +313,12 @@ export function useForYouFeed() {
     paused: query.fetchStatus === 'paused',
     /** A pull-to-refresh is in flight: the old session's cards are still shown. */
     refreshing: isPlaceholderData && query.isFetching,
+    /**
+     * The cards on screen are the old session's, standing in for a new session that has not
+     * answered (in flight, or waiting for a connection). The pending session has no next page
+     * of its own, so nothing about the end of the feed can be said until it answers (BUY-05D).
+     */
+    refreshPending: isPlaceholderData,
     retry,
     retryNextPage: () => void fetchNextPage({ cancelRefetch: false }),
     loadMore,
