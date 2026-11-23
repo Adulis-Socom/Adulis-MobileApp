@@ -102,7 +102,7 @@ export default function Search() {
             flexDirection: 'row',
             alignItems: 'center',
             borderWidth: 1,
-            borderColor: theme.color.border,
+            borderColor: theme.color.borderStrong,
             borderRadius: theme.radius.md,
             backgroundColor: theme.color.surface,
             paddingHorizontal: theme.space.sm,

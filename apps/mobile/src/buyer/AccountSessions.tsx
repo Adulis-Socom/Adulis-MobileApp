@@ -5,7 +5,7 @@ import type { AccountSession } from '../api/client';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
-import { useLocale, useT } from '../i18n/i18n';
+import { useLocale, useT, formatDateTime } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { sessionDeviceKey, useAccountSessions } from './account';
 
@@ -21,8 +21,7 @@ export function AccountSessions() {
   const locale = useLocale();
   const theme = useTheme();
   const sessions = useAccountSessions();
-  const when = (iso: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  const when = (iso: string) => formatDateTime(locale, iso);
   const secondary = { color: theme.color.textSecondary };
 
   const row = (s: AccountSession) => (

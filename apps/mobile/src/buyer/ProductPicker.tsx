@@ -8,6 +8,7 @@ import { fillSlots } from '../api/messages';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { useT } from '../i18n/i18n';
+import { useReduceMotion } from '../theme/reduce-motion';
 import { useTheme } from '../theme/theme';
 import { mediaUrl } from './for-you-feed';
 import { usePublicList } from './public-list';
@@ -37,6 +38,7 @@ export function ProductPicker({
   onSelect: (slug: string) => void;
   onCancel: () => void;
 }) {
+  const reduceMotion = useReduceMotion();
   const t = useT();
   const theme = useTheme();
   const api = usePrivateApi();
@@ -49,7 +51,7 @@ export function ProductPicker({
   const secondary = { color: theme.color.textSecondary };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onCancel}>
+    <Modal visible animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onCancel}>
       {/* A modal is its own window, drawn edge to edge: it needs its own safe-area provider (B-005). */}
       <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: theme.color.bg }}>
@@ -102,7 +104,7 @@ function PickerRow({ product, onPress }: { product: SellerProduct; onPress: () =
         marginBottom: theme.space.xs,
         borderRadius: theme.radius.md,
         borderWidth: 1,
-        borderColor: theme.color.border,
+        borderColor: theme.color.borderStrong,
         backgroundColor: pressed ? theme.color.surfaceMuted : theme.color.surface,
       })}
     >

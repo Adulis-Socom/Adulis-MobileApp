@@ -105,7 +105,7 @@ export function PublicListView<I>({
     if (list.status === 'pending') {
       return (
         <>
-          <ActivityIndicator color={theme.color.accent} />
+          <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
           <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
             {t(loading)}
           </AppText>

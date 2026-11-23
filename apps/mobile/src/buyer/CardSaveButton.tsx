@@ -51,7 +51,7 @@ function useLook() {
     justifyContent: 'center',
     backgroundColor: theme.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: theme.color.borderStrong,
   };
   return { theme, icon, round };
 }
@@ -106,7 +106,7 @@ function SignedInCardSave({ target, name, style }: Props) {
       testID="card-save"
     >
       {save.busy ? (
-        <ActivityIndicator color={theme.color.accent} />
+        <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
       ) : (
         <Ionicons name={glyph} size={icon} color={save.saved ? theme.color.accent : theme.color.text} />
       )}

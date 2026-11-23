@@ -53,6 +53,33 @@ export function formatMinor(locale: Locale, amountMinor: number, currency: strin
   return format.format(amountMinor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2));
 }
 
+/** A formatted date, or null when the value is not a date: a bad string never throws in render and never shows "Invalid Date". */
+function formatWith(locale: Locale, date: Date, options: Intl.DateTimeFormatOptions): string | null {
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  } catch {
+    return null;
+  }
+}
+
+/** A server instant as date and time in the person's locale, or null (a slot filled with null hides its sentence). */
+export function formatDateTime(locale: Locale, iso: string | null | undefined): string | null {
+  return typeof iso === 'string' && iso !== '' ? formatWith(locale, new Date(iso), { dateStyle: 'medium', timeStyle: 'short' }) : null;
+}
+
+/** A server instant as a date in the person's locale, or null. */
+export function formatDate(locale: Locale, iso: string | null | undefined): string | null {
+  return typeof iso === 'string' && iso !== '' ? formatWith(locale, new Date(iso), { dateStyle: 'medium' }) : null;
+}
+
+/** A server calendar day (YYYY-MM-DD, no time or zone) as a date, read as that day everywhere, or null. */
+export function formatCalendarDay(locale: Locale, day: string | null | undefined): string | null {
+  return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)
+    ? formatWith(locale, new Date(`${day}T00:00:00Z`), { dateStyle: 'medium', timeZone: 'UTC' })
+    : null;
+}
+
 /**
  * A Product's current price from its Variants' lowest and highest (price lives on the
  * Variant): one amount when they agree, the span when they differ, null when there is no

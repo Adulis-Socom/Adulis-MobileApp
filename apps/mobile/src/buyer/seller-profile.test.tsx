@@ -197,6 +197,27 @@ describe('the Seller Profile', () => {
     expect(screen.getByText('Review 1')).toBeOnTheScreen();
   });
 
+  it('a review whose date is not a date still shows, without a date line, and the screen does not fall over (BUY-04/BUY-08)', async () => {
+    await openProfile();
+    serve(REVIEWS, ok({ data: [sellerReview(1, { published_at: 'not-a-date' }), sellerReview(2)], next_cursor: null }));
+    await fireEvent.press(tab(en['buyer.seller.tab.reviews']));
+    expect(await screen.findByText('Review 1')).toBeOnTheScreen();
+    expect(screen.getByText('Review 2')).toBeOnTheScreen();
+    expect(screen.getAllByText(/^Reviewed /)).toHaveLength(1); // only the real date is said
+    expect(screen.queryByText(/Invalid/)).not.toBeOnTheScreen();
+  });
+
+  it('About with a join date that is not a date shows the rest and leaves the date line out (BUY-04/BUY-08)', async () => {
+    serve(HEADER, ok(storefront(HANDLE, { member_since: 'someday' })));
+    serve(SCENES, ok({ data: [], next_cursor: null }));
+    await renderRouter(APP_DIR, { initialUrl: `/sellers/${HANDLE}` });
+    expect(await screen.findByRole('header', { name: 'Store 1' })).toBeOnTheScreen();
+    await fireEvent.press(tab(en['buyer.seller.tab.about']));
+    expect(await screen.findByTestId('seller-about')).toBeOnTheScreen();
+    expect(screen.queryByText(/^On Adulis since/)).not.toBeOnTheScreen();
+    expect(screen.queryByText(/Invalid/)).not.toBeOnTheScreen();
+  });
+
   it('About: only genuine facts the server sent', async () => {
     await openProfile();
     await fireEvent.press(tab(en['buyer.seller.tab.about']));

@@ -150,7 +150,8 @@ describe('text clamps', () => {
  * (animationType) is the one transition the app asks for by name, and a Modal opened with a presentation style is
  * drawn by the platform; anything new must say how it follows the reduced-motion setting.
  */
-const MOTION = [['buyer/ProductPicker.tsx', 'animationType="slide"', 'Modal presentation drawn by the platform']] as const;
+// The Product picker's slide now follows the reduced-motion setting (useReduceMotion), pinned in control-and-spinner-guards.test.ts: no fixed animationType literal is allowed.
+const MOTION = [] as const;
 
 describe('motion', () => {
   it('is exactly the listed transitions, and no animation library is used', () => {

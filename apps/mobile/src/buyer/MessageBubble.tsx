@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { fillSlots } from '../api/messages';
 import { AppText } from '../components/AppText';
-import { useLocale, useT } from '../i18n/i18n';
+import { useLocale, useT, formatDateTime } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { botText, type ChatMessage, type SenderKind } from './chat';
 
@@ -28,7 +28,7 @@ export function MessageBubble({ message: m, viewer }: { message: ChatMessage; vi
   const theme = useTheme();
   const locale = useLocale();
   const secondary = { color: theme.color.textSecondary };
-  const when = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  const when = (iso: string) => formatDateTime(locale, iso);
   const bot = m.kind === 'BOT';
   const mine = viewer === 'buyer' ? m.kind === 'BUYER' : m.kind === 'SELLER' || m.kind === 'TEAM_MEMBER';
   return (
