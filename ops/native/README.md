@@ -156,6 +156,17 @@ service, another app id (also in the string forms of `clearState`, `launchApp` a
 other than navigation keys, a command or option it does not know, a file that is not valid YAML, and any
 permission grant other than the one declared. The `smoke` battery runs `foundation-smoke` first (it must make this
 run's database gain a device, which proves the app talks to this run's API) and then `buyer-shell`.
+
+**Fixture sets and the `buyer-discovery` battery.** `fixtures --set <name>` loads one set, once per run. Besides
+`baseline` there are `catalogue-core` (Seller Fixture Weaves, four Products, BETA subscription), `scenes` (two Scenes
+published through `core.fn_scene_post_publish`), `market-b` (a second Market with a Product the SEED Market must not
+show), `extras` (Fixture Pottery and 32 `Shop item NN` Products) and `assistant` (one intent). A set that has
+`requires` is refused until the sets it names are loaded; `conflicts` is unchanged. The sets are rows only: no image
+object is written (key columns are plain strings), no order, payment, review, notification or chat row exists. The
+`buyer-discovery` battery runs `foundation-smoke` first and then the eight registered flows whose data these sets
+cover and that need no variable, between-step action or sign-in continuation; its fixtures load in the order
+`baseline, catalogue-core, scenes, market-b, extras`. The remaining flows are not registered: see the matrix in the
+BUY-03A readiness report.
 Maestro is started from its JVM with a fixed list of options and a small environment; results (JUnit
 report, log, screenshots, the device log and, on a failure, a screenshot) are written under
 `<run>/native/<session>/`. Only an infrastructure error (the device, adb or the Maestro driver failed

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { assertTarget } from '../lib/guard.mjs';
 import { runValue } from '../lib/identity.mjs';
 import { writeManifest } from '../lib/manifest.mjs';
+import { catalogueSets } from './catalogue.mjs';
 
 const uuid = (seed) => {
   const h = createHash('sha256').update(seed).digest('hex');
@@ -27,6 +28,7 @@ INSERT INTO core.device (id, platform) VALUES ('${canaryDeviceId(m)}', 'ANDROID'
 INSERT INTO core.category (id, code) VALUES ('${uuid(`baseline-category:${m.run}`)}', 'fixture-crafts');
 `,
   },
+  ...catalogueSets(uuid),
 };
 
 /** Raises unless the session is on this run's server, database and run setting. */
@@ -78,6 +80,9 @@ export async function loadSet(m, io, name, { dir }) {
     throw new Error(`unknown fixture set '${name}' (known: ${Object.keys(SETS).join(', ')})`);
   if (m.fixtures.includes(name))
     throw new Error(`fixture set '${name}' is already loaded in this run`);
+  const missing = (set.requires ?? []).find((x) => !m.fixtures.includes(x));
+  if (missing)
+    throw new Error(`fixture set '${name}' requires '${missing}' to be loaded first in this run`);
   const clash = m.fixtures.find(
     (x) => set.conflicts.includes(x) || SETS[x]?.conflicts.includes(name),
   );
