@@ -1,14 +1,13 @@
 import { Controller, Get, Post, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { z } from 'zod';
 import { HandlerTransaction } from '../../common/db/handler-transaction';
 import type { AuthedRequest } from '../../common/auth/auth.guard';
 import type { LocalizedRequest } from '../../common/http/locale.middleware';
 import { ApiIdempotencyKey } from '../../common/idempotency/api-idempotency-key';
-import { ReportCreatedDto, MyReportsDto } from './reports.dto';
+import { ReportCreatedDto, ReportRequestBodyDto, MyReportsDto, reportRequestBody } from './reports.dto';
 
 /**
  * C8 — reports (ADU-API-01 v1.6 section 12.15; ADU-PRD-01 S18).
@@ -36,18 +35,12 @@ import { ReportCreatedDto, MyReportsDto } from './reports.dto';
  * that has since corrected itself.
  */
 
-const reportBody = z.object({
-  subject_kind: z.enum(['PRODUCT', 'REVIEW', 'MESSAGE', 'SELLER', 'STOREFRONT']),
-  subject_id: z.uuid(),
-  reason: z.string().min(1).max(80),
-  detail: z.string().max(2000).optional(),
-});
-
 @Controller()
 export class ReportsController {
   constructor(private readonly tx: HandlerTransaction) {}
 
   @ApiIdempotencyKey()
+  @ApiBody({ type: ReportRequestBodyDto })
   @ApiCreatedResponse({ type: ReportCreatedDto })
   @Post('reports')
   @ApiOperation({ summary: 'Any surface, any authenticated actor; the queue trigger routes it.' })
@@ -55,7 +48,7 @@ export class ReportsController {
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<unknown> {
-    const body = reportBody.parse(req.body);
+    const body = reportRequestBody.parse(req.body);
     return this.tx.runIdempotent(req as LocalizedRequest, res, 201, async (trx) => {
       const id = randomUUID();
       await sql`

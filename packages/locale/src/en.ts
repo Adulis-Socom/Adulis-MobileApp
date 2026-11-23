@@ -722,9 +722,9 @@ export const enCommon = {
   'seller.messages.replying_as': 'Replies are sent as {store} (@{handle}).',
   // BUY-12A: the internal fixture Cart (draws only the carts an adapter returns; unreachable in a release build).
   // The wording is PROPOSED and awaits approval (BUY12-D-02 / LOCALE-02 SR-13); it makes no claim about payment,
-  // reservation or stock and no sentence offers a purchase.
+  // reservation or stock and no sentence offers a purchase. The marker is only "Demonstration data." (rev 2 section 8).
   'buyer.cart.title': 'Cart',
-  'buyer.cart.fixture_marker': 'Demonstration data. No payment is made.',
+  'buyer.cart.fixture_marker': 'Demonstration data.',
   'buyer.cart.empty': 'Your cart is empty.',
   'buyer.cart.loading': 'Loading your cart',
   'buyer.cart.checking': 'Checking your cart again',
@@ -739,9 +739,9 @@ export const enCommon = {
   'buyer.cart.item_fallback': 'Item',
   'buyer.cart.quantity': 'Quantity {count}',
   'buyer.cart.price_each': '{price} each',
-  'buyer.cart.was_price': 'Was {price}',
+  'buyer.cart.was_price': 'Previous price {price}',
   'buyer.cart.subtotal': 'Subtotal {price}',
-  'buyer.cart.available_count': 'Only {count} available',
+  'buyer.cart.available_count': '{count} available',
   'buyer.cart.issue.NO_LONGER_PUBLISHED': 'No longer offered by the Seller',
   'buyer.cart.issue.VARIANT_WITHDRAWN': 'This option is no longer offered',
   'buyer.cart.issue.SELLER_UNAVAILABLE': 'The Seller is not available right now',
@@ -749,7 +749,7 @@ export const enCommon = {
   'buyer.cart.issue.UNAVAILABLE': 'Not available',
   'buyer.cart.issue.INSUFFICIENT_STOCK': 'Not enough available for this quantity',
   'buyer.cart.issue.PRICE_CHANGED': 'The price changed',
-  'buyer.cart.issue.UNKNOWN': 'This item needs checking',
+  'buyer.cart.issue.UNKNOWN': 'The status of this item is not known',
 } as const;
 
 export type CommonMessageKey = keyof typeof enCommon;
