@@ -42,10 +42,16 @@ export const searchTarget = (item: SearchItem): SaveTarget | null =>
       : null;
 
 /** The server's refusals of the query itself: asking again cannot change them, so each has its own sentence. */
-const refusedQuery = (error: unknown): 'buyer.search.no_terms' | 'buyer.search.too_long' | null => {
+const refusedQuery = (error: unknown): 'buyer.search.no_terms' | 'buyer.search.too_long' | 'buyer.search.too_short' | null => {
   if (!(error instanceof ApiError) || error.failure.kind !== 'problem' || error.failure.problem.code !== 'VALIDATION_FAILED') return null;
   const reason = error.failure.problem.slots?.['reason'];
-  return reason === 'QUERY_NO_TERMS' ? 'buyer.search.no_terms' : reason === 'QUERY_TOO_LONG' ? 'buyer.search.too_long' : null;
+  return reason === 'QUERY_NO_TERMS'
+    ? 'buyer.search.no_terms'
+    : reason === 'QUERY_TOO_LONG'
+      ? 'buyer.search.too_long'
+      : reason === 'QUERY_TOO_SHORT'
+        ? 'buyer.search.too_short'
+        : null;
 };
 
 /**
