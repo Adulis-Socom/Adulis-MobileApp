@@ -1,6 +1,6 @@
 import { en } from '@adulis/locale/mobile';
 import { onlineManager } from '@tanstack/react-query';
-import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 import { AccessibilityInfo, AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { useUiStore } from '../state/ui-store';
@@ -533,12 +533,128 @@ describe('offline with cards on screen (BUY-05A, B23-009)', () => {
     await act(async () => onlineManager.setOnline(false));
     await fireEvent.press(screen.getByRole('button', { name: en['buyer.for_you.load_more'] }));
     await act(() => jest.advanceTimersByTimeAsync(1000));
-    expect(await screen.findByText(en['common.offline'])).toBeOnTheScreen();
+    // The header notice and, since BUY-05B, the one beside Load more.
+    expect(await screen.findByTestId('load-more-offline')).toBeOnTheScreen();
+    expect(screen.getAllByText(en['common.offline'])).toHaveLength(2); // the header and the one at the control
     expect(feedCalls()).toHaveLength(1);
     await act(async () => onlineManager.setOnline(true));
     expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
     expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
     expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }]);
+  });
+});
+
+describe('Load more while offline: the notice sits at the control (BUY-05B, B24-012)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks(); // a failed test must not leak its announce spy
+    onlineManager.setOnline(true);
+  });
+  const first = Array.from({ length: 20 }, (_, i) => fypUnit(i + 1, { position: i + 1 }));
+  const page2 = () => ok(fypPage([fypUnit(30, { position: 21 })], null));
+  const pressLoadMore = () => fireEvent.press(screen.getByRole('button', { name: en['buyer.for_you.load_more'] }));
+  const offlineEverywhere = () => screen.getAllByText(en['common.offline']);
+
+  it('shows the offline sentence beside Load more, with no spinner and no end sentence, and the cards stay', async () => {
+    serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [page2()] });
+    await renderRouter(APP_DIR);
+    expect(await screen.findByText('Store 1')).toBeOnTheScreen();
+    expect(screen.queryByTestId('load-more-offline')).not.toBeOnTheScreen(); // online: nothing extra
+    await act(async () => onlineManager.setOnline(false));
+    await pressLoadMore();
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(await screen.findByTestId('load-more-offline')).toHaveTextContent(en['common.offline']);
+    // It sits in the footer with the control, not only in the header.
+    expect(within(screen.getByTestId('load-more-footer')).getByTestId('load-more-offline')).toBeOnTheScreen();
+    expect(screen.getByText('Store 1')).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.for_you.loading_more'])).not.toBeOnTheScreen(); // does not spin
+    expect(screen.queryByText(en['buyer.for_you.end'])).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en['buyer.for_you.load_more'] })).toBeEnabled();
+    expect(feedCalls()).toHaveLength(1); // paused, not spent
+  });
+
+  it('is spoken once: the footer line is plain text, the header alert is the single announcement', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    try {
+      serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [page2()] });
+      await renderRouter(APP_DIR);
+      await screen.findByText('Store 1');
+      await act(async () => onlineManager.setOnline(false));
+      await pressLoadMore();
+      await act(() => jest.advanceTimersByTimeAsync(1000));
+      await screen.findByTestId('load-more-offline');
+      expect(offlineEverywhere()).toHaveLength(2); // header and footer are both on screen
+      expect(announce.mock.calls.filter(([text]) => text === en['common.offline'])).toHaveLength(1);
+    } finally {
+      announce.mockRestore();
+    }
+  });
+
+  it('a second press while offline sends nothing and adds no second request', async () => {
+    serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [page2()] });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await act(async () => onlineManager.setOnline(false));
+    await pressLoadMore();
+    await pressLoadMore();
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(feedCalls()).toHaveLength(1);
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    // The pending request resumed once, with the original cursor, and nothing was fetched twice.
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }]);
+  });
+
+  it('on reconnect the notice goes, the page arrives once, no Scene appears twice, and the cursor is intact', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    // The next page repeats Scene 20 (already on screen) and adds Scene 30: only one is new.
+    serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [ok(fypPage([fypUnit(20, { position: 21 }), fypUnit(30, { position: 22 })], null))] });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await act(async () => onlineManager.setOnline(false));
+    await pressLoadMore();
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    await screen.findByTestId('load-more-offline');
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(screen.queryByTestId('load-more-offline')).not.toBeOnTheScreen();
+    expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
+    expect(announce).toHaveBeenCalledWith('Loaded 1 more, just above.'); // 2 sent, 1 already shown: no duplicate
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }]);
+  });
+
+  it('Try again pressed offline after a failed page says so at the control, in place of the stale failure, and the page loads on reconnect', async () => {
+    serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [problem(500, 'INTERNAL', 'request'), page2()] });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await pressLoadMore();
+    expect(await screen.findByText(new RegExp(en['buyer.for_you.more_failed']))).toBeOnTheScreen();
+    await act(async () => onlineManager.setOnline(false));
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    expect(await screen.findByTestId('load-more-offline')).toHaveTextContent(en['common.offline']);
+    expect(screen.queryByText(new RegExp(en['buyer.for_you.more_failed']))).not.toBeOnTheScreen();
+    expect(feedCalls()).toHaveLength(2); // the failed page; the retry is paused, not spent
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(screen.queryByTestId('load-more-offline')).not.toBeOnTheScreen();
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-A' }]);
+  });
+
+  it('a page that fails after the connection returns shows the failure with Try again, not the offline notice; Try again then loads it', async () => {
+    serveByCursor({ '': [ok(fypPage(first, 'cursor-A'))], 'cursor-A': [problem(500, 'INTERNAL', 'request'), page2()] });
+    await renderRouter(APP_DIR);
+    await screen.findByText('Store 1');
+    await act(async () => onlineManager.setOnline(false));
+    await pressLoadMore();
+    await act(() => jest.advanceTimersByTimeAsync(1000));
+    await screen.findByTestId('load-more-offline');
+    await act(async () => onlineManager.setOnline(true));
+    expect(await screen.findByText(new RegExp(en['buyer.for_you.more_failed']))).toBeOnTheScreen();
+    expect(screen.queryByTestId('load-more-offline')).not.toBeOnTheScreen();
+    expect(screen.getByText('Store 1')).toBeOnTheScreen(); // the cards stay
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText(en['buyer.for_you.end'])).toBeOnTheScreen();
+    expect(feedCalls().map((c) => c.query)).toEqual([{}, { cursor: 'cursor-A' }, { cursor: 'cursor-A' }]);
   });
 });
 

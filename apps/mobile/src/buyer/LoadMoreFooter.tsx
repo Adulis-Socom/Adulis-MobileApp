@@ -18,6 +18,8 @@ export type Paging = {
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
   error: unknown;
+  /** A read of this list waits for a connection (TanStack paused it; that includes a retry, and it cannot be narrowed to the next page): said beside the control, never a spinner (BUY-05B). */
+  paused?: boolean;
   loadMore: () => void;
   retryNextPage: () => void;
 };
@@ -32,6 +34,9 @@ export type Paging = {
  *   followed by how many items it added, "just above": focus is not moved (no jump), and the new
  *   items come just before the button (or the end sentence that replaced it).
  * - At the end, the end sentence replaces the button.
+ * - Offline, a page the Buyer asked for waits for the connection and resumes by itself: the offline sentence
+ *   is shown beside the button (plain text: the screen's own alert is the one announcement), the button
+ *   stays, and nothing spins.
  */
 export function LoadMoreFooter({
   paging,
@@ -43,6 +48,8 @@ export function LoadMoreFooter({
   const t = useT();
   const theme = useTheme();
   const { count, pageCount, hasNextPage, isFetchingNextPage, isFetchNextPageError } = paging;
+  // A failed page whose Try again is waiting for the connection says so too: the stale failure gives way to it.
+  const waitingForConnection = paging.paused === true && hasNextPage && !isFetchingNextPage;
   // Items and pages when the Buyer pressed the button. The in-flight state is not watched: an
   // answer that comes at once can arrive in the same render as the request (never "fetching").
   const asked = useRef<{ from: number; pages: number } | null>(null);
@@ -68,9 +75,9 @@ export function LoadMoreFooter({
   };
 
   return (
-    <View style={{ paddingVertical: theme.space.lg, paddingHorizontal: theme.space.sm, gap: theme.space.sm, alignItems: 'center' }}>
+    <View testID="load-more-footer" style={{ paddingVertical: theme.space.lg, paddingHorizontal: theme.space.sm, gap: theme.space.sm, alignItems: 'center' }}>
       {/* Fixed slots: the button keeps its place in the tree, and so its native view, in every state. */}
-      {isFetchNextPageError ? (
+      {isFetchNextPageError && !waitingForConnection ? (
         <AlertText style={{ textAlign: 'center' }}>{`${t(keys.failed)} ${failureMessage(t, paging.error)}`}</AlertText>
       ) : null}
       {isFetchingNextPage ? (
@@ -78,6 +85,11 @@ export function LoadMoreFooter({
           <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
           <StatusText style={{ color: theme.color.textSecondary, textAlign: 'center' }}>{t(keys.loading)}</StatusText>
         </View>
+      ) : null}
+      {waitingForConnection ? (
+        <AppText testID="load-more-offline" style={{ color: theme.color.textSecondary, textAlign: 'center' }}>
+          {t('common.offline')}
+        </AppText>
       ) : null}
       {hasNextPage ? (
         <View style={{ alignSelf: 'stretch' }} testID="load-more">
