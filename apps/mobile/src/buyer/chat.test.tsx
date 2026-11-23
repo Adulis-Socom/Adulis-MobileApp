@@ -607,6 +607,25 @@ describe('BUYER-COMMS-01: a failure with rows already shown is never silent', ()
     expect(screen.queryByText(/Unknown/)).not.toBeOnTheScreen(); // never shown, never guessed
   });
 
+  it('C2b (BUY-10A). in that state a failed Load earlier is said beside its control, and Try again asks for the OLDER page (not the newest again)', async () => {
+    signedIn();
+    const chat = installChat();
+    const c = chat.conv(A);
+    chat.msg(c, { sender_kind: 'SELLER', body: 'The oldest line', sent_at: ago(1000) });
+    for (let i = 50; i >= 1; i--) chat.msg(c, { sender_kind: 'OPERATOR', body: `Unknown ${i}`, sent_at: ago(i * 10) });
+    await renderRouter(APP_DIR, { initialUrl: `/chat/${c.id}` });
+    await screen.findByRole('button', { name: en['buyer.chat.load_earlier'] });
+    chat.faults.laterMessagePages = true;
+    await fireEvent.press(screen.getByRole('button', { name: en['buyer.chat.load_earlier'] }));
+    const failed = new RegExp(en['buyer.list.more_failed']);
+    expect(await screen.findByText(failed, {}, { timeout: 10_000 })).toBeOnTheScreen();
+    expect(screen.queryByText(en['buyer.chat.failed'])).not.toBeOnTheScreen(); // not the whole conversation
+    chat.faults.laterMessagePages = false;
+    await fireEvent.press(screen.getByRole('button', { name: en['common.retry'] }));
+    expect(await screen.findByText('The oldest line')).toBeOnTheScreen();
+    expect(messageCalls().at(-1)?.query.cursor).toBe(c.messages[49]!.sent_at);
+  });
+
   it('C1c. Load older conversations that fails says so, is announced, and Try again loads the page', async () => {
     signedIn();
     const chat = installChat();

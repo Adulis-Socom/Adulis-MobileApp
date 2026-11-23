@@ -544,7 +544,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       />
     ) : (
       <View style={{ flex: 1, padding: theme.space.lg, gap: theme.space.sm }}>
-        {messages.isError ? (
+        {messages.isError && failure !== 'next' ? (
           <View style={{ gap: theme.space.sm }}>
             <AlertText>{t('buyer.chat.failed')}</AlertText>
             <AppText style={secondary}>{failureMessage(t, messages.error)}</AppText>
@@ -552,7 +552,8 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
           </View>
         ) : messages.hasNextPage ? (
           // The newest page held nothing this app can show (a row it has no word for is dropped, never guessed), but older
-          // pages exist: that is not an empty conversation, and the way back must stay.
+          // pages exist: that is not an empty conversation, and the way back must stay. A failed OLDER page says so beside
+          // that control (not as a failure of the whole conversation), and its Try again asks for that page.
           <PagingControl query={messages} failure={failure} label="buyer.chat.load_earlier" />
         ) : (
           <AppText style={secondary}>
@@ -567,7 +568,7 @@ function OwnedConversation({ conversationRef, product }: { conversationRef: unkn
       {header}
       <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.sm }}>
         <Button label={t('buyer.chat.refresh')} variant="secondary" onPress={refresh} disabled={messages.isFetching} />
-        {/* A read (a refresh, or the poll) that waits for a connection, with messages shown: say so; nothing was sent or lost.
+        {/* A read that waits for a connection (a refresh, the poll, an earlier page, a return to the app), with messages shown: say so; nothing was sent or lost.
             In the edited-unsent state the recheck line already says it: one message, not two. */}
         {messages.fetchStatus === 'paused' && messages.items.length > 0 && recheckText !== t('common.offline') ? (
           <AppText testID="chat-offline" style={secondary}>
