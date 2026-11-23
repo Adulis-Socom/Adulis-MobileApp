@@ -49,7 +49,7 @@ export function ForYouFeed() {
   if (feed.status === 'pending') {
     return (
       <Centered>
-        <ActivityIndicator color={theme.color.accent} />
+        <ActivityIndicator color={theme.color.accent} importantForAccessibility="no" accessibilityElementsHidden />
         <AppText accessibilityLiveRegion="polite" style={{ color: theme.color.textSecondary }}>
           {t('buyer.for_you.loading')}
         </AppText>

@@ -148,10 +148,11 @@ describe('text clamps', () => {
 /**
  * Motion the app itself starts. Spinners and pull-to-refresh are drawn by the platform, scrolling to a
  * channel is not animated, and screen transitions are the navigator's. The Product picker's modal slide
- * (animationType) is the one transition the app asks for by name, and a Modal opened with a presentation style is
- * drawn by the platform; anything new must say how it follows the reduced-motion setting.
+ * (animationType) is the one transition the app asks for by name, and it follows the reduced-motion setting (pinned in
+ * control-and-spinner-guards.test.ts); anything new must say how it follows that setting too.
  */
-const MOTION = [['buyer/ProductPicker.tsx', 'animationType="slide"', 'Modal presentation drawn by the platform']] as const;
+// The Product picker's slide now follows the reduced-motion setting (useReduceMotion), pinned in control-and-spinner-guards.test.ts: no fixed animationType literal is allowed.
+const MOTION = [] as const;
 
 describe('motion', () => {
   it('is exactly the listed transitions, and no animation library is used', () => {

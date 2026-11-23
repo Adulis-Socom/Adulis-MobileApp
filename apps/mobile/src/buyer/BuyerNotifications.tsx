@@ -5,7 +5,7 @@ import { failureMessage, fillSlots } from '../api/messages';
 import { AlertText } from '../components/AlertText';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
-import { useLocale, useT } from '../i18n/i18n';
+import { useLocale, useT, formatDateTime } from '../i18n/i18n';
 import { useTheme } from '../theme/theme';
 import { LoadMoreFooter, type Paging } from './LoadMoreFooter';
 import { notificationText, useMarkNotificationRead, useNotificationInbox, type BuyerNotification, type InboxScope } from './notifications';
@@ -32,7 +32,7 @@ export function NotificationInbox({ scope }: { scope: InboxScope }) {
   const theme = useTheme();
   const inbox = useNotificationInbox(scope);
   const { mark, pending, failed } = useMarkNotificationRead(scope);
-  const when = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  const when = (iso: string) => formatDateTime(locale, iso);
   const secondary = { color: theme.color.textSecondary };
 
   const now = Date.now();
