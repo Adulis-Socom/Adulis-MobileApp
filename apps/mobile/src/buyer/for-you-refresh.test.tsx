@@ -88,7 +88,7 @@ describe('a pull whose new session is pending never says the feed ended (BUY-05D
     expect(screen.getByText(en['buyer.for_you.end'])).toBeOnTheScreen();
   });
 
-  it('a feed with more pages offline: the old Load more is not offered for a session that is pending', async () => {
+  it('a pending pull over a feed that had more pages shows no end sentence either', async () => {
     serveByCursor({
       '': [ok(fypPage(Array.from({ length: 20 }, (_, i) => fypUnit(i + 1, { position: i + 1 })), 'cursor-A', 'session-old')), ok(fypPage([fypUnit(40)], null, 'session-new'))],
       'cursor-A': [ok(fypPage([fypUnit(30, { position: 21 })], 'cursor-B'))],
@@ -134,7 +134,7 @@ describe('an empty feed pulled offline says so (BUY-05D)', () => {
     expect(screen.queryByText(en['common.offline'])).not.toBeOnTheScreen();
   });
 
-  it('is announced once, not on every re-render', async () => {
+  it('is announced once, by one alert', async () => {
     serveByCursor({ '': [ok(fypPage([], null, 'session-empty')), ok(fypPage([fypUnit(7)], null, 'session-new'))] });
     await renderRouter(APP_DIR);
     await screen.findByText(en['buyer.for_you.empty']);
