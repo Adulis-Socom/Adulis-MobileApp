@@ -286,6 +286,8 @@ export const amCommon: Record<CommonMessageKey, string> = {
   'buyer.search.too_short': 'ለመፈለግ ቢያንስ 2 ፊደሎችን ይተይቡ።',
   // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
   'buyer.search.no_terms': 'ለመፈለግ ፊደሎችን ወይም ቁጥሮችን ይጠቀሙ።',
+  // Draft Amharic awaiting the human pass: not approved copy, and a release build shows the English.
+  'buyer.search.too_long': 'ይህ ፍለጋ በጣም ረጅም ነው። ጥቂት ወይም አጠር ያሉ ቃላትን ይጠቀሙ።',
   'buyer.search.tabs': 'የውጤት አይነቶች',
   'buyer.search.tab.top': 'ዋና',
   'buyer.search.tab.products': 'ምርቶች',
