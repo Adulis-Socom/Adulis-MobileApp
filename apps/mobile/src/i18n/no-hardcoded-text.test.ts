@@ -47,7 +47,7 @@ const DEVELOPMENT_ONLY_TEXT: Record<string, { why: string; texts: string[] }> = 
       'Network:',
       'Open',
       'SQLite:',
-      'Seller Companion and Courier are unlocked here for foundation diagnostics only. Real eligibility comes from the backend (account_context), and release builds offer Buyer only.',
+      'Seller Companion and Courier are unlocked here for foundation diagnostics only. Real eligibility comes from the backend (account_context). Whether a release build shows these entries is the open founder decision D-08.',
       'Session:',
       'System',
       'Theme',

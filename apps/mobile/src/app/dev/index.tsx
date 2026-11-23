@@ -79,7 +79,7 @@ export default function DiagnosticsScreen() {
       <AppText>
         Seller Companion and Courier are unlocked here for foundation diagnostics only. Real
         eligibility comes from the backend (account_context). Whether a release build shows these entries is the
-        founder's open decision D-08.
+        open founder decision D-08.
       </AppText>
 
       <ChoiceGroup
