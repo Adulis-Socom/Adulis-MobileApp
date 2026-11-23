@@ -14,14 +14,90 @@
       "hazards": ["clearState", "permission-grant"],
       "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
       "vars": []
+    },
+    "buyer-scene-explorer": {
+      "file": "buyer-scene-explorer.yaml",
+      "sha256": "90c3f3dc5506b51fd983ed965ef8290da92f2bb635da529d0a68d6532191fd8e",
+      "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "catalogue-product-1": {
+      "file": "catalogue-product-1.yaml",
+      "sha256": "9d8ea3ec0ce6fc7845f4036ff4f6ee3a8dd3e8e4e09555e98902809b1a712a6c",
+      "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "catalogue-product-link": {
+      "file": "catalogue-product-link.yaml",
+      "sha256": "489a09cc70f9db4c3fa26b52651305151d485cf55044f7e2efbc0bae6bb1907a",
+      "hazards": ["app-stop", "clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "shop": {
+      "file": "shop.yaml",
+      "sha256": "cb8981c24387bda421f1653603108a6bfeb030b68bbdd905cb212c6d95063ccf",
+      "hazards": ["clearState", "loop-while", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "search": {
+      "file": "search.yaml",
+      "sha256": "c411fd807a65c711b0e5db644096473ca3f3c24bc31849fba46d68c97b673449",
+      "hazards": ["clearState", "loop-while", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "seller-profile": {
+      "file": "seller-profile.yaml",
+      "sha256": "9fdfc9b6dd651a06b33fc5b49bd519e9f79a6e64ecce07d97b46d2e17e9b2838",
+      "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "seller-profile-private-1": {
+      "file": "seller-profile-private-1.yaml",
+      "sha256": "85c5cef52c581519a4b9f0d79c676d1e8a1b77ad67845531f0d25a4357164284",
+      "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
+    },
+    "shop-refresh-1": {
+      "file": "shop-refresh-1.yaml",
+      "sha256": "3f8862acf178edaf0b9ecac67ae76fa2e41ae46996f47e49def1a350d53b0070",
+      "hazards": ["clearState", "permission-grant"],
+      "permissions": ["android.permission.ACCESS_LOCAL_NETWORK:allow"],
+      "vars": []
     }
   },
   "batteries": {
     "smoke": {
       "flows": ["foundation-smoke", "buyer-shell"],
-      "settings": { "stay_awake": "7" },
+      "settings": {
+        "stay_awake": "7"
+      },
       "canary": "foundation-smoke",
       "fixtures": ["baseline"]
+    },
+    "buyer-discovery": {
+      "flows": [
+        "foundation-smoke",
+        "buyer-scene-explorer",
+        "catalogue-product-1",
+        "catalogue-product-link",
+        "shop",
+        "search",
+        "seller-profile",
+        "seller-profile-private-1",
+        "shop-refresh-1"
+      ],
+      "settings": {
+        "stay_awake": "7"
+      },
+      "canary": "foundation-smoke",
+      "fixtures": ["baseline", "catalogue-core", "scenes", "market-b", "extras"]
     }
   }
 }
