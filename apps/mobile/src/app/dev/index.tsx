@@ -78,7 +78,8 @@ export default function DiagnosticsScreen() {
         ))}
       <AppText>
         Seller Companion and Courier are unlocked here for foundation diagnostics only. Real
-        eligibility comes from the backend (account_context), and release builds offer Buyer only.
+        eligibility comes from the backend (account_context). Whether a release build shows these entries is the
+        open founder decision D-08.
       </AppText>
 
       <ChoiceGroup
@@ -97,7 +98,7 @@ export default function DiagnosticsScreen() {
       <AppText>{t('health.ok')}</AppText>
 
       <AppText>Session: {session.status === 'signedIn' ? 'signed in' : 'signed out'}</AppText>
-      {/* As the server sent it (WO-003): observed only, never acted on in the Buyer shell. */}
+      {/* As the server sent it: shown here for diagnostics; the mode hook (useAvailableModes) is what acts on it. */}
       <AppText>
         account_context:{' '}
         {accountContext
