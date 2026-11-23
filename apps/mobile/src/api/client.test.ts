@@ -181,6 +181,81 @@ describe('failure messages', () => {
   });
 });
 
+describe('a response whose body stalls (BUY-27A, B23-013)', () => {
+  const REF = 'c0000000-0000-4000-8000-000000000001';
+  // Headers arrive at once; the body never finishes. `abortRejects` models a platform whose body
+  // read rejects on abort; without it the read simply never settles (a polyfill that ignores the signal).
+  const stalledBody = (status: number, abortRejects: boolean) => {
+    globalThis.fetch = jest.fn(
+      (_url: unknown, init?: { signal?: AbortSignal }) =>
+        Promise.resolve({
+          status,
+          headers: { get: () => null },
+          json: () =>
+            new Promise<unknown>((_resolve, reject) => {
+              if (abortRejects) init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+            }),
+        } as unknown as Response),
+    ) as unknown as typeof fetch;
+    process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
+  };
+  const send = () => client(GOOD_TOKEN).api.sendMessage(REF, 'Hello', 'k');
+
+  it.each([
+    ['a body read that rejects on abort', true],
+    ['a body read that never settles', false],
+  ] as const)('a stalled success body is a timeout at ten seconds, with %s', async (_label, abortRejects) => {
+    jest.useFakeTimers();
+    try {
+      stalledBody(201, abortRejects);
+      const pending = failureOf(send());
+      await jest.advanceTimersByTimeAsync(9_999);
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await jest.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      const error = (await pending) as ApiError;
+      // Unknown outcome: transient, so the caller keeps its idempotency key and never reads it as answered.
+      expect(error.failure).toEqual({ kind: 'timeout' });
+      expect(isTransient(error)).toBe(true);
+      expect(wasAnswered(error)).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a stalled failure body is bounded and keeps the status the server did answer with', async () => {
+    jest.useFakeTimers();
+    try {
+      stalledBody(500, false);
+      const pending = failureOf(send());
+      await jest.advanceTimersByTimeAsync(10_000);
+      const error = (await pending) as ApiError;
+      expect(error.failure).toMatchObject({ kind: 'unexpected', status: 500 });
+      expect(wasAnswered(error)).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a body that finishes in time is unaffected, and no timer is left running', async () => {
+    jest.useFakeTimers();
+    try {
+      globalThis.fetch = jest.fn(() =>
+        Promise.resolve({ status: 200, headers: { get: () => null }, json: async () => ({ ok: true }) } as unknown as Response),
+      ) as unknown as typeof fetch;
+      process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.example.test';
+      await expect(client().api.bootstrap()).resolves.toEqual({ ok: true });
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe('retry hints on a failed answer', () => {
   const REF = 'c0000000-0000-4000-8000-000000000001';
   const send = (api: ReturnType<typeof client>['api']) => api.sendMessage(REF, 'Hello', 'k');
