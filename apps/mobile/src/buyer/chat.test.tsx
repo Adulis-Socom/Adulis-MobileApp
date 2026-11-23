@@ -953,6 +953,9 @@ describe('Product-context messaging (WO-014)', () => {
       expect(await context().findByText(en['common.offline'])).toBeOnTheScreen();
       expect(context().queryByText(en['buyer.chat.context_checking'])).toBeNull();
       expect(screen.queryByText('Woven basket')).toBeNull();
+      // Nothing is verified, so nothing can be sent.
+      await fireEvent.changeText(composer(), 'Is it in stock?');
+      expect(sendButton()).toBeDisabled();
       expect(sends()).toEqual([]);
       await act(async () => onlineManager.setOnline(true));
       expect(await context().findByText('Woven basket')).toBeOnTheScreen();

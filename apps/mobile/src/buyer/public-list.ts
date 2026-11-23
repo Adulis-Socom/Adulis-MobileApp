@@ -86,7 +86,9 @@ export function usePublicList<P extends { next_cursor: string | null }, I>({
   const oldest = useRef<number | undefined>(undefined);
   useLayoutEffect(() => {
     oldest.current = query.data?.pages[0]?.receivedAt;
-    if (query.data !== undefined && !query.isPlaceholderData) shownGeneration.current = list.generation;
+    // Nothing on screen: nothing may stand in later (a removed query of the same key, after a change of resource or
+    // subject and back, would otherwise read as current).
+    shownGeneration.current = query.data === undefined ? -1 : query.isPlaceholderData ? shownGeneration.current : list.generation;
   });
   useForegroundRevalidation(
     () => oldest.current,
