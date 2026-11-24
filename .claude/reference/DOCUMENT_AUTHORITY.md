@@ -2,6 +2,19 @@
 
 Use exact filenames when locating source documents. Do not infer a newer revision from an older one.
 
+## 24 November 2026 layer (founder decisions D24-01..D24-18)
+
+Placed **above** the list below: the decision register of the November 24 pack
+(`Governance/DECISION_REGISTER_2026-11-24.md`), then each design's November 24 amendment, then
+the November 8 reconciled pack. It is working authority, not a signed board or legal approval,
+and it does not authorise any code, database or infrastructure change by itself. Effects on the
+table that follows: **K-1** payment authority is undecided, so nothing payment-related is built
+or extended and the legacy Seller confirm/reject path is not approved behaviour; **K-3** and
+**K-8** are now decided as targets (Fastify, Drizzle, BullMQ on Valkey) with the migration still
+unauthorised and gated by `ADU-MIG-2026-11-24`; Stories, whole-Ethiopia Market activation and the
+Seller-Console-first build order are decided. A status in the table below is not changed by this
+paragraph; the register in `docs/mobile/WO-001C-CONTRACT-GAPS.json` keeps its own statuses.
+
 ## Precedence (founder decision, WO-001B, 9 November 2026)
 
 1. **The founder's current explicit decisions**, including the accepted WO-001 / WO-001A decisions.
