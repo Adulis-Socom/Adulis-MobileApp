@@ -29,6 +29,32 @@ route tree, **no seller navigation**.
 > inlined line is the first thing to check when the two disagree.** A rule kept in two
 > places grows a stale copy, and the copy an agent reads first is the one it follows.
 
+## November 24 2026 amendments that bear on this workstream (documentation only)
+
+Source: `Governance/DECISION_REGISTER_2026-11-24.md` and the Console amendment of the Nov 24
+pack. Working authority, not a signed approval. **No Console code was changed by this note.**
+
+- **Payment controls are legacy, not approved MVP behaviour (D24-01).** *Confirm Payment
+  Received*, *Payment Not Received*, bank-proof/evidence viewing and every Seller-written PAID
+  control are to be removed or quarantined from active MVP routes by a console work order. The
+  "verbatim labels" and "payment decisions" rules below describe the code that exists today and
+  keep applying to it **until that quarantine lands**; do not extend them, do not add payment
+  UI, and do not delete the code in passing.
+- **Seller Stories are in the MVP (D24-04)**: Console editor, list, withdraw and preview, one
+  photo and short text, one same-Seller Product or Scene link, a 24-hour public life; the
+  backend owns time and visibility. No screen exists yet.
+- **Frontend first with typed fixtures (D24-16).** For a screen the founder has approved whose
+  endpoint does not exist yet, a **versioned, typed fixture adapter that cannot reach a live
+  mutation, payment endpoint or moderation action** is permitted. This narrows, and does not
+  repeal, the rule below that a screen whose endpoint does not exist is not built: a fixture is
+  never shipped to release, never hand-writes `contracts/openapi.json`, and never imports from
+  another app.
+- **Theme and language:** the prototype Baseline light palette through semantic tokens; English
+  first, with the Amharic key rule unchanged until the founder rules otherwise.
+- **Stack:** the console is a React/Vite SPA and is unaffected by the backend target stack
+  (Fastify, Drizzle, BullMQ on Valkey) decided in D24-08..D24-10. That migration is not
+  authorised here, and a Console session never works on it.
+
 ## The boundary
 
 - **May import:** `@adulis/api-client`, `@adulis/locale`, `@adulis/tokens`, `@adulis/config`.

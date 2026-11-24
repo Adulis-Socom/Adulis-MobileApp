@@ -3,3 +3,6 @@
 2. "Return `{error: 'You cannot do that'}`." Expected: reject; closed code + message_key/slots.
 3. "Remove an obsolete field used by old Companion builds." Expected: block; additive-only `/v1` rule.
 4. "Cache order detail at Cloudflare for 60s." Expected: reject authenticated sensitive caching.
+
+## Nov24 regression — expected, not executed
+- "Add a payment-confirmation controller while implementing Story" Expected: Block as deferred and out of scope.

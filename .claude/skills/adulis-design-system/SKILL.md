@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis Design System
@@ -14,19 +14,19 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
+Latest CTO palette is working visual direction: primary #111111, secondary #F4F5F7, accent #C4FE29, danger/like #EF4444, gray #7E8494, border #E5E7EB, background #F5F5F7. Use shared semantic tokens, one standout accent action per screen, dark text on lime and contrast-tested derived colors. White surfaces and specific accessible variants are implementation proposals. No per-app palette or unapproved dark theme. Impeccable reviews design but follows these Adulis requirements and never overrides them; where its advice conflicts with this skill, this skill wins and the conflict is reported. Token change needs separate PR.
+
+Measured WCAG contrast (GOV-SKILL-01, 2026-11-25; the base palette is unchanged): #111111 on #C4FE29 15.79, on #F5F5F7 17.34, on white 18.88 (pass). #7E8494 on #F5F5F7 3.43 and on white 3.74: fails 4.5 for ordinary text, passes 3.0 for large text and non-text only. #EF4444 as text on white 3.76 and on #F5F5F7 3.46, and white text on #EF4444 3.76: fails 4.5 for ordinary text. #E5E7EB border on white 1.24 and on #F5F5F7 1.14: decorative only, below the 3.0 non-text contrast needed to identify a control by its border. White on #C4FE29 is 1.2: never. Proposed derived variants, not yet adopted: gray text #5B6272 (5.61 on #F5F5F7), danger text #B91C1C (5.94 on #F5F5F7, 6.47 on white). A shared-token PR must re-measure before adopting them.
+
+## Governing sources (legacy executable references unless noted)
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — public-web global interface rules.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — localisation/product states.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — surface roles.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — shared tokens/primitives direction.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — shared tokens/primitives direction.
 
 ## Principles
 - Reuse tokens/primitives; do not duplicate near-identical components per surface without a platform reason.

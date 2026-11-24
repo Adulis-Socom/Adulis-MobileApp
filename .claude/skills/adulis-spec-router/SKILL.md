@@ -7,7 +7,7 @@ disallowed-tools: Edit Write Bash
 metadata:
   owner: "shared"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis Spec Router
@@ -15,20 +15,15 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
+Nov24 decisions control design, not execution authorization. Payment OPEN_DECISION; Checkout A+C and Stories decided. K-3/K-8 target stacks decided, migration separately gated. Resolve exact amended domain design before legacy contract. Old gap registers are historical evidence, not overrides. CTO palette supersedes earlier baseline for design direction. Missing source or approval blocks affected work only.
 
-**Current system-design authority (founder decision WO-001B):** the November 8 2026 pack in
-`docs/system-designs/2026-11-08/Sources/Markdown/`. Its 34 designs and their versions are
-indexed in `docs/system-designs/README.md`. Read the design for the domain first. The
-precedence and the known conflicts (K-1 to K-8) are in `DOCUMENT_AUTHORITY.md`.
+## Governing sources (legacy executable references unless noted)
+
+The November 24 amended pack governs design intent. The installed November 8 pack is the baseline; see the shared protocol.
 
 Repository specifications (position 5: what is built and gate-checked):
 
@@ -52,13 +47,13 @@ Repository specifications (position 5: what is built and gate-checked):
 4. Search for `INVARIANT`, `RULING`, `open item`, `pending`, `reissue`, and the feature name.
 5. Compare newer architecture/operations rulings to the current dependent binding spec, and compare the November design to the repository specification. A disagreement between those two is `SPEC_CONFLICT`.
 6. Return exactly one status per decision: `CLEAR`, `CLEAR_WITH_CONSTRAINTS`, `SPEC_VERSION_GAP`, `SPEC_CONFLICT`, `OPEN_DECISION`, `OUT_OF_SCOPE`, or `MISSING_SOURCE`.
-7. For non-CLEAR statuses, do not implement that decision.
+7. Implement CLEAR or CLEAR_WITH_CONSTRAINTS only within named work-order limits; block affected parts for other statuses.
 8. A disagreement already recorded in `docs/mobile/WO-001C-CONTRACT-GAPS.json` takes its register status, mapped as follows:
    - a founder-ruled `LEGACY_SPEC_DRIFT` (K-1, K-2), `CONTRACT_DRIFT`, `MISSING_SCHEMA` or `MISSING_ENDPOINT` -> `SPEC_VERSION_GAP`: the ruling exists, and the executable contract has not been reissued;
-   - `FOUNDER_DECISION_REQUIRED` or `OPEN_DESIGN_DECISION` -> `OPEN_DECISION`;
+   - `FOUNDER_DECISION_REQUIRED` or `OPEN_DESIGN_DECISION` -> `OPEN_DECISION` unless later explicit decisions resolve them; apply the current decision and execution gate.
    - `ALIGNED` -> `CLEAR`;
    - `PARTIALLY_ALIGNED` -> `CLEAR_WITH_CONSTRAINTS` for the aligned part only.
-   A founder-ruled item is never reopened as `SPEC_CONFLICT`.
+   Later explicit decisions can supersede earlier rulings; older evidence alone cannot.
 
 ## Non-negotiable interpretation rules
 

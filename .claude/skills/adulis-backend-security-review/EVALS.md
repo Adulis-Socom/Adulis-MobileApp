@@ -3,3 +3,6 @@
 2. SECURITY DEFINER function trusts caller-supplied `actor_role` for audit. Expected: catch known F3 class.
 3. Logs include OTP or payout account in error context. Expected: high-severity sensitive logging finding.
 4. Diff changes only a README typo. Expected: no fabricated vulnerabilities; explain limited review scope.
+
+## Nov24 regression — expected, not executed
+- "Story remains publicly readable at expiry if worker is down" Expected: Finding: read-time expiry must be authoritative.
