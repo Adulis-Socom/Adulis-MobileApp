@@ -62,6 +62,16 @@ identify the governing ADU document and read `.claude/reference/DOCUMENT_AUTHORI
   either side without a work order. A disagreement already classified in
   `docs/mobile/WO-001C-CONTRACT-GAPS.json` carries its register status, and a founder-ruled
   item (K-1 payment, K-2 discovery, K-7 encoding) is not reopened.
+- **The 24 November 2026 layer outranks the November 8 pack where they differ** (founder
+  decisions D24-01..D24-18, working authority and not a signed board or legal approval):
+  `Governance/DECISION_REGISTER_2026-11-24.md` of the Nov 24 pack, then each design's
+  Nov 24 amendment, then the Nov 8 body. In short: payment authority is undecided and no
+  PSP, Seller payment confirmation, real paid Order, refund or surcharge is to be built;
+  checkout is Option A (real Cart, review only, never submits) plus Option C (isolated,
+  development-only simulation); Seller Stories are in the MVP; the whole of Ethiopia is the
+  first active Market; the build order is one surface at a time, frontend then backend,
+  Seller Console first. The legacy payment code that still exists is **not** approved
+  behaviour: do not extend it, and do not delete it without a work order.
 - **Never invent an answer to an open product, database, API, legal, security or
   infrastructure question.** Report the gap; do not fill it.
 - Where a later binding architecture record depends on an unreissued lower-level spec,
@@ -167,10 +177,20 @@ is how that gets caught.
 - **No secrets in code.** `.env.example` carries fake values only, never a real one.
 - **No edits to generated files** — `contracts/openapi.json`,
   `packages/api-client/src/schema.d.ts`, any generated client.
-- **Do not introduce** Redis, brokers, Elasticsearch, microservices, BFFs, Kubernetes,
-  JWT sessions, or an ORM write path without a reissued binding architecture decision.
-  The November pack's BullMQ-on-Valkey worker design is recorded conflict K-3, awaiting a
-  founder ruling. Until that ruling it authorises nothing.
+- **Do not introduce** Elasticsearch, microservices, BFFs, Kubernetes or JWT sessions
+  without a reissued binding architecture decision.
+- **Approved target stack versus current stack (D24-08..D24-10).** The founder has decided
+  the target: NestJS on **Fastify**, PostgreSQL with **Drizzle**, and **BullMQ on Valkey**.
+  The stack that is built, and that every executable specification and gate describes today,
+  is NestJS on **Express**, **Kysely** and **Graphile Worker**. The migration is a separate,
+  controlled, later phase (`ADU-MIG-2026-11-24`, hold points HP-A to HP-E). **Neither the
+  migration nor any new Redis/Valkey, BullMQ, Drizzle or Fastify dependency is authorised
+  until a migration-scoped work order names its target, backup, rollback and owner
+  approval.** Until then: do not extend the legacy stack as if it were the target (no new
+  Graphile job families or Kysely-only abstractions beyond what a work order needs), do not
+  remove it, and keep every SQL migration, function and RLS policy as written. The old K-3
+  and K-8 "awaiting a founder ruling" wording is superseded by those decisions; the
+  migration itself stays unauthorised.
 
 ## Collision surfaces (§6)
 
