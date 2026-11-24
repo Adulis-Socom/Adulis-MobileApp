@@ -19,6 +19,8 @@ declare const __APP_VERSION__: string;
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_SMOKE_BREAK?: string;
+  /** Development only (SC-FE-01): '1' serves the typed fixture transport. Ignored by release builds. */
+  readonly VITE_CONSOLE_FIXTURES?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
