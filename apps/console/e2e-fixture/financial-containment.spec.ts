@@ -56,7 +56,8 @@ test('navigation: More offers no Payout, Claims or courier delivery; Subscriptio
 
   const hrefs = await page.locator('section.more-menu a').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''));
   expect(hrefs.some((h) => h.endsWith('/subscription'))).toBe(true);
-  expect(hrefs.filter((h) => /\/payouts$|\/claims|\/courier/.test(h))).toEqual([]);
+  // `/couriers` (the Store's courier-invite management) is a different, non-delivery screen and stays.
+  expect(hrefs.filter((h) => /\/payouts$|\/claims|\/courier$/.test(h))).toEqual([]);
 
   // The chooser has no courier door either.
   await page.goto('/');
@@ -105,7 +106,7 @@ test('an order with an OPEN payment submission offers no payment or handoff acti
   ]) {
     expect(await page.locator(sel).count(), sel).toBe(0);
   }
-  const text = (await page.locator('main').innerText()) ?? '';
+  const text = await page.locator('#main').innerText();
   expect(text).not.toMatch(
     /Confirm Payment Received|Payment Not Received|View evidence|Reissue payment instructions|Mark Ready|Show QR|Hand to the courier|Assign a courier/,
   );
