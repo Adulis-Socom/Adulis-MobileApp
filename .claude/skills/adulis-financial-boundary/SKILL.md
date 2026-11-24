@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis Financial Boundary
@@ -14,32 +14,30 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
+Payment authority undecided (D24-01–03); no PSP, Seller confirmation, real paid Orders, refunds, settlement, credentials or surcharge. Checkout A is real Seller-scoped Cart/review only; C is isolated internal simulation. Subscription and payout scope remains open after Batch 01; do not add or activate financial behavior by inference. Preserve existing data, permissions, encryption and audit until authorized quarantine.
+
+## Governing sources (legacy executable references unless noted)
 - `ADU-00_One_Page_Business_Model_v9_1.md` — no custody/payment-verification doctrine.
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md` — `financial` schema, roles, append-only/ledger.
-- `ADU-API-01_API_Contract_v1_3.md` — evidence/disclosure endpoints.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — who may access what.
+- `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — `financial` schema, roles, append-only/ledger.
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — evidence/disclosure endpoints.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` — who may access what.
 - `ADU-SEC-01_Content_Security_Policy_v1_0.md` — browser evidence presentation.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — R15 (functions return ciphertext + key reference; decryption in the API) and R18 (framed streaming) are both pending DB/API write-backs; flag either as `SPEC_VERSION_GAP` unless interim authority is recorded. The prohibitions in this skill (no keys stored in the database, no unlogged reads, no client-side decryption) hold under both versions and apply now.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — R15 (functions return ciphertext + key reference; decryption in the API) and R18 (framed streaming) are both pending DB/API write-backs; flag either as `SPEC_VERSION_GAP` unless interim authority is recorded. The prohibitions in this skill (no keys stored in the database, no unlogged reads, no client-side decryption) hold under both versions and apply now.
 - `ADU-DPIA-01_Data_Protection_Impact_Assessment_v1_0.md` — privacy risk context, not legal sign-off.
 
 ## Non-negotiable product posture
 
-> Since WO-001C (K-1, founder ruling) payment is provider/backend verified. The no-custody and no-escrow bullets still hold. The evidence and Seller-confirmation machinery is legacy drift until WO-PAY-001 (gaps PAY-1 and PAY-3 in `docs/mobile/WO-001C-CONTRACT-GAPS.json`): keep its boundary controls while it exists, and build nothing new on it.
+Payment authority is undecided (D24-01); preserve existing financial isolation until authorized quarantine, never extend the legacy paths.
 
 - Adulis does not hold buyer money before licence/partner authority.
 - No escrow, wallet, or Adulis-held seller balance in V1.
-- Adulis never asserts payment is genuine.
-- ~~Buyer submits evidence; seller checks the seller's own bank/payment account and confirms receipt.~~ **Stale (K-1):** the Seller never establishes PAID.
-- Financial records remain append-only where specified; V1 ledger proves Adulis balance remains zero.
+- Do not assert payment is genuine or select a provider in this MVP.
+- No Seller or fixture establishes real PAID.
+- Financial records remain append-only where specified; preserve existing ledger invariants without new financial behavior.
 
 ## Boundary controls
 - `financial` has no ordinary app-role table access.

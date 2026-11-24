@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis API Engineer
@@ -14,26 +14,24 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
-- `ADU-API-01_API_Contract_v1_3.md` — wire authority.
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md` — enforcement authority.
+Target NestJS/Fastify + PostgreSQL/Drizzle; current Express/Kysely until authorized migration. Preserve named SQL functions, transaction-local scope, errors, idempotency and wire compatibility. Stories use server-owned expiry and same-Seller/Market validation. No payment or real paid commerce. Frontend work does not authorize API changes.
+
+## Governing sources (legacy executable references unless noted)
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — wire authority.
+- `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — enforcement authority.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — product behavior.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — authorization.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — NestJS/Kysely/build doctrine; watch pending API v1.4.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` — authorization.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — NestJS/Kysely/build doctrine. Check current contract gaps.
 
 ## Implementation doctrine
 - REST/JSON over HTTPS; OpenAPI 3.1 from NestJS decorators.
 - Thin controller, thin service.
 - Every state-changing endpoint calls the named DB function where one exists; no table write bypass.
-- Kysely typed reads; parameterised SQL for function calls.
+- Legacy Kysely reads until authorized migration; target Drizzle reads and parameterized SQL function calls.
 - Client computes nothing authoritative; return resolved state.
 - Every failure is machine-readable/localisable; never return English prose as the canonical message.
 - Every state-changing POST is idempotent from the client perspective.

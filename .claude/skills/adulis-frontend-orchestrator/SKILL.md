@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis Frontend Orchestrator
@@ -14,28 +14,28 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
+Seller Console -> Mobile (Buyer/Companion/Courier) -> Storefront -> Operator; frontend then backend per surface, Company Website excluded. Pause Mobile while Console active. Preserve conforming code; use typed, dev-only fixtures, no live fallback/release inclusion. Real checkout review; transactional, handoff and purchase-derived flows internal only. Ponytail instead of Superpowers, Impeccable for UI.
+
+## Governing sources (legacy executable references unless noted)
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — surface placement.
-- `ADU-API-01_API_Contract_v1_3.md` — client contract.
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — client contract.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — product behavior.
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — marketing/public-site rules.
 - `ADU-SEC-01_Content_Security_Policy_v1_0.md` — browser security.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — front-end stack/build sequence.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — front-end stack/build sequence.
 
 ## Surface decision
 Classify the requested feature first:
-- **Public web/storefront:** anonymous marketing/browse/install conversion.
+- **Seller Storefront:** public browse and app handoff; no web checkout. Company Website excluded.
 - **Seller PWA:** create, configure, manage, administer.
-- **Buyer Mode:** full buyer commerce experience.
-- **Seller Companion:** monitor, communicate, respond, understand; deliberately smaller than PWA.
+- **Buyer Mode:** discovery, messaging, Cart and checkout review; transactions deferred.
+- **Seller Companion:** monitor, communicate, respond, understand; deliberately smaller than Console.
+- **Courier:** mobile context; live delivery deferred.
+- **Operator:** separate privileged console, Founder model, inactive Staff variant.
 
 If a feature is proposed on the wrong surface, stop and report the architecture mismatch before coding.
 
@@ -46,14 +46,14 @@ If a feature is proposed on the wrong surface, stop and report the architecture 
 4. Map every server state/error/permission to UI states; do not infer authoritative state.
 5. Reuse design tokens/primitives before creating new patterns.
 6. Implement loading, empty, offline/stale, success, recoverable error, and terminal states as applicable.
-7. Validate English + Amharic/Ge'ez layout.
+7. Validate English and text expansion readiness; Amharic release deferred.
 8. Validate accessibility and low-bandwidth behavior.
 9. Validate CSP/session/app-store restrictions for the target surface.
 10. Add tests and record contract gaps instead of working around them locally.
 
 ## Forbidden behavior
 - business-state calculation in client;
-- handwritten API response types that duplicate generated contracts;
+- handwritten API response types that duplicate generated contracts; separate typed fixture ports permitted for approved missing contracts;
 - Seller Companion growing into full seller management;
 - billing/price/tier/upgrade surfaces inside mobile;
 - fixed-height layouts that clip translation;

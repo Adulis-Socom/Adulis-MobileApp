@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis DB Invariant Engineer
@@ -14,19 +14,17 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md` — primary.
+Drizzle is the approved target, not authority to bypass PostgreSQL constraints, RLS or named SQL functions. Preserve transaction-local set_config and migration history. PostgreSQL durable truth; Valkey rebuildable coordination/cache. Story/Scene eligibility is server-owned, same-Seller/Market and fail-closed; expiry independent of delayed jobs. No new financial state or DDL outside authorized work orders.
+
+## Governing sources (legacy executable references unless noted)
+- `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — primary.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — product behavior.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — permission/scoping rules.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — pending v1.7 rulings must be flagged.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` — permission/scoping rules.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — historical build rules; verify current manifest.
 
 ## Doctrine
 Use the strongest layer capable of expressing the rule:

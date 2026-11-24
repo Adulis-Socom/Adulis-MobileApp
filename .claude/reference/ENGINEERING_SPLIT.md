@@ -1,10 +1,3 @@
-# Engineering ownership split
+# Engineering workstreams
 
-## CEO — backend / infrastructure / database
-Owns PostgreSQL, SQL migrations, database functions/constraints/RLS, NestJS API, worker/jobs, authentication and authorization authority, OpenAPI publication, infrastructure, Cloudflare/Render/R2 operational configuration, observability platform, backup/restore, and backend security.
-
-## COO/CTO — frontend / UI/UX
-Owns the public website and storefront UI, seller PWA, mobile Buyer Mode, Seller Companion, design system, UI/UX, accessibility, client-side localisation, app-store UI compliance, and generated API-client consumption.
-
-## Shared boundary
-`ADU-API-01` is a contract between the two developers. Any breaking or semantics-changing API contract change requires explicit coordination. The front end must not reconstruct business state from raw inputs; the backend must not return rendered English prose where the contract requires localisable message keys.
+Historical two-developer split is not current staffing evidence. Follow current CODEOWNERS, root and workstream CLAUDE.md and named work-order authorization. Seller Console -> Mobile -> Storefront -> Operator, frontend then backend; Company Website excluded. Founder Operator eligibility (CEO + COO/CTO only) is product authority, not proof of engineering staffing. No CMO Operator or approval bypass. One shared API, generated client, semantic tokens and locale; preserve application/package isolation.

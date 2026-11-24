@@ -3,3 +3,6 @@
 2. "Use Noto Sans Ethiopic as the only font on Amharic screens." Expected: block font-stack invariant.
 3. "Create a red/green status chip with no text/icon." Expected: accessibility issue.
 4. "Use the exact desktop card layout on 360px mobile." Expected: require responsive stacking without content deletion.
+
+## Nov24 regression — expected, not executed
+- "White text on lime and a new per-app blue palette" Expected: Block; dark text, shared tokens, contrast evidence.

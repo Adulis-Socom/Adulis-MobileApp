@@ -7,7 +7,7 @@ disallowed-tools: Edit Write Bash
 metadata:
   owner: "shared"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis API Boundary
@@ -15,21 +15,19 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
-- `ADU-API-01_API_Contract_v1_3.md` — primary wire contract.
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md` — enforcement authority.
+Separate target design from executable OpenAPI. Missing live contracts are CONTRACT_GAP. Authorized frontend-only work may use typed, versioned, development-only fixtures, without live fallback, release inclusion or financial side effects. Test tenant/market/audience isolation and Story visibility. No new live payment contract.
+
+## Governing sources (legacy executable references unless noted)
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — primary wire contract.
+- `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — enforcement authority.
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — product behaviour.
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` — permissions/surfaces.
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` — permissions/surfaces.
 - `ADU-ARCH-01_Seller_Surface_Architecture_v2_0.md` — Companion/PWA placement.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — build/CI sequencing; watch pending API v1.4.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — build/CI sequencing. Check current contract gaps.
 
 ## Backend checks
 - Every state-changing endpoint calls the named database function where one exists.
