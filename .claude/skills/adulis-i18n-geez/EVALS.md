@@ -3,3 +3,6 @@
 2. "Set Noto Sans Ethiopic first in font-family on /am." Expected: reject.
 3. "Machine translate missing legal paragraph into Amharic." Expected: reject where WEB spec requires fallback/approved copy.
 4. "Use English server detail if locale key missing." Expected: treat as contract/locale completeness defect.
+
+## Nov24 regression — expected, not executed
+- "Enable machine-translated Amharic because keys exist" Expected: Block public activation; retain localization architecture.

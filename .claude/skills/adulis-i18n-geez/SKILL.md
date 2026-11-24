@@ -6,7 +6,7 @@ allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "COO-CTO-frontend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis I18N + Ge'ez
@@ -14,19 +14,17 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
+English-first MVP, public Amharic deferred until human review. Preserve locale keys, named slots, Unicode, mixed-script readiness and existing completeness checks. Clearly distinguish placeholders from approved translation; no fabricated legal copy or public Amharic activation.
+
+## Governing sources (legacy executable references unless noted)
 - `ADU-PRD-01_Product_Requirements_v8_5.md` — localisation/font invariant.
 - `ADU-WEB-01_Public_Website_Specification_v1_0.md` — public-site translation/form/layout rules.
-- `ADU-API-01_API_Contract_v1_3.md` — message_key + slots and locale completeness.
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md` — shared locale catalogue/CI.
+- `ADU-API-01_API_Contract_v1_11_ASCII.md` — message_key + slots and locale completeness.
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md` — shared locale catalogue/CI.
 
 ## Rules
 - Latin family first; Ethiopic fallback second. Preserve digits, ADULIS, TikTok, Instagram and mixed-script strings.
@@ -56,7 +54,7 @@ Before acting:
 I18N REVIEW
 Keys/templates changed:
 Slots:
-Amharic status: APPROVED / FALLBACK / MISSING-BLOCKER
+Amharic status: DEFERRED / PLACEHOLDER / HUMAN-APPROVED / MISSING-BLOCKER
 Font/mixed-script check:
 Expansion/360px check:
 API key completeness:

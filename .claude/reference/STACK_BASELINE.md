@@ -1,13 +1,11 @@
-# Current engineering stack baseline
+# Approved target vs executable legacy stack
 
-Derived from ADU-CON-02 v3.0. Verify exact package versions from the repository lockfile/package manifests before editing.
-
-**This describes what is built.** ADU-CON-02 is a repository document, position 5 in the precedence in `DOCUMENT_AUTHORITY.md`. The November 8 2026 pack agrees with most of it, including the modular monolith and the absence of a BFF, Kubernetes, Kafka, microservices or a separate search cluster. It differs on two points. First, it specifies **BullMQ on Valkey** as the sole background engine, plus Valkey for rebuildable cache and rate coordination (ARCH-PLATFORM-01 v3.3, DEPLOY-01 v3.2, EVT-01 v3.2). That contradicts graphile-worker and "Redis" below. It is conflict **K-3** (`FOUNDER_DECISION_REQUIRED`, the WO-001C architecture verdict): change neither side without a founder work order. Second, the pack names **Drizzle** (ADR-03) and **NestJS/Fastify**, where the build runs Kysely with hand-authored node-pg-migrate SQL and `@nestjs/platform-express`. That is conflict **K-8**, with the same status and the same rule.
+Read CURRENT_MVP_AUTHORITY.md and the controlled migration plan. Target Fastify, Drizzle, BullMQ/Valkey; legacy Express, Kysely, node-pg-migrate, Graphile Worker until authorized migration. Lists below describe legacy executable tooling unless noted. No migration authorized by this reference.
 
 ## Backend
 - TypeScript, strict mode
 - Node 22 LTS
-- PostgreSQL 17 as sole datastore
+- PostgreSQL 17 as durable datastore; target Valkey rebuildable
 - NestJS 11
 - Kysely for typed reads / parameterised SQL
 - `node-pg-migrate` with hand-authored SQL migrations
@@ -18,10 +16,9 @@ Derived from ADU-CON-02 v3.0. Verify exact package versions from the repository 
 Rejected unless a binding architecture revision changes the decision:
 - microservices / per-surface backends / BFFs
 - Kubernetes
-- Redis
-- RabbitMQ or another broker
+- Redis/brokers other than approved, migration-gated Valkey/BullMQ
 - Elasticsearch / separate search cluster
-- Prisma/TypeORM/ORM write paths
+- Prisma/TypeORM and ORM writes bypassing SQL invariants
 - Firebase/Supabase as backend authority
 - JWT for sessions
 

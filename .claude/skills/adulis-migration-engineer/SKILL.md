@@ -1,12 +1,12 @@
 ---
 name: adulis-migration-engineer
 description: >-
-  Authors and reviews Adulis PostgreSQL migrations using the current SQL-first node-pg-migrate doctrine, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
+  Authors and reviews Adulis PostgreSQL migrations preserving SQL-first migration history during authorized Drizzle migration, with role/grant safety, deterministic schema output, lock/rewrite analysis, and Appendix-C verification. Use whenever creating or changing database migrations.
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
   priority: "P0"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Adulis Migration Engineer
@@ -14,18 +14,16 @@ metadata:
 
 ## Shared source protocol
 
-Before acting:
-1. Read `${CLAUDE_PROJECT_DIR}/.claude/reference/DOCUMENT_AUTHORITY.md` if present.
-2. Locate the exact governing filenames listed below with `Glob`. Do not substitute an older revision when a newer named revision is required.
-3. Read only the relevant sections first; expand if necessary.
-4. If a required source is absent, output `MISSING_SOURCE` and name it.
-5. If the task crosses a known unreissued-spec boundary, output `SPEC_VERSION_GAP` and do not guess.
+Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` from the repository root. Locate the founder-provided Nov24 pack (or configured `ADULIS_SPEC_ROOT`), read `Governance/DECISION_REGISTER_2026-11-24.md` and applicable `Effective_Current_Designs/Markdown` amendment before the Nov8 body. If the necessary source cannot be read, report `MISSING_SOURCE`; do not guess. Historical executable references below describe what is built, not contrary design authority. Missing live contracts are `SPEC_VERSION_GAP` or `CONTRACT_GAP`; approved frontend-only typed fixtures may proceed without inventing a live contract. Confirm named work-order scope before editing. Preserve existing permission denials and safeguards.
 
+## Current MVP constraints — 24 November 2026
 
-## Governing sources
-- `ADU-DB-01_Database_and_Data_Model_v1_6.md`
-- `ADU-CON-02_Seller_Console_System_Design_v3_0.md`
-- `ADU-AUTH-01_Authentication_and_Authorization_v2_0.md` when roles/permissions change.
+Approved target Fastify, Drizzle, BullMQ/Valkey, not immediate execution. Follow CONTROLLED_MIGRATION_PLAN_2026-11-24.md: inventory/restore proof, HTTP parity, Drizzle domain migration preserving SQL/RLS, one consumer per job family at cutover, generated contracts/CI, authorized retirement. Preserve data by default; no schema push, snapshot recreation, rewrite of applied migrations or persistent operation without approval. PostgreSQL outbox durable.
+
+## Governing sources (legacy executable references unless noted)
+- `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md`
+- `ADU-CON-02_Seller_Console_System_Design_v3_2_ASCII.md`
+- `ADU-AUTH-01_Authentication_and_Authorization_v2_8_ASCII.md` when roles/permissions change.
 
 ## Current migration posture
 - PostgreSQL 17.
@@ -38,7 +36,7 @@ Before acting:
 ## Procedure
 1. Locate existing migration conventions and numbering; do not invent a parallel system.
 2. Read the exact DB section/manifest entry being implemented.
-3. Check `SPEC_VERSION_GAP` before using CON v3 rulings that require DB v1.7.
+3. Verify current manifest and governing contract; stop on unreissued changes.
 4. Analyze: lock strength, table rewrite, backfill, index build, constraint validation, rollback, grants, RLS, function ownership, search_path, triggers.
 5. Preserve historical rows and append-only semantics.
 6. Do not change existing financial/state history in place to "match" a new rule.
@@ -48,7 +46,7 @@ Before acting:
 10. Pin the new file in the same change with `pnpm db:migration-pin` and commit `ops/migrations.manifest.json`; apply it only with `pnpm db:migrate` (it runs the migration-file guard). Never start `node-pg-migrate` directly.
 
 ## Hard blocks
-- A migration depending on DB v1.7-only rulings without explicit interim authorization.
+- A migration depending on unreissued contracts without explicit interim authorization.
 - Prisma/TypeORM/ORM schema generators as DDL authority.
 - `UPDATE`/`DELETE` grants on append-only records.
 - function ownership or `SECURITY DEFINER` changes without explicit audit.
