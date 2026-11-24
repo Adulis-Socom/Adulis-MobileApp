@@ -398,6 +398,73 @@ if (lightKeys.join(',') === darkKeys.join(',')) {
   for (const k of darkKeys.filter((k) => !lightKeys.includes(k))) console.log(`          dark only:  ${k}`);
 }
 
+// ---------------------------------------------------------------- 5. contrast (DS-TOK-01, B02-D04)
+// The CTO palette is only safe if its pairs stay readable. WCAG 2.x, computed from the RESOLVED
+// index.ts values in BOTH modes (never copies). Text 4.5:1, non-text 3:1. A new role, or a changed
+// value, that stops clearing its target fails here, in the gate, not in a screenshot review.
+function lum(hex) {
+  const n = hex.replace('#', '');
+  const c = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);
+  const l = c.map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+}
+const ratio = (a, b) => {
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const resolved = (name) =>
+  new Map([...ramps[name]].map(([k, val]) => [k, String(resolve(val, ramps))]));
+const modes = { light: resolved('color'), dark: resolved('colorDark') };
+const TEXT = 4.5;
+const NONTEXT = 3;
+const CONTRAST_PAIRS = [
+  ['text', 'bg', TEXT], ['text', 'surface', TEXT], ['text', 'surfaceMuted', TEXT],
+  ['textSecondary', 'bg', TEXT], ['textSecondary', 'surface', TEXT], ['textSecondary', 'surfaceMuted', TEXT],
+  ['textMuted', 'bg', TEXT], ['textMuted', 'surface', TEXT], ['textMuted', 'surfaceMuted', TEXT],
+  ['borderStrong', 'bg', NONTEXT], ['borderStrong', 'surface', NONTEXT], ['borderStrong', 'surfaceMuted', NONTEXT],
+  ['primaryText', 'primary', TEXT], ['primaryText', 'primaryHover', TEXT], ['primaryText', 'primaryActive', TEXT],
+  ['secondaryText', 'secondary', TEXT], ['secondaryText', 'secondaryHover', TEXT], ['secondaryText', 'secondaryActive', TEXT],
+  ['highlightText', 'highlight', TEXT], ['highlightText', 'highlightHover', TEXT], ['highlightText', 'highlightActive', TEXT],
+  ['highlightBorder', 'bg', NONTEXT], ['highlightBorder', 'surface', NONTEXT],
+  ['danger', 'bg', TEXT], ['danger', 'surface', TEXT], ['danger', 'dangerBg', TEXT],
+  ['like', 'bg', NONTEXT], ['like', 'surface', NONTEXT],
+  ['dangerSolid', 'bg', NONTEXT], ['dangerSolid', 'surface', NONTEXT],
+];
+// PRE-EXISTING, not introduced by DS-TOK-01: the dark theme's textMuted (#8b8478) on surfaceMuted (#26231e) is
+// 4.23:1. The dark theme is not in this work order's scope (B02-D03 adds no dark theme), so it is named here,
+// printed on every run, and registered (B2-013) rather than silently fixed or silently skipped.
+const KNOWN_DEBT = new Set(['dark:textMuted/surfaceMuted']);
+const knownDebt = [];
+const lowContrast = [];
+let measured = 0;
+for (const [mode, table] of Object.entries(modes)) {
+  const ringTable = { light: ramps.focus, dark: pairs(exportBody(tsSrc, 'focusDark') ?? '') }[mode];
+  const ring = String(resolve(ringTable.get('ringColor') ?? '', { ...ramps, focus: ringTable }));
+  const roles = new Map([...table, ['focusRing', ring]]);
+  // The ring is drawn 2px OFF the control, so it is read against the page or a surface, never against the
+  // control's own fill (lime included); that is why there is no focusRing-on-highlight pair.
+  const all = [...CONTRAST_PAIRS, ['focusRing', 'bg', NONTEXT], ['focusRing', 'surface', NONTEXT]];
+  for (const [fg, bgName, need] of all) {
+    const a = roles.get(fg);
+    const b = roles.get(bgName);
+    if (!/^#[0-9a-f]{6}$/i.test(a ?? '') || !/^#[0-9a-f]{6}$/i.test(b ?? '')) {
+      lowContrast.push(`${mode}: ${fg} on ${bgName} is not two resolvable hex colours (${a} / ${b})`);
+      continue;
+    }
+    measured += 1;
+    const r = ratio(a, b);
+    if (r < need && KNOWN_DEBT.has(`${mode}:${fg}/${bgName}`)) { knownDebt.push(`${mode}: ${fg} on ${bgName} = ${r.toFixed(2)}:1`); continue; }
+    if (r < need) lowContrast.push(`${mode}: ${fg} (${a}) on ${bgName} (${b}) = ${r.toFixed(2)}:1, needs ${need}:1`);
+  }
+}
+if (lowContrast.length === 0) {
+  pass('contrast: every declared pair clears its target in both modes', `${measured} pairs`);
+  for (const d of knownDebt) console.log(`          known pre-existing exemption (B2-013): ${d}`);
+} else {
+  fail('contrast: a declared pair no longer clears its target');
+  for (const l of lowContrast) console.log(`          ${l}`);
+}
+
 console.log(
   failures.length === 0
     ? '\nPASS  index.ts and tokens.css agree, in both modes and both directions.\n'
