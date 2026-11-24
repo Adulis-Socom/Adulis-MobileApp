@@ -94,6 +94,9 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   display: grid;
   min-height: 100dvh;
   grid-template-rows: auto 1fr auto;
+  /* SC-FE-01-CLOSE: an explicit shrinkable column. The implicit `auto` column cannot shrink below its widest
+     descendant, so one non-wrapping row widened the header and the whole page (Orders at 320px, 150% text). */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas: 'top' 'main' 'bottom';
 }
 .topbar {
@@ -101,6 +104,10 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   display: flex;
   align-items: center;
   gap: var(--adu-space-md);
+  /* SC-FE-01-CLOSE: wrap, never widen the page. At 320px with 150% text the switcher, the bell and
+     Sign out do not fit on one line, and a non-wrapping header dragged the whole page 149px wide. */
+  flex-wrap: wrap;
+  min-width: 0;
   padding: var(--adu-space-sm) var(--adu-space-md);
   border-bottom: 1px solid var(--adu-color-border);
 }
@@ -142,7 +149,10 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
   padding: 0;
   display: flex;
 }
-.bottombar li { flex: 1; }
+/* SC-FE-01-CLOSE: five labels do not fit one row at 320px with 150% text, and a non-wrapping row widened the
+   whole page. The bar now wraps onto a second row instead (items still share the width on one row when they fit). */
+.bottombar ul { flex-wrap: wrap; }
+.bottombar li { flex: 1 1 auto; min-width: 0; }
 .bottombar a, .sidenav a {
   display: flex;
   align-items: center;
@@ -279,6 +289,9 @@ label { display: block; font-weight: 500; margin-top: var(--adu-space-md); }
 .readiness-item.done .readiness-label { color: var(--adu-color-text-muted); }
 
 .readiness-action { flex: 0 0 auto; }
+/* B02-D02: the deferred payout sentence is a whole sentence, not a link label -- it wraps in its row
+   (found by the 320px responsive suite: as a non-wrapping span it overflowed the page by 262px). */
+.readiness-action.deferred { flex: 1 1 12rem; min-width: 0; color: var(--adu-color-text-muted); }
 
 /* An action the server named that this build has no route for: shown, not
    linked, and visibly not a control. Hiding it would hide a blocking
