@@ -49,7 +49,7 @@ pack. Working authority, not a signed approval. **No Console code was changed by
   repeal, the rule below that a screen whose endpoint does not exist is not built: a fixture is
   never shipped to release, never hand-writes `contracts/openapi.json`, and never imports from
   another app.
-- **Theme and language:** the prototype Baseline light palette through semantic tokens; English
+- **Theme and language:** the CTO palette through shared semantic tokens (B02-D03; the earlier prototype terracotta theme is superseded); English
   first, with the Amharic key rule unchanged until the founder rules otherwise.
 - **Stack:** the console is a React/Vite SPA and is unaffected by the backend target stack
   (Fastify, Drizzle, BullMQ on Valkey) decided in D24-08..D24-10. That migration is not
