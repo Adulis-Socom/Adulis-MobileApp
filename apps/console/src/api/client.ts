@@ -15,6 +15,7 @@
  * JavaScript, anywhere, ever.
  */
 import { resolveApiBaseUrl } from '@adulis/api-client';
+import { ApiError } from './api-error';
 import type { AdulisProblem } from '../lib/states';
 
 /**
@@ -70,11 +71,9 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
  */
 const CLIENT_ID = `web/${__APP_VERSION__}`;
 
-export class ApiError extends Error {
-  constructor(readonly problem: AdulisProblem) {
-    super(problem.code);
-  }
-}
+// ApiError lives in its own module so the fixture transport can throw it without importing
+// this file (a client -> transport -> client cycle, which dependency-cruiser forbids).
+export { ApiError };
 
 export interface RequestOptions {
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -85,7 +84,26 @@ export interface RequestOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * THE FIXTURE SEAM (SC-FE-01; docs: 06_SAFE_FIXTURE_AND_COMMERCE_BOUNDARY).
+ *
+ * `FIXTURES_ON` is a build-time constant: Vite replaces `import.meta.env.DEV` with
+ * `false` in a production build, so the dynamic import below and the fixture module
+ * it names are removed from a release bundle even when VITE_CONSOLE_FIXTURES is set
+ * (proved by e2e-fixture/no-fixture-in-build.spec.ts). When it is on, every call goes
+ * to the fixture transport, which never calls `fetch`; nothing falls back to live.
+ */
+export const FIXTURES_ON: boolean =
+  import.meta.env.DEV && import.meta.env.VITE_CONSOLE_FIXTURES === '1';
+
+async function fixtureTransport() {
+  if (FIXTURES_ON) return (await import('./fixtures/transport')).transport;
+  return null;
+}
+
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const fx = await fixtureTransport();
+  if (fx) return fx.json<T>(path, { method: opts.method, sellerId: opts.sellerId });
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'X-Adulis-Client': CLIENT_ID,
@@ -178,6 +196,8 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
  * as the tab lives.
  */
 export async function apiBlob(path: string, opts: RequestOptions = {}): Promise<Blob> {
+  const fx = await fixtureTransport();
+  if (fx) return fx.blob(path, { method: opts.method, sellerId: opts.sellerId });
   const headers: Record<string, string> = { 'X-Adulis-Client': CLIENT_ID };
   if (opts.sellerId) headers['X-Adulis-Seller'] = opts.sellerId;
   if (opts.locale) headers['Accept-Language'] = opts.locale;

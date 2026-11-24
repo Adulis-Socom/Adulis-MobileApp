@@ -46,6 +46,19 @@ const SAID: Record<string, { name: string; meaning: string }> = {
 export function EnvironmentBanner() {
   const { environment } = useMarket();
 
+  // SC-FE-01: a fixture-driven development build says so, persistently and outside the
+  // routed screen. 
+  // The condition is spelled out here, not imported: Vite folds `import.meta.env.DEV` to false in this
+  // very module, so a release bundle drops the banner and its words (an imported constant would not fold).
+  if (import.meta.env.DEV && import.meta.env.VITE_CONSOLE_FIXTURES === '1') {
+    return (
+      <div className="env-banner" data-fixture="on" role="status">
+        <strong>Demonstration data</strong>{' '}
+        <span>Nothing on this page is real, and no request leaves this browser.</span>
+      </div>
+    );
+  }
+
   /*
    * NOTHING UNTIL THE SERVER HAS SAID, and nothing for production.
    *
