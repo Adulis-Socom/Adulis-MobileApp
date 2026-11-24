@@ -97,7 +97,10 @@ export function Shell() {
         </div>
       </nav>
       <main id="main">
-        <Outlet />
+        {/* keyed by the seller in the URL: moving to another store (a history jump,
+            a deep link) remounts the screen, so no list, form or open modal of store A
+            can sit on screen under store B while B's answer is on its way (SC-FE-01). */}
+        <Outlet key={sellerId} />
       </main>
       <nav className="bottombar" aria-label={en['console.a11y.primary_nav']}>
         <ul>
