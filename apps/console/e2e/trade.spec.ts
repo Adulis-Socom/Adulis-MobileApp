@@ -156,7 +156,7 @@ test.describe('SC-04 -- payment and handoff are removed, not disabled (D24-01) @
       ]) {
         expect(await page.locator(sel).count(), `${name}: ${sel}`).toBe(0);
       }
-      const text = await page.locator('main').innerText();
+      const text = await page.locator('#main').innerText();
       expect(text, name).not.toMatch(
         /Confirm Payment Received|Payment Not Received|View evidence|Reissue payment instructions|Mark Ready|Show QR|Hand to the courier|Assign a courier/,
       );
