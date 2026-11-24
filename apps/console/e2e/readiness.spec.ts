@@ -5,12 +5,8 @@
  * Through T9 that clause was met by driving a browser once, by hand, and
  * reading the DOM. This is the same assertion, made on every run.
  */
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { SEEDED } from './helpers/session';
-
-const BUYER_STATE = path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth', 'buyer-state.json');
 
 test.describe('SC-01 -- the readiness hub', () => {
   test('renders every item the server returned, and resumes across a reload', async ({ page }) => {
