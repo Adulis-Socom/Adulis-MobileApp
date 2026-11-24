@@ -197,18 +197,6 @@ export function Orders() {
                   */}
                   <Deadline clock={clockFor(o)} onElapsed={reload} />
                 </Link>
-                {/*
-                  "A single primary action if one is available." Without
-                  `allowed_actions` (which no endpoint returns -- D-155) the
-                  only action this screen can offer honestly is NAVIGATION to
-                  where the decision is made. It is not an outcome-bearing
-                  control and does not claim to be.
-                */}
-                {o.state === 'PAYMENT_SUBMITTED' ? (
-                  <Link className="order-primary" to={o.id} data-primary="review_payment">
-                    {en['console.trade.orders.review_payment']}
-                  </Link>
-                ) : null}
               </li>
             ))}
           </ul>

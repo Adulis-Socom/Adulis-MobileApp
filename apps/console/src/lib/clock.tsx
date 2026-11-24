@@ -89,17 +89,9 @@ export function clockFor(o: ClockSource): Clock {
     case 'NOTIFIED':
       return o.expires_at ? { kind: 'RESERVATION', deadline: o.expires_at } : { kind: 'NONE' };
     case 'PAYMENT_SUBMITTED':
-      /*
-       * NOT a fallback to expires_at. If the confirmation deadline is missing
-       * the honest rendering is NO CLOCK -- the reservation window is
-       * "irrelevant" here (S7), and showing an irrelevant deadline as though
-       * it governed is worse than showing none. The seed order in this state
-       * deliberately carries an expires_at in the PAST, so a fallback would
-       * render a negative countdown and the harness would see it.
-       */
-      return o.payment_sla_deadline
-        ? { kind: 'CONFIRMATION', deadline: o.payment_sla_deadline }
-        : { kind: 'NONE' };
+      // D24-01: the Seller no longer confirms or rejects payment, so a confirmation countdown
+      // would time a decision nobody here can make. No clock, never a fallback to expires_at.
+      return { kind: 'NONE' };
     default:
       // PAYMENT_CONFIRMED, HANDED_OFF, COMPLETED, both cancellations and
       // EXPIRED_UNCLAIMED. No countdown at all.

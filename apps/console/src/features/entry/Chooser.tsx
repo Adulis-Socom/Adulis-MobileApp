@@ -124,22 +124,6 @@ export function Chooser() {
         </p>
       ) : null}
 
-      {/* THE COURIER LINK MOVED TO SIGN-IN (T19 Phase 1) and survives here in
-          the EMPTY state only.
-          A courier is not seller staff: they hold their own account, they see
-          only assigned orders, and they have no store to be redirected into.
-          Sign-in is where they meet it first, and following it from there
-          resumes to /courier after verifying.
-          But a courier who signs in WITHOUT following that link lands here,
-          on an account with no stores -- so this is the other place they
-          arrive, and it is not "behind seller navigation": a person with no
-          store is never redirected past this screen. In the READY state, where
-          the account does hold stores, it is gone. */}
-      {state === 'EMPTY' || state === 'READY' ? (
-        <p className="courier-link">
-          <Link to="/courier">{en['console.courier.chooser_link']}</Link>
-        </p>
-      ) : null}
     </main>
   );
 }
