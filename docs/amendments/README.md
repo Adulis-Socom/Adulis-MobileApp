@@ -32,6 +32,7 @@ and the recorded conflicts between the two (K-1 to K-8) are in
 | Addendum | Records |
 |---|---|
 | [`BATCH-02-FOUNDER-DECISIONS-2026-11-25.md`](BATCH-02-FOUNDER-DECISIONS-2026-11-25.md) | B02-D01 Subscription Option B, B02-D02 Payout Option A, B02-D03 CTO palette supersedes the prototype theme, B02-D04 accessibility variants, B02-D05 Batch 02 work orders. Adds to, and alters nothing in, the 8 and 24 November records |
+| [`BATCH-02B-FOUNDER-DECISIONS-2026-11-25.md`](BATCH-02B-FOUNDER-DECISIONS-2026-11-25.md) | B02B-D01 the Reservation model is retired from the active architecture, B02B-D02 Courier relationship management retained, B02B-D03 Seller Console light-theme-first, B02B-D04 authorised backend safety exception (BE-RES-01, BE-SAFE-01, BE-READY-01), B02B-D05 conditional acceptance of the Console test reduction |
 
 ## Proposed amendments -- NOT installed, nothing here governs yet
 

@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Target NestJS/Fastify + PostgreSQL/Drizzle; current Express/Kysely until authorized migration. Preserve named SQL functions, transaction-local scope, errors, idempotency and wire compatibility. Stories use server-owned expiry and same-Seller/Market validation. No payment or real paid commerce. Frontend work does not authorize API changes.
+Target NestJS/Fastify + PostgreSQL/Drizzle; current Express/Kysely until authorized migration. Preserve named SQL functions, transaction-local scope, errors, idempotency and wire compatibility. Stories use server-owned expiry and same-Seller/Market validation. No payment or real paid commerce. Frontend work does not authorize API changes. The Reservation model is RETIRED (B02B-D01): add no Reservation endpoint, database-function call, job or DTO field; a retired operation fails closed and is never extended; drain-only workers keep releasing historical holds.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-API-01_API_Contract_v1_11_ASCII.md` — wire authority.

@@ -1,7 +1,7 @@
 ---
 name: adulis-order-concurrency
 description: >-
-  Designs and tests Adulis order, reservation, stock, payment-state, expiry, partial-fulfilment, and handoff concurrency/idempotency. Use for any commerce state transition or background job that can race or retry.
+  Designs and tests Adulis order, stock, payment-state, expiry, partial-fulfilment, and handoff concurrency/idempotency. Use for any commerce state transition or background job that can race or retry.
 allowed-tools: Read Glob Grep Edit Write
 metadata:
   owner: "CEO-backend"
@@ -18,7 +18,7 @@ Read `.claude/reference/CURRENT_MVP_AUTHORITY.md` and `DOCUMENT_AUTHORITY.md` fr
 
 ## Current MVP constraints — 24 November 2026
 
-Live payments, paid Orders, handoff, purchase Review Grants and payment Claims deferred. Checkout preview never places an Order or reserves stock. Internal simulations cannot mutate real stock/trust. Preserve future concurrency checks; for live Stories/Scenes prove expiry/public eligibility and idempotent worker retries. BullMQ at-least-once execution cannot duplicate effects.
+Live payments, paid Orders, handoff, purchase Review Grants and payment Claims deferred. Checkout preview never places an Order or reserves stock. Internal simulations cannot mutate real stock/trust. Preserve future concurrency checks; for live Stories/Scenes prove expiry/public eligibility and idempotent worker retries. BullMQ at-least-once execution cannot duplicate effects. The Reservation model is RETIRED (B02B-D01): do not design, extend or test new Reservation creation, hold, expiry or release; the existing expiry sweep is a drain of historical holds only and is kept until a founder-approved reconciliation. The governing Order model is ADU-ORDER-01 v3.3 (Payment Attempt, Checkout Inventory Allocation), deferred with payment.
 
 ## Governing sources (legacy executable references unless noted)
 - `ADU-DB-01_Database_and_Data_Model_v1_27_ASCII.md` — constraints/state machines.
@@ -38,7 +38,7 @@ Live payments, paid Orders, handoff, purchase Review Grants and payment Claims d
 
 ## Core rules for future authorized transactions (not live MVP)
 - cart holds no stock; order creation revalidates;
-- reservation uniqueness is structural;
+- (retired model, history only) reservation uniqueness is structural for historical data;
 - stock cannot go negative and cannot move without the stock-event mechanism;
 - expiry/release jobs are idempotent;
 - writes use client idempotency semantics;
