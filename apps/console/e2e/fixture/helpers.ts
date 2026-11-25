@@ -74,8 +74,16 @@ export async function goInApp(page: Page, path: string): Promise<void> {
 }
 
 export async function noHorizontalOverflow(page: Page): Promise<void> {
-  const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
-  expect(overflow.scroll, `horizontal overflow: scrollWidth ${overflow.scroll} > clientWidth ${overflow.client}`).toBeLessThanOrEqual(overflow.client + 1);
+  const overflow = await page.evaluate(() => {
+    const client = document.documentElement.clientWidth;
+    // name the offenders, so a failure says which element is wider than the window
+    const culprits = [...document.querySelectorAll<HTMLElement>('body *')]
+      .filter((el) => el.getBoundingClientRect().right > client + 1 && getComputedStyle(el).position !== 'fixed')
+      .slice(0, 6)
+      .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)} right=${Math.round(el.getBoundingClientRect().right)} w=${Math.round(el.getBoundingClientRect().width)}`);
+    return { scroll: document.documentElement.scrollWidth, client, culprits };
+  });
+  expect(overflow.scroll, `horizontal overflow: scrollWidth ${overflow.scroll} > clientWidth ${overflow.client}; wider than the window: ${overflow.culprits.join(' | ')}`).toBeLessThanOrEqual(overflow.client + 1);
 }
 
 export async function limeCount(page: Page): Promise<number> {
