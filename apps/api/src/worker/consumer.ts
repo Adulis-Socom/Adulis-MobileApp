@@ -131,11 +131,12 @@ export class EventConsumerRunner {
                   set: { failureClass, failureFingerprint: fingerprint, sanitizedSummary: row.sanitizedSummary, attemptCount: row.attemptCount, effectMayHaveHappened: row.effectMayHaveHappened, updatedAt: sql`now()` },
                 })
                 .returning({ id: asyncDeadLetter.deadLetterId });
-        if (written.length > 0 && row.sourceEventId) {
+        const sourceEventId = row.sourceEventId;
+        if (written.length > 0 && sourceEventId !== null) {
           await tx
             .update(eventDelivery)
             .set({ state: 'DEAD_LETTERED', updatedAt: sql`now()` })
-            .where(and(eq(eventDelivery.eventId, env.source_event_id), eq(eventDelivery.consumer, consumer)));
+            .where(and(eq(eventDelivery.eventId, sourceEventId), eq(eventDelivery.consumer, consumer)));
         }
       });
     } catch (writeErr) {
