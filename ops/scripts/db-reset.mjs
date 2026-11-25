@@ -313,7 +313,9 @@ show('after', c);
  * seed that silently stops producing a timing row turns this red instead of
  * leaving a database where bootstrap succeeds and sign-in cannot (D-128).
  *
- * (5 since T11: the fifth is D-167's already-lapsed deadline.)
+ * (5 since T11: the fifth is D-167's already-lapsed deadline. ZERO since migration 0063:
+ * the legacy Reservation model and live Order creation were retired before launch, so the
+ * seed creates no Order, and the pin now guards that no fixture brings one back.)
  * `orders` was added with C-4's trade fixture, and it is the count that most
  * needs pinning: three of the four exist to carry ONE CLOCK TREATMENT EACH,
  * so a seed that quietly stops producing the PAYMENT_SUBMITTED order leaves
@@ -355,7 +357,7 @@ show('after', c);
  * for: a count here is a transcription of what the seed defines, and the two
  * must move together or the seed has drifted from its own description.
  */
-const EXPECTED = { markets: 1, accounts: 3, sellers: 2, devices: 0, timing: 1, orders: 5, stock_drift: 0, active_markets: 1, global_budget: 1 };
+const EXPECTED = { markets: 1, accounts: 3, sellers: 2, devices: 0, timing: 1, orders: 0, stock_drift: 0, active_markets: 1, global_budget: 1 };
 const wrong = c === null
   ? [['core.market', 'present', 'absent']]
   : Object.entries(EXPECTED)
