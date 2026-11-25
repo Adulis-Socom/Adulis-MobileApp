@@ -178,6 +178,26 @@ code {
   max-width: 38rem;
 }
 
+/* every one-column grid lets its column shrink below its widest child, so a long label wraps instead of widening the page */
+.page,
+.stack,
+.field,
+.group,
+.panel,
+.state,
+.state-body,
+.section,
+.fixture-help,
+.dlg-body,
+.plain-list,
+.skeleton-block {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fixture-help li > .btn {
+  max-width: 100%;
+}
+
 .page > *,
 .stack > *,
 .field,
