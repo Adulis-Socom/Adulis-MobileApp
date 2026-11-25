@@ -172,6 +172,10 @@ code {
 }
 
 .page > *,
+.stack > *,
+.field,
+.group,
+.text-input,
 .panel > *,
 .state > *,
 .state-body > * {
