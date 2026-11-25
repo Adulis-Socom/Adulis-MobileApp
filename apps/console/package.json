@@ -12,7 +12,8 @@
     "test": "echo \"@adulis/console: unit tests still absent. The e2e harness is 'pnpm verify:console-e2e' (the console-e2e gate) -- it needs a reset database and a running API, so it is a gate rather than a package test.\"",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint src",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:fixture": "playwright test -c playwright.fixture.config.ts"
   },
   "dependencies": {
     "@adulis/api-client": "workspace:*",
